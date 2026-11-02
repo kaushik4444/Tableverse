@@ -19,6 +19,7 @@ const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
 const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
+const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded } = require('./lib/wsLimits');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -320,20 +321,7 @@ function start(opts = {}) {
   server.keepAliveTimeout = opts.keepAliveTimeoutMs ?? 5000;
 
   // ------------------------------------------------------------ helpers
-  const send = (ws, obj) => {
-    if (!ws || ws.readyState !== 1) return false;
-    if (ws.bufferedAmount > maxBufferedBytes) {
-      ws.terminate(); // a slow client must not retain an unbounded broadcast queue
-      return false;
-    }
-    try {
-      ws.send(JSON.stringify(obj), (err) => { if (err) ws.terminate(); });
-      return true;
-    } catch {
-      ws.terminate();
-      return false;
-    }
-  };
+  const send = (ws, obj) => sendBounded(ws, obj, maxBufferedBytes);
   const sendError = (p, message) => send(p.ws, { t: 'error', message });
   function notifyAccount(playerId, event) {
     const recipient = players.get(playerId);
@@ -1170,18 +1158,11 @@ function start(opts = {}) {
     return true;
   };
 
-  let helloQueue = Promise.resolve(); // hellos are handled one at a time so a token can never get two player objects
-  let helloQueueDepth = 0;
-  const onHello = (ws, msg) => {
-    if (helloQueueDepth >= maxPendingHellos) {
-      ws.close(1013, 'server busy');
-      return Promise.resolve();
-    }
-    helloQueueDepth++;
-    const run = helloQueue.then(() => handleHello(ws, msg)).finally(() => { helloQueueDepth = Math.max(0, helloQueueDepth - 1); });
-    helloQueue = run.catch(() => {});
-    return run;
-  };
+  const helloQueue = createBoundedSerialQueue(maxPendingHellos);
+  const onHello = (ws, msg) => helloQueue.enqueue(
+    () => handleHello(ws, msg),
+    () => ws.close(1013, 'server busy')
+  );
 
   async function handleHello(ws, msg) {
     if (ws.readyState !== 1) return; // the socket closed while waiting in the queue
@@ -1346,12 +1327,7 @@ function start(opts = {}) {
       };
       // one message at a time per socket: a join that waits for the database must finish before the next message
       // (act, chat, leave...) is looked at, exactly as when every handler was synchronous. Bound the waiting queue too.
-      if (ws.queueDepth >= maxQueuedMessages) {
-        ws.close(1013, 'server busy');
-        return;
-      }
-      ws.queueDepth++;
-      ws.queue = (ws.queue || Promise.resolve()).then(run).finally(() => { ws.queueDepth = Math.max(0, ws.queueDepth - 1); });
+      enqueueSocketMessage(ws, run, maxQueuedMessages);
     });
     ws.on('close', () => {
       const p = ws.player;
