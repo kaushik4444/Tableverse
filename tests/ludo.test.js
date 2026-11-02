@@ -200,6 +200,7 @@ test('viewFor: hand mirrors own tokens, myTurn/canRoll/canMove flags correct', a
   assert.equal(v0.me, 0);
   assert.equal(v0.n, 2);
   assert.deepEqual(v0.hand, g.tokens[0]);
+  assert.deepEqual(v0.tokens, g.tokens, 'renderer receives every player token position');
   // with 2 players, turn is 0 after readying, so p0's turn
   assert.equal(v0.myTurn, true);
   assert.equal(v0.canRoll, true);
