@@ -33,12 +33,12 @@
     if (v.phase === 'moving') return v.canMove ? 'Choose a highlighted token to move' : v.players[v.turn].name + ' is moving';
     return 'Ludo';
   }
-  function tokenButton(v, i, t, p, x, y, home = false) {
+  function tokenButton(v, i, t, p, x, y, home = false, offset = [0, 0]) {
     if (p === 58) return '';
     const selectable = i === v.me && v.canMove && (v.legalTokens || []).includes(t);
     const color = COLORS[i];
     const title = `${v.players[i].name} — token ${t + 1}`;
-    return `<button type="button" class="ludo-token ${color} ${selectable ? 'legal' : ''} ${home ? 'in-yard' : ''}" style="left:${(x / 15) * 100 + 3.333}%;top:${(y / 15) * 100 + 3.333}%" ${selectable ? `data-lt="tok:${t}" aria-label="${home ? "Bring token " + (t + 1) + " out" : p >= 52 ? "Move home-column token " + (t + 1) : "Move token " + (t + 1)}"` : 'disabled aria-hidden="true"'} title="${esc(title)}"><span></span></button>`;
+    return `<button type="button" class="ludo-token ${color} ${selectable ? 'legal' : ''} ${home ? 'in-yard' : ''}" style="left:${(x / 15) * 100 + 3.333}%;top:${(y / 15) * 100 + 3.333}%;--stack-x:${offset[0]}%;--stack-y:${offset[1]}%" ${selectable ? `data-lt="tok:${t}" aria-label="${home ? "Bring token " + (t + 1) + " out" : p >= 52 ? "Move home-column token " + (t + 1) : "Move token " + (t + 1)}"` : 'disabled aria-hidden="true"'} title="${esc(title)}"><span></span></button>`;
   }
   function board(v) {
     const tiles = TRACK.map(([r,c], sq) => {
@@ -54,12 +54,19 @@
       ['red',1,1],['yellow',1,9],['blue',9,1],['green',9,9]
     ].map(([color,r,c]) => `<div class="ludo-base ${color}" style="grid-row:${r}/span 6;grid-column:${c}/span 6"><div class="ludo-base-inner"><div class="ludo-yard">${[0,1,2,3].map(k=>'<i></i>').join('')}</div></div><b>${color.toUpperCase()}</b></div>`).join('');
     const tokens = [];
+    const occupied = new Map();
+    const stackOffsets = [[-1.15,-1.15],[1.15,-1.15],[-1.15,1.15],[1.15,1.15]];
     for (let i=0;i<v.n;i++) {
       for (let t=0;t<4;t++) {
         const p=v.players[i].tokens[t];
         if (p===58) continue;
         const xy=pos(i,p);
-        if (xy) tokens.push(tokenButton(v,i,t,p,xy[1],xy[0]));
+        if (xy) {
+          const key = xy.join(',');
+          const slot = occupied.get(key) || 0;
+          occupied.set(key, slot + 1);
+          tokens.push(tokenButton(v,i,t,p,xy[1],xy[0],false,stackOffsets[slot % stackOffsets.length]));
+        }
         else {
           const homeCells = [[2,2],[2,4],[4,2],[4,4],[2,10],[2,12],[4,10],[4,12],[10,10],[10,12],[12,10],[12,12],[10,2],[10,4],[12,2],[12,4]];
           const baseOffset=[0,4,8,12][i];
@@ -93,9 +100,12 @@
   }
   function render(root,v,ctx) {
     ui.latest=v; ui.ctx=ctx;
+    const lastAction = (v.log || []).slice(-1)[0];
+    const feedback = lastAction ? `<div class="ludo-feedback" role="status"><span>${lastAction.kind === 'capture' ? '⚔️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
     root.innerHTML=`<section class="ludo ${v.phase==='gameOver'?'over':''}">
       <header class="ludo-header"><div><span class="ludo-kicker">TABLEVERSE CLASSICS</span><h2>🎲 Ludo</h2><p>Race your tokens home. First to finish all four wins.</p></div><nav>${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></nav></header>
       <div class="ludo-status ${v.myTurn?'mine':''}"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
+      ${feedback}
       <div class="ludo-layout"><main class="ludo-play-area">${board(v)}</main><aside class="ludo-side"><h3>Players</h3>${players(v)}${dice(v)}<div class="ludo-hint"><b>How to play</b><span>Roll a 6 to leave your yard. Land on opponents to send them home. Reach the centre with an exact roll.</span></div></aside></div>
       ${controls(v,ctx)}
     </section>`;
