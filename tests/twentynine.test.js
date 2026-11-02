@@ -91,14 +91,16 @@ test('open auction lets active bidders raise across rounds; passing is permanent
   const second = (f + 1) % 4, third = (f + 2) % 4, dealer = g.dealer;
   assert.equal(act(second, { type: 'bid', pass: true }).ok, true);
   assert.equal(act(third, { type: 'bid', amount: 17 }).ok, true);
-  assert.equal(act(dealer, { type: 'bid', pass: true }).ok, true);
   assert.equal(g.turn, f);
   assert.equal(act(f, { type: 'bid', amount: 18 }).ok, true);
   assert.equal(g.turn, third);
-  assert.equal(act(second, { type: 'bid', amount: 19 }).ok, false);
+  assert.equal(act(second, { type: 'bid', amount: 19 }).ok, false, 'the passed second player cannot re-enter');
   assert.equal(act(third, { type: 'bid', amount: 19 }).ok, true);
   assert.equal(g.turn, f);
   assert.equal(act(f, { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, third);
+  assert.equal(g.activeBidders.includes(dealer), true, 'dealer enters only after the first active bidder passes');
+  assert.equal(act(third, { type: 'bid', pass: true }).ok, true);
   assert.equal(g.phase, 'chooseTrump');
   assert.equal(g.highBidder, third);
   assert.equal(g.highBid, 19);
