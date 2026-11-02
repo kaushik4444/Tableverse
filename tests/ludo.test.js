@@ -51,6 +51,7 @@ test('roll gives 1-6, six earns another roll, non-six passes the turn', async ()
   assert.equal(g.dice, null);
   assert.equal(g.sixes, 0);
   assert.equal(g.phase, 'rolling');
+  assert.deepEqual(g.log.at(-1), { by: 'P0', card: 'rolled a 1 — no legal moves, turn passed', kind: 'miss' });
 
   // a six keeps the same player rolling
   g.rng = alwaysSix;
@@ -181,6 +182,8 @@ test('third consecutive six forfeits the roll and ends the turn immediately', as
   assert.equal(g.dice, null);
   assert.equal(g.tokens[0][0], beforeThird, 'no token moves on the third six');
   assert.equal(g.sixes, 0);
+  assert.equal(g.log.at(-1).kind, 'miss');
+  assert.match(g.log.at(-1).card, /three sixes/);
 });
 
 
