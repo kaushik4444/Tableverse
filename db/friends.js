@@ -74,8 +74,12 @@ async function hasFriendship(playerA, playerB) {
   return r.rows.length > 0;
 }
 
-/** inviterIds: the current host and anyone who hosted this table before (an invitation outlives a host change). */
-async function canJoinPrivateRoom(playerId, roomCode, gameId, inviterIds) {
+/**
+ * inviterIds: the creator, the current host and anyone who hosted this table before (an invitation outlives a host change).
+ * Needs an ACCEPTED invitation from one of them AND the friendship still existing. `allowExpired` is for someone who is already
+ * at the table: an invitation's expiry only stops NEW entries, it never throws a seated player out.
+ */
+async function canJoinPrivateRoom(playerId, roomCode, gameId, inviterIds, { allowExpired = false } = {}) {
   requireDb();
   const r = await db.query(
     `SELECT 1
@@ -83,8 +87,8 @@ async function canJoinPrivateRoom(playerId, roomCode, gameId, inviterIds) {
      JOIN friendships f ON f.player_a_id = LEAST(i.inviter_id, i.invitee_id)
                        AND f.player_b_id = GREATEST(i.inviter_id, i.invitee_id)
      WHERE i.invitee_id = $1 AND i.room_code = $2 AND i.game_id = $3
-       AND i.inviter_id = ANY($4::uuid[]) AND i.status = 'accepted' AND i.expires_at > NOW()`,
-    [playerId, roomCode, gameId, [].concat(inviterIds)]
+       AND i.inviter_id = ANY($4::uuid[]) AND i.status = 'accepted' AND (i.expires_at > NOW() OR $5::boolean)`,
+    [playerId, roomCode, gameId, [].concat(inviterIds), Boolean(allowExpired)]
   );
   return r.rows.length > 0;
 }

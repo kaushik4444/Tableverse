@@ -317,12 +317,19 @@ function start(opts = {}) {
     if (!text) return;
     send(recipient.ws, { t: 'socialNotice', kind: event.type, text, invitationId: event.invitationId });
   }
-  /** A friendship ended: everybody at the affected private tables is checked against the access rule again. */
+  /**
+   * A friendship ended. Whoever could only be at a private table because of it loses access (policy: docs/PRIVATE_TABLES.md).
+   * Both people are looked at wherever they are: it does not matter whether the inviter is the current host, a previous host
+   * or has left. The database decides (the removal already revoked the invitations); this applies the result to live tables.
+   */
   async function onFriendRemoved(a, b) {
-    for (const room of [...rooms.values()]) {
-      if (room.visibility !== 'private') continue;
-      const here = [...room.members, ...room.spectators].some((v) => v.id === a || v.id === b);
-      if (here) await enforceAccess(room, null).catch((e) => console.error('[server] access check failed:', e.message));
+    try {
+      for (const room of [...rooms.values()]) {
+        if (room.visibility !== 'private') continue;
+        await enforceAccess(room, [a, b].filter((id) => players.get(id)?.room === room.code));
+      }
+    } catch (err) {
+      console.error('[server] applying a removed friendship failed:', err.message);
     }
     publishPresence(a);
     publishPresence(b);
@@ -347,39 +354,47 @@ function start(opts = {}) {
       console.error('[server] presence update failed:', err.message);
     }
   }
-  /** Private-table access: the rule is in lib/roomAccess.js (documented there); this wires it to the database. */
-  async function canEnterRoom(p, room) {
+  /** Private-table access: the rule is in lib/roomAccess.js; this wires it to the database. `present` = already at the table. */
+  async function canEnterRoom(p, room, { present = false } = {}) {
     if (room.removed && room.removed.has(p.id)) return false; // removed by the host
     try {
       const { allowed } = await decideAccess({
-        room, playerId: p.id, isAnonymous: p.isAnonymous, hasDatabase: dbPool.hasDatabase(),
-        invitedBy: (inviterIds) => dbFriends.canJoinPrivateRoom(p.id, room.code, room.gameId, inviterIds),
-        areFriends: (a, b) => dbFriends.hasFriendship(a, b),
+        room, playerId: p.id, isAnonymous: p.isAnonymous, hasDatabase: dbPool.hasDatabase(), present,
+        invitedBy: (inviterIds, opts) => dbFriends.canJoinPrivateRoom(p.id, room.code, room.gameId, inviterIds, opts),
       });
+      if (allowed && room.denied) room.denied.delete(p.id);
       return allowed;
     } catch (err) {
       console.error('[server] private room authorization failed:', err.message);
       return false;
     }
   }
-  /**
-   * Apply the access rule again to people already at a private table (a friendship ended, or a finished game is being
-   * restarted). Whoever no longer qualifies leaves with a notice. `onlyIds` limits the check; null checks everybody.
-   */
-  async function enforceAccess(room, onlyIds = null) {
+  /** Re-check, against the database, everyone at this private table (or just `ids`) and apply the policy to those who lost access. */
+  async function enforceAccess(room, ids = null) {
     if (room.visibility !== 'private') return;
-    const code = room.code;
-    for (const v of [...room.members.filter((m) => !m.bot), ...room.spectators]) {
-      if (onlyIds && !onlyIds.includes(v.id)) continue;
-      const q = players.get(v.id);
-      if (!q || q.room !== code || rooms.get(code) !== room) continue;
-      if (await canEnterRoom(q, room)) continue;
-      if (q.room !== code || rooms.get(code) !== room) continue; // moved on while we were asking
-      leaveRoom(q);
-      if (q.connected) {
-        send(q.ws, { t: 'left' });
-        send(q.ws, { t: 'notice', text: 'You can no longer be at that private table, so you left it.' });
-      }
+    const here = ids || [...room.members.filter((m) => !m.bot).map((m) => m.id), ...room.spectators.map((x) => x.id)];
+    for (const id of here) {
+      const q = players.get(id);
+      if (!q || q.room !== room.code || rooms.get(room.code) !== room) continue;
+      if (!(await canEnterRoom(q, room, { present: true }))) revokeAccess(q, room);
+    }
+  }
+  /**
+   * "You may no longer be at this table". A seat in a game that is RUNNING is protected: the person finishes that game
+   * (nobody's game is aborted by a friendship change) but is marked and cannot come back; everyone else leaves now.
+   */
+  function revokeAccess(q, room) {
+    (room.denied || (room.denied = new Set())).add(q.id);
+    const seated = room.members.some((m) => m.id === q.id && !m.bot);
+    if (seated && room.status === 'playing') {
+      if (q.connected) send(q.ws, { t: 'notice', text: 'You no longer have access to this private table. You can finish this game, but you cannot come back to the table.' });
+      return;
+    }
+    leaveRoom(q);
+    if (q.connected) {
+      send(q.ws, { t: 'left' });
+      send(q.ws, { t: 'notice', text: 'You no longer have access to that private table, so you left it.' });
+      send(q.ws, tablesMsg(q));
     }
   }
   const isConnected = (m) => m.bot || !!players.get(m.id)?.connected;
@@ -435,6 +450,7 @@ function start(opts = {}) {
     const out = [];
     for (const room of rooms.values()) {
       if (room.status !== 'playing' || p.room === room.code) continue;
+      if (room.denied && room.denied.has(p.id)) continue; // lost access to this private table
       if (room.members.some((m) => m.id === p.id && m.bot)) out.push({ code: room.code, gameId: room.gameId, paused: !humans(room).some(isConnected) });
     }
     return out;
@@ -801,7 +817,10 @@ function start(opts = {}) {
         gameId: def.id,
         visibility: msg.visibility === 'public' ? 'public' : 'private',
         hostId: p.id,
+        creatorId: p.id, // the person who opened the table: never loses access to it
         hosts: new Set([p.id]), // everyone who has hosted this table: their accepted invitations stay valid after a host change
+        admitted: new Set(), // people already here when a public table was made private (docs/PRIVATE_TABLES.md)
+        denied: new Set(), // people who lost access while a game was running: they may finish it but not come back
         status: 'lobby',
         seats: def.seats.default,
         options: sanitizeOptions(def, {}),
@@ -827,7 +846,8 @@ function start(opts = {}) {
       applyProfile(p, msg);
       if (!room) return sendError(p, `No table with code ${code || '?'}`);
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
-      if (!await canEnterRoom(p, room)) return sendError(p, 'This private table requires an accepted invitation.');
+      const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
+      if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
       const seat = room.members.find((m) => m.id === p.id);
       // Already at this table (seated, or watching): nothing to add. This is decided BEFORE any capacity check, so a full
       // table or a full spectator list never turns away someone who is already in it, and no second "joined/watching"
@@ -892,7 +912,7 @@ function start(opts = {}) {
     async sit(p) {
       const room = rooms.get(p.room);
       if (!room || room.status !== 'lobby' || !isSpec(room, p.id)) return sendError(p, 'Not possible right now');
-      if (!await canEnterRoom(p, room)) return sendError(p, 'This private table requires an accepted invitation.');
+      if (!await canEnterRoom(p, room, { present: true })) return sendError(p, 'This private table requires an accepted invitation.');
 
       if (room.members.length >= room.seats) return sendError(p, 'There is no open seat');
       room.spectators.splice(room.spectators.findIndex((s) => s.id === p.id), 1);
@@ -989,7 +1009,11 @@ function start(opts = {}) {
     setVisibility(p, msg) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
-      room.visibility = msg.visibility === 'public' ? 'public' : 'private';
+      const next = msg.visibility === 'public' ? 'public' : 'private';
+      if (next === 'private' && room.visibility !== 'private') { // whoever is already here was let in as a public guest and stays
+        room.admitted = new Set([...room.members.filter((m) => !m.bot).map((m) => m.id), ...room.spectators.map((x) => x.id)]);
+      }
+      room.visibility = next;
       broadcast(room); // also broadcasts the directory, removing private tables immediately
     },
 
@@ -1044,14 +1068,15 @@ function start(opts = {}) {
     async rematch(p) {
       const room = hostRoom(p, 'finished');
       if (!room) return;
+      // Anyone who lost access to a private table while the game was running leaves now, before the next round forms.
+      await enforceAccess(room);
+      if (rooms.get(room.code) !== room || room.status !== 'finished' || room.hostId !== p.id) return; // the table changed while we checked
       clearTimeout(room.timer);
       room.game = null;
       room.status = 'lobby';
       room.deadline = null;
-      // Spectators stay spectators: watching a game does not turn into a seat when the next one is set up. They can sit
-      // down themselves from the lobby ("sit"), and a private table is checked again for everybody (friendships may have ended).
-      await enforceAccess(room);
-      if (rooms.get(room.code) === room) broadcast(room);
+      // Spectators stay spectators: watching is a choice. They take an open seat themselves with `sit`.
+      broadcast(room);
     },
   };
 
@@ -1203,7 +1228,7 @@ function start(opts = {}) {
     send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
-    if (room && await canEnterRoom(p, room)) {
+    if (room && await canEnterRoom(p, room, { present: true })) {
       if (p.dropAnnounced) {
         p.dropAnnounced = false;
         sys(room, `📶 ${p.name} reconnected`);
@@ -1214,7 +1239,8 @@ function start(opts = {}) {
       schedule(room);
     } else {
       if (room) {
-        p.room = null;
+        (room.denied || (room.denied = new Set())).add(p.id);
+        leaveRoom(p); // frees the seat (a bot takes over a running game) instead of leaving a ghost player behind
         send(ws, { t: 'left' });
         send(ws, { t: 'error', message: 'This private table requires an accepted invitation.' });
       } else p.room = null;
