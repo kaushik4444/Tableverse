@@ -1,0 +1,54 @@
+/* Shared game UX polish: consistent controls, status hierarchy and small-screen ergonomics. */
+.wz, .wz * { box-sizing: border-box; }
+.wz { width: min(100%, 980px); }
+.wz-top { min-width: 0; }
+.wz-top > .row { gap: 6px; }
+.wz-top .btn { min-width: 40px; min-height: 40px; }
+.wz-status { line-height: 1.35; }
+.wz-status > span { min-width: 0; }
+.wz-status.mine { border: 1px solid rgba(242, 193, 78, .42); }
+.wz-status:not(.mine) { border: 1px solid var(--panel-line); }
+.bidbox, .pk-raise, .pk-result, .tm-ready, .tm-starvote { box-sizing: border-box; }
+.bidbtn, .suitbtn, .pk-size, .pk-step, .pk-btns .btn, .tm-actions .btn { min-height: 44px; }
+button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.pt-seat { min-width: 0; }
+.plate { max-width: min(112px, 100%); }
+.hand, .tm-hand { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.score-wrap { max-width: 100%; overscroll-behavior-x: contain; }
+.score { min-width: max-content; }
+.tm-status { min-height: 42px; }
+.tm-actions { display: flex; gap: 8px; }
+.tm-actions .tm-play { flex: 1; }
+.pk-btns .btn { min-width: 0; }
+.pk-sizes { flex-wrap: wrap; }
+.pk-size { min-width: 54px; }
+@media (max-width: 600px) {
+  .wz { gap: 7px; padding-inline: max(8px, env(safe-area-inset-left)); }
+  .wz-top { display: flex; flex-wrap: wrap; gap: 6px; }
+  .wz-round { flex: 1 1 auto; }
+  .wz-top > .row { flex: 1 0 100%; width: 100%; justify-content: flex-end; }
+  .wz-trump { flex: 1 1 120px; max-width: none; margin: 0; }
+  .wz-round b { font-size: 18px; }
+  .wz-top .btn { min-height: 42px; }
+  .wz-status { align-items: center; min-height: 44px; padding: 8px 10px; font-size: 14px; }
+  .hand-in, .tm-hand-in { justify-content: flex-start; }
+  .t29-strip { gap: 6px; }
+  .tbox { padding: 7px 8px; }
+  .tbox b { font-size: 19px; }
+  .tbox small { font-size: 10px; }
+  .bidinfo { max-width: 84px; font-size: 11px; }
+  .pk-actions { padding-bottom: max(2px, env(safe-area-inset-bottom)); }
+  .pk-btns { grid-template-columns: .9fr 1.1fr 1.3fr; gap: 6px; }
+  .pk-btns .btn { min-height: 48px; padding-inline: 6px; font-size: 14px; }
+  .tm-actions { width: 100%; }
+  .tm-actions .btn { min-height: 48px; }
+}
+@media (max-width: 380px) {
+  .wz-top .btn { min-width: 36px; padding-inline: 8px; }
+  .wz-top .btn.small { font-size: 12px; }
+  .tbox b { font-size: 17px; }
+  .pk-size { min-width: 46px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pseat.turn .av, .ct-timer.warn { animation: none; }
+}
