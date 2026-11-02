@@ -1279,11 +1279,11 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-roadmap-refresh';
+  const WHATS_NEW_VERSION = '2026-11-go-fish';
   const WHATS_NEW = [
     ['🎲', 'Ludo is now playable', 'Create a table for 2–4 players, play with friends and let bots fill empty seats.'],
     ['🔐', 'Wizard scorecard requires sign-in', 'Sign in to open the offline scorecard. Scores remain stored on your device and are not added to profile statistics.'],
-    ['🧭', 'The game roadmap has been refreshed', 'Twelve upcoming games are listed in planned development order, using original working titles and presentation.'],
+    ['🐟', 'Go Fish is now playable', 'Ask for cards, collect four of a kind and make the most books. 2–6 players, with bots for empty seats.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
