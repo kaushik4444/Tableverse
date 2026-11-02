@@ -269,15 +269,20 @@ function start(opts = {}) {
     }
 
     if (rel === '/healthz') {
+      res.setHeader('Cache-Control', 'no-store');
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       return res.end('ok');
     }
     if (rel === '/readyz') {
-      const ok = (text) => { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(text); };
+      const respond = (status, text) => {
+        res.setHeader('Cache-Control', 'no-store');
+        res.writeHead(status, { 'Content-Type': 'text/plain' });
+        res.end(text);
+      };
       const q = matchQueue.stats();
       const tail = q.pending || q.failed ? ` (matches: ${q.pending} pending, ${q.failed} failed)` : '';
-      if (!dbPool.hasDatabase()) ok('ready (in-memory store)' + tail);
-      else dbPool.ping().then(() => ok('ready' + tail), () => { res.writeHead(503, { 'Content-Type': 'text/plain' }); res.end('database unavailable'); });
+      if (!dbPool.hasDatabase()) respond(200, 'ready (in-memory store)' + tail);
+      else dbPool.ping().then(() => respond(200, 'ready' + tail), () => respond(503, 'database unavailable'));
       return;
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
