@@ -1264,7 +1264,7 @@
   const WHATS_NEW = [
     ['🏠', 'A simpler home', 'Games come first. Friends are a small card on the home page, the full list lives on a Friends page, and a bell in the top bar shows friend requests and table invitations you can answer in place.'],
     ['🎲', 'Ludo now playable', 'Race your four tokens home — roll a six to get out, send opponents back, finish by exact count. 2–4 players.'],
-    ['🔜', 'Coming soon', 'Monopoly and Snakes and Ladders are on the way.'],
+    ['🔜', 'Coming soon', 'Go Fish, Snakes and Ladders, Monopoly and more are on the roadmap.'],
     ['🤝', 'Friends', 'Search by username, send and answer friend requests, and see who is online or which game they are playing right now.'],
     ['🔒', 'Private tables and invitations', 'New tables are private: invite friends from the lobby and they join once they accept. Make a table public to share its code and link.'],
     ['👑', 'Host tools', 'Make another player the host, or remove a player, spectator or bot from the lobby.'],
