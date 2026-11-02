@@ -227,7 +227,7 @@
       </div>
       ${scoreStrip(v)}
       ${tableHTML(v, ctx)}
-      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span role="status" aria-live="polite" aria-atomic="true">${statusText(v)}</span>
+      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${statusText(v)}</span>
         ${v.canReveal ? '<button class="btn small" data-t9="reveal">Show trump</button>' : ''}
         ${canPlay ? '<button class="btn small" data-t9="play">Play</button>' : ''}</div>
       ${controlsHTML(v)}
