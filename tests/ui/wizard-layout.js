@@ -92,13 +92,13 @@ const SIZES = [
       };
     }, msgs);
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
-    await page.waitForSelector(GAME === 'ludo' ? '.ludo-header' : '.wz-top', { timeout: 8000 }).catch(() => {});
+    await page.waitForSelector(GAME === 'ludo' ? '.ludo-tools' : '.wz-top', { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(300);
     const report = await page.evaluate((game) => {
       const vw = document.documentElement.clientWidth;
       const out = { vw, pageScrollW: document.documentElement.scrollWidth, problems: [] };
       const top = document.querySelector(game === 'ludo' ? '.ludo-header' : '.wz-top');
-      if (!top) { out.problems.push(game === 'ludo' ? 'no Ludo header rendered' : 'no game header rendered'); return out; }
+      if (!top) { out.problems.push(game === 'ludo' ? 'no Ludo utility controls rendered' : 'no game header rendered'); return out; }
       const wz = document.querySelector('.wz') || document.querySelector('.ludo');
       if (game === 'ludo') {
         const board = document.querySelector('.ludo-board');
@@ -129,6 +129,10 @@ const SIZES = [
         if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
       }
       if (!document.querySelector('.game-supporting-details')) out.problems.push('collapsed game log/rules are not available below the play surface');
+      if (game === 'ludo') {
+        if (document.querySelector('.ludo-header')) out.problems.push('Ludo duplicates the game title/description inside the play surface');
+        if (document.querySelector('.ludo-hint')) out.problems.push('Ludo repeats How to play inline instead of using the shared collapsed rules');
+      }
       if (game === 'themind') {
         const guidance = document.querySelector('.tm-status-guidance');
         if (!guidance) out.problems.push('The Mind current-state guidance is not announced accessibly');
