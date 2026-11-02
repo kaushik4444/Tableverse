@@ -253,6 +253,7 @@
       } else {
         toast('Your queued card is no longer legal. Choose another card.');
         ui.selected = null;
+        ctx.rerender();
       }
     }
   }
