@@ -117,6 +117,23 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await ctx.close();
   });
 
+  await test('removing a friend uses a consistent in-app confirmation instead of a browser dialog', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs });
+    let nativeDialog = false;
+    page.on('dialog', async (dialog) => { nativeDialog = true; await dialog.dismiss(); });
+    await page.goto(url + '/#friends');
+    await page.waitForSelector('#friends-panel .social-row');
+    const row = page.locator('#friends-panel .social-row').filter({ hasText: '@bob' });
+    await row.locator('[data-act="removeFriend"]').click();
+    await page.waitForSelector('#modal-overlay');
+    assert.match(await page.textContent('#modal-overlay'), /Remove this friend/);
+    assert.match(await page.textContent('#modal-overlay'), /pending invitations/);
+    await page.click('#modal-overlay [data-modal-close]');
+    assert.equal(nativeDialog, false, 'no native browser confirmation was opened');
+    assert.equal(await row.count(), 1, 'cancel leaves the friend in the list');
+    await ctx.close();
+  });
+
   await test('the bell shows pending requests and invitations, answers them in place, and closes on Escape', async () => {
     incomingReq = [{ id: 'rq1', username: 'eve', display_name: 'Eve' }];
     incomingInv = [{ id: 'iv1', username: 'bob', display_name: 'Bo', game_id: 'wizard', room_code: 'ABCDEF', expires_at: '2099-01-01T00:00:00Z', status: 'pending' }];
