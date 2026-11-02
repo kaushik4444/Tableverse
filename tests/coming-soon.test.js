@@ -36,5 +36,5 @@ assert.equal((whatsNew[1].match(/^\s*\[/gm) || []).length, 3, 'What’s new only
 assert.match(whatsNew[1], /Ludo is now playable/);
 assert.match(whatsNew[1], /Wizard scorecard requires sign-in/);
 assert.doesNotMatch(whatsNew[1], /Private tables and invitations|Host tools|Player cards|Profiles and history/);
-assert.doesNotMatch(appSource, /confirm\\(/, 'important actions use in-app confirmation dialogs');
+assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
 console.log('Coming Soon and latest-release-note tests passed (12 games, requested order, alternate working titles, 3 current highlights).');
