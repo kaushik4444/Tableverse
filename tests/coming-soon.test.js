@@ -13,17 +13,20 @@ const ui = window.TVHomeUI({
   pendingSocial: () => 0,
 });
 const html = ui.comingSoonHTML();
-const requested = ['Go Fish', 'Snakes and Ladders', 'Monopoly', 'Saboteur', '6 nimmt!', 'UNO', 'Sea Battle', 'CATAN — 4 players', 'CATAN — 5–6 players'];
-const extras = ['Hearts', 'Spades', 'Crazy Eights', 'Checkers', 'Chess', 'Connect Four', 'Carcassonne', 'Ticket to Ride', 'Codenames', 'Coup', 'Love Letter', 'The Resistance / Avalon', 'Yahtzee', 'Old Maid', 'Rummy', 'Euchre'];
-assert.equal((html.match(/class="soon-card"/g) || []).length, requested.length + extras.length);
+const buildOrder = ['Go Fish', 'Snakes and Ladders', 'Property Rivals', 'Hidden Miners', 'Bullhead Run', 'Color Clash', 'Sea Battle', 'Island Settlers — 4 players', 'Island Settlers — 5–6 players'];
+const additional = ['Four in a Row', 'Secret Clues', 'Tic-Tac-Toe'];
+assert.equal((html.match(/class="soon-card"/g) || []).length, 12);
 let previous = -1;
-for (const name of [...requested, ...extras]) {
+for (const name of [...buildOrder, ...additional]) {
   const index = html.indexOf(name);
   assert.ok(index > previous, `roadmap order is wrong or missing: ${name}`);
   previous = index;
 }
-assert.match(html, /Your requested build order/);
-assert.match(html, /More games we'd love to bring to the table/);
-assert.match(html, /aria-label="Coming soon games"/);
-assert.match(html, /class="soon-tag">Planned/);
-console.log('Coming Soon roadmap tests passed (25 games, requested order preserved).');
+for (const protectedBrand of ['Monopoly', 'Saboteur', '6 nimmt!', 'UNO', 'CATAN', 'Connect Four', 'Codenames']) {
+  assert.ok(!html.includes(protectedBrand), `protected commercial title should not be displayed: ${protectedBrand}`);
+}
+assert.match(html, /Development order/);
+assert.match(html, /Also on the list/);
+assert.match(html, /12 planned/);
+assert.match(html, /original artwork and presentation/);
+console.log('Coming Soon roadmap tests passed (12 games, requested order, alternate working titles).');
