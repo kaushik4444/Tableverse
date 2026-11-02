@@ -60,6 +60,27 @@ test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 2
   assert.equal(h.highBidder, (f + 1) % 4);
 });
 
+test('open auction lets active bidders raise across rounds; passing is permanent and highest bidder wins', () => {
+  const g = E.createGame(people(), {}, mulberry32(21));
+  const f = (g.dealer + 1) % 4;
+  const act = (seat, action) => E.applyAction(g, g.players[seat].id, action);
+  assert.equal(act(f, { type: 'bid', amount: 15 }).ok, true);
+  const second = (f + 1) % 4, third = (f + 2) % 4, dealer = g.dealer;
+  assert.equal(act(second, { type: 'bid', pass: true }).ok, true);
+  assert.equal(act(third, { type: 'bid', amount: 17 }).ok, true);
+  assert.equal(act(dealer, { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, f);
+  assert.equal(act(f, { type: 'bid', amount: 18 }).ok, true);
+  assert.equal(g.turn, third);
+  assert.equal(act(second, { type: 'bid', amount: 19 }).ok, false);
+  assert.equal(act(third, { type: 'bid', amount: 19 }).ok, true);
+  assert.equal(g.turn, f);
+  assert.equal(act(f, { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.phase, 'chooseTrump');
+  assert.equal(g.highBidder, third);
+  assert.equal(g.highBid, 19);
+});
+
 function toPlaying(seed) {
   const g = E.createGame(people(), {}, mulberry32(seed));
   const f = (g.dealer + 1) % 4;
@@ -74,11 +95,11 @@ function toPlaying(seed) {
   return g;
 }
 
-test('after trump is chosen everybody has 8 cards and the player left of the dealer leads', () => {
+test('after trump is chosen everybody has 8 cards and the highest bidder leads', () => {
   const g = toPlaying(3);
   assert.equal(g.phase, 'playing');
   for (const p of g.players) assert.equal(p.hand.length, 8);
-  assert.equal(g.turn, (g.dealer + 1) % 4);
+  assert.equal(g.turn, g.highBidder);
   assert.equal(new Set(g.players.flatMap((p) => p.hand.map((c) => c.id))).size, 32);
 });
 
@@ -141,6 +162,20 @@ test('last trick is forced after the first card, unless the player may still ask
   assert.equal(E.viewFor(g, 'spectator').me, -1);
 });
 
+test('trump King–Queen marriage adds four points once after trump reveal and a team trick win', () => {
+  const g = toPlaying(31);
+  g.trumpSuit = 'S'; g.trumpRevealed = true; g.tricksWon = [1, 0]; g.tricksPlayed = 1; g.marriageDeclared = false; g.turn = 0;
+  g.players[0].hand = [card('S', 'K'), card('S', 'Q'), card('H', '7')];
+  assert.equal(E.viewFor(g, 'p0').canDeclareMarriage, true);
+  assert.equal(E.applyAction(g, 'p1', { type: 'marriage' }).ok, false);
+  assert.equal(E.applyAction(g, 'p0', { type: 'marriage' }).ok, true);
+  assert.equal(g.handPoints[0], 4);
+  assert.equal(g.marriageDeclared, true);
+  assert.equal(E.viewFor(g, 'p0').canDeclareMarriage, false);
+  assert.equal(E.applyAction(g, 'p0', { type: 'marriage' }).ok, false);
+  assert.equal(g.log.at(-1).kind, 'marriage');
+});
+
 console.log('29 simulation');
 
 test('200 full games: every hand distributes exactly 29 points and scores add up', () => {
@@ -158,7 +193,8 @@ test('200 full games: every hand distributes exactly 29 points and scores add up
     }
     let a = 0, b = 0;
     for (const h of g.history) {
-      assert.equal(h.points[0] + h.points[1], 29);
+      // The 29 card points still total 29; a declared trump marriage adds a separate 4-point bonus.
+      assert.equal(h.points[0] + h.points[1] - (h.marriageDeclared ? 4 : 0), 29);
       const t = h.bidder % 2;
       if (h.made) { assert.ok(h.points[t] >= h.bid); t === 0 ? a++ : b++; } else { assert.ok(h.points[t] < h.bid); t === 0 ? a-- : b--; }
     }

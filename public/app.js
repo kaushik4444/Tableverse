@@ -1664,12 +1664,14 @@
     announceStatus(statusText ? statusText.textContent : '');
     const top = $app.querySelector('.wz-top');
     if (top) top.querySelector('.row')?.insertAdjacentHTML('afterbegin', '<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>');
-    const log = (S.view.log || []).slice(-12).reverse();
-    if (log.length) {
-      const details = document.createElement('details');
-      details.className = 'game-log-inline';
-      details.innerHTML = `<summary>📜 Game log <span>${S.view.log.length} plays</span></summary><ol>${log.map((e) => `<li><span>${esc(logLine(e))}</span></li>`).join('')}</ol>`;
-      $app.querySelector('.wz')?.appendChild(details);
+    const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
+    const gameInfo = gameMeta(S.room.gameId);
+    if (surface && gameInfo) {
+      const log = (S.view.log || []).slice(-12).reverse();
+      const supporting = document.createElement('section');
+      supporting.className = 'game-supporting-details';
+      supporting.innerHTML = `${log.length ? `<details class="game-info-panel"><summary>📜 Game log <span>${S.view.log.length} plays</span></summary><ol>${log.map((e) => `<li><span>${esc(logLine(e))}</span></li>`).join('')}</ol></details>` : ''}${(gameInfo.rules || []).length ? `<details class="game-info-panel"><summary>📖 How to play</summary>${gameInfo.rules.map((rule) => `<p>${esc(rule)}</p>`).join('')}</details>` : ''}`;
+      if (supporting.innerHTML) surface.appendChild(supporting);
     }
     const bar = $app.querySelector('.wz-status');
     if (bar) bar.insertAdjacentHTML('beforeend', '<span class="ct-timer" hidden></span>');

@@ -10,7 +10,7 @@
     D: { sym: '♦', name: 'Diamonds', cls: 'suit-Y' },
     C: { sym: '♣', name: 'Clubs', cls: 'suit-G' },
   };
-  const ui = { selected: null, bid: null, scores: false, shownKey: null, timer: null, prevTrick: new Set(), ctx: null, latest: null, hand: 0 };
+  const ui = { selected: null, queuedCard: null, bid: null, scores: false, shownKey: null, timer: null, prevTrick: new Set(), ctx: null, latest: null, hand: 0 };
   const POINTS = { J: 3, 9: 2, A: 1, 10: 1 };
 
   function cardHTML(c, { tag = 'div', cls = '', attrs = '' } = {}) {
@@ -48,6 +48,10 @@
     const name = (i) => esc(v.players[i].name);
     if (v._hold && v.lastTrick) return `${name(v.lastTrick.winner)} wins the trick${v.lastTrick.points ? ' (' + v.lastTrick.points + ' pt' + (v.lastTrick.points > 1 ? 's' : '') + ')' : ''}!`;
     if (v.phase === 'playing' && v.autoPlay) return 'Last cards: yours is played automatically…';
+    if (ui.queuedCard && v.phase === 'playing' && !v.myTurn) {
+      const queued = v.hand.find((c) => c.id === ui.queuedCard);
+      if (queued) return `${name(v.turn)} is playing… ${queued.rank} of ${SUITS[queued.suit].name} queued for your turn.`;
+    }
     switch (v.phase) {
       case 'bidding':
         return v.myTurn ? `Your bid: ${v.minBid} to ${v.maxBid}, or pass` : `${name(v.turn)} is bidding…`;
@@ -89,7 +93,7 @@
     const p = v.players[i];
     const turn = v.turn === i;
     const b = v.bids[i];
-    const sub = v.phase === 'bidding' ? (b === null ? (turn ? 'bidding…' : 'waiting') : b === 'pass' ? 'passed' : `bid ${b}`) : v.highBidder === i ? `bidder · ${v.highBid}` : relation(v, i);
+    const sub = v.phase === 'bidding' ? (v.passed?.[i] || b === 'pass' ? 'passed' : b === null ? (turn ? 'bidding…' : 'waiting') : `bid ${b}`) : v.highBidder === i ? `bidder · ${v.highBid}` : relation(v, i);
     return pt.seatHTML({ pid: p.id, name: p.name, avatar: pt.avatarOf(ctx.room, p.id), sub, turn, dealer: i === v.dealer, first: i === (v.dealer + 1) % 4, me: i === v.me, team: teamOf(i) === myTeam(v) ? 0 : 1 });
   }
 
@@ -150,7 +154,7 @@
     const legal = new Set(v.legal);
     return v.hand
       .map((c, i) => {
-        const cls = [can && legal.has(c.id) ? 'playable' : '', can && !legal.has(c.id) ? 'dim' : '', ui.selected === c.id ? 'sel' : ''].join(' ');
+        const cls = [can && legal.has(c.id) ? 'playable' : '', can && !legal.has(c.id) ? 'dim' : '', ui.selected === c.id || ui.queuedCard === c.id ? 'sel' : ''].join(' ');
         return cardHTML(c, { tag: 'button', cls: 'hc ' + cls, attrs: `data-t9="card" data-id="${c.id}" aria-pressed="${ui.selected === c.id}" style="${i ? `margin-left:${-z.overlap}px` : ''}"` });
       })
       .join('');
@@ -197,9 +201,11 @@
       ui.hand = v.handNo;
       ui.bid = null;
       ui.selected = null;
+      ui.queuedCard = null;
       ui.prevTrick = new Set();
     }
     if (!v.myTurn || v.phase !== 'playing' || !v.hand.some((c) => c.id === ui.selected)) ui.selected = null;
+    if (ui.queuedCard && (v.phase !== 'playing' || !v.hand.some((c) => c.id === ui.queuedCard))) ui.queuedCard = null;
     if (!v.myTurn || v.phase !== 'bidding' || (ui.bid !== null && ui.bid < v.minBid)) ui.bid = null;
 
     const key = v.phase + ':' + v.handNo;
@@ -229,6 +235,7 @@
       ${tableHTML(v, ctx)}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${statusText(v)}</span>
         ${v.canReveal ? '<button class="btn small" data-t9="reveal">Show trump</button>' : ''}
+        ${v.canDeclareMarriage ? '<button class="btn small" data-t9="marriage">Declare K–Q (+4)</button>' : ''}
         ${canPlay ? '<button class="btn small" data-t9="play">Play</button>' : ''}</div>
       ${controlsHTML(v)}
       <div class="hand"><div class="hand-in">${handHTML(v, z)}</div></div>
@@ -237,6 +244,18 @@
     const h2 = root.querySelector('.hand');
     if (h2) h2.scrollLeft = scroll;
     root.onclick = onClick;
+    if (ui.queuedCard && v.phase === 'playing' && v.myTurn && !v._hold && !v.autoPlay) {
+      const id = ui.queuedCard;
+      ui.queuedCard = null;
+      if (v.legal.includes(id)) {
+        ui.selected = id;
+        ctx.act({ type: 'play', cardId: id });
+      } else {
+        toast('Your queued card is no longer legal. Choose another card.');
+        ui.selected = null;
+        ctx.rerender();
+      }
+    }
   }
 
   function onClick(e) {
@@ -254,15 +273,21 @@
         if (v.phase !== 'playing') return toast(v.phase === 'bidding' ? 'Bidding comes first' : v.phase === 'chooseTrump' ? 'Trump is being chosen' : 'Wait for the next hand');
         if (v._hold) return toast('The trick is being collected…');
         if (v.autoPlay) return toast('Your last card is played automatically');
-        if (!v.myTurn) return toast('Not your turn yet');
-        if (!v.legal.includes(card.id)) return toast(v.mustTrump ? 'You must play a trump card' : 'You must follow the lead suit if you can');
-        if (ui.selected === card.id) {
-          ui.selected = null;
-          ctx.act({ type: 'play', cardId: card.id });
-        } else {
+        if (v.myTurn) {
+          if (!v.legal.includes(card.id)) return toast(v.mustTrump ? 'You must play a trump card' : 'You must follow the lead suit if you can');
           ui.selected = card.id;
-          ctx.rerender();
+          ui.queuedCard = null;
+          ctx.act({ type: 'play', cardId: card.id });
+          break;
         }
+        if (ui.queuedCard === card.id) {
+          ui.queuedCard = null;
+          toast('Queued card cleared');
+        } else {
+          ui.queuedCard = card.id;
+          toast('Card queued. It will play automatically on your turn if still legal.');
+        }
+        ctx.rerender();
         break;
       }
       case 'play':
@@ -274,6 +299,9 @@
         break;
       case 'reveal':
         ctx.act({ type: 'reveal' });
+        break;
+      case 'marriage':
+        ctx.act({ type: 'marriage' });
         break;
       case 'pick':
         ui.bid = Number(el.dataset.n);

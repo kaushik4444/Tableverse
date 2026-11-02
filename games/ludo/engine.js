@@ -79,6 +79,8 @@ function applyMove(g, playerIdx, tokenIdx, np) {
   if (np === FINISHED) {
     g.log.push({ by: g.players[playerIdx].name, card: 'got a token home', kind: 'home' });
   }
+  g.log.push({ by: g.players[playerIdx].name, card: `moved token ${tokenIdx + 1} by ${g.dice}`, kind: 'move' });
+  emit(g, { type: 'moved', by: playerIdx, token: tokenIdx, from: old, to: np, dice: g.dice });
   if (g.tokens[playerIdx].every((x) => x === FINISHED)) {
     finishPlayer(g, playerIdx);
   }
@@ -176,6 +178,7 @@ function applyAction(g, playerId, action) {
         endTurn(g);
       } else {
         g.phase = 'moving';
+        g.log.push({ by: g.players[who].name, card: `rolled a ${d}`, kind: 'roll' });
         emit(g, { type: 'rolled', by: who, dice: d });
       }
       bump(g);
