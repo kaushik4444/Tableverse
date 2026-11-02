@@ -1,155 +1,131 @@
-/* Ludo table renderer: the board, the four home yards, the dice and your tokens.
- * Registered with the app shell via CardTable.register('ludo', ...). */
+/* Classic cross-board Ludo renderer. Rules and server state remain in games/ludo/engine.js. */
 (() => {
   'use strict';
-  const { esc, toast } = window.CardTable;
-
-  const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]); // track squares that protect from capture
-  const COLOR_CSS = { '🔴': '#ef4444', '🟡': '#eab308', '🟢': '#22c55e', '🔵': '#3b82f6' };
-
-  // Absolute board square for a token (player 0-3, internal position -1..57).
-  function absSquare(playerIdx, p) {
-    const STARTS = [0, 13, 26, 39];
-    if (p === -1) return null; // in the yard
-    if (p >= 0 && p < 52) return (STARTS[playerIdx] + p) % 52; // on the track
-    if (p >= 52 && p < 58) return null; // in the home column (not on the shared track)
-    return null; // finished
+  const { esc } = window.CardTable;
+  const ui = { ctx: null, latest: null };
+  const COLORS = ['red', 'yellow', 'green', 'blue'];
+  const HEX = { red: '#e84b4b', yellow: '#f2c94c', green: '#28a66a', blue: '#4388df' };
+  const EMOJI = { red: '🔴', yellow: '🟡', green: '🟢', blue: '🔵' };
+  const TRACK = [
+    [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],[0,7],[0,8],
+    [1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
+    [7,14],[8,14],[8,13],[8,12],[8,11],[8,10],[8,9],[9,8],[10,8],[11,8],[12,8],[13,8],
+    [14,8],[14,7],[14,6],[13,6],[12,6],[11,6],[10,6],[9,6],[8,5],[8,4],[8,3],[8,2],[8,1],[8,0],
+    [7,0],[6,0]
+  ];
+  const SAFE = new Set([0,8,13,21,26,34,39,47]);
+  const HOME = [
+    [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]],
+    [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]],
+    [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]],
+    [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]]
+  ];
+  const STARTS = [0,13,26,39];
+  function pos(i, p) {
+    if (p >= 0 && p < 52) return TRACK[(STARTS[i] + p) % 52];
+    if (p >= 52 && p < 58) return HOME[i][p - 52];
+    return null;
   }
-
-  const ui = { ctx: null, latest: null, seq: null, rolled: null, selected: null, animating: false };
-
-  function tokenMark(p, cls = '') {
-    // internal position -> small drawn token glyph
-    if (p === -1) return `<span class="lt yard">⚪</span>`;
-    if (p >= 0 && p < 52) return `<span class="lt track ${cls}">●</span>`;
-    if (p >= 52 && p < 58) return `<span class="lt home">↑</span>`;
-    return `<span class="lt done">✓</span>`;
+  function status(v) {
+    if (v.phase === 'gameOver') return v.winner >= 0 ? v.players[v.winner].name + ' wins!' : 'Game over';
+    if (v.phase === 'ready') return v.myTurn ? 'Everyone ready? Start the game' : v.players[v.turn].name + ' is getting ready';
+    if (v.phase === 'rolling') return v.canRoll ? 'Your turn — roll the dice' : v.players[v.turn].name + ' is rolling';
+    if (v.phase === 'moving') return v.canMove ? 'Choose a highlighted token to move' : v.players[v.turn].name + ' is moving';
+    return 'Ludo';
   }
-
-  function sizes(v) {
-    const w = window.innerWidth;
-    let cw = w < 520 ? 44 : 52;
-    return { cw };
+  function tokenButton(v, i, t, p, x, y, home = false, offset = [0, 0]) {
+    if (p === 58) return '';
+    const selectable = i === v.me && v.canMove && (v.legalTokens || []).includes(t);
+    const color = COLORS[i];
+    const title = `${v.players[i].name} — token ${t + 1}`;
+    return `<button type="button" class="ludo-token ${color} ${selectable ? 'legal' : ''} ${home ? 'in-yard' : ''}" style="left:${(x / 15) * 100 + 3.333}%;top:${(y / 15) * 100 + 3.333}%;--stack-x:${offset[0]}%;--stack-y:${offset[1]}%" ${selectable ? `data-lt="tok:${t}" aria-label="${home ? "Bring token " + (t + 1) + " out" : p >= 52 ? "Move home-column token " + (t + 1) : "Move token " + (t + 1)}"` : 'disabled aria-hidden="true"'} title="${esc(title)}"><span></span></button>`;
   }
-
-  function statusText(v) {
-    const nm = (i) => esc(v.players[i].name);
-    if (v.phase === 'gameOver') {
-      const w = v.winner >= 0 ? nm(v.winner) : 'Nobody';
-      return `Game over — ${w} won`;
-    }
-    if (v.phase === 'ready') return v.myTurn ? 'Tap Ready to start' : `${nm(v.turn)} is getting ready…`;
-    if (v.phase === 'rolling') return v.canRoll ? 'Tap to roll the dice' : `${nm(v.turn)} is rolling…`;
-    if (v.phase === 'moving') return v.canMove ? 'Move a token' : `${nm(v.turn)} is moving…`;
-    return '…';
-  }
-
-  function boardHTML(v) {
-    const tracks = []; // player's tokens on the track, keyed by absolute square -> tokens
-    const at = {};
-    for (let i = 0; i < v.n; i++) {
-      for (let t = 0; t < v.players[i].tokens.length; t++) {
-        const p = v.players[i].tokens[t];
-        const sq = absSquare(i, p);
-        if (sq === null) continue;
-        (at[sq] = at[sq] || []).push({ i, t, p, color: v.players[i].color });
+  function board(v) {
+    const tiles = TRACK.map(([r,c], sq) => {
+      const safe = SAFE.has(sq);
+      const start = STARTS.indexOf(sq);
+      const cls = start >= 0 ? COLORS[start] + '-start' : safe ? 'safe' : '';
+      return `<div class="ludo-cell ${cls}" style="grid-row:${r+1};grid-column:${c+1}">${start >= 0 ? '★' : safe ? '✦' : ''}</div>`;
+    }).join('');
+    const lanes = HOME.map((lane,i) => lane.map(([r,c],j) =>
+      `<div class="ludo-cell lane ${COLORS[i]}" style="grid-row:${r+1};grid-column:${c+1}">${j===5?'◆':''}</div>`
+    ).join('')).join('');
+    const bases = [
+      ['red',1,1],['yellow',1,9],['blue',9,1],['green',9,9]
+    ].map(([color,r,c]) => `<div class="ludo-base ${color}" style="grid-row:${r}/span 6;grid-column:${c}/span 6"><div class="ludo-base-inner"><div class="ludo-yard">${[0,1,2,3].map(k=>'<i></i>').join('')}</div></div><b>${color.toUpperCase()}</b></div>`).join('');
+    const tokens = [];
+    const occupied = new Map();
+    const stackOffsets = [-30,-10,10,30].flatMap(y => [-30,-10,10,30].map(x => [x,y]));
+    for (let i=0;i<v.n;i++) {
+      for (let t=0;t<4;t++) {
+        const p=v.players[i].tokens[t];
+        if (p===58) continue;
+        const xy=pos(i,p);
+        if (xy) {
+          const key = xy.join(',');
+          const slot = occupied.get(key) || 0;
+          occupied.set(key, slot + 1);
+          tokens.push(tokenButton(v,i,t,p,xy[1],xy[0],false,stackOffsets[slot % stackOffsets.length]));
+        }
+        else {
+          const homeCells = [[2,2],[2,4],[4,2],[4,4],[2,10],[2,12],[4,10],[4,12],[10,10],[10,12],[12,10],[12,12],[10,2],[10,4],[12,2],[12,4]];
+          const baseOffset=[0,4,8,12][i];
+          const [r,c]=homeCells[baseOffset+t];
+          tokens.push(tokenButton(v,i,t,p,c,r,true));
+        }
       }
     }
-    const cells = [];
-    for (let sq = 0; sq < 52; sq++) {
-      const safe = SAFE.has(sq);
-      const toks = at[sq] || [];
-      cells.push(`<div class="lc ${safe ? 'safe' : ''}"><div class="lc-toks">${toks.map((x) => {
-        const selectable = x.i === v.me && v.canMove && (v.legalTokens || []).includes(x.t);
-        return `<button type="button" class="lc-tok token-button ${selectable ? 'is-legal' : ''}" style="color:${COLOR_CSS[x.color] || '#64748b'}" ${selectable ? `data-lt="tok:${x.t}" aria-label="Move token ${x.t + 1}"` : 'disabled aria-hidden="true"'}>${x.color}</button>`;
-      }).join('')}</div><small class="lc-num">${sq + 1}</small></div>`);
-    }
-    return `<div class="lb"><div class="lb-track">${cells.join('')}</div>${homeAreasHTML(v)}</div>`;
+    const center = `<div class="ludo-center" style="grid-row:7/span 3;grid-column:7/span 3"><div class="tri red"></div><div class="tri yellow"></div><div class="tri green"></div><div class="tri blue"></div><span>★</span></div>`;
+    return `<div class="ludo-board-wrap"><div class="ludo-board">${bases}${tiles}${lanes}${center}<div class="ludo-tokens">${tokens.join('')}</div></div></div>`;
   }
-
-  function homeAreasHTML(v) {
-    // yards (p === -1) and home columns (p >= 52)
-    const yards = [];
-    const cols = [];
-    for (let i = 0; i < v.n; i++) {
-      const yardTokens = v.players[i].tokens.map((p, t) => ({ p, t })).filter((x) => x.p === -1);
-      const homeTokens = v.players[i].tokens.map((p, t) => ({ p, t })).filter((x) => x.p >= 52 && x.p < 58);
-      const doneTokens = v.players[i].tokens.map((p, t) => ({ p, t })).filter((x) => x.p === 58);
-      const ownTurn = i === v.me && v.canMove;
-      yards.push(`<div class="ly"><div class="ly-color">${v.players[i].color}</div><div class="ly-count" title="${esc(v.players[i].name)}'s yard">${yardTokens.map(({t}) => {
-        const selectable = ownTurn && (v.legalTokens || []).includes(t);
-        return `<button type="button" class="lt yard token-button ${selectable ? 'is-legal' : ''}" ${selectable ? `data-lt="tok:${t}" aria-label="Bring token ${t + 1} out"` : 'disabled aria-hidden="true"'}>⚪</button>`;
-      }).join('')}</div></div>`);
-      cols.push(`<div class="lc"><div class="ly-color">${v.players[i].color}</div><div class="lc-toks">${homeTokens.map(({t}) => {
-        const selectable = ownTurn && (v.legalTokens || []).includes(t);
-        return `<button type="button" class="lt home token-button ${selectable ? 'is-legal' : ''}" ${selectable ? `data-lt="tok:${t}" aria-label="Move home-column token ${t + 1}"` : 'disabled aria-hidden="true"'}>↑</button>`;
-      }).join('')}${doneTokens.map(() => '<span class="lt done">✓</span>').join('')}</div><small class="lc-num">home</small></div>`);
-    }
-    return `<div class="lyard">${yards.join('')}</div><div class="lhomecols">${cols.join('')}</div>`;
+  function players(v) {
+    return `<div class="ludo-players">${v.players.map((p,i)=> {
+      const done=p.tokens.filter(x=>x===58).length;
+      const active=i===v.turn && v.phase!=='gameOver';
+      return `<div class="ludo-player ${COLORS[i]} ${active?'active':''} ${i===v.me?'you':''}"><span class="player-dot"></span><div class="player-copy"><b>${esc(p.name)} ${i===v.me?'<small>(you)</small>':''}</b><small>${active?'Playing now':p.ready?'Ready':'Waiting'}</small></div><strong>${done}/4 <small>home</small></strong></div>`;
+    }).join('')}</div>`;
   }
-
-  function diceHTML(v) {
-    const d = v.dice === null ? '?' : v.dice;
-    return `<div class="ldice"><button class="btn big ld-roll ${!v.canRoll ? 'disabled' : ''}" data-lt="roll" ${!v.canRoll ? 'disabled' : ''}>${d === '?' ? 'Roll' : d}</button>${v.sixes ? `<span class="ld-sixes">sixes: ${v.sixes}</span>` : ''}</div>`;
+  function dice(v) {
+    const d=v.dice;
+    const face=d===null?'?':String(d);
+    return `<div class="ludo-dice-panel"><div class="ludo-die ${v.canRoll?'rollable':''}">${face}</div><div class="ludo-dice-copy"><b>${d===null?'Roll the dice': 'You rolled a '+d}</b><small>${v.sixes? v.sixes+' consecutive six'+(v.sixes===1?'':'es')+' — roll again':''}</small></div><button class="btn big ludo-roll" data-lt="roll" ${v.canRoll?'':'disabled'}>${v.canRoll?'Roll dice':v.phase==='moving'?'Select a token':'Waiting'}</button></div>`;
   }
-
-  function controlsHTML(v, ctx) {
-    if (v.me < 0) return '';
-    if (v.phase === 'ready') {
-      const me = v.players[v.me];
-      return `<div class="lready"><h3>Get ready</h3><p class="hint">Everyone taps Ready, then the first player rolls.</p><button class="btn big" data-lt="ready" ${me.ready ? 'disabled' : ''}>${me.ready ? 'Waiting for the others…' : 'Ready'}</button></div>`;
-    }
-    if (v.phase === 'gameOver') {
-      const w = v.winner >= 0 ? esc(v.players[v.winner].name) : 'Nobody';
-      const isHost = ctx && ctx.isHost;
-      return `<div class="lready"><h2>${v.me === v.winner ? 'You won! 🎉' : `Game over — ${w} won`}</h2><p class="hint">Finishing order: ${v.finishedOrder.map((i) => esc(v.players[i].name)).join(' → ')}.</p><div class="row" style="margin-top:12px">${isHost ? '<button class="btn" data-lt="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-lt="leave">Leave table</button></div></div>`;
+  function controls(v,ctx) {
+    if(v.phase==='ready' && v.me>=0) return `<div class="ludo-ready"><b>Ready to play?</b><span>All players must be ready before the first roll.</span><button class="btn big" data-lt="ready" ${v.players[v.me].ready?'disabled':''}>${v.players[v.me].ready?'Ready ✓':'I’m ready'}</button></div>`;
+    if(v.phase==='gameOver') {
+      const w=v.winner>=0?esc(v.players[v.winner].name):'Nobody';
+      return `<div class="ludo-ready"><b>${v.me===v.winner?'You won the game! 🎉':w+' won the game'}</b><span>Finishing order: ${(v.finishedOrder||[]).map(i=>esc(v.players[i].name)).join(' · ')}</span><div class="row">${ctx&&ctx.isHost?'<button class="btn" data-lt="again">Play again</button>':''}<button class="btn ghost" data-lt="leave">Leave table</button></div></div>`;
     }
     return '';
   }
-
-  function render(root, v, ctx) {
-    ui.ctx = ctx;
-    ui.latest = v;
-    const z = sizes(v);
-    root.style.setProperty('--lcw', z.cw + 'px');
-    root.innerHTML = `
-    <div class="ludo ${v.phase === 'gameOver' ? 'over' : ''}">
-      <div class="wz-top">
-        <div class="wz-round"><b>Ludo</b><span class="label">· ${v.players.length} players</span></div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave">✕</button></div>
-      </div>
-      <div class="l-status ${v.myTurn ? 'mine' : ''}">${statusText(v)}</div>
-      ${boardHTML(v)}
-      ${diceHTML(v)}
-      ${controlsHTML(v, ctx)}
-    </div>`;
-    root.onclick = onClick;
+  function render(root,v,ctx) {
+    ui.latest=v; ui.ctx=ctx;
+    const lastAction = (v.log || []).slice(-1)[0];
+    const feedback = lastAction ? `<div class="ludo-feedback" role="status"><span>${lastAction.kind === 'capture' ? '⚔️' : lastAction.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
+    root.innerHTML=`<section class="ludo ${v.phase==='gameOver'?'over':''}">
+      <header class="ludo-header"><div><span class="ludo-kicker">TABLEVERSE CLASSICS</span><h2>🎲 Ludo</h2><p>Race your tokens home. First to finish all four wins.</p></div><nav>${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></nav></header>
+      <div class="ludo-status ${v.myTurn?'mine':''}"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
+      ${feedback}
+      <div class="ludo-layout"><main class="ludo-play-area">${board(v)}</main><aside class="ludo-side"><h3>Players</h3>${players(v)}${dice(v)}<div class="ludo-hint"><b>How to play</b><span>Roll a 6 to leave your yard. Land on opponents to send them home. Reach the centre with an exact roll.</span></div></aside></div>
+      ${controls(v,ctx)}
+    </section>`;
+    root.onclick=onClick;
   }
-
   function onClick(e) {
-    const el = e.target.closest('[data-lt]');
-    if (!el) return;
-    const v = ui.latest;
-    const ctx = ui.ctx;
-    if (!v || !ctx) return;
-    if (el.classList.contains('disabled')) return;
-    const act = el.dataset.lt;
-    if (act === 'roll') {
-      ctx.act({ type: 'roll' });
-    } else if (act === 'ready') {
-      ctx.act({ type: 'ready' });
-    } else if (act === 'rules') {
-      ctx.showRules();
-    } else if (act === 'again') {
-      ctx.rematch();
-    } else if (act === 'leave') {
-      ctx.leave();
-    } else if (act.startsWith('tok:')) {
-      const token = Number(act.slice(4));
-      if (!Number.isInteger(token) || !v.canMove || !(v.legalTokens || []).includes(token)) return;
-      ctx.act({ type: 'move', token });
+    const el=e.target.closest('[data-lt]');
+    if(!el)return;
+    const v=ui.latest,ctx=ui.ctx;
+    if(!v||!ctx||el.disabled)return;
+    const a=el.dataset.lt;
+    if(a==='roll')ctx.act({type:'roll'});
+    else if(a==='ready')ctx.act({type:'ready'});
+    else if(a==='rules')ctx.showRules();
+    else if(a==='again')ctx.rematch();
+    else if(a==='leave')ctx.leave();
+    else if(a.startsWith('tok:')) {
+      const token=Number(a.slice(4));
+      if(Number.isInteger(token)&&v.canMove&&(v.legalTokens||[]).includes(token))ctx.act({type:'move',token});
     }
   }
-
-  window.CardTable.register('ludo', { render });
+  window.CardTable.register('ludo',{render});
 })();

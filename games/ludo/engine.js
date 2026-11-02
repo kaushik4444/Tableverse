@@ -160,6 +160,7 @@ function applyAction(g, playerId, action) {
       // A third consecutive six forfeits that roll and ends the turn immediately.
       // Do not let the player move on the third six.
       if (d === 6 && g.sixes === 2) {
+        g.log.push({ by: g.players[who].name, card: 'rolled three sixes — turn forfeited', kind: 'miss' });
         g.dice = null;
         g.sixes = 0;
         endTurn(g);
@@ -170,6 +171,7 @@ function applyAction(g, playerId, action) {
       g.sixes = d === 6 ? g.sixes + 1 : 0;
       const moves = legalMoves(g, who);
       if (moves.length === 0) {
+        g.log.push({ by: g.players[who].name, card: `rolled a ${d} — no legal moves, turn passed`, kind: 'miss' });
         g.dice = null;
         endTurn(g);
       } else {
