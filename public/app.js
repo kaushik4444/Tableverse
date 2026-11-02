@@ -1260,18 +1260,11 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-simpler-home';
+  const WHATS_NEW_VERSION = '2026-11-roadmap-refresh';
   const WHATS_NEW = [
-    ['🏠', 'A simpler home', 'Games come first. Friends are a small card on the home page, the full list lives on a Friends page, and a bell in the top bar shows friend requests and table invitations you can answer in place.'],
-    ['🎲', 'Ludo now playable', 'Race your four tokens home — roll a six to get out, send opponents back, finish by exact count. 2–4 players.'],
-    ['🔜', 'Coming soon', 'Monopoly and Snakes and Ladders are on the way.'],
-    ['🤝', 'Friends', 'Search by username, send and answer friend requests, and see who is online or which game they are playing right now.'],
-    ['🔒', 'Private tables and invitations', 'New tables are private: invite friends from the lobby and they join once they accept. Make a table public to share its code and link.'],
-    ['👑', 'Host tools', 'Make another player the host, or remove a player, spectator or bot from the lobby.'],
-    ['🪪', 'Player cards', 'Tap anyone at a table to see their handle, connection quality and record, and to add them as a friend or mute them.'],
-    ['🖼️', 'Profile avatar', 'Choose from the preset avatars in your profile or the lobby; your selection is saved to your account.'],
-    ['📱', 'One device at a time', 'Signing in on another device signs this one out, so your account is never in two places at once.'],
-    ['👤', 'Profiles and history', 'Your stats and every finished game, plus account deletion from your profile.'],
+    ['🎲', 'Ludo is now playable', 'Create a table for 2–4 players, play with friends and let bots fill empty seats.'],
+    ['🔐', 'Wizard scorecard requires sign-in', 'Sign in to open the offline scorecard. Scores remain stored on your device and are not added to profile statistics.'],
+    ['🧭', 'The game roadmap has been refreshed', 'Twelve upcoming games are listed in planned development order, using original working titles and presentation.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
@@ -1312,7 +1305,10 @@
     cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }); },
     cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.'); },
     cardDecline: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/decline', { requestId: r.request.id }); },
-    cardRemove: () => { const r = relationTo(S.card && S.card.last); if (r.friend && confirm('Remove this friend? Pending invitations between you will be revoked.')) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.'); },
+    cardRemove: () => { const r = relationTo(S.card && S.card.last); if (!r.friend) return; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="cardRemoveConfirm">Remove friend</button></div>'); },
+    cardRemoveConfirm: () => { const r = relationTo(S.card && S.card.last); closeModal(); if (r.friend) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.'); },
+    removeFriendConfirm: () => { const id = S.pendingFriendRemovalId; S.pendingFriendRemovalId = null; closeModal(); if (id) socialPost('/api/me/friends/remove', { friendId: id }, 'Friend removed.'); },
+    leaveGameConfirm: () => { closeModal(); send({ t: 'leave' }); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
       makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
@@ -1462,8 +1458,8 @@
           <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
           <p>${esc(g.tagline)}</p>
           <div class="row game-actions">
-            <button class="btn small" data-act="create" data-game="${esc(g.id)}">Create table</button>
-            <button class="btn ghost small" data-act="rules" data-game="${esc(g.id)}">Rules</button>
+            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}">Create table</button>
+            <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
             ${g.id === 'wizard' ? (S.guest ? `<button class="btn ghost small" type="button" data-act="showLogin">Log in for offline scorecard</button>` : `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>`) : ''}
           </div>
         </div>
@@ -1475,7 +1471,7 @@
       <section class="home-hero">
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
-          <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Free card games in your browser. Bots fill any empty seat.'}</p>
+          <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
           ${S.guest ? '<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button></div>' : ''}
         </div>
         <form class="join-form" id="joinForm" aria-label="Join a table">
@@ -1637,7 +1633,8 @@
       act: (action) => send({ t: 'act', action }),
       leave: () => {
         const playing = S.room.status === 'playing' && !isSpectator();
-        if (!playing || confirm('Leave the game? A bot takes your seat, and you can rejoin from the home screen.')) send({ t: 'leave' });
+        if (!playing) send({ t: 'leave' });
+        else openModal('Leave game', '<p class="hint">Leave this game? A bot will take your seat, and you can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave game</button></div>');
       },
       rematch: () => send({ t: 'rematch' }),
       showRules: () => showRules(S.room.gameId),
@@ -1722,7 +1719,7 @@
     acceptFriend: (el) => socialPost('/api/me/friend-requests/accept', { requestId: el.dataset.id }, 'Friend request accepted.'),
     declineFriend: (el) => socialPost('/api/me/friend-requests/decline', { requestId: el.dataset.id }),
     cancelFriend: (el) => socialPost('/api/me/friend-requests/cancel', { requestId: el.dataset.id }),
-    removeFriend: (el) => { if (confirm('Remove this friend? Pending invitations between you will be revoked.')) socialPost('/api/me/friends/remove', { friendId: el.dataset.id }, 'Friend removed.'); },
+    removeFriend: (el) => { S.pendingFriendRemovalId = el.dataset.id; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="removeFriendConfirm">Remove friend</button></div>'); },
     acceptInvitation: async (el) => {
       try {
         const out = await postJson('/api/me/table-invitations/accept', { invitationId: el.dataset.id });

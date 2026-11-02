@@ -65,9 +65,42 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     return `<div class="menu-wrap bell-wrap"><button type="button" class="tb-bell" data-act="toggleBell" aria-haspopup="dialog" aria-expanded="${!!S.bellOpen}" aria-label="Notifications${n ? `, ${n} waiting` : ''}"><span aria-hidden="true">🔔</span>${n ? `<span class="bell-count" aria-hidden="true">${n > 9 ? '9+' : n}</span>` : ''}</button>${panel}</div>`;
   }
 
-  const COMING_SOON = [['🎲', 'Monopoly', 'Buy, trade and bankrupt your friends.'], ['🐍', 'Snakes and Ladders', 'Race to 100 and dodge the snakes.'], ['💣', 'Saboteur', 'Dig for gold — or stop the others from finding it.'], ['🃏', '6 nimmt!', 'Take 5: play a card, avoid the bulls.']];
+  const COMING_SOON = [
+    ['🐟', 'Go Fish', 'Ask, collect matching sets and make the most books.', 'Your build order'],
+    ['🐍', 'Snakes and Ladders', 'Race to the finish and watch out for the snakes.', 'Your build order'],
+    ['🏠', 'Property Rivals', 'Buy properties, trade smartly and build your empire.', 'Your build order'],
+    ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order'],
+    ['🐂', 'Bullhead Run', 'Play numbered cards and avoid collecting bullheads.', 'Your build order'],
+    ['🎨', 'Color Clash', 'Match colours and numbers, then play action cards wisely.', 'Your build order'],
+    ['🚢', 'Sea Battle', 'Hide your fleet, call your shots and sink the opposing ships.', 'Your build order'],
+    ['🌾', 'Resource Isles — 4 players', 'Gather resources, trade and build settlements and roads.', 'Your build order'],
+    ['🌾', 'Resource Isles — 5–6 players', 'Bring the larger-group expansion to the island.', 'Your build order'],
+    ['🟡', 'Four in a Row', 'Connect four pieces before your opponent does.', 'Additional games'],
+    ['🕵️', 'Secret Clues', 'Give clever clues so your team finds the right words.', 'Additional games'],
+    ['❎', 'Tic-Tac-Toe', 'Take turns placing Xs and Os to make a line of three.', 'Additional games'],
+  ];
+  function comingSoonCards(items, start) {
+    return items.map(([ico, name, description], index) => `<article class="soon-card">
+      <span class="soon-number" aria-label="Roadmap position ${start + index}">${start + index}</span>
+      <span class="soon-ico" aria-hidden="true">${ico}</span>
+      <div class="soon-copy"><b>${esc(name)}</b><small>${esc(description)}</small></div>
+      <span class="soon-tag">Planned</span>
+    </article>`).join('');
+  }
   function comingSoonHTML() {
-    return `<section class="home-section" aria-label="Coming soon"><h2 class="section">Coming soon</h2><div class="soon-grid">${COMING_SOON.map(([ico, n, d]) => `<div class="soon-card"><span class="soon-ico" aria-hidden="true">${ico}</span><div><b>${esc(n)}</b><small>${esc(d)}</small></div><em class="soon-tag">Soon</em></div>`).join('')}</div></section>`;
+    const requested = COMING_SOON.filter((item) => item[3] === 'Your build order');
+    const additional = COMING_SOON.filter((item) => item[3] === 'Additional games');
+    return `<section class="home-section coming-roadmap" aria-label="Coming soon games">
+      <div class="soon-heading">
+        <div><h2 class="section">Coming soon</h2><p class="soon-intro">The next games planned for Tableverse, in development order.</p></div>
+        <span class="soon-count">12 planned</span>
+      </div>
+      <h3 class="soon-group-title">Development order</h3>
+      <div class="soon-grid">${comingSoonCards(requested, 1)}</div>
+      <h3 class="soon-group-title soon-more-title">Also on the list</h3>
+      <div class="soon-grid">${comingSoonCards(additional, requested.length + 1)}</div>
+      <p class="soon-footnote">Titles are working names. Game rules will be implemented with original artwork and presentation.</p>
+    </section>`;
   }
 
 

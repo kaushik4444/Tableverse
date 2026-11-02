@@ -105,14 +105,32 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await page.waitForSelector('.friends-strip');
     assert.equal(await page.$('#friends-panel'), null, 'no full friends panel on home');
     assert.match(await page.textContent('.friends-strip'), /friends online|none online|Add friends/);
-    const soon = await page.textContent('.soon-grid');
-    for (const n of ['Monopoly', 'Snakes and Ladders', 'Ludo']) assert.match(soon, new RegExp(n));
+    const soon = await page.textContent('.coming-roadmap');
+    for (const n of ['Go Fish', 'Snakes and Ladders', 'Property Rivals', 'Hidden Miners', 'Bullhead Run', 'Color Clash', 'Sea Battle', 'Resource Isles', 'Four in a Row', 'Secret Clues', 'Tic-Tac-Toe']) assert.ok(soon.includes(n), `missing roadmap game: ${n}`);
     assert.equal(await page.$('.soon-card button'), null, 'coming-soon cards are not playable');
+    assert.equal(await page.locator('.soon-card').count(), 12, 'only the requested twelve games are listed');
     await page.click('.friends-strip [data-act="openFriendsPage"]');
     await page.waitForSelector('#friends-panel');
     assert.equal(new URL(page.url()).hash, '#friends');
     await page.click('.back-link');
     await page.waitForSelector('.game-grid');
+    await ctx.close();
+  });
+
+  await test('removing a friend uses a consistent in-app confirmation instead of a browser dialog', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs });
+    let nativeDialog = false;
+    page.on('dialog', async (dialog) => { nativeDialog = true; await dialog.dismiss(); });
+    await page.goto(url + '/#friends');
+    await page.waitForSelector('#friends-panel .social-row');
+    const row = page.locator('#friends-panel .social-row').filter({ hasText: '@bob' });
+    await row.locator('[data-act="removeFriend"]').click();
+    await page.waitForSelector('#modal-overlay');
+    assert.match(await page.textContent('#modal-overlay'), /Remove this friend/);
+    assert.match(await page.textContent('#modal-overlay'), /pending invitations/);
+    await page.click('#modal-overlay [data-modal-close]');
+    assert.equal(nativeDialog, false, 'no native browser confirmation was opened');
+    assert.equal(await row.count(), 1, 'cancel leaves the friend in the list');
     await ctx.close();
   });
 
