@@ -60,7 +60,7 @@
     for (let sq = 0; sq < 52; sq++) {
       const safe = SAFE.has(sq);
       const toks = at[sq] || [];
-      cells.push(`<div class="lc ${safe ? 'safe' : ''}"><div class="lc-toks">${toks.map((x) => `<span class="lc-tok" style="color:${x.color === '🔴'?'#ef4444':x.color==='🟡'?'#eab308':x.color==='🟢'?'#22c55e':'#3b82f6'}" data-lt="${x.i}:${x.t}">${x.color}</span>`).join('')}</div><small class="lc-num">${sq + 1}</small></div>`);
+      cells.push(`<div class="lc ${safe ? 'safe' : ''}"><div class="lc-toks">${toks.map((x) => `<span class="lc-tok" style="color:${x.color === '🔴'?'#ef4444':x.color==='🟡'?'#eab308':x.color==='🟢'?'#22c55e':'#3b82f6'}" data-lt="tok:${x.i}:${x.t}">${x.color}</span>`).join('')}</div><small class="lc-num">${sq + 1}</small></div>`);
     }
     return `<div class="lb"><div class="lb-track">${cells.join('')}</div>${homeAreasHTML(v)}</div>`;
   }
@@ -84,7 +84,7 @@
     return `<div class="ldice"><button class="btn big ld-roll ${!v.canRoll ? 'disabled' : ''}" data-lt="roll" ${!v.canRoll ? 'disabled' : ''}>${d === '?' ? 'Roll' : d}</button>${v.sixes ? `<span class="ld-sixes">sixes: ${v.sixes}</span>` : ''}</div>`;
   }
 
-  function controlsHTML(v) {
+  function controlsHTML(v, ctx) {
     if (v.me < 0) return '';
     if (v.phase === 'ready') {
       const me = v.players[v.me];
@@ -92,7 +92,8 @@
     }
     if (v.phase === 'gameOver') {
       const w = v.winner >= 0 ? esc(v.players[v.winner].name) : 'Nobody';
-      return `<div class="lready"><h2>${v.me === v.winner ? 'You won! 🎉' : `Game over — ${w} won`}</h2><p class="hint">Finishing order: ${v.finishedOrder.map((i) => esc(v.players[i].name)).join(' → ')}.</p><div class="row" style="margin-top:12px">${v.ctx.isHost ? '<button class="btn" data-lt="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-lt="leave">Leave table</button></div></div>`;
+      const isHost = ctx && ctx.isHost;
+      return `<div class="lready"><h2>${v.me === v.winner ? 'You won! 🎉' : `Game over — ${w} won`}</h2><p class="hint">Finishing order: ${v.finishedOrder.map((i) => esc(v.players[i].name)).join(' → ')}.</p><div class="row" style="margin-top:12px">${isHost ? '<button class="btn" data-lt="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-lt="leave">Leave table</button></div></div>`;
     }
     return '';
   }
@@ -111,7 +112,7 @@
       <div class="l-status ${v.myTurn ? 'mine' : ''}">${statusText(v)}</div>
       ${boardHTML(v)}
       ${diceHTML(v)}
-      ${controlsHTML(v)}
+      ${controlsHTML(v, ctx)}
     </div>`;
     root.onclick = onClick;
   }

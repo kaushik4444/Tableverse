@@ -220,6 +220,7 @@ function viewFor(g, playerId) {
       id: p.id,
       name: p.name,
       color: p.color,
+      ready: g.ready.has(i),
       tokens: g.tokens[i].slice(),
       finished: g.tokens[i].every((x) => x === FINISHED),
     })),

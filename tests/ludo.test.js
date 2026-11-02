@@ -203,6 +203,17 @@ test('viewFor: hand mirrors own tokens, myTurn/canRoll/canMove flags correct', a
   assert.equal(E.viewFor(g, 'p1').dice, null);
 });
 
+test('viewFor exposes each player ready status', async () => {
+  const g = E.createGame(people(3), {}, mulberry32(1));
+  const v0 = E.viewFor(g, 'p0');
+  assert.ok(v0.players.every((pl) => pl.ready === false), 'nobody ready at start');
+  must(g, 'p0', { type: 'ready' });
+  const v1 = E.viewFor(g, 'p0');
+  assert.equal(v1.players[0].ready, true);
+  assert.equal(v1.players[1].ready, false);
+  assert.equal(v1.players[2].ready, false);
+});
+
 test('plugin: create/view/act/awaiting/botAction/results wiring', async () => {
   const players = people(3);
   const g = plugin.create(players, {}, mulberry32(5));
