@@ -55,7 +55,7 @@
     ].map(([color,r,c]) => `<div class="ludo-base ${color}" style="grid-row:${r}/span 6;grid-column:${c}/span 6"><div class="ludo-base-inner"><div class="ludo-yard">${[0,1,2,3].map(k=>'<i></i>').join('')}</div></div><b>${color.toUpperCase()}</b></div>`).join('');
     const tokens = [];
     const occupied = new Map();
-    const stackOffsets = [[-22,-22],[22,-22],[-22,22],[22,22]];
+    const stackOffsets = [-30,-10,10,30].flatMap(y => [-30,-10,10,30].map(x => [x,y]));
     for (let i=0;i<v.n;i++) {
       for (let t=0;t<4;t++) {
         const p=v.players[i].tokens[t];
@@ -101,7 +101,7 @@
   function render(root,v,ctx) {
     ui.latest=v; ui.ctx=ctx;
     const lastAction = (v.log || []).slice(-1)[0];
-    const feedback = lastAction ? `<div class="ludo-feedback" role="status"><span>${lastAction.kind === 'capture' ? '⚔️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
+    const feedback = lastAction ? `<div class="ludo-feedback" role="status"><span>${lastAction.kind === 'capture' ? '⚔️' : lastAction.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
     root.innerHTML=`<section class="ludo ${v.phase==='gameOver'?'over':''}">
       <header class="ludo-header"><div><span class="ludo-kicker">TABLEVERSE CLASSICS</span><h2>🎲 Ludo</h2><p>Race your tokens home. First to finish all four wins.</p></div><nav>${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></nav></header>
       <div class="ludo-status ${v.myTurn?'mine':''}"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
