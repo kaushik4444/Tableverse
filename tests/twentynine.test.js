@@ -48,12 +48,12 @@ test('bidding is heads-up: a pass opens the seat for the next player clockwise',
   assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', amount: 16 }).ok, true);
   assert.equal(g.turn, first);
   assert.equal(E.applyAction(g, id(first), { type: 'bid', pass: true }).ok, true);
-  assert.equal(g.turn, (first + 2) % 4, 'the remaining active bidder gets the next turn');
+  assert.equal(g.turn, (first + 3) % 4, 'the incoming challenger gets the first response');
   assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', amount: 17 }).ok, false, 'a passed player cannot re-enter');
-  assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', amount: 17 }).ok, true);
-  assert.equal(g.turn, (first + 3) % 4, 'the newly-entered fourth player now gets a chance to raise');
-  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 18 }).ok, true);
-  assert.equal(g.turn, (first + 2) % 4);
+  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 17 }).ok, true);
+  assert.equal(g.turn, (first + 2) % 4, 'the incumbent responds to the incoming challenger');
+  assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', amount: 18 }).ok, true);
+  assert.equal(g.turn, (first + 3) % 4);
 });
 
 test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 28 ends it', () => {
@@ -98,9 +98,9 @@ test('open auction lets active bidders raise across rounds; passing is permanent
   assert.equal(act(third, { type: 'bid', amount: 19 }).ok, true);
   assert.equal(g.turn, f);
   assert.equal(act(f, { type: 'bid', pass: true }).ok, true);
-  assert.equal(g.turn, third);
+  assert.equal(g.turn, dealer, 'the newly-entered dealer responds to the incumbent');
   assert.equal(g.activeBidders.includes(dealer), true, 'dealer enters only after the first active bidder passes');
-  assert.equal(act(third, { type: 'bid', pass: true }).ok, true);
+  assert.equal(act(dealer, { type: 'bid', pass: true }).ok, true);
   assert.equal(g.phase, 'chooseTrump');
   assert.equal(g.highBidder, third);
   assert.equal(g.highBid, 19);
