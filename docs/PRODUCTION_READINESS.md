@@ -11,11 +11,12 @@ This document separates protections implemented in the application from operatio
 - Authentication uses HttpOnly session cookies, CSRF double-submit checks, password hashing, session revocation, and rate limits.
 - WebSocket upgrades validate browser Origin when supplied; inbound payloads, per-IP connections, and per-socket message rates are bounded.
 - Outbound WebSocket buffering, per-socket asynchronous message queues, and the global serial authentication queue are bounded. Slow consumers or overloaded handshakes are disconnected rather than allowed to accumulate unbounded memory.
-- HTTP responses receive security headers, including a restrictive Content Security Policy, no-sniff, referrer and permissions policies; HSTS is enabled in production.
+- HTTP responses receive security headers, including a restrictive Content Security Policy, no-sniff, referrer and permissions policies; HSTS is enabled in production. Health/readiness probes are marked `no-store`.
 - Finished match writes are retried and spooled locally before database persistence; shutdown drains the queue for a bounded period.
+- HTTP header/body receive timeouts and keep-alive timeouts are bounded.
 - Health (`/healthz`) and readiness (`/readyz`) endpoints are available.
 - Render and Docker production builds use `npm ci` against the committed lockfile for reproducible dependency installation.
-- The test suite covers game engines, HTTP/WebSocket flows, PostgreSQL integration, account lifecycle, access control and UI layout checks.
+- CI runs game engines, HTTP/WebSocket flows, PostgreSQL integration, account lifecycle, access control and real-browser layout checks; it also audits production dependencies and builds the production Docker image.
 
 ## Deployment constraints to resolve before a public launch
 
