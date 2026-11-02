@@ -1,168 +1,203 @@
-/* Classic cross-board Ludo renderer. Rules and server state remain in games/ludo/engine.js. */
+/* Ludo table renderer: a classic cross board drawn as one SVG, glossy tokens on top, and a single compact turn bar.
+ * Rules and server state live in games/ludo/engine.js; this file only draws a view and sends { roll | ready | move }.
+ *
+ * Geometry (cell units on a 15 x 15 board, a cell's centre is +0.5): seat 0 is the top-left yard and the other seats
+ * follow clockwise. Everything for seat 0 is defined once and rotated by 90 degrees per seat. */
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, root: null };
-  const COLORS = ['red', 'yellow', 'green', 'blue'];
-  const HEX = { red: '#e84b4b', yellow: '#f2c94c', green: '#28a66a', blue: '#4388df' };
-  const EMOJI = { red: '🔴', yellow: '🟡', green: '🟢', blue: '🔵' };
-  const TRACK = [
-    [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],[0,7],[0,8],
-    [1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
-    [7,14],[8,14],[8,13],[8,12],[8,11],[8,10],[8,9],[9,8],[10,8],[11,8],[12,8],[13,8],
-    [14,8],[14,7],[14,6],[13,6],[12,6],[11,6],[10,6],[9,6],[8,5],[8,4],[8,3],[8,2],[8,1],[8,0],
-    [7,0],[6,0]
+
+  const LAP = 51; // ring squares a token walks (internal positions 0..50), then 51..55 = home column, 56 = home
+  const FINISHED = 56;
+  const SEAT = [
+    { name: 'red', hex: '#ef4444', dark: '#b91c1c', light: '#fecaca' },
+    { name: 'green', hex: '#22c55e', dark: '#15803d', light: '#bbf7d0' },
+    { name: 'yellow', hex: '#f5b301', dark: '#b45309', light: '#fde68a' },
+    { name: 'blue', hex: '#3b82f6', dark: '#1d4ed8', light: '#bfdbfe' },
   ];
-  const SAFE = new Set([0,8,13,21,26,34,39,47]);
-  const HOME = [
-    [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]],
-    [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]],
-    [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]],
-    [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]]
-  ];
-  const STARTS = [0,13,26,39];
-  function pos(i, p) {
-    if (p >= 0 && p < 52) return TRACK[(STARTS[i] + p) % 52];
-    if (p >= 52 && p < 58) return HOME[i][p - 52];
-    return null;
+  const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]); // ring squares that protect from capture
+  const seatsFor = (n) => (n === 2 ? [0, 2] : [0, 1, 2, 3].slice(0, n));
+
+  // rotate a point (cell units) a quarter turn clockwise, k times
+  const rot = ([x, y], k) => { for (let i = 0; i < k; i++) [x, y] = [15 - y, x]; return [x, y]; };
+  const center = ([c, r]) => [c + 0.5, r + 0.5];
+
+  // Ring: 13 squares for seat 0 (start square first), rotated for the next three seats.
+  const RING0 = [[1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [6, 5], [6, 4], [6, 3], [6, 2], [6, 1], [6, 0], [7, 0], [8, 0]];
+  const RING = [];
+  for (let k = 0; k < 4; k++) for (const cell of RING0) RING.push(rot(center(cell), k).map((v) => v - 0.5));
+  // Home column for seat 0: five squares leading to the centre; position 56 sits in the centre triangle.
+  const LANE0 = [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7]];
+  const lane = (seat) => LANE0.map((cell) => rot(center(cell), seat).map((v) => v - 0.5));
+  const YARD0 = [[1.9, 1.9], [4.1, 1.9], [1.9, 4.1], [4.1, 4.1]]; // token slots in the top-left yard
+  const HOME0 = [[6.45, 7.05], [6.45, 7.5], [6.45, 7.95], [6.85, 7.5]]; // finished tokens in the seat's centre triangle
+
+  /** Centre of the square a token stands on, in cell units. */
+  function where(seat, pos, t) {
+    if (pos === -1) return rot(YARD0[t], seat);
+    if (pos === FINISHED) return rot(HOME0[t % 4], seat);
+    if (pos >= LAP) return center(lane(seat)[pos - LAP]);
+    return center(RING[(seat * 13 + pos) % 52]);
   }
-  function status(v) {
-    if (v.phase === 'gameOver') return v.winner >= 0 ? v.players[v.winner].name + ' wins!' : 'Game over';
-    if (v.phase === 'ready') return v.myTurn ? 'Everyone ready? Start the game' : v.players[v.turn].name + ' is getting ready';
-    if (v.phase === 'rolling') return v.canRoll ? 'Your turn — roll the dice' : v.players[v.turn].name + ' is next to roll';
-    if (v.phase === 'moving') return v.canMove ? 'Your turn — choose a highlighted token' : v.players[v.turn].name + ' is choosing a token';
+  const ringKey = (seat, pos) => (pos >= 0 && pos < LAP ? 'r' + ((seat * 13 + pos) % 52) : null);
+
+  const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map() };
+
+  function boardSVG(n) {
+    const seats = seatsFor(n);
+    const cells = [];
+    const rect = (c, r, fill, extra = '') => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.14" fill="${fill}" ${extra}/>`;
+    RING.forEach(([c, r], i) => {
+      const startSeat = i % 13 === 0 ? i / 13 : -1;
+      const used = startSeat >= 0 && seats.includes(startSeat);
+      cells.push(rect(c, r, startSeat >= 0 ? SEAT[startSeat].hex : '#f1f5f9'));
+      if (startSeat >= 0 && !used) cells[cells.length - 1] = rect(c, r, SEAT[startSeat].light);
+      if (SAFE.has(i) && startSeat < 0) cells.push(`<text x="${c + 0.5}" y="${r + 0.72}" text-anchor="middle" font-size="0.62" fill="#94a3b8">★</text>`);
+      if (startSeat >= 0) cells.push(`<text x="${c + 0.5}" y="${r + 0.72}" text-anchor="middle" font-size="0.62" fill="#fff">★</text>`);
+    });
+    for (let k = 0; k < 4; k++) lane(k).forEach(([c, r]) => cells.push(rect(c, r, seats.includes(k) ? SEAT[k].light : '#f1f5f9')));
+    const yards = [0, 1, 2, 3].map((k) => {
+      const active = seats.includes(k);
+      const [x, y] = rot([3, 3], k);
+      const slots = YARD0.map((p) => rot(p, k)).map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="0.78" fill="${active ? SEAT[k].dark : '#cbd5e1'}" opacity="${active ? 0.22 : 0.5}"/>`).join('');
+      return `<g><rect x="${x - 3}" y="${y - 3}" width="6" height="6" rx="0.5" fill="${active ? SEAT[k].hex : '#cbd5e1'}"/><rect x="${x - 2.4}" y="${y - 2.4}" width="4.8" height="4.8" rx="0.45" fill="#fff" opacity="${active ? 0.92 : 0.6}"/>${slots}</g>`;
+    }).join('');
+    const tri = (pts, k) => `<polygon points="${pts}" fill="${seats.includes(k) ? SEAT[k].hex : '#cbd5e1'}"/>`;
+    const centre = `${tri('6,6 6,9 7.5,7.5', 0)}${tri('6,6 9,6 7.5,7.5', 1)}${tri('9,6 9,9 7.5,7.5', 2)}${tri('6,9 9,9 7.5,7.5', 3)}`;
+    return `<svg class="ludo-svg" viewBox="0 0 15 15" aria-hidden="true" focusable="false"><rect width="15" height="15" rx="0.7" fill="#fff"/>${yards}${cells.join('')}${centre}<circle cx="7.5" cy="7.5" r="0.28" fill="#fff" opacity=".9"/></svg>`;
+  }
+
+  function tokensHTML(v) {
+    const seats = v.players.map((p, i) => (Number.isInteger(p.seat) ? p.seat : seatsFor(v.n)[i]));
+    // tokens that share a ring square are fanned out so each stays visible and tappable
+    const groups = new Map();
+    v.players.forEach((p, i) => p.tokens.forEach((pos, t) => {
+      const key = ringKey(seats[i], pos);
+      if (key) groups.set(key, (groups.get(key) || 0) + 1);
+    }));
+    const seen = new Map();
+    const FAN = { 2: [[-0.2, 0], [0.2, 0]], 3: [[-0.2, -0.16], [0.2, -0.16], [0, 0.2]], 4: [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]] };
+    const out = [];
+    const last = v.lastMove;
+    v.players.forEach((p, i) => p.tokens.forEach((pos, t) => {
+      const seat = seats[i];
+      let [x, y] = where(seat, pos, t);
+      const key = ringKey(seat, pos);
+      let stack = 1;
+      if (key && groups.get(key) > 1) {
+        stack = Math.min(groups.get(key), 4);
+        const idx = seen.get(key) || 0; seen.set(key, idx + 1);
+        const off = (FAN[stack] || FAN[4])[idx % stack];
+        x += off[0]; y += off[1];
+      }
+      const legal = i === v.me && v.canMove && (v.legalTokens || []).includes(t);
+      const home = pos === FINISHED;
+      const label = pos === -1 ? `Bring token ${t + 1} out` : pos >= LAP && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
+      const moved = last && last.player === i && last.token === t;
+      const pid = `${i}-${t}`;
+      out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / 15) * 100}%;top:${(y / 15) * 100}%"><i></i></button>`);
+    }));
+    return out.join('');
+  }
+
+  function dieHTML(d, rolling) {
+    const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+    const on = new Set(PIPS[d] || []);
+    return `<div class="ludo-die ${rolling ? 'rolling' : ''} ${d ? '' : 'blank'}" role="img" aria-label="${d ? 'Dice shows ' + d : 'Dice not rolled yet'}">${d ? Array.from({ length: 9 }, (_, k) => `<span class="${on.has(k) ? 'on' : ''}"></span>`).join('') : '<b>?</b>'}</div>`;
+  }
+
+  function statusLine(v) {
+    const nm = (i) => (v.players[i] ? esc(v.players[i].name) : 'A player');
+    if (v.phase === 'gameOver') return v.winner >= 0 ? `${nm(v.winner)} wins!` : 'Game over';
+    if (v.phase === 'ready') return v.me >= 0 && !v.players[v.me].ready ? 'Ready to start?' : 'Waiting for the others…';
+    if (v.phase === 'rolling') return v.canRoll ? 'Your turn — roll the dice' : `${nm(v.turn)} is rolling…`;
+    if (v.phase === 'moving') return v.canMove ? 'Pick a glowing token' : `${nm(v.turn)} is moving…`;
     return 'Ludo';
   }
-  function tokenButton(v, i, t, p, x, y, home = false, offset = [0, 0]) {
-    if (p === 58) return '';
-    const selectable = i === v.me && v.canMove && (v.legalTokens || []).includes(t);
-    const color = COLORS[i];
-    const title = `${v.players[i].name} — token ${t + 1}`;
-    return `<button type="button" class="ludo-token ${color} ${selectable ? 'legal' : ''} ${home ? 'in-yard' : ''}" style="left:${(x / 15) * 100 + 3.333}%;top:${(y / 15) * 100 + 3.333}%;--stack-x:${offset[0]}%;--stack-y:${offset[1]}%" ${selectable ? `data-lt="tok:${t}" aria-label="${home ? "Bring token " + (t + 1) + " out" : p >= 52 ? "Move home-column token " + (t + 1) : "Move token " + (t + 1)}"` : 'disabled aria-hidden="true"'} title="${esc(title)}"><span></span></button>`;
+  function lastEvent(v) {
+    const e = (v.log || []).slice(-1)[0];
+    if (!e || v.phase === 'ready') return '';
+    const icon = e.kind === 'capture' ? '⚔️' : e.kind === 'home' ? '🏁' : e.kind === 'miss' ? '↪️' : e.kind === 'roll' ? '🎲' : '•';
+    return `${icon} ${esc(e.by)} ${esc(e.card)}`;
   }
-  function board(v) {
-    const tiles = TRACK.map(([r,c], sq) => {
-      const safe = SAFE.has(sq);
-      const start = STARTS.indexOf(sq);
-      const cls = start >= 0 ? COLORS[start] + '-start' : safe ? 'safe' : '';
-      return `<div class="ludo-cell ${cls}" style="grid-row:${r+1};grid-column:${c+1}">${start >= 0 ? '★' : safe ? '✦' : ''}</div>`;
-    }).join('');
-    const lanes = HOME.map((lane,i) => lane.map(([r,c],j) =>
-      `<div class="ludo-cell lane ${COLORS[i]}" style="grid-row:${r+1};grid-column:${c+1}">${j===5?'◆':''}</div>`
-    ).join('')).join('');
-    const bases = [
-      ['red',1,1],['yellow',1,9],['blue',9,1],['green',9,9]
-    ].map(([color,r,c]) => `<div class="ludo-base ${color}" style="grid-row:${r}/span 6;grid-column:${c}/span 6"><div class="ludo-base-inner"><div class="ludo-yard">${[0,1,2,3].map(k=>'<i></i>').join('')}</div></div><b>${color.toUpperCase()}</b></div>`).join('');
-    const tokens = [];
-    const occupied = new Map();
-    const stackOffsets = [-30,-10,10,30].flatMap(y => [-30,-10,10,30].map(x => [x,y]));
-    for (let i=0;i<v.n;i++) {
-      for (let t=0;t<4;t++) {
-        const p=v.players[i].tokens[t];
-        if (p===58) continue;
-        const xy=pos(i,p);
-        if (xy) {
-          const key = xy.join(',');
-          const slot = occupied.get(key) || 0;
-          occupied.set(key, slot + 1);
-          tokens.push(tokenButton(v,i,t,p,xy[1],xy[0],false,stackOffsets[slot % stackOffsets.length]));
-        }
-        else {
-          const homeCells = [[2,2],[2,4],[4,2],[4,4],[2,10],[2,12],[4,10],[4,12],[10,10],[10,12],[12,10],[12,12],[10,2],[10,4],[12,2],[12,4]];
-          const baseOffset=[0,4,8,12][i];
-          const [r,c]=homeCells[baseOffset+t];
-          tokens.push(tokenButton(v,i,t,p,c,r,true));
-        }
-      }
+
+  function barHTML(v) {
+    const turnSeat = v.players[v.turn] ? SEAT[Number.isInteger(v.players[v.turn].seat) ? v.players[v.turn].seat : seatsFor(v.n)[v.turn]] : SEAT[0];
+    const rolling = v.dice !== null && v.dice !== undefined && ui.rollSeq !== null && v.event && v.event.seq !== ui.rollSeq;
+    let action = '';
+    if (v.me >= 0) {
+      if (v.phase === 'ready') action = `<button class="btn big ludo-roll" data-lt="ready" ${v.players[v.me].ready ? 'disabled' : ''}>${v.players[v.me].ready ? 'Waiting…' : 'I’m ready'}</button>`;
+      else if (v.phase === 'rolling') action = `<button class="btn big ludo-roll" data-lt="roll" ${v.canRoll ? '' : 'disabled'}>${v.canRoll ? 'Roll dice' : 'Waiting…'}</button>`;
     }
-    const center = `<div class="ludo-center" style="grid-row:7/span 3;grid-column:7/span 3"><div class="tri red"></div><div class="tri yellow"></div><div class="tri green"></div><div class="tri blue"></div><span>★</span></div>`;
-    return `<div class="ludo-board-wrap"><div class="ludo-board">${bases}${tiles}${lanes}${center}<div class="ludo-tokens">${tokens.join('')}</div></div></div>`;
+    const sixes = v.sixes ? `<small>${v.sixes === 1 ? 'A six — roll again after moving' : 'Two sixes in a row — a third ends your turn'}</small>` : '';
+    return `<div class="ludo-dice-panel ludo-status ${v.myTurn ? 'mine' : ''}" style="--turn:${turnSeat.hex}">
+      ${dieHTML(v.dice, rolling)}
+      <div class="ludo-dice-copy"><b>${statusLine(v)}</b>${sixes || (lastEvent(v) ? `<small>${lastEvent(v)}</small>` : '')}</div>
+      ${action}
+    </div>`;
   }
-  function players(v) {
-    return `<div class="ludo-players">${v.players.map((p,i)=> {
-      const done=p.tokens.filter(x=>x===58).length;
-      const active=i===v.turn && v.phase!=='gameOver';
-      return `<div class="ludo-player ${COLORS[i]} ${active?'active':''} ${i===v.me?'you':''}"><span class="player-dot"></span><div class="player-copy"><b>${esc(p.name)} ${i===v.me?'<small>(you)</small>':''}</b><small>${active?'Playing now':p.ready?'Ready':'Waiting'}</small></div><strong>${done}/4 <small>home</small></strong></div>`;
-    }).join('')}</div>`;
+
+  function playersHTML(v) {
+    return `<ul class="ludo-players" aria-label="Players">${v.players.map((p, i) => {
+      const seat = SEAT[Number.isInteger(p.seat) ? p.seat : seatsFor(v.n)[i]];
+      const home = p.tokens.filter((x) => x === FINISHED).length;
+      const active = i === v.turn && v.phase !== 'gameOver' && v.phase !== 'ready';
+      const pips = [0, 1, 2, 3].map((k) => `<i class="${k < home ? 'on' : ''}"></i>`).join('');
+      return `<li class="ludo-player ${active ? 'active' : ''} ${i === v.me ? 'you' : ''}" style="--c:${seat.hex}"><span class="player-dot"></span><b>${esc(p.name)}${i === v.me ? ' <small>you</small>' : ''}</b><span class="pips" title="${home} of 4 home">${pips}</span></li>`;
+    }).join('')}</ul>`;
   }
-  function dice(v) {
-    const d=v.dice;
-    const face=d===null?'?':String(d);
-    const player = v.players[v.turn] ? esc(v.players[v.turn].name) : 'Player';
-    const label = d===null ? (v.canRoll ? 'Your turn to roll' : player + ' to roll') : player + ' rolled a ' + d;
-    return `<div class="ludo-dice-panel"><div class="ludo-die ${v.canRoll?'rollable':''}">${face}</div><div class="ludo-dice-copy"><b>${label}</b><small>${v.sixes? v.sixes+' consecutive six'+(v.sixes===1?'':'es')+' — roll again':''}</small></div><button class="btn big ludo-roll" data-lt="roll" ${v.canRoll?'':'disabled'}>${v.canRoll?'Roll dice':v.phase==='moving'?'Choose token':'Waiting'}</button></div>`;
+
+  function endHTML(v, ctx) {
+    if (v.phase !== 'gameOver') return '';
+    const w = v.winner >= 0 ? esc(v.players[v.winner].name) : 'Nobody';
+    const order = (v.finishedOrder || []).map((i, k) => `<li><span>${k + 1}</span>${esc(v.players[i].name)}</li>`).join('');
+    return `<div class="ludo-end"><b>${v.me === v.winner ? 'You won! 🎉' : `${w} won`}</b><ol>${order}</ol><div class="row">${ctx && ctx.isHost ? '<button class="btn" data-lt="again">Play again</button>' : '<small>The host can start a rematch.</small>'}<button class="btn ghost" data-lt="leave">Leave table</button></div></div>`;
   }
-  function controls(v,ctx) {
-    if(v.phase==='ready' && v.me>=0) return `<div class="ludo-ready"><b>Ready to play?</b><span>All players must be ready before the first roll.</span><button class="btn big" data-lt="ready" ${v.players[v.me].ready?'disabled':''}>${v.players[v.me].ready?'Ready ✓':'I’m ready'}</button></div>`;
-    if(v.phase==='gameOver') {
-      const w=v.winner>=0?esc(v.players[v.winner].name):'Nobody';
-      return `<div class="ludo-ready"><b>${v.me===v.winner?'You won the game! 🎉':w+' won the game'}</b><span>Finishing order: ${(v.finishedOrder||[]).map(i=>esc(v.players[i].name)).join(' · ')}</span><div class="row">${ctx&&ctx.isHost?'<button class="btn" data-lt="again">Play again</button>':''}<button class="btn ghost" data-lt="leave">Leave table</button></div></div>`;
-    }
-    return '';
-  }
-  function eventFeedback(v) {
-    const event = v.event;
-    if (event) {
-      const name = (i) => v.players[i] ? esc(v.players[i].name) : 'A player';
-      if (event.type === 'rolled') return `<div class="ludo-feedback"><span>🎲</span><b>${name(event.by)} rolled a ${event.dice}</b></div>`;
-      if (event.type === 'moved') return `<div class="ludo-feedback"><span>🟢</span><b>${name(event.by)} moved token ${event.token + 1} by ${event.dice}</b></div>`;
-      if (event.type === 'turn') {
-        const detail = (v.log || []).slice(-2).map((entry) => `${esc(entry.by)} ${esc(entry.card)}`).join(' · ');
-        const prefix = detail ? `${detail} · ` : '';
-        return `<div class="ludo-feedback"><span>👤</span><b>${prefix}${name(event.by)}’s turn</b></div>`;
-      }
-      if (event.type === 'finished') return `<div class="ludo-feedback"><span>🏁</span><b>${name(event.by)} finished in place ${event.place}</b></div>`;
-      if (event.type === 'won') return `<div class="ludo-feedback"><span>🏆</span><b>${name(event.by)} won the game</b></div>`;
-      if (event.type === 'start') return '<div class="ludo-feedback"><span>🎲</span><b>The game has started</b></div>';
-    }
-    const last = (v.log || []).slice(-1)[0];
-    return last ? `<div class="ludo-feedback"><span>${last.kind === 'capture' ? '⚔️' : last.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(last.by)} ${esc(last.card)}</b></div>` : '';
-  }
-  function render(root,v,ctx) {
-    ui.latest=v; ui.ctx=ctx; ui.root=root;
-    const feedback = eventFeedback(v);
-    root.innerHTML=`<section class="ludo ${v.phase==='gameOver'?'over':''}">
+
+  function render(root, v, ctx) {
+    ui.latest = v; ui.ctx = ctx; ui.root = root;
+    // remember where tokens were so moves glide instead of jumping
+    const before = new Map();
+    root.querySelectorAll('.ludo-token[data-pid]').forEach((el) => before.set(el.dataset.pid, [el.style.left, el.style.top]));
+    root.innerHTML = `<section class="ludo ${v.phase === 'gameOver' ? 'over' : ''}">
       <div class="ludo-tools">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></div>
-      <div class="ludo-status ${v.myTurn?'mine':''}"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
-      ${feedback}
-      <div class="ludo-layout"><main class="ludo-play-area">${board(v)}</main><aside class="ludo-side"><h3>Players</h3>${players(v)}${dice(v)}</aside></div>
-      ${controls(v,ctx)}
+      <div class="ludo-layout">
+        <div class="ludo-main">${barHTML(v)}<div class="ludo-board" style="--n:${v.n}">${boardSVG(v.n)}<div class="ludo-tokens">${tokensHTML(v)}</div></div></div>
+        <aside class="ludo-side">${playersHTML(v)}${endHTML(v, ctx)}</aside>
+      </div>
     </section>`;
-    root.onclick=onClick;
-  }
-  function onClick(e) {
-    const clickedToken = e.target.closest('.ludo-token');
-    const el=e.target.closest('[data-lt]');
-    if(!el)return;
-    const v=ui.latest,ctx=ui.ctx;
-    if(!v||!ctx)return;
-    // Expanded touch halos can overlap on a small board. Resolve a token tap to the
-    // nearest selectable token centre, not whichever overlapping button painted last.
-    if (clickedToken) {
-      const legal = [...(ui.root?.querySelectorAll('.ludo-token.legal[data-lt]') || [])];
-      const hitCandidates = legal.map((token) => {
-        const r = token.getBoundingClientRect();
-        return { token, r, distance: (r.left + r.width / 2 - e.clientX) ** 2 + (r.top + r.height / 2 - e.clientY) ** 2 };
-      }).filter(({ r }) => e.clientX >= r.left - 11 && e.clientX <= r.right + 11 && e.clientY >= r.top - 11 && e.clientY <= r.bottom + 11);
-      if (hitCandidates.length) {
-        // If enlarged halos overlap, the nearest visible token face wins.
-        const nearest = hitCandidates.reduce((best, candidate) => !best || candidate.distance < best.distance ? candidate : best, null);
-        const token = Number(nearest.token.dataset.lt.slice(4));
-        if (Number.isInteger(token) && v.canMove && (v.legalTokens || []).includes(token)) ctx.act({ type: 'move', token });
+    ui.rollSeq = v.event ? v.event.seq : null;
+    if (before.size) {
+      const moving = [];
+      root.querySelectorAll('.ludo-token[data-pid]').forEach((el) => {
+        const old = before.get(el.dataset.pid);
+        if (old && (old[0] !== el.style.left || old[1] !== el.style.top)) moving.push([el, el.style.left, el.style.top, old]);
+      });
+      moving.forEach(([el, , , old]) => { el.style.transition = 'none'; el.style.left = old[0]; el.style.top = old[1]; });
+      if (moving.length) {
+        void root.offsetWidth; // commit the old positions, then animate to the new ones
+        moving.forEach(([el, l, t]) => { el.style.transition = ''; el.style.left = l; el.style.top = t; });
       }
-      return;
     }
-    if(el.disabled)return;
-    const a=el.dataset.lt;
-    if(a==='roll')ctx.act({type:'roll'});
-    else if(a==='ready')ctx.act({type:'ready'});
-    else if(a==='rules')ctx.showRules();
-    else if(a==='again')ctx.rematch();
-    else if(a==='leave')ctx.leave();
-    else if(a.startsWith('tok:')) {
-      const token=Number(a.slice(4));
-      if(Number.isInteger(token)&&v.canMove&&(v.legalTokens||[]).includes(token))ctx.act({type:'move',token});
+    root.onclick = onClick;
+  }
+
+  function onClick(e) {
+    const el = e.target.closest('[data-lt]');
+    if (!el || el.disabled) return;
+    const v = ui.latest; const ctx = ui.ctx;
+    if (!v || !ctx) return;
+    const a = el.dataset.lt;
+    if (a === 'roll') ctx.act({ type: 'roll' });
+    else if (a === 'ready') ctx.act({ type: 'ready' });
+    else if (a === 'rules') ctx.showRules();
+    else if (a === 'again') ctx.rematch();
+    else if (a === 'leave') ctx.leave();
+    else if (a.startsWith('tok:')) {
+      const token = Number(a.slice(4));
+      if (Number.isInteger(token) && v.canMove && (v.legalTokens || []).includes(token)) ctx.act({ type: 'move', token });
     }
   }
-  window.CardTable.register('ludo',{render});
+
+  window.CardTable.register('ludo', { render });
 })();

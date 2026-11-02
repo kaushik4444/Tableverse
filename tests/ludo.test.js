@@ -294,14 +294,14 @@ test('renderer exposes clickable own yard, track and home tokens only when legal
     window, CardTable: cardTable,
   });
   assert.ok(registered, 'Ludo renderer registered');
-  const root = { style: { setProperty() {} }, innerHTML: '', onclick: null };
+  const root = { style: { setProperty() {} }, innerHTML: '', onclick: null, querySelectorAll: () => [], offsetWidth: 0 };
   const view = {
     n: 2, me: 0, phase: 'moving', turn: 0, canMove: true, canRoll: false,
     myTurn: true, dice: 6, sixes: 1, winner: null, finishedOrder: [],
     legalTokens: [0, 1, 2],
     players: [
-      { id: 'p0', name: 'Me', color: '🔴', ready: true, tokens: [-1, 0, 52, 58] },
-      { id: 'p1', name: 'Opponent', color: '🟡', ready: true, tokens: [39, -1, -1, -1] },
+      { id: 'p0', name: 'Me', color: '🔴', seat: 0, ready: true, tokens: [-1, 0, 51, 56] },
+      { id: 'p1', name: 'Opponent', color: '🟡', seat: 2, ready: true, tokens: [39, -1, -1, -1] },
     ],
   };
   registered.render(root, view, { isHost: true, act() {}, showRules() {}, rematch() {}, leave() {} });
