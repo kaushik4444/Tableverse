@@ -17,6 +17,7 @@ const { createAuthRoutes } = require('./lib/authRoutes');
 const dbAccount = require('./db/account');
 const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
+const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -316,24 +317,12 @@ function start(opts = {}) {
     if (!text) return;
     send(recipient.ws, { t: 'socialNotice', kind: event.type, text, invitationId: event.invitationId });
   }
-  /**
-   * A friendship ended. Private tables that are still gathering (lobby) lose the person who no longer has access: they
-   * are taken out with a notice. A game already under way is left alone (their seat is theirs until they leave), but
-   * they cannot come back to it once they have left.
-   */
-  function onFriendRemoved(a, b) {
+  /** A friendship ended: everybody at the affected private tables is checked against the access rule again. */
+  async function onFriendRemoved(a, b) {
     for (const room of [...rooms.values()]) {
-      if (room.visibility !== 'private' || room.status !== 'lobby') continue;
-      for (const [host, guest] of [[a, b], [b, a]]) {
-        if (room.hostId !== host) continue;
-        const q = players.get(guest);
-        if (!q || q.room !== room.code) continue;
-        leaveRoom(q);
-        if (q.connected) {
-          send(q.ws, { t: 'left' });
-          send(q.ws, { t: 'notice', text: 'You are no longer friends with the host, so you left their private table.' });
-        }
-      }
+      if (room.visibility !== 'private') continue;
+      const here = [...room.members, ...room.spectators].some((v) => v.id === a || v.id === b);
+      if (here) await enforceAccess(room, null).catch((e) => console.error('[server] access check failed:', e.message));
     }
     publishPresence(a);
     publishPresence(b);
@@ -358,16 +347,38 @@ function start(opts = {}) {
       console.error('[server] presence update failed:', err.message);
     }
   }
+  /** Private-table access: the rule is in lib/roomAccess.js (documented there); this wires it to the database. */
   async function canEnterRoom(p, room) {
-    if (room.visibility === 'public' || room.hostId === p.id || (room.hosts && room.hosts.has(p.id))) return true;
-    // already seated or watching: access was checked when they came in; a reconnect must not strand their seat
-    if (room.members.some((m) => m.id === p.id && !m.bot) || room.spectators.some((x) => x.id === p.id)) return true;
-    if (!dbPool.hasDatabase() || p.isAnonymous) return false;
     try {
-      return await dbFriends.canJoinPrivateRoom(p.id, room.code, room.gameId, [...new Set([room.hostId, ...(room.hosts || [])])]);
+      const { allowed } = await decideAccess({
+        room, playerId: p.id, isAnonymous: p.isAnonymous, hasDatabase: dbPool.hasDatabase(),
+        invitedBy: (inviterIds) => dbFriends.canJoinPrivateRoom(p.id, room.code, room.gameId, inviterIds),
+        areFriends: (a, b) => dbFriends.hasFriendship(a, b),
+      });
+      return allowed;
     } catch (err) {
       console.error('[server] private room authorization failed:', err.message);
       return false;
+    }
+  }
+  /**
+   * Apply the access rule again to people already at a private table (a friendship ended, or a finished game is being
+   * restarted). Whoever no longer qualifies leaves with a notice. `onlyIds` limits the check; null checks everybody.
+   */
+  async function enforceAccess(room, onlyIds = null) {
+    if (room.visibility !== 'private') return;
+    const code = room.code;
+    for (const v of [...room.members.filter((m) => !m.bot), ...room.spectators]) {
+      if (onlyIds && !onlyIds.includes(v.id)) continue;
+      const q = players.get(v.id);
+      if (!q || q.room !== code || rooms.get(code) !== room) continue;
+      if (await canEnterRoom(q, room)) continue;
+      if (q.room !== code || rooms.get(code) !== room) continue; // moved on while we were asking
+      leaveRoom(q);
+      if (q.connected) {
+        send(q.ws, { t: 'left' });
+        send(q.ws, { t: 'notice', text: 'You can no longer be at that private table, so you left it.' });
+      }
     }
   }
   const isConnected = (m) => m.bot || !!players.get(m.id)?.connected;
@@ -985,20 +996,17 @@ function start(opts = {}) {
       afterChange(room);
     },
 
-    rematch(p) {
+    async rematch(p) {
       const room = hostRoom(p, 'finished');
       if (!room) return;
       clearTimeout(room.timer);
       room.game = null;
       room.status = 'lobby';
       room.deadline = null;
-      // spectators take any free seat; the rest keep watching and can sit down when the host frees a seat
-      for (const s of room.spectators.slice()) {
-        if (room.members.length >= room.seats) break;
-        room.spectators.splice(room.spectators.indexOf(s), 1);
-        room.members.push({ id: s.id, name: s.name, avatar: s.avatar, bot: false });
-      }
-      broadcast(room);
+      // Spectators stay spectators: watching a game does not turn into a seat when the next one is set up. They can sit
+      // down themselves from the lobby ("sit"), and a private table is checked again for everybody (friendships may have ended).
+      await enforceAccess(room);
+      if (rooms.get(room.code) === room) broadcast(room);
     },
   };
 
