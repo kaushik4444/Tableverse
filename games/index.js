@@ -6,6 +6,7 @@ const registry = {
   poker: require('./poker'),
   themind: require('./themind'),
   ludo: require('./ludo'),
+  gofish: require('./gofish'),
 };
 
 module.exports = {
