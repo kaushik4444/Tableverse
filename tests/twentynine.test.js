@@ -66,8 +66,8 @@ test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 2
   assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 29 }).ok, false); // above maximum
   assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 15.5 }).ok, false);
   assert.equal(E.applyAction(g, id(first), { type: 'bid', pass: true }).ok, true);
-  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', pass: true }).ok, true);
   assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, (first + 3) % 4, 'the dealer is the next challenger');
   assert.equal(E.viewFor(g, id(first + 3)).canPass, false); // dealer must bid
   assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', pass: true }).ok, false);
   assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 15 }).ok, true);
