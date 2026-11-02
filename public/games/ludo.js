@@ -55,7 +55,7 @@
     ].map(([color,r,c]) => `<div class="ludo-base ${color}" style="grid-row:${r}/span 6;grid-column:${c}/span 6"><div class="ludo-base-inner"><div class="ludo-yard">${[0,1,2,3].map(k=>'<i></i>').join('')}</div></div><b>${color.toUpperCase()}</b></div>`).join('');
     const tokens = [];
     const occupied = new Map();
-    const stackOffsets = [[-1.15,-1.15],[1.15,-1.15],[-1.15,1.15],[1.15,1.15]];
+    const stackOffsets = [[-22,-22],[22,-22],[-22,22],[22,22]];
     for (let i=0;i<v.n;i++) {
       for (let t=0;t<4;t++) {
         const p=v.players[i].tokens[t];
