@@ -28,6 +28,17 @@ function buildMessages(gameId, n, seed) {
   if (gameId === 'ludo') {
     for (const p of players) g.act(p.id, { type: 'ready' });
     g.act(players[0].id, { type: 'roll' }); // deterministic six: all four yard tokens are legal
+  } else if (gameId === 'themind') {
+    // Advance to level 2, then trigger a throwing star so the UI has a persistent
+    // "star" event while the current phase requires players to confirm continuing.
+    for (const p of players) g.act(p.id, { type: 'ready' });
+    while (g.view(players[0].id).phase === 'playing') {
+      const cards = players.flatMap((p) => g.view(p.id).hand.map((card) => ({ id: p.id, card })));
+      const next = cards.sort((a, b) => a.card - b.card)[0];
+      g.act(next.id, { type: 'play', card: next.card });
+    }
+    for (const p of players) g.act(p.id, { type: 'ready' });
+    for (const p of players) g.act(p.id, { type: 'shuriken' });
   }
   const room = { code: 'ABCDEF', gameId, hostId: 'p0', status: 'playing', options: {}, visibility: 'public', seats: n, min: def.seats.min, max: def.seats.max, seatLabels: null,
     members: players.map((p) => ({ id: p.id, name: p.name, bot: false, avatar: p.avatar, connected: true })), spectators: [], deadline: null, now: Date.now() };
@@ -103,6 +114,13 @@ const SIZES = [
           if (hit.content === 'none' || hit.content === 'normal') out.problems.push('selectable Ludo token has no enlarged touch target');
         }
       } else if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
+      if (game === 'themind') {
+        const guidance = document.querySelector('.tm-status-guidance[role="status"][aria-live="polite"]');
+        if (!guidance) out.problems.push('The Mind current-state guidance is not announced accessibly');
+        else if (!guidance.textContent.includes('Confirm when ready to continue')) out.problems.push('The Mind star-pause guidance is missing while the last event is a star');
+      }
+      const timer = document.querySelector('.ct-timer');
+      if (timer && timer.closest('[role="status"]')) out.problems.push('turn timer is nested inside a live region and may cause repeated announcements');
       const tops = top.getBoundingClientRect();
       if (top.scrollWidth > top.clientWidth + 1) out.problems.push(`header content wider than header (${top.scrollWidth} > ${top.clientWidth})`);
       if (wz && wz.scrollWidth > wz.clientWidth + 1) out.problems.push(`.wz scrolls horizontally (${wz.scrollWidth} > ${wz.clientWidth})`);
