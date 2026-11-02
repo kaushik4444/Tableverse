@@ -194,12 +194,22 @@ const SIZES = [
     });
     overlaps.forEach((o) => report.problems.push(o));
     if (GAME === 'ludo') {
+      await page.evaluate(() => {
+        document.addEventListener('click', (event) => {
+          const token = event.target.closest('.ludo-token');
+          if (token) window.__ludoClickTarget = token.dataset.lt;
+        }, true);
+      });
       const target = await page.locator('.ludo-token.legal[data-lt="tok:0"]').boundingBox();
       if (target) {
         await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
         await page.waitForTimeout(30);
-        const selected = await page.evaluate(() => window.__clientMessages.filter((m) => m.t === 'act').slice(-1)[0]?.action?.token);
-        if (selected !== 0) report.problems.push('tap on the first adjacent legal token selected a neighbouring token');
+        const result = await page.evaluate(() => ({
+          selected: window.__clientMessages.filter((m) => m.t === 'act').slice(-1)[0]?.action?.token,
+          target: window.__ludoClickTarget,
+          rects: [...document.querySelectorAll('.ludo-token.legal')].map((el) => ({ id: el.dataset.lt, r: (() => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })() })),
+        }));
+        if (result.selected !== 0) report.problems.push('tap on tok:0 selected ' + String(result.selected) + ' (event target ' + String(result.target) + '; centres ' + JSON.stringify(result.rects) + ')');
       } else report.problems.push('first adjacent legal Ludo token is missing');
     }
     const announcerPersists = await page.evaluate(() => {
