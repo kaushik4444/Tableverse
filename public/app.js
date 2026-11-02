@@ -1305,7 +1305,10 @@
     cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }); },
     cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.'); },
     cardDecline: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/decline', { requestId: r.request.id }); },
-    cardRemove: () => { const r = relationTo(S.card && S.card.last); if (r.friend && confirm('Remove this friend? Pending invitations between you will be revoked.')) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.'); },
+    cardRemove: () => { const r = relationTo(S.card && S.card.last); if (!r.friend) return; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="cardRemoveConfirm">Remove friend</button></div>'); },
+    cardRemoveConfirm: () => { const r = relationTo(S.card && S.card.last); closeModal(); if (r.friend) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.'); },
+    removeFriendConfirm: () => { const id = S.pendingFriendRemovalId; S.pendingFriendRemovalId = null; closeModal(); if (id) socialPost('/api/me/friends/remove', { friendId: id }, 'Friend removed.'); },
+    leaveGameConfirm: () => { closeModal(); send({ t: 'leave' }); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
       makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
@@ -1630,7 +1633,8 @@
       act: (action) => send({ t: 'act', action }),
       leave: () => {
         const playing = S.room.status === 'playing' && !isSpectator();
-        if (!playing || confirm('Leave the game? A bot takes your seat, and you can rejoin from the home screen.')) send({ t: 'leave' });
+        if (!playing) send({ t: 'leave' });
+        else openModal('Leave game', '<p class="hint">Leave this game? A bot will take your seat, and you can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave game</button></div>');
       },
       rematch: () => send({ t: 'rematch' }),
       showRules: () => showRules(S.room.gameId),
@@ -1715,7 +1719,7 @@
     acceptFriend: (el) => socialPost('/api/me/friend-requests/accept', { requestId: el.dataset.id }, 'Friend request accepted.'),
     declineFriend: (el) => socialPost('/api/me/friend-requests/decline', { requestId: el.dataset.id }),
     cancelFriend: (el) => socialPost('/api/me/friend-requests/cancel', { requestId: el.dataset.id }),
-    removeFriend: (el) => { if (confirm('Remove this friend? Pending invitations between you will be revoked.')) socialPost('/api/me/friends/remove', { friendId: el.dataset.id }, 'Friend removed.'); },
+    removeFriend: (el) => { S.pendingFriendRemovalId = el.dataset.id; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="removeFriendConfirm">Remove friend</button></div>'); },
     acceptInvitation: async (el) => {
       try {
         const out = await postJson('/api/me/table-invitations/accept', { invitationId: el.dataset.id });
