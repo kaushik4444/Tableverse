@@ -445,25 +445,31 @@ function cookieSocket(port, cookie) {
     console.log('players who leave');
     await test('a player who leaves early is stored as such and does not get the game in their stats; the one who stayed does', async () => {
       srv = await start({ ...fast, matchLog: quiet() });
-      const a = await authClient(srv, 'Stayer'); const b = await authClient(srv, 'Quitter');
-      a.send({ t: 'create', gameId: 'wizard' });
-      await until(() => a.room, 'table');
-      a.send({ t: 'setSeats', seats: 3 });
-      a.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20' } });
-      b.send({ t: 'join', code: a.room.code });
-      await until(() => b.room && b.room.members.length === 2, 'both seated');
-      a.send({ t: 'start' });
-      await until(() => b.view && b.room.status === 'playing', 'started');
-      b.send({ t: 'leave' });
-      await until(() => a.room.status === 'finished', 'game over');
-      const [m] = await until(async () => { const r = await matchesOf(a.room.code); return r.length ? r : null; }, 'match row');
-      const ps = await q('SELECT * FROM match_participants WHERE match_id = $1 ORDER BY seat', [m.id]);
-      assert.deepEqual(ps.map((p) => [p.left_early, p.is_bot]), [[false, false], [true, false], [false, true]]);
-      assert.equal((await a.getStats()).played, 1);
-      b.send({ t: 'hello', token: b.token });
-      assert.equal((await b.getStats()).played, 0, 'leaving a game early is not a loss');
-      a.ws.close(); b.ws.close();
-      await srv.close();
+      let a; let b;
+      try {
+        a = await authClient(srv, 'Stayer'); b = await authClient(srv, 'Quitter');
+        // This is a legacy production-path test for match persistence, not the private-table invitation flow.
+        a.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+        await until(() => a.room, 'table');
+        a.send({ t: 'setSeats', seats: 3 });
+        a.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20' } });
+        b.send({ t: 'join', code: a.room.code });
+        await until(() => b.room && b.room.members.length === 2, 'both seated');
+        a.send({ t: 'start' });
+        await until(() => b.view && b.room.status === 'playing', 'started');
+        b.send({ t: 'leave' });
+        await until(() => a.room.status === 'finished', 'game over');
+        const [m] = await until(async () => { const r = await matchesOf(a.room.code); return r.length ? r : null; }, 'match row');
+        const ps = await q('SELECT * FROM match_participants WHERE match_id = $1 ORDER BY seat', [m.id]);
+        assert.deepEqual(ps.map((p) => [p.left_early, p.is_bot]), [[false, false], [true, false], [false, true]]);
+        assert.equal((await a.getStats()).played, 1);
+        b.send({ t: 'hello', token: b.token });
+        assert.equal((await b.getStats()).played, 0, 'leaving a game early is not a loss');
+      } finally {
+        if (a?.ws && a.ws.readyState !== WebSocket.CLOSED) a.ws.terminate();
+        if (b?.ws && b.ws.readyState !== WebSocket.CLOSED) b.ws.terminate();
+        await srv.close();
+      }
     });
 
     console.log('database failures while recording');
