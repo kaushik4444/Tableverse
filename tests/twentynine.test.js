@@ -48,9 +48,11 @@ test('bidding is heads-up: a pass opens the seat for the next player clockwise',
   assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', amount: 16 }).ok, true);
   assert.equal(g.turn, first);
   assert.equal(E.applyAction(g, id(first), { type: 'bid', pass: true }).ok, true);
-  assert.equal(g.turn, (first + 3) % 4);
+  assert.equal(g.turn, (first + 2) % 4, 'the remaining active bidder gets the next turn');
   assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', amount: 17 }).ok, false, 'a passed player cannot re-enter');
-  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 17 }).ok, true);
+  assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', amount: 17 }).ok, true);
+  assert.equal(g.turn, (first + 3) % 4, 'the newly-entered fourth player now gets a chance to raise');
+  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 18 }).ok, true);
   assert.equal(g.turn, (first + 2) % 4);
 });
 
