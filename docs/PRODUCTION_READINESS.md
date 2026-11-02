@@ -14,6 +14,7 @@ This document separates protections implemented in the application from operatio
 - HTTP responses receive security headers, including a restrictive Content Security Policy, no-sniff, referrer and permissions policies; HSTS is enabled in production.
 - Finished match writes are retried and spooled locally before database persistence; shutdown drains the queue for a bounded period.
 - Health (`/healthz`) and readiness (`/readyz`) endpoints are available.
+- Render and Docker production builds use `npm ci` against the committed lockfile for reproducible dependency installation.
 - The test suite covers game engines, HTTP/WebSocket flows, PostgreSQL integration, account lifecycle, access control and UI layout checks.
 
 ## Deployment constraints to resolve before a public launch
