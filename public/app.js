@@ -1260,18 +1260,11 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-simpler-home';
+  const WHATS_NEW_VERSION = '2026-11-roadmap-refresh';
   const WHATS_NEW = [
-    ['🏠', 'A simpler home', 'Games come first. Friends are a small card on the home page, the full list lives on a Friends page, and a bell in the top bar shows friend requests and table invitations you can answer in place.'],
-    ['🎲', 'Ludo now playable', 'Race your four tokens home — roll a six to get out, send opponents back, finish by exact count. 2–4 players.'],
-    ['🔜', 'Coming soon', 'Go Fish, Snakes and Ladders, Monopoly and more are on the roadmap.'],
-    ['🤝', 'Friends', 'Search by username, send and answer friend requests, and see who is online or which game they are playing right now.'],
-    ['🔒', 'Private tables and invitations', 'New tables are private: invite friends from the lobby and they join once they accept. Make a table public to share its code and link.'],
-    ['👑', 'Host tools', 'Make another player the host, or remove a player, spectator or bot from the lobby.'],
-    ['🪪', 'Player cards', 'Tap anyone at a table to see their handle, connection quality and record, and to add them as a friend or mute them.'],
-    ['🖼️', 'Profile avatar', 'Choose from the preset avatars in your profile or the lobby; your selection is saved to your account.'],
-    ['📱', 'One device at a time', 'Signing in on another device signs this one out, so your account is never in two places at once.'],
-    ['👤', 'Profiles and history', 'Your stats and every finished game, plus account deletion from your profile.'],
+    ['🎲', 'Ludo is now playable', 'Create a table for 2–4 players, play with friends and let bots fill empty seats.'],
+    ['🔐', 'Wizard scorecard requires sign-in', 'Sign in to open the offline scorecard. Scores remain stored on your device and are not added to profile statistics.'],
+    ['🧭', 'The game roadmap has been refreshed', 'Twelve upcoming games are listed in planned development order, using original working titles and presentation.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
@@ -1462,8 +1455,8 @@
           <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
           <p>${esc(g.tagline)}</p>
           <div class="row game-actions">
-            <button class="btn small" data-act="create" data-game="${esc(g.id)}">Create table</button>
-            <button class="btn ghost small" data-act="rules" data-game="${esc(g.id)}">Rules</button>
+            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}">Create table</button>
+            <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
             ${g.id === 'wizard' ? (S.guest ? `<button class="btn ghost small" type="button" data-act="showLogin">Log in for offline scorecard</button>` : `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>`) : ''}
           </div>
         </div>
@@ -1475,7 +1468,7 @@
       <section class="home-hero">
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
-          <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Free card games in your browser. Bots fill any empty seat.'}</p>
+          <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
           ${S.guest ? '<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button></div>' : ''}
         </div>
         <form class="join-form" id="joinForm" aria-label="Join a table">
