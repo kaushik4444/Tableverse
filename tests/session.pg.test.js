@@ -166,7 +166,7 @@ function socket(port, cookie) {
   } finally {
     // Close idle PostgreSQL clients before DROP DATABASE ... WITH (FORCE).
     // This avoids expected administrator-termination/ECONNRESET noise during test teardown.
-    if (process.env.DATABASE_URL) await dbPool.close().catch(() => {});
+    if (process.env.DATABASE_URL) await require('../db/pool').close().catch(() => {});
     fs.rmSync(spool, { recursive: true, force: true });
     await t.drop();
   }
