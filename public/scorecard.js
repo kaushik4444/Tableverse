@@ -198,6 +198,49 @@
   });
   $.addEventListener('change', (e) => { if (e.target.dataset.pm !== undefined) setup.plusMinus = e.target.checked; });
 
-  render();
+  function showAccessGate(message, retryable = false) {
+    $.innerHTML = `<main class="sc sc-gate">
+      <div class="sc-top"><h1>Wizard scorecard</h1><a href="/">Tableverse</a></div>
+      <section class="panel gate-panel" role="status">
+        <div class="gate-icon" aria-hidden="true">🔐</div>
+        <h2>Log in to use the scorecard</h2>
+        <p class="sub">${esc(message || 'The Wizard offline scorecard is part of your Tableverse account experience. Log in to continue.')}</p>
+        <div class="row gate-actions">
+          <a class="btn big" href="/">Go to Tableverse and log in</a>
+          ${retryable ? '<button class="btn ghost" type="button" data-act="retry">Try again</button>' : ''}
+        </div>
+      </section>
+    </main>`;
+  }
+
+  async function startAfterAuth() {
+    showAccessGate('Checking your Tableverse account…');
+    try {
+      const response = await fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' });
+      if (!response.ok) throw new Error('We could not verify your session. Check your connection and try again.');
+      const session = await response.json();
+      const requiresVerification = Object.prototype.hasOwnProperty.call(session || {}, 'emailVerificationRequired')
+        ? !!session.emailVerificationRequired
+        : Object.prototype.hasOwnProperty.call(session || {}, 'requiresVerification')
+          ? !!session.requiresVerification : true;
+      if (!session || !session.ok || !session.authenticated) {
+        showAccessGate('Please log in or create a Tableverse account first.');
+        return;
+      }
+      if (requiresVerification && !session.emailVerified) {
+        showAccessGate('Please verify your account email before opening the scorecard. You can resend the verification link after logging in.');
+        return;
+      }
+      render();
+    } catch (error) {
+      showAccessGate(error.message || 'Could not check your account. Please try again.', true);
+    }
+  }
+
+  $.addEventListener('click', (e) => {
+    if (e.target.closest('[data-act="retry"]')) startAfterAuth();
+  });
+
+  startAfterAuth();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 })();

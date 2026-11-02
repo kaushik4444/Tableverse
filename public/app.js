@@ -1464,7 +1464,7 @@
           <div class="row game-actions">
             <button class="btn small" data-act="create" data-game="${esc(g.id)}">Create table</button>
             <button class="btn ghost small" data-act="rules" data-game="${esc(g.id)}">Rules</button>
-            ${g.id === 'wizard' ? `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>` : ''}
+            ${g.id === 'wizard' ? (S.guest ? `<button class="btn ghost small" type="button" data-act="showLogin">Log in for offline scorecard</button>` : `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>`) : ''}
           </div>
         </div>
       </article>`).join('');
