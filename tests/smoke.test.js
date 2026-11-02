@@ -196,6 +196,20 @@ function client(port, name, token) {
   await tm.until(() => tm.view && tm.view.game === 'themind', 'mind started');
   tm.ws.close();
 
+  const gf = await authClient('Gina');
+  await gf.until(() => gf.id, 'welcome Gina');
+  gf.send({ t: 'create', gameId: 'gofish' });
+  await gf.until(() => gf.room && gf.room.gameId === 'gofish', 'go fish table');
+  gf.send({ t: 'start' });
+  await gf.until(() => gf.view && gf.view.game === 'gofish', 'go fish started');
+  assert.equal(gf.view.myTurn, true, 'the first seat starts');
+  assert.ok(gf.view.hand.length >= 5 && gf.view.targets.length >= 1);
+  assert.ok(gf.view.players.every((p) => !('hand' in p) && typeof p.cards === 'number'), 'other players show card counts only');
+  gf.send({ t: 'act', action: { type: 'ask', target: gf.view.targets[0], rank: gf.view.askRanks[0] } });
+  await gf.until(() => gf.view && gf.view.event && ['take', 'fish'].includes(gf.view.event.type), 'go fish ask answered');
+  gf.send({ t: 'act', action: { type: 'ask', target: 'nobody', rank: 'A' } });
+  gf.ws.close();
+
   assert.equal(a.announcement, '');
   const ann = await start({ port: 0, announcement: '  Maintenance\n at 22:00 ' + 'x'.repeat(400) });
   const an = await authClient('Ann2', ann.port);
