@@ -136,7 +136,7 @@
     }
     if (v.phase === 'bidding' && v.myTurn) {
       const btns = [];
-      for (let i = v.minBid; i <= v.maxBid; i++) btns.push(`<button class="bidbtn ${ui.bid === i ? 'on' : ''}" data-t9="pick" data-n="${i}">${i}</button>`);
+      for (let i = v.minBid; i <= v.maxBid; i++) btns.push(`<button class="bidbtn ${ui.bid === i ? 'on' : ''}" aria-pressed="${ui.bid === i}" data-t9="pick" data-n="${i}">${i}</button>`);
       return `<div class="bidbox"><div class="row" style="justify-content:space-between"><span class="label">${v.highBidder >= 0 ? `Current bid: ${v.highBid}` : 'No bid yet'}</span>
         <span class="row" style="gap:6px"><button class="btn ghost small" data-t9="pass" ${v.canPass ? '' : 'disabled'}>Pass</button>
         <button class="btn small" data-t9="bid" ${ui.bid === null ? 'disabled' : ''}>${ui.bid === null ? 'Pick a bid' : `Bid ${ui.bid}`}</button></span></div>
