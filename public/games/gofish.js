@@ -33,7 +33,7 @@
     switch (e.type) {
       case 'take': return `${by} asked ${to} for ${word(e.rank)} and got <b>${e.count}</b>.${bookText}`;
       case 'fish': {
-        const drew = you && v.myDraw ? ` You drew ${cardHTML(v.myDraw.card, 'tiny')}` : e.wish ? ' and drew the very card!' : '';
+        const drew = you && v.myDraw ? ` You drew ${cardHTML(v.myDraw.card, 'tiny', '', 'span')}` : e.wish ? ' and drew the very card!' : '';
         return `${by} asked ${to} for ${word(e.rank)}: <b>Go Fish!</b>${e.empty ? ' (the stock is empty)' : drew}${bookText}`;
       }
       case 'empty': return `${by} had no cards and drew one.`;
