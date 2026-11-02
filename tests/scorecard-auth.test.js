@@ -20,7 +20,7 @@ async function boot(sessionResponse) {
     fetch: async () => ({ ok: true, json: async () => sessionResponse }),
     setTimeout: () => 0,
   };
-  vm.runInNewContext(fs.readFileSync(require.resolve('../../public/scorecard.js'), 'utf8'), context);
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/scorecard.js'), 'utf8'), context);
   await new Promise((resolve) => setImmediate(resolve));
   return root.innerHTML;
 }
