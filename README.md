@@ -110,6 +110,10 @@ If provider delivery fails after signup, the account is still created and the re
 
 Set `DATABASE_URL` and email variables in Render env settings before deploying.
 
+## Production readiness
+
+The application-level safeguards and remaining launch requirements are tracked in [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md). In particular, the current in-memory room/presence model is single-instance, and the default match-result spool is not durable across replacement of an ephemeral host. Review the release checklist before opening the service to the public.
+
 ## Development
 
 ```bash
