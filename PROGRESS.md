@@ -1,4 +1,4 @@
-# Tableverse progress notes (branch `feature/stage-6-friends-private-tables`)
+# Tableverse progress notes (latest work: branch `feature/stage-8-ux-refactor`)
 
 Never merge this branch into `main` from an agent session. Work in small stages: test, commit, push after each.
 
@@ -82,3 +82,15 @@ Stage 6 social features and the Stage 7 follow-ups documented above are implemen
 - README: "What exists today", new v0.7 section (friends, presence, private-table policy, host tools, player cards, sessions, phones), endpoint and WebSocket message list, migrations 006-008, test commands (`npm run build`, `npm test`, `npm run test:ui`, PostgreSQL note). `package.json`/lockfile version 0.7.0.
 - In-app: What's new (version key `2026-11-friends`, 7 entries, checked at 320 and 390 px), home hero text and a hint under the table-code box explaining that private tables need an invitation.
 - Checked: `npm run build`, `tests/ui/social-ui.js` 9/9, smoke. PostgreSQL suites not run here (no server in the sandbox).
+
+
+## Stage 8 — UX/UI refactor (branch `feature/stage-8-ux-refactor`, from main 525c7e4; do not merge from an agent session)
+- 8.1/8.2 (92a9030): home = hero + join, friends card, games, Coming soon (Monopoly, Snakes and Ladders, Ludo), recent tables, public tables. Full friends panel moved to `#friends` page (`renderFriendsPage`, route in `routeFromHash/applyRoute/openPage`, menu item with pending badge). Panel id is now `friends-panel`.
+- Tests: `node tests/ui/social-ui.js` 10 passed, 0 failed (new test for the card, coming-soon cards and `#friends` navigation; friends-list test now loads `#friends`).
+- 8.4: What's new entry added, `WHATS_NEW_VERSION` bumped to `2026-11-simpler-home`, README v0.8 section.
+- `node tests/ui/wizard-layout.js`: 288 ok, "all viewports ok".
+- Width check (320, 375, 414, 768, 1280; home and #friends, with friends, a request and an invitation): no horizontal overflow; 375px screenshot reviewed by eye.
+- Bell + split: notification bell in the top bar (requests and invitations, accept/decline in place, Escape/outside click closes, fixed-position panel fits 320-1280 px); home strip no longer lists invitations; account-menu badge removed. Social/home markup moved from `public/app.js` (1859 -> 1808 lines) into `public/home-ui.js` (`window.TVHomeUI`, loaded before app.js; added to `npm run build`).
+- Results: `node tests/ui/social-ui.js` 11 passed 0 failed (new bell test); `wizard-layout.js` 288 ok; `host-tools-ui.js` 9 passed 0 failed; `npm run build` passes.
+- Not run: full `npm test` / `test:pg` (no server or database changes in this branch).
+- Known: private-table security fixes + spectator-rematch fix are NOT in main; they are on `wip/private-table-access-policy` (c8e1a17) and need a manual merge (server.js conflicts with host-tools commit 98aec12) and a real-CI `npm run test:pg`.
