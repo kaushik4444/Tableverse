@@ -13,7 +13,7 @@ const ui = window.TVHomeUI({
   pendingSocial: () => 0,
 });
 const html = ui.comingSoonHTML();
-const buildOrder = ['Go Fish', 'Snakes and Ladders', 'Property Rivals', 'Hidden Miners', 'Bullhead Run', 'Color Clash', 'Sea Battle', 'Island Settlers — 4 players', 'Island Settlers — 5–6 players'];
+const buildOrder = ['Go Fish', 'Snakes and Ladders', 'Property Rivals', 'Hidden Miners', 'Bullhead Run', 'Color Clash', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
 const additional = ['Four in a Row', 'Secret Clues', 'Tic-Tac-Toe'];
 assert.equal((html.match(/class="soon-card"/g) || []).length, 12);
 let previous = -1;
