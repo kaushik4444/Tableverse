@@ -31,7 +31,7 @@ module.exports = {
   rules: [
     'Four players, two teams: you and the player sitting opposite are partners. 32 cards (7 to Ace). Card order, high to low: J, 9, A, 10, K, Q, 8, 7.',
     'Card points: Jack 3, Nine 2, Ace 1, Ten 1. That is 28 points, plus 1 for winning the last trick makes 29.',
-    'Everyone gets 4 cards. Starting left of the dealer, players take turns raising the open bid from 15 to 28 or passing. You may raise more than once while still in the auction; passing is permanent. The auction ends when all but the highest bidder have passed. If everyone else passes without a bid, the dealer must open at 15. A bid of 28 ends the auction immediately.',
+    'Everyone gets 4 cards. Starting left of the dealer, two players bid head-to-head, raising from 15 to 28 or passing. When one passes, the next player clockwise takes the vacant bidding seat. Passing is permanent. The auction continues until only one bidder remains; that highest bidder wins. If everyone else passes without a bid, the dealer must open at 15. A bid of 28 ends the auction immediately.',
     'The highest bidder secretly picks the trump suit (one they hold). Four more cards are then dealt to each player, and the bidder leads the first trick.',
     'Play 8 tricks and follow the lead suit if you can. If you cannot follow, you may ask to see the trump: it is then shown to everyone and you must play a trump card if you have one. Until it is shown, trump cards played as discards do not count as trump.',
     'Trump marriage (K–Q): after trump has been revealed and your team has won at least one trick, declare the King and Queen of trump while it is your turn to add 4 points to your team’s hand total. It can be declared once per hand.',
