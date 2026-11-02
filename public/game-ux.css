@@ -85,3 +85,10 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 @media (prefers-reduced-motion: reduce) {
   .ludo-token.legal { animation: none; }
 }
+
+/* Keep the right-hand player seat inside the viewport on very narrow phones. */
+@media (max-width: 380px) {
+  .pt-seat[style*="left:87%"] { transform: translate(-65%, -50%); }
+  .pt-seat { width: 76px; }
+  .plate { max-width: 76px; }
+}
