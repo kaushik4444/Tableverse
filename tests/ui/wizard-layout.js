@@ -119,6 +119,21 @@ const SIZES = [
         if (!guidance) out.problems.push('The Mind current-state guidance is not announced accessibly');
         else if (!guidance.textContent.includes('Confirm when ready to continue')) out.problems.push('The Mind star-pause guidance is missing while the last event is a star');
       }
+      if (['wizard', 'twentynine', 'poker'].includes(game) && !document.querySelector('.wz-status > span[role="status"][aria-live="polite"]')) {
+        out.problems.push('turn status live region includes controls or timer instead of only the status text');
+      }
+      if (game === 'poker') {
+        const slider = document.querySelector('.pk-raise [data-pk="slider"]');
+        if (!slider) out.problems.push('Poker raise slider is missing');
+        else {
+          slider.value = String(Math.min(Number(slider.max), Number(slider.min) + 1));
+          slider.dispatchEvent(new Event('input', { bubbles: true }));
+          for (const preset of document.querySelectorAll('.pk-size')) {
+            const expected = Number(preset.dataset.v) === Number(slider.value);
+            if (preset.getAttribute('aria-pressed') !== String(expected)) out.problems.push('Poker raise preset aria-pressed is stale after slider input');
+          }
+        }
+      }
       const timer = document.querySelector('.ct-timer');
       if (timer && timer.closest('[role="status"]')) out.problems.push('turn timer is nested inside a live region and may cause repeated announcements');
       const tops = top.getBoundingClientRect();
