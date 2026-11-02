@@ -35,7 +35,8 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'Content-Security-Policy':
-    "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
+    "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
 const BOT_NAMES = ['Merlin', 'Morgana', 'Gandalf', 'Circe', 'Rincewind', 'Radagast', 'Elminster', 'Oz'];
@@ -56,6 +57,8 @@ function start(opts = {}) {
   const autoAdvanceMs = opts.autoAdvanceMs ?? 8000; // pause between rounds
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxMsgsPerSec = opts.maxMsgsPerSec ?? 30; // per socket; humans send a handful of messages per minute
+  const maxQueuedMessages = opts.maxQueuedMessages ?? 100; // bound async work queued behind slow database operations
+  const maxBufferedBytes = opts.maxBufferedBytes ?? 1024 * 1024; // disconnect slow consumers before outbound memory grows without bound
   const botScale = opts.botDelay ? Math.min(1, opts.botDelay[1] / 1600) : 1; // tests run with fast bots; plugin-timed bots follow
   const trickPauseMs = opts.trickPauseMs ?? 1700; // time everybody gets to see a finished trick being collected
   const env = opts.env || process.env;
@@ -139,10 +142,13 @@ function start(opts = {}) {
       req.on('error', reject);
     });
 
-  const setCommonHeaders = (res, contentType = 'application/json; charset=utf-8') => {
-    res.setHeader('Content-Type', contentType);
+  const setSecurityHeaders = (res) => {
     for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
     if (production) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  };
+  const setCommonHeaders = (res, contentType = 'application/json; charset=utf-8') => {
+    res.setHeader('Content-Type', contentType);
+    setSecurityHeaders(res);
   };
 
   const sendJson = (res, status, body) => {
@@ -241,6 +247,7 @@ function start(opts = {}) {
   });
 
   const server = http.createServer(async (req, res) => {
+    setSecurityHeaders(res); // apply to success and error responses, including health checks and 404s
     let rel;
     try {
       rel = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -300,10 +307,26 @@ function start(opts = {}) {
       res.end(req.method === 'HEAD' ? undefined : data);
     });
   });
+  // Bound incomplete HTTP requests and idle keep-alive sockets. These are request-receive timeouts,
+  // not limits on how long a completed auth/database operation may take to respond.
+  server.headersTimeout = opts.headersTimeoutMs ?? 10000;
+  server.requestTimeout = opts.requestTimeoutMs ?? 30000;
+  server.keepAliveTimeout = opts.keepAliveTimeoutMs ?? 5000;
 
   // ------------------------------------------------------------ helpers
   const send = (ws, obj) => {
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+    if (!ws || ws.readyState !== 1) return false;
+    if (ws.bufferedAmount > maxBufferedBytes) {
+      ws.terminate(); // a slow client must not retain an unbounded broadcast queue
+      return false;
+    }
+    try {
+      ws.send(JSON.stringify(obj), (err) => { if (err) ws.terminate(); });
+      return true;
+    } catch {
+      ws.terminate();
+      return false;
+    }
   };
   const sendError = (p, message) => send(p.ws, { t: 'error', message });
   function notifyAccount(playerId, event) {
@@ -1263,6 +1286,7 @@ function start(opts = {}) {
     ws.isAlive = true;
     ws.player = null;
     ws.msgs = 0;
+    ws.queueDepth = 0;
     ws.on('pong', (data) => {
       ws.isAlive = true;
       // a latency probe answers with the id it carried; the keep-alive ping has no payload
@@ -1309,8 +1333,13 @@ function start(opts = {}) {
         }
       };
       // one message at a time per socket: a join that waits for the database must finish before the next message
-      // (act, chat, leave...) is looked at, exactly as when every handler was synchronous
-      ws.queue = (ws.queue || Promise.resolve()).then(run);
+      // (act, chat, leave...) is looked at, exactly as when every handler was synchronous. Bound the waiting queue too.
+      if (ws.queueDepth >= maxQueuedMessages) {
+        ws.close(1013, 'server busy');
+        return;
+      }
+      ws.queueDepth++;
+      ws.queue = (ws.queue || Promise.resolve()).then(run).finally(() => { ws.queueDepth = Math.max(0, ws.queueDepth - 1); });
     });
     ws.on('close', () => {
       const p = ws.player;
