@@ -153,7 +153,7 @@
       </div>
       <div class="tm-sub"><span class="tm-lives" title="Lives">${lives}</span><div class="tm-dots" aria-hidden="true">${dots}</div>${stars || '<span></span>'}</div>
       ${tableHTML(v, ctx)}
-      ${text || v.me < 0 ? `<div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''} tm-status"><span>${text || 'Watching the team play'}</span></div>` : ''}
+      ${text || v.me < 0 ? `<div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''} tm-status"><span>${text || (v.phase === 'playing' ? (v.me < 0 ? 'Watching the team play' : v.waitingAfterStar ? 'Waiting for everyone to continue' : v.hand.length ? 'Your lowest card is ready. Play when the group is ready.' : 'You have no cards left. Wait for the others.') : v.phase === 'ready' || v.phase === 'levelEnd' ? 'Get ready for the next level' : 'Game complete')}</span></div>` : ''}
       ${handHTML(v, z)}
       ${controlsHTML(v)}
       ${overlayHTML(v)}
