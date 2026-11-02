@@ -9,7 +9,7 @@ module.exports = {
   accent: '#f59e0b',
   tagline: 'Race your four tokens home. Roll a six to get out, send opponents back to start, and finish by exact count.',
   seats: { min: 2, max: 4, default: 4 },
-  stats: { kind: 'none', bestLabel: 'Best finish', bestOf: (row) => row.best },
+  stats: { kind: 'none', bestLabel: 'Best finish', bestOf: (row) => -row.best, formatBest: (value) => String(-value) },
   seatLabel: (i) => ['Red', 'Yellow', 'Green', 'Blue'][i],
   options: [
     {
