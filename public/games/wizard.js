@@ -34,6 +34,10 @@
     const name = (i) => esc(v.players[i].name);
     if (v._hold && v.lastTrick) return `${name(v.lastTrick.winner)} wins the trick!`;
     if (v.phase === 'playing' && v.autoPlay) return 'Last cards: yours is played automatically…';
+    if (ui.queuedCard && v.phase === 'playing' && !v.myTurn) {
+      const queued = v.hand.find((card) => card.id === ui.queuedCard);
+      if (queued) return `${name(v.turn)} is playing… ${cardName(queued)} queued for your turn.`;
+    }
     if (v.phase === 'chooseTrump') return v.myTurn ? 'A wizard was turned up. Choose the trump suit.' : `${name(v.dealer)} is choosing trump…`;
     if (v.phase === 'bidding' && v.simultaneous) {
       const waiting = v.players.filter((p) => !p.hasBid).length;
