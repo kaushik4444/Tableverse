@@ -112,6 +112,11 @@ const SIZES = [
             if (r.left < b.left - 1 || r.right > b.right + 1 || r.top < b.top - 1 || r.bottom > b.bottom + 1) out.problems.push('Ludo token is outside the board');
           }
         }
+        const dicePanel = document.querySelector('.ludo-dice-panel');
+        if (!dicePanel) out.problems.push('Ludo roll controls are missing');
+        else if (vw <= 760 && board && dicePanel.getBoundingClientRect().bottom > board.getBoundingClientRect().top + 1) {
+          out.problems.push('Ludo dice and roll control must appear above the board on mobile');
+        }
         if (!document.querySelector('#game-status-announcer[role="status"][aria-live="polite"]')) out.problems.push('Ludo turn status is not announced by the persistent live region');
         const legal = board ? [...board.querySelectorAll('.ludo-token.legal')] : [];
         if (!legal.length) out.problems.push('active Ludo turn has no highlighted legal token');
@@ -123,6 +128,7 @@ const SIZES = [
       } else {
         if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
       }
+      if (!document.querySelector('.game-supporting-details')) out.problems.push('collapsed game log/rules are not available below the play surface');
       if (game === 'themind') {
         const guidance = document.querySelector('.tm-status-guidance');
         if (!guidance) out.problems.push('The Mind current-state guidance is not announced accessibly');
