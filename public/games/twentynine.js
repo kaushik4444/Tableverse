@@ -151,7 +151,7 @@
     return v.hand
       .map((c, i) => {
         const cls = [can && legal.has(c.id) ? 'playable' : '', can && !legal.has(c.id) ? 'dim' : '', ui.selected === c.id ? 'sel' : ''].join(' ');
-        return cardHTML(c, { tag: 'button', cls: 'hc ' + cls, attrs: `data-t9="card" data-id="${c.id}" style="${i ? `margin-left:${-z.overlap}px` : ''}"` });
+        return cardHTML(c, { tag: 'button', cls: 'hc ' + cls, attrs: `data-t9="card" data-id="${c.id}" aria-pressed="${ui.selected === c.id}" style="${i ? `margin-left:${-z.overlap}px` : ''}"` });
       })
       .join('');
   }
