@@ -223,7 +223,7 @@ test('viewFor exposes only the current player legal token indexes', async () => 
   g.turn = 0;
   g.dice = 6;
   const own = E.viewFor(g, 'p0');
-  assert.deepEqual(own.legalTokens, [0, 1], 'yard and track tokens can move on a six');
+  assert.deepEqual(own.legalTokens, [0, 1, 2], 'yard, track and home-column tokens can move on a six');
   assert.deepEqual(E.viewFor(g, 'p1').legalTokens, [], 'opponents never receive selectable tokens');
   g.dice = 1;
   assert.deepEqual(E.viewFor(g, 'p0').legalTokens, [1, 2], 'home-column token is selectable when it can move');
