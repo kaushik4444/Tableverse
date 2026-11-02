@@ -360,12 +360,12 @@ console.log('match record');
   await 
 test('profile stats rank first place as the best Ludo finish', async () => {
   const rows = [
-    { gameId: 'ludo', isWinner: false, score: 1, best: 3, finishedAt: new Date() },
-    { gameId: 'ludo', isWinner: true, score: 4, best: 1, finishedAt: new Date() },
-    { gameId: 'ludo', isWinner: false, score: 2, best: 2, finishedAt: new Date() },
+    { gameId: 'ludo', isWinner: false, score: 1, seats: 4, finishedAt: new Date() },
+    { gameId: 'ludo', isWinner: true, score: 4, seats: 4, finishedAt: new Date() },
+    { gameId: 'ludo', isWinner: false, score: 2, seats: 4, finishedAt: new Date() },
   ];
   const stats = computeProfile(rows, { metrics: (id) => id === 'ludo' ? plugin.stats : null });
-  assert.equal(stats.perGame[0].best, -1);
+  assert.equal(stats.perGame[0].best, 0, 'best score is stored as score minus seats');
   assert.equal(stats.perGame[0].bestText, '1', 'first place is shown as best finish');
 });
 
