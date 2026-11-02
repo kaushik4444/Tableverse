@@ -105,7 +105,7 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await page.waitForSelector('.friends-strip');
     assert.equal(await page.$('#friends-panel'), null, 'no full friends panel on home');
     assert.match(await page.textContent('.friends-strip'), /friends online|none online|Add friends/);
-    const soon = await page.textContent('.soon-grid');
+    const soon = await page.textContent('.coming-roadmap');
     for (const n of ['Go Fish', 'Snakes and Ladders', 'Property Rivals', 'Hidden Miners', 'Bullhead Run', 'Color Clash', 'Sea Battle', 'Island Settlers', 'Four in a Row', 'Secret Clues', 'Tic-Tac-Toe']) assert.ok(soon.includes(n), `missing roadmap game: ${n}`);
     assert.equal(await page.$('.soon-card button'), null, 'coming-soon cards are not playable');
     assert.equal(await page.locator('.soon-card').count(), 12, 'only the requested twelve games are listed');
