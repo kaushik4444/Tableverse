@@ -93,12 +93,31 @@
     return `${by} ${text}`;
   };
 
+
+  // This node lives outside #app, whose innerHTML is replaced on every game update.
+  // Keeping it mounted lets assistive technology observe text changes reliably.
+  function announceStatus(text) {
+    let node = document.getElementById('game-status-announcer');
+    if (!node) {
+      node = document.createElement('div');
+      node.id = 'game-status-announcer';
+      node.className = 'game-status-announcer';
+      node.setAttribute('role', 'status');
+      node.setAttribute('aria-live', 'polite');
+      node.setAttribute('aria-atomic', 'true');
+      document.body.appendChild(node);
+    }
+    const next = String(text || '').trim();
+    if (node.textContent !== next) node.textContent = next;
+  }
+
   const isSpectator = () => !!(S.room && (S.room.spectators || []).some((s) => s.id === S.id));
 
   window.CardTable = Object.assign(window.CardTable || {}, {
     esc,
     toast,
     register: (id, p) => { plugins[id] = p; },
+    announceStatus,
     chat: {
       button: () => `<button class="btn ghost small chat-btn" data-act="chat" aria-label="Open chat">💬<span class="cb" ${S.unread ? '' : 'hidden'}>${S.unread}</span></button>`,
     },
@@ -1641,6 +1660,8 @@
       rerender: render,
       toast,
     });
+    const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
+    announceStatus(statusText ? statusText.textContent : '');
     const top = $app.querySelector('.wz-top');
     if (top) top.querySelector('.row')?.insertAdjacentHTML('afterbegin', '<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>');
     const log = (S.view.log || []).slice(-12).reverse();

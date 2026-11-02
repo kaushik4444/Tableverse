@@ -8,6 +8,7 @@ const WebSocket = require('ws');
 const { prepareDatabase } = require('../db/startup');
 const { registerAndVerify } = require('./helpers/auth');
 const { start } = require('../server');
+const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded } = require('../lib/wsLimits');
 
 let passed = 0;
 async function test(name, fn) {
@@ -83,6 +84,54 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
   });
   const hello = (o, extra = {}) => o.ws.send(JSON.stringify({ t: 'hello', ...extra }));
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  await test('per-socket WebSocket queue rejects overload and recovers after success and failure', async () => {
+    const ws = { queueDepth: 0, queue: Promise.resolve(), closed: null, close(code, reason) { this.closed = { code, reason }; } };
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    assert.equal(enqueueSocketMessage(ws, () => gate, 1), true);
+    await Promise.resolve();
+    assert.equal(ws.queueDepth, 1);
+    assert.equal(enqueueSocketMessage(ws, async () => {}, 1), false);
+    assert.deepEqual(ws.closed, { code: 1013, reason: 'server busy' });
+    release();
+    await ws.queue;
+    assert.equal(ws.queueDepth, 0);
+    assert.equal(enqueueSocketMessage(ws, async () => { throw new Error('expected handler failure'); }, 1), true);
+    await ws.queue;
+    assert.equal(ws.queueDepth, 0);
+    assert.equal(enqueueSocketMessage(ws, async () => {}, 1), true);
+    await ws.queue;
+    assert.equal(ws.queueDepth, 0);
+  });
+
+  await test('global hello queue rejects overload and recovers after a failed authentication task', async () => {
+    const queue = createBoundedSerialQueue(1);
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const first = queue.enqueue(() => gate);
+    assert.equal(queue.depth, 1);
+    let rejected = false;
+    assert.equal(await queue.enqueue(async () => 'should not run', () => { rejected = true; }), false);
+    assert.equal(rejected, true);
+    release();
+    await first;
+    assert.equal(queue.depth, 0);
+    await assert.rejects(queue.enqueue(async () => { throw new Error('expected auth failure'); }), /expected auth failure/);
+    assert.equal(queue.depth, 0);
+    assert.equal(await queue.enqueue(async () => 'recovered'), 'recovered');
+  });
+
+  await test('slow WebSocket consumers are terminated before another outbound message is queued', () => {
+    let terminated = false;
+    const slow = { readyState: 1, bufferedAmount: 1025, terminate() { terminated = true; }, send() { throw new Error('must not send'); } };
+    assert.equal(sendBounded(slow, { t: 'test' }, 1024), false);
+    assert.equal(terminated, true);
+    let sent = null;
+    const healthy = { readyState: 1, bufferedAmount: 0, send(raw, cb) { sent = JSON.parse(raw); cb(null); }, terminate() { throw new Error('healthy socket terminated'); } };
+    assert.equal(sendBounded(healthy, { t: 'ok' }, 1024), true);
+    assert.deepEqual(sent, { t: 'ok' });
+  });
+
   let seq = 1;
   const auth = async (srv, name = 'T') => {
     const base = name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -146,14 +195,26 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     await srv.close();
   });
 
-  await test('/readyz answers, and responses carry HSTS only in production', async () => {
+  await test('health, readiness, static and error responses carry security headers; HSTS is production-only', async () => {
     const srv = await start(base);
     const r = await fetch(`http://127.0.0.1:${srv.port}/readyz`);
     assert.equal(r.status, 200);
-    assert.equal((await fetch(`http://127.0.0.1:${srv.port}/`)).headers.get('strict-transport-security'), null);
+    const home = await fetch(`http://127.0.0.1:${srv.port}/`);
+    const health = await fetch(`http://127.0.0.1:${srv.port}/healthz`);
+    const missing = await fetch(`http://127.0.0.1:${srv.port}/missing`);
+    assert.equal(r.headers.get('cache-control'), 'no-store');
+    assert.equal(health.headers.get('cache-control'), 'no-store');
+    for (const response of [r, home, health, missing]) {
+      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+      assert.match(response.headers.get('content-security-policy') || '', /object-src 'none'/);
+      assert.match(response.headers.get('content-security-policy') || '', /base-uri 'self'/);
+      assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
+      assert.equal(response.headers.get('strict-transport-security'), null);
+    }
     await srv.close();
     const prod = await start({ ...base, env: { NODE_ENV: 'production' } });
-    assert.match((await fetch(`http://127.0.0.1:${prod.port}/`)).headers.get('strict-transport-security'), /max-age/);
+    const secure = await fetch(`http://127.0.0.1:${prod.port}/`);
+    assert.match(secure.headers.get('strict-transport-security'), /max-age/);
     await prod.close();
   });
 

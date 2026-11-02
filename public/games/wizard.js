@@ -34,6 +34,10 @@
     const name = (i) => esc(v.players[i].name);
     if (v._hold && v.lastTrick) return `${name(v.lastTrick.winner)} wins the trick!`;
     if (v.phase === 'playing' && v.autoPlay) return 'Last cards: yours is played automatically…';
+    if (ui.queuedCard && v.phase === 'playing' && !v.myTurn) {
+      const queued = v.hand.find((card) => card.id === ui.queuedCard);
+      if (queued) return `${name(v.turn)} is playing… ${cardName(queued)} queued for your turn.`;
+    }
     if (v.phase === 'chooseTrump') return v.myTurn ? 'A wizard was turned up. Choose the trump suit.' : `${name(v.dealer)} is choosing trump…`;
     if (v.phase === 'bidding' && v.simultaneous) {
       const waiting = v.players.filter((p) => !p.hasBid).length;
@@ -128,7 +132,7 @@
     if (v.phase === 'bidding' && v.myTurn) {
       const btns = [];
       for (let i = 0; i <= v.round; i++) {
-        btns.push(`<button class="bidbtn ${ui.bid === i ? 'on' : ''}" data-wz="pick" data-n="${i}" ${i === v.forbiddenBid ? 'disabled' : ''}>${i}</button>`);
+        btns.push(`<button class="bidbtn ${ui.bid === i ? 'on' : ''}" aria-pressed="${ui.bid === i}" data-wz="pick" data-n="${i}" ${i === v.forbiddenBid ? 'disabled' : ''}>${i}</button>`);
       }
       const note = v.forbiddenBid !== null ? `<div class="hint">Plus / Minus 1: as dealer you can’t bid ${v.forbiddenBid}, because the total would equal the number of tricks.</div>` : '';
       const fsNote = v.foresight && v.foresight.length ? '<div class="hint">Foresight: you can’t see your own card, but you can see everyone else’s.</div>' : '';
@@ -150,7 +154,7 @@
           ui.selected === c.id ? 'sel' : '',
           ui.queuedCard === c.id ? 'sel' : '',
         ].join(' ');
-        return cardHTML(c, { tag: 'button', cls: 'hc ' + cls, attrs: `data-wz="card" data-id="${c.id}" style="${i ? `margin-left:${-z.overlap}px` : ''}"` });
+        return cardHTML(c, { tag: 'button', cls: 'hc ' + cls, attrs: `data-wz="card" data-id="${c.id}" aria-pressed="${ui.selected === c.id || ui.queuedCard === c.id}" style="${i ? `margin-left:${-z.overlap}px` : ''}"` });
       })
       .join('');
   }

@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null };
+  const ui = { ctx: null, latest: null, root: null };
   const COLORS = ['red', 'yellow', 'green', 'blue'];
   const HEX = { red: '#e84b4b', yellow: '#f2c94c', green: '#28a66a', blue: '#4388df' };
   const EMOJI = { red: '🔴', yellow: '🟡', green: '🟢', blue: '🔵' };
@@ -99,9 +99,9 @@
     return '';
   }
   function render(root,v,ctx) {
-    ui.latest=v; ui.ctx=ctx;
+    ui.latest=v; ui.ctx=ctx; ui.root=root;
     const lastAction = (v.log || []).slice(-1)[0];
-    const feedback = lastAction ? `<div class="ludo-feedback" role="status"><span>${lastAction.kind === 'capture' ? '⚔️' : lastAction.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
+    const feedback = lastAction ? `<div class="ludo-feedback"><span>${lastAction.kind === 'capture' ? '⚔️' : lastAction.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
     root.innerHTML=`<section class="ludo ${v.phase==='gameOver'?'over':''}">
       <header class="ludo-header"><div><span class="ludo-kicker">TABLEVERSE CLASSICS</span><h2>🎲 Ludo</h2><p>Race your tokens home. First to finish all four wins.</p></div><nav>${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></nav></header>
       <div class="ludo-status ${v.myTurn?'mine':''}"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
@@ -112,10 +112,28 @@
     root.onclick=onClick;
   }
   function onClick(e) {
+    const clickedToken = e.target.closest('.ludo-token');
     const el=e.target.closest('[data-lt]');
     if(!el)return;
     const v=ui.latest,ctx=ui.ctx;
-    if(!v||!ctx||el.disabled)return;
+    if(!v||!ctx)return;
+    // Expanded touch halos can overlap on a small board. Resolve a token tap to the
+    // nearest selectable token centre, not whichever overlapping button painted last.
+    if (clickedToken) {
+      const legal = [...(ui.root?.querySelectorAll('.ludo-token.legal[data-lt]') || [])];
+      const hitCandidates = legal.map((token) => {
+        const r = token.getBoundingClientRect();
+        return { token, r, distance: (r.left + r.width / 2 - e.clientX) ** 2 + (r.top + r.height / 2 - e.clientY) ** 2 };
+      }).filter(({ r }) => e.clientX >= r.left - 11 && e.clientX <= r.right + 11 && e.clientY >= r.top - 11 && e.clientY <= r.bottom + 11);
+      if (hitCandidates.length) {
+        // If enlarged halos overlap, the nearest visible token face wins.
+        const nearest = hitCandidates.reduce((best, candidate) => !best || candidate.distance < best.distance ? candidate : best, null);
+        const token = Number(nearest.token.dataset.lt.slice(4));
+        if (Number.isInteger(token) && v.canMove && (v.legalTokens || []).includes(token)) ctx.act({ type: 'move', token });
+      }
+      return;
+    }
+    if(el.disabled)return;
     const a=el.dataset.lt;
     if(a==='roll')ctx.act({type:'roll'});
     else if(a==='ready')ctx.act({type:'ready'});

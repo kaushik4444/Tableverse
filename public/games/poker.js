@@ -121,9 +121,9 @@
       const verb = v.currentBet === 0 ? 'Bet' : 'Raise to';
       const sizes2 = raiseSizes(v);
       raiseBox = `<div class="pk-raise">
-        <div class="pk-sizes">${sizes2.map(([l, val]) => `<button type="button" class="pk-size ${val === to ? 'on' : ''}" data-pk="size" data-v="${val}">${l}</button>`).join('')}</div>
+        <div class="pk-sizes">${sizes2.map(([l, val]) => `<button type="button" class="pk-size ${val === to ? 'on' : ''}" aria-pressed="${val === to}" data-pk="size" data-v="${val}">${l}</button>`).join('')}</div>
         <div class="pk-slide"><button type="button" class="pk-step" data-pk="step" data-d="-1" aria-label="Less">−</button>
-          <input type="range" min="${v.minRaiseTo}" max="${v.maxRaiseTo}" step="1" value="${to}" data-pk="slider" aria-label="Raise amount">
+          <input type="range" min="${v.minRaiseTo}" max="${v.maxRaiseTo}" step="1" value="${to}" data-pk="slider" aria-label="Raise amount" aria-valuetext="${fmt(to)}">
           <button type="button" class="pk-step" data-pk="step" data-d="1" aria-label="More">+</button></div></div>`;
       raiseBtn = `<button class="btn pk-raise-btn" data-pk="raise">${to >= v.maxRaiseTo ? 'All-in ' + fmt(to) : verb + ' <b data-pk-amt>' + fmt(to) + '</b>'}</button>`;
     }
@@ -244,7 +244,13 @@
     if (rerender) return ui.ctx.rerender();
     const btn = document.querySelector('.pk-raise-btn');
     if (btn) btn.innerHTML = ui.raiseTo >= v.maxRaiseTo ? 'All-in ' + fmt(ui.raiseTo) : (v.currentBet === 0 ? 'Bet' : 'Raise to') + ' <b data-pk-amt>' + fmt(ui.raiseTo) + '</b>';
-    document.querySelectorAll('.pk-size').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === ui.raiseTo));
+    document.querySelectorAll('.pk-size').forEach((b) => {
+      const pressed = Number(b.dataset.v) === ui.raiseTo;
+      b.classList.toggle('on', pressed);
+      b.setAttribute('aria-pressed', String(pressed));
+    });
+    const slider = document.querySelector('.pk-raise [data-pk="slider"]');
+    if (slider) slider.setAttribute('aria-valuetext', fmt(ui.raiseTo));
   }
 
   function onClick(e) {

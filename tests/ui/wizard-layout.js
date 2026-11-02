@@ -14,7 +14,7 @@ const games = require('../../games');
 
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/json' };
-const CASES = process.env.UI_GAME ? [[process.env.UI_GAME, Number(process.env.UI_SEATS || 4)]] : [['wizard', 3], ['wizard', 4], ['wizard', 6], ['twentynine', 4], ['poker', 2], ['poker', 6], ['themind', 2], ['themind', 4]];
+const CASES = process.env.UI_GAME ? [[process.env.UI_GAME, Number(process.env.UI_SEATS || 4)]] : [['wizard', 3], ['wizard', 4], ['wizard', 6], ['twentynine', 4], ['poker', 2], ['poker', 6], ['themind', 2], ['themind', 4], ['ludo', 2], ['ludo', 4]];
 const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const SEEDS = process.env.UI_SEED ? [Number(process.env.UI_SEED)] : [1, 2, 3, 4, 5, 6];
 const NAMES = ['Aarav the Magnificent', 'Bo', 'Charlotte-Anne', 'Dmitri', 'Eve', 'Frederick'];
@@ -22,12 +22,35 @@ const NAMES = ['Aarav the Magnificent', 'Bo', 'Charlotte-Anne', 'Dmitri', 'Eve',
 function buildMessages(gameId, n, seed) {
   const def = games.get(gameId);
   const players = NAMES.slice(0, n).map((name, i) => ({ id: 'p' + i, name, avatar: '🧙' }));
-  const g = def.create(players, Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default])), mulberry(seed));
+  const rng = gameId === 'ludo' ? () => 0.999999 : mulberry(seed);
+  const g = def.create(players, Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default])), rng);
+  // Render Ludo in an active move state so the responsive check covers real, selectable board tokens.
+  if (gameId === 'ludo') {
+    for (const p of players) g.act(p.id, { type: 'ready' });
+    g.act(players[0].id, { type: 'roll' }); // deterministic six: all four yard tokens are legal
+  } else if (gameId === 'themind') {
+    // Advance to level 2, then trigger a throwing star so the UI has a persistent
+    // "star" event while the current phase requires players to confirm continuing.
+    for (const p of players) g.act(p.id, { type: 'ready' });
+    while (g.view(players[0].id).phase === 'playing') {
+      const cards = players.flatMap((p) => g.view(p.id).hand.map((card) => ({ id: p.id, card })));
+      const next = cards.sort((a, b) => a.card - b.card)[0];
+      g.act(next.id, { type: 'play', card: next.card });
+    }
+    for (const p of players) g.act(p.id, { type: 'ready' });
+    for (const p of players) g.act(p.id, { type: 'shuriken' });
+  }
   const room = { code: 'ABCDEF', gameId, hostId: 'p0', status: 'playing', options: {}, visibility: 'public', seats: n, min: def.seats.min, max: def.seats.max, seatLabels: null,
     members: players.map((p) => ({ id: p.id, name: p.name, bot: false, avatar: p.avatar, connected: true })), spectators: [], deadline: null, now: Date.now() };
+  const view = g.view('p0');
+  if (gameId === 'ludo') {
+    // Adjacent on-track legal tokens make their enlarged touch halos overlap on phones.
+    view.players[0].tokens = [0, 1, 58, 58];
+    view.phase = 'moving'; view.canMove = true; view.myTurn = true; view.legalTokens = [0, 1]; view.dice = 6;
+  }
   return [
     { t: 'welcome', id: 'p0', name: players[0].name, avatar: '🧙', avatars: ['🧙'], emotes: ['👍'], games: games.list(), tables: [], rejoin: [] },
-    { t: 'state', room, view: g.view('p0') },
+    { t: 'state', room, view },
   ];
 }
 
@@ -61,21 +84,68 @@ const SIZES = [
     const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2, hasTouch: size.width < 800 });
     const page = await ctx.newPage();
     await page.addInitScript((messages) => {
+      window.__clientMessages = [];
       window.WebSocket = class {
         constructor() { this.readyState = 0; setTimeout(() => { this.readyState = 1; this.onopen && this.onopen({}); }, 0); }
-        send(raw) { let m; try { m = JSON.parse(raw); } catch { return; } if (m.t === 'hello') messages.forEach((x, i) => setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify(x) }), 10 * (i + 1))); }
+        send(raw) { let m; try { m = JSON.parse(raw); } catch { return; } window.__clientMessages.push(m); if (m.t === 'hello') messages.forEach((x, i) => setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify(x) }), 10 * (i + 1))); }
         close() { this.readyState = 3; }
       };
     }, msgs);
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
-    await page.waitForSelector('.wz-top', { timeout: 8000 }).catch(() => {});
+    await page.waitForSelector(GAME === 'ludo' ? '.ludo-header' : '.wz-top', { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(300);
-    const report = await page.evaluate(() => {
+    const report = await page.evaluate((game) => {
       const vw = document.documentElement.clientWidth;
       const out = { vw, pageScrollW: document.documentElement.scrollWidth, problems: [] };
-      const top = document.querySelector('.wz-top');
-      if (!top) { out.problems.push('no .wz-top rendered'); return out; }
-      const wz = document.querySelector('.wz'); const wzOverflow = getComputedStyle(wz).overflowX; if (wzOverflow === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
+      const top = document.querySelector(game === 'ludo' ? '.ludo-header' : '.wz-top');
+      if (!top) { out.problems.push(game === 'ludo' ? 'no Ludo header rendered' : 'no game header rendered'); return out; }
+      const wz = document.querySelector('.wz') || document.querySelector('.ludo');
+      if (game === 'ludo') {
+        const board = document.querySelector('.ludo-board');
+        if (!board) out.problems.push('no Ludo board rendered');
+        else {
+          const b = board.getBoundingClientRect();
+          if (b.left < -0.5 || b.right > vw + 0.5) out.problems.push(`Ludo board is off screen (${Math.round(b.left)}..${Math.round(b.right)} of ${vw})`);
+          if (Math.abs(b.width - b.height) > 2) out.problems.push(`Ludo board is not square (${Math.round(b.width)}x${Math.round(b.height)})`);
+          for (const token of board.querySelectorAll('.ludo-token')) {
+            const r = token.getBoundingClientRect();
+            if (r.left < b.left - 1 || r.right > b.right + 1 || r.top < b.top - 1 || r.bottom > b.bottom + 1) out.problems.push('Ludo token is outside the board');
+          }
+        }
+        if (!document.querySelector('#game-status-announcer[role="status"][aria-live="polite"]')) out.problems.push('Ludo turn status is not announced by the persistent live region');
+        const legal = board ? [...board.querySelectorAll('.ludo-token.legal')] : [];
+        if (!legal.length) out.problems.push('active Ludo turn has no highlighted legal token');
+        for (const token of legal) {
+          if (!token.getAttribute('aria-label')) out.problems.push('selectable Ludo token has no accessible label');
+          const hit = getComputedStyle(token, '::before');
+          if (hit.content === 'none' || hit.content === 'normal') out.problems.push('selectable Ludo token has no enlarged touch target');
+        }
+      } else {
+        if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
+      }
+      if (game === 'themind') {
+        const guidance = document.querySelector('.tm-status-guidance');
+        if (!guidance) out.problems.push('The Mind current-state guidance is not announced accessibly');
+        else if (!guidance.textContent.includes('Confirm when ready to continue')) out.problems.push('The Mind star-pause guidance is missing while the last event is a star');
+      }
+      if (!document.querySelector('#game-status-announcer[role="status"][aria-live="polite"]') || document.querySelector('#app #game-status-announcer')) {
+        out.problems.push('persistent game status announcer is missing or nested inside the replaced app root');
+      }
+      if (game === 'poker') {
+        const slider = document.querySelector('.pk-raise [data-pk="slider"]');
+        // A slider is only rendered for the player who can currently raise. The two-player
+        // fixture exercises that state; other seat counts may begin on a different action.
+        if (slider) {
+          slider.value = String(Math.min(Number(slider.max), Number(slider.min) + 1));
+          slider.dispatchEvent(new Event('input', { bubbles: true }));
+          for (const preset of document.querySelectorAll('.pk-size')) {
+            const expected = Number(preset.dataset.v) === Number(slider.value);
+            if (preset.getAttribute('aria-pressed') !== String(expected)) out.problems.push('Poker raise preset aria-pressed is stale after slider input');
+          }
+        }
+      }
+      const timer = document.querySelector('.ct-timer');
+      if (timer && timer.closest('#game-status-announcer')) out.problems.push('turn timer is included in the persistent live region');
       const tops = top.getBoundingClientRect();
       if (top.scrollWidth > top.clientWidth + 1) out.problems.push(`header content wider than header (${top.scrollWidth} > ${top.clientWidth})`);
       if (wz && wz.scrollWidth > wz.clientWidth + 1) out.problems.push(`.wz scrolls horizontally (${wz.scrollWidth} > ${wz.clientWidth})`);
@@ -94,12 +164,13 @@ const SIZES = [
       const hand = document.querySelector('.hand, .tm-hand, .pk-hand');
       out.handRight = hand ? Math.round(hand.getBoundingClientRect().right) : null;
       return out;
-    });
+    }, GAME);
     if (report.pageScrollW > report.vw + 1) report.problems.push(`page scrolls horizontally (${report.pageScrollW} > ${report.vw})`);
     // elements anywhere inside the table that stick out of the viewport (excluding scroll containers that are meant to scroll)
     const wide = await page.evaluate(() => {
       const vw = document.documentElement.clientWidth; const bad = [];
-      for (const e of document.querySelectorAll('.wz *')) {
+      const root = document.querySelector('.wz, .ludo');
+      for (const e of (root ? root.querySelectorAll('*') : [])) {
         if (e.closest('.hand, .tm-hand, .overlay, .chat, .watchers')) continue;
         const r = e.getBoundingClientRect();
         if (r.width && (r.right > vw + 1 || r.left < -1) && getComputedStyle(e).position !== 'fixed') bad.push(`${e.tagName.toLowerCase()}.${String(e.className).split(' ')[0]} ${Math.round(r.left)}..${Math.round(r.right)}`);
@@ -122,6 +193,39 @@ const SIZES = [
       return out;
     });
     overlaps.forEach((o) => report.problems.push(o));
+    if (GAME === 'ludo') {
+      await page.evaluate(() => {
+        document.addEventListener('click', (event) => {
+          const token = event.target.closest('.ludo-token');
+          if (token) window.__ludoClickTarget = token.dataset.lt;
+        }, true);
+      });
+      await page.evaluate(() => document.querySelector('.ludo-token.legal[data-lt="tok:0"]')?.scrollIntoView({ block: 'center', inline: 'center' }));
+      await page.waitForTimeout(50); // the legal-token glow animates its scale, so avoid Playwright's stability wait
+      const target = await page.locator('.ludo-token.legal[data-lt="tok:0"]').boundingBox();
+      if (target) {
+        await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+        await page.waitForTimeout(30);
+        const result = await page.evaluate(() => ({
+          selected: window.__clientMessages.filter((m) => m.t === 'act').slice(-1)[0]?.action?.token,
+          target: window.__ludoClickTarget,
+          rects: [...document.querySelectorAll('.ludo-token.legal')].map((el) => ({ id: el.dataset.lt, r: (() => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })() })),
+        }));
+        if (result.selected !== 0) report.problems.push('tap on tok:0 selected ' + String(result.selected) + ' (event target ' + String(result.target) + '; centres ' + JSON.stringify(result.rects) + ')');
+      } else report.problems.push('first adjacent legal Ludo token is missing');
+    }
+    const announcerPersists = await page.evaluate(() => {
+      const node = document.getElementById('game-status-announcer');
+      const app = document.getElementById('app');
+      if (!node || !app || !window.CardTable?.announceStatus) return false;
+      const original = app.innerHTML;
+      app.innerHTML = '<p>simulated full game rerender</p>';
+      window.CardTable.announceStatus('Updated turn status');
+      const survived = document.getElementById('game-status-announcer') === node && node.textContent === 'Updated turn status';
+      app.innerHTML = original;
+      return survived;
+    });
+    if (!announcerPersists) report.problems.push('game status announcer is recreated or lost when the game root is replaced');
     const ok = report.problems.length === 0;
     if (!ok) failures++;
     console.log(`${ok ? 'ok  ' : 'FAIL'}  ${GAME}/${seats} seed ${seed} ${size.name}: header ${report.headerHeight}px high, ${report.buttons} buttons${ok ? '' : '\n        - ' + report.problems.join('\n        - ')}`);
