@@ -22,7 +22,13 @@ const NAMES = ['Aarav the Magnificent', 'Bo', 'Charlotte-Anne', 'Dmitri', 'Eve',
 function buildMessages(gameId, n, seed) {
   const def = games.get(gameId);
   const players = NAMES.slice(0, n).map((name, i) => ({ id: 'p' + i, name, avatar: '🧙' }));
-  const g = def.create(players, Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default])), mulberry(seed));
+  const rng = gameId === 'ludo' ? () => 0.999999 : mulberry(seed);
+  const g = def.create(players, Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default])), rng);
+  // Render Ludo in an active move state so the responsive check covers real, selectable board tokens.
+  if (gameId === 'ludo') {
+    for (const p of players) g.act(p.id, { type: 'ready' });
+    g.act(players[0].id, { type: 'roll' }); // deterministic six: all four yard tokens are legal
+  }
   const room = { code: 'ABCDEF', gameId, hostId: 'p0', status: 'playing', options: {}, visibility: 'public', seats: n, min: def.seats.min, max: def.seats.max, seatLabels: null,
     members: players.map((p) => ({ id: p.id, name: p.name, bot: false, avatar: p.avatar, connected: true })), spectators: [], deadline: null, now: Date.now() };
   return [
@@ -89,6 +95,13 @@ const SIZES = [
           }
         }
         if (!document.querySelector('.ludo-status[role="status"]')) out.problems.push('Ludo turn status is not announced accessibly');
+        const legal = board ? [...board.querySelectorAll('.ludo-token.legal')] : [];
+        if (!legal.length) out.problems.push('active Ludo turn has no highlighted legal token');
+        for (const token of legal) {
+          if (!token.getAttribute('aria-label')) out.problems.push('selectable Ludo token has no accessible label');
+          const hit = getComputedStyle(token, '::before');
+          if (hit.content === 'none' || hit.content === 'normal') out.problems.push('selectable Ludo token has no enlarged touch target');
+        }
       } else if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
       const tops = top.getBoundingClientRect();
       if (top.scrollWidth > top.clientWidth + 1) out.problems.push(`header content wider than header (${top.scrollWidth} > ${top.clientWidth})`);
