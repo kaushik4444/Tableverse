@@ -202,7 +202,7 @@ function applyAction(g, playerId, action) {
       g.trumpSuit = action.suit;
       for (const p of g.players) p.hand = sortHand(p.hand.concat(g.stock.splice(0, 4)));
       g.phase = 'playing';
-      g.turn = (g.dealer + 1) % 4;
+      g.turn = g.highBidder; // the winning bidder leads the first trick
       return ok();
     }
     case 'reveal': {
