@@ -121,21 +121,17 @@
     // nearest selectable token centre, not whichever overlapping button painted last.
     if (clickedToken) {
       const legal = [...(ui.root?.querySelectorAll('.ludo-token.legal[data-lt]') || [])];
-      if (legal.length) {
-        const nearest = legal.reduce((best, token) => {
-          const r = token.getBoundingClientRect();
-          const d = (r.left + r.width / 2 - e.clientX) ** 2 + (r.top + r.height / 2 - e.clientY) ** 2;
-          return !best || d < best.distance ? { token, distance: d } : best;
-        }, null);
-        if (nearest) {
-          const tokenEl = nearest.token;
-          if (!tokenEl.disabled) {
-            const token = Number(tokenEl.dataset.lt.slice(4));
-            if (Number.isInteger(token) && v.canMove && (v.legalTokens || []).includes(token)) ctx.act({ type: 'move', token });
-          }
-          return;
-        }
+      const hitCandidates = legal.map((token) => {
+        const r = token.getBoundingClientRect();
+        return { token, r, distance: (r.left + r.width / 2 - e.clientX) ** 2 + (r.top + r.height / 2 - e.clientY) ** 2 };
+      }).filter(({ r }) => e.clientX >= r.left - 11 && e.clientX <= r.right + 11 && e.clientY >= r.top - 11 && e.clientY <= r.bottom + 11);
+      if (hitCandidates.length) {
+        // If enlarged halos overlap, the nearest visible token face wins.
+        const nearest = hitCandidates.reduce((best, candidate) => !best || candidate.distance < best.distance ? candidate : best, null);
+        const token = Number(nearest.token.dataset.lt.slice(4));
+        if (Number.isInteger(token) && v.canMove && (v.legalTokens || []).includes(token)) ctx.act({ type: 'move', token });
       }
+      return;
     }
     if(el.disabled)return;
     const a=el.dataset.lt;
