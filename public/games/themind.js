@@ -173,7 +173,7 @@
       </div>
       <div class="tm-sub"><span class="tm-lives" title="Lives">${lives}</span><div class="tm-dots" aria-hidden="true">${dots}</div>${stars || '<span></span>'}</div>
       ${tableHTML(v, ctx)}
-      <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''} tm-status">${text ? `<span class="tm-status-event">${text}</span>` : ''}<span class="tm-status-guidance" role="status" aria-live="polite" aria-atomic="true">${statusGuidance(v)}</span></div>
+      <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''} tm-status">${text ? `<span class="tm-status-event">${text}</span>` : ''}<span class="tm-status-guidance">${statusGuidance(v)}</span></div>
       ${handHTML(v, z)}
       ${controlsHTML(v)}
       ${overlayHTML(v)}
