@@ -4,9 +4,8 @@
   'use strict';
   const { esc, toast } = window.CardTable;
 
-  const COLORS = ['🔴', '🟡', '🟢', '🔵'];
-  const HOMES = ['Home 1', 'Home 2', 'Home 3', 'Home 4'];
   const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]); // track squares that protect from capture
+  const COLOR_CSS = { '🔴': '#ef4444', '🟡': '#eab308', '🟢': '#22c55e', '🔵': '#3b82f6' };
 
   // Absolute board square for a token (player 0-3, internal position -1..57).
   function absSquare(playerIdx, p) {
@@ -60,7 +59,10 @@
     for (let sq = 0; sq < 52; sq++) {
       const safe = SAFE.has(sq);
       const toks = at[sq] || [];
-      cells.push(`<div class="lc ${safe ? 'safe' : ''}"><div class="lc-toks">${toks.map((x) => `<span class="lc-tok" style="color:${x.color === '🔴'?'#ef4444':x.color==='🟡'?'#eab308':x.color==='🟢'?'#22c55e':'#3b82f6'}" data-lt="tok:${x.i}:${x.t}">${x.color}</span>`).join('')}</div><small class="lc-num">${sq + 1}</small></div>`);
+      cells.push(`<div class="lc ${safe ? 'safe' : ''}"><div class="lc-toks">${toks.map((x) => {
+        const selectable = x.i === v.me && v.canMove && (v.legalTokens || []).includes(x.t);
+        return `<button type="button" class="lc-tok token-button ${selectable ? 'is-legal' : ''}" style="color:${COLOR_CSS[x.color] || '#64748b'}" ${selectable ? `data-lt="tok:${x.t}" aria-label="Move token ${x.t + 1}"` : 'disabled aria-hidden="true"'}>${x.color}</button>`;
+      }).join('')}</div><small class="lc-num">${sq + 1}</small></div>`);
     }
     return `<div class="lb"><div class="lb-track">${cells.join('')}</div>${homeAreasHTML(v)}</div>`;
   }
@@ -70,11 +72,18 @@
     const yards = [];
     const cols = [];
     for (let i = 0; i < v.n; i++) {
-      const yard = v.tokens[i].filter((p) => p === -1).length;
-      const inHome = v.tokens[i].filter((p) => p >= 52 && p < 58).length;
-      const done = v.tokens[i].filter((p) => p >= 58).length;
-      yards.push(`<div class="ly"><div class="ly-color">${v.players[i].color}</div><div class="ly-count" title="${esc(v.players[i].name)}'s yard">${yard}</div></div>`);
-      cols.push(`<div class="lc"><div class="ly-color">${v.players[i].color}</div><div class="lc-toks">${Array.from({ length: inHome }, () => '<span class="lt home">↑</span>').join('')}${Array.from({ length: done }, () => '<span class="lt done">✓</span>').join('')}</div><small class="lc-num">home</small></div>`);
+      const yardTokens = v.tokens[i].map((p, t) => ({ p, t })).filter((x) => x.p === -1);
+      const homeTokens = v.tokens[i].map((p, t) => ({ p, t })).filter((x) => x.p >= 52 && x.p < 58);
+      const doneTokens = v.tokens[i].map((p, t) => ({ p, t })).filter((x) => x.p === 58);
+      const ownTurn = i === v.me && v.canMove;
+      yards.push(`<div class="ly"><div class="ly-color">${v.players[i].color}</div><div class="ly-count" title="${esc(v.players[i].name)}'s yard">${yardTokens.map(({t}) => {
+        const selectable = ownTurn && (v.legalTokens || []).includes(t);
+        return `<button type="button" class="lt yard token-button ${selectable ? 'is-legal' : ''}" ${selectable ? `data-lt="tok:${t}" aria-label="Bring token ${t + 1} out"` : 'disabled aria-hidden="true"'}>⚪</button>`;
+      }).join('')}</div></div>`);
+      cols.push(`<div class="lc"><div class="ly-color">${v.players[i].color}</div><div class="lc-toks">${homeTokens.map(({t}) => {
+        const selectable = ownTurn && (v.legalTokens || []).includes(t);
+        return `<button type="button" class="lt home token-button ${selectable ? 'is-legal' : ''}" ${selectable ? `data-lt="tok:${t}" aria-label="Move home-column token ${t + 1}"` : 'disabled aria-hidden="true"'}>↑</button>`;
+      }).join('')}${doneTokens.map(() => '<span class="lt done">✓</span>').join('')}</div><small class="lc-num">home</small></div>`);
     }
     return `<div class="lyard">${yards.join('')}</div><div class="lhomecols">${cols.join('')}</div>`;
   }
@@ -136,10 +145,9 @@
     } else if (act === 'leave') {
       ctx.leave();
     } else if (act.startsWith('tok:')) {
-      const [, i, t] = act.split(':');
-      ui.selected = { i: Number(i), t: Number(t) };
-      ctx.act({ type: 'move', token: ui.selected.t });
-      ui.selected = null;
+      const token = Number(act.slice(4));
+      if (!Number.isInteger(token) || !v.canMove || !(v.legalTokens || []).includes(token)) return;
+      ctx.act({ type: 'move', token });
     }
   }
 
