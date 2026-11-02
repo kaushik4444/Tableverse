@@ -89,5 +89,6 @@ Stage 6 social features and the Stage 7 follow-ups documented above are implemen
 - Tests: `node tests/ui/social-ui.js` 10 passed, 0 failed (new test for the card, coming-soon cards and `#friends` navigation; friends-list test now loads `#friends`).
 - 8.4: What's new entry added, `WHATS_NEW_VERSION` bumped to `2026-11-simpler-home`, README v0.8 section.
 - `node tests/ui/wizard-layout.js`: 288 ok, "all viewports ok".
-- Not yet done: further app.js render-helper split, 320/375/414/768/1280 screenshot pass, final full `npm test`.
+- Width check (320, 375, 414, 768, 1280; home and #friends, with friends, a request and an invitation): no horizontal overflow; 375px screenshot reviewed by eye.
+- Not yet done: app.js render-helper split, final full `npm test` (no server changes in this branch).
 - Known: private-table security fixes + spectator-rematch fix are NOT in main; they are on `wip/private-table-access-policy` (c8e1a17) and need a manual merge (server.js conflicts with host-tools commit 98aec12) and a real-CI `npm run test:pg`.
