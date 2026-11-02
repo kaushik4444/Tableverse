@@ -1,0 +1,27 @@
+/* Go Fish: stock, books, the two-step ask. Builds on table.css (cards, seats, hand). */
+.gf .gf-stock { display: grid; justify-items: center; gap: 2px; }
+.gf .gf-stock .card { --cw: calc(var(--cw0, 62px) * .72); }
+.gf .gf-stock .card.slot { background: transparent; border: 2px dashed rgba(255, 255, 255, .35); box-shadow: none; }
+.gf .gf-stock b { font-size: 20px; line-height: 1; }
+.gf .gf-stock small, .gf .gf-event { color: rgba(255, 255, 255, .78); font-size: 12px; }
+.gf .gf-event { margin: 4px 0 0; max-width: 280px; line-height: 1.35; }
+.gf .gf-event .card.tiny { --cw: 22px; display: inline-block; vertical-align: middle; }
+.gf .gf-backs { display: flex; gap: 2px; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); }
+.gf .gf-backs i { width: 9px; height: 13px; border-radius: 2px; background: repeating-linear-gradient(45deg, #3a2a7a 0 3px, #4b3a96 3px 6px); border: 1px solid rgba(255, 255, 255, .7); }
+.gf .gf-books { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; max-width: 110px; }
+.gf .gf-books span { min-width: 18px; padding: 1px 4px; border-radius: 6px; background: var(--gold, #f2c14e); color: #3b2c00; font-size: 11px; font-weight: 800; text-align: center; }
+.gf .gf-askable { cursor: pointer; }
+.gf .gf-askable .av { box-shadow: 0 0 0 3px rgba(242, 193, 78, .85); }
+.gf .gf-picked .av { box-shadow: 0 0 0 4px var(--gold, #f2c14e), 0 0 18px rgba(242, 193, 78, .7); }
+.gf .gf-empty { text-align: center; padding: 18px 8px; color: rgba(255, 255, 255, .75); }
+.gf .gf-ask { display: grid; gap: 10px; margin-top: 8px; }
+.gf .gf-row { display: grid; gap: 6px; }
+.gf .gf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gf .gf-chip { display: inline-flex; align-items: baseline; gap: 5px; min-width: 44px; min-height: 44px; padding: 6px 12px; justify-content: center; border-radius: 12px; border: 2px solid var(--panel-line, rgba(255, 255, 255, .2)); background: rgba(255, 255, 255, .06); color: inherit; font: inherit; font-weight: 800; font-size: 18px; cursor: pointer; }
+.gf .gf-chip.wide { font-size: 15px; }
+.gf .gf-chip small { font-size: 11px; opacity: .75; font-weight: 600; }
+.gf .gf-chip.on { border-color: var(--gold, #f2c14e); background: rgba(242, 193, 78, .22); }
+.gf .gf-chip:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; }
+.gf .gf-final { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.gf .gf-final li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .06); }
+.gf .gf-final li.win { background: rgba(242, 193, 78, .2); }

@@ -66,7 +66,6 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   }
 
   const COMING_SOON = [
-    ['🐟', 'Go Fish', 'Ask, collect matching sets and make the most books.', 'Your build order'],
     ['🐍', 'Snakes and Ladders', 'Race to the finish and watch out for the snakes.', 'Your build order'],
     ['🏠', 'Property Rivals', 'Buy properties, trade smartly and build your empire.', 'Your build order'],
     ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order'],
@@ -93,7 +92,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     return `<section class="home-section coming-roadmap" aria-label="Coming soon games">
       <div class="soon-heading">
         <div><h2 class="section">Coming soon</h2><p class="soon-intro">The next games planned for Tableverse, in development order.</p></div>
-        <span class="soon-count">12 planned</span>
+        <span class="soon-count">${COMING_SOON.length} planned</span>
       </div>
       <h3 class="soon-group-title">Development order</h3>
       <div class="soon-grid">${comingSoonCards(requested, 1)}</div>
