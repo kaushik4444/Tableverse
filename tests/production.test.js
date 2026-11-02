@@ -153,6 +153,8 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     const home = await fetch(`http://127.0.0.1:${srv.port}/`);
     const health = await fetch(`http://127.0.0.1:${srv.port}/healthz`);
     const missing = await fetch(`http://127.0.0.1:${srv.port}/missing`);
+    assert.equal(r.headers.get('cache-control'), 'no-store');
+    assert.equal(health.headers.get('cache-control'), 'no-store');
     for (const response of [r, home, health, missing]) {
       assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
       assert.match(response.headers.get('content-security-policy') || '', /object-src 'none'/);
