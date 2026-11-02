@@ -107,9 +107,9 @@
       if (event.type === 'rolled') return `<div class="ludo-feedback"><span>🎲</span><b>${name(event.by)} rolled a ${event.dice}</b></div>`;
       if (event.type === 'moved') return `<div class="ludo-feedback"><span>🟢</span><b>${name(event.by)} moved token ${event.token + 1} by ${event.dice}</b></div>`;
       if (event.type === 'turn') {
-        const last = (v.log || []).slice(-1)[0];
-        const detail = last ? `${esc(last.by)} ${esc(last.card)} · ` : '';
-        return `<div class="ludo-feedback"><span>👤</span><b>${detail}${name(event.by)}’s turn</b></div>`;
+        const detail = (v.log || []).slice(-2).map((entry) => `${esc(entry.by)} ${esc(entry.card)}`).join(' · ');
+        const prefix = detail ? `${detail} · ` : '';
+        return `<div class="ludo-feedback"><span>👤</span><b>${prefix}${name(event.by)}’s turn</b></div>`;
       }
       if (event.type === 'finished') return `<div class="ludo-feedback"><span>🏁</span><b>${name(event.by)} finished in place ${event.place}</b></div>`;
       if (event.type === 'won') return `<div class="ludo-feedback"><span>🏆</span><b>${name(event.by)} won the game</b></div>`;
