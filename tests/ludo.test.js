@@ -182,6 +182,36 @@ test('third consecutive six forfeits the roll and ends the turn immediately', as
   assert.equal(g.sixes, 0);
 });
 
+
+test('finished players are skipped, including when finishing on a six', async () => {
+  const g = E.createGame(people(3), {}, mulberry32(1));
+  readyAll(g);
+  // p0 has finished; p2 completes a non-six move. Turn rotation must skip p0.
+  g.tokens[0] = [58, 58, 58, 58];
+  g.tokens[2] = [0, -1, -1, -1];
+  g.finishedOrder = [0];
+  g.phase = 'moving';
+  g.turn = 2;
+  g.dice = 1;
+  g.sixes = 0;
+  must(g, 'p2', { type: 'move', token: 0 });
+  assert.equal(g.turn, 1, 'next turn skips the finished p0');
+  assert.deepEqual(g.awaiting ? g.awaiting() : E.awaitingList(g), ['p1']);
+
+  // A player who finishes all four tokens on a six must not receive the bonus roll.
+  const h = E.createGame(people(3), {}, mulberry32(2));
+  readyAll(h);
+  h.tokens[0] = [58, 58, 58, 52];
+  h.phase = 'moving';
+  h.turn = 0;
+  h.dice = 6;
+  h.sixes = 1;
+  must(h, 'p0', { type: 'move', token: 3 });
+  assert.deepEqual(h.finishedOrder, [0]);
+  assert.equal(h.turn, 1);
+  assert.equal(h.phase, 'rolling');
+});
+
 test('game over: no more actions allowed', async () => {
   const g = E.createGame(people(2), {}, mulberry32(1));
   readyAll(g);
