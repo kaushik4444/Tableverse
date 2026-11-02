@@ -58,6 +58,7 @@ function start(opts = {}) {
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxMsgsPerSec = opts.maxMsgsPerSec ?? 30; // per socket; humans send a handful of messages per minute
   const maxQueuedMessages = opts.maxQueuedMessages ?? 100; // bound async work queued behind slow database operations
+  const maxPendingHellos = opts.maxPendingHellos ?? 250; // bound the global serial authentication queue during connection floods
   const maxBufferedBytes = opts.maxBufferedBytes ?? 1024 * 1024; // disconnect slow consumers before outbound memory grows without bound
   const botScale = opts.botDelay ? Math.min(1, opts.botDelay[1] / 1600) : 1; // tests run with fast bots; plugin-timed bots follow
   const trickPauseMs = opts.trickPauseMs ?? 1700; // time everybody gets to see a finished trick being collected
@@ -1165,8 +1166,14 @@ function start(opts = {}) {
   };
 
   let helloQueue = Promise.resolve(); // hellos are handled one at a time so a token can never get two player objects
+  let helloQueueDepth = 0;
   const onHello = (ws, msg) => {
-    const run = helloQueue.then(() => handleHello(ws, msg));
+    if (helloQueueDepth >= maxPendingHellos) {
+      ws.close(1013, 'server busy');
+      return Promise.resolve();
+    }
+    helloQueueDepth++;
+    const run = helloQueue.then(() => handleHello(ws, msg)).finally(() => { helloQueueDepth = Math.max(0, helloQueueDepth - 1); });
     helloQueue = run.catch(() => {});
     return run;
   };
