@@ -663,11 +663,15 @@
         loadSnapshot();
         openAuthSheet('login', m.message || 'Log in to play.');
         break;
-      case 'tables':
+      case 'tables': {
+        const key = JSON.stringify([m.tables, m.rejoin]);
         S.publicTables = m.tables || [];
         S.rejoin = m.rejoin || [];
+        if (key === S.tablesKey) break; // nothing changed: do not rebuild the screen
+        S.tablesKey = key;
         if (!S.room) render();
         break;
+      }
       case 'emote':
         showEmote(m.id, m.e);
         CardTable.sound.play('emote');
@@ -703,9 +707,14 @@
         if (!S.room) render();
         break;
       case 'state': {
+        const { now, ...stable } = m.room;
+        const stateKey = JSON.stringify([stable, m.view]);
+        const same = stateKey === S.stateKey && S.room;
+        S.stateKey = stateKey;
         S.room = m.room;
         S.view = m.view;
         S.skew = (m.room.now || Date.now()) - Date.now();
+        if (same) break; // identical to what is on screen (a presence or ping tick): keep the DOM, the focus and any animation
         setHash(m.room.code);
         soundsFor(prevView, m.view);
         prevView = m.view;
@@ -1446,10 +1455,17 @@
     openModal('What’s new', `<ul class="wn-list">${WHATS_NEW.map(([ico, t, d]) => `<li><span class="wn-ico" aria-hidden="true">${ico}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>`);
   }
 
+  /** Fields whose text must survive a redraw (someone joins, a friend comes online) while the person is typing or choosing. */
+  const KEEP_FIELDS = ['name', 'friendSearch', 'tableInviteFriend', 'code'];
+  const VALUE_FIELDS = ['friendSearch', 'tableInviteFriend']; // the others are driven by state (S.name, S.draftCode): only focus and cursor come back
   function render() {
-    // keep the cursor in the name box when the screen is redrawn (e.g. someone joins while you type)
     const ae = document.activeElement;
-    const keep = ae && ae.id === 'name' ? { start: ae.selectionStart, end: ae.selectionEnd } : null;
+    const focusedId = ae && KEEP_FIELDS.includes(ae.id) ? ae.id : null;
+    const saved = {};
+    for (const id of KEEP_FIELDS) {
+      const el = document.getElementById(id);
+      if (el && el.value !== undefined) saved[id] = { value: el.value, start: el.selectionStart, end: el.selectionEnd };
+    }
     if (!S.ready && !S.guest && !S.room) {
       $app.innerHTML = '<div class="page"><div class="brand"><div class="mark">🂡</div><h1>Tableverse</h1><p>Connecting…</p></div></div>';
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
@@ -1460,11 +1476,14 @@
     else renderGame();
     updateWatchers();
     if ($chat && S.chatOpen) drawChat();
-    if (keep) {
-      const el = document.getElementById('name');
-      if (el) {
+    for (const id of KEEP_FIELDS) {
+      const el = document.getElementById(id);
+      const was = saved[id];
+      if (!el || !was) continue;
+      if (VALUE_FIELDS.includes(id) && el.value !== was.value && (el.tagName === 'SELECT' ? [...el.options].some((o) => o.value === was.value) : true)) el.value = was.value;
+      if (id === focusedId) {
         el.focus();
-        try { el.setSelectionRange(keep.start, keep.end); } catch { /* ignore */ }
+        try { if (was.start !== null && was.start !== undefined) el.setSelectionRange(was.start, was.end); } catch { /* selects and some input types have no selection */ }
       }
     }
   }
