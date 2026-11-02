@@ -15,7 +15,7 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 .hand, .tm-hand { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .score-wrap { max-width: 100%; overscroll-behavior-x: contain; }
 .score { min-width: max-content; }
-.tm-status { min-height: 42px; }
+.tm-status { min-height: 42px; margin-top: 6px; display: grid; gap: 2px; justify-items: center; }
 .tm-actions { display: flex; gap: 8px; }
 .tm-actions .tm-play { flex: 1; }
 .pk-btns .btn { min-width: 0; }
