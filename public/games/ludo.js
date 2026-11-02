@@ -106,7 +106,11 @@
       const name = (i) => v.players[i] ? esc(v.players[i].name) : 'A player';
       if (event.type === 'rolled') return `<div class="ludo-feedback"><span>🎲</span><b>${name(event.by)} rolled a ${event.dice}</b></div>`;
       if (event.type === 'moved') return `<div class="ludo-feedback"><span>🟢</span><b>${name(event.by)} moved token ${event.token + 1} by ${event.dice}</b></div>`;
-      if (event.type === 'turn') return `<div class="ludo-feedback"><span>👤</span><b>${name(event.by)}’s turn</b></div>`;
+      if (event.type === 'turn') {
+        const last = (v.log || []).slice(-1)[0];
+        const detail = last ? `${esc(last.by)} ${esc(last.card)} · ` : '';
+        return `<div class="ludo-feedback"><span>👤</span><b>${detail}${name(event.by)}’s turn</b></div>`;
+      }
       if (event.type === 'finished') return `<div class="ludo-feedback"><span>🏁</span><b>${name(event.by)} finished in place ${event.place}</b></div>`;
       if (event.type === 'won') return `<div class="ludo-feedback"><span>🏆</span><b>${name(event.by)} won the game</b></div>`;
       if (event.type === 'start') return '<div class="ludo-feedback"><span>🎲</span><b>The game has started</b></div>';
