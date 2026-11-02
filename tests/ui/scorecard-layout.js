@@ -1,18 +1,34 @@
 'use strict';
-const path = require('node:path');
+const http = require('node:http');
 const fs = require('node:fs');
-const assert = require('node:assert/strict');
+const path = require('node:path');
 let chromium;
 try { ({ chromium } = require('playwright')); } catch { console.log('SKIPPED: playwright is not installed'); process.exit(0); }
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const scorecardSource = fs.readFileSync(path.join(PUBLIC, 'scorecard.js'), 'utf8');
-assert.match(scorecardSource, /<div class="sc-actions">/, 'scorecard must use its own action-bar class, not the global navigation .menu');
+if (!scorecardSource.includes('<div class="sc-actions">')) throw new Error('scorecard must use its own action-bar class, not the global navigation .menu');
+function serve() {
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://localhost');
+    const rel = decodeURIComponent(url.pathname === '/' ? '/scorecard.html' : url.pathname);
+    const file = path.normalize(path.join(PUBLIC, rel));
+    if (!file.startsWith(PUBLIC)) { res.writeHead(403); return res.end(); }
+    fs.readFile(file, (err, data) => {
+      if (err) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
+      res.end(data);
+    });
+  });
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
+}
 (async () => {
-  const browser = await chromium.launch();
+  const server = await serve(), browser = await chromium.launch();
   let failed = false;
   try {
     const page = await browser.newPage({ viewport: { width: 320, height: 640 } });
-    await page.goto('file://' + path.join(PUBLIC, 'scorecard.html'));
+    await page.route('**/scorecard.js', (route) => route.abort());
+    await page.goto(`http://127.0.0.1:${server.address().port}/scorecard.html`);
     await page.evaluate(() => {
       document.getElementById('sc').innerHTML = `
         <main class="sc">
@@ -38,6 +54,6 @@ assert.match(scorecardSource, /<div class="sc-actions">/, 'scorecard must use it
         failed = true; console.error('FAIL scorecard layout at', width, result);
       } else console.log('ok scorecard action bar at', width);
     }
-  } finally { await browser.close(); }
+  } finally { await browser.close(); await new Promise((resolve) => server.close(resolve)); }
   if (failed) process.exitCode = 1;
 })();
