@@ -30,7 +30,7 @@ assert.match(html, /Also on the list/);
 assert.match(html, /12 planned/);
 assert.match(html, /original artwork and presentation/);
 const appSource = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
-const whatsNew = appSource.match(/const WHATS_NEW = \[([\\s\\S]*?)\\n  \];/);
+const whatsNew = appSource.match(/const WHATS_NEW = \[([\s\S]*?)\n  \];/);
 assert.ok(whatsNew, 'What’s new release notes exist');
 assert.equal((whatsNew[1].match(/^\s*\[/gm) || []).length, 3, 'What’s new only contains the latest three highlights');
 assert.match(whatsNew[1], /Ludo is now playable/);
