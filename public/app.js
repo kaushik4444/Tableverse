@@ -1279,9 +1279,9 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-roadmap-refresh';
+  const WHATS_NEW_VERSION = '2026-11-ludo-board';
   const WHATS_NEW = [
-    ['🎲', 'Ludo is now playable', 'Create a table for 2–4 players, play with friends and let bots fill empty seats.'],
+    ['🎲', 'Ludo is now playable', 'Create a table for 2–4 players. A fresh classic board with glowing tokens, one simple turn bar, and bots to fill empty seats.'],
     ['🔐', 'Wizard scorecard requires sign-in', 'Sign in to open the offline scorecard. Scores remain stored on your device and are not added to profile statistics.'],
     ['🧭', 'The game roadmap has been refreshed', 'Twelve upcoming games are listed in planned development order, using original working titles and presentation.'],
   ];

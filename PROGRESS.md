@@ -102,3 +102,9 @@ Stage 6 social features and the Stage 7 follow-ups documented above are implemen
 - Behavior changes vs 7.5: a removed seated player can no longer reconnect to the running game (a bot takes the seat); the creator can no longer be locked out by a later host.
 - Run here: `npm run build` ok; `tests/room-access.test.js` 14/14 (rewritten for this policy); engine, twentynine, poker, themind, results, scrub, matchqueue, cleanup, email, isolation, db pass.
 - NOT run here: `npm run test:pg` including the new `private-table-access.pg.test.js`, `host-tools.test.js` and the other `ws`/`pg`-dependent suites (packages cannot be installed in this sandbox). Run them against a disposable database before merging.
+
+
+## Stage 11 — Ludo polish (branch `feature/stage-11-ludo-polish`, from main e94d9fa; not merged)
+- Engine (`games/ludo`): board geometry now matches a real board: a token walks 51 ring squares (positions 0..50), then a 5-square home column (51..55), home = 56 (was 52 + 6, which skipped a diagonal into the lane). Two players sit opposite (seats 0 and 2); colours follow the board clockwise (red, green, yellow, blue); `seatLabel(i, seats)`. Smarter bot (finish > capture > bring out > safety/danger > furthest). New option `bonusRolls` (sixes only | sixes, captures and home). `view.players[i].seat`, `view.lastMove`.
+- Client (`public/games/ludo.js`, `ludo.css`): board is one SVG (cells, yards, centre triangles), glossy tokens glide between squares, stacked tokens fan out, one turn bar (die with pips, status + last event, single Roll / I'm ready button), compact player list with home pips, result card. Removed the separate status, feedback, players heading and ready panels. Old Ludo rules removed from `public/game-ux.css`.
+- Tests: `node tests/ludo.test.js` 23 passed (new: geometry, seats, bonus rolls, bot); `UI_GAME=ludo UI_SEATS=4 node tests/ui/wizard-layout.js` all viewports ok. Not run: PG suites (no server/DB changes).
