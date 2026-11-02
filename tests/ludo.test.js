@@ -3,6 +3,8 @@
 // and full-game play-outs with bots for every player count.
 require('./helpers/env'); // first: NODE_ENV=test, no .env loading, no DATABASE_URL (memory-mode test)
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
 const E = require('../games/ludo/engine');
 const plugin = require('../games/ludo');
 const { buildMatchRecord } = require('../db/matchRecord');
@@ -235,6 +237,40 @@ test('viewFor exposes each player ready status', async () => {
   assert.equal(v1.players[0].ready, true);
   assert.equal(v1.players[1].ready, false);
   assert.equal(v1.players[2].ready, false);
+});
+
+
+test('renderer exposes clickable own yard, track and home tokens only when legal', async () => {
+  let registered;
+  const cardTable = {
+    esc: (s) => String(s),
+    toast: () => {},
+    sound: { button: () => '' },
+    chat: { button: () => '' },
+    register: (id, renderer) => { if (id === 'ludo') registered = renderer; },
+  };
+  const window = { CardTable: cardTable, innerWidth: 900 };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/games/ludo.js'), 'utf8'), {
+    window, CardTable: cardTable,
+  });
+  assert.ok(registered, 'Ludo renderer registered');
+  const root = { style: { setProperty() {} }, innerHTML: '', onclick: null };
+  const view = {
+    n: 2, me: 0, phase: 'moving', turn: 0, canMove: true, canRoll: false,
+    myTurn: true, dice: 6, sixes: 1, winner: null, finishedOrder: [],
+    legalTokens: [0, 1, 2],
+    players: [
+      { id: 'p0', name: 'Me', color: '🔴', ready: true, tokens: [-1, 0, 52, 58] },
+      { id: 'p1', name: 'Opponent', color: '🟡', ready: true, tokens: [39, -1, -1, -1] },
+    ],
+    tokens: [[-1, 0, 52, 58], [39, -1, -1, -1]],
+  };
+  registered.render(root, view, { isHost: true, act() {}, showRules() {}, rematch() {}, leave() {} });
+  for (const token of [0, 1, 2]) assert.ok(root.innerHTML.includes(`data-lt="tok:${token}"`), `token ${token} is selectable`);
+  assert.ok(root.innerHTML.includes('Bring token 1 out'));
+  assert.ok(root.innerHTML.includes('Move home-column token 3'));
+  assert.ok(!root.innerHTML.includes('tok:3'), 'finished tokens cannot be selected');
+  assert.ok(!root.innerHTML.includes('tok:4'), 'opponent tokens cannot be selected');
 });
 
 test('plugin: create/view/act/awaiting/botAction/results wiring', async () => {
