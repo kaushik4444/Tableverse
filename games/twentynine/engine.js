@@ -285,7 +285,7 @@ function viewFor(g, playerId) {
     minBid: g.phase === 'bidding' ? minBid(g) : null,
     maxBid: MAX_BID,
     canPass: g.phase === 'bidding' && me === g.turn ? canPass(g) : false,
-    passed: g.passed.slice(),
+    passed: (g.passed || [false, false, false, false]).slice(),
     trumpSet: g.trumpSuit !== null,
     trumpSuit: knowsTrump ? g.trumpSuit : null,
     trumpRevealed: g.trumpRevealed,
