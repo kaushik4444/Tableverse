@@ -40,6 +40,7 @@ function socket(port, cookie) {
   process.env.MATCH_SPOOL_DIR = spool;
   try {
     process.env.DATABASE_URL = t.url;
+    const dbPool = require('../db/pool');
     const dbAuth = require('../db/auth');
     const dbPlayers = require('../db/players');
     const { start } = require('../server');
@@ -163,6 +164,9 @@ function socket(port, cookie) {
     await srv.close();
     console.log(`\n${passed} session tests passed`);
   } finally {
+    // Close idle PostgreSQL clients before DROP DATABASE ... WITH (FORCE).
+    // This avoids expected administrator-termination/ECONNRESET noise during test teardown.
+    if (process.env.DATABASE_URL) await dbPool.close().catch(() => {});
     fs.rmSync(spool, { recursive: true, force: true });
     await t.drop();
   }
