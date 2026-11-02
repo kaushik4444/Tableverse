@@ -378,6 +378,8 @@ test('roll and token move events identify the player, die result and token', asy
   assert.equal(g.event.type, 'rolled');
   assert.equal(g.event.by, 0);
   assert.equal(g.event.dice, 6);
+  assert.equal(g.log.at(-1).kind, 'roll');
+  assert.match(g.log.at(-1).card, /rolled a 6/);
   must(g, 'p0', { type: 'move', token: 0 });
   assert.equal(g.event.type, 'moved');
   assert.equal(g.event.by, 0);
