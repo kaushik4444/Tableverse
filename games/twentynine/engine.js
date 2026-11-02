@@ -72,7 +72,8 @@ function startHand(g) {
   g.stock = deck; // 16 cards, dealt after trump is chosen
   g.phase = 'bidding';
   g.turn = (g.dealer + 1) % 4;
-  g.bids = [null, null, null, null]; // null = not yet, 'pass', or a number
+  g.bids = [null, null, null, null]; // latest action: null, 'pass', or current bid
+  g.passed = [false, false, false, false]; // passing is permanent for this auction
   g.highBid = 0;
   g.highBidder = -1;
   g.trumpSuit = null;
@@ -82,14 +83,34 @@ function startHand(g) {
   g.lastTrick = null;
   g.tricksPlayed = 0;
   g.handPoints = [0, 0];
+  g.tricksWon = [0, 0];
+  g.marriageDeclared = false;
 }
 
 function minBid(g) {
   return Math.max(MIN_BID, g.highBid + 1);
 }
 function canPass(g) {
-  // the dealer bids last; if everyone before passed, the dealer has to bid
+  // The dealer must open at 15 if everybody else has passed without a bid.
   return !(g.turn === g.dealer && g.highBidder < 0);
+}
+
+function nextBidder(g) {
+  for (let step = 1; step <= 4; step++) {
+    const seat = (g.turn + step) % 4;
+    if (!g.passed[seat]) return seat;
+  }
+  return -1;
+}
+
+function advanceBidding(g) {
+  const passed = g.passed.filter(Boolean).length;
+  if (g.highBid === MAX_BID || (g.highBidder >= 0 && passed >= 3)) {
+    g.phase = 'chooseTrump';
+    g.turn = g.highBidder;
+    return;
+  }
+  g.turn = nextBidder(g);
 }
 
 function legalCards(g, seat) {
@@ -112,6 +133,14 @@ function canReveal(g, seat) {
   return !g.players[seat].hand.some((c) => c.suit === led);
 }
 
+// Standard 29 marriage: the player holds both K and Q of revealed trump and their team has won a trick.
+function canDeclareMarriage(g, seat) {
+  if (g.phase !== 'playing' || !g.trumpRevealed || seat !== g.turn || g.marriageDeclared) return false;
+  if (!g.tricksWon || g.tricksWon[team(seat)] < 1) return false;
+  const hand = g.players[seat].hand;
+  return hand.some((c) => c.suit === g.trumpSuit && c.rank === 'K') && hand.some((c) => c.suit === g.trumpSuit && c.rank === 'Q');
+}
+
 /**
  * Last trick of a hand: everybody holds one card. After the first card is down the rest play automatically,
  * except a player who may still ask for the trump to be shown (that choice can change the winner).
@@ -119,7 +148,7 @@ function canReveal(g, seat) {
 function forcedPlay(g) {
   if (g.phase !== 'playing' || !g.trick.length) return null;
   const p = g.players[g.turn];
-  if (!p || p.hand.length !== 1 || canReveal(g, g.turn)) return null;
+  if (!p || p.hand.length !== 1 || canReveal(g, g.turn) || canDeclareMarriage(g, g.turn)) return null;
   return { playerId: p.id, action: { type: 'play', cardId: p.hand[0].id } };
 }
 
@@ -131,7 +160,7 @@ function finishHand(g) {
   const pts = g.handPoints.slice();
   const made = pts[bidderTeam] >= g.highBid;
   g.teamScore[bidderTeam] += made ? 1 : -1;
-  g.history.push({ hand: g.handNo, dealer: g.dealer, bidder: g.highBidder, bid: g.highBid, trumpSuit: g.trumpSuit, points: pts, made, score: g.teamScore.slice() });
+  g.history.push({ hand: g.handNo, dealer: g.dealer, bidder: g.highBidder, bid: g.highBid, trumpSuit: g.trumpSuit, points: pts, made, marriageDeclared: g.marriageDeclared, score: g.teamScore.slice() });
   const [a, b] = g.teamScore;
   const t = g.options.target;
   if (a >= t || b <= -t) g.winnerTeam = 0;
@@ -148,8 +177,10 @@ function applyAction(g, playerId, action) {
     case 'bid': {
       if (g.phase !== 'bidding') return fail('Not bidding now');
       if (seat !== g.turn) return fail('Not your turn');
+      if (g.passed[seat]) return fail('You have already passed and cannot re-enter the auction');
       if (action.pass === true) {
-        if (!canPass(g)) return fail('Everyone passed, so you must bid');
+        if (!canPass(g)) return fail('Everyone else passed, so the dealer must open at 15');
+        g.passed[seat] = true;
         g.bids[seat] = 'pass';
         g.log.push({ by: g.players[seat].name, card: 'passes', kind: 'bid' });
       } else {
@@ -160,10 +191,7 @@ function applyAction(g, playerId, action) {
         g.highBidder = seat;
         g.log.push({ by: g.players[seat].name, card: `bids ${amt}`, kind: 'bid' });
       }
-      if (g.highBid === MAX_BID || g.bids.every((b) => b !== null)) {
-        g.phase = 'chooseTrump';
-        g.turn = g.highBidder;
-      } else g.turn = (g.turn + 1) % 4;
+      advanceBidding(g);
       return ok();
     }
     case 'chooseTrump': {
@@ -181,6 +209,13 @@ function applyAction(g, playerId, action) {
       if (!canReveal(g, seat)) return fail('You cannot ask for the trump now');
       g.trumpRevealed = true;
       g.revealer = seat;
+      return ok();
+    }
+    case 'marriage': {
+      if (!canDeclareMarriage(g, seat)) return fail('You cannot declare a trump marriage now');
+      g.marriageDeclared = true;
+      g.handPoints[team(seat)] += 4;
+      g.log.push({ by: g.players[seat].name, card: 'declares the trump King–Queen marriage (+4 points)', kind: 'marriage' });
       return ok();
     }
     case 'play': {
@@ -203,6 +238,7 @@ function applyAction(g, playerId, action) {
       let pts = g.trick.reduce((s, t) => s + t.card.pts, 0);
       if (g.tricksPlayed === 8) pts += 1; // last trick bonus
       g.handPoints[team(winner)] += pts;
+      g.tricksWon[team(winner)]++;
       g.lastTrick = { cards: g.trick, winner, points: pts };
       g.trick = [];
       g.turn = winner;
@@ -240,6 +276,8 @@ function viewFor(g, playerId) {
     hand: me >= 0 ? g.players[me].hand : [],
     legal: g.phase === 'playing' && me === g.turn ? legalCards(g, me).map((c) => c.id) : [],
     canReveal: me >= 0 && canReveal(g, me),
+    canDeclareMarriage: me >= 0 && canDeclareMarriage(g, me),
+    marriageDeclared: g.marriageDeclared,
     mustTrump: g.revealer === me && me >= 0,
     bids: g.bids,
     highBid: g.highBid,
@@ -247,6 +285,7 @@ function viewFor(g, playerId) {
     minBid: g.phase === 'bidding' ? minBid(g) : null,
     maxBid: MAX_BID,
     canPass: g.phase === 'bidding' && me === g.turn ? canPass(g) : false,
+    passed: g.passed.slice(),
     trumpSet: g.trumpSuit !== null,
     trumpSuit: knowsTrump ? g.trumpSuit : null,
     trumpRevealed: g.trumpRevealed,
@@ -299,6 +338,7 @@ function botAction(g, playerId) {
   }
   if (g.phase === 'chooseTrump') return { type: 'chooseTrump', suit: bestTrump(hand) };
   if (g.phase === 'handEnd') return { type: 'continue' };
+  if (g.phase === 'playing' && canDeclareMarriage(g, seat)) return { type: 'marriage' };
 
   // playing
   const iKnowTrump = g.trumpRevealed || seat === g.highBidder;
@@ -332,4 +372,4 @@ function botAction(g, playerId) {
   return { type: 'play', cardId: pick.id };
 }
 
-module.exports = { forcedPlay, SUITS, RANKS, buildDeck, createGame, applyAction, awaiting, viewFor, botAction, trickWinner, legalCards, canReveal, MIN_BID, MAX_BID };
+module.exports = { forcedPlay, SUITS, RANKS, buildDeck, createGame, applyAction, awaiting, viewFor, botAction, trickWinner, legalCards, canReveal, canDeclareMarriage, MIN_BID, MAX_BID };

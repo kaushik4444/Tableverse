@@ -12,7 +12,21 @@ const { computeProfile } = require('../db/stats');
 
 let passed = 0;
 async function test(name, fn) {
-  try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
+  try { await fn(); passed++; test('roll and token move events identify the player, die result and token', () => {
+  const g = E.createGame(people(), {}, () => 0.999999);
+  for (const p of people()) E.applyAction(g, p.id, { type: 'ready' });
+  assert.equal(E.applyAction(g, 'p0', { type: 'roll' }).ok, true);
+  assert.equal(g.event.type, 'rolled');
+  assert.equal(g.event.by, 0);
+  assert.equal(g.event.dice, 6);
+  assert.equal(E.applyAction(g, 'p0', { type: 'move', token: 0 }).ok, true);
+  assert.equal(g.event.type, 'moved');
+  assert.equal(g.event.by, 0);
+  assert.equal(g.event.token, 0);
+  assert.equal(g.event.dice, 6);
+});
+
+console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 function mulberry32(a) {
   return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };

@@ -79,6 +79,7 @@ function applyMove(g, playerIdx, tokenIdx, np) {
   if (np === FINISHED) {
     g.log.push({ by: g.players[playerIdx].name, card: 'got a token home', kind: 'home' });
   }
+  emit(g, { type: 'moved', by: playerIdx, token: tokenIdx, from: old, to: np, dice: g.dice });
   if (g.tokens[playerIdx].every((x) => x === FINISHED)) {
     finishPlayer(g, playerIdx);
   }

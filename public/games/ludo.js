@@ -29,8 +29,8 @@
   function status(v) {
     if (v.phase === 'gameOver') return v.winner >= 0 ? v.players[v.winner].name + ' wins!' : 'Game over';
     if (v.phase === 'ready') return v.myTurn ? 'Everyone ready? Start the game' : v.players[v.turn].name + ' is getting ready';
-    if (v.phase === 'rolling') return v.canRoll ? 'Your turn — roll the dice' : v.players[v.turn].name + ' is rolling';
-    if (v.phase === 'moving') return v.canMove ? 'Choose a highlighted token to move' : v.players[v.turn].name + ' is moving';
+    if (v.phase === 'rolling') return v.canRoll ? 'Your turn — roll the dice' : v.players[v.turn].name + ' is next to roll';
+    if (v.phase === 'moving') return v.canMove ? 'Your turn — choose a highlighted token' : v.players[v.turn].name + ' is choosing a token';
     return 'Ludo';
   }
   function tokenButton(v, i, t, p, x, y, home = false, offset = [0, 0]) {
@@ -88,7 +88,9 @@
   function dice(v) {
     const d=v.dice;
     const face=d===null?'?':String(d);
-    return `<div class="ludo-dice-panel"><div class="ludo-die ${v.canRoll?'rollable':''}">${face}</div><div class="ludo-dice-copy"><b>${d===null?'Roll the dice': 'You rolled a '+d}</b><small>${v.sixes? v.sixes+' consecutive six'+(v.sixes===1?'':'es')+' — roll again':''}</small></div><button class="btn big ludo-roll" data-lt="roll" ${v.canRoll?'':'disabled'}>${v.canRoll?'Roll dice':v.phase==='moving'?'Select a token':'Waiting'}</button></div>`;
+    const player = v.players[v.turn] ? esc(v.players[v.turn].name) : 'Player';
+    const label = d===null ? (v.canRoll ? 'Your turn to roll' : player + ' to roll') : player + ' rolled a ' + d;
+    return `<div class="ludo-dice-panel"><div class="ludo-die ${v.canRoll?'rollable':''}">${face}</div><div class="ludo-dice-copy"><b>${label}</b><small>${v.sixes? v.sixes+' consecutive six'+(v.sixes===1?'':'es')+' — roll again':''}</small></div><button class="btn big ludo-roll" data-lt="roll" ${v.canRoll?'':'disabled'}>${v.canRoll?'Roll dice':v.phase==='moving'?'Choose token':'Waiting'}</button></div>`;
   }
   function controls(v,ctx) {
     if(v.phase==='ready' && v.me>=0) return `<div class="ludo-ready"><b>Ready to play?</b><span>All players must be ready before the first roll.</span><button class="btn big" data-lt="ready" ${v.players[v.me].ready?'disabled':''}>${v.players[v.me].ready?'Ready ✓':'I’m ready'}</button></div>`;
@@ -98,12 +100,25 @@
     }
     return '';
   }
+  function eventFeedback(v) {
+    const event = v.event;
+    if (event) {
+      const name = (i) => v.players[i] ? esc(v.players[i].name) : 'A player';
+      if (event.type === 'rolled') return `<div class="ludo-feedback"><span>🎲</span><b>${name(event.by)} rolled a ${event.dice}</b></div>`;
+      if (event.type === 'moved') return `<div class="ludo-feedback"><span>🟢</span><b>${name(event.by)} moved token ${event.token + 1} by ${event.dice}</b></div>`;
+      if (event.type === 'turn') return `<div class="ludo-feedback"><span>👤</span><b>${name(event.by)}’s turn</b></div>`;
+      if (event.type === 'finished') return `<div class="ludo-feedback"><span>🏁</span><b>${name(event.by)} finished in place ${event.place}</b></div>`;
+      if (event.type === 'won') return `<div class="ludo-feedback"><span>🏆</span><b>${name(event.by)} won the game</b></div>`;
+      if (event.type === 'start') return '<div class="ludo-feedback"><span>🎲</span><b>The game has started</b></div>';
+    }
+    const last = (v.log || []).slice(-1)[0];
+    return last ? `<div class="ludo-feedback"><span>${last.kind === 'capture' ? '⚔️' : last.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(last.by)} ${esc(last.card)}</b></div>` : '';
+  }
   function render(root,v,ctx) {
     ui.latest=v; ui.ctx=ctx; ui.root=root;
-    const lastAction = (v.log || []).slice(-1)[0];
-    const feedback = lastAction ? `<div class="ludo-feedback"><span>${lastAction.kind === 'capture' ? '⚔️' : lastAction.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
+    const feedback = eventFeedback(v);
     root.innerHTML=`<section class="ludo ${v.phase==='gameOver'?'over':''}">
-      <header class="ludo-header"><div><span class="ludo-kicker">TABLEVERSE CLASSICS</span><h2>🎲 Ludo</h2><p>Race your tokens home. First to finish all four wins.</p></div><nav>${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></nav></header>
+      <header class="ludo-header"><div><span class="ludo-kicker">TABLEVERSE CLASSICS</span><h2>🎲 Ludo</h2><p>Race your tokens home. First to finish all four wins.</p></div><nav>${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></nav></header>
       <div class="ludo-status ${v.myTurn?'mine':''}"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
       ${feedback}
       <div class="ludo-layout"><main class="ludo-play-area">${board(v)}</main><aside class="ludo-side"><h3>Players</h3>${players(v)}${dice(v)}<div class="ludo-hint"><b>How to play</b><span>Roll a 6 to leave your yard. Land on opponents to send them home. Reach the centre with an exact roll.</span></div></aside></div>

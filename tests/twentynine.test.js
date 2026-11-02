@@ -60,6 +60,27 @@ test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 2
   assert.equal(h.highBidder, (f + 1) % 4);
 });
 
+test('open auction lets active bidders raise across rounds; passing is permanent and highest bidder wins', () => {
+  const g = E.createGame(people(), {}, mulberry32(21));
+  const f = (g.dealer + 1) % 4;
+  const act = (seat, action) => E.applyAction(g, g.players[seat].id, action);
+  assert.equal(act(f, { type: 'bid', amount: 15 }).ok, true);
+  const second = (f + 1) % 4, third = (f + 2) % 4, dealer = g.dealer;
+  assert.equal(act(second, { type: 'bid', pass: true }).ok, true);
+  assert.equal(act(third, { type: 'bid', amount: 17 }).ok, true);
+  assert.equal(act(dealer, { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, f);
+  assert.equal(act(f, { type: 'bid', amount: 18 }).ok, true);
+  assert.equal(g.turn, third);
+  assert.equal(act(second, { type: 'bid', amount: 19 }).ok, false);
+  assert.equal(act(third, { type: 'bid', amount: 19 }).ok, true);
+  assert.equal(g.turn, f);
+  assert.equal(act(f, { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.phase, 'chooseTrump');
+  assert.equal(g.highBidder, third);
+  assert.equal(g.highBid, 19);
+});
+
 function toPlaying(seed) {
   const g = E.createGame(people(), {}, mulberry32(seed));
   const f = (g.dealer + 1) % 4;
@@ -139,6 +160,20 @@ test('last trick is forced after the first card, unless the player may still ask
   assert.equal(E.forcedPlay(g), null); // p2 can still reveal
   assert.equal(E.viewFor(g, 'p2').autoPlay, false);
   assert.equal(E.viewFor(g, 'spectator').me, -1);
+});
+
+test('trump King–Queen marriage adds four points once after trump reveal and a team trick win', () => {
+  const g = toPlaying(31);
+  g.trumpSuit = 'S'; g.trumpRevealed = true; g.tricksWon = [1, 0]; g.tricksPlayed = 1; g.marriageDeclared = false; g.turn = 0;
+  g.players[0].hand = [card('S', 'K'), card('S', 'Q'), card('H', '7')];
+  assert.equal(E.viewFor(g, 'p0').canDeclareMarriage, true);
+  assert.equal(E.applyAction(g, 'p1', { type: 'marriage' }).ok, false);
+  assert.equal(E.applyAction(g, 'p0', { type: 'marriage' }).ok, true);
+  assert.equal(g.handPoints[0], 4);
+  assert.equal(g.marriageDeclared, true);
+  assert.equal(E.viewFor(g, 'p0').canDeclareMarriage, false);
+  assert.equal(E.applyAction(g, 'p0', { type: 'marriage' }).ok, false);
+  assert.equal(g.log.at(-1).kind, 'marriage');
 });
 
 console.log('29 simulation');

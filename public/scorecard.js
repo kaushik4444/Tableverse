@@ -124,7 +124,7 @@
       <div class="sc-top"><h1>Wizard scorecard</h1><a href="/">Tableverse</a></div>
       <div class="tabs" role="tablist"><button class="${G.tab === 'scores' ? '' : 'on'}" data-act="tab" data-t="play">Round</button><button class="${G.tab === 'scores' ? 'on' : ''}" data-act="tab" data-t="scores">Scores</button></div>
       ${body}
-      <div class="menu"><button class="btn ghost small" data-act="undo" ${G.done.length ? '' : 'disabled'}>Undo last round</button><button class="btn ghost small" data-act="copy" ${G.done.length ? '' : 'disabled'}>Copy scores</button><button class="btn ghost small" data-act="new">New game</button></div>
+      <div class="sc-actions"><button class="btn ghost small" data-act="undo" ${G.done.length ? '' : 'disabled'}>Undo last round</button><button class="btn ghost small" data-act="copy" ${G.done.length ? '' : 'disabled'}>Copy scores</button><button class="btn ghost small" data-act="new">New game</button></div>
     </main>`;
   }
 

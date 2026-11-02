@@ -43,6 +43,8 @@ module.exports = {
       scrub: (names, to) => scrubDeep([g, players], names, to),
       act: (playerId, action) => engine.applyAction(g, playerId, action),
       awaiting: () => engine.awaitingList(g),
+      botDelayMs: () => 2300,
+      stamp: () => g.event ? g.event.seq : null,
       botAction: (playerId) => engine.botAction(g, playerId),
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',

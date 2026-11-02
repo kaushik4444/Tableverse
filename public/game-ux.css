@@ -95,3 +95,13 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .pt-seat { width: 76px; }
   .plate { max-width: 76px; }
 }
+
+
+/* Secondary reference material stays below the live play area, collapsed by default. */
+.game-supporting-details { display: grid; gap: 8px; margin: 14px 0 22px; }
+.game-info-panel { border: 1px solid var(--panel-line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.game-info-panel summary { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 13px; cursor: pointer; font-weight: 700; }
+.game-info-panel summary span { color: var(--muted); font-size: 11px; font-weight: 500; }
+.game-info-panel ol, .game-info-panel p { margin: 0; padding: 0 14px 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.game-info-panel ol { padding-left: 32px; }
+.game-info-panel li { padding: 3px 0; }
