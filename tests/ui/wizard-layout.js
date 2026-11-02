@@ -42,9 +42,15 @@ function buildMessages(gameId, n, seed) {
   }
   const room = { code: 'ABCDEF', gameId, hostId: 'p0', status: 'playing', options: {}, visibility: 'public', seats: n, min: def.seats.min, max: def.seats.max, seatLabels: null,
     members: players.map((p) => ({ id: p.id, name: p.name, bot: false, avatar: p.avatar, connected: true })), spectators: [], deadline: null, now: Date.now() };
+  const view = g.view('p0');
+  if (gameId === 'ludo') {
+    // Adjacent on-track legal tokens make their enlarged touch halos overlap on phones.
+    view.players[0].tokens = [0, 1, 58, 58];
+    view.phase = 'moving'; view.canMove = true; view.myTurn = true; view.legalTokens = [0, 1]; view.dice = 6;
+  }
   return [
     { t: 'welcome', id: 'p0', name: players[0].name, avatar: '🧙', avatars: ['🧙'], emotes: ['👍'], games: games.list(), tables: [], rejoin: [] },
-    { t: 'state', room, view: g.view('p0') },
+    { t: 'state', room, view },
   ];
 }
 
@@ -78,9 +84,10 @@ const SIZES = [
     const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2, hasTouch: size.width < 800 });
     const page = await ctx.newPage();
     await page.addInitScript((messages) => {
+      window.__clientMessages = [];
       window.WebSocket = class {
         constructor() { this.readyState = 0; setTimeout(() => { this.readyState = 1; this.onopen && this.onopen({}); }, 0); }
-        send(raw) { let m; try { m = JSON.parse(raw); } catch { return; } if (m.t === 'hello') messages.forEach((x, i) => setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify(x) }), 10 * (i + 1))); }
+        send(raw) { let m; try { m = JSON.parse(raw); } catch { return; } window.__clientMessages.push(m); if (m.t === 'hello') messages.forEach((x, i) => setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify(x) }), 10 * (i + 1))); }
         close() { this.readyState = 3; }
       };
     }, msgs);
@@ -105,7 +112,7 @@ const SIZES = [
             if (r.left < b.left - 1 || r.right > b.right + 1 || r.top < b.top - 1 || r.bottom > b.bottom + 1) out.problems.push('Ludo token is outside the board');
           }
         }
-        if (!document.querySelector('.ludo-status[role="status"]')) out.problems.push('Ludo turn status is not announced accessibly');
+        if (!document.querySelector('#game-status-announcer[role="status"][aria-live="polite"]')) out.problems.push('Ludo turn status is not announced by the persistent live region');
         const legal = board ? [...board.querySelectorAll('.ludo-token.legal')] : [];
         if (!legal.length) out.problems.push('active Ludo turn has no highlighted legal token');
         for (const token of legal) {
@@ -117,12 +124,12 @@ const SIZES = [
         if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
       }
       if (game === 'themind') {
-        const guidance = document.querySelector('.tm-status-guidance[role="status"][aria-live="polite"]');
+        const guidance = document.querySelector('.tm-status-guidance');
         if (!guidance) out.problems.push('The Mind current-state guidance is not announced accessibly');
         else if (!guidance.textContent.includes('Confirm when ready to continue')) out.problems.push('The Mind star-pause guidance is missing while the last event is a star');
       }
-      if (['wizard', 'twentynine', 'poker'].includes(game) && !document.querySelector('.wz-status > span[role="status"][aria-live="polite"]')) {
-        out.problems.push('turn status live region includes controls or timer instead of only the status text');
+      if (!document.querySelector('#game-status-announcer[role="status"][aria-live="polite"]') || document.querySelector('#app #game-status-announcer')) {
+        out.problems.push('persistent game status announcer is missing or nested inside the replaced app root');
       }
       if (game === 'poker') {
         const slider = document.querySelector('.pk-raise [data-pk="slider"]');
@@ -138,7 +145,7 @@ const SIZES = [
         }
       }
       const timer = document.querySelector('.ct-timer');
-      if (timer && timer.closest('[role="status"]')) out.problems.push('turn timer is nested inside a live region and may cause repeated announcements');
+      if (timer && timer.closest('#game-status-announcer')) out.problems.push('turn timer is included in the persistent live region');
       const tops = top.getBoundingClientRect();
       if (top.scrollWidth > top.clientWidth + 1) out.problems.push(`header content wider than header (${top.scrollWidth} > ${top.clientWidth})`);
       if (wz && wz.scrollWidth > wz.clientWidth + 1) out.problems.push(`.wz scrolls horizontally (${wz.scrollWidth} > ${wz.clientWidth})`);
@@ -186,6 +193,15 @@ const SIZES = [
       return out;
     });
     overlaps.forEach((o) => report.problems.push(o));
+    if (GAME === 'ludo') {
+      const target = await page.locator('.ludo-token.legal[data-lt="tok:0"]').boundingBox();
+      if (target) {
+        await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+        await page.waitForTimeout(30);
+        const selected = await page.evaluate(() => window.__clientMessages.filter((m) => m.t === 'act').slice(-1)[0]?.action?.token);
+        if (selected !== 0) report.problems.push('tap on the first adjacent legal token selected a neighbouring token');
+      } else report.problems.push('first adjacent legal Ludo token is missing');
+    }
     const ok = report.problems.length === 0;
     if (!ok) failures++;
     console.log(`${ok ? 'ok  ' : 'FAIL'}  ${GAME}/${seats} seed ${seed} ${size.name}: header ${report.headerHeight}px high, ${report.buttons} buttons${ok ? '' : '\n        - ' + report.problems.join('\n        - ')}`);
