@@ -52,3 +52,37 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 @media (prefers-reduced-motion: reduce) {
   .pseat.turn .av, .ct-timer.warn { animation: none; }
 }
+
+/* Ludo shares the same content width and touch/focus behaviour as the card tables. */
+.ludo { width: min(100%, 1100px); min-width: 0; margin-inline: auto; }
+.ludo-header { min-width: 0; }
+.ludo-header nav .btn { min-width: 40px; min-height: 40px; }
+.ludo-status { line-height: 1.4; }
+.ludo-token:focus-visible { outline: 3px solid #fff; outline-offset: 3px; box-shadow: 0 0 0 6px #19a66b; }
+.ludo-token.legal { touch-action: manipulation; }
+.ludo-roll, .ludo-ready .btn { min-height: 48px; }
+.ludo-board-wrap { min-width: 0; }
+.ludo-board { width: 100%; }
+.ludo-feedback { overflow-wrap: anywhere; }
+.ludo-player, .ludo-dice-panel { min-width: 0; }
+@media (max-width: 600px) {
+  .ludo { gap: 8px; }
+  .ludo-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+  .ludo-header nav { max-width: 156px; justify-content: flex-end; }
+  .ludo-header nav .btn { min-width: 38px; min-height: 42px; }
+  .ludo-header p { max-width: 28ch; line-height: 1.35; }
+  .ludo-status { margin: 6px 0 10px; padding: 10px; }
+  .ludo-play-area { min-width: 0; }
+  .ludo-token.legal { outline-width: 2px; }
+  .ludo-die { width: 46px; height: 46px; }
+}
+@media (max-width: 360px) {
+  .ludo-header { grid-template-columns: minmax(0, 1fr); }
+  .ludo-header nav { max-width: none; justify-content: flex-start; }
+  .ludo-header nav .btn { min-height: 44px; }
+  .ludo-player { gap: 6px; }
+  .ludo-player>strong { font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ludo-token.legal { animation: none; }
+}
