@@ -4,6 +4,20 @@ require('./helpers/env');
 const assert = require('node:assert/strict');
 const testdb = require('./helpers/testdb');
 const { Browser, registerAndVerify } = require('./helpers/auth');
+const WebSocket = require('ws');
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function until(check, label, timeout = 8000) {
+  const started = Date.now();
+  for (;;) { const value = check(); if (value) return value; if (Date.now() - started > timeout) throw new Error(`timeout waiting for ${label}`); await wait(20); }
+}
+function wsClient(port, token) {
+  const c = { messages: [], errors: [], room: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  c.send = (message) => c.ws.send(JSON.stringify(message));
+  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('message', (raw) => { const m = JSON.parse(raw); c.messages.push(m); if (m.t === 'state') c.room = m.room; if (m.t === 'error') c.errors.push(m.message); });
+  return c;
+}
 
 let passed = 0;
 async function test(name, fn) {
@@ -33,6 +47,11 @@ const PW = 'TestPass123!';
         return { ...created, id: session.json.player.id, username: session.json.player.username, email };
       };
       const a = await user('Alpha'); const b = await user('Bravo'); const c = await user('Charlie');
+      const hostSocket = wsClient(srv.port, a.token);
+      await until(() => hostSocket.messages.some((m) => m.t === 'welcome'), 'host socket welcome');
+      hostSocket.send({ t: 'create', gameId: 'wizard', visibility: 'private' });
+      await until(() => hostSocket.room && hostSocket.room.visibility === 'private', 'private invitation test room');
+      const privateRoomCode = hostSocket.room.code;
       const anon = new Browser(srv.port); await anon.csrf();
       const establishFriendship = async (requester, recipient) => {
         const sent = await requester.browser.post('/api/me/friend-requests', { username: recipient.username });
@@ -99,7 +118,7 @@ const PW = 'TestPass123!';
         await establishFriendship(a, b);
         await breakFriendship(a, c); // Keep this pair unrelated for the negative invitation check.
         const expiry = () => new Date(Date.now() + 3600000).toISOString();
-        assert.equal((await a.browser.post('/api/me/table-invitations', { username: c.username, gameId: 'wizard', roomCode: 'ABCDEF', expiresAt: expiry() })).status, 404);
+        assert.equal((await a.browser.post('/api/me/table-invitations', { username: c.username, gameId: 'wizard', roomCode: privateRoomCode, expiresAt: expiry() })).status, 404);
         assert.equal((await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'saboteur', roomCode: 'ABCDEF', expiresAt: expiry() })).status, 400);
         assert.equal((await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: 'A B', expiresAt: expiry() })).status, 400);
         const created = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: 'ABCDEF', expiresAt: expiry() });
@@ -118,7 +137,7 @@ const PW = 'TestPass123!';
 
       await test('removal winning the pair lock prevents concurrent invitation acceptance', async () => {
         const expiry = new Date(Date.now() + 3600000).toISOString();
-        const created = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: 'RSTUVW', expiresAt: expiry });
+        const created = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: privateRoomCode, expiresAt: expiry });
         assert.equal(created.status, 201, JSON.stringify(created.json));
         const invitationId = created.json.invitation.id;
         const [removeLock, acceptLock] = await Promise.all([t.client(), t.client()]);
@@ -152,7 +171,7 @@ const PW = 'TestPass123!';
       await test('acceptance before removal remains accepted in serialized order', async () => {
         await establishFriendship(a, b);
         const expiry = new Date(Date.now() + 3600000).toISOString();
-        const created = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: 'UVWXYZ', expiresAt: expiry });
+        const created = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: privateRoomCode, expiresAt: expiry });
         assert.equal(created.status, 201, JSON.stringify(created.json));
         const accepted = await b.browser.post('/api/me/table-invitations/accept', { invitationId: created.json.invitation.id });
         assert.equal(accepted.status, 200, JSON.stringify(accepted.json));
@@ -179,6 +198,7 @@ const PW = 'TestPass123!';
         assert.ok(pending[0].id);
       });
 
+      hostSocket.ws.terminate();
       await x.end();
     } finally { await srv.close(); }
     await dbPool.close();
