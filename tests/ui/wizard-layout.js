@@ -200,7 +200,9 @@ const SIZES = [
           if (token) window.__ludoClickTarget = token.dataset.lt;
         }, true);
       });
-      const target = await page.locator('.ludo-token.legal[data-lt="tok:0"]').boundingBox();
+      const firstLegal = page.locator('.ludo-token.legal[data-lt="tok:0"]');
+      await firstLegal.scrollIntoViewIfNeeded();
+      const target = await firstLegal.boundingBox();
       if (target) {
         await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
         await page.waitForTimeout(30);
