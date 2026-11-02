@@ -105,22 +105,18 @@ function nextActiveBidder(g, fromSeat) {
 }
 
 function advanceBidding(g, actedSeat) {
-  if (g.highBid === MAX_BID || g.activeBidders.length <= 1) {
-    if (g.highBidder >= 0) {
-      g.phase = 'chooseTrump';
-      g.turn = g.highBidder;
-    }
+  if (g.highBid === MAX_BID) {
+    if (g.highBidder >= 0) { g.phase = 'chooseTrump'; g.turn = g.highBidder; }
     return;
   }
   // Keep the auction heads-up. When someone passes, the next player clockwise
   // takes the vacant seat; players who passed never return.
   if (g.passed[actedSeat]) {
-    const next = [];
+    g.activeBidders = g.activeBidders.filter((seat) => seat !== actedSeat);
     for (let step = 1; step <= 4; step++) {
       const seat = (actedSeat + step) % 4;
-      if (!g.passed[seat] && !g.activeBidders.includes(seat)) { next.push(seat); break; }
+      if (!g.passed[seat] && !g.activeBidders.includes(seat)) { g.activeBidders.push(seat); break; }
     }
-    if (next.length) g.activeBidders.push(next[0]);
   }
   if (g.activeBidders.length <= 1) {
     if (g.highBidder >= 0) {
