@@ -132,7 +132,7 @@
     if (v.phase === 'bidding' && v.myTurn) {
       const btns = [];
       for (let i = 0; i <= v.round; i++) {
-        btns.push(`<button class="bidbtn ${ui.bid === i ? 'on' : ''}" data-wz="pick" data-n="${i}" ${i === v.forbiddenBid ? 'disabled' : ''}>${i}</button>`);
+        btns.push(`<button class="bidbtn ${ui.bid === i ? 'on' : ''}" aria-pressed="${ui.bid === i}" data-wz="pick" data-n="${i}" ${i === v.forbiddenBid ? 'disabled' : ''}>${i}</button>`);
       }
       const note = v.forbiddenBid !== null ? `<div class="hint">Plus / Minus 1: as dealer you can’t bid ${v.forbiddenBid}, because the total would equal the number of tricks.</div>` : '';
       const fsNote = v.foresight && v.foresight.length ? '<div class="hint">Foresight: you can’t see your own card, but you can see everyone else’s.</div>' : '';
