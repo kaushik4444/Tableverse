@@ -4,15 +4,12 @@
 window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial }) {
   function socialHTML() {
     if (S.guest) return '';
-    const friends = S.friends.map((f) => `<li class="social-row"><span class="social-avatar">${esc(f.avatar || '🧙')}</span><span class="social-info"><b>${esc(f.display_name || f.username)}</b><small>@${esc(f.username)} · ${f.online ? (f.playing ? '🎮 Playing ' + esc((gameMeta(f.playing) || {}).name || f.playing) : '🟢 Online') + ' · ' + pingBadge(f.ping) : 'Last seen ' + (f.last_seen ? new Date(f.last_seen).toLocaleString() : 'unknown')}</small></span><button class="btn ghost small" data-act="removeFriend" data-id="${esc(f.id)}">Remove</button></li>`).join('');
+    const friends = S.friends.map((f) => `<li class="social-row"><span class="social-avatar">${esc(f.avatar || '🧙')}</span><span class="social-info"><b class="friend-name" data-act="openProfile" data-username="${esc(f.username)}">${esc(f.display_name || f.username)}</b><small>@${esc(f.username)} · ${f.online ? (f.playing ? '🎮 Playing ' + esc((gameMeta(f.playing) || {}).name || f.playing) : '🟢 Online') + ' · ' + pingBadge(f.ping) : 'Last seen ' + (f.last_seen ? new Date(f.last_seen).toLocaleString() : 'unknown')}</small></span><button class="btn ghost small" data-act="removeFriend" data-id="${esc(f.id)}">Remove</button></li>`).join('');
     const friendNames = new Set(S.friends.map((friend) => friend.username));
     const requestNames = new Set([...S.friendRequests.incoming, ...S.friendRequests.outgoing].map((request) => request.username));
     const invitationNames = new Set(S.invitations.incoming.map((invitation) => invitation.username));
     const searchResults = S.friendSearch.filter((player) => !friendNames.has(player.username) && !requestNames.has(player.username) && !invitationNames.has(player.username));
-    const inviteTargets = S.friends.filter((friend) => !S.invitations.outgoing.some((invitation) => invitation.username === friend.username) && !S.roomInviteSent.has(`${S.room?.code}:${friend.username}`));
     const resultHTML = searchResults.map((p) => `<li class="social-row"><span class="social-info"><b>${esc(p.display_name || p.username)}</b><small>@${esc(p.username)}</small></span><button class="btn small" data-act="sendFriend" data-username="${esc(p.username)}">Add friend</button></li>`).join('');
-    const tableInviteTargets = inviteTargets.map((f) => `<option value="${esc(f.username)}">${esc(f.display_name || f.username)} (@${esc(f.username)})</option>`).join('');
-    S.inviteFriendOptions = tableInviteTargets;
     const incoming = S.friendRequests.incoming.map((r) => `<li class="social-row"><span class="social-info"><b>${esc(r.display_name || r.username)}</b><small>@${esc(r.username)} sent a friend request</small></span><button class="btn small" data-act="acceptFriend" data-id="${esc(r.id)}">Accept</button><button class="btn ghost small" data-act="declineFriend" data-id="${esc(r.id)}">Decline</button></li>`).join('');
     const outgoing = S.friendRequests.outgoing.map((r) => `<li class="social-row"><span class="social-info"><b>${esc(r.display_name || r.username)}</b><small>Request pending</small></span><button class="btn ghost small" data-act="cancelFriend" data-id="${esc(r.id)}">Cancel</button></li>`).join('');
     const invites = S.invitations.incoming.map((i) => `<li class="social-row"><span class="social-info"><b>${esc(i.display_name || i.username)}</b><small>${esc(i.game_id)} table · ${esc(i.room_code)} · expires ${esc(new Date(i.expires_at).toLocaleString())}</small></span><button class="btn small" data-act="acceptInvitation" data-id="${esc(i.id)}">Accept</button><button class="btn ghost small" data-act="declineInvitation" data-id="${esc(i.id)}">Decline</button></li>`).join('');
@@ -29,8 +26,14 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
 
   function inviteFriendsHTML() {
     if (!S.room || S.room.visibility !== 'private' || S.room.hostId !== S.id || S.guest) return '';
-    const friends = S.inviteFriendOptions || '';
-    return `<form id="tableInviteForm" class="social-search"><label for="tableInviteFriend">Invite a friend to this private table</label><select id="tableInviteFriend" required>${friends || '<option value="">All friends already invited</option>'}</select><button class="btn small" type="submit" ${friends ? '' : 'disabled'}>Send invitation</button></form>`;
+    const outgoing = S.invitations.outgoing || [];
+    const alreadyInvited = new Set(outgoing.filter((i) => i.room_code === S.room.code && (i.status === 'pending' || i.status === 'accepted')).map((i) => i.username));
+    const rows = S.friends.map((f) => {
+      const invited = alreadyInvited.has(f.username);
+      const status = invited ? 'Invited' : (f.online ? (f.playing ? 'Playing' : 'Online') : 'Offline');
+      return `<option value="${esc(f.username)}" ${invited ? 'disabled' : ''}>${esc(f.display_name || f.username)} (@${esc(f.username)}) · ${status}</option>`;
+    }).join('');
+    return `<form id="tableInviteForm" class="social-search"><label for="tableInviteFriend">Invite a friend to this private table</label><select id="tableInviteFriend" required>${rows || '<option value="" disabled>No friends to invite</option>'}</select><button class="btn small" type="submit" ${rows ? '' : 'disabled'}>Send invitation</button></form>`;
   }
 
 
@@ -39,7 +42,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     if (S.guest) return '';
     const online = S.friends.filter((f) => f.online);
     const pend = pendingSocial();
-    const chips = online.slice(0, 6).map((f) => `<span class="fs-chip" title="@${esc(f.username)}"><span class="social-avatar">${esc(f.avatar || '🧙')}</span>${esc(f.display_name || f.username)}</span>`).join('');
+    const chips = online.slice(0, 6).map((f) => `<span class="fs-chip" data-act="openProfile" data-username="${esc(f.username)}" title="@${esc(f.username)}"><span class="social-avatar">${esc(f.avatar || '🧙')}</span>${esc(f.display_name || f.username)}</span>`).join('');
     const summary = S.friends.length
       ? (online.length ? `${online.length} of ${S.friends.length} friends online` : `${S.friends.length} friend${S.friends.length === 1 ? '' : 's'}, none online`)
       : 'Add friends to invite them to private tables.';

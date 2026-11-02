@@ -1,5 +1,6 @@
 'use strict';
 const db = require('./pool');
+const games = require('../games');
 const { AuthError } = require('./auth');
 
 const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
@@ -23,7 +24,7 @@ function validateRoomCode(value) {
   return value;
 }
 function validateGameId(value) {
-  if (!['wizard', 'twentynine', 'poker', 'themind'].includes(value)) badInput();
+  if (typeof value !== 'string' || !games.get(value)) badInput(); // the registry is the list of games (migration 009)
   return value;
 }
 function validateId(value) {

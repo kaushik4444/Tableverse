@@ -53,6 +53,9 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 .public-tables-panel { margin: 16px 0 12px; }
 .social-panel { display: grid; gap: 10px; }
 .social-panel h3 { margin-top: 8px; font-size: 16px; }
+.fs-chip { cursor: pointer; user-select: none; white-space: nowrap; }
+.friend-name { cursor: pointer; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; transition: color .15s; }
+.friend-name:hover { color: var(--ink); }
 .social-search label { flex-basis: 100%; text-align: left; font-size: 14px; color: var(--muted); }
 #tableInviteForm { margin-top: 12px; }
 .social-search { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

@@ -50,13 +50,13 @@
     friendSearchBusy: false,
     inviteFriendOptions: '',
     friendQuery: '',
-    roomInviteSent: new Set(),
     page: 'home', // 'home' | 'profile' | 'player' (a public profile); the table and game screens take over while a room is open
     profile: null, // own profile page: { loading, error, data, tab, history }
     player: null, // a public profile page: { username, loading, error, data }
     publicTables: [],
     rejoin: [], // running games where a bot is playing this player's seat
     avatarOpen: false,
+    pendingModalTarget: null, // player id acted on by an open modal (make host / kick)
     menuOpen: false, // the account dropdown in the top bar
     bellOpen: false, // the notifications dropdown in the top bar
     wnSeen: store.get('ct_wn_seen') || '', // the last What's new version this person opened
@@ -1314,6 +1314,8 @@
     cardRemove: () => { const r = relationTo(S.card && S.card.last); if (r.friend && confirm('Remove this friend? Pending invitations between you will be revoked.')) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.'); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
+      makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
+      kickPlayerConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'kick', id }); } },
   };
   function closeModal() {
     const o = document.getElementById('modal-overlay');
@@ -1703,8 +1705,8 @@
       for (let i = 0; i < S.room.seats - S.room.members.length; i++) send({ t: 'addBot' });
     },
     removeBot: (el) => send({ t: 'removeBot', id: el.dataset.id }),
-    makeHost: (el) => { if (confirm(`Make ${el.dataset.name || 'this player'} the host? You will stay at the table, but only the host can start the game and change settings.`)) send({ t: 'makeHost', id: el.dataset.id }); },
-    kickPlayer: (el) => { if (confirm(`Remove ${el.dataset.name || 'this player'} from the table? They will not be able to come back to this table.`)) send({ t: 'kick', id: el.dataset.id }); },
+    makeHost: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Make host', `<p class="hint">Make ${esc(el.dataset.name || 'this player')} the host of this table? You will stay at the table, but only the host can start the game and change settings.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="makeHostConfirm">Make host</button></div>`); },
+    kickPlayer: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Remove player', `<p class="hint">Remove ${esc(el.dataset.name || 'this player')} from this table? They will not be able to come back.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="kickPlayerConfirm">Remove</button></div>`); },
     seats: (el) => send({ t: 'setSeats', seats: Number(el.dataset.n) }),
     start: () => send({ t: 'start' }),
     dismissAnnouncement: () => {
@@ -1713,6 +1715,7 @@
       render();
     },
     refreshSocial: () => loadSocial(),
+    openProfile: (el) => openPage('player', el.dataset.username),
     sendFriend: (el) => socialPost('/api/me/friend-requests', { username: el.dataset.username }, 'Friend request sent.'),
     acceptFriend: (el) => socialPost('/api/me/friend-requests/accept', { requestId: el.dataset.id }, 'Friend request accepted.'),
     declineFriend: (el) => socialPost('/api/me/friend-requests/decline', { requestId: el.dataset.id }),
@@ -1792,7 +1795,6 @@
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       try {
         await postJson('/api/me/table-invitations', { username, gameId: S.room.gameId, roomCode: S.room.code, expiresAt });
-        S.roomInviteSent.add(`${S.room.code}:${username}`);
         toast('Invitation sent.');
         await loadSocial({ quiet: true });
         render();

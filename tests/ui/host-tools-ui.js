@@ -26,7 +26,6 @@ const lobby = (hostId) => ({
   const browser = await chromium.launch();
   const open = async (hostId, viewport) => {
     const { page, ctx } = await scriptedPage(browser, { viewport, messages: [welcome({ games: [game] }), lobby(hostId)] });
-    page.on('dialog', (d) => d.accept());
     await page.goto(url + '/');
     await page.waitForSelector('.seats', { timeout: 8000 });
     return { page, ctx };
@@ -51,9 +50,12 @@ const lobby = (hostId) => ({
   await test('the buttons send the right messages (after a confirmation)', async () => {
     const { page, ctx } = await open('me', { width: 390, height: 844 });
     await page.click('[data-act=makeHost][data-id=p1]');
+    await page.click('#modal-overlay [data-modal-act="makeHostConfirm"]');
     await page.click('[data-act=kickPlayer][data-id=p1]');
+    await page.click('#modal-overlay [data-modal-act="kickPlayerConfirm"]');
     await page.click('.spectator-list summary');
     await page.click('.spectator-people [data-act=kickPlayer]');
+    await page.click('#modal-overlay [data-modal-act="kickPlayerConfirm"]');
     const sent = await page.evaluate(() => window.__sent.filter((m) => m.t === 'makeHost' || m.t === 'kick'));
     assert.deepEqual(sent, [{ t: 'makeHost', id: 'p1' }, { t: 'kick', id: 'p1' }, { t: 'kick', id: 's1' }]);
     await ctx.close();
@@ -61,8 +63,8 @@ const lobby = (hostId) => ({
 
   await test('declining the confirmation sends nothing', async () => {
     const { page, ctx } = await open('me', { width: 390, height: 844 });
-    page.removeAllListeners('dialog'); page.on('dialog', (d) => d.dismiss());
     await page.click('[data-act=kickPlayer][data-id=p1]');
+    await page.click('#modal-overlay [data-modal-close]');
     assert.equal(await page.evaluate(() => window.__sent.filter((m) => m.t === 'kick').length), 0);
     await ctx.close();
   });
