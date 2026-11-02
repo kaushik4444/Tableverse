@@ -1464,6 +1464,7 @@
           <div class="row game-actions">
             <button class="btn small" data-act="create" data-game="${esc(g.id)}">Create table</button>
             <button class="btn ghost small" data-act="rules" data-game="${esc(g.id)}">Rules</button>
+            ${g.id === 'wizard' ? `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>` : ''}
           </div>
         </div>
       </article>`).join('');
@@ -1493,7 +1494,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot"><a href="/scorecard.html">Wizard paper scorecard</a>${S.guest ? '' : ' · <button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}</footer>
+      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}</footer>
     </main>`;
   }
 
