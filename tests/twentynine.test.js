@@ -33,6 +33,27 @@ test('trick winner: highest of lead suit; revealed trump cuts; hidden-trump disc
   assert.equal(E.trickWinner([entry(0, card('S', '9'), false), entry(1, card('S', 'J'), true), entry(2, card('H', 'J'), false), entry(3, card('S', '7'), true)]), 1);
 });
 
+test('bidding is heads-up: a pass opens the seat for the next player clockwise', () => {
+  const g = E.createGame(people(), {}, mulberry32(19));
+  const first = (g.dealer + 1) % 4;
+  const id = (s) => g.players[s % 4].id;
+  assert.deepEqual(g.activeBidders, [first, (first + 1) % 4]);
+  assert.equal(g.turn, first);
+  assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 15 }).ok, true);
+  assert.equal(g.turn, (first + 1) % 4);
+  assert.deepEqual(g.activeBidders, [first, (first + 1) % 4]);
+  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', pass: true }).ok, true);
+  assert.deepEqual(g.activeBidders.sort((a,b)=>a-b), [first, (first + 2) % 4].sort((a,b)=>a-b));
+  assert.equal(g.turn, (first + 2) % 4);
+  assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', amount: 16 }).ok, true);
+  assert.equal(g.turn, first);
+  assert.equal(E.applyAction(g, id(first), { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, (first + 3) % 4);
+  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', amount: 17 }).ok, false, 'a passed player cannot re-enter');
+  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 17 }).ok, true);
+  assert.equal(g.turn, (first + 2) % 4);
+});
+
 test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 28 ends it', () => {
   const g = E.createGame(people(), {}, mulberry32(1));
   const first = (g.dealer + 1) % 4;
