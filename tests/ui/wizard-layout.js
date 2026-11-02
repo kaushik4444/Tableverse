@@ -200,9 +200,9 @@ const SIZES = [
           if (token) window.__ludoClickTarget = token.dataset.lt;
         }, true);
       });
-      const firstLegal = page.locator('.ludo-token.legal[data-lt="tok:0"]');
-      await firstLegal.scrollIntoViewIfNeeded();
-      const target = await firstLegal.boundingBox();
+      await page.evaluate(() => document.querySelector('.ludo-token.legal[data-lt="tok:0"]')?.scrollIntoView({ block: 'center', inline: 'center' }));
+      await page.waitForTimeout(50); // the legal-token glow animates its scale, so avoid Playwright's stability wait
+      const target = await page.locator('.ludo-token.legal[data-lt="tok:0"]').boundingBox();
       if (target) {
         await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
         await page.waitForTimeout(30);
