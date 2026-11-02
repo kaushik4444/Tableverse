@@ -203,7 +203,7 @@ function socket(port, cookie) {
       const b = await newUser('Recent', 'Recent Rob');
       const sa = socket(srv.port, a.cookie);
       await until(() => sa.welcome(), 'welcome');
-      sa.send({ t: 'create', gameId: 'wizard' });
+      sa.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
       await until(() => sa.room, 'table');
       const code = sa.room.code;
       const mine = await until(async () => { const r = (await a.browser.get('/api/me/recent')).json; return r.tables.length ? r.tables : null; }, 'recent table saved');
@@ -321,7 +321,7 @@ function socket(port, cookie) {
       const watcher = await newUser('Watch', 'Watcher Wes');
       const s = socket(srv.port, u.cookie);
       await until(() => s.welcome(), 'welcome');
-      s.send({ t: 'create', gameId: 'wizard' });
+      s.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
       await until(() => s.room, 'table');
       const code = s.room.code;
       // a second seated human keeps the game running once the first one is gone (a table with no human left pauses by
