@@ -1263,7 +1263,8 @@
   const WHATS_NEW_VERSION = '2026-11-simpler-home';
   const WHATS_NEW = [
     ['🏠', 'A simpler home', 'Games come first. Friends are a small card on the home page, the full list lives on a Friends page, and a bell in the top bar shows friend requests and table invitations you can answer in place.'],
-    ['🔜', 'Coming soon', 'Monopoly, Snakes and Ladders and Ludo are on the way.'],
+    ['🎲', 'Ludo now playable', 'Race your four tokens home — roll a six to get out, send opponents back, finish by exact count. 2–4 players.'],
+    ['🔜', 'Coming soon', 'Monopoly and Snakes and Ladders are on the way.'],
     ['🤝', 'Friends', 'Search by username, send and answer friend requests, and see who is online or which game they are playing right now.'],
     ['🔒', 'Private tables and invitations', 'New tables are private: invite friends from the lobby and they join once they accept. Make a table public to share its code and link.'],
     ['👑', 'Host tools', 'Make another player the host, or remove a player, spectator or bot from the lobby.'],
@@ -1463,6 +1464,7 @@
           <div class="row game-actions">
             <button class="btn small" data-act="create" data-game="${esc(g.id)}">Create table</button>
             <button class="btn ghost small" data-act="rules" data-game="${esc(g.id)}">Rules</button>
+            ${g.id === 'wizard' ? `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>` : ''}
           </div>
         </div>
       </article>`).join('');
@@ -1492,7 +1494,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot"><a href="/scorecard.html">Wizard paper scorecard</a>${S.guest ? '' : ' · <button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}</footer>
+      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}</footer>
     </main>`;
   }
 

@@ -12,6 +12,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 - **29** (4): team-based trick play with secret trump and 3/6/9 match length options.
 - **Poker (No-Limit Texas Hold’em)** (2–8): blinds, all-ins, side pots, showdown resolution.
 - **The Mind** (2–4): co-op, real-time ascending play with lives/stars and difficulty options.
+- **Ludo** (2–4): race your four tokens home — roll a six to get out, send opponents back, finish by exact count.
 
 Bots can fill open seats so tables can start quickly.
 
@@ -40,7 +41,7 @@ Tableverse is currently open for friend testing.
 ## What's new in v0.8 — a simpler home
 
 - **Home page.** Greeting and table-code join, then the games straight away. Friends are a compact card (who is online); the full friends list, search, requests and sent invitations are on their own page at `#friends` (account menu → Friends). A **notification bell** in the top bar shows a count of friend requests and table invitations and lets you accept or decline them in place (refreshed every minute and when opened). Recent and public tables sit below the games.
-- **Coming soon.** Monopoly, Snakes and Ladders and Ludo are listed as non-playable cards ahead of their release.
+- **Coming soon.** Monopoly and Snakes and Ladders are listed as non-playable cards ahead of their release. Ludo shipped in v0.8 and is playable now (2–4 players).
 - **What's new** is also linked from the home footer. No server, database or API changes. Home/social markup now lives in `public/home-ui.js` (loaded before `app.js`).
 
 ## What's new in v0.7 — friends, private tables, host tools
@@ -67,6 +68,8 @@ New endpoints: `GET /api/me/friends`, `GET /api/me/friends/search?username=`, `G
 - Saboteur
 - 6 nimmt! (Take 5)
 - UNO
+
+Ludo shipped in v0.8 and is playable now (2–4 players).
 
 ## Database & architecture
 

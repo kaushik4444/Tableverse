@@ -1,0 +1,31 @@
+/* Ludo board and token controls */
+.ludo { --ludo-ink: var(--text, #17251f); color: var(--ludo-ink); }
+.ludo .l-status { margin: 12px 0; padding: 10px 14px; border-radius: 12px; background: var(--panel, #f3f6f4); text-align: center; font-weight: 650; }
+.ludo .l-status.mine { outline: 2px solid var(--accent, #16a36a); }
+.ludo .lb { display: grid; gap: 12px; }
+.ludo .lb-track { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; }
+.ludo .lc { min-width: 0; min-height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid var(--line, #dce5df); border-radius: 7px; background: var(--panel, #f8faf9); }
+.ludo .lc.safe { background: color-mix(in srgb, var(--accent, #16a36a) 12%, var(--panel, white)); border-color: var(--accent, #16a36a); }
+.ludo .lc-toks { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px; }
+.ludo .lc-num { font-size: 9px; opacity: .58; line-height: 1; }
+.ludo .lc-tok, .ludo .lt { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border-radius: 50%; font-size: 14px; line-height: 1; }
+.ludo .token-button { border: 0; background: transparent; cursor: pointer; font: inherit; }
+.ludo .token-button:disabled { cursor: default; opacity: .72; }
+.ludo .token-button.is-legal { cursor: pointer; outline: 2px solid var(--accent, #16a36a); background: color-mix(in srgb, var(--accent, #16a36a) 15%, transparent); box-shadow: 0 0 0 2px var(--panel, white); }
+.ludo .token-button.is-legal:hover, .ludo .token-button.is-legal:focus-visible { transform: scale(1.12); }
+.ludo .lyard, .ludo .lhomecols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ludo .ly { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; border: 1px solid var(--line, #dce5df); border-radius: 10px; }
+.ludo .ly-color { font-size: 18px; }
+.ludo .ly-count { display: flex; flex-wrap: wrap; gap: 2px; }
+.ludo .ldice { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 14px 0; }
+.ludo .ld-sixes { font-size: 12px; opacity: .7; }
+.ludo .lready { margin: 14px 0; padding: 16px; border: 1px solid var(--line, #dce5df); border-radius: 14px; text-align: center; }
+.ludo .lready .hint { margin: 6px 0 12px; }
+.ludo .lready .row { justify-content: center; flex-wrap: wrap; }
+@media (max-width: 560px) {
+  .ludo .lb-track { gap: 2px; }
+  .ludo .lc { min-height: 30px; border-radius: 5px; }
+  .ludo .lc-tok, .ludo .lt { width: 18px; height: 18px; font-size: 11px; }
+  .ludo .lc-num { font-size: 7px; }
+  .ludo .lyard, .ludo .lhomecols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
