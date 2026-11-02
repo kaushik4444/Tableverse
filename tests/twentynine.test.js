@@ -33,6 +33,29 @@ test('trick winner: highest of lead suit; revealed trump cuts; hidden-trump disc
   assert.equal(E.trickWinner([entry(0, card('S', '9'), false), entry(1, card('S', 'J'), true), entry(2, card('H', 'J'), false), entry(3, card('S', '7'), true)]), 1);
 });
 
+test('bidding is heads-up: a pass opens the seat for the next player clockwise', () => {
+  const g = E.createGame(people(), {}, mulberry32(19));
+  const first = (g.dealer + 1) % 4;
+  const id = (s) => g.players[s % 4].id;
+  assert.deepEqual(g.activeBidders, [first, (first + 1) % 4]);
+  assert.equal(g.turn, first);
+  assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 15 }).ok, true);
+  assert.equal(g.turn, (first + 1) % 4);
+  assert.deepEqual(g.activeBidders, [first, (first + 1) % 4]);
+  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', pass: true }).ok, true);
+  assert.deepEqual(g.activeBidders.sort((a,b)=>a-b), [first, (first + 2) % 4].sort((a,b)=>a-b));
+  assert.equal(g.turn, (first + 2) % 4);
+  assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', amount: 16 }).ok, true);
+  assert.equal(g.turn, first);
+  assert.equal(E.applyAction(g, id(first), { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, (first + 3) % 4, 'the incoming challenger gets the first response');
+  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', amount: 17 }).ok, false, 'a passed player cannot re-enter');
+  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 17 }).ok, true);
+  assert.equal(g.turn, (first + 2) % 4, 'the incumbent responds to the incoming challenger');
+  assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', amount: 18 }).ok, true);
+  assert.equal(g.turn, (first + 3) % 4);
+});
+
 test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 28 ends it', () => {
   const g = E.createGame(people(), {}, mulberry32(1));
   const first = (g.dealer + 1) % 4;
@@ -43,11 +66,14 @@ test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 2
   assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 29 }).ok, false); // above maximum
   assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 15.5 }).ok, false);
   assert.equal(E.applyAction(g, id(first), { type: 'bid', pass: true }).ok, true);
-  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', pass: true }).ok, true);
   assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, (first + 3) % 4, 'the dealer is the next challenger');
   assert.equal(E.viewFor(g, id(first + 3)).canPass, false); // dealer must bid
   assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', pass: true }).ok, false);
   assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 15 }).ok, true);
+  assert.equal(g.phase, 'bidding', 'the other active bidder still gets a chance to raise');
+  assert.equal(g.turn, (first + 1) % 4);
+  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', pass: true }).ok, true);
   assert.equal(g.phase, 'chooseTrump');
   assert.equal(g.turn, g.dealer);
 
@@ -68,14 +94,16 @@ test('open auction lets active bidders raise across rounds; passing is permanent
   const second = (f + 1) % 4, third = (f + 2) % 4, dealer = g.dealer;
   assert.equal(act(second, { type: 'bid', pass: true }).ok, true);
   assert.equal(act(third, { type: 'bid', amount: 17 }).ok, true);
-  assert.equal(act(dealer, { type: 'bid', pass: true }).ok, true);
   assert.equal(g.turn, f);
   assert.equal(act(f, { type: 'bid', amount: 18 }).ok, true);
   assert.equal(g.turn, third);
-  assert.equal(act(second, { type: 'bid', amount: 19 }).ok, false);
+  assert.equal(act(second, { type: 'bid', amount: 19 }).ok, false, 'the passed second player cannot re-enter');
   assert.equal(act(third, { type: 'bid', amount: 19 }).ok, true);
   assert.equal(g.turn, f);
   assert.equal(act(f, { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, dealer, 'the newly-entered dealer responds to the incumbent');
+  assert.equal(g.activeBidders.includes(dealer), true, 'dealer enters only after the first active bidder passes');
+  assert.equal(act(dealer, { type: 'bid', pass: true }).ok, true);
   assert.equal(g.phase, 'chooseTrump');
   assert.equal(g.highBidder, third);
   assert.equal(g.highBid, 19);

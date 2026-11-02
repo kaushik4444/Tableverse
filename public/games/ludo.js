@@ -122,10 +122,10 @@
     ui.latest=v; ui.ctx=ctx; ui.root=root;
     const feedback = eventFeedback(v);
     root.innerHTML=`<section class="ludo ${v.phase==='gameOver'?'over':''}">
-      <header class="ludo-header"><div><span class="ludo-kicker">TABLEVERSE CLASSICS</span><h2>🎲 Ludo</h2><p>Race your tokens home. First to finish all four wins.</p></div><nav>${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></nav></header>
+      <div class="ludo-tools">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></div>
       <div class="ludo-status ${v.myTurn?'mine':''}"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
       ${feedback}
-      <div class="ludo-layout"><main class="ludo-play-area">${board(v)}</main><aside class="ludo-side"><h3>Players</h3>${players(v)}${dice(v)}<div class="ludo-hint"><b>How to play</b><span>Roll a 6 to leave your yard. Land on opponents to send them home. Reach the centre with an exact roll.</span></div></aside></div>
+      <div class="ludo-layout"><main class="ludo-play-area">${board(v)}</main><aside class="ludo-side"><h3>Players</h3>${players(v)}${dice(v)}</aside></div>
       ${controls(v,ctx)}
     </section>`;
     root.onclick=onClick;
