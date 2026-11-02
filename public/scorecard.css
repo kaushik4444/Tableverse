@@ -42,3 +42,13 @@
 .menu { display: flex; flex-wrap: wrap; gap: 8px; }
 .hint { color: var(--muted); font-size: 13px; text-align: center; }
 .sc .row { display: flex; gap: 10px; align-items: center; }
+
+/* Account gate */
+.sc-gate { min-height: 70vh; align-content: center; }
+.gate-panel { display: grid; justify-items: center; gap: 12px; padding: clamp(22px, 5vw, 36px); text-align: center; }
+.gate-panel h2 { margin: 0; }
+.gate-panel .sub { max-width: 38ch; line-height: 1.5; }
+.gate-icon { font-size: 38px; }
+.gate-actions { justify-content: center; flex-wrap: wrap; width: 100%; }
+.gate-actions a { text-decoration: none; text-align: center; }
+@media (max-width: 420px) { .sc-gate { padding-inline: 12px; } .gate-actions > * { width: 100%; } }
