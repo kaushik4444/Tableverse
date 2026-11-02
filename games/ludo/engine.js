@@ -178,6 +178,7 @@ function applyAction(g, playerId, action) {
         endTurn(g);
       } else {
         g.phase = 'moving';
+        g.log.push({ by: g.players[who].name, card: `rolled a ${d}`, kind: 'roll' });
         emit(g, { type: 'rolled', by: who, dice: d });
       }
       bump(g);
