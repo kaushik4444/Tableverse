@@ -3,9 +3,7 @@ require('./helpers/env');
 const assert = require('node:assert/strict');
 const { Browser } = require('./helpers/auth');
 const WebSocket = require('ws');
-const { start } = require('../server');
 const testdb = require('./helpers/testdb');
-const dbFriends = require('../db/friends');
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(check, label, timeout = 8000) {
@@ -36,8 +34,11 @@ async function run() {
   const t = await testdb.create();
   if (!t) return;
   process.env.DATABASE_URL = t.url;
+  // These modules capture DATABASE_URL when loaded, so load them only after
+  // the isolated test database URL has been assigned above.
   const dbPool = require('../db/pool');
-  await dbPool.close();
+  const dbFriends = require('../db/friends');
+  const { start } = require('../server');
   const app = await start({ port: 0, trustProxy: false, maxMsgsPerSec: Infinity, matchLog: { log() {}, warn() {}, error() {} } });
   const clients = [];
   const browsers = [];
