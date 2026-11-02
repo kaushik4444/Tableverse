@@ -150,7 +150,7 @@
           ui.selected === c.id ? 'sel' : '',
           ui.queuedCard === c.id ? 'sel' : '',
         ].join(' ');
-        return cardHTML(c, { tag: 'button', cls: 'hc ' + cls, attrs: `data-wz="card" data-id="${c.id}" style="${i ? `margin-left:${-z.overlap}px` : ''}"` });
+        return cardHTML(c, { tag: 'button', cls: 'hc ' + cls, attrs: `data-wz="card" data-id="${c.id}" aria-pressed="${ui.selected === c.id || ui.queuedCard === c.id}" style="${i ? `margin-left:${-z.overlap}px` : ''}"` });
       })
       .join('');
   }
