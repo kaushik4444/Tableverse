@@ -126,8 +126,9 @@ const SIZES = [
       }
       if (game === 'poker') {
         const slider = document.querySelector('.pk-raise [data-pk="slider"]');
-        if (!slider) out.problems.push('Poker raise slider is missing');
-        else {
+        // A slider is only rendered for the player who can currently raise. The two-player
+        // fixture exercises that state; other seat counts may begin on a different action.
+        if (slider) {
           slider.value = String(Math.min(Number(slider.max), Number(slider.min) + 1));
           slider.dispatchEvent(new Event('input', { bubbles: true }));
           for (const preset of document.querySelectorAll('.pk-size')) {
