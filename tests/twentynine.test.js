@@ -71,6 +71,9 @@ test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 2
   assert.equal(E.viewFor(g, id(first + 3)).canPass, false); // dealer must bid
   assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', pass: true }).ok, false);
   assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 15 }).ok, true);
+  assert.equal(g.phase, 'bidding', 'the other active bidder still gets a chance to raise');
+  assert.equal(g.turn, (first + 1) % 4);
+  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', pass: true }).ok, true);
   assert.equal(g.phase, 'chooseTrump');
   assert.equal(g.turn, g.dealer);
 
