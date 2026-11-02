@@ -58,6 +58,7 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 .ludo-header nav .btn { min-width: 40px; min-height: 40px; }
 .ludo-status { line-height: 1.4; }
 .ludo-token:focus-visible { outline: 3px solid #fff; outline-offset: 3px; box-shadow: 0 0 0 6px #19a66b; }
+.ludo-token.legal::before { content: ''; position: absolute; inset: -11px; border-radius: 50%; }
 .ludo-token.legal { touch-action: manipulation; }
 .ludo-roll, .ludo-ready .btn { min-height: 48px; }
 .ludo-board-wrap { min-width: 0; }
