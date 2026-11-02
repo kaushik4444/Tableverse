@@ -97,7 +97,7 @@ const SIZES = [
     const report = await page.evaluate((game) => {
       const vw = document.documentElement.clientWidth;
       const out = { vw, pageScrollW: document.documentElement.scrollWidth, problems: [] };
-      const top = document.querySelector(game === 'ludo' ? '.ludo-header' : '.wz-top');
+      const top = document.querySelector(game === 'ludo' ? '.ludo-tools' : '.wz-top');
       if (!top) { out.problems.push(game === 'ludo' ? 'no Ludo utility controls rendered' : 'no game header rendered'); return out; }
       const wz = document.querySelector('.wz') || document.querySelector('.ludo');
       if (game === 'ludo') {
