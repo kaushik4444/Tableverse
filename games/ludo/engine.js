@@ -102,7 +102,11 @@ function finishPlayer(g, playerIdx) {
 }
 
 function endTurn(g) {
-  g.turn = (g.turn + 1) % g.n;
+  // Players who have finished all four tokens are removed from the turn rotation.
+  for (let step = 0; step < g.n; step++) {
+    g.turn = (g.turn + 1) % g.n;
+    if (!g.finishedOrder.includes(g.turn)) break;
+  }
   g.phase = 'rolling';
   g.dice = null;
   g.sixes = 0;
@@ -185,7 +189,10 @@ function applyAction(g, playerId, action) {
       applyMove(g, who, token, np);
       g.dice = null;
       if (g.phase === 'gameOver') { bump(g); return { ok: true }; }
-      if (justSix && g.sixes > 0 && g.sixes < 3) {
+      if (g.finishedOrder.includes(who)) {
+        // A player who has brought all four tokens home cannot use a bonus six.
+        endTurn(g);
+      } else if (justSix && g.sixes > 0 && g.sixes < 3) {
         // a 6 earns another roll for the same player
         g.phase = 'rolling';
       } else {
