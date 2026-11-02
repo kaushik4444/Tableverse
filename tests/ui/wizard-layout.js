@@ -202,6 +202,18 @@ const SIZES = [
         if (selected !== 0) report.problems.push('tap on the first adjacent legal token selected a neighbouring token');
       } else report.problems.push('first adjacent legal Ludo token is missing');
     }
+    const announcerPersists = await page.evaluate(() => {
+      const node = document.getElementById('game-status-announcer');
+      const app = document.getElementById('app');
+      if (!node || !app || !window.CardTable?.announceStatus) return false;
+      const original = app.innerHTML;
+      app.innerHTML = '<p>simulated full game rerender</p>';
+      window.CardTable.announceStatus('Updated turn status');
+      const survived = document.getElementById('game-status-announcer') === node && node.textContent === 'Updated turn status';
+      app.innerHTML = original;
+      return survived;
+    });
+    if (!announcerPersists) report.problems.push('game status announcer is recreated or lost when the game root is replaced');
     const ok = report.problems.length === 0;
     if (!ok) failures++;
     console.log(`${ok ? 'ok  ' : 'FAIL'}  ${GAME}/${seats} seed ${seed} ${size.name}: header ${report.headerHeight}px high, ${report.buttons} buttons${ok ? '' : '\n        - ' + report.problems.join('\n        - ')}`);
