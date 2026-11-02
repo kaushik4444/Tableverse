@@ -193,7 +193,8 @@ test('200 full games: every hand distributes exactly 29 points and scores add up
     }
     let a = 0, b = 0;
     for (const h of g.history) {
-      assert.equal(h.points[0] + h.points[1], 29);
+      // The 29 card points still total 29; a declared trump marriage adds a separate 4-point bonus.
+      assert.equal(h.points[0] + h.points[1] - (h.marriageDeclared ? 4 : 0), 29);
       const t = h.bidder % 2;
       if (h.made) { assert.ok(h.points[t] >= h.bid); t === 0 ? a++ : b++; } else { assert.ok(h.points[t] < h.bid); t === 0 ? a-- : b--; }
     }
