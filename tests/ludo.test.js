@@ -231,6 +231,7 @@ test('viewFor: hand mirrors own tokens, myTurn/canRoll/canMove flags correct', a
   assert.equal(v0.me, 0);
   assert.equal(v0.n, 2);
   assert.deepEqual(v0.hand, g.tokens[0]);
+  assert.deepEqual(v0.players.map((p) => p.tokens), g.tokens, 'all public token positions are available under each player');
   // with 2 players, turn is 0 after readying, so p0's turn
   assert.equal(v0.myTurn, true);
   assert.equal(v0.canRoll, true);
@@ -294,7 +295,6 @@ test('renderer exposes clickable own yard, track and home tokens only when legal
       { id: 'p0', name: 'Me', color: '🔴', ready: true, tokens: [-1, 0, 52, 58] },
       { id: 'p1', name: 'Opponent', color: '🟡', ready: true, tokens: [39, -1, -1, -1] },
     ],
-    tokens: [[-1, 0, 52, 58], [39, -1, -1, -1]],
   };
   registered.render(root, view, { isHost: true, act() {}, showRules() {}, rematch() {}, leave() {} });
   for (const token of [0, 1, 2]) assert.ok(root.innerHTML.includes(`data-lt="tok:${token}"`), `token ${token} is selectable`);
