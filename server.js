@@ -349,6 +349,7 @@ function start(opts = {}) {
   }
   /** Private-table access: the rule is in lib/roomAccess.js (documented there); this wires it to the database. */
   async function canEnterRoom(p, room) {
+    if (room.removed && room.removed.has(p.id)) return false; // removed by the host
     try {
       const { allowed } = await decideAccess({
         room, playerId: p.id, isAnonymous: p.isAnonymous, hasDatabase: dbPool.hasDatabase(),
@@ -825,6 +826,7 @@ function start(opts = {}) {
       const room = rooms.get(code);
       applyProfile(p, msg);
       if (!room) return sendError(p, `No table with code ${code || '?'}`);
+      if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       if (!await canEnterRoom(p, room)) return sendError(p, 'This private table requires an accepted invitation.');
       const seat = room.members.find((m) => m.id === p.id);
       // Already at this table (seated, or watching): nothing to add. This is decided BEFORE any capacity check, so a full
@@ -939,6 +941,49 @@ function start(opts = {}) {
           sendError(p, 'Stats are unavailable right now');
         }
       );
+    },
+
+    /** Host only: hand the table to another seated human (any time). The previous host stays at the table. */
+    makeHost(p, msg) {
+      const room = rooms.get(p.room);
+      if (!room || room.hostId !== p.id) return sendError(p, 'Only the host can do that');
+      const target = room.members.find((m) => m.id === msg.id && !m.bot);
+      if (!target || target.id === p.id) return sendError(p, 'Pick another player sitting at this table');
+      room.hostId = target.id;
+      (room.hosts || (room.hosts = new Set())).add(target.id);
+      sys(room, `👑 ${p.name} made ${target.name} the host`);
+      notifyOthers(room, p.id, `👑 ${target.name} is now the host`);
+      broadcast(room);
+    },
+
+    /**
+     * Host only, lobby only: remove a seated player, a bot or a spectator. A removed person cannot come back to this table
+     * (join, sit and reconnect all refuse them) until the table closes. The host cannot remove themselves (they use Leave).
+     */
+    kick(p, msg) {
+      const room = hostRoom(p, 'lobby');
+      if (!room) return;
+      if (msg.id === p.id) return sendError(p, 'You cannot remove yourself. Use Leave, or make someone else the host first.');
+      const mi = room.members.findIndex((m) => m.id === msg.id);
+      const si = room.spectators.findIndex((x) => x.id === msg.id);
+      if (mi < 0 && si < 0) return sendError(p, 'That player is not at this table');
+      if (mi >= 0 && room.members[mi].bot) { room.members.splice(mi, 1); return broadcast(room); }
+      const gone = mi >= 0 ? room.members.splice(mi, 1)[0] : room.spectators.splice(si, 1)[0];
+      (room.removed || (room.removed = new Set())).add(gone.id);
+      const q = players.get(gone.id);
+      if (q) {
+        q.room = null;
+        clearTimeout(q.dropTimer);
+        q.dropAnnounced = false;
+        if (q.connected) {
+          send(q.ws, { t: 'left' });
+          send(q.ws, { t: 'notice', text: 'The host removed you from that table.' });
+          send(q.ws, tablesMsg(q));
+        }
+        schedulePresence(q.id);
+      }
+      sys(room, `🚫 ${gone.name} was removed by the host`);
+      broadcast(room);
     },
 
     setVisibility(p, msg) {

@@ -67,6 +67,8 @@ Each stage is one commit; resume from the first stage that is not marked done.
   - **NOT run here**: `npm run test:pg` and every `*.pg.test.js`, plus spectators/ping/stats/private-tables/production/smoke suites that need the `ws`/`pg`/argon2 packages: this sandbox cannot install them (npm registry blocked). They must be run on a machine with a disposable test database. No server-level regression test for the spectator-rematch fix was run.
 - **7.4+ (next)**: more UX/UI polish (see "Next step").
 
+- **Host tools (done)**: `makeHost` (host only, any status, target must be a seated human) and `kick` (host only, lobby only; seated player, spectator or bot; cannot kick yourself). Removed people go into `room.removed` and are refused by `join`, `sit` and reconnect (`canEnterRoom`) for the life of that table only. UI: 👑 / ✕ on other people's seats and ✕ next to spectators, each behind a confirm. Tests: `tests/host-tools.test.js` (DB-free, 6 cases), `tests/ui/host-tools-ui.js` (9 cases incl. 320-1280px overflow). Not covered by a database test: private-table interplay (a handed-over private table follows `lib/roomAccess.js`: the previous host stays only while friends with the new host).
+
 ## Current review status
 
 Stage 6 social features and the Stage 7 follow-ups documented above are implemented on this branch. The historical “Remaining Stage 6 work” checklist has been retired because it no longer reflects the code.

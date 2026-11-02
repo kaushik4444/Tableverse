@@ -211,6 +211,11 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 .seat { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(0,0,0,.2); border-radius: 10px; }
 .seat .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); flex: none; }
 .seat .dot.off { background: #777; }
+.seat-actions { display: inline-flex; gap: 6px; flex: none; }
+.seat-actions .btn { padding: 6px 10px; min-width: 38px; }
+.spectator-people { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.spectator-people li { display: flex; align-items: center; gap: 8px; }
+.spectator-people .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seat .nm { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; background: var(--panel-line); }
 .tag.host { background: var(--gold); color: var(--gold-ink); }

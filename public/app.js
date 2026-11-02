@@ -1538,6 +1538,7 @@
         ${m.id === r.hostId ? '<span class="tag host">host</span>' : ''}
         <span class="dot ${m.connected ? '' : 'off'}" title="${m.connected ? 'online' : 'offline'}"></span>
         ${isHost && m.bot ? `<button class="btn ghost small" data-act="removeBot" data-id="${esc(m.id)}" aria-label="Remove ${esc(m.name)}">✕</button>` : ''}
+        ${isHost && !m.bot && m.id !== S.id ? `<span class="seat-actions"><button class="btn ghost small" data-act="makeHost" data-id="${esc(m.id)}" data-name="${esc(m.name)}" aria-label="Make ${esc(m.name)} the host" title="Make host">👑</button><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(m.id)}" data-name="${esc(m.name)}" aria-label="Remove ${esc(m.name)} from the table" title="Remove from table">✕</button></span>` : ''}
       </li>`);
       } else {
         seats.push(`<li class="seat empty"><span class="avatar ghost">?</span><span class="nm">Open seat</span>${label}</li>`);
@@ -1560,7 +1561,7 @@
         <span class="row" style="gap:6px">${CardTable.chat.button()}<button class="btn ghost small" data-act="rules" data-game="${esc(r.gameId)}">Rules</button></span>
       </div>
       ${spectating ? `<section class="panel"><h3>👁 You are watching</h3><p class="hint" style="text-align:left;margin:6px 0 10px">The next game starts when the host presses Start. ${open > 0 ? 'There is an open seat if you want to play.' : 'Ask the host to free a seat if you want to play.'}</p>${open > 0 ? '<button class="btn" data-act="sit">Take a seat</button>' : ''}</section>` : ''}
-      ${r.spectators && r.spectators.length ? `<details class="spectator-list"><summary>👁 ${r.spectators.length} watching</summary><div class="spectator-names">${r.spectators.map((x) => esc(x.name)).join(', ')}</div></details>` : ''}
+      ${r.spectators && r.spectators.length ? `<details class="spectator-list"><summary>👁 ${r.spectators.length} watching</summary>${isHost ? `<ul class="spectator-people">${r.spectators.map((x) => `<li><span class="nm">${esc(x.name)}</span><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(x.id)}" data-name="${esc(x.name)}" aria-label="Remove ${esc(x.name)} from the table" title="Remove from table">✕</button></li>`).join('')}</ul>` : `<div class="spectator-names">${r.spectators.map((x) => esc(x.name)).join(', ')}</div>`}</details>` : ''}
       <section class="panel code-card">
         <div class="label">${r.visibility === 'public' ? 'Table code · share it with your friends' : 'Table code · private, invited friends only'}</div>
         <div class="code">${esc(r.code)}</div>
@@ -1713,6 +1714,8 @@
       for (let i = 0; i < S.room.seats - S.room.members.length; i++) send({ t: 'addBot' });
     },
     removeBot: (el) => send({ t: 'removeBot', id: el.dataset.id }),
+    makeHost: (el) => { if (confirm(`Make ${el.dataset.name || 'this player'} the host? You will stay at the table, but only the host can start the game and change settings.`)) send({ t: 'makeHost', id: el.dataset.id }); },
+    kickPlayer: (el) => { if (confirm(`Remove ${el.dataset.name || 'this player'} from the table? They will not be able to come back to this table.`)) send({ t: 'kick', id: el.dataset.id }); },
     seats: (el) => send({ t: 'setSeats', seats: Number(el.dataset.n) }),
     start: () => send({ t: 'start' }),
     dismissAnnouncement: () => {
