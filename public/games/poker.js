@@ -223,7 +223,7 @@
       </div>
       ${tableHTML(v, ctx, z)}
       ${handHTML(v)}
-      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${statusText(v)}</span></div>
+      <div class="wz-status ${v.myTurn ? 'mine' : ''}" role="status" aria-live="polite" aria-atomic="true"><span>${statusText(v)}</span></div>
       ${v.phase === 'handEnd' ? resultHTML(v, ctx) : controlsHTML(v)}
       ${overlayHTML(v)}
     </div>`;
