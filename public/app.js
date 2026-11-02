@@ -507,7 +507,7 @@
     const outgoing = S.friendRequests.outgoing.map((r) => `<li class="social-row"><span class="social-info"><b>${esc(r.display_name || r.username)}</b><small>Request pending</small></span><button class="btn ghost small" data-act="cancelFriend" data-id="${esc(r.id)}">Cancel</button></li>`).join('');
     const invites = S.invitations.incoming.map((i) => `<li class="social-row"><span class="social-info"><b>${esc(i.display_name || i.username)}</b><small>${esc(i.game_id)} table · ${esc(i.room_code)} · expires ${esc(new Date(i.expires_at).toLocaleString())}</small></span><button class="btn small" data-act="acceptInvitation" data-id="${esc(i.id)}">Accept</button><button class="btn ghost small" data-act="declineInvitation" data-id="${esc(i.id)}">Decline</button></li>`).join('');
     const sent = S.invitations.outgoing.map((i) => `<li class="social-row"><span class="social-info"><b>${esc(i.display_name || i.username)}</b><small>${esc(i.room_code)} · ${esc(i.status)}</small></span><button class="btn ghost small" data-act="revokeInvitation" data-id="${esc(i.id)}">Revoke</button></li>`).join('');
-    return `<section class="home-section social-panel" id="friends"><div class="row" style="justify-content:space-between"><h2 class="section">Friends</h2><button class="btn ghost small" data-act="refreshSocial">Refresh</button></div>
+    return `<section class="home-section social-panel" id="friends-panel"><div class="row" style="justify-content:space-between"><h2 class="section">Friends</h2><button class="btn ghost small" data-act="refreshSocial">Refresh</button></div>
       ${S.socialError ? `<p class="social-error" role="alert">${esc(S.socialError)}</p>` : ''}${S.socialNotice ? `<p class="social-notice" role="status">${esc(S.socialNotice)}</p>` : ''}${S.socialLoading ? '<p class="hint">Loading friends…</p>' : ''}
       <form id="friendSearchForm" class="social-search"><label class="sr-only" for="friendSearch">Search by username</label><input id="friendSearch" minlength="1" maxlength="24" autocomplete="off" placeholder="Find someone by username" value="${esc(S.friendQuery)}"><button class="btn small" type="submit" ${S.friendSearchBusy ? 'disabled' : ''}>Search</button></form>
       ${resultHTML ? `<ul class="social-list">${resultHTML}</ul>` : (S.friendQuery && !S.friendSearchBusy ? '<p class="hint">No new players found.</p>' : '')}
@@ -521,6 +521,27 @@
     if (!S.room || S.room.visibility !== 'private' || S.room.hostId !== S.id || S.guest) return '';
     const friends = S.inviteFriendOptions || '';
     return `<form id="tableInviteForm" class="social-search"><label for="tableInviteFriend">Invite a friend to this private table</label><select id="tableInviteFriend" required>${friends || '<option value="">All friends already invited</option>'}</select><button class="btn small" type="submit" ${friends ? '' : 'disabled'}>Send invitation</button></form>`;
+  }
+
+  /** Home: a small friends card (who is online, what needs an answer). The full panel lives on #friends. */
+  function friendsStripHTML() {
+    if (S.guest) return '';
+    const online = S.friends.filter((f) => f.online);
+    const pend = pendingSocial();
+    const chips = online.slice(0, 6).map((f) => `<span class="fs-chip" title="@${esc(f.username)}"><span class="social-avatar">${esc(f.avatar || '🧙')}</span>${esc(f.display_name || f.username)}</span>`).join('');
+    const invites = S.invitations.incoming.slice(0, 2).map((i) => `<li class="social-row"><span class="social-info"><b>${esc(i.display_name || i.username)}</b><small>invited you to a ${esc((gameMeta(i.game_id) || {}).name || i.game_id)} table</small></span><button class="btn small" data-act="acceptInvitation" data-id="${esc(i.id)}">Accept</button><button class="btn ghost small" data-act="declineInvitation" data-id="${esc(i.id)}">Decline</button></li>`).join('');
+    const summary = S.friends.length
+      ? (online.length ? `${online.length} of ${S.friends.length} friends online` : `${S.friends.length} friend${S.friends.length === 1 ? '' : 's'}, none online`)
+      : 'Add friends to invite them to private tables.';
+    return `<section class="home-section friends-strip" aria-label="Friends">
+      <div class="fs-head"><div><h2 class="section">Friends</h2><p class="hint">${summary}${pend ? ` · <b>${pend} waiting for you</b>` : ''}</p></div><button type="button" class="btn ghost small" data-act="openFriendsPage">${pend ? 'Review' : 'Manage'}</button></div>
+      ${chips ? `<div class="fs-chips">${chips}</div>` : ''}
+      ${invites ? `<ul class="social-list">${invites}</ul>` : ''}
+    </section>`;
+  }
+
+  function renderFriendsPage() {
+    $app.innerHTML = `${topbarHTML()}<main class="page profile-page friends-page"><a class="back-link" href="/" data-act="goHome">← Back to games</a>${socialHTML()}</main>`;
   }
 
   function recentTablesHTML() {
@@ -1132,6 +1153,7 @@
   function routeFromHash() {
     const h = decodeURIComponent(location.hash.slice(1));
     if (h === 'profile') return { page: 'profile' };
+    if (h === 'friends') return { page: 'friends' };
     const m = /^u\/([a-z0-9_]{3,24})$/i.exec(h);
     if (m) return { page: 'player', username: m[1].toLowerCase() };
     return { page: 'home' };
@@ -1139,7 +1161,9 @@
   function applyRoute() {
     const r = routeFromHash();
     if (r.page === 'profile' && S.guest) { S.page = 'home'; openAuthSheet('login', 'Log in to see your profile.'); return; }
+    if (r.page === 'friends' && S.guest) { S.page = 'home'; openAuthSheet('login', 'Log in to see your friends.'); return; }
     if (r.page === 'profile') return void openPage('profile', null, true);
+    if (r.page === 'friends') return void openPage('friends', null, true);
     if (r.page === 'player') return void openPage('player', r.username, true);
     S.page = 'home';
     render();
@@ -1147,9 +1171,9 @@
   function openPage(page, arg, fromHash) {
     if (S.menuOpen) S.menuOpen = false;
     S.page = page;
-    if (!fromHash) { try { history.pushState(null, '', page === 'profile' ? '#profile' : page === 'player' ? '#u/' + arg : location.pathname + location.search); } catch { /* ignore */ } }
+    if (!fromHash) { try { history.pushState(null, '', page === 'profile' ? '#profile' : page === 'friends' ? '#friends' : page === 'player' ? '#u/' + arg : location.pathname + location.search); } catch { /* ignore */ } }
     window.scrollTo(0, 0);
-    if (page === 'profile') loadProfile(); else if (page === 'player') loadPlayer(arg); else render();
+    if (page === 'profile') loadProfile(); else if (page === 'player') loadPlayer(arg); else if (page === 'friends') { render(); loadSocial({ quiet: true }); } else render();
   }
 
   async function loadProfile(historyPage = 1) {
@@ -1295,6 +1319,8 @@
     ['📱', 'One device at a time', 'Signing in on another device signs this one out, so your account is never in two places at once.'],
     ['👤', 'Profiles and history', 'Your stats and every finished game, plus account deletion from your profile.'],
   ];
+  /** Friend requests + table invitations waiting for an answer (drives the menu badge and the home strip). */
+  const pendingSocial = () => S.friendRequests.incoming.length + S.invitations.incoming.length;
   const hasNewNews = () => S.wnSeen !== WHATS_NEW_VERSION;
 
   function topbarHTML() {
@@ -1308,13 +1334,14 @@
     const menu = S.menuOpen ? `<div class="menu" role="menu" aria-label="Account">
         <div class="menu-head">${av}<div class="menu-who"><b>${esc(name)}</b>${S.username ? `<small>@${esc(S.username)}</small>` : ''}</div></div>
         ${item('openProfilePage', '👤', 'Profile and history')}
+        ${item('openFriendsPage', '👥', 'Friends', pendingSocial() ? `<span class="mi-new">${pendingSocial()}</span>` : '')}
         ${item('openSettings', '⚙️', 'Settings')}
         ${item('openWhatsNew', '🎉', 'What’s new', hasNewNews() ? '<span class="mi-new">New</span>' : '')}
         <div class="menu-sep" role="separator"></div>
         ${item('logout', '🚪', 'Log out')}
         ${item('logoutAll', '🔒', 'Log out everywhere', '', 'dim')}
       </div>` : '';
-    return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}">${av}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
+    return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}">${av}${hasNewNews() || pendingSocial() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
   }
 
   function closeMenu() {
@@ -1454,6 +1481,7 @@
       $app.innerHTML = '<div class="page"><div class="brand"><div class="mark">🂡</div><h1>Tableverse</h1><p>Connecting…</p></div></div>';
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
     else if (!S.room && S.page === 'player') renderPlayerPage();
+    else if (!S.room && S.page === 'friends' && !S.guest) renderFriendsPage();
     else if (!S.room) renderHome();
     else if (S.room.status === 'lobby') renderLobby();
     else renderGame();
@@ -1466,6 +1494,11 @@
         try { el.setSelectionRange(keep.start, keep.end); } catch { /* ignore */ }
       }
     }
+  }
+
+  const COMING_SOON = [['🎲', 'Monopoly', 'Buy, trade and bankrupt your friends.'], ['🐍', 'Snakes and Ladders', 'Race to 100 and dodge the snakes.'], ['🎯', 'Ludo', 'Bring all four tokens home first.']];
+  function comingSoonHTML() {
+    return `<section class="home-section" aria-label="Coming soon"><h2 class="section">Coming soon</h2><div class="soon-grid">${COMING_SOON.map(([ico, n, d]) => `<div class="soon-card"><span class="soon-ico" aria-hidden="true">${ico}</span><div><b>${esc(n)}</b><small>${esc(d)}</small></div><em class="soon-tag">Soon</em></div>`).join('')}</div></section>`;
   }
 
   function renderHome() {
@@ -1488,25 +1521,26 @@
       <section class="home-hero">
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
-          <p>${name ? 'Host a table below, or join a friend\u2019s public table with its code. Private tables open with an invitation.' : 'Free card games in your browser. Bots fill any empty seat.'}</p>
+          <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Free card games in your browser. Bots fill any empty seat.'}</p>
           ${S.guest ? '<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button></div>' : ''}
         </div>
         <form class="join-form" id="joinForm" aria-label="Join a table">
           <label class="label" for="code">Have a table code?</label>
           <div class="join-row"><input id="code" type="text" maxlength="6" placeholder="ABCDEF" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc(S.draftCode)}"><button class="btn" type="submit">Join</button></div>
-          <small class="hint">A private table needs an invitation from its host: see Friends below.</small>
+          <small class="hint">Private tables open with an invitation from the host.</small>
         </form>
       </section>
       ${rejoinBannerHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
-      ${recentTablesHTML()}
-      ${socialHTML()}
+      ${friendsStripHTML()}
       <section class="home-section" id="games">
         <h2 class="section">Games</h2>
         ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
       </section>
+      ${comingSoonHTML()}
+      ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot"><a href="/scorecard.html">Wizard paper scorecard</a></footer>
+      <footer class="home-foot"><a href="/scorecard.html">Wizard paper scorecard</a>${S.guest ? '' : ' · <button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}</footer>
     </main>`;
   }
 
@@ -1689,6 +1723,7 @@
     },
     toggleMenu: () => { S.menuOpen = !S.menuOpen; render(); },
     openProfilePage: () => { S.menuOpen = false; openPage('profile'); },
+    openFriendsPage: () => { S.menuOpen = false; openPage('friends'); },
     openSettings: () => { S.menuOpen = false; render(); openSettingsDialog(); },
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
     toggleAvatars: () => { S.avatarOpen = !S.avatarOpen; render(); },

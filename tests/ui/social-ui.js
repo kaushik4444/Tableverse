@@ -88,11 +88,28 @@ let outgoing = []; let friendList = friends.friends; // bob, cyd and dia are fri
 
   await test('the friends list shows each friend’s ping next to their status, and nothing for offline friends', async () => {
     const { page, ctx } = await scriptedPage(browser, { messages: msgs });
-    await page.goto(url + '/');
-    await page.waitForFunction(() => document.body.textContent.includes('Bo'));
+    await page.goto(url + '/#friends');
+    await page.waitForSelector('#friends-panel .social-row');
     const text = await page.evaluate(() => [...document.querySelectorAll('.social-row')].map((r) => r.textContent.replace(/\s+/g, ' ')));
     const bo = text.find((t) => t.includes('@bob')); const cy = text.find((t) => t.includes('@cyd')); const di = text.find((t) => t.includes('@dia'));
     assert.match(bo, /Online · 38 ms/); assert.match(cy, /Playing Wizard · 310 ms/ ); assert.doesNotMatch(di, / ms/);
+    await ctx.close();
+  });
+
+  await test('home shows a compact friends card and Coming soon games; the full panel lives on #friends', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs });
+    await page.goto(url + '/');
+    await page.waitForSelector('.friends-strip');
+    assert.equal(await page.$('#friends-panel'), null, 'no full friends panel on home');
+    assert.match(await page.textContent('.friends-strip'), /friends online|none online|Add friends/);
+    const soon = await page.textContent('.soon-grid');
+    for (const n of ['Monopoly', 'Snakes and Ladders', 'Ludo']) assert.match(soon, new RegExp(n));
+    assert.equal(await page.$('.soon-card button'), null, 'coming-soon cards are not playable');
+    await page.click('.friends-strip [data-act="openFriendsPage"]');
+    await page.waitForSelector('#friends-panel');
+    assert.equal(new URL(page.url()).hash, '#friends');
+    await page.click('.back-link');
+    await page.waitForSelector('.game-grid');
     await ctx.close();
   });
 

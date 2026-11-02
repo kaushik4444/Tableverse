@@ -466,3 +466,20 @@ html { scroll-behavior: auto; }
 .pcard-actions .btn { width: 100%; justify-content: center; }
 .pcard-note { color: var(--muted); font-size: 13px; margin: 8px 0 0; text-align: left; }
 .pcard-actions a.btn { display: flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }
+
+/* Stage 8: simpler home */
+.friends-strip { background: var(--card, rgba(255,255,255,.04)); border: 1px solid var(--line, rgba(255,255,255,.1)); border-radius: 14px; padding: 12px 14px; }
+.fs-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.fs-head .section { margin: 0; }
+.fs-head .hint { margin: 2px 0 0; }
+.fs-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.fs-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 4px; border-radius: 999px; background: rgba(255,255,255,.07); font-size: 13px; }
+.friends-strip .social-list { margin-top: 8px; }
+.soon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
+.soon-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--line, rgba(255,255,255,.18)); opacity: .8; }
+.soon-card b { display: block; }
+.soon-card small { color: var(--muted); }
+.soon-ico { font-size: 26px; }
+.soon-tag { margin-left: auto; font-style: normal; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; }
+.linklike:hover { color: var(--ink); }
