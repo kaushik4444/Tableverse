@@ -95,11 +95,11 @@ function toPlaying(seed) {
   return g;
 }
 
-test('after trump is chosen everybody has 8 cards and the player left of the dealer leads', () => {
+test('after trump is chosen everybody has 8 cards and the highest bidder leads', () => {
   const g = toPlaying(3);
   assert.equal(g.phase, 'playing');
   for (const p of g.players) assert.equal(p.hand.length, 8);
-  assert.equal(g.turn, (g.dealer + 1) % 4);
+  assert.equal(g.turn, g.highBidder);
   assert.equal(new Set(g.players.flatMap((p) => p.hand.map((c) => c.id))).size, 32);
 });
 
