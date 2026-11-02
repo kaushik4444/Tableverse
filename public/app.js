@@ -1309,8 +1309,10 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-friends';
+  const WHATS_NEW_VERSION = '2026-11-simpler-home';
   const WHATS_NEW = [
+    ['🏠', 'A simpler home', 'Games come first. Friends are a small card on the home page, with the full list, requests and invitations on their own Friends page (account menu).'],
+    ['🔜', 'Coming soon', 'Monopoly, Snakes and Ladders and Ludo are on the way.'],
     ['🤝', 'Friends', 'Search by username, send and answer friend requests, and see who is online or which game they are playing right now.'],
     ['🔒', 'Private tables and invitations', 'New tables are private: invite friends from the lobby and they join once they accept. Make a table public to share its code and link.'],
     ['👑', 'Host tools', 'Make another player the host, or remove a player, spectator or bot from the lobby.'],

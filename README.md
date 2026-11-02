@@ -37,6 +37,12 @@ Tableverse is currently open for friend testing.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
+## What's new in v0.8 — a simpler home
+
+- **Home page.** Greeting and table-code join, then the games straight away. Friends are a compact card (who is online, anything waiting for you, accept/decline invitations in place); the full friends list, search, requests and sent invitations are on their own page at `#friends` (account menu → Friends, with a badge for pending items). Recent and public tables sit below the games.
+- **Coming soon.** Monopoly, Snakes and Ladders and Ludo are listed as non-playable cards ahead of their release.
+- **What's new** is also linked from the home footer. No server, database or API changes.
+
 ## What's new in v0.7 — friends, private tables, host tools
 
 - **Friends.** Search players by username (`[a-z0-9_]`), send/accept/decline/cancel requests, remove friends. Duplicate requests, requesting yourself and acting on someone else's request are refused; a request in answer to one you received becomes a friendship. Pending requests and invitations show on the home screen, with a live notice when a new one arrives.
