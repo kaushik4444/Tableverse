@@ -85,7 +85,7 @@ async function run() {
     assert.equal((await stranger.browser.post('/api/me/table-invitations/accept', { invitationId: created.json.invitation.id })).status, 404, 'wrong recipient cannot accept');
     const early = await dbFriends.transitionInvitation(host.id, created.json.invitation.id, 'accept').catch((error) => error);
     assert.equal(early.status, 404, 'inviter cannot accept their own invite');
-    await dbPool.query('UPDATE private_table_invitations SET expires_at = NOW() - INTERVAL \'1 second\' WHERE id = $1', [created.json.invitation.id]);
+    await dbPool.query("UPDATE private_table_invitations SET created_at = NOW() - INTERVAL '2 seconds', expires_at = NOW() - INTERVAL '1 second' WHERE id = $1", [created.json.invitation.id]);
     await dbFriends.expireInvitation(created.json.invitation.id);
     assert.equal((await invitee.browser.post('/api/me/table-invitations/accept', { invitationId: created.json.invitation.id })).status, 404, 'expired invitation cannot be accepted');
 
@@ -164,6 +164,9 @@ async function run() {
   } finally {
     for (const client of clients) client.ws.terminate();
     await app.close();
+    // Close the application's PostgreSQL pool before the isolated database is force-dropped.
+    // Otherwise pg-pool reports expected ECONNRESET/administrator-termination errors for idle clients.
+    await dbPool.close();
     if (playerIds.length) {
       const cleanup = await t.client();
       try {
