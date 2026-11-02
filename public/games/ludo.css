@@ -85,3 +85,47 @@
   .ludo-die { width: 38px; height: 38px; }
   .ludo-roll { min-width: 88px; font-size: 12px; padding-inline: 7px; }
 }
+
+
+/* Tableverse-wide game surface alignment and a cleaner, modern Ludo board. */
+.ludo { width:100%; max-width:100%; }
+.ludo-tools { display:flex; justify-content:flex-end; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 10px; }
+.ludo-status { margin:8px 0 12px; }
+.ludo-play-area { background:var(--panel, #f7f8f7); border:1px solid var(--panel-line); border-radius:18px; box-shadow:0 8px 24px #10251b0d; }
+.ludo-board-wrap { max-width: min(100%, 650px); }
+.ludo-board { border:4px solid #fff; border-radius:14px; box-shadow:0 12px 32px #17251f20, inset 0 0 0 1px #d9ddd8; background:#f8faf8; }
+.ludo-cell { border-color:#e1e6e2; background:#fff; color:#a7b0a9; transition:background .2s ease; }
+.ludo-cell.safe { background:#f2f5e9; color:#a7a879; }
+.ludo-cell.red-start { background:#fce7e5; color:#c94a48; }
+.ludo-cell.yellow-start { background:#fff5d7; color:#a98218; }
+.ludo-cell.green-start { background:#e2f4e9; color:#27875a; }
+.ludo-cell.blue-start { background:#e5effd; color:#3974bb; }
+.ludo-cell.lane.red { background:#f6c4c0; border-color:#e8aaa4; }
+.ludo-cell.lane.yellow { background:#f8e6a9; border-color:#ead38a; }
+.ludo-cell.lane.green { background:#bce5cc; border-color:#9bd3b1; }
+.ludo-cell.lane.blue { background:#c4daf7; border-color:#a5c4ed; }
+.ludo-base { border:2px solid #fff; }
+.ludo-base.red { background:linear-gradient(145deg,#f07870,#d94d49); }
+.ludo-base.yellow { background:linear-gradient(145deg,#f8d96e,#e8b83e); }
+.ludo-base.green { background:linear-gradient(145deg,#5fc28d,#289765); }
+.ludo-base.blue { background:linear-gradient(145deg,#75a9ec,#397acb); }
+.ludo-base-inner { width:78%; height:78%; border-radius:14%; background:#fbfcfa; box-shadow:0 3px 12px #17251f18; }
+.ludo-yard { background:#f0f3ef; gap:10%; }
+.ludo-yard i { border:3px solid #fff; box-shadow:0 2px 5px #14231b2c, inset 0 1px 2px #fff8; }
+.ludo-token { width:6%; height:6%; min-width:12px; min-height:12px; border:2px solid #fff; box-shadow:0 2px 5px #101b1770, inset 0 1px 2px #ffffff80; transition:filter .18s ease, box-shadow .18s ease; }
+.ludo-token.red { background:linear-gradient(145deg,#ff7770,#c92f36); }
+.ludo-token.yellow { background:linear-gradient(145deg,#ffe27a,#d49a19); }
+.ludo-token.green { background:linear-gradient(145deg,#6ee0a2,#137a4a); }
+.ludo-token.blue { background:linear-gradient(145deg,#83b9ff,#205db1); }
+.ludo-token span { width:44%; height:44%; background:#ffffffa8; box-shadow:0 1px 2px #0002; }
+.ludo-token.legal { outline:2px solid #fff; box-shadow:0 0 0 4px #159b68,0 5px 14px #159b6860; }
+.ludo-feedback { border-radius:12px; box-shadow:0 3px 12px #10251b08; }
+.ludo-tools .btn { min-height:34px; }
+@media(max-width:760px) {
+ .ludo-tools { justify-content:flex-end; margin-bottom:8px; }
+ .ludo-play-area { padding:clamp(5px,1.4vw,10px); }
+}
+@media(prefers-reduced-motion:reduce) {
+ .ludo-token.legal { animation:none; }
+ .ludo-cell,.ludo-token { transition:none; }
+}
