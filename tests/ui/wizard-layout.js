@@ -14,7 +14,7 @@ const games = require('../../games');
 
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/json' };
-const CASES = process.env.UI_GAME ? [[process.env.UI_GAME, Number(process.env.UI_SEATS || 4)]] : [['wizard', 3], ['wizard', 4], ['wizard', 6], ['twentynine', 4], ['poker', 2], ['poker', 6], ['themind', 2], ['themind', 4]];
+const CASES = process.env.UI_GAME ? [[process.env.UI_GAME, Number(process.env.UI_SEATS || 4)]] : [['wizard', 3], ['wizard', 4], ['wizard', 6], ['twentynine', 4], ['poker', 2], ['poker', 6], ['themind', 2], ['themind', 4], ['ludo', 2], ['ludo', 4]];
 const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const SEEDS = process.env.UI_SEED ? [Number(process.env.UI_SEED)] : [1, 2, 3, 4, 5, 6];
 const NAMES = ['Aarav the Magnificent', 'Bo', 'Charlotte-Anne', 'Dmitri', 'Eve', 'Frederick'];
@@ -68,14 +68,28 @@ const SIZES = [
       };
     }, msgs);
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
-    await page.waitForSelector('.wz-top', { timeout: 8000 }).catch(() => {});
+    await page.waitForSelector(GAME === 'ludo' ? '.ludo-header' : '.wz-top', { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(300);
-    const report = await page.evaluate(() => {
+    const report = await page.evaluate((game) => {
       const vw = document.documentElement.clientWidth;
       const out = { vw, pageScrollW: document.documentElement.scrollWidth, problems: [] };
-      const top = document.querySelector('.wz-top');
-      if (!top) { out.problems.push('no .wz-top rendered'); return out; }
-      const wz = document.querySelector('.wz'); const wzOverflow = getComputedStyle(wz).overflowX; if (wzOverflow === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
+      const top = document.querySelector(game === 'ludo' ? '.ludo-header' : '.wz-top');
+      if (!top) { out.problems.push(game === 'ludo' ? 'no Ludo header rendered' : 'no game header rendered'); return out; }
+      const wz = document.querySelector('.wz') || document.querySelector('.ludo');
+      if (game === 'ludo') {
+        const board = document.querySelector('.ludo-board');
+        if (!board) out.problems.push('no Ludo board rendered');
+        else {
+          const b = board.getBoundingClientRect();
+          if (b.left < -0.5 || b.right > vw + 0.5) out.problems.push(`Ludo board is off screen (${Math.round(b.left)}..${Math.round(b.right)} of ${vw})`);
+          if (Math.abs(b.width - b.height) > 2) out.problems.push(`Ludo board is not square (${Math.round(b.width)}x${Math.round(b.height)})`);
+          for (const token of board.querySelectorAll('.ludo-token')) {
+            const r = token.getBoundingClientRect();
+            if (r.left < b.left - 1 || r.right > b.right + 1 || r.top < b.top - 1 || r.bottom > b.bottom + 1) out.problems.push('Ludo token is outside the board');
+          }
+        }
+        if (!document.querySelector('.ludo-status[role="status"]')) out.problems.push('Ludo turn status is not announced accessibly');
+      } else if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
       const tops = top.getBoundingClientRect();
       if (top.scrollWidth > top.clientWidth + 1) out.problems.push(`header content wider than header (${top.scrollWidth} > ${top.clientWidth})`);
       if (wz && wz.scrollWidth > wz.clientWidth + 1) out.problems.push(`.wz scrolls horizontally (${wz.scrollWidth} > ${wz.clientWidth})`);
@@ -94,12 +108,13 @@ const SIZES = [
       const hand = document.querySelector('.hand, .tm-hand, .pk-hand');
       out.handRight = hand ? Math.round(hand.getBoundingClientRect().right) : null;
       return out;
-    });
+    }, GAME);
     if (report.pageScrollW > report.vw + 1) report.problems.push(`page scrolls horizontally (${report.pageScrollW} > ${report.vw})`);
     // elements anywhere inside the table that stick out of the viewport (excluding scroll containers that are meant to scroll)
     const wide = await page.evaluate(() => {
       const vw = document.documentElement.clientWidth; const bad = [];
-      for (const e of document.querySelectorAll('.wz *')) {
+      const root = document.querySelector('.wz, .ludo');
+      for (const e of (root ? root.querySelectorAll('*') : [])) {
         if (e.closest('.hand, .tm-hand, .overlay, .chat, .watchers')) continue;
         const r = e.getBoundingClientRect();
         if (r.width && (r.right > vw + 1 || r.left < -1) && getComputedStyle(e).position !== 'fixed') bad.push(`${e.tagName.toLowerCase()}.${String(e.className).split(' ')[0]} ${Math.round(r.left)}..${Math.round(r.right)}`);
