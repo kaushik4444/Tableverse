@@ -12,21 +12,7 @@ const { computeProfile } = require('../db/stats');
 
 let passed = 0;
 async function test(name, fn) {
-  try { await fn(); passed++; test('roll and token move events identify the player, die result and token', () => {
-  const g = E.createGame(people(), {}, () => 0.999999);
-  for (const p of people()) E.applyAction(g, p.id, { type: 'ready' });
-  assert.equal(E.applyAction(g, 'p0', { type: 'roll' }).ok, true);
-  assert.equal(g.event.type, 'rolled');
-  assert.equal(g.event.by, 0);
-  assert.equal(g.event.dice, 6);
-  assert.equal(E.applyAction(g, 'p0', { type: 'move', token: 0 }).ok, true);
-  assert.equal(g.event.type, 'moved');
-  assert.equal(g.event.by, 0);
-  assert.equal(g.event.token, 0);
-  assert.equal(g.event.dice, 6);
-});
-
-console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
+  try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\\n' + e.stack); process.exitCode = 1; }
 }
 function mulberry32(a) {
   return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -383,6 +369,20 @@ test('profile stats rank first place as the best Ludo finish', async () => {
   const stats = computeProfile(rows, { metrics: (id) => id === 'ludo' ? plugin.stats : null });
   assert.equal(stats.perGame[0].best, -1, 'first place is the highest (least negative) rank');
   assert.equal(stats.perGame[0].bestText, '1', 'first place is shown as best finish');
+});
+
+test('roll and token move events identify the player, die result and token', async () => {
+  const g = E.createGame(people(2), {}, alwaysSix);
+  readyAll(g);
+  must(g, 'p0', { type: 'roll' });
+  assert.equal(g.event.type, 'rolled');
+  assert.equal(g.event.by, 0);
+  assert.equal(g.event.dice, 6);
+  must(g, 'p0', { type: 'move', token: 0 });
+  assert.equal(g.event.type, 'moved');
+  assert.equal(g.event.by, 0);
+  assert.equal(g.event.token, 0);
+  assert.equal(g.event.dice, 6);
 });
 
 test('buildMatchRecord: ludo produces one record with all seats and scores', async () => {
