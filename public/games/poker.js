@@ -121,7 +121,7 @@
       const verb = v.currentBet === 0 ? 'Bet' : 'Raise to';
       const sizes2 = raiseSizes(v);
       raiseBox = `<div class="pk-raise">
-        <div class="pk-sizes">${sizes2.map(([l, val]) => `<button type="button" class="pk-size ${val === to ? 'on' : ''}" data-pk="size" data-v="${val}">${l}</button>`).join('')}</div>
+        <div class="pk-sizes">${sizes2.map(([l, val]) => `<button type="button" class="pk-size ${val === to ? 'on' : ''}" aria-pressed="${val === to}" data-pk="size" data-v="${val}">${l}</button>`).join('')}</div>
         <div class="pk-slide"><button type="button" class="pk-step" data-pk="step" data-d="-1" aria-label="Less">−</button>
           <input type="range" min="${v.minRaiseTo}" max="${v.maxRaiseTo}" step="1" value="${to}" data-pk="slider" aria-label="Raise amount">
           <button type="button" class="pk-step" data-pk="step" data-d="1" aria-label="More">+</button></div></div>`;
