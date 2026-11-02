@@ -117,8 +117,8 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - 13.2 (6d9454b, done) `tests/snakesladders.test.js`: 21 tests (board invariants, ladders, snakes, exact finish, sixes, turn order, views, placings, bot games for 2-4 players, plugin, scrub, match record). In `npm test` and `build`.
 - 13.3 (ebc4f2a, done) `public/games/snakesladders.js` + `.css` (+ links in `index.html`): board with square numbers, SVG ladders and snakes drawn from the view, tokens that slide between squares (CSS transition; none with reduced motion), dice panel with tumble animation, roll button, player list, feedback line from the log, results overlay. Uses the shared `.wz`, `.wz-top`, `.wz-status` so the log, rules, timer and announcer work as in other games.
 - 13.4 (done) Snakes and Ladders leaves Coming soon (10 planned), What's new highlight (Ludo's dropped: only 3 are shown), README v0.10, tests updated (`coming-soon.test.js`, `ui/social-ui.js`).
-- 13.5 (pending) `tests/ui/snakesladders-ui.js` browser tests and a Snakes and Ladders case in the `wizard-layout.js` viewport matrix; add to `test:ui` and `build`; smoke test through the server socket.
-- 13.6 (pending) Open the PR, wait for CI (it runs PostgreSQL), fix failures.
+- 13.5 (9fdac40, 69fa417, done) `tests/ui/snakesladders-ui.js` (9 browser tests), Snakes and Ladders in the `wizard-layout.js` matrix (2 and 4 seats), `test:ui` and `build`; smoke test through the server socket.
+- 13.6 (done) PR #26 opened; CI green on both Node versions (build, tests with PostgreSQL, browser checks, Docker image, audit). Not merged: the owner merges.
 - Verified here: engine tests 21/21, `coming-soon.test.js`, screenshots at 390 and 1280 px (no horizontal overflow). NOT run here: anything needing `ws`/`pg` (npm registry blocked in this sandbox): the server smoke test and all `*.pg.test.js`; CI covers them.
 - Known: tokens slide in a straight line between squares (also along a snake or ladder); there is no square-by-square walk yet.
 
