@@ -210,6 +210,21 @@ function client(port, name, token) {
   gf.send({ t: 'act', action: { type: 'ask', target: 'nobody', rank: 'A' } });
   gf.ws.close();
 
+  const sl = await authClient('Sana');
+  await sl.until(() => sl.id, 'welcome Sana');
+  sl.send({ t: 'create', gameId: 'snakesladders' });
+  await sl.until(() => sl.room && sl.room.gameId === 'snakesladders', 'snakes and ladders table');
+  sl.send({ t: 'start' });
+  await sl.until(() => sl.view && sl.view.game === 'snakesladders', 'snakes and ladders started');
+  assert.equal(sl.view.myTurn, true, 'the first seat starts');
+  assert.equal(sl.view.canRoll, true);
+  assert.equal(Object.keys(sl.view.ladders).length, 8);
+  sl.send({ t: 'act', action: { type: 'roll' } });
+  await sl.until(() => sl.view && sl.view.lastRoll && sl.view.lastRoll.by === 0, 'roll answered');
+  assert.ok(sl.view.lastRoll.dice >= 1 && sl.view.lastRoll.dice <= 6);
+  sl.send({ t: 'act', action: { type: 'move', token: 0 } }); // not an action in this game: refused, the table carries on
+  sl.ws.close();
+
   assert.equal(a.announcement, '');
   const ann = await start({ port: 0, announcement: '  Maintenance\n at 22:00 ' + 'x'.repeat(400) });
   const an = await authClient('Ann2', ann.port);
