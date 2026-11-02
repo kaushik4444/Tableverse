@@ -72,6 +72,7 @@ function startHand(g) {
   g.stock = deck; // 16 cards, dealt after trump is chosen
   g.phase = 'bidding';
   g.turn = (g.dealer + 1) % 4;
+  g.activeBidders = [g.turn, (g.turn + 1) % 4]; // only two seats compete at a time; a pass opens a seat for the next player
   g.bids = [null, null, null, null]; // latest action: null, 'pass', or current bid
   g.passed = [false, false, false, false]; // passing is permanent for this auction
   g.highBid = 0;
@@ -95,22 +96,43 @@ function canPass(g) {
   return !(g.turn === g.dealer && g.highBidder < 0);
 }
 
-function nextBidder(g) {
+function nextActiveBidder(g, fromSeat) {
   for (let step = 1; step <= 4; step++) {
-    const seat = (g.turn + step) % 4;
-    if (!g.passed[seat]) return seat;
+    const seat = (fromSeat + step) % 4;
+    if (g.activeBidders.includes(seat)) return seat;
   }
   return -1;
 }
 
-function advanceBidding(g) {
-  const passed = g.passed.filter(Boolean).length;
-  if (g.highBid === MAX_BID || (g.highBidder >= 0 && passed >= 3)) {
-    g.phase = 'chooseTrump';
-    g.turn = g.highBidder;
+function advanceBidding(g, actedSeat) {
+  if (g.highBid === MAX_BID || g.activeBidders.length <= 1) {
+    if (g.highBidder >= 0) {
+      g.phase = 'chooseTrump';
+      g.turn = g.highBidder;
+    }
     return;
   }
-  g.turn = nextBidder(g);
+  // Keep the auction heads-up. When someone passes, the next player clockwise
+  // takes the vacant seat; players who passed never return.
+  if (g.passed[actedSeat]) {
+    const next = [];
+    for (let step = 1; step <= 4; step++) {
+      const seat = (actedSeat + step) % 4;
+      if (!g.passed[seat] && !g.activeBidders.includes(seat)) { next.push(seat); break; }
+    }
+    if (next.length) g.activeBidders.push(next[0]);
+  }
+  if (g.activeBidders.length <= 1) {
+    if (g.highBidder >= 0) {
+      g.phase = 'chooseTrump';
+      g.turn = g.highBidder;
+    } else {
+      // The dealer is the final player when everyone else has passed and must open at 15.
+      g.turn = g.dealer;
+    }
+    return;
+  }
+  g.turn = nextActiveBidder(g, actedSeat);
 }
 
 function legalCards(g, seat) {
@@ -191,7 +213,7 @@ function applyAction(g, playerId, action) {
         g.highBidder = seat;
         g.log.push({ by: g.players[seat].name, card: `bids ${amt}`, kind: 'bid' });
       }
-      advanceBidding(g);
+      advanceBidding(g, seat);
       return ok();
     }
     case 'chooseTrump': {
@@ -286,6 +308,7 @@ function viewFor(g, playerId) {
     maxBid: MAX_BID,
     canPass: g.phase === 'bidding' && me === g.turn ? canPass(g) : false,
     passed: (g.passed || [false, false, false, false]).slice(),
+    activeBidders: (g.activeBidders || []).slice(),
     trumpSet: g.trumpSuit !== null,
     trumpSuit: knowsTrump ? g.trumpSuit : null,
     trumpRevealed: g.trumpRevealed,
