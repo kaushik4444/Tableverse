@@ -32,12 +32,14 @@
 .ludo-center .tri.blue{left:0;bottom:0;border-width:100% 0 0 100%;border-color:transparent transparent transparent #5794df}
 .ludo-center>span{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(10px,2vw,22px);color:#fff;text-shadow:0 1px 3px #555}
 .ludo-tokens{position:absolute;inset:0;z-index:5;pointer-events:none}
-.ludo-token{pointer-events:auto;position:absolute;transform:translate(-50%,-50%);width:5.5%;height:5.5%;min-width:10px;min-height:10px;padding:0;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 3px #0008;display:grid;place-items:center;cursor:default}
+.ludo-token{pointer-events:auto;position:absolute;transform:translate(calc(-50% + var(--stack-x,0%)),calc(-50% + var(--stack-y,0%)));width:5.5%;height:5.5%;min-width:10px;min-height:10px;padding:0;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 3px #0008;display:grid;place-items:center;cursor:default}
 .ludo-token span{width:45%;height:45%;border-radius:50%;background:#ffffff70}
 .ludo-token.red{background:#df3939}.ludo-token.yellow{background:#e9b92d}.ludo-token.green{background:#168b55}.ludo-token.blue{background:#286ec4}
 .ludo-token.in-yard{width:6%;height:6%}
 .ludo-token.legal{cursor:pointer;outline:3px solid #fff;box-shadow:0 0 0 5px #19a66b,0 0 15px 5px #19a66b99;animation:ludo-glow 1.2s ease-in-out infinite alternate;z-index:8}
-@keyframes ludo-glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.22)}}
+@keyframes ludo-glow{from{transform:translate(calc(-50% + var(--stack-x,0%)),calc(-50% + var(--stack-y,0%))) scale(1)}to{transform:translate(calc(-50% + var(--stack-x,0%)),calc(-50% + var(--stack-y,0%))) scale(1.22)}}
+.ludo-feedback{display:flex;align-items:center;justify-content:center;gap:8px;margin:-7px 0 13px;padding:8px 12px;border:1px solid var(--panel-line);border-radius:10px;background:var(--panel);font-size:12px;text-align:center;color:var(--text,var(--ink));}
+.ludo-feedback>span{font-size:14px;}
 .ludo-side{display:grid;gap:10px;min-width:0}
 .ludo-side h3{margin:2px 0;font-size:14px}
 .ludo-players{display:grid;gap:7px}
