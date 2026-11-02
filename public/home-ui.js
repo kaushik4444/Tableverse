@@ -66,50 +66,40 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   }
 
   const COMING_SOON = [
-    ['🐟', 'Go Fish', 'Ask, collect sets and try to make the most books.', 'Your build order'],
+    ['🐟', 'Go Fish', 'Ask, collect matching sets and make the most books.', 'Your build order'],
     ['🐍', 'Snakes and Ladders', 'Race to the finish and watch out for the snakes.', 'Your build order'],
-    ['🏠', 'Monopoly', 'Buy properties, trade with friends and build your empire.', 'Your build order'],
-    ['⛏️', 'Saboteur', 'Work together to find gold — unless you are the saboteur.', 'Your build order'],
-    ['🐂', '6 nimmt!', 'Play numbered cards and avoid collecting bullheads.', 'Your build order'],
-    ['🃏', 'UNO', 'Match colours and numbers; use action cards at the right moment.', 'Your build order'],
+    ['🏠', 'Property Rivals', 'Buy properties, trade smartly and build your empire.', 'Your build order'],
+    ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order'],
+    ['🐂', 'Bullhead Run', 'Play numbered cards and avoid collecting bullheads.', 'Your build order'],
+    ['🎨', 'Color Clash', 'Match colours and numbers, then play action cards wisely.', 'Your build order'],
     ['🚢', 'Sea Battle', 'Hide your fleet, call your shots and sink the opposing ships.', 'Your build order'],
-    ['🌾', 'CATAN — 4 players', 'Gather resources, trade and build settlements and roads.', 'Your build order'],
-    ['🌾', 'CATAN — 5–6 players', 'Expand the CATAN experience for larger groups.', 'Your build order'],
-    ['♥️', 'Hearts', 'A classic trick-taking game where avoiding points is the goal.', 'More ideas'],
-    ['♠️', 'Spades', 'Team up, bid your tricks and try to meet your contract.', 'More ideas'],
-    ['🔄', 'Crazy Eights', 'Match the suit or rank and be the first to empty your hand.', 'More ideas'],
-    ['🔴', 'Checkers', 'Jump, capture and crown your pieces in this classic duel.', 'More ideas'],
-    ['♟️', 'Chess', 'The timeless strategy game for two players.', 'More ideas'],
-    ['🟡', 'Connect Four', 'Connect four discs before your opponent does.', 'More ideas'],
-    ['🏰', 'Carcassonne', 'Build a shared landscape with cities, roads and fields.', 'More ideas'],
-    ['🚂', 'Ticket to Ride', 'Claim railway routes and connect destination cities.', 'More ideas'],
-    ['🕵️', 'Codenames', 'Give clever clues so your team finds the right words.', 'More ideas'],
-    ['🎭', 'Coup', 'Bluff, challenge and outwit your friends to stay in power.', 'More ideas'],
-    ['💌', 'Love Letter', 'Use deduction and a little luck to deliver your letter.', 'More ideas'],
-    ['🗡️', 'The Resistance / Avalon', 'Find the hidden traitors before they sabotage the mission.', 'More ideas'],
-    ['🎲', 'Yahtzee', 'Roll dice, choose combinations and chase the high score.', 'More ideas'],
-    ['👵', 'Old Maid', 'Pair up cards and avoid being left with the odd one out.', 'More ideas'],
-    ['🂡', 'Rummy', 'Make sets and runs, then be first to play all your cards.', 'More ideas'],
-    ['🃏', 'Euchre', 'A fast partnership trick-taking game for four players.', 'More ideas'],
+    ['🌾', 'Island Settlers — 4 players', 'Gather resources, trade and build settlements and roads.', 'Your build order'],
+    ['🌾', 'Island Settlers — 5–6 players', 'Bring the larger-group expansion to the island.', 'Your build order'],
+    ['🟡', 'Four in a Row', 'Connect four pieces before your opponent does.', 'Additional games'],
+    ['🕵️', 'Secret Clues', 'Give clever clues so your team finds the right words.', 'Additional games'],
+    ['❎', 'Tic-Tac-Toe', 'Take turns placing Xs and Os to make a line of three.', 'Additional games'],
   ];
   function comingSoonCards(items, start) {
     return items.map(([ico, name, description], index) => `<article class="soon-card">
       <span class="soon-number" aria-label="Roadmap position ${start + index}">${start + index}</span>
       <span class="soon-ico" aria-hidden="true">${ico}</span>
       <div class="soon-copy"><b>${esc(name)}</b><small>${esc(description)}</small></div>
-      <em class="soon-tag">Planned</em>
+      <span class="soon-tag">Planned</span>
     </article>`).join('');
   }
   function comingSoonHTML() {
     const requested = COMING_SOON.filter((item) => item[3] === 'Your build order');
-    const ideas = COMING_SOON.filter((item) => item[3] === 'More ideas');
+    const additional = COMING_SOON.filter((item) => item[3] === 'Additional games');
     return `<section class="home-section coming-roadmap" aria-label="Coming soon games">
-      <h2 class="section">Coming soon</h2>
-      <p class="soon-intro">The games on our roadmap, in planned development order. One game at a time — tested and polished before the next.</p>
-      <h3 class="soon-group-title">Your requested build order</h3>
+      <div class="soon-heading">
+        <div><h2 class="section">Coming soon</h2><p class="soon-intro">The next games planned for Tableverse, in development order.</p></div>
+        <span class="soon-count">12 planned</span>
+      </div>
+      <h3 class="soon-group-title">Development order</h3>
       <div class="soon-grid">${comingSoonCards(requested, 1)}</div>
-      <h3 class="soon-group-title soon-more-title">More games we'd love to bring to the table</h3>
-      <div class="soon-grid">${comingSoonCards(ideas, requested.length + 1)}</div>
+      <h3 class="soon-group-title soon-more-title">Also on the list</h3>
+      <div class="soon-grid">${comingSoonCards(additional, requested.length + 1)}</div>
+      <p class="soon-footnote">Titles are working names. Game rules will be implemented with original artwork and presentation.</p>
     </section>`;
   }
 
