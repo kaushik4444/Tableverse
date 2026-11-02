@@ -92,9 +92,9 @@ test('move: a 6 brings a token out; other dice need a token already out', async 
 test('capture: landing on an opponent on a non-safe square sends them home', async () => {
   const g = E.createGame(people(2), {}, mulberry32(1));
   readyAll(g);
-  // p0 token at abs 6, p1 token at abs 7. abs 7 is not safe.
+  // p0 token at abs 6, p1 token at abs 7. abs 7 is not safe. (Two players sit opposite: p1 enters at abs 26.)
   g.tokens[0] = [6, -1, -1, -1];
-  g.tokens[1] = [46, -1, -1, -1]; // abs (13+46)%52 = 7
+  g.tokens[1] = [33, -1, -1, -1]; // abs (26+33)%52 = 7
   g.phase = 'rolling';
   g.turn = 0;
   g.dice = null;
@@ -112,9 +112,9 @@ test('capture: landing on an opponent on a non-safe square sends them home', asy
 test('safe squares protect from capture', async () => {
   const g = E.createGame(people(2), {}, mulberry32(1));
   readyAll(g);
-  // abs 13 is p1's start and is a safe square. p0 rolls onto it.
+  // abs 13 is a start square (safe). p1 waits there; p0 rolls onto it.
   g.tokens[0] = [12, -1, -1, -1]; // abs 12
-  g.tokens[1] = [0, -1, -1, -1];  // p1 at abs 13 (safe)
+  g.tokens[1] = [39, -1, -1, -1]; // p1 at abs (26+39)%52 = 13 (safe)
   g.phase = 'rolling';
   g.turn = 0;
   g.dice = null;
@@ -124,35 +124,40 @@ test('safe squares protect from capture', async () => {
   assert.equal(g.dice, 1);
   must(g, 'p0', { type: 'move', token: 0 });
   assert.equal(g.tokens[0][0], 13);
-  assert.equal(g.tokens[1][0], 0, 'p1 token stays on a safe square');
+  assert.equal(g.tokens[1][0], 39, 'p1 token stays on a safe square');
 });
 
 test('home column: exact count needed to finish; overshoot is illegal', async () => {
   const g = E.createGame(people(2), {}, mulberry32(1));
   readyAll(g);
-  // three tokens already home, the last one is one step before the home column
-  g.tokens[0] = [58, 58, 58, 51];
+  // three tokens already home, the last one is on its final ring square (position 50)
+  g.tokens[0] = [56, 56, 56, 50];
   g.phase = 'rolling';
   g.turn = 0;
   g.dice = null;
   g.sixes = 0;
-  g.rng = rollOne; // dice 1 -> into home column at 52
+  g.rng = rollOne; // dice 1 -> into the home column at 51
   must(g, 'p0', { type: 'roll' });
   assert.equal(g.dice, 1);
   must(g, 'p0', { type: 'move', token: 3 });
-  assert.equal(g.tokens[0][3], 52, 'into the home column');
+  assert.equal(g.tokens[0][3], 51, 'into the home column');
 
   // end the turn so p0 rolls again
   g.turn = 0;
   g.phase = 'rolling';
   g.dice = null;
   g.sixes = 0;
-  // roll exactly 6 to finish
+  // a 6 would overshoot (51 + 6 = 57): exact count needed, so the roll passes the turn
   g.rng = alwaysSix;
   must(g, 'p0', { type: 'roll' });
-  assert.equal(g.dice, 6);
+  assert.equal(g.turn, 1, 'overshoot: no legal move, turn passes');
+  assert.equal(g.tokens[0][3], 51);
+  g.turn = 0; g.phase = 'rolling'; g.dice = null; g.sixes = 0;
+  g.rng = () => 0.7; // dice 5: exactly home
+  must(g, 'p0', { type: 'roll' });
+  assert.equal(g.dice, 5);
   must(g, 'p0', { type: 'move', token: 3 });
-  assert.equal(g.tokens[0][3], 58, 'finished by exact count');
+  assert.equal(g.tokens[0][3], 56, 'finished by exact count');
   assert.ok(g.finishedOrder.includes(0));
   assert.equal(g.winner, 0);
   assert.equal(g.phase, 'gameOver');
@@ -191,7 +196,7 @@ test('finished players are skipped, including when finishing on a six', async ()
   const g = E.createGame(people(3), {}, mulberry32(1));
   readyAll(g);
   // p0 has finished; p2 completes a non-six move. Turn rotation must skip p0.
-  g.tokens[0] = [58, 58, 58, 58];
+  g.tokens[0] = [56, 56, 56, 56];
   g.tokens[2] = [0, -1, -1, -1];
   g.finishedOrder = [0];
   g.phase = 'moving';
@@ -205,7 +210,7 @@ test('finished players are skipped, including when finishing on a six', async ()
   // A player who finishes all four tokens on a six must not receive the bonus roll.
   const h = E.createGame(people(3), {}, mulberry32(2));
   readyAll(h);
-  h.tokens[0] = [58, 58, 58, 52];
+  h.tokens[0] = [56, 56, 56, 50];
   h.phase = 'moving';
   h.turn = 0;
   h.dice = 6;
@@ -219,8 +224,8 @@ test('finished players are skipped, including when finishing on a six', async ()
 test('game over: no more actions allowed', async () => {
   const g = E.createGame(people(2), {}, mulberry32(1));
   readyAll(g);
-  g.tokens[0] = [58, 58, 58, 58];
-  g.tokens[1] = [51, -1, -1, -1];
+  g.tokens[0] = [56, 56, 56, 56];
+  g.tokens[1] = [50, -1, -1, -1];
   g.phase = 'gameOver';
   g.winner = 0;
   assert.ok(!E.applyAction(g, 'p0', { type: 'roll' }).ok);
@@ -252,15 +257,15 @@ test('viewFor: hand mirrors own tokens, myTurn/canRoll/canMove flags correct', a
 test('viewFor exposes only the current player legal token indexes', async () => {
   const g = E.createGame(people(2), {}, mulberry32(1));
   readyAll(g);
-  g.tokens[0] = [-1, 0, 52, 58];
+  g.tokens[0] = [-1, 0, 51, 56];
   g.phase = 'moving';
   g.turn = 0;
   g.dice = 6;
   const own = E.viewFor(g, 'p0');
-  assert.deepEqual(own.legalTokens, [0, 1, 2], 'yard, track and home-column tokens can move on a six');
+  assert.deepEqual(own.legalTokens, [0, 1], 'a six brings a token out or moves one on; the home-column token would overshoot');
   assert.deepEqual(E.viewFor(g, 'p1').legalTokens, [], 'opponents never receive selectable tokens');
-  g.dice = 1;
-  assert.deepEqual(E.viewFor(g, 'p0').legalTokens, [1, 2], 'home-column token is selectable when it can move');
+  g.dice = 5;
+  assert.deepEqual(E.viewFor(g, 'p0').legalTokens, [1, 2], 'home-column token is selectable when it can finish by exact count');
 });
 
 test('viewFor exposes each player ready status', async () => {
@@ -305,6 +310,58 @@ test('renderer exposes clickable own yard, track and home tokens only when legal
   assert.ok(root.innerHTML.includes('Move home-column token 3'));
   assert.ok(!root.innerHTML.includes('tok:3'), 'finished tokens cannot be selected');
   assert.ok(!root.innerHTML.includes('tok:4'), 'opponent tokens cannot be selected');
+});
+
+test('geometry: a lap is 51 ring squares, then a 5-square home column, then home (56)', async () => {
+  assert.equal(E.LAP, 51); assert.equal(E.HOME_COL, 5); assert.equal(E.FINISHED, 56);
+  const g = E.createGame(people(2), {}, mulberry32(1));
+  assert.equal(E.newPosFor(g, 0, 50, 1), 51, 'the ring square before the turn leads into the home column');
+  assert.equal(E.newPosFor(g, 0, 50, 6), 56, 'exactly home from the last ring square');
+  assert.equal(E.newPosFor(g, 0, 50, 7), null, 'overshoot');
+  assert.equal(E.newPosFor(g, 0, 55, 1), 56);
+  assert.equal(E.newPosFor(g, 0, 55, 2), null);
+  assert.equal(E.newPosFor(g, 0, 56, 1), null, 'a finished token never moves');
+});
+
+test('seats: two players sit opposite each other, colours follow the board clockwise', async () => {
+  const two = E.createGame(people(2), {}, mulberry32(1));
+  assert.deepEqual(two.players.map((p) => p.seat), [0, 2]);
+  assert.deepEqual(two.players.map((p) => p.color), ['🔴', '🟡']);
+  const four = E.createGame(people(4), {}, mulberry32(1));
+  assert.deepEqual(four.players.map((p) => p.color), ['🔴', '🟢', '🟡', '🔵']);
+  assert.deepEqual(E.viewFor(four, 'p1').players.map((p) => p.seat), [0, 1, 2, 3]);
+  assert.equal(E.absPos(two, 1, 0), 26, 'the second player of a two-player game enters at the opposite corner');
+});
+
+test('bonus rolls: captures and getting home earn another roll only in the generous variant', async () => {
+  for (const [mode, expectRoll] of [['classic', false], ['generous', true]]) {
+    const g = E.createGame(people(2), { bonusRolls: mode }, mulberry32(1));
+    readyAll(g);
+    g.tokens[0] = [6, -1, -1, -1]; g.tokens[1] = [33, -1, -1, -1]; // p0 captures on abs 7
+    g.phase = 'moving'; g.turn = 0; g.dice = 1; g.sixes = 0;
+    must(g, 'p0', { type: 'move', token: 0 });
+    assert.equal(g.tokens[1][0], -1, 'captured');
+    assert.deepEqual(g.lastMove.captured, [{ player: 1, token: 0 }], 'the last move records what was captured');
+    assert.equal(g.turn === 0 && g.phase === 'rolling', expectRoll, `${mode}: bonus roll after a capture`);
+    const h = E.createGame(people(2), { bonusRolls: mode }, mulberry32(1));
+    readyAll(h);
+    h.tokens[0] = [51, -1, -1, -1];
+    h.phase = 'moving'; h.turn = 0; h.dice = 5; h.sixes = 0;
+    must(h, 'p0', { type: 'move', token: 0 });
+    assert.equal(h.turn === 0 && h.phase === 'rolling', expectRoll, `${mode}: bonus roll after getting home`);
+  }
+});
+
+test('bot: finishes a token first, then captures, then brings a token out, and never makes an illegal move', async () => {
+  const g = E.createGame(people(2), {}, mulberry32(1));
+  readyAll(g);
+  g.tokens[0] = [51, 6, -1, -1]; g.tokens[1] = [-1, -1, -1, -1];
+  g.phase = 'moving'; g.turn = 0; g.dice = 5;
+  assert.deepEqual(E.botAction(g, 'p0'), { type: 'move', token: 0 }, 'getting home beats everything');
+  g.tokens[0] = [6, -1, -1, -1]; g.tokens[1] = [33, -1, -1, -1]; g.dice = 1;
+  assert.deepEqual(E.botAction(g, 'p0'), { type: 'move', token: 0 }, 'captures when it can');
+  g.tokens[0] = [10, -1, -1, -1]; g.tokens[1] = [-1, -1, -1, -1]; g.dice = 6;
+  assert.deepEqual(E.botAction(g, 'p0'), { type: 'move', token: 1 }, 'a six brings a new token out');
 });
 
 test('plugin: create/view/act/awaiting/botAction/results wiring', async () => {

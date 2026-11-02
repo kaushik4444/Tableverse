@@ -10,8 +10,18 @@ module.exports = {
   tagline: 'Race your four tokens home. Roll a six to get out, send opponents back to start, and finish by exact count.',
   seats: { min: 2, max: 4, default: 4 },
   stats: { kind: 'none', bestLabel: 'Best finish', bestOf: (row) => row.score - row.seats - 1, formatBest: (value) => String(-value) },
-  seatLabel: (i) => ['Red', 'Yellow', 'Green', 'Blue'][i],
+  seatLabel: (i, seats) => (seats === 2 ? ['Red', 'Yellow'] : seats === 3 ? ['Red', 'Green', 'Yellow'] : ['Red', 'Green', 'Yellow', 'Blue'])[i],
   options: [
+    {
+      key: 'bonusRolls',
+      type: 'select',
+      label: 'Bonus rolls',
+      default: 'classic',
+      choices: [
+        { value: 'classic', label: 'Sixes only', desc: 'A six earns another roll. Three sixes in a row end your turn.' },
+        { value: 'generous', label: 'Sixes, captures and home', desc: 'Capturing a token or getting one home also earns another roll.' },
+      ],
+    },
     {
       key: 'timeLimit',
       type: 'select',
@@ -30,7 +40,7 @@ module.exports = {
   rules: [
     '2-4 players, four tokens each. Everyone starts with all tokens in their yard.',
     'Roll a six to bring a token out onto your starting square. A six also earns another roll.',
-    'Move your tokens clockwise around the board by the number rolled. You must finish your home column by exact count.',
+    'Move your tokens clockwise around the board by the number rolled. After a full lap your token turns into its own coloured home column and must reach the centre by exact count.',
     'Land on an opponent\'s token on a non-safe square and send it back to its yard. Safe squares (the four starts and four marked spots) protect from capture.',
     'Three sixes in a row end your turn. First player to get all four tokens home wins.',
   ],
