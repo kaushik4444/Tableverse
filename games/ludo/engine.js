@@ -153,9 +153,17 @@ function applyAction(g, playerId, action) {
     case 'roll': {
       if (g.phase !== 'rolling' || g.turn !== who) return { ok: false, error: 'Not your turn to roll' };
       const d = Math.floor(g.rng() * 6) + 1;
+      // A third consecutive six forfeits that roll and ends the turn immediately.
+      // Do not let the player move on the third six.
+      if (d === 6 && g.sixes === 2) {
+        g.dice = null;
+        g.sixes = 0;
+        endTurn(g);
+        bump(g);
+        return { ok: true };
+      }
       g.dice = d;
       g.sixes = d === 6 ? g.sixes + 1 : 0;
-      if (g.sixes >= 3) g.sixes = 0; // three sixes: the turn ends after this move
       const moves = legalMoves(g, who);
       if (moves.length === 0) {
         g.dice = null;
@@ -232,6 +240,9 @@ function viewFor(g, playerId) {
     myTurn: !over && me >= 0 && g.turn === me,
     canRoll: !over && me >= 0 && g.phase === 'rolling' && g.turn === me,
     canMove: !over && me >= 0 && g.phase === 'moving' && g.turn === me,
+    legalTokens: !over && me >= 0 && g.phase === 'moving' && g.turn === me
+      ? legalMoves(g, me).map((move) => move.token)
+      : [],
     winner: g.winner,
     finishedOrder: g.finishedOrder.slice(),
     event: g.event,
