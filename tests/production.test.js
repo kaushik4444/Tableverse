@@ -146,14 +146,24 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     await srv.close();
   });
 
-  await test('/readyz answers, and responses carry HSTS only in production', async () => {
+  await test('health, readiness, static and error responses carry security headers; HSTS is production-only', async () => {
     const srv = await start(base);
     const r = await fetch(`http://127.0.0.1:${srv.port}/readyz`);
     assert.equal(r.status, 200);
-    assert.equal((await fetch(`http://127.0.0.1:${srv.port}/`)).headers.get('strict-transport-security'), null);
+    const home = await fetch(`http://127.0.0.1:${srv.port}/`);
+    const health = await fetch(`http://127.0.0.1:${srv.port}/healthz`);
+    const missing = await fetch(`http://127.0.0.1:${srv.port}/missing`);
+    for (const response of [r, home, health, missing]) {
+      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+      assert.match(response.headers.get('content-security-policy') || '', /object-src 'none'/);
+      assert.match(response.headers.get('content-security-policy') || '', /base-uri 'self'/);
+      assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
+      assert.equal(response.headers.get('strict-transport-security'), null);
+    }
     await srv.close();
     const prod = await start({ ...base, env: { NODE_ENV: 'production' } });
-    assert.match((await fetch(`http://127.0.0.1:${prod.port}/`)).headers.get('strict-transport-security'), /max-age/);
+    const secure = await fetch(`http://127.0.0.1:${prod.port}/`);
+    assert.match(secure.headers.get('strict-transport-security'), /max-age/);
     await prod.close();
   });
 
