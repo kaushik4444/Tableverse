@@ -48,8 +48,8 @@
     const tracks = []; // player's tokens on the track, keyed by absolute square -> tokens
     const at = {};
     for (let i = 0; i < v.n; i++) {
-      for (let t = 0; t < v.tokens[i].length; t++) {
-        const p = v.tokens[i][t];
+      for (let t = 0; t < v.players[i].tokens.length; t++) {
+        const p = v.players[i].tokens[t];
         const sq = absSquare(i, p);
         if (sq === null) continue;
         (at[sq] = at[sq] || []).push({ i, t, p, color: v.players[i].color });
@@ -72,9 +72,9 @@
     const yards = [];
     const cols = [];
     for (let i = 0; i < v.n; i++) {
-      const yardTokens = v.tokens[i].map((p, t) => ({ p, t })).filter((x) => x.p === -1);
-      const homeTokens = v.tokens[i].map((p, t) => ({ p, t })).filter((x) => x.p >= 52 && x.p < 58);
-      const doneTokens = v.tokens[i].map((p, t) => ({ p, t })).filter((x) => x.p === 58);
+      const yardTokens = v.players[i].tokens.map((p, t) => ({ p, t })).filter((x) => x.p === -1);
+      const homeTokens = v.players[i].tokens.map((p, t) => ({ p, t })).filter((x) => x.p >= 52 && x.p < 58);
+      const doneTokens = v.players[i].tokens.map((p, t) => ({ p, t })).filter((x) => x.p === 58);
       const ownTurn = i === v.me && v.canMove;
       yards.push(`<div class="ly"><div class="ly-color">${v.players[i].color}</div><div class="ly-count" title="${esc(v.players[i].name)}'s yard">${yardTokens.map(({t}) => {
         const selectable = ownTurn && (v.legalTokens || []).includes(t);
