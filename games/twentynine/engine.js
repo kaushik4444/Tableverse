@@ -111,11 +111,16 @@ function advanceBidding(g, actedSeat) {
   }
   // Keep the auction heads-up. When someone passes, the next player clockwise
   // takes the vacant seat; players who passed never return.
+  let incomingBidder = -1;
   if (g.passed[actedSeat]) {
     g.activeBidders = g.activeBidders.filter((seat) => seat !== actedSeat);
     for (let step = 1; step <= 4; step++) {
       const seat = (actedSeat + step) % 4;
-      if (!g.passed[seat] && !g.activeBidders.includes(seat)) { g.activeBidders.push(seat); break; }
+      if (!g.passed[seat] && !g.activeBidders.includes(seat)) {
+        g.activeBidders.push(seat);
+        incomingBidder = seat;
+        break;
+      }
     }
   }
   if (g.activeBidders.length <= 1) {
@@ -128,7 +133,8 @@ function advanceBidding(g, actedSeat) {
     }
     return;
   }
-  g.turn = nextActiveBidder(g, actedSeat);
+  // The replacement challenger responds to the incumbent's standing bid first.
+  g.turn = incomingBidder >= 0 ? incomingBidder : nextActiveBidder(g, actedSeat);
 }
 
 function legalCards(g, seat) {
