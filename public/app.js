@@ -1268,7 +1268,7 @@
     ['🔒', 'Private tables and invitations', 'New tables are private: invite friends from the lobby and they join once they accept. Make a table public to share its code and link.'],
     ['👑', 'Host tools', 'Make another player the host, or remove a player, spectator or bot from the lobby.'],
     ['🪪', 'Player cards', 'Tap anyone at a table to see their handle, connection quality and record, and to add them as a friend or mute them.'],
-    ['🖼️', 'Profile picture', 'Change your picture from your profile or the lobby; it is saved to your account.'],
+    ['🖼️', 'Profile avatar', 'Choose from the preset avatars in your profile or the lobby; your selection is saved to your account.'],
     ['📱', 'One device at a time', 'Signing in on another device signs this one out, so your account is never in two places at once.'],
     ['👤', 'Profiles and history', 'Your stats and every finished game, plus account deletion from your profile.'],
   ];
