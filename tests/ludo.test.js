@@ -8,6 +8,7 @@ const vm = require('node:vm');
 const E = require('../games/ludo/engine');
 const plugin = require('../games/ludo');
 const { buildMatchRecord } = require('../db/matchRecord');
+const { computeProfile } = require('../db/stats');
 
 let passed = 0;
 async function test(name, fn) {
@@ -356,7 +357,19 @@ test('playOut: full bot-only game finishes for 2, 3 and 4 players', async () => 
 
 console.log('match record');
 (async () => {
-  await test('buildMatchRecord: ludo produces one record with all seats and scores', async () => {
+  await 
+test('profile stats rank first place as the best Ludo finish', async () => {
+  const rows = [
+    { gameId: 'ludo', isWinner: false, score: 1, best: 3, finishedAt: new Date() },
+    { gameId: 'ludo', isWinner: true, score: 4, best: 1, finishedAt: new Date() },
+    { gameId: 'ludo', isWinner: false, score: 2, best: 2, finishedAt: new Date() },
+  ];
+  const stats = computeProfile(rows, { metrics: (id) => id === 'ludo' ? plugin.stats : null });
+  assert.equal(stats.perGame[0].best, -1);
+  assert.equal(stats.perGame[0].bestText, '1', 'first place is shown as best finish');
+});
+
+test('buildMatchRecord: ludo produces one record with all seats and scores', async () => {
     const players = people(4);
     const g = plugin.create(players, {}, mulberry32(21));
     while (!g.isOver()) {
