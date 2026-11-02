@@ -108,6 +108,7 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     const soon = await page.textContent('.soon-grid');
     for (const n of ['Go Fish', 'Snakes and Ladders', 'Monopoly', 'Saboteur', '6 nimmt!', 'UNO', 'Sea Battle', 'CATAN — 4 players', 'CATAN — 5–6 players', 'Hearts', 'Spades', 'Connect Four', 'Codenames', 'Ludo']) assert.ok(soon.includes(n), `missing roadmap game: ${n}`);
     assert.equal(await page.$('.soon-card button'), null, 'coming-soon cards are not playable');
+    assert.equal(await page.locator('.soon-card').count(), 12, 'only the requested twelve games are listed');
     await page.click('.friends-strip [data-act="openFriendsPage"]');
     await page.waitForSelector('#friends-panel');
     assert.equal(new URL(page.url()).hash, '#friends');
