@@ -137,17 +137,21 @@
   // Keep actionable guidance tied to the current game state, not the last event.
   // The engine intentionally retains its last event, so eventText() alone can become stale.
   function statusGuidance(v) {
+    if (v.phase === 'gameOver') {
+      if (v.me < 0) return v.won ? 'The team won!' : 'The team ran out of lives';
+      return v.won ? 'You did it!' : 'Out of lives';
+    }
     if (v.me < 0) return 'Watching the team play';
     if (v.phase === 'playing') {
-      if (v.waitingAfterStar) return v.starReady.includes(v.me) ? 'Waiting for everyone to continue' : 'Confirm when ready to continue';
-      if (v.starPending && !v.players[v.me].voted) return 'A throwing star has been proposed. Agree or cancel using the controls below.';
+      if (v.waitingAfterStar) return !v.hand.length || v.starReady.includes(v.me) ? 'Waiting for everyone to continue' : 'Confirm when ready to continue';
       if (!v.hand.length) return 'You have no cards left. Wait for the others.';
+      if (v.starPending && !v.players[v.me].voted) return 'A throwing star has been proposed. Agree or cancel using the controls below.';
       return 'Your lowest card is ready. Play when the group is ready.';
     }
     if (v.phase === 'ready' || v.phase === 'levelEnd') {
       return v.players[v.me].ready ? 'Waiting for everyone to get ready' : 'Get ready for the next level';
     }
-    return v.won ? 'Game complete — you won!' : 'Game complete';
+    return 'Game in progress';
   }
 
   function render(root, v, ctx) {
