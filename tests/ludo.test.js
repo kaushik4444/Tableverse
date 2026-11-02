@@ -154,22 +154,30 @@ test('home column: exact count needed to finish; overshoot is illegal', async ()
   assert.equal(g.phase, 'gameOver');
 });
 
-test('three sixes end the turn after the third move', async () => {
+test('third consecutive six forfeits the roll and ends the turn immediately', async () => {
   const g = E.createGame(people(2), {}, mulberry32(1));
   readyAll(g);
-  g.tokens[0] = [0, -1, -1, -1]; // token already out at abs 0
+  g.tokens[0] = [0, -1, -1, -1];
   g.phase = 'rolling';
   g.turn = 0;
   g.dice = null;
   g.sixes = 0;
   g.rng = alwaysSix;
-  for (const seq of [1, 2, 3]) {
+  for (let seq = 1; seq <= 2; seq++) {
     must(g, 'p0', { type: 'roll' });
     assert.equal(g.dice, 6);
     must(g, 'p0', { type: 'move', token: 0 });
-    assert.equal(g.tokens[0][0], 6 * seq, 'moved ' + 6 * seq + ' squares');
+    assert.equal(g.tokens[0][0], 6 * seq);
+    assert.equal(g.phase, 'rolling');
+    assert.equal(g.turn, 0);
   }
-  assert.equal(g.turn, 1, 'after moving on the third six, the turn passes');
+  const beforeThird = g.tokens[0][0];
+  must(g, 'p0', { type: 'roll' });
+  assert.equal(g.turn, 1, 'third six forfeits the roll and passes the turn');
+  assert.equal(g.phase, 'rolling');
+  assert.equal(g.dice, null);
+  assert.equal(g.tokens[0][0], beforeThird, 'no token moves on the third six');
+  assert.equal(g.sixes, 0);
 });
 
 test('game over: no more actions allowed', async () => {
@@ -201,6 +209,21 @@ test('viewFor: hand mirrors own tokens, myTurn/canRoll/canMove flags correct', a
   assert.equal(E.viewFor(g, 'p1').myTurn, true);
   assert.equal(E.viewFor(g, 'p1').canRoll, true);
   assert.equal(E.viewFor(g, 'p1').dice, null);
+});
+
+
+test('viewFor exposes only the current player legal token indexes', async () => {
+  const g = E.createGame(people(2), {}, mulberry32(1));
+  readyAll(g);
+  g.tokens[0] = [-1, 0, 52, 58];
+  g.phase = 'moving';
+  g.turn = 0;
+  g.dice = 6;
+  const own = E.viewFor(g, 'p0');
+  assert.deepEqual(own.legalTokens, [0, 1], 'yard and track tokens can move on a six');
+  assert.deepEqual(E.viewFor(g, 'p1').legalTokens, [], 'opponents never receive selectable tokens');
+  g.dice = 1;
+  assert.deepEqual(E.viewFor(g, 'p0').legalTokens, [1, 2], 'home-column token is selectable when it can move');
 });
 
 test('viewFor exposes each player ready status', async () => {
