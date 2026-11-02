@@ -1285,13 +1285,15 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-profiles';
+  const WHATS_NEW_VERSION = '2026-11-friends';
   const WHATS_NEW = [
-    ['👤', 'Profiles and history', 'Your profile page shows your stats and every finished game, with pages. You can change your display name there.'],
-    ['🗑️', 'Delete your account', 'From your profile, with your password. Your finished games stay in other players\u2019 history as \u201cDeleted player\u201d.'],
-    ['🕘', 'Recent tables follow you', 'They are saved on your account now, so any device shows the same list.'],
-    ['📜', 'Clearer game logs', 'Every log line now says who did what.'],
-    ['🧪', 'Friend testing is open', 'Sign up and play in the browser on phone or desktop.'],
+    ['🤝', 'Friends', 'Search by username, send and answer friend requests, and see who is online or which game they are playing right now.'],
+    ['🔒', 'Private tables and invitations', 'New tables are private: invite friends from the lobby and they join once they accept. Make a table public to share its code and link.'],
+    ['👑', 'Host tools', 'Make another player the host, or remove a player, spectator or bot from the lobby.'],
+    ['🪪', 'Player cards', 'Tap anyone at a table to see their handle, connection quality and record, and to add them as a friend or mute them.'],
+    ['🖼️', 'Profile picture', 'Change your picture from your profile or the lobby; it is saved to your account.'],
+    ['📱', 'One device at a time', 'Signing in on another device signs this one out, so your account is never in two places at once.'],
+    ['👤', 'Profiles and history', 'Your stats and every finished game, plus account deletion from your profile.'],
   ];
   const hasNewNews = () => S.wnSeen !== WHATS_NEW_VERSION;
 
@@ -1486,12 +1488,13 @@
       <section class="home-hero">
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
-          <p>${name ? 'Host a table below, or join a friend with their code.' : 'Free card games in your browser. Bots fill any empty seat.'}</p>
+          <p>${name ? 'Host a table below, or join a friend\u2019s public table with its code. Private tables open with an invitation.' : 'Free card games in your browser. Bots fill any empty seat.'}</p>
           ${S.guest ? '<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button></div>' : ''}
         </div>
         <form class="join-form" id="joinForm" aria-label="Join a table">
           <label class="label" for="code">Have a table code?</label>
           <div class="join-row"><input id="code" type="text" maxlength="6" placeholder="ABCDEF" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc(S.draftCode)}"><button class="btn" type="submit">Join</button></div>
+          <small class="hint">A private table needs an invitation from its host: see Friends below.</small>
         </form>
       </section>
       ${rejoinBannerHTML()}
