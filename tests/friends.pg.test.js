@@ -119,15 +119,15 @@ const PW = 'TestPass123!';
         await breakFriendship(a, c); // Keep this pair unrelated for the negative invitation check.
         const expiry = () => new Date(Date.now() + 3600000).toISOString();
         assert.equal((await a.browser.post('/api/me/table-invitations', { username: c.username, gameId: 'wizard', roomCode: privateRoomCode, expiresAt: expiry() })).status, 404);
-        assert.equal((await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'saboteur', roomCode: 'ABCDEF', expiresAt: expiry() })).status, 400);
+        assert.equal((await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'saboteur', roomCode: privateRoomCode, expiresAt: expiry() })).status, 400);
         assert.equal((await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: 'A B', expiresAt: expiry() })).status, 400);
-        const created = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: 'ABCDEF', expiresAt: expiry() });
+        const created = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: privateRoomCode, expiresAt: expiry() });
         assert.equal(created.status, 201, JSON.stringify(created.json));
         const id = created.json.invitation.id;
         assert.equal((await c.browser.post('/api/me/table-invitations/accept', { invitationId: id })).status, 404);
         assert.equal((await b.browser.post('/api/me/table-invitations/accept', { invitationId: id })).status, 200);
         assert.equal((await b.browser.post('/api/me/table-invitations/accept', { invitationId: id })).status, 404);
-        const revoke = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'poker', roomCode: 'GHIJKL', expiresAt: expiry() });
+        const revoke = await a.browser.post('/api/me/table-invitations', { username: b.username, gameId: 'wizard', roomCode: privateRoomCode, expiresAt: expiry() });
         assert.equal((await b.browser.post('/api/me/table-invitations/revoke', { invitationId: revoke.json.invitation.id })).status, 404);
         assert.equal((await a.browser.post('/api/me/table-invitations/revoke', { invitationId: revoke.json.invitation.id })).status, 200);
         const expired = await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, created_at, expires_at) VALUES ($1, $2, 'wizard', 'MNOPQR', NOW() - INTERVAL '2 minutes', NOW() - INTERVAL '1 minute') RETURNING id", [a.id, b.id]);
@@ -176,7 +176,7 @@ const PW = 'TestPass123!';
         const accepted = await b.browser.post('/api/me/table-invitations/accept', { invitationId: created.json.invitation.id });
         assert.equal(accepted.status, 200, JSON.stringify(accepted.json));
         assert.equal((await a.browser.post('/api/me/friends/remove', { friendId: b.id })).status, 200);
-        assert.equal((await q('SELECT status FROM private_table_invitations WHERE id=$1', [created.json.invitation.id]))[0].status, 'accepted');
+        assert.equal((await q('SELECT status FROM private_table_invitations WHERE id=$1', [created.json.invitation.id]))[0].status, 'revoked');
       });
 
       await test('constraints reject malformed records and account deletion cascades all social rows', async () => {
