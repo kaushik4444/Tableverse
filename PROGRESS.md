@@ -67,11 +67,11 @@ Each stage is one commit; resume from the first stage that is not marked done.
   - **NOT run here**: `npm run test:pg` and every `*.pg.test.js`, plus spectators/ping/stats/private-tables/production/smoke suites that need the `ws`/`pg`/argon2 packages: this sandbox cannot install them (npm registry blocked). They must be run on a machine with a disposable test database. No server-level regression test for the spectator-rematch fix was run.
 - **7.4+ (next)**: more UX/UI polish (see "Next step").
 
-## Remaining Stage 6 work
+## Current review status
 
-- **S6.2 — Friends System:** Complete any remaining friend-search/request/list/remove UX and authorization behavior without duplicating the existing backend. Audit actual shipped behavior and agree the exact scope before changes.
-- **S6.3–S6.5 — Private tables:** Stage 6.1 currently stores invitation metadata and lifecycle only; it does not authorize private-room joins, hide private rooms from public discovery, provide invite UX/share links, or handle related room lifecycle/presence. Define each remaining stage from the project roadmap, then implement in order with API, WebSocket, UI, and race/security tests.
-- Once scope is grounded, deliver each stage with focused and full test suites, accurate progress notes, and separate commits/pushes to this branch. Never merge to `main`; stop after Stage 6 for the requested review.
+Stage 6 social features and the Stage 7 follow-ups documented above are implemented on this branch. The historical “Remaining Stage 6 work” checklist has been retired because it no longer reflects the code.
 
-## Next step
-Stage 7.4c onward: UX/UI refactor of `public/app.js` (one ~1800-line IIFE): remove duplicated friend/avatar markup helpers, split rendering helpers into small named functions, keep behavior identical and re-run `node tests/ui/social-ui.js` and `node tests/ui/wizard-layout.js` (use `NODE_PATH=$(npm root -g)` for Playwright) after every change. Then run `npm run test:pg` against a disposable PostgreSQL before merging.
+- The latest migration is `008_friend_presence.sql`; the migration concurrency test must assert migrations 001–008.
+- A full PostgreSQL run is still required on a machine with a disposable `TEST_DATABASE_URL`. Do not treat skipped PostgreSQL suites as passing.
+- Presence is process-local; friends connected to another server instance may appear offline.
+- Keep this branch separate. Review and merge decisions belong to the repository owner.
