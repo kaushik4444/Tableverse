@@ -224,6 +224,7 @@ function viewFor(g, playerId) {
     game: 'ludo',
     me,
     n: g.n,
+    tokens: g.tokens.map((tokens) => tokens.slice()),
     players: g.players.map((p, i) => ({
       id: p.id,
       name: p.name,
