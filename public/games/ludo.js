@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null };
+  const ui = { ctx: null, latest: null, root: null };
   const COLORS = ['red', 'yellow', 'green', 'blue'];
   const HEX = { red: '#e84b4b', yellow: '#f2c94c', green: '#28a66a', blue: '#4388df' };
   const EMOJI = { red: '🔴', yellow: '🟡', green: '🟢', blue: '🔵' };
@@ -99,12 +99,12 @@
     return '';
   }
   function render(root,v,ctx) {
-    ui.latest=v; ui.ctx=ctx;
+    ui.latest=v; ui.ctx=ctx; ui.root=root;
     const lastAction = (v.log || []).slice(-1)[0];
-    const feedback = lastAction ? `<div class="ludo-feedback" role="status"><span>${lastAction.kind === 'capture' ? '⚔️' : lastAction.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
+    const feedback = lastAction ? `<div class="ludo-feedback"><span>${lastAction.kind === 'capture' ? '⚔️' : lastAction.kind === 'miss' ? '↪️' : '🏁'}</span><b>${esc(lastAction.by)} ${esc(lastAction.card)}</b></div>` : '';
     root.innerHTML=`<section class="ludo ${v.phase==='gameOver'?'over':''}">
       <header class="ludo-header"><div><span class="ludo-kicker">TABLEVERSE CLASSICS</span><h2>🎲 Ludo</h2><p>Race your tokens home. First to finish all four wins.</p></div><nav>${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lt="rules">Rules</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></nav></header>
-      <div class="ludo-status ${v.myTurn?'mine':''}" role="status" aria-live="polite" aria-atomic="true"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
+      <div class="ludo-status ${v.myTurn?'mine':''}"><span class="ludo-status-pulse"></span><b>${esc(status(v))}</b>${v.phase==='moving'&&v.canMove?'<small>Tap one of the glowing tokens on the board</small>':''}</div>
       ${feedback}
       <div class="ludo-layout"><main class="ludo-play-area">${board(v)}</main><aside class="ludo-side"><h3>Players</h3>${players(v)}${dice(v)}<div class="ludo-hint"><b>How to play</b><span>Roll a 6 to leave your yard. Land on opponents to send them home. Reach the centre with an exact roll.</span></div></aside></div>
       ${controls(v,ctx)}
@@ -112,10 +112,32 @@
     root.onclick=onClick;
   }
   function onClick(e) {
+    const clickedToken = e.target.closest('.ludo-token');
     const el=e.target.closest('[data-lt]');
     if(!el)return;
     const v=ui.latest,ctx=ui.ctx;
-    if(!v||!ctx||el.disabled)return;
+    if(!v||!ctx)return;
+    // Expanded touch halos can overlap on a small board. Resolve a token tap to the
+    // nearest selectable token centre, not whichever overlapping button painted last.
+    if (clickedToken) {
+      const legal = [...(ui.root?.querySelectorAll('.ludo-token.legal[data-lt]') || [])];
+      if (legal.length) {
+        const nearest = legal.reduce((best, token) => {
+          const r = token.getBoundingClientRect();
+          const d = (r.left + r.width / 2 - e.clientX) ** 2 + (r.top + r.height / 2 - e.clientY) ** 2;
+          return !best || d < best.distance ? { token, distance: d } : best;
+        }, null);
+        if (nearest) {
+          const tokenEl = nearest.token;
+          if (!tokenEl.disabled) {
+            const token = Number(tokenEl.dataset.lt.slice(4));
+            if (Number.isInteger(token) && v.canMove && (v.legalTokens || []).includes(token)) ctx.act({ type: 'move', token });
+          }
+          return;
+        }
+      }
+    }
+    if(el.disabled)return;
     const a=el.dataset.lt;
     if(a==='roll')ctx.act({type:'roll'});
     else if(a==='ready')ctx.act({type:'ready'});
