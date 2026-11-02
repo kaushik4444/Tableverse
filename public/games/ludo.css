@@ -120,7 +120,7 @@
 .ludo-token span { width:44%; height:44%; background:#ffffffa8; box-shadow:0 1px 2px #0002; }
 .ludo-token.legal { outline:2px solid #fff; box-shadow:0 0 0 4px #159b68,0 5px 14px #159b6860; }
 .ludo-feedback { border-radius:12px; box-shadow:0 3px 12px #10251b08; }
-.ludo-tools .btn { min-height:34px; }
+.ludo-tools .btn { min-width:40px; min-height:44px; }
 @media(max-width:760px) {
  .ludo-tools { justify-content:flex-end; margin-bottom:8px; }
  .ludo-play-area { padding:clamp(5px,1.4vw,10px); }
