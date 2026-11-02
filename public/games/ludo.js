@@ -38,7 +38,7 @@
     const selectable = i === v.me && v.canMove && (v.legalTokens || []).includes(t);
     const color = COLORS[i];
     const title = `${v.players[i].name} — token ${t + 1}`;
-    return `<button type="button" class="ludo-token ${color} ${selectable ? 'legal' : ''} ${home ? 'in-yard' : ''}" style="left:${(x / 15) * 100 + 3.333}%;top:${(y / 15) * 100 + 3.333}%" ${selectable ? `data-lt="tok:${t}" aria-label="Move ${esc(title)}"` : 'disabled aria-hidden="true"'} title="${esc(title)}"><span></span></button>`;
+    return `<button type="button" class="ludo-token ${color} ${selectable ? 'legal' : ''} ${home ? 'in-yard' : ''}" style="left:${(x / 15) * 100 + 3.333}%;top:${(y / 15) * 100 + 3.333}%" ${selectable ? `data-lt="tok:${t}" aria-label="${home ? "Bring token " + (t + 1) + " out" : p >= 52 ? "Move home-column token " + (t + 1) : "Move token " + (t + 1)}"` : 'disabled aria-hidden="true"'} title="${esc(title)}"><span></span></button>`;
   }
   function board(v) {
     const tiles = TRACK.map(([r,c], sq) => {
