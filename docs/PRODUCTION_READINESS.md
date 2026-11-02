@@ -10,7 +10,7 @@ This document separates protections implemented in the application from operatio
 - Database migrations run transactionally under a PostgreSQL advisory lock.
 - Authentication uses HttpOnly session cookies, CSRF double-submit checks, password hashing, session revocation, and rate limits.
 - WebSocket upgrades validate browser Origin when supplied; inbound payloads, per-IP connections, and per-socket message rates are bounded.
-- Outbound WebSocket buffering and queued asynchronous messages are now bounded. Slow consumers are disconnected rather than allowed to accumulate unbounded memory.
+- Outbound WebSocket buffering, per-socket asynchronous message queues, and the global serial authentication queue are bounded. Slow consumers or overloaded handshakes are disconnected rather than allowed to accumulate unbounded memory.
 - HTTP responses receive security headers, including a restrictive Content Security Policy, no-sniff, referrer and permissions policies; HSTS is enabled in production.
 - Finished match writes are retried and spooled locally before database persistence; shutdown drains the queue for a bounded period.
 - Health (`/healthz`) and readiness (`/readyz`) endpoints are available.
