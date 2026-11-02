@@ -251,7 +251,7 @@
       </div>
       ${bidStrip(v)}
       ${tableHTML(v, ctx, z)}
-      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${statusText(v)}</span>${canPlay ? '<button class="btn small" data-wz="play">Play</button>' : ''}</div>
+      <div class="wz-status ${v.myTurn ? 'mine' : ''}" role="status" aria-live="polite" aria-atomic="true"><span>${statusText(v)}</span>${canPlay ? '<button class="btn small" data-wz="play">Play</button>' : ''}</div>
       ${controlsHTML(v)}
       <div class="hand"><div class="hand-in">${handHTML(v, z)}</div></div>
       ${overlayHTML(v)}
