@@ -90,5 +90,7 @@ Stage 6 social features and the Stage 7 follow-ups documented above are implemen
 - 8.4: What's new entry added, `WHATS_NEW_VERSION` bumped to `2026-11-simpler-home`, README v0.8 section.
 - `node tests/ui/wizard-layout.js`: 288 ok, "all viewports ok".
 - Width check (320, 375, 414, 768, 1280; home and #friends, with friends, a request and an invitation): no horizontal overflow; 375px screenshot reviewed by eye.
-- Not yet done: app.js render-helper split, final full `npm test` (no server changes in this branch).
+- Bell + split: notification bell in the top bar (requests and invitations, accept/decline in place, Escape/outside click closes, fixed-position panel fits 320-1280 px); home strip no longer lists invitations; account-menu badge removed. Social/home markup moved from `public/app.js` (1859 -> 1808 lines) into `public/home-ui.js` (`window.TVHomeUI`, loaded before app.js; added to `npm run build`).
+- Results: `node tests/ui/social-ui.js` 11 passed 0 failed (new bell test); `wizard-layout.js` 288 ok; `host-tools-ui.js` 9 passed 0 failed; `npm run build` passes.
+- Not run: full `npm test` / `test:pg` (no server or database changes in this branch).
 - Known: private-table security fixes + spectator-rematch fix are NOT in main; they are on `wip/private-table-access-policy` (c8e1a17) and need a manual merge (server.js conflicts with host-tools commit 98aec12) and a real-CI `npm run test:pg`.

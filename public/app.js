@@ -58,6 +58,7 @@
     rejoin: [], // running games where a bot is playing this player's seat
     avatarOpen: false,
     menuOpen: false, // the account dropdown in the top bar
+    bellOpen: false, // the notifications dropdown in the top bar
     wnSeen: store.get('ct_wn_seen') || '', // the last What's new version this person opened
     createVisibility: 'private',
     sessionListOpen: store.get('ct_sessions_open') !== '0',
@@ -492,58 +493,6 @@
     joinTable(invitation.room_code || invitation.roomCode, 'join');
   }
 
-  function socialHTML() {
-    if (S.guest) return '';
-    const friends = S.friends.map((f) => `<li class="social-row"><span class="social-avatar">${esc(f.avatar || '🧙')}</span><span class="social-info"><b>${esc(f.display_name || f.username)}</b><small>@${esc(f.username)} · ${f.online ? (f.playing ? '🎮 Playing ' + esc((gameMeta(f.playing) || {}).name || f.playing) : '🟢 Online') + ' · ' + pingBadge(f.ping) : 'Last seen ' + (f.last_seen ? new Date(f.last_seen).toLocaleString() : 'unknown')}</small></span><button class="btn ghost small" data-act="removeFriend" data-id="${esc(f.id)}">Remove</button></li>`).join('');
-    const friendNames = new Set(S.friends.map((friend) => friend.username));
-    const requestNames = new Set([...S.friendRequests.incoming, ...S.friendRequests.outgoing].map((request) => request.username));
-    const invitationNames = new Set(S.invitations.incoming.map((invitation) => invitation.username));
-    const searchResults = S.friendSearch.filter((player) => !friendNames.has(player.username) && !requestNames.has(player.username) && !invitationNames.has(player.username));
-    const inviteTargets = S.friends.filter((friend) => !S.invitations.outgoing.some((invitation) => invitation.username === friend.username) && !S.roomInviteSent.has(`${S.room?.code}:${friend.username}`));
-    const resultHTML = searchResults.map((p) => `<li class="social-row"><span class="social-info"><b>${esc(p.display_name || p.username)}</b><small>@${esc(p.username)}</small></span><button class="btn small" data-act="sendFriend" data-username="${esc(p.username)}">Add friend</button></li>`).join('');
-    const tableInviteTargets = inviteTargets.map((f) => `<option value="${esc(f.username)}">${esc(f.display_name || f.username)} (@${esc(f.username)})</option>`).join('');
-    S.inviteFriendOptions = tableInviteTargets;
-    const incoming = S.friendRequests.incoming.map((r) => `<li class="social-row"><span class="social-info"><b>${esc(r.display_name || r.username)}</b><small>@${esc(r.username)} sent a friend request</small></span><button class="btn small" data-act="acceptFriend" data-id="${esc(r.id)}">Accept</button><button class="btn ghost small" data-act="declineFriend" data-id="${esc(r.id)}">Decline</button></li>`).join('');
-    const outgoing = S.friendRequests.outgoing.map((r) => `<li class="social-row"><span class="social-info"><b>${esc(r.display_name || r.username)}</b><small>Request pending</small></span><button class="btn ghost small" data-act="cancelFriend" data-id="${esc(r.id)}">Cancel</button></li>`).join('');
-    const invites = S.invitations.incoming.map((i) => `<li class="social-row"><span class="social-info"><b>${esc(i.display_name || i.username)}</b><small>${esc(i.game_id)} table · ${esc(i.room_code)} · expires ${esc(new Date(i.expires_at).toLocaleString())}</small></span><button class="btn small" data-act="acceptInvitation" data-id="${esc(i.id)}">Accept</button><button class="btn ghost small" data-act="declineInvitation" data-id="${esc(i.id)}">Decline</button></li>`).join('');
-    const sent = S.invitations.outgoing.map((i) => `<li class="social-row"><span class="social-info"><b>${esc(i.display_name || i.username)}</b><small>${esc(i.room_code)} · ${esc(i.status)}</small></span><button class="btn ghost small" data-act="revokeInvitation" data-id="${esc(i.id)}">Revoke</button></li>`).join('');
-    return `<section class="home-section social-panel" id="friends-panel"><div class="row" style="justify-content:space-between"><h2 class="section">Friends</h2><button class="btn ghost small" data-act="refreshSocial">Refresh</button></div>
-      ${S.socialError ? `<p class="social-error" role="alert">${esc(S.socialError)}</p>` : ''}${S.socialNotice ? `<p class="social-notice" role="status">${esc(S.socialNotice)}</p>` : ''}${S.socialLoading ? '<p class="hint">Loading friends…</p>' : ''}
-      <form id="friendSearchForm" class="social-search"><label class="sr-only" for="friendSearch">Search by username</label><input id="friendSearch" minlength="1" maxlength="24" autocomplete="off" placeholder="Find someone by username" value="${esc(S.friendQuery)}"><button class="btn small" type="submit" ${S.friendSearchBusy ? 'disabled' : ''}>Search</button></form>
-      ${resultHTML ? `<ul class="social-list">${resultHTML}</ul>` : (S.friendQuery && !S.friendSearchBusy ? '<p class="hint">No new players found.</p>' : '')}
-      ${incoming || outgoing ? `<h3>Friend requests</h3><ul class="social-list">${incoming}${outgoing}</ul>` : ''}
-      <h3>Your friends</h3>${friends ? `<ul class="social-list">${friends}</ul>` : '<p class="hint">No friends yet. Search for a username to add someone.</p>'}
-      ${invites ? `<h3>Table invitations</h3><ul class="social-list">${invites}</ul>` : ''}${sent ? `<details><summary>Sent invitations</summary><ul class="social-list">${sent}</ul></details>` : ''}
-    </section>`;
-  }
-
-  function inviteFriendsHTML() {
-    if (!S.room || S.room.visibility !== 'private' || S.room.hostId !== S.id || S.guest) return '';
-    const friends = S.inviteFriendOptions || '';
-    return `<form id="tableInviteForm" class="social-search"><label for="tableInviteFriend">Invite a friend to this private table</label><select id="tableInviteFriend" required>${friends || '<option value="">All friends already invited</option>'}</select><button class="btn small" type="submit" ${friends ? '' : 'disabled'}>Send invitation</button></form>`;
-  }
-
-  /** Home: a small friends card (who is online, what needs an answer). The full panel lives on #friends. */
-  function friendsStripHTML() {
-    if (S.guest) return '';
-    const online = S.friends.filter((f) => f.online);
-    const pend = pendingSocial();
-    const chips = online.slice(0, 6).map((f) => `<span class="fs-chip" title="@${esc(f.username)}"><span class="social-avatar">${esc(f.avatar || '🧙')}</span>${esc(f.display_name || f.username)}</span>`).join('');
-    const invites = S.invitations.incoming.slice(0, 2).map((i) => `<li class="social-row"><span class="social-info"><b>${esc(i.display_name || i.username)}</b><small>invited you to a ${esc((gameMeta(i.game_id) || {}).name || i.game_id)} table</small></span><button class="btn small" data-act="acceptInvitation" data-id="${esc(i.id)}">Accept</button><button class="btn ghost small" data-act="declineInvitation" data-id="${esc(i.id)}">Decline</button></li>`).join('');
-    const summary = S.friends.length
-      ? (online.length ? `${online.length} of ${S.friends.length} friends online` : `${S.friends.length} friend${S.friends.length === 1 ? '' : 's'}, none online`)
-      : 'Add friends to invite them to private tables.';
-    return `<section class="home-section friends-strip" aria-label="Friends">
-      <div class="fs-head"><div><h2 class="section">Friends</h2><p class="hint">${summary}${pend ? ` · <b>${pend} waiting for you</b>` : ''}</p></div><button type="button" class="btn ghost small" data-act="openFriendsPage">${pend ? 'Review' : 'Manage'}</button></div>
-      ${chips ? `<div class="fs-chips">${chips}</div>` : ''}
-      ${invites ? `<ul class="social-list">${invites}</ul>` : ''}
-    </section>`;
-  }
-
-  function renderFriendsPage() {
-    $app.innerHTML = `${topbarHTML()}<main class="page profile-page friends-page"><a class="back-link" href="/" data-act="goHome">← Back to games</a>${socialHTML()}</main>`;
-  }
-
   function recentTablesHTML() {
     if (!S.recentTables.length) return '';
     const rows = S.recentTables.map((r) => {
@@ -816,10 +765,12 @@
     if (e.key !== 'Escape') return;
     if (S.auth) closeOverlay();
     else if (document.getElementById('modal-overlay')) closeModal();
+    else if (S.bellOpen) { S.bellOpen = false; render(); document.querySelector('.tb-bell')?.focus(); }
     else if (S.menuOpen) { closeMenu(); document.querySelector('.tb-avatar-btn')?.focus(); }
   });
   // a click anywhere outside the open account menu closes it
   document.addEventListener('click', (e) => {
+    if (S.bellOpen && !e.target.closest('.bell-wrap')) { S.bellOpen = false; render(); }
     if (S.menuOpen && !e.target.closest('.menu-wrap')) closeMenu();
   });
 
@@ -1169,7 +1120,7 @@
     render();
   }
   function openPage(page, arg, fromHash) {
-    if (S.menuOpen) S.menuOpen = false;
+    S.menuOpen = false; S.bellOpen = false;
     S.page = page;
     if (!fromHash) { try { history.pushState(null, '', page === 'profile' ? '#profile' : page === 'friends' ? '#friends' : page === 'player' ? '#u/' + arg : location.pathname + location.search); } catch { /* ignore */ } }
     window.scrollTo(0, 0);
@@ -1311,7 +1262,7 @@
   // ------------------------------------------------------------ top bar, account menu and its dialogs
   const WHATS_NEW_VERSION = '2026-11-simpler-home';
   const WHATS_NEW = [
-    ['🏠', 'A simpler home', 'Games come first. Friends are a small card on the home page, with the full list, requests and invitations on their own Friends page (account menu).'],
+    ['🏠', 'A simpler home', 'Games come first. Friends are a small card on the home page, the full list lives on a Friends page, and a bell in the top bar shows friend requests and table invitations you can answer in place.'],
     ['🔜', 'Coming soon', 'Monopoly, Snakes and Ladders and Ludo are on the way.'],
     ['🤝', 'Friends', 'Search by username, send and answer friend requests, and see who is online or which game they are playing right now.'],
     ['🔒', 'Private tables and invitations', 'New tables are private: invite friends from the lobby and they join once they accept. Make a table public to share its code and link.'],
@@ -1321,6 +1272,8 @@
     ['📱', 'One device at a time', 'Signing in on another device signs this one out, so your account is never in two places at once.'],
     ['👤', 'Profiles and history', 'Your stats and every finished game, plus account deletion from your profile.'],
   ];
+  const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
+  const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
   /** Friend requests + table invitations waiting for an answer (drives the menu badge and the home strip). */
   const pendingSocial = () => S.friendRequests.incoming.length + S.invitations.incoming.length;
   const hasNewNews = () => S.wnSeen !== WHATS_NEW_VERSION;
@@ -1336,14 +1289,14 @@
     const menu = S.menuOpen ? `<div class="menu" role="menu" aria-label="Account">
         <div class="menu-head">${av}<div class="menu-who"><b>${esc(name)}</b>${S.username ? `<small>@${esc(S.username)}</small>` : ''}</div></div>
         ${item('openProfilePage', '👤', 'Profile and history')}
-        ${item('openFriendsPage', '👥', 'Friends', pendingSocial() ? `<span class="mi-new">${pendingSocial()}</span>` : '')}
+        ${item('openFriendsPage', '👥', 'Friends')}
         ${item('openSettings', '⚙️', 'Settings')}
         ${item('openWhatsNew', '🎉', 'What’s new', hasNewNews() ? '<span class="mi-new">New</span>' : '')}
         <div class="menu-sep" role="separator"></div>
         ${item('logout', '🚪', 'Log out')}
         ${item('logoutAll', '🔒', 'Log out everywhere', '', 'dim')}
       </div>` : '';
-    return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}">${av}${hasNewNews() || pendingSocial() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
+    return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}">${av}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
   }
 
   function closeMenu() {
@@ -1483,7 +1436,7 @@
       $app.innerHTML = '<div class="page"><div class="brand"><div class="mark">🂡</div><h1>Tableverse</h1><p>Connecting…</p></div></div>';
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
     else if (!S.room && S.page === 'player') renderPlayerPage();
-    else if (!S.room && S.page === 'friends' && !S.guest) renderFriendsPage();
+    else if (!S.room && S.page === 'friends' && !S.guest) $app.innerHTML = topbarHTML() + friendsPageHTML();
     else if (!S.room) renderHome();
     else if (S.room.status === 'lobby') renderLobby();
     else renderGame();
@@ -1496,11 +1449,6 @@
         try { el.setSelectionRange(keep.start, keep.end); } catch { /* ignore */ }
       }
     }
-  }
-
-  const COMING_SOON = [['🎲', 'Monopoly', 'Buy, trade and bankrupt your friends.'], ['🐍', 'Snakes and Ladders', 'Race to 100 and dodge the snakes.'], ['🎯', 'Ludo', 'Bring all four tokens home first.']];
-  function comingSoonHTML() {
-    return `<section class="home-section" aria-label="Coming soon"><h2 class="section">Coming soon</h2><div class="soon-grid">${COMING_SOON.map(([ico, n, d]) => `<div class="soon-card"><span class="soon-ico" aria-hidden="true">${ico}</span><div><b>${esc(n)}</b><small>${esc(d)}</small></div><em class="soon-tag">Soon</em></div>`).join('')}</div></section>`;
   }
 
   function renderHome() {
@@ -1723,9 +1671,10 @@
       const url = `${location.origin}/#u/${u}`;
       try { await navigator.clipboard.writeText(url); toast('Profile link copied'); } catch { window.prompt('Copy this link:', url); }
     },
-    toggleMenu: () => { S.menuOpen = !S.menuOpen; render(); },
+    toggleMenu: () => { S.menuOpen = !S.menuOpen; S.bellOpen = false; render(); },
+    toggleBell: () => { S.bellOpen = !S.bellOpen; S.menuOpen = false; render(); if (S.bellOpen) loadSocial({ quiet: true }); },
     openProfilePage: () => { S.menuOpen = false; openPage('profile'); },
-    openFriendsPage: () => { S.menuOpen = false; openPage('friends'); },
+    openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },
     openSettings: () => { S.menuOpen = false; render(); openSettingsDialog(); },
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
     toggleAvatars: () => { S.avatarOpen = !S.avatarOpen; render(); },

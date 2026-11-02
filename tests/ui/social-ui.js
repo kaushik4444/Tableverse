@@ -14,9 +14,12 @@ const friends = { ok: true, friends: [
   { id: 'f3', username: 'dia', display_name: 'Di', avatar: '🧙', online: false, playing: null, ping: null, last_seen: '2026-11-01T10:00:00Z' },
 ] };
 
-let outgoing = []; let friendList = friends.friends; // bob, cyd and dia are friends; ann and the others are not
+let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = friends.friends; // bob, cyd and dia are friends; ann and the others are not
 (async () => {
   const { server, url, calls } = await serve({
+    'GET /api/me/friend-requests?direction=incoming': () => ({ ok: true, requests: incomingReq }),
+    'GET /api/me/table-invitations?direction=incoming': () => ({ ok: true, invitations: incomingInv }),
+    'POST /api/me/friend-requests/accept': () => { incomingReq = []; return { ok: true }; },
     'GET /api/me/friend-requests?direction=outgoing': () => ({ ok: true, requests: outgoing }),
     'POST /api/me/friend-requests': ({ body }) => { const u = JSON.parse(body).username; if (u === 'broke') return { __status: 409, body: { ok: false, error: 'You already sent a request.' } }; outgoing = [{ id: 'r1', username: u, display_name: u }]; return { ok: true, request: { id: 'r1', status: 'pending' } }; },
     'POST /api/me/avatar': ({ body }) => { const a = JSON.parse(body).avatar; if (a === '🐉') return { __status: 429, body: { ok: false, error: 'Too many changes. Try again later.' } }; profile.profile.avatar = a; return { ok: true, avatar: a }; },
@@ -110,6 +113,29 @@ let outgoing = []; let friendList = friends.friends; // bob, cyd and dia are fri
     assert.equal(new URL(page.url()).hash, '#friends');
     await page.click('.back-link');
     await page.waitForSelector('.game-grid');
+    await ctx.close();
+  });
+
+  await test('the bell shows pending requests and invitations, answers them in place, and closes on Escape', async () => {
+    incomingReq = [{ id: 'rq1', username: 'eve', display_name: 'Eve' }];
+    incomingInv = [{ id: 'iv1', username: 'bob', display_name: 'Bo', game_id: 'wizard', room_code: 'ABCDEF', expires_at: '2099-01-01T00:00:00Z', status: 'pending' }];
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs });
+    await page.goto(url + '/');
+    await page.waitForSelector('.tb-bell .bell-count');
+    assert.equal((await page.textContent('.bell-count')).trim(), '2');
+    assert.equal(await page.$('.bell-panel'), null, 'closed until opened');
+    await page.click('.tb-bell');
+    const txt = await page.textContent('.bell-panel');
+    assert.match(txt, /Eve/); assert.match(txt, /invited you to a Wizard table/);
+    await page.click('.bell-panel [data-act="acceptFriend"]');
+    await page.waitForFunction(() => !document.querySelector('.bell-panel')?.textContent.includes('Eve'));
+    assert.ok(calls.some((c) => c.method === 'POST' && /friend-requests\/accept$/.test(c.path)));
+    await page.keyboard.press('Escape');
+    assert.equal(await page.$('.bell-panel'), null);
+    incomingReq = []; incomingInv = [];
+    await page.reload();
+    await page.waitForSelector('.friends-strip');
+    assert.equal(await page.$('.bell-count'), null, 'no badge when nothing is waiting');
     await ctx.close();
   });
 

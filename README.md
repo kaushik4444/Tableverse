@@ -39,9 +39,9 @@ Tableverse is currently open for friend testing.
 
 ## What's new in v0.8 — a simpler home
 
-- **Home page.** Greeting and table-code join, then the games straight away. Friends are a compact card (who is online, anything waiting for you, accept/decline invitations in place); the full friends list, search, requests and sent invitations are on their own page at `#friends` (account menu → Friends, with a badge for pending items). Recent and public tables sit below the games.
+- **Home page.** Greeting and table-code join, then the games straight away. Friends are a compact card (who is online); the full friends list, search, requests and sent invitations are on their own page at `#friends` (account menu → Friends). A **notification bell** in the top bar shows a count of friend requests and table invitations and lets you accept or decline them in place (refreshed every minute and when opened). Recent and public tables sit below the games.
 - **Coming soon.** Monopoly, Snakes and Ladders and Ludo are listed as non-playable cards ahead of their release.
-- **What's new** is also linked from the home footer. No server, database or API changes.
+- **What's new** is also linked from the home footer. No server, database or API changes. Home/social markup now lives in `public/home-ui.js` (loaded before `app.js`).
 
 ## What's new in v0.7 — friends, private tables, host tools
 
