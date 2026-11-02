@@ -65,7 +65,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     return `<div class="menu-wrap bell-wrap"><button type="button" class="tb-bell" data-act="toggleBell" aria-haspopup="dialog" aria-expanded="${!!S.bellOpen}" aria-label="Notifications${n ? `, ${n} waiting` : ''}"><span aria-hidden="true">🔔</span>${n ? `<span class="bell-count" aria-hidden="true">${n > 9 ? '9+' : n}</span>` : ''}</button>${panel}</div>`;
   }
 
-  const COMING_SOON = [['🎲', 'Monopoly', 'Buy, trade and bankrupt your friends.'], ['🐍', 'Snakes and Ladders', 'Race to 100 and dodge the snakes.'], ['🎯', 'Ludo', 'Bring all four tokens home first.']];
+  const COMING_SOON = [['🎲', 'Monopoly', 'Buy, trade and bankrupt your friends.'], ['🐍', 'Snakes and Ladders', 'Race to 100 and dodge the snakes.'], ['💣', 'Saboteur', 'Dig for gold — or stop the others from finding it.'], ['🃏', '6 nimmt!', 'Take 5: play a card, avoid the bulls.']];
   function comingSoonHTML() {
     return `<section class="home-section" aria-label="Coming soon"><h2 class="section">Coming soon</h2><div class="soon-grid">${COMING_SOON.map(([ico, n, d]) => `<div class="soon-card"><span class="soon-ico" aria-hidden="true">${ico}</span><div><b>${esc(n)}</b><small>${esc(d)}</small></div><em class="soon-tag">Soon</em></div>`).join('')}</div></section>`;
   }
