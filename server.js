@@ -19,7 +19,7 @@ const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
 const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
-const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded } = require('./lib/wsLimits');
+const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -522,10 +522,10 @@ function start(opts = {}) {
 
   function broadcast(room) {
     room.lastActivity = Date.now();
-    const info = roomInfo(room);
+    const infoJson = JSON.stringify(roomInfo(room)); // the same for everybody at the table: serialised once
     for (const m of viewers(room)) {
       const p = players.get(m.id);
-      if (p && p.connected) send(p.ws, { t: 'state', room: info, view: room.game ? room.game.view(m.id) : null });
+      if (p && p.connected) sendBoundedRaw(p.ws, `{"t":"state","room":${infoJson},"view":${JSON.stringify((room.game && room.game.view(m.id)) ?? null)}}`, maxBufferedBytes);
     }
     broadcastTables();
   }
