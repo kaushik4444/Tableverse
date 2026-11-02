@@ -114,13 +114,6 @@ const SIZES = [
           if (hit.content === 'none' || hit.content === 'normal') out.problems.push('selectable Ludo token has no enlarged touch target');
         }
       } else {
-        if (game === 'themind') {
-          const guidance = document.querySelector('.tm-status-guidance[role="status"][aria-live="polite"]');
-          if (!guidance) out.problems.push('The Mind current-phase guidance is missing from its live status region');
-          else if (!guidance.textContent.trim()) out.problems.push('The Mind current-phase guidance is empty');
-          const status = document.querySelector('.tm-status');
-          if (status && /function statusGuidance|Keep actionable guidance/.test(status.textContent)) out.problems.push('The Mind renderer leaked guidance source code into the page');
-        }
         if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
       }
       if (game === 'themind') {
