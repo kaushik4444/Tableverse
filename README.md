@@ -29,24 +29,32 @@ Tableverse is currently open for friend testing.
 
 ## What exists today
 
-- Public home page + live table directory.
+- Public home page, live table directory and a table-code box (public tables).
 - Auth sheet that resumes the action a visitor originally tapped after login.
-- Account menu (Profile, Settings, What’s New, logout controls) and a profile page (`#profile`; public pages at `#u/<username>`).
+- Account menu (Profile, Settings, What's New, logout controls), a profile page (`#profile`; public pages at `#u/<username>`) and tap-a-player cards at the table.
+- **Friends**: username search, requests (send, accept, decline, cancel), removal, online/offline, last seen, the game a friend is playing and a connection-quality (ping) badge.
+- **Private tables** (the default for new tables) with friend invitations, and **host tools** to hand over the table or remove people.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
-- Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits.
+- Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
-## What's new in v0.6 — profiles, history, account deletion
+## What's new in v0.7 — friends, private tables, host tools
 
-- **Profiles.** Own profile (username, display name, join date, stats, history, account tab) and a public page per username showing only username, display name, avatar, join date, games played, wins and win rate. Display names are validated server-side (2–20 characters, control characters and `<>` removed).
-- **History and stats.** Paginated finished-match history (10 per page, newest first). Statistics are aggregated in SQL (no row cap); only human, finished, non-early-leave games with a match key are counted, each match once.
-- **Delete Account.** Password re-authentication, then one transaction: sessions, credentials, tokens and recent tables are removed; match rows are kept with the seat renamed to `Deleted player` and `player_id` unlinked. A game still in progress shows the seat as `Deleted player` and is recorded that way when it ends.
-- **One active session per account** (migration 006). Logging in on a second device signs the first one out (its socket closes with code 4002); a partial unique index makes the database enforce it.
-- **Host tools** (lobby): the host can make another seated player the host (any time) and remove a player, spectator or bot from the lobby. A removed person cannot rejoin that table (join, spectate and reconnect are refused) until it closes.
-- **Recent tables** are per account (table `player_recent_tables`, migration 005) and sync across devices. Closed tables are dropped on read. The old browser-only `ct_recent` key is removed.
-- **Game logs** show who acted (shared client formatter); Poker and 29 log wording was clarified.
-- **Home page** reduced to join/create, rejoin, recent and open tables.
+- **Friends.** Search players by username (`[a-z0-9_]`), send/accept/decline/cancel requests, remove friends. Duplicate requests, requesting yourself and acting on someone else's request are refused; a request in answer to one you received becomes a friendship. Pending requests and invitations show on the home screen, with a live notice when a new one arrives.
+- **Presence.** Friends see online, last seen, and *which game* someone is playing (never a table code) plus a ping badge. Presence is held per server instance, so with several instances a friend connected to another one looks offline.
+- **Private tables.** A new table is private: it is hidden from the public directory and its code is not an access grant. The host invites a friend from the lobby; the friend accepts, then joins. Make a table public to share its code and link. The rule lives in `lib/roomAccess.js` and is applied on join, sit, reconnect, when a friendship ends and when a finished game is restarted: a previous host may return only while still friends with the current host; a seat in a game under way is kept; without a database only the host gets in.
+- **Host tools.** In the lobby the host can make another seated player the host (also mid-game) and remove a player, spectator or bot. A removed person cannot rejoin that table (join, spectate, sit and reconnect are refused) until it closes. The old host keeps their seat.
+- **Player cards, avatars, ping.** Tap anyone at a table for their handle, ping, record and friend/mute actions. Your picture (the fixed emoji set) is saved to your account (`POST /api/me/avatar`).
+- **Sessions and spectators.** One active session per account (migration 006, partial unique index): a new login signs the other device out (WebSocket close code 4002). Repeat spectate/join requests are idempotent and never produce duplicate announcements; rematch keeps spectators as spectators.
+- **Phones.** Fixed real horizontal overflow instead of hiding it (Wizard/table header, lobby code and seat list at 320 px).
 
-New endpoints: `GET /api/me/profile`, `POST /api/me/display-name`, `GET /api/me/history?page=`, `GET /api/me/recent`, `POST /api/me/recent/clear`, `POST /api/me/delete-account`, `GET /api/players/:username` (public).
+New endpoints: `GET /api/me/friends`, `GET /api/me/friends/search?username=`, `GET|POST /api/me/friend-requests` (+ `/accept`, `/decline`, `/cancel`), `POST /api/me/friends/remove`, `GET|POST /api/me/table-invitations` (+ `/accept`, `/decline`, `/revoke`), `POST /api/me/avatar`. New WebSocket messages: `makeHost`, `kick` (client to server); `socialNotice`, `socialPresence`, `latency` (server to client). Migrations 006 (single session), 007 (friends, requests, invitations), 008 (presence/invitation indexes).
+
+### Earlier: v0.6 — profiles, history, account deletion
+
+- **Profiles and history.** Own profile (stats, paginated finished-match history, account tab) and a public page per username with only public fields. Statistics are aggregated in SQL; only human, finished, non-early-leave games are counted, each match once.
+- **Delete Account.** Password re-authentication, then one transaction removes sessions, credentials, tokens and recent tables; match rows are kept as `Deleted player`. A game in progress anonymises the seat everywhere (state, log, chat, saved match).
+- **Recent tables** are per account (migration 005) and sync across devices.
+- **Game logs** show who acted in every game.
 
 ## Roadmap (planned, not shipped yet)
 
@@ -96,19 +104,21 @@ Set `DATABASE_URL` and email variables in Render env settings before deploying.
 ## Development
 
 ```bash
-npm start
-npm test
+npm start            # http://localhost:3000 (in-memory store without DATABASE_URL)
+npm run build        # syntax-checks server, client, libraries and tests
+npm test             # all suites (PostgreSQL suites skip without TEST_DATABASE_URL)
+npm run test:ui      # Playwright layout/behaviour tests (skips when Playwright is missing)
 ```
 
 ## PostgreSQL tests
 
-`tests/db.pg.test.js`, `tests/production.pg.test.js`, `tests/cleanup.pg.test.js`, `tests/account.pg.test.js` require a disposable local PostgreSQL instance:
+The `tests/*.pg.test.js` suites (database, production, cleanup, account, matches, session, friends, private tables) require a disposable local PostgreSQL instance:
 
 ```bash
 TEST_DATABASE_URL=postgres://postgres:secret@127.0.0.1:5432/postgres npm run test:pg
 ```
 
-The test helper refuses managed/production-like hosts and does not use `DATABASE_URL`.
+The test helper refuses managed/production-like hosts and does not use `DATABASE_URL`. A skipped PostgreSQL suite is not a pass: `npm run test:pg` fails instead of skipping.
 
 ## Data cleanup tooling
 

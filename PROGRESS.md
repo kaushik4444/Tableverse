@@ -77,3 +77,8 @@ Stage 6 social features and the Stage 7 follow-ups documented above are implemen
 - A full PostgreSQL run is still required on a machine with a disposable `TEST_DATABASE_URL`. Do not treat skipped PostgreSQL suites as passing.
 - Presence is process-local; friends connected to another server instance may appear offline.
 - Keep this branch separate. Review and merge decisions belong to the repository owner.
+
+## Docs and UX copy pass (branch `claude/tableverse-docs-whats-new`, after Stage 6/7 was merged to main in PR #11)
+- README: "What exists today", new v0.7 section (friends, presence, private-table policy, host tools, player cards, sessions, phones), endpoint and WebSocket message list, migrations 006-008, test commands (`npm run build`, `npm test`, `npm run test:ui`, PostgreSQL note). `package.json`/lockfile version 0.7.0.
+- In-app: What's new (version key `2026-11-friends`, 7 entries, checked at 320 and 390 px), home hero text and a hint under the table-code box explaining that private tables need an invitation.
+- Checked: `npm run build`, `tests/ui/social-ui.js` 9/9, smoke. PostgreSQL suites not run here (no server in the sandbox).
