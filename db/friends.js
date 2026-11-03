@@ -276,7 +276,7 @@ async function transitionInvitation(actorId, invitationId, action) {
     const updated = await client.query(
       `UPDATE private_table_invitations SET status = $3, updated_at = NOW()
        WHERE id = $1 AND ${owner} = $2 AND status = 'pending' AND expires_at > NOW()
-       RETURNING id, status`, [invitationId, actorId, status]
+       RETURNING id, status, game_id, room_code`, [invitationId, actorId, status] // the client joins with the room code
     );
     if (!updated.rows.length) throw new AuthError('Invitation not found.', 404);
     return updated.rows[0];

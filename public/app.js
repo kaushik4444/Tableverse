@@ -509,7 +509,9 @@
     if (!invitation || invitation.status !== 'accepted') return toast('Accept the invitation before joining.');
     const game = gameMeta(invitation.game_id || invitation.gameId);
     toast(`Joining ${(game && game.name) || 'private'} table…`);
-    joinTable(invitation.room_code || invitation.roomCode, 'join');
+    const code = invitation.room_code || invitation.roomCode;
+    if (!code) return toast('This invitation has no table code. Ask the host to invite you again.');
+    joinTable(code, 'join');
   }
 
   function recentTablesHTML() {
@@ -1764,9 +1766,10 @@
     removeFriend: (el) => { S.pendingFriendRemovalId = el.dataset.id; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="removeFriendConfirm">Remove friend</button></div>'); },
     acceptInvitation: async (el) => {
       try {
+        const known = S.invitations.incoming.find((i) => String(i.id) === String(el.dataset.id)); // the list is reloaded below, so keep what we know about it
         const out = await postJson('/api/me/table-invitations/accept', { invitationId: el.dataset.id });
         await loadSocial({ quiet: true });
-        joinAcceptedInvitation(out.invitation);
+        joinAcceptedInvitation({ ...(known || {}), ...(out.invitation || {}), status: (out.invitation && out.invitation.status) || 'accepted' });
       } catch (error) { S.socialError = error.message || 'Could not accept invitation.'; render(); }
     },
     declineInvitation: (el) => socialPost('/api/me/table-invitations/decline', { invitationId: el.dataset.id }),
