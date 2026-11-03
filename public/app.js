@@ -1097,6 +1097,7 @@
 
   let lastTickSec = -1;
   function updateTimer() {
+    if (!S.room && lastTickSec === -1) return; // home screen: no timers to update
     const dl = S.room && S.room.status === 'playing' ? S.room.deadline : null;
     const left = dl ? Math.max(0, Math.ceil((dl - (Date.now() + S.skew)) / 1000)) : null;
     document.querySelectorAll('.ct-timer').forEach((el) => {
