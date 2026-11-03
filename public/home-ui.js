@@ -67,7 +67,6 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   }
 
   const COMING_SOON = [
-    ['🏠', 'Property Rivals', 'Buy properties, trade smartly and build your empire.', 'Your build order'],
     ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order'],
     ['🐂', 'Bullhead Run', 'Play numbered cards and avoid collecting bullheads.', 'Your build order'],
     ['🎨', 'Color Clash', 'Match colours and numbers, then play action cards wisely.', 'Your build order'],

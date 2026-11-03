@@ -1298,8 +1298,8 @@
   const WHATS_NEW_VERSION = '2026-11-smoother-games';
   const WHATS_NEW = [
     ['✨', 'Smoother, tidier games', 'One toolbar in every game, tokens that walk square by square in Snakes and Ladders, Ludo plays your only possible move, and a crown shows who is ahead.'],
-    ['🐟', 'Go Fish is now playable', 'Ask for cards, collect four of a kind and make the most books. 2–6 players, with bots for empty seats.'],
     ['🐍', 'Snakes and Ladders is now playable', 'Roll, climb the ladders and dodge the snakes. 2–4 players, with bots for empty seats.'],
+    ['🏠', 'Property Rivals is now playable', 'Buy cities, ports and utilities, build, trade and bankrupt your rivals on an original world-tour board. 2–6 players, with bots for empty seats.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;

@@ -150,6 +150,14 @@ Each item is one commit. Resume by reading `git log` on the branch.
 - Ideas not done (measure first): per-viewer `view()` for big tables is computed per player; the chat log is resent in full on join; `app.js` still rebuilds a whole screen on every changed state (a keyed diff would help on slow phones).
 
 
+## Stage 15 — Property Rivals (branch `feature/stage-14-property-rivals`, from main)
+Resume from the first stage not marked done. Each stage is one commit, pushed at once.
+- 15.1-15.4 (done) `games/propertyrivals/{board,engine,actions,index}.js`, registered in `games/index.js` (no migration needed). Original board, decks, rent/building/mortgage/auction/trade/debt rules, bots, view with static board data.
+- 15.5 (c9832a5, done) `tests/propertyrivals.test.js`: 20 tests incl. bot playouts for 2-6 players and even-building invariants.
+- 15.6 (done) `public/games/propertyrivals.js` + `.css`: 11x11 board ring, tokens, dice, buy/auction/debt/trade panels, property manager.
+- 15.7 (done) `tests/ui/propertyrivals-ui.js` (8 browser tests), wizard-layout matrix (2/4/6 seats), smoke test, `test:ui`/`build`; leaves Coming soon (9 planned), What's new, README v0.11.
+- 15.8 (todo) PR + CI. Verified locally: engine tests, coming-soon test, browser tests. NOT run locally: `smoke.test.js` and PostgreSQL suites (need `ws`/`pg`, CI only).
+- Known: no bank house limit; trades only on your own turn; tokens jump (no square-by-square walk).
 ## Stage 15 — your bug list, consistency across games (branch `feature/stage-15-consistency`, from main 92dcc65)
 - 15.1 Friends header on home is one tappable button (opens #friends), not only "Manage". The waiting lobby no longer has the profile/avatar editor (edit it from the account menu).
 - 15.2 Toolbar everywhere: chat, reactions, ⋯ (sound, log, rules, scores…), leave. Go Fish and Snakes were not matched by `unifyToolbar` (their leave button uses `data-gf`/`data-sl`); it now finds leave by any data attribute equal to `leave`.
