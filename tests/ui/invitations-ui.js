@@ -46,6 +46,21 @@ const invitation = { id: 'inv-1', game_id: 'wizard', room_code: 'ZXCVBN', status
     await ctx.close();
   });
 
+  await test('friend names are real buttons: the keyboard opens a profile (friends page and online chips on home)', async () => {
+    const friend = { id: 'p9', username: 'bo', display_name: 'Bo', avatar: '🦊', online: true, playing: null, ping: 40, last_seen: null };
+    const { server: s2, url: u2 } = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/me/friends': () => ({ ok: true, friends: [friend] }) });
+    for (const [hash, selector] of [['#friends', 'button.friend-name'], ['', 'button.fs-chip']]) {
+      const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: [] })] });
+      await page.goto(u2 + '/' + hash);
+      await page.waitForSelector(selector, { timeout: 8000 });
+      await page.focus(selector);
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => location.hash === '#u/bo');
+      await ctx.close();
+    }
+    s2.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;

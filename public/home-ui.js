@@ -4,7 +4,7 @@
 window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial }) {
   function socialHTML() {
     if (S.guest) return '';
-    const friends = S.friends.map((f) => `<li class="social-row"><span class="social-avatar">${esc(f.avatar || '🧙')}</span><span class="social-info"><b class="friend-name" data-act="openProfile" data-username="${esc(f.username)}">${esc(f.display_name || f.username)}</b><small>@${esc(f.username)} · ${f.online ? (f.playing ? '🎮 Playing ' + esc((gameMeta(f.playing) || {}).name || f.playing) : '🟢 Online') + ' · ' + pingBadge(f.ping) : 'Last seen ' + (f.last_seen ? new Date(f.last_seen).toLocaleString() : 'unknown')}</small></span><button class="btn ghost small" data-act="removeFriend" data-id="${esc(f.id)}">Remove</button></li>`).join('');
+    const friends = S.friends.map((f) => `<li class="social-row"><span class="social-avatar">${esc(f.avatar || '🧙')}</span><span class="social-info"><button type="button" class="friend-name" data-act="openProfile" data-username="${esc(f.username)}">${esc(f.display_name || f.username)}</button><small>@${esc(f.username)} · ${f.online ? (f.playing ? '🎮 Playing ' + esc((gameMeta(f.playing) || {}).name || f.playing) : '🟢 Online') + ' · ' + pingBadge(f.ping) : 'Last seen ' + (f.last_seen ? new Date(f.last_seen).toLocaleString() : 'unknown')}</small></span><button class="btn ghost small" data-act="removeFriend" data-id="${esc(f.id)}">Remove</button></li>`).join('');
     const friendNames = new Set(S.friends.map((friend) => friend.username));
     const requestNames = new Set([...S.friendRequests.incoming, ...S.friendRequests.outgoing].map((request) => request.username));
     const invitationNames = new Set(S.invitations.incoming.map((invitation) => invitation.username));
@@ -42,7 +42,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     if (S.guest) return '';
     const online = S.friends.filter((f) => f.online);
     const pend = pendingSocial();
-    const chips = online.slice(0, 6).map((f) => `<span class="fs-chip" data-act="openProfile" data-username="${esc(f.username)}" title="@${esc(f.username)}"><span class="social-avatar">${esc(f.avatar || '🧙')}</span>${esc(f.display_name || f.username)}</span>`).join('');
+    const chips = online.slice(0, 6).map((f) => `<button type="button" class="fs-chip" data-act="openProfile" data-username="${esc(f.username)}" title="@${esc(f.username)}"><span class="social-avatar">${esc(f.avatar || '🧙')}</span>${esc(f.display_name || f.username)}</button>`).join('');
     const summary = S.friends.length
       ? (online.length ? `${online.length} of ${S.friends.length} friends online` : `${S.friends.length} friend${S.friends.length === 1 ? '' : 's'}, none online`)
       : 'Add friends to invite them to private tables.';
