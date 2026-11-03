@@ -109,3 +109,13 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .t29-strip .label, .t29-strip small { font-size: 11px; }
   .tm-status-guidance { line-height: 1.3; font-size: 13px; }
 }
+
+/* Soft, consistent feel: the same easing on every game control, gentle press feedback, nothing jumps. */
+.wz .btn, .ludo .btn, .tm .btn, .bidbtn, .suitbtn, .pk-size, .pk-step { transition: transform .12s ease, background-color .2s ease, border-color .2s ease, box-shadow .2s ease, opacity .2s ease; }
+.wz .btn:active:not(:disabled), .ludo .btn:active:not(:disabled), .tm .btn:active:not(:disabled), .bidbtn:active:not(:disabled), .suitbtn:active:not(:disabled) { transform: scale(.97); }
+.wz-status, .tm-status, .ludo-dice-panel { transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease; }
+.hand .card, .tm-hand .tcard { transition: transform .18s ease, box-shadow .18s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .wz .btn, .ludo .btn, .tm .btn, .bidbtn, .suitbtn, .pk-size, .pk-step, .wz-status, .tm-status, .ludo-dice-panel, .hand .card, .tm-hand .tcard { transition: none; }
+  .wz .btn:active, .ludo .btn:active, .tm .btn:active { transform: none; }
+}
