@@ -227,8 +227,10 @@ function client(port, name, token) {
   for (const [id, who, send] of [['tictactoe', 'Tara', { type: 'place', cell: 4 }], ['fourinarow', 'Finn', { type: 'drop', col: 3 }], ['fiveinarow', 'Fay', { type: 'place', cell: 112 }]]) {
     const lg = await authClient(who);
     await lg.until(() => lg.id, 'welcome ' + who);
-    lg.send({ t: 'create', gameId: id, options: { starter: 'host' } });
+    lg.send({ t: 'create', gameId: id });
     await lg.until(() => lg.room && lg.room.gameId === id, id + ' table');
+    lg.send({ t: 'setOptions', options: { starter: 'host' } });
+    await lg.until(() => lg.room.options && lg.room.options.starter === 'host', id + ' options set');
     lg.send({ t: 'start' });
     await lg.until(() => lg.view && lg.view.game === id, id + ' started');
     assert.equal(lg.view.myTurn, true, id + ': the first seat starts with starter=host');
