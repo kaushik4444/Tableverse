@@ -210,6 +210,20 @@ function client(port, name, token) {
   gf.send({ t: 'act', action: { type: 'ask', target: 'nobody', rank: 'A' } });
   gf.ws.close();
 
+  const pr = await authClient('Priya');
+  await pr.until(() => pr.id, 'welcome Priya');
+  pr.send({ t: 'create', gameId: 'propertyrivals' });
+  await pr.until(() => pr.room && pr.room.gameId === 'propertyrivals', 'property rivals table');
+  pr.send({ t: 'start' });
+  await pr.until(() => pr.view && pr.view.game === 'propertyrivals', 'property rivals started');
+  assert.equal(pr.view.myTurn, true, 'the first seat starts');
+  assert.equal(pr.view.squares.length, 40);
+  assert.equal(JSON.stringify(pr.view).includes('"decks"'), false, 'deck order is never sent');
+  pr.send({ t: 'act', action: { type: 'roll' } });
+  await pr.until(() => pr.view && pr.view.event && pr.view.event.type === 'roll', 'roll answered');
+  pr.send({ t: 'act', action: { type: 'build', square: 0 } }); // refused, the table carries on
+  pr.ws.close();
+
   const sl = await authClient('Sana');
   await sl.until(() => sl.id, 'welcome Sana');
   sl.send({ t: 'create', gameId: 'snakesladders' });
