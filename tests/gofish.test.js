@@ -181,4 +181,34 @@ test('plugin: wiring, results share ties, and the match record stores every seat
   assert.equal(JSON.stringify(game.view('p0')).includes('P1'), false);
 });
 
+test('endgame: when the last cards change hands nobody is waited for; a player who still has a move always gets it', () => {
+  // stock empty. p0 takes the last card another player held: nobody left to ask, so the game ends right away
+  const a = rigged(3, [[['7', 'S'], ['K', 'H']], [['7', 'H']], []], []);
+  a.books = [['A', '3', '4'], ['5', '6', '8', 'Q'], ['10', 'J', '9', '2']];
+  must(a, 'p0', { type: 'ask', target: 'p1', rank: '7' });
+  assert.equal(a.phase, 'gameOver'); assert.equal(a.event.type, 'over'); assert.deepEqual(E.awaiting(a), []);
+  assert.equal(E.applyAction(a, 'p0', { type: 'ask', target: 'p1', rank: '7' }).ok, false);
+  // stock empty, p2 is out of cards: p0 fails to get a card, and p1 (who still has a card) gets their turn, p2 is skipped
+  const b = rigged(3, [[['7', 'S']], [['2', 'H']], []], []);
+  b.books = [['A', '3', '4'], ['5', '6', '8', 'Q'], ['10', 'J', '9', 'K']];
+  must(b, 'p0', { type: 'ask', target: 'p1', rank: '7' });
+  assert.equal(b.phase, 'playing'); assert.equal(b.turn, 1, 'the player who still holds a card is not skipped');
+  must(b, 'p1', { type: 'ask', target: 'p0', rank: '2' });
+  assert.equal(b.turn, 0, 'p2 stays skipped; the turn goes back to p0');
+});
+
+test('every game ends with the closing event and 13 books, for 2 to 6 players', () => {
+  for (const n of [2, 3, 4, 5, 6]) for (let seed = 1; seed <= 25; seed++) {
+    const g = E.createGame(people(n), {}, mulberry32(seed * 31 + n)); let steps = 0;
+    while (g.phase !== 'gameOver') {
+      assert.ok(++steps < 3000, `${n}p/${seed} does not end`);
+      const id = E.awaiting(g)[0]; const f = E.forcedPlay(g);
+      assert.ok(E.applyAction(g, id, f ? f.action : E.botAction(g, id)).ok);
+    }
+    assert.equal(g.books.reduce((x, b) => x + b.length, 0), 13, `${n}p/${seed}: all books are down`);
+    assert.equal(g.event.type, 'over'); assert.ok(g.event.winners.length >= 1); assert.deepEqual(E.awaiting(g), []);
+    assert.equal(E.viewFor(g, 'p0').phase, 'gameOver');
+  }
+});
+
 console.log(`\n${passed} go fish tests passed`);
