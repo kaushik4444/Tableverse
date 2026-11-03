@@ -93,7 +93,7 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 /* Short phones (about 640px tall): the table gives up height so the table, your hand and the main buttons all fit on one screen. */
 @media (max-width: 520px) and (max-height: 700px) {
   .pt { --pt-min: 236px; }
-  .wz:has(.wz-bids) .pt:has(.pt-corner) { --pt-min: 300px; } /* the trump corner needs the extra room */
+  .wz:has(.wz-bids) .pt:has(.pt-corner) { --pt-min:286px; } /* the trump corner needs the extra room */
   .tm .pt { --pt-min: 212px; }
   .wz:has(.t29-strip):has(.bidbox) .pt { --pt-min: 214px; } /* bidding in 29: the bid grid needs the room */
   .tm-status, .wz-status { padding-block: 6px; }
