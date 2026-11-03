@@ -19,6 +19,20 @@ function build(gameId, n) {
 }
 
 let failed = 0;
+async function homeCheck(browser, url) {
+  const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages: [welcome({ games: games.list() })] });
+  try {
+    await page.goto(url + '/');
+    await page.waitForSelector('.game-grid .game-card');
+    const r = await page.evaluate(() => ({ h: document.documentElement.scrollHeight, soonOpen: !!document.querySelector('details.soon-fold[open]'), soonCards: document.querySelectorAll('.soon-card').length, emptyBlock: !!document.querySelector('.public-tables-panel') }));
+    assert.ok(r.h <= 2000, `the home page stays short on a phone (${r.h}px)`);
+    assert.equal(r.soonOpen, false, 'the roadmap starts folded');
+    assert.equal(r.soonCards, 12, 'the roadmap is still complete');
+    assert.equal(r.emptyBlock, false, 'no empty open-tables block');
+    console.log('  ok  home is compact: ' + r.h + 'px, roadmap folded, no empty blocks');
+  } catch (e) { failed++; console.error('FAIL  home\n' + (e.stack || e)); }
+  await ctx.close();
+}
 async function lobbyCheck(browser, url) {
   const def = games.get('wizard');
   const room = { code: 'ABCDEF', gameId: 'wizard', hostId: 'me', status: 'lobby', options: {}, visibility: 'private', seats: 4, min: def.seats.min, max: def.seats.max, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
@@ -63,8 +77,9 @@ async function lobbyCheck(browser, url) {
     } catch (e) { failed++; console.error('FAIL  ' + gameId + '\n' + (e.stack || e)); }
     await ctx.close();
   }
+  await homeCheck(browser, url);
   await lobbyCheck(browser, url);
   await browser.close(); server.close();
-  console.log(`\nmobile fit: ${CASES.length + 1 - failed} passed, ${failed} failed`);
+  console.log(`\nmobile fit: ${CASES.length + 2 - failed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();

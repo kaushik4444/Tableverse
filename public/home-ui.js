@@ -46,7 +46,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     const chips = online.slice(0, 6).map((f) => `<span class="fs-chip" data-act="openProfile" data-username="${esc(f.username)}" title="@${esc(f.username)}"><span class="social-avatar">${esc(f.avatar || '🧙')}</span>${esc(f.display_name || f.username)}</span>`).join('');
     const summary = S.friends.length
       ? (online.length ? `${online.length} of ${S.friends.length} friends online` : `${S.friends.length} friend${S.friends.length === 1 ? '' : 's'}, none online`)
-      : 'Add friends to invite them to private tables.';
+      : 'Add friends to play private tables.';
     return `<section class="home-section friends-strip" aria-label="Friends">
       <div class="fs-head"><div><h2 class="section">Friends</h2><p class="hint">${summary}${pend ? ` · <b>${pend} waiting in your bell</b>` : ''}</p></div><button type="button" class="btn ghost small" data-act="openFriendsPage">Manage</button></div>
       ${chips ? `<div class="fs-chips">${chips}</div>` : ''}
@@ -91,17 +91,14 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   function comingSoonHTML() {
     const requested = COMING_SOON.filter((item) => item[3] === 'Your build order');
     const additional = COMING_SOON.filter((item) => item[3] === 'Additional games');
-    return `<section class="home-section coming-roadmap" aria-label="Coming soon games">
-      <div class="soon-heading">
-        <div><h2 class="section">Coming soon</h2><p class="soon-intro">The next games planned for Tableverse, in development order.</p></div>
-        <span class="soon-count">12 planned</span>
-      </div>
+    return `<details class="home-section coming-roadmap soon-fold" aria-label="Coming soon games">
+      <summary class="soon-heading"><span><span class="section">Coming soon</span><span class="soon-intro">Next games, in development order</span></span><span class="soon-count">12 planned</span></summary>
       <h3 class="soon-group-title">Development order</h3>
       <div class="soon-grid">${comingSoonCards(requested, 1)}</div>
       <h3 class="soon-group-title soon-more-title">Also on the list</h3>
       <div class="soon-grid">${comingSoonCards(additional, requested.length + 1)}</div>
       <p class="soon-footnote">Titles are working names. Game rules will be implemented with original artwork and presentation.</p>
-    </section>`;
+    </details>`;
   }
 
 

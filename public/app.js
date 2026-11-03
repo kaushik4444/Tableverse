@@ -611,6 +611,7 @@
 
   function publicTablesHTML() {
     const count = S.publicTables.length;
+    if (!count) return ''; // nothing open: no empty block on the home page
     const rows = S.publicTables.map((t) => {
       const g = gameMeta(t.gameId) || { name: t.gameId, icon: '🎴' };
       const action = publicTableAction(t);
