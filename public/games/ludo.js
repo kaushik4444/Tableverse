@@ -138,7 +138,7 @@
   }
 
   function playersHTML(v) {
-    const lead = window.CardTable.pt.leaderOf(v.players.length, (k) => v.players[k].tokens.reduce((s, x) => s + (x === FINISHED ? 100 : Math.max(x, 0)), 0), 1);
+    const lead = (window.CardTable.pt ? window.CardTable.pt.leaderOf : () => -1)(v.players.length, (k) => v.players[k].tokens.reduce((s, x) => s + (x === FINISHED ? 100 : Math.max(x, 0)), 0), 1);
     return `<ul class="ludo-players" aria-label="Players">${v.players.map((p, i) => {
       const seat = SEAT[Number.isInteger(p.seat) ? p.seat : seatsFor(v.n)[i]];
       const home = p.tokens.filter((x) => x === FINISHED).length;
