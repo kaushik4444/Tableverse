@@ -64,12 +64,20 @@
 .ludo-end .row { justify-content: center; flex-wrap: wrap; gap: 8px; }
 
 @media (max-width: 760px) {
-  .ludo-layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .ludo { gap: 8px; }
+  .ludo-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .ludo-side { order: 2; }
-  .ludo-players { grid-template-columns: 1fr 1fr; }
-  .ludo-dice-panel { grid-template-columns: auto minmax(0, 1fr); }
-  .ludo-roll { grid-column: 1 / -1; width: 100%; }
-  .ludo-board { max-width: 100%; box-shadow: 0 6px 22px rgba(0, 0, 0, .4), 0 0 0 3px rgba(255, 255, 255, .92); }
+  /* one row: die, status, action; one row of four player chips */
+  .ludo-dice-panel { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 8px 10px; }
+  .ludo-die { width: 44px; height: 44px; padding: 6px; border-radius: 12px; }
+  .ludo-roll { min-width: 104px; width: auto; min-height: 44px; padding-inline: 14px; }
+  .ludo-dice-copy b { font-size: 14px; }
+  .ludo-players { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; }
+  .ludo-player { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; gap: 2px 6px; padding: 6px 8px; }
+  .ludo-player .pips { grid-column: 1 / -1; }
+  .ludo-player b { font-size: 12px; }
+  .ludo-player b small { display: none; }
+  .ludo-board { max-width: min(100%, calc(100dvh - 270px)); box-shadow: 0 6px 22px rgba(0, 0, 0, .4), 0 0 0 3px rgba(255, 255, 255, .92); }
 }
 @media (prefers-reduced-motion: reduce) {
   .ludo-token, .ludo-token.legal::before, .ludo-die.rolling { animation: none; transition: none; }

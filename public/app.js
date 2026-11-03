@@ -59,6 +59,7 @@
     pendingModalTarget: null, // player id acted on by an open modal (make host / kick)
     menuOpen: false, // the account dropdown in the top bar
     bellOpen: false, // the notifications dropdown in the top bar
+    toolsOpen: false, // the "more" menu in a game's toolbar
     wnSeen: store.get('ct_wn_seen') || '', // the last What's new version this person opened
     createVisibility: 'private',
     sessionListOpen: store.get('ct_sessions_open') !== '0',
@@ -784,11 +785,13 @@
     if (e.key !== 'Escape') return;
     if (S.auth) closeOverlay();
     else if (document.getElementById('modal-overlay')) closeModal();
+    else if (S.toolsOpen) { setTools(false); document.querySelector('.tb-more-btn')?.focus(); }
     else if (S.bellOpen) { S.bellOpen = false; render(); document.querySelector('.tb-bell')?.focus(); }
     else if (S.menuOpen) { closeMenu(); document.querySelector('.tb-avatar-btn')?.focus(); }
   });
   // a click anywhere outside the open account menu closes it
   document.addEventListener('click', (e) => {
+    if (S.toolsOpen && (!e.target.closest('.tb-more-wrap') || e.target.closest('.tb-pop button'))) setTools(false);
     if (S.bellOpen && !e.target.closest('.bell-wrap')) { S.bellOpen = false; render(); }
     if (S.menuOpen && !e.target.closest('.menu-wrap')) closeMenu();
   });
@@ -1312,6 +1315,36 @@
     return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}">${av}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
   }
 
+  /**
+   * Every game gets the same compact toolbar: chat, reactions, a "more" menu (sound, log, scores/chips/stats) and leave.
+   * The games render their own buttons; this moves the secondary ones into the menu so one row fits any phone.
+   */
+  function unifyToolbar() {
+    const bar = $app.querySelector('.wz-top > .row, .ludo-tools');
+    if (!bar) return;
+    const leave = bar.querySelector('[data-wz="leave"], [data-t9="leave"], [data-pk="leave"], [data-tm="leave"], [data-lt="leave"]');
+    const chat = bar.querySelector('.chat-btn');
+    const emote = bar.querySelector('[data-act="emotes"]');
+    const extras = [...bar.querySelectorAll('button')].filter((b) => b !== leave && b !== chat && b !== emote);
+    if (!extras.some((b) => b.dataset.act === 'activityLog')) {
+      const log = document.createElement('button');
+      log.type = 'button'; log.className = 'btn ghost small'; log.dataset.act = 'activityLog'; log.setAttribute('aria-label', 'Open game log'); log.textContent = '📜 Log';
+      extras.push(log);
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'tb-more-wrap';
+    wrap.innerHTML = `<button type="button" class="btn ghost small tb-more-btn" data-act="toggleTools" aria-haspopup="true" aria-expanded="${!!S.toolsOpen}" aria-label="More options">⋯</button><div class="tb-pop" role="group" aria-label="More options" ${S.toolsOpen ? '' : 'hidden'}></div>`;
+    const pop = wrap.querySelector('.tb-pop');
+    extras.forEach((b) => pop.appendChild(b));
+    bar.replaceChildren(...[chat, emote, wrap, leave].filter(Boolean));
+  }
+  function setTools(open) {
+    S.toolsOpen = open;
+    const btn = $app.querySelector('.tb-more-btn'); const pop = $app.querySelector('.tb-pop');
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+    if (pop) pop.hidden = !open;
+  }
+
   function closeMenu() {
     if (!S.menuOpen) return false;
     S.menuOpen = false;
@@ -1662,8 +1695,7 @@
     });
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
     announceStatus(statusText ? statusText.textContent : '');
-    const top = $app.querySelector('.wz-top');
-    if (top) top.querySelector('.row')?.insertAdjacentHTML('afterbegin', '<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>');
+    unifyToolbar();
     const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
     const gameInfo = gameMeta(S.room.gameId);
     if (surface && gameInfo) {
@@ -1696,6 +1728,7 @@
       try { await navigator.clipboard.writeText(url); toast('Profile link copied'); } catch { window.prompt('Copy this link:', url); }
     },
     toggleMenu: () => { S.menuOpen = !S.menuOpen; S.bellOpen = false; render(); },
+    toggleTools: () => setTools(!S.toolsOpen),
     toggleBell: () => { S.bellOpen = !S.bellOpen; S.menuOpen = false; render(); if (S.bellOpen) loadSocial({ quiet: true }); },
     openProfilePage: () => { S.menuOpen = false; openPage('profile'); },
     openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },
