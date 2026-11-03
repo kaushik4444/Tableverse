@@ -13,9 +13,9 @@ const ui = window.TVHomeUI({
   pendingSocial: () => 0,
 });
 const html = ui.comingSoonHTML();
-const buildOrder = ['Property Rivals', 'Hidden Miners', 'Bullhead Run', 'Color Clash', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
+const buildOrder = ['Hidden Miners', 'Bullhead Run', 'Color Clash', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
 const additional = ['Four in a Row', 'Secret Clues', 'Tic-Tac-Toe'];
-assert.equal((html.match(/class="soon-card"/g) || []).length, 10);
+assert.equal((html.match(/class="soon-card"/g) || []).length, 9);
 let previous = -1;
 for (const name of [...buildOrder, ...additional]) {
   const index = html.indexOf(name);
@@ -27,7 +27,7 @@ for (const protectedBrand of ['Monopoly', 'Saboteur', '6 nimmt!', 'UNO', 'CATAN'
 }
 assert.match(html, /Development order/);
 assert.match(html, /Also on the list/);
-assert.match(html, /10 planned/);
+assert.match(html, /9 planned/);
 assert.match(html, /original artwork and presentation/);
 const appSource = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
 const whatsNew = appSource.match(/const WHATS_NEW = \[([\s\S]*?)\n  \];/);
@@ -36,7 +36,8 @@ assert.equal((whatsNew[1].match(/^\s*\[/gm) || []).length, 3, 'What’s new only
 assert.match(whatsNew[1], /Snakes and Ladders is now playable/);
 assert.ok(!html.includes('Snakes and Ladders'), 'a playable game is not listed as coming soon');
 assert.match(whatsNew[1], /Go Fish is now playable/);
-assert.match(whatsNew[1], /Wizard scorecard requires sign-in/);
+assert.match(whatsNew[1], /Property Rivals is now playable/);
+assert.ok(!html.includes('Property Rivals'), 'a playable game is not listed as coming soon');
 assert.doesNotMatch(whatsNew[1], /Private tables and invitations|Host tools|Player cards|Profiles and history/);
 assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
-console.log('Coming Soon and latest-release-note tests passed (10 games, requested order, alternate working titles, 3 current highlights).');
+console.log('Coming Soon and latest-release-note tests passed (9 games, requested order, alternate working titles, 3 current highlights).');

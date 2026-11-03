@@ -149,3 +149,12 @@ Each item is one commit. Resume by reading `git log` on the branch.
 - Verified here: `npm run build`, `static`, `coming-soon`, engine suites, browser suites (`redraw-ui`, `invitations-ui`, `social-ui`, `host-tools-ui`, `wizard-layout`). CI on PR #27 was green after 14.5; the later commits are checked by the next run. NOT run here: `ws`/`pg` suites (npm registry blocked); CI covers them.
 - Ideas not done (measure first): per-viewer `view()` for big tables is computed per player; the chat log is resent in full on join; `app.js` still rebuilds a whole screen on every changed state (a keyed diff would help on slow phones).
 
+
+## Stage 15 — Property Rivals (branch `feature/stage-14-property-rivals`, from main)
+Resume from the first stage not marked done. Each stage is one commit, pushed at once.
+- 15.1-15.4 (done) `games/propertyrivals/{board,engine,actions,index}.js`, registered in `games/index.js` (no migration needed). Original board, decks, rent/building/mortgage/auction/trade/debt rules, bots, view with static board data.
+- 15.5 (c9832a5, done) `tests/propertyrivals.test.js`: 20 tests incl. bot playouts for 2-6 players and even-building invariants.
+- 15.6 (done) `public/games/propertyrivals.js` + `.css`: 11x11 board ring, tokens, dice, buy/auction/debt/trade panels, property manager.
+- 15.7 (done) `tests/ui/propertyrivals-ui.js` (8 browser tests), wizard-layout matrix (2/4/6 seats), smoke test, `test:ui`/`build`; leaves Coming soon (9 planned), What's new, README v0.11.
+- 15.8 (todo) PR + CI. Verified locally: engine tests, coming-soon test, browser tests. NOT run locally: `smoke.test.js` and PostgreSQL suites (need `ws`/`pg`, CI only).
+- Known: no bank house limit; trades only on your own turn; tokens jump (no square-by-square walk).

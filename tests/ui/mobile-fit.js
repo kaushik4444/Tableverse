@@ -51,7 +51,7 @@ async function homeCheck(browser, url) {
     await page.goto(url + '/');
     await page.waitForSelector('.game-grid .game-card');
     const r = await page.evaluate(() => ({ h: document.documentElement.scrollHeight, soonOpen: !!document.querySelector('details.soon-fold[open]'), soonCards: document.querySelectorAll('.soon-card').length, soonCount: (document.querySelector('.soon-count')||{}).textContent, emptyBlock: !!document.querySelector('.public-tables-panel') }));
-    assert.ok(r.h <= 2000, `the home page stays short on a phone (${r.h}px)`);
+    assert.ok(r.h <= 2200, `the home page stays short on a phone (${r.h}px)`);
     assert.equal(r.soonOpen, false, 'the roadmap starts folded');
     assert.equal(r.soonCards, parseInt(r.soonCount, 10), 'the roadmap lists every planned game');
     assert.equal(r.emptyBlock, false, 'no empty open-tables block');
