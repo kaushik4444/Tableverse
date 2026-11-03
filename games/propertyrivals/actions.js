@@ -293,6 +293,7 @@ function viewFor(g, playerId) {
   const sqr = g.phase === 'buy' && me === turn ? sq(g.players[me].pos) : null;
   return {
     game: 'propertyrivals',
+    squares: B.SQUARES, groups: B.GROUPS, // static board data, so the client needs no copy of it
     me, n: g.n, options: { ...g.options },
     phase: g.phase, turn, round: g.round, jackpot: g.jackpot,
     dice: g.dice, doubles: g.doubles, again: g.again,
