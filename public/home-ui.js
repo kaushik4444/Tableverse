@@ -67,7 +67,6 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   }
 
   const COMING_SOON = [
-    ['🐟', 'Go Fish', 'Ask, collect matching sets and make the most books.', 'Your build order'],
     ['🐍', 'Snakes and Ladders', 'Race to the finish and watch out for the snakes.', 'Your build order'],
     ['🏠', 'Property Rivals', 'Buy properties, trade smartly and build your empire.', 'Your build order'],
     ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order'],
@@ -92,7 +91,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     const requested = COMING_SOON.filter((item) => item[3] === 'Your build order');
     const additional = COMING_SOON.filter((item) => item[3] === 'Additional games');
     return `<details class="home-section coming-roadmap soon-fold" aria-label="Coming soon games">
-      <summary class="soon-heading"><span><span class="section">Coming soon</span><span class="soon-intro">Next games, in development order</span></span><span class="soon-count">12 planned</span></summary>
+      <summary class="soon-heading"><span><span class="section">Coming soon</span><span class="soon-intro">Next games, in development order</span></span><span class="soon-count">${COMING_SOON.length} planned</span></summary>
       <h3 class="soon-group-title">Development order</h3>
       <div class="soon-grid">${comingSoonCards(requested, 1)}</div>
       <h3 class="soon-group-title soon-more-title">Also on the list</h3>

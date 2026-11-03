@@ -103,6 +103,13 @@ Stage 6 social features and the Stage 7 follow-ups documented above are implemen
 - Run here: `npm run build` ok; `tests/room-access.test.js` 14/14 (rewritten for this policy); engine, twentynine, poker, themind, results, scrub, matchqueue, cleanup, email, isolation, db pass.
 - NOT run here: `npm run test:pg` including the new `private-table-access.pg.test.js`, `host-tools.test.js` and the other `ws`/`pg`-dependent suites (packages cannot be installed in this sandbox). Run them against a disposable database before merging.
 
+## Stage 12 — Go Fish (branch `feature/stage-12-go-fish`, from main e94d9fa)
+- 12.1 (4a790f3) `games/gofish/engine.js` + `index.js`, registered in `games/index.js` (game ids need no migration since 009).
+- 12.2 (a5b1a82) `tests/gofish.test.js`: 12 tests (dealing 7/5, take and go again, Go Fish + wish option, empty stock, books incl. opening hand, ask validation, empty hands/skip/forced draw, endgame and ties, hidden information, 150 bot games for 2-6 players, plugin + match record + name scrub).
+- 12.3 (ab8296a) `public/games/gofish.js` + `gofish.css` on the shared table (`pt.tableHTML`, `pt.seatHTML`, `.wz-top`, `.wz-status`, shared log/rules panel): two-step ask (rank, player; or tap a card / a seat), auto-pick when only one choice, Draw button, event text, results overlay.
+- 12.4 (8416b04) `tests/ui/gofish-ui.js` (9 browser tests) + Go Fish in the `wizard-layout.js` viewport matrix (2, 4, 6 players). Found and fixed: a card `<div>` inside a `<p>` dropped the drawn card.
+- 12.5 Go Fish removed from Coming soon (11 planned; count now computed), What's new highlight, README v0.9.
+- Policy notes: Go Fish uses the standard rules (7 cards for two players, otherwise 5; a player with no cards draws on their turn; the game ends when all 13 books are down). Bots only use public information (who asked for what).
 
 ## Stage 11 — Ludo polish (branch `feature/stage-11-ludo-polish`, from main e94d9fa; not merged)
 - Engine (`games/ludo`): board geometry now matches a real board: a token walks 51 ring squares (positions 0..50), then a 5-square home column (51..55), home = 56 (was 52 + 6, which skipped a diagonal into the lane). Two players sit opposite (seats 0 and 2); colours follow the board clockwise (red, green, yellow, blue); `seatLabel(i, seats)`. Smarter bot (finish > capture > bring out > safety/danger > furthest). New option `bonusRolls` (sixes only | sixes, captures and home). `view.players[i].seat`, `view.lastMove`.

@@ -13,6 +13,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 - **Poker (No-Limit Texas Hold’em)** (2–8): blinds, all-ins, side pots, showdown resolution.
 - **The Mind** (2–4): co-op, real-time ascending play with lives/stars and difficulty options.
 - **Ludo** (2–4): race your four tokens home on the classic cross board — roll a six to get out, send opponents back, finish by exact count. Two players sit opposite each other; optional bonus rolls for captures and getting home.
+- **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
 
 Bots can fill open seats so tables can start quickly.
 
@@ -37,6 +38,11 @@ Tableverse is currently open for friend testing.
 - **Private tables** (the default for new tables) with friend invitations, and **host tools** to hand over the table or remove people.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
+
+## What's new in v0.9 — Go Fish
+
+- **Go Fish** is playable (2–6 players, bots fill empty seats, 2 players get 7 cards, otherwise 5). Ask for a rank you hold, pick a player (or tap them at the table), press Ask. Books are laid down at once; most books wins, equal books share the win. Only your own hand is ever sent to you.
+- Removed from the Coming soon list (11 planned games remain).
 
 ## What's new in v0.8 — a simpler home
 
