@@ -5,7 +5,7 @@ const { serve, scriptedPage, loadPlaywright, sessionOk, welcome } = require('./h
 const games = require('../../games');
 const { chromium } = loadPlaywright();
 
-const CASES = [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4]];
+const CASES = [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4]];
 const NAMES = ['Aarav', 'Bo', 'Cy', 'Di', 'Eve', 'Fay'];
 function build(gameId, n, untilMine = false) {
   const def = games.get(gameId);
