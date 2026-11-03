@@ -7,18 +7,44 @@ const { chromium } = loadPlaywright();
 
 const CASES = [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4]];
 const NAMES = ['Aarav', 'Bo', 'Cy', 'Di', 'Eve', 'Fay'];
-function build(gameId, n) {
+function build(gameId, n, untilMine = false) {
   const def = games.get(gameId);
   const players = NAMES.slice(0, n).map((nm, i) => ({ id: i ? 'p' + i : 'me', name: nm, avatar: '🧙' }));
   let a = 3; const rng = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const g = def.create(players, Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default])), rng);
   if (gameId === 'ludo' || gameId === 'themind') players.forEach((p) => g.act(p.id, { type: 'ready' }));
+  if (untilMine) { // let the bots play until it is the human's turn to bid or bet
+    for (let steps = 0; steps < 400 && !g.isOver(); steps++) {
+      const aw = g.awaiting();
+      if (aw.includes('me')) break;
+      if (!aw.length) { const au = g.autoAction && g.autoAction(); if (!au) break; g.act(null, au); continue; }
+      const act = g.botAction(aw[0]); if (!act) break; g.act(aw[0], act);
+    }
+  }
   const room = { code: 'ABCDEF', gameId, hostId: 'me', status: 'playing', options: {}, visibility: 'public', seats: n, min: def.seats.min, max: def.seats.max, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
     members: players.map((p) => ({ id: p.id, name: p.name, bot: false, avatar: p.avatar, connected: true })) };
   return [welcome({ games: games.list() }), { t: 'state', room, view: g.view('me') }];
 }
 
 let failed = 0;
+async function myTurnCheck(browser, url) {
+  for (const [gameId, n] of [['wizard', 4], ['twentynine', 4], ['poker', 4]]) {
+    const { page, ctx } = await scriptedPage(browser, { viewport: { width: 360, height: 640 }, messages: build(gameId, n, true) });
+    try {
+      await page.goto(url + '/');
+      await page.waitForSelector('.game-supporting-details', { timeout: 8000 });
+      await page.waitForTimeout(300);
+      const r = await page.evaluate(() => {
+        const btns = [...document.querySelectorAll('.wz button')].filter((b) => b.offsetParent && !b.disabled && !b.closest('.tb-pop, .game-supporting-details, .wz-top'));
+        return { n: btns.length, low: btns.filter((b) => b.getBoundingClientRect().bottom + scrollY > innerHeight).map((b) => (b.getAttribute('aria-label') || b.textContent).trim().slice(0, 18)) };
+      });
+      assert.ok(r.n > 0, `${gameId}: it is the human's turn, so there are actions`);
+      assert.deepEqual(r.low, [], `${gameId}: your cards and actions stay on a 360x640 screen on your turn`);
+      console.log('  ok  ' + gameId + ' your-turn actions fit 360x640 (' + r.n + ' controls)');
+    } catch (e) { failed++; console.error('FAIL  ' + gameId + ' my turn\n' + (e.stack || e)); }
+    await ctx.close();
+  }
+}
 async function homeCheck(browser, url) {
   const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages: [welcome({ games: games.list() })] });
   try {
@@ -77,9 +103,10 @@ async function lobbyCheck(browser, url) {
     } catch (e) { failed++; console.error('FAIL  ' + gameId + '\n' + (e.stack || e)); }
     await ctx.close();
   }
+  await myTurnCheck(browser, url);
   await homeCheck(browser, url);
   await lobbyCheck(browser, url);
   await browser.close(); server.close();
-  console.log(`\nmobile fit: ${CASES.length + 2 - failed} passed, ${failed} failed`);
+  console.log(`\nmobile fit: ${CASES.length + 5 - failed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();

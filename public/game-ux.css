@@ -95,6 +95,17 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .pt { --pt-min: 236px; }
   .wz:has(.wz-bids) .pt:has(.pt-corner) { --pt-min: 300px; } /* the trump corner needs the extra room */
   .tm .pt { --pt-min: 212px; }
+  .wz:has(.t29-strip):has(.bidbox) .pt { --pt-min: 214px; } /* bidding in 29: the bid grid needs the room */
   .tm-status, .wz-status { padding-block: 6px; }
+  /* your turn to bid or bet: the panel already says what to do, so its status line and the bet-size chips give way */
+  .wz-status:has(+ .bidbox), .wz-status:has(+ .pk-raise) { display: none; }
+  .pk-sizes { display: none; }
+  .bidbox { padding: 8px 10px; gap: 6px; }
+  .wz { gap: 4px; }
+  .t29-strip > * { padding-block: 4px; }
+  .tbox { grid-auto-flow: column; justify-content: space-between; align-items: baseline; padding: 4px 10px; }
+  .bidgrid { gap: 4px; }
+  .bidgrid .bidbtn { flex: 1 1 36px; min-width: 36px; padding-inline: 0; }
+  .t29-strip .label, .t29-strip small { font-size: 11px; }
   .tm-status-guidance { line-height: 1.3; font-size: 13px; }
 }
