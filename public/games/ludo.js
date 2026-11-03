@@ -111,7 +111,7 @@
     if (v.phase === 'gameOver') return v.winner >= 0 ? `${nm(v.winner)} wins!` : 'Game over';
     if (v.phase === 'ready') return v.me >= 0 && !v.players[v.me].ready ? 'Ready to start?' : 'Waiting for the others…';
     if (v.phase === 'rolling') return v.canRoll ? 'Your turn — roll the dice' : `${nm(v.turn)} is rolling…`;
-    if (v.phase === 'moving') return v.canMove ? 'Pick a glowing token' : `${nm(v.turn)} is moving…`;
+    if (v.phase === 'moving') return v.canMove ? (v.autoPlay ? 'Only one move: playing it' : 'Pick a glowing token') : `${nm(v.turn)} is moving…`;
     return 'Ludo';
   }
   function lastEvent(v) {

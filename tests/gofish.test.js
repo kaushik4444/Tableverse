@@ -181,4 +181,11 @@ test('plugin: wiring, results share ties, and the match record stores every seat
   assert.equal(JSON.stringify(game.view('p0')).includes('P1'), false);
 });
 
+test('the view carries no game log: it would reveal what other players asked for', () => {
+  const g = E.createGame(people(3), {}, mulberry32(5));
+  const v = E.viewFor(g, 'p0');
+  assert.equal('log' in v, false);
+  assert.equal(JSON.stringify(v).includes('"kind"'), false);
+});
+
 console.log(`\n${passed} go fish tests passed`);

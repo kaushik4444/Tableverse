@@ -63,6 +63,20 @@ function legalMoves(g, playerIdx) {
   return out;
 }
 
+/**
+ * When the roll leaves exactly one possible move (tokens that stand on the same square and would land on the same
+ * square count as one), the server plays it. Returns { playerId, action } or null.
+ */
+function forcedPlay(g) {
+  if (g.phase !== 'moving') return null;
+  const who = g.turn;
+  const moves = legalMoves(g, who);
+  if (!moves.length) return null;
+  const distinct = new Set(moves.map((m) => g.tokens[who][m.token] + '>' + m.to));
+  if (distinct.size !== 1) return null;
+  return { playerId: g.players[who].id, action: { type: 'move', token: moves[0].token } };
+}
+
 function applyMove(g, playerIdx, tokenIdx, np) {
   const old = g.tokens[playerIdx][tokenIdx];
   g.tokens[playerIdx][tokenIdx] = np;
@@ -322,6 +336,7 @@ function viewFor(g, playerId) {
     myTurn: !over && me >= 0 && g.turn === me,
     canRoll: !over && me >= 0 && g.phase === 'rolling' && g.turn === me,
     canMove: !over && me >= 0 && g.phase === 'moving' && g.turn === me,
+    autoPlay: !over && me >= 0 && g.turn === me && forcedPlay(g) !== null, // the only possible move is played for you
     legalTokens: !over && me >= 0 && g.phase === 'moving' && g.turn === me
       ? legalMoves(g, me).map((move) => move.token)
       : [],
@@ -336,5 +351,5 @@ function viewFor(g, playerId) {
 
 module.exports = {
   TOKENS, TRACK, LAP, HOME_COL, FINISHED, STARTS, SAFE, COLORS, SEAT_COLORS, SEATS_FOR, absPos,
-  createGame, applyAction, awaitingList, botAction, viewFor, newPosFor, legalMoves,
+  createGame, applyAction, awaitingList, botAction, viewFor, newPosFor, legalMoves, forcedPlay,
 };

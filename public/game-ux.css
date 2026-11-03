@@ -119,3 +119,4 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .wz .btn, .ludo .btn, .tm .btn, .bidbtn, .suitbtn, .pk-size, .pk-step, .wz-status, .tm-status, .ludo-dice-panel, .hand .card, .tm-hand .tcard { transition: none; }
   .wz .btn:active, .ludo .btn:active, .tm .btn:active { transform: none; }
 }
+

@@ -56,6 +56,7 @@ module.exports = {
       botDelayMs: () => 1800,
       stamp: () => g.event ? g.event.seq : null,
       botAction: (playerId) => engine.botAction(g, playerId),
+      forcedPlay: () => engine.forcedPlay(g),
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // first to finish all four tokens wins; score is placement (first = n, ... last = 1)

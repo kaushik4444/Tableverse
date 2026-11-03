@@ -18,7 +18,7 @@
 .sl-snake circle { fill: var(--snake, #2f9e6b); }
 .sl-snake .eye { fill: #fff; }
 .sl-s1 { --snake: #2f9e6b; } .sl-s2 { --snake: #7a5cc7; } .sl-s3 { --snake: #d9734a; }
-.sl-token { position: absolute; z-index: 3; width: 5%; height: 5%; min-width: 14px; min-height: 14px; border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 2px 5px #0005; transition: left .7s cubic-bezier(.3, .7, .3, 1), top .7s cubic-bezier(.3, .7, .3, 1); }
+.sl-token { position: absolute; z-index: 3; width: 5%; height: 5%; min-width: 14px; min-height: 14px; border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 2px 5px #0005; transition: left .3s ease-in-out, top .3s ease-in-out; }
 .sl-token.red { background: var(--sl-red); } .sl-token.blue { background: var(--sl-blue); } .sl-token.green { background: var(--sl-green); } .sl-token.yellow { background: var(--sl-yellow); }
 .sl-token.me { outline: 2px solid #111a; outline-offset: 1px; }
 .sl-token.turn { z-index: 4; box-shadow: 0 0 0 3px #fff, 0 0 12px 4px #19a66b99; }
@@ -50,3 +50,4 @@
   .sl-players { grid-template-columns: 1fr 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .sl-token { transition: none; } .sl-die.tumble { animation: none; } }
+.sl.sl-jumping .sl-token { transition-duration: .85s; transition-timing-function: cubic-bezier(.4, 0, .2, 1); } /* a ladder or snake is one long slide */

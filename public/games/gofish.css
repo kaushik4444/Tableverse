@@ -3,9 +3,9 @@
 .gf .gf-stock .card { --cw: calc(var(--cw0, 62px) * .72); }
 .gf .gf-stock .card.slot { background: transparent; border: 2px dashed rgba(255, 255, 255, .35); box-shadow: none; }
 .gf .gf-stock b { font-size: 20px; line-height: 1; }
-.gf .gf-stock small, .gf .gf-event { color: rgba(255, 255, 255, .78); font-size: 12px; }
-.gf .gf-event { margin: 4px 0 0; max-width: 280px; line-height: 1.35; }
-.gf .gf-event .card.tiny { --cw: 22px; display: inline-block; vertical-align: middle; }
+.gf .gf-stock small { color: rgba(255, 255, 255, .78); font-size: 12px; }
+.gf .gf-event { margin: 6px 0 0; max-width: 300px; line-height: 1.3; color: #fff; font-size: 15px; font-weight: 650; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.gf .gf-event .card.tiny { --cw: 26px; display: inline-block; vertical-align: middle; }
 .gf .gf-backs { display: flex; gap: 2px; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); }
 .gf .gf-backs i { width: 9px; height: 13px; border-radius: 2px; background: repeating-linear-gradient(45deg, #3a2a7a 0 3px, #4b3a96 3px 6px); border: 1px solid rgba(255, 255, 255, .7); }
 .gf .gf-books { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; max-width: 110px; }
