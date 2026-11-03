@@ -8,6 +8,7 @@ const registry = {
   ludo: require('./ludo'),
   gofish: require('./gofish'),
   snakesladders: require('./snakesladders'),
+  propertyrivals: require('./propertyrivals'),
 };
 
 module.exports = {
