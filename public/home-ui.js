@@ -73,9 +73,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     ['🚢', 'Sea Battle', 'Hide your fleet, call your shots and sink the opposing ships.', 'Your build order'],
     ['🌾', 'Resource Isles — 4 players', 'Gather resources, trade and build settlements and roads.', 'Your build order'],
     ['🌾', 'Resource Isles — 5–6 players', 'Bring the larger-group expansion to the island.', 'Your build order'],
-    ['🟡', 'Four in a Row', 'Connect four pieces before your opponent does.', 'Additional games'],
     ['🕵️', 'Secret Clues', 'Give clever clues so your team finds the right words.', 'Additional games'],
-    ['❎', 'Tic-Tac-Toe', 'Take turns placing Xs and Os to make a line of three.', 'Additional games'],
   ];
   function comingSoonCards(items, start) {
     return items.map(([ico, name, description, , status = 'Planned'], index) => `<article class="soon-card${status === 'In development' ? ' in-dev' : ''}">

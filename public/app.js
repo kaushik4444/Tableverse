@@ -1295,11 +1295,11 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-property-rivals';
+  const WHATS_NEW_VERSION = '2026-11-line-games';
   const WHATS_NEW = [
-    ['🐟', 'Go Fish is now playable', 'Ask for cards, collect four of a kind and make the most books. 2–6 players, with bots for empty seats.'],
     ['🐍', 'Snakes and Ladders is now playable', 'Roll, climb the ladders and dodge the snakes. 2–4 players, with bots for empty seats.'],
     ['🏠', 'Property Rivals is now playable', 'Buy cities, ports and utilities, build, trade and bankrupt your rivals on an original world-tour board. 2–6 players, with bots for empty seats.'],
+    ['🟡', 'Tic-Tac-Toe, Four in a Row and Five in a Row', 'Three quick two-player games: line up your marks, drop discs or place stones. Play a friend or a bot.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
