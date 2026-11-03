@@ -536,6 +536,11 @@ html { scroll-behavior: auto; }
   .soon-tag { font-size: 8px; padding: 2px 5px; }
 }
 
+/* Friend names are buttons (keyboard and screen-reader reachable) that read as text. */
+button.friend-name { border: 0; background: none; padding: 0; margin: 0; font: inherit; font-weight: 700; text-align: left; }
+button.fs-chip { border: 0; color: var(--ink); font: inherit; font-size: 13px; min-height: 34px; }
+button.fs-chip:hover { background: rgba(255,255,255,.14); }
+button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 8px; }
 /* Lobby: fewer, quieter blocks. Profile and options fold into one-line summaries. */
 .fold { padding: 0; }
 .fold > summary { list-style: none; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 14px; cursor: pointer; }

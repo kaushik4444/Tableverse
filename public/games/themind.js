@@ -244,7 +244,9 @@
     playLowest();
   });
 
-  window.addEventListener('resize', () => { if (ui.ctx && ui.latest && ui.latest.game === 'themind' && document.querySelector('.tm')) ui.ctx.rerender(); });
+  // a resize fires many times a second while a phone rotates or its address bar slides: redraw once it settles
+  let resizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (ui.ctx && ui.latest && ui.latest.game === 'themind' && document.querySelector('.tm')) ui.ctx.rerender(); }, 120); });
 
   window.CardTable.register('themind', { render });
 })();

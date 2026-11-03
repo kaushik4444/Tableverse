@@ -343,7 +343,9 @@
     }
   }
 
-  window.addEventListener('resize', () => { if (ui.ctx && ui.latest && ui.latest.game === 'twentynine' && document.querySelector('.t29')) ui.ctx.rerender(); });
+  // a resize fires many times a second while a phone rotates or its address bar slides: redraw once it settles
+  let resizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (ui.ctx && ui.latest && ui.latest.game === 'twentynine' && document.querySelector('.t29')) ui.ctx.rerender(); }, 120); });
 
   window.CardTable.register('twentynine', { render });
 })();

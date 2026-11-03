@@ -19,7 +19,8 @@ const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
 const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
-const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded } = require('./lib/wsLimits');
+const { createStaticFiles } = require('./lib/staticFiles');
+const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -248,6 +249,7 @@ function start(opts = {}) {
     },
   });
 
+  const staticFiles = createStaticFiles();
   const server = http.createServer(async (req, res) => {
     setSecurityHeaders(res); // apply to success and error responses, including health checks and 404s
     let rel;
@@ -300,18 +302,18 @@ function start(opts = {}) {
       res.writeHead(403);
       return res.end();
     }
-    fs.readFile(file, (err, data) => {
+    const type = MIME[path.extname(file)] || 'application/octet-stream';
+    staticFiles.load(file, type, (err, entry) => {
       if (err) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('Not found');
       }
-      res.writeHead(200, {
-        'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
-        'Cache-Control': 'no-cache',
+      staticFiles.respond(req, res, entry, {
+        'Content-Type': type,
+        'Cache-Control': 'no-cache', // always revalidate; the ETag turns that into a cheap 304
         ...SECURITY_HEADERS,
         ...(production ? { 'Strict-Transport-Security': 'max-age=15552000; includeSubDomains' } : {}),
       });
-      res.end(req.method === 'HEAD' ? undefined : data);
     });
   });
   // Bound incomplete HTTP requests and idle keep-alive sockets. These are request-receive timeouts,
@@ -475,17 +477,57 @@ function start(opts = {}) {
 
   const tablesMsg = (p) => ({ t: 'tables', tables: publicTables(), rejoin: rejoinFor(p) });
 
+  /** Who can take a seat back: playerId -> [{code, gameId, paused}], built in one pass over the rooms (not once per player). */
+  function rejoinIndex() {
+    const index = new Map();
+    for (const room of rooms.values()) {
+      if (room.status !== 'playing') continue;
+      let paused;
+      for (const m of room.members) {
+        if (!m.bot || (room.denied && room.denied.has(m.id))) continue; // denied: lost access to this private table
+        const q = players.get(m.id);
+        if (q && q.room === room.code) continue;
+        if (paused === undefined) paused = !humans(room).some(isConnected);
+        const list = index.get(m.id) || index.set(m.id, []).get(m.id);
+        list.push({ code: room.code, gameId: room.gameId, paused });
+      }
+    }
+    return index;
+  }
+
+  /**
+   * The table directory goes to people who are looking at it (not inside a table), at most every 120 ms however many
+   * tables changed, and only when it differs from what that person already has. Every move at every table used to send
+   * the whole directory to every connected player.
+   */
+  let tablesTimer = null;
   function broadcastTables() {
+    if (tablesTimer) return;
+    tablesTimer = setTimeout(flushTables, 120);
+    if (tablesTimer.unref) tablesTimer.unref();
+  }
+  function flushTables() {
+    tablesTimer = null;
     const tables = publicTables();
-    for (const p of players.values()) if (p.connected) send(p.ws, { t: 'tables', tables, rejoin: rejoinFor(p) });
+    const tablesKey = JSON.stringify(tables);
+    const rejoin = rejoinIndex();
+    for (const p of players.values()) {
+      if (!p.connected) continue;
+      if (p.room) { p.tablesKey = null; continue; } // inside a table: it gets a fresh directory when it leaves
+      const mine = rejoin.get(p.id) || [];
+      const key = tablesKey + '|' + JSON.stringify(mine);
+      if (p.tablesKey === key) continue;
+      p.tablesKey = key;
+      send(p.ws, { t: 'tables', tables, rejoin: mine });
+    }
   }
 
   function broadcast(room) {
     room.lastActivity = Date.now();
-    const info = roomInfo(room);
+    const infoJson = JSON.stringify(roomInfo(room)); // the same for everybody at the table: serialised once
     for (const m of viewers(room)) {
       const p = players.get(m.id);
-      if (p && p.connected) send(p.ws, { t: 'state', room: info, view: room.game ? room.game.view(m.id) : null });
+      if (p && p.connected) sendBoundedRaw(p.ws, `{"t":"state","room":${infoJson},"view":${JSON.stringify((room.game && room.game.view(m.id)) ?? null)}}`, maxBufferedBytes);
     }
     broadcastTables();
   }
@@ -1408,6 +1450,7 @@ function start(opts = {}) {
 
   async function close({ drainMs = 0 } = {}) {
     clearInterval(ticker);
+    clearTimeout(tablesTimer);
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);

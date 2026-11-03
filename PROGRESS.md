@@ -137,3 +137,15 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - 12.5 Your-turn fit: on short phones (<= 700px tall) the bid/bet panels drop their duplicate status line and the bet-size chips, cards are smaller (Wizard/29 54px, Poker hand 60px), 29's team boxes and bid grid are tighter, tables shrink only where nothing needs the room. At 360x640 your cards and actions stay on screen on your turn in Wizard, 29 and Poker (`mobile-fit.js` your-turn check).
 - Results (all run in this sandbox): `wizard-layout.js` all viewports ok, `mobile-fit.js` 10 passed, `ludo-ui.js` 3 passed, `host-tools-ui.js` 9 passed, `social-ui.js` 12 passed, `scorecard-layout.js` no failures printed, `ludo.test.js` 23 passed, `coming-soon.test.js` passed. Not run: PG suites and `production.test.js` (no `ws`/real PostgreSQL here) — run `npm test` in CI before merging.
 - 12.6 Soft feel: one easing for every game control, gentle press feedback, reduced-motion respected (CSS only, no re-render animation so nothing flickers on updates).
+## Stage 14 — performance and bug fixes (branch `refactor/performance-and-bugfixes`, from main 9da10bb, PR #27)
+Each item is one commit. Resume by reading `git log` on the branch.
+- 14.1 Table directory: coalesced (120 ms), sent only to people outside a table, skipped when unchanged per person, rejoin offers built in one pass (`rejoinIndex`). Was: every move at every table sent the whole directory to every player, O(players x rooms).
+- 14.2 State broadcast serialises the shared room info once (`sendBoundedRaw` in `lib/wsLimits.js`).
+- 14.3 Client `render()` keeps typed text, dropdown choice, focus and cursor (`KEEP_FIELDS`); identical `state` and `tables` messages no longer rebuild the screen. `tests/ui/redraw-ui.js` (fails without the fix).
+- 14.4 Game renderers (wizard, 29, poker, The Mind) redraw once a resize settles (120 ms) instead of on every resize event.
+- 14.5 `lib/staticFiles.js`: files cached in memory (revalidated by mtime), gzip for text, ETag and 304; `tests/static.test.js` (6).
+- Bug: accepting a table invitation failed with "no table code" because `transitionInvitation` returned only id and status. It now returns `game_id` and `room_code`, and the client falls back to what it knew. `tests/ui/invitations-ui.js`, plus a PostgreSQL assertion in `tests/friends.pg.test.js`.
+- Accessibility: friend names and online chips are buttons (keyboard opens the profile).
+- Verified here: `npm run build`, `static`, `coming-soon`, engine suites, browser suites (`redraw-ui`, `invitations-ui`, `social-ui`, `host-tools-ui`, `wizard-layout`). CI on PR #27 was green after 14.5; the later commits are checked by the next run. NOT run here: `ws`/`pg` suites (npm registry blocked); CI covers them.
+- Ideas not done (measure first): per-viewer `view()` for big tables is computed per player; the chat log is resent in full on join; `app.js` still rebuilds a whole screen on every changed state (a keyed diff would help on slow phones).
+

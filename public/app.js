@@ -510,7 +510,9 @@
     if (!invitation || invitation.status !== 'accepted') return toast('Accept the invitation before joining.');
     const game = gameMeta(invitation.game_id || invitation.gameId);
     toast(`Joining ${(game && game.name) || 'private'} table…`);
-    joinTable(invitation.room_code || invitation.roomCode, 'join');
+    const code = invitation.room_code || invitation.roomCode;
+    if (!code) return toast('This invitation has no table code. Ask the host to invite you again.');
+    joinTable(code, 'join');
   }
 
   function recentTablesHTML() {
@@ -665,11 +667,15 @@
         loadSnapshot();
         openAuthSheet('login', m.message || 'Log in to play.');
         break;
-      case 'tables':
+      case 'tables': {
+        const key = JSON.stringify([m.tables, m.rejoin]);
         S.publicTables = m.tables || [];
         S.rejoin = m.rejoin || [];
+        if (key === S.tablesKey) break; // nothing changed: do not rebuild the screen
+        S.tablesKey = key;
         if (!S.room) render();
         break;
+      }
       case 'emote':
         showEmote(m.id, m.e);
         CardTable.sound.play('emote');
@@ -705,9 +711,14 @@
         if (!S.room) render();
         break;
       case 'state': {
+        const { now, ...stable } = m.room;
+        const stateKey = JSON.stringify([stable, m.view]);
+        const same = stateKey === S.stateKey && S.room;
+        S.stateKey = stateKey;
         S.room = m.room;
         S.view = m.view;
         S.skew = (m.room.now || Date.now()) - Date.now();
+        if (same) break; // identical to what is on screen (a presence or ping tick): keep the DOM, the focus and any animation
         setHash(m.room.code);
         soundsFor(prevView, m.view);
         prevView = m.view;
@@ -1090,6 +1101,7 @@
 
   let lastTickSec = -1;
   function updateTimer() {
+    if (!S.room && lastTickSec === -1) return; // home screen: no timers to update
     const dl = S.room && S.room.status === 'playing' ? S.room.deadline : null;
     const left = dl ? Math.max(0, Math.ceil((dl - (Date.now() + S.skew)) / 1000)) : null;
     document.querySelectorAll('.ct-timer').forEach((el) => {
@@ -1480,10 +1492,17 @@
     openModal('What’s new', `<ul class="wn-list">${WHATS_NEW.map(([ico, t, d]) => `<li><span class="wn-ico" aria-hidden="true">${ico}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>`);
   }
 
+  /** Fields whose text must survive a redraw (someone joins, a friend comes online) while the person is typing or choosing. */
+  const KEEP_FIELDS = ['name', 'friendSearch', 'tableInviteFriend', 'code'];
+  const VALUE_FIELDS = ['friendSearch', 'tableInviteFriend']; // the others are driven by state (S.name, S.draftCode): only focus and cursor come back
   function render() {
-    // keep the cursor in the name box when the screen is redrawn (e.g. someone joins while you type)
     const ae = document.activeElement;
-    const keep = ae && ae.id === 'name' ? { start: ae.selectionStart, end: ae.selectionEnd } : null;
+    const focusedId = ae && KEEP_FIELDS.includes(ae.id) ? ae.id : null;
+    const saved = {};
+    for (const id of KEEP_FIELDS) {
+      const el = document.getElementById(id);
+      if (el && el.value !== undefined) saved[id] = { value: el.value, start: el.selectionStart, end: el.selectionEnd };
+    }
     if (!S.ready && !S.guest && !S.room) {
       $app.innerHTML = '<div class="page"><div class="brand"><div class="mark">🂡</div><h1>Tableverse</h1><p>Connecting…</p></div></div>';
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
@@ -1494,11 +1513,14 @@
     else renderGame();
     updateWatchers();
     if ($chat && S.chatOpen) drawChat();
-    if (keep) {
-      const el = document.getElementById('name');
-      if (el) {
+    for (const id of KEEP_FIELDS) {
+      const el = document.getElementById(id);
+      const was = saved[id];
+      if (!el || !was) continue;
+      if (VALUE_FIELDS.includes(id) && el.value !== was.value && (el.tagName === 'SELECT' ? [...el.options].some((o) => o.value === was.value) : true)) el.value = was.value;
+      if (id === focusedId) {
         el.focus();
-        try { el.setSelectionRange(keep.start, keep.end); } catch { /* ignore */ }
+        try { if (was.start !== null && was.start !== undefined) el.setSelectionRange(was.start, was.end); } catch { /* selects and some input types have no selection */ }
       }
     }
   }
@@ -1788,9 +1810,10 @@
     removeFriend: (el) => { S.pendingFriendRemovalId = el.dataset.id; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="removeFriendConfirm">Remove friend</button></div>'); },
     acceptInvitation: async (el) => {
       try {
+        const known = S.invitations.incoming.find((i) => String(i.id) === String(el.dataset.id)); // the list is reloaded below, so keep what we know about it
         const out = await postJson('/api/me/table-invitations/accept', { invitationId: el.dataset.id });
         await loadSocial({ quiet: true });
-        joinAcceptedInvitation(out.invitation);
+        joinAcceptedInvitation({ ...(known || {}), ...(out.invitation || {}), status: (out.invitation && out.invitation.status) || 'accepted' });
       } catch (error) { S.socialError = error.message || 'Could not accept invitation.'; render(); }
     },
     declineInvitation: (el) => socialPost('/api/me/table-invitations/decline', { invitationId: el.dataset.id }),
