@@ -40,3 +40,5 @@
   .gf .gf-event { font-size: 14px; margin-top: 2px; }
 }
 @media (max-width: 520px) { .gf .gf-stock .card { --cw: calc(var(--cw0, 62px) * .5); } }
+@media (max-width: 520px) and (max-height: 700px) { .gf .gf-stock .gf-pile { display: none; } .gf .gf-stock b { font-size: 22px; } } /* on a short phone the stock is just its count, so it never covers a seat plate */
+@media (max-width: 520px) and (min-height: 701px) { .gf .gf-stock .card { --cw: calc(var(--cw0, 62px) * .6); } }

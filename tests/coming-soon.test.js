@@ -36,7 +36,7 @@ assert.equal((whatsNew[1].match(/^\s*\[/gm) || []).length, 3, 'What’s new only
 assert.match(whatsNew[1], /Snakes and Ladders is now playable/);
 assert.ok(!html.includes('Snakes and Ladders'), 'a playable game is not listed as coming soon');
 assert.match(whatsNew[1], /Go Fish is now playable/);
-assert.match(whatsNew[1], /Wizard scorecard requires sign-in/);
+assert.match(whatsNew[1], /Smoother, tidier games/);
 assert.doesNotMatch(whatsNew[1], /Private tables and invitations|Host tools|Player cards|Profiles and history/);
 assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
 console.log('Coming Soon and latest-release-note tests passed (10 games, requested order, alternate working titles, 3 current highlights).');

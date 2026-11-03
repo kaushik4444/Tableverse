@@ -120,7 +120,7 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - 13.5 (9fdac40, 69fa417, done) `tests/ui/snakesladders-ui.js` (9 browser tests), Snakes and Ladders in the `wizard-layout.js` matrix (2 and 4 seats), `test:ui` and `build`; smoke test through the server socket.
 - 13.6 (done) PR #26 opened; CI green on both Node versions (build, tests with PostgreSQL, browser checks, Docker image, audit). Not merged: the owner merges.
 - Verified here: engine tests 21/21, `coming-soon.test.js`, screenshots at 390 and 1280 px (no horizontal overflow). NOT run here: anything needing `ws`/`pg` (npm registry blocked in this sandbox): the server smoke test and all `*.pg.test.js`; CI covers them.
-- Known: tokens slide in a straight line between squares (also along a snake or ladder); there is no square-by-square walk yet.
+- (Done in stage 15: tokens now walk square by square.)
 
 ## Stage 11 — Ludo polish (branch `feature/stage-11-ludo-polish`, from main e94d9fa; not merged)
 - Engine (`games/ludo`): board geometry now matches a real board: a token walks 51 ring squares (positions 0..50), then a 5-square home column (51..55), home = 56 (was 52 + 6, which skipped a diagonal into the lane). Two players sit opposite (seats 0 and 2); colours follow the board clockwise (red, green, yellow, blue); `seatLabel(i, seats)`. Smarter bot (finish > capture > bring out > safety/danger > furthest). New option `bonusRolls` (sixes only | sixes, captures and home). `view.players[i].seat`, `view.lastMove`.
@@ -149,3 +149,14 @@ Each item is one commit. Resume by reading `git log` on the branch.
 - Verified here: `npm run build`, `static`, `coming-soon`, engine suites, browser suites (`redraw-ui`, `invitations-ui`, `social-ui`, `host-tools-ui`, `wizard-layout`). CI on PR #27 was green after 14.5; the later commits are checked by the next run. NOT run here: `ws`/`pg` suites (npm registry blocked); CI covers them.
 - Ideas not done (measure first): per-viewer `view()` for big tables is computed per player; the chat log is resent in full on join; `app.js` still rebuilds a whole screen on every changed state (a keyed diff would help on slow phones).
 
+
+## Stage 15 — your bug list, consistency across games (branch `feature/stage-15-consistency`, from main 92dcc65)
+- 15.1 Friends header on home is one tappable button (opens #friends), not only "Manage". The waiting lobby no longer has the profile/avatar editor (edit it from the account menu).
+- 15.2 Toolbar everywhere: chat, reactions, ⋯ (sound, log, rules, scores…), leave. Go Fish and Snakes were not matched by `unifyToolbar` (their leave button uses `data-gf`/`data-sl`); it now finds leave by any data attribute equal to `leave`.
+- 15.3 Go Fish: no game log (it would show what others asked for): not in the ⋯ menu, not under the table, and `viewFor` no longer sends `log`. The centre action line is 15px/bold (was 12px).
+- 15.4 Snakes and Ladders: the token walks square by square (340 ms each), a ladder or snake is one long slide, the Roll button waits ("Moving…"), the result overlay waits, and bots pause 3.4–4 s so turns do not run together. Reduced motion skips the walk.
+- 15.5 Ludo: when only one move is possible (tokens on the same square that land on the same square count as one) the server plays it (`forcedPlay`, 700 ms) and the status says "Only one move: playing it".
+- 15.6 Phones (360x640): Go Fish and Snakes fit with the shared toolbar (mobile-fit now covers 7 games). Go Fish drops the stock pile picture on short phones (count only) and hides the rank/player labels visually.
+- 15.7 Consistency: a crown marks who is ahead in Go Fish (most books), Snakes (furthest) and Ludo (most progress), like "Leading"/"Winner" in Wizard and 29 (which already had them). Merged the audit branch: Go Fish no longer crashes when a game ends (the closing event names no player) and `tests/ui/game-audit.js` (plays every engine to 4 moments at 6 screen sizes; not in `npm test`).
+- Audit left over (known): poker with 8 players on a 320px-wide phone overlaps seat plates; 29 shows a played card slightly behind the top seat plate at 320x568 and 1280x800.
+- Property Rivals is on `feature/stage-14-property-rivals` and has its own toolbar: when it merges, check it against `mobile-fit.js`.

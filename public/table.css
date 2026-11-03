@@ -129,6 +129,7 @@ button.card { cursor: pointer; }
 .bdg { font: 800 9.5px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
 .bdg.d { background: #fff; color: #1a1a40; }
 .bdg.f { background: var(--first); color: #052b25; }
+.bdg.l { background: var(--gold, #f2c14e); color: var(--gold-ink, #3b2c00); }
 .pseat.first .av { border-color: var(--first); }
 .pseat:not(.turn):not(.me) .av { opacity: .88; }
 .pseat.turn .plate::before { content: '▶ '; color: var(--gold); }
