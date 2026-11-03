@@ -158,3 +158,11 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - 15.7 (done) `tests/ui/propertyrivals-ui.js` (8 browser tests), wizard-layout matrix (2/4/6 seats), smoke test, `test:ui`/`build`; leaves Coming soon (9 planned), What's new, README v0.11.
 - 15.8 (todo) PR + CI. Verified locally: engine tests, coming-soon test, browser tests. NOT run locally: `smoke.test.js` and PostgreSQL suites (need `ws`/`pg`, CI only).
 - Known: no bank house limit; trades only on your own turn; tokens jump (no square-by-square walk).
+
+## Stage 15 — Layout audit of every game except Ludo (branch `audit/game-ui-layout`, from main)
+- Tool: `tests/ui/game-audit.js` plays each game's real engine to four moments and checks six screen sizes for cut-off, overlapping and tiny controls (`UI_GAME=poker UI_SEATS=6 UI_SHOTS=dir node tests/ui/game-audit.js`; not part of `npm test`).
+- Fixes: Go Fish crash when a game ended (results never drew; regression test added); shorter table on short phones; Poker board sized to fit between side seats at 4+ players; 29 trump label bounded; played cards nudged off seat plates; Go Fish event line moved below the table; Wizard trump corner/strip clear of seats at 320x568.
+- Checked: `npm run build`; `wizard-layout.js` all viewports ok (one Ludo tap flake on a first run, clean on rerun); `gofish-ui.js` 10/10; `social-ui.js` 12/12; `host-tools-ui.js` 9/9.
+- Known remaining (audit): Poker 6p/8p seats overlap at 320x568 (8p also at 360x640); some below-the-fold hands and small tap targets (e.g. the "What's new" link) on the smallest phones.
+- Not done (perf ideas): per-viewer `view()` at big tables, chat log resent in full on join, keyed diff instead of whole-screen rebuild.
+- Not run: server/PG suites (no `ws`/`pg` here); CI covers them.
