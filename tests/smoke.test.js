@@ -220,7 +220,7 @@ function client(port, name, token) {
   assert.equal(pr.view.squares.length, 40);
   assert.equal(JSON.stringify(pr.view).includes('"decks"'), false, 'deck order is never sent');
   pr.send({ t: 'act', action: { type: 'roll' } });
-  await pr.until(() => pr.view && pr.view.event && pr.view.event.type === 'roll', 'roll answered');
+  await pr.until(() => pr.view && pr.view.dice && pr.view.dice[0] > 0, 'property rivals roll answered'); // the event is replaced by the landing, so wait for the dice
   pr.send({ t: 'act', action: { type: 'build', square: 0 } }); // refused, the table carries on
   pr.ws.close();
 
