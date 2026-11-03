@@ -12,7 +12,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 - **29** (4): team-based trick play with secret trump and 3/6/9 match length options.
 - **Poker (No-Limit Texas Hold’em)** (2–8): blinds, all-ins, side pots, showdown resolution.
 - **The Mind** (2–4): co-op, real-time ascending play with lives/stars and difficulty options.
-- **Ludo** (2–4): race your four tokens home — roll a six to get out, send opponents back, finish by exact count.
+- **Ludo** (2–4): race your four tokens home on the classic cross board — roll a six to get out, send opponents back, finish by exact count. Two players sit opposite each other; optional bonus rolls for captures and getting home.
 - **Snakes and Ladders** (2–4): roll to race along a 10×10 path to square 100. Ladders lift you, snakes drop you. Optional exact roll to finish and roll again on a six.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
 

@@ -45,7 +45,7 @@ function buildMessages(gameId, n, seed) {
   const view = g.view('p0');
   if (gameId === 'ludo') {
     // Adjacent on-track legal tokens make their enlarged touch halos overlap on phones.
-    view.players[0].tokens = [0, 1, 58, 58];
+    view.players[0].tokens = [0, 1, 56, 56];
     view.phase = 'moving'; view.canMove = true; view.myTurn = true; view.legalTokens = [0, 1]; view.dice = 6;
   }
   return [
