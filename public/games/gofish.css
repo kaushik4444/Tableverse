@@ -39,3 +39,4 @@
   .gf .gf-ask .btn.big { min-height: 44px; padding-block: 8px; font-size: 16px; }
   .gf .gf-event { font-size: 14px; margin-top: 2px; }
 }
+@media (max-width: 520px) { .gf .gf-stock .card { --cw: calc(var(--cw0, 62px) * .5); } }
