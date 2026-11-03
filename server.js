@@ -19,6 +19,7 @@ const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
 const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
+const { createStaticFiles } = require('./lib/staticFiles');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -248,6 +249,7 @@ function start(opts = {}) {
     },
   });
 
+  const staticFiles = createStaticFiles();
   const server = http.createServer(async (req, res) => {
     setSecurityHeaders(res); // apply to success and error responses, including health checks and 404s
     let rel;
@@ -300,18 +302,18 @@ function start(opts = {}) {
       res.writeHead(403);
       return res.end();
     }
-    fs.readFile(file, (err, data) => {
+    const type = MIME[path.extname(file)] || 'application/octet-stream';
+    staticFiles.load(file, type, (err, entry) => {
       if (err) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('Not found');
       }
-      res.writeHead(200, {
-        'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
-        'Cache-Control': 'no-cache',
+      staticFiles.respond(req, res, entry, {
+        'Content-Type': type,
+        'Cache-Control': 'no-cache', // always revalidate; the ETag turns that into a cheap 304
         ...SECURITY_HEADERS,
         ...(production ? { 'Strict-Transport-Security': 'max-age=15552000; includeSubDomains' } : {}),
       });
-      res.end(req.method === 'HEAD' ? undefined : data);
     });
   });
   // Bound incomplete HTTP requests and idle keep-alive sockets. These are request-receive timeouts,
