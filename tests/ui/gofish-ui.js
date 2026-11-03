@@ -107,6 +107,26 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a real finished game (closing event has no player) draws the results instead of crashing', async () => {
+    const games = require('../../games');
+    const def = games.get('gofish');
+    const players = four.map((x, i) => ({ id: i === 0 ? 'me' : 'p' + i, name: x.name }));
+    let a = 3; const rng = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+    const g = def.create(players, { timeLimit: 'off' }, rng);
+    for (let i = 0; i < 5000 && !g.isOver(); i++) { const id = g.awaiting()[0]; const f = g.forcedPlay && g.forcedPlay(); g.act(f ? f.playerId : id, f ? f.action : g.botAction(id)); }
+    assert.ok(g.isOver(), 'the engine finished the game');
+    const msgs = tableMessages('gofish', four);
+    msgs[1].view = JSON.parse(JSON.stringify(g.view('me')));
+    const errors = [];
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs });
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(url + '/');
+    await page.waitForSelector('.gf-final', { timeout: 8000 });
+    assert.deepEqual(errors, []);
+    assert.match(await page.textContent('.overlay'), /Game over|You won|You share/);
+    await ctx.close();
+  });
+
   await test('phone width: nothing scrolls sideways and the Ask button is reachable', async () => {
     const { page, ctx } = await open(tableMessages('gofish', [{ name: 'Aarav the Magnificent' }, { name: 'Charlotte-Anne' }, { name: 'Dmitri' }, { name: 'Eve' }, { name: 'Frederick' }, { name: 'Bo' }]), { width: 320, height: 568 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true);

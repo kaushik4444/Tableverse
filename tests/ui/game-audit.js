@@ -103,7 +103,7 @@ function inPage() {
     }
   }
   // overlaps between controls and seats (a fanned hand overlaps by design, so cards are not compared with each other)
-  const cand = all.filter((el) => el.matches('button, a.btn, input, select, .pt-seat, .wz-status, .wz-top, .bidbox, .gf-ask, .sl-panel, .sl-players li, .sl-feedback') && !el.parentElement.closest('button'));
+  const cand = all.filter((el) => !el.closest('.hand') && el.matches('button, a.btn, input, select, .pt-seat, .wz-status, .wz-top, .bidbox, .gf-ask, .sl-panel, .sl-players li, .sl-feedback') && !el.parentElement.closest('button'));
   const inter = (a, b) => { const x = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)), y = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)); return x * y; };
   for (let i = 0; i < cand.length; i++) for (let j = i + 1; j < cand.length; j++) {
     const a = cand[i], b = cand[j];
@@ -137,6 +137,13 @@ function inPage() {
     const lowest = Math.max(...hand.map((c) => c.getBoundingClientRect().bottom));
     if (lowest > vh + 1) add('WARN', 'below-fold', `hand ends at ${Math.round(lowest)} (screen ${vh})`);
   }
+  // a fanned hand overlaps by design, but each card must keep a slice wide enough to tap
+  if (hand.length > 1) {
+    const rs = hand.map((c) => c.getBoundingClientRect()).sort((a, b) => a.left - b.left);
+    let slice = Infinity; for (let i = 0; i + 1 < rs.length; i++) slice = Math.min(slice, rs[i + 1].left - rs[i].left);
+    out.info.handSlice = Math.round(slice);
+    if (slice < 16) add('WARN', 'fan-slice', `only ${Math.round(slice)}px of each hand card is tappable`);
+  }
   const prime = [...document.querySelectorAll('.btn.big, [data-gf=ask], [data-sl=roll], .bidbtn')].filter(visible);
   for (const b of prime) if (b.getBoundingClientRect().bottom > vh + 1 && !b.closest('.overlay')) { add('WARN', 'below-fold', `${label(b)} needs scrolling (bottom ${Math.round(b.getBoundingClientRect().bottom)} of ${vh})`); break; }
   out.info.pageH = document.documentElement.scrollHeight; out.info.vh = vh;
@@ -158,7 +165,7 @@ function inPage() {
         const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, hasTouch: size.width < 800 });
         const page = await ctx.newPage();
         const errors = [];
-        page.on('pageerror', (e) => errors.push(e.message));
+        page.on('pageerror', (e) => errors.push(e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).join(' | ').replace(/http:\/\/127\.0\.0\.1:\d+/g, '')));
         await page.addInitScript((messages) => {
           window.WebSocket = class {
             constructor() { this.readyState = 0; setTimeout(() => { this.readyState = 1; this.onopen && this.onopen({}); }, 0); }
