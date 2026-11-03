@@ -67,7 +67,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   }
 
   const COMING_SOON = [
-    ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order'],
+    ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order', 'In development'],
     ['🐂', 'Bullhead Run', 'Play numbered cards and avoid collecting bullheads.', 'Your build order'],
     ['🎨', 'Color Clash', 'Match colours and numbers, then play action cards wisely.', 'Your build order'],
     ['🚢', 'Sea Battle', 'Hide your fleet, call your shots and sink the opposing ships.', 'Your build order'],
@@ -78,11 +78,11 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     ['❎', 'Tic-Tac-Toe', 'Take turns placing Xs and Os to make a line of three.', 'Additional games'],
   ];
   function comingSoonCards(items, start) {
-    return items.map(([ico, name, description], index) => `<article class="soon-card">
+    return items.map(([ico, name, description, , status = 'Planned'], index) => `<article class="soon-card${status === 'In development' ? ' in-dev' : ''}">
       <span class="soon-number" aria-label="Roadmap position ${start + index}">${start + index}</span>
       <span class="soon-ico" aria-hidden="true">${ico}</span>
       <div class="soon-copy"><b>${esc(name)}</b><small>${esc(description)}</small></div>
-      <span class="soon-tag">Planned</span>
+      <span class="soon-tag">${esc(status)}</span>
     </article>`).join('');
   }
   function comingSoonHTML() {

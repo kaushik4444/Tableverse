@@ -15,7 +15,7 @@ const ui = window.TVHomeUI({
 const html = ui.comingSoonHTML();
 const buildOrder = ['Hidden Miners', 'Bullhead Run', 'Color Clash', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
 const additional = ['Four in a Row', 'Secret Clues', 'Tic-Tac-Toe'];
-assert.equal((html.match(/class="soon-card"/g) || []).length, 9);
+assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 9);
 let previous = -1;
 for (const name of [...buildOrder, ...additional]) {
   const index = html.indexOf(name);
@@ -26,6 +26,9 @@ for (const protectedBrand of ['Monopoly', 'Saboteur', '6 nimmt!', 'UNO', 'CATAN'
   assert.ok(!html.includes(protectedBrand), `protected commercial title should not be displayed: ${protectedBrand}`);
 }
 assert.match(html, /Development order/);
+assert.equal((html.match(/>In development</g) || []).length, 1, 'exactly one game is in development');
+assert.match(html, /Hidden Miners[\s\S]*?>In development</);
+assert.equal((html.match(/>Planned</g) || []).length, 8, 'the others are planned');
 assert.match(html, /Also on the list/);
 assert.match(html, /9 planned/);
 assert.match(html, /original artwork and presentation/);

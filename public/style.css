@@ -570,3 +570,5 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
   .game-card .game-actions .btn { min-height: 40px; }
   .game-grid { gap: 10px; }
 }
+
+.soon-card.in-dev .soon-tag { color: var(--gold, #f2c14e); border-color: currentColor; }
