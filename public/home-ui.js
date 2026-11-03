@@ -33,7 +33,8 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
       const status = invited ? 'Invited' : (f.online ? (f.playing ? 'Playing' : 'Online') : 'Offline');
       return `<option value="${esc(f.username)}" ${invited ? 'disabled' : ''}>${esc(f.display_name || f.username)} (@${esc(f.username)}) · ${status}</option>`;
     }).join('');
-    return `<form id="tableInviteForm" class="social-search"><label for="tableInviteFriend">Invite a friend to this private table</label><select id="tableInviteFriend" required>${rows || '<option value="" disabled>No friends to invite</option>'}</select><button class="btn small" type="submit" ${rows ? '' : 'disabled'}>Send invitation</button></form>`;
+    if (!rows) return '';
+    return `<form id="tableInviteForm" class="social-search"><label class="sr-only" for="tableInviteFriend">Invite a friend to this private table</label><select id="tableInviteFriend" required>${rows || '<option value="" disabled>No friends to invite</option>'}</select><button class="btn small" type="submit" ${rows ? '' : 'disabled'}>Send invitation</button></form>`;
   }
 
 

@@ -1557,6 +1557,15 @@
       <p class="opt-desc">${esc(cur.desc)}</p></div>`;
   }
 
+  /** One short line describing the current options, e.g. "Standard · Full game · No limit". */
+  function optionsSummary(g, r) {
+    return (g.options || []).map((o) => {
+      if (o.type === 'boolean') return r.options[o.key] ? o.label : '';
+      const cur = o.choices.find((c) => c.value === r.options[o.key]) || o.choices[0];
+      return cur ? cur.label : '';
+    }).filter(Boolean).join(' · ') || 'Standard rules';
+  }
+
   function renderLobby() {
     const r = S.room;
     const g = gameMeta(r.gameId) || { name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
@@ -1602,17 +1611,16 @@
       ${spectating ? `<section class="panel"><h3>👁 You are watching</h3><p class="hint" style="text-align:left;margin:6px 0 10px">The next game starts when the host presses Start. ${open > 0 ? 'There is an open seat if you want to play.' : 'Ask the host to free a seat if you want to play.'}</p>${open > 0 ? '<button class="btn" data-act="sit">Take a seat</button>' : ''}</section>` : ''}
       ${r.spectators && r.spectators.length ? `<details class="spectator-list"><summary>👁 ${r.spectators.length} watching</summary>${isHost ? `<ul class="spectator-people">${r.spectators.map((x) => `<li><span class="nm">${esc(x.name)}</span><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(x.id)}" data-name="${esc(x.name)}" aria-label="Remove ${esc(x.name)} from the table" title="Remove from table">✕</button></li>`).join('')}</ul>` : `<div class="spectator-names">${r.spectators.map((x) => esc(x.name)).join(', ')}</div>`}</details>` : ''}
       <section class="panel code-card">
-        <div class="label">${r.visibility === 'public' ? 'Table code · share it with your friends' : 'Table code · private, invited friends only'}</div>
+        <div class="label">Table code</div>
         <div class="code">${esc(r.code)}</div>
         ${r.visibility === 'public' ? `<div class="row" style="justify-content:center">
           <button class="btn small" data-act="copyLink">Copy invite link</button>
           <button class="btn small wa" data-act="whatsapp">WhatsApp</button>
           ${navigator.share ? '<button class="btn ghost small" data-act="share">Share…</button>' : ''}
         </div>` : ''}
-        ${isHost ? `<div class="visibility-control"><span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button><small>${r.visibility === 'public' ? 'Anyone can find this table in Sessions in Progress.' : 'Only friends with an accepted invitation can join.'}</small></div>` : ''}
-        ${inviteFriendsHTML()}${r.visibility === 'public' ? '<small>Public table links and codes can be shared freely.</small>' : '<small>Private table links and codes are not access grants. Invite each friend above; they must accept first.</small>'}
+        ${isHost ? `<div class="visibility-control"><span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
+        ${inviteFriendsHTML()}
       </section>
-      <section class="panel">${profileHTML()}</section>
       <section class="panel">
         <div class="row" style="justify-content:space-between">
           <h3>Players <span class="label">${n} joined</span></h3>
@@ -1621,7 +1629,8 @@
         <ul class="seats">${seats.join('')}</ul>
         ${isHost && open > 0 ? `<div class="row" style="margin-top:12px"><button class="btn ghost small" data-act="addBot">+ Add a bot</button><button class="btn ghost small" data-act="fillBots">Fill ${open} open seat${open === 1 ? '' : 's'} with bots</button></div>` : ''}
       </section>
-      ${opts ? `<section class="panel"><h3 style="margin-bottom:10px">Variants &amp; options</h3><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</section>` : ''}
+      <details class="panel fold you-fold"><summary><span class="avatar">${S.avatar ? esc(S.avatar) : '★'}</span><span class="fold-title">${S.named ? esc(S.name) : 'Your profile'}${S.username ? ` <small>@${esc(S.username)}</small>` : ''}</span><span class="fold-hint">Edit</span></summary>${profileHTML()}</details>
+      ${opts ? `<details class="panel fold"><summary><span class="fold-title">Game options</span><span class="fold-hint">${esc(optionsSummary(g, r))}</span></summary><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</details>` : ''}
       ${
         isHost
           ? `<div class="start-bar"><button class="btn big" data-act="start">Start game${open > 0 ? ` <small>· ${open} bot${open === 1 ? '' : 's'} will join</small>` : ''}</button></div>`

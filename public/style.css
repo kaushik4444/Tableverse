@@ -535,3 +535,16 @@ html { scroll-behavior: auto; }
   .soon-card { min-height: 66px; padding: 9px 10px; gap: 8px; }
   .soon-tag { font-size: 8px; padding: 2px 5px; }
 }
+
+/* Lobby: fewer, quieter blocks. Profile and options fold into one-line summaries. */
+.fold { padding: 0; }
+.fold > summary { list-style: none; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 14px; cursor: pointer; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary .avatar { flex: 0 0 auto; width: 32px; height: 32px; font-size: 18px; }
+.fold-title { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fold-title small { color: var(--muted); font-weight: 400; }
+.fold-hint { margin-left: auto; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+.fold > summary::after { content: '▾'; color: var(--muted); transition: transform .2s; }
+.fold[open] > summary::after { transform: rotate(180deg); }
+.fold > :not(summary) { margin: 0 14px 14px; }
+.code-card .code { font-size: clamp(30px, 12vw, 44px); margin: 2px 0 8px; }

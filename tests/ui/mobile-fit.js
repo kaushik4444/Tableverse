@@ -19,6 +19,23 @@ function build(gameId, n) {
 }
 
 let failed = 0;
+async function lobbyCheck(browser, url) {
+  const def = games.get('wizard');
+  const room = { code: 'ABCDEF', gameId: 'wizard', hostId: 'me', status: 'lobby', options: {}, visibility: 'private', seats: 4, min: def.seats.min, max: def.seats.max, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
+    members: [{ id: 'me', name: 'Aarav', bot: false, avatar: '🧙', connected: true }, { id: 'p1', name: 'Bo', bot: false, avatar: '🦊', connected: true }, { id: 'b1', name: 'Merlin', bot: true, avatar: '🐉', connected: true }] };
+  const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages: [welcome({ games: games.list() }), { t: 'state', room, view: null }] });
+  try {
+    await page.goto(url + '/');
+    await page.waitForSelector('.code-card');
+    const r = await page.evaluate(() => ({ h: document.documentElement.scrollHeight, folds: document.querySelectorAll('details.fold').length, open: document.querySelectorAll('details.fold[open]').length, start: !!document.querySelector('[data-act="start"]') }));
+    assert.ok(r.h <= 1300, `the lobby stays compact on a phone (${r.h}px tall)`);
+    assert.equal(r.folds, 2, 'profile and options are folded');
+    assert.equal(r.open, 0, 'folds start closed');
+    assert.ok(r.start, 'host can start');
+    console.log('  ok  lobby is compact: ' + r.h + 'px, profile and options folded');
+  } catch (e) { failed++; console.error('FAIL  lobby\n' + (e.stack || e)); }
+  await ctx.close();
+}
 (async () => {
   const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk() });
   const browser = await chromium.launch();
@@ -46,7 +63,8 @@ let failed = 0;
     } catch (e) { failed++; console.error('FAIL  ' + gameId + '\n' + (e.stack || e)); }
     await ctx.close();
   }
+  await lobbyCheck(browser, url);
   await browser.close(); server.close();
-  console.log(`\nmobile fit: ${CASES.length - failed} passed, ${failed} failed`);
+  console.log(`\nmobile fit: ${CASES.length + 1 - failed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();
