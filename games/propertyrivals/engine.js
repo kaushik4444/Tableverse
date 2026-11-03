@@ -36,7 +36,7 @@ function createGame(players, options, rng = Math.random) {
     n,
     rng,
     options: { startCash, auction: o.auction !== false, jackpot: o.jackpot === true, rounds: ['30', '60'].includes(String(o.rounds)) ? String(o.rounds) : 'off' },
-    players: players.map((p, i) => ({ id: p.id, name: p.name, token: TOKENS[i], cash: startCash, pos: 0, inLockup: false, lockTries: 0, keep: 0, bankrupt: false, place: null })),
+    players: players.map((p, i) => ({ id: p.id, name: p.name, token: TOKENS[i], cash: startCash, pos: 0, inLockup: false, lockTries: 0, keeps: [], bankrupt: false, place: null })),
     land: B.SQUARES.map((s) => (B.buyable(s) ? { owner: -1, houses: 0, mortgaged: false } : null)),
     turn: 0,
     phase: 'roll', // roll | buy | manage | debt | auction | trade | gameOver
@@ -66,7 +66,7 @@ const ownsGroup = (g, i, group) => B.groupSquares(group).every((k) => g.land[k].
 const groupHouses = (g, group) => B.groupSquares(group).map((k) => g.land[k].houses);
 const hasBuildings = (g, group) => groupHouses(g, group).some((h) => h > 0);
 
-function rentOf(g, k, dice, mult = 1) {
+function rentOf(g, k, dice, mult = 1) { // mult applies to cities and ports; a utility is dice x 4 or x 10
   const s = sq(k); const l = g.land[k];
   if (!l || l.owner < 0 || l.mortgaged) return 0;
   if (s.type === 'city') {
@@ -75,7 +75,7 @@ function rentOf(g, k, dice, mult = 1) {
   }
   if (s.type === 'port') { const c = B.portSquares.filter((p) => g.land[p].owner === l.owner).length; return 25 * 2 ** (c - 1) * mult; }
   const c = B.utilitySquares.filter((p) => g.land[p].owner === l.owner).length;
-  return dice * (c === 2 ? 10 : 4) * (mult > 1 ? 1 : 1);
+  return dice * (c === 2 ? 10 : 4);
 }
 
 /** What a player would raise by selling every building and mortgaging every property (plus cash). */
@@ -141,8 +141,8 @@ function bankrupt(g, i) {
     l.houses = 0;
     if (heir >= 0) l.owner = heir; else { l.owner = -1; l.mortgaged = false; }
   }
-  if (heir >= 0) g.players[heir].keep += p.keep;
-  p.keep = 0;
+  for (const kc of p.keeps) { if (heir >= 0) g.players[heir].keeps.push(kc); else g.decks[kc.deck].push(kc.idx); }
+  p.keeps = [];
   p.bankrupt = true;
   p.place = active(g).length + 1;
   g.order.push(i);
@@ -201,7 +201,7 @@ function drawCard(g, i, deck) {
   const order = g.decks[deck];
   const idx = order.shift();
   const c = cards[idx];
-  if (c.keep) g.players[i].keep++; else order.push(idx); // a kept card leaves the deck until it is used
+  if (c.keep) g.players[i].keeps.push({ deck, idx }); else order.push(idx); // a kept card leaves the deck until it is used
   g.lastCard = { seq: g.seq + 1, deck, text: c.text, by: i };
   emit(g, { type: 'card', by: i, deck, text: c.text });
   say(g, i, `drew: ${c.text}`, 'card');
