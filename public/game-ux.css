@@ -120,3 +120,6 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .wz .btn:active, .ludo .btn:active, .tm .btn:active { transform: none; }
 }
 
+
+/* A long game name never runs under the toolbar buttons. */
+.wz-top .wz-round { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

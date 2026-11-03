@@ -91,7 +91,7 @@
   function feedback(v) {
     const last = (v.log || []).slice(-1)[0];
     if (ui.animating && v.lastRoll) return `<div class="sl-feedback" role="status"><span>🎲</span><b>${esc(v.players[v.lastRoll.by].name)} rolled a ${v.lastRoll.dice}…</b></div>`;
-    if (!last) return '<div class="sl-feedback"><span>🎲</span><b>Roll to start. First to square 100 wins.</b></div>';
+    if (!last) return '<div class="sl-feedback start"><span>🎲</span><b>Roll to start. First to square 100 wins.</b></div>';
     const icon = { ladder: '🪜', snake: '🐍', miss: '↪️', win: '🏆' }[last.kind] || '🎲';
     return `<div class="sl-feedback ${esc(last.kind || '')}" role="status"><span>${icon}</span><b>${esc(last.by)} ${esc(last.card)}</b></div>`;
   }

@@ -72,7 +72,8 @@
 
   function sizes(v) {
     const w = window.innerWidth;
-    const cw = w < 480 ? 58 : w < 900 ? 72 : 84;
+    let cw = w < 480 ? 58 : w < 900 ? 72 : 84;
+    if (innerHeight <= 700) cw = Math.min(cw, 48); // short phones: the table, the ask and the hand share one screen
     const n = v.hand.length;
     const avail = Math.min(w, 980) - 20;
     let overlap = -6;

@@ -5,7 +5,7 @@ const { serve, scriptedPage, loadPlaywright, sessionOk, welcome } = require('./h
 const games = require('../../games');
 const { chromium } = loadPlaywright();
 
-const CASES = [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4]];
+const CASES = [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4]];
 const NAMES = ['Aarav', 'Bo', 'Cy', 'Di', 'Eve', 'Fay'];
 function build(gameId, n, untilMine = false) {
   const def = games.get(gameId);
@@ -69,10 +69,10 @@ async function lobbyCheck(browser, url) {
     await page.waitForSelector('.code-card');
     const r = await page.evaluate(() => ({ h: document.documentElement.scrollHeight, folds: document.querySelectorAll('details.fold').length, open: document.querySelectorAll('details.fold[open]').length, start: !!document.querySelector('[data-act="start"]') }));
     assert.ok(r.h <= 1300, `the lobby stays compact on a phone (${r.h}px tall)`);
-    assert.equal(r.folds, 2, 'profile and options are folded');
+    assert.equal(r.folds, 1, 'the game options are folded (no profile editor in the lobby)');
     assert.equal(r.open, 0, 'folds start closed');
     assert.ok(r.start, 'host can start');
-    console.log('  ok  lobby is compact: ' + r.h + 'px, profile and options folded');
+    console.log('  ok  lobby is compact: ' + r.h + 'px, options folded');
   } catch (e) { failed++; console.error('FAIL  lobby\n' + (e.stack || e)); }
   await ctx.close();
 }
@@ -89,11 +89,14 @@ async function lobbyCheck(browser, url) {
         const d = document.querySelector('.game-supporting-details');
         const bar = document.querySelector('.wz-top > .row, .ludo-tools');
         return { mainEnd: Math.round(d.getBoundingClientRect().top + scrollY), vh: innerHeight, direct: bar ? [...bar.children].map((c) => (c.classList.contains('chat-btn') ? 'chat' : c.dataset.act === 'emotes' ? 'emotes' : c.classList.contains('tb-more-wrap') ? 'more' : 'other')).join(',') : null,
+          leaveLast: !!bar && Object.values(bar.lastElementChild.dataset).includes('leave'),
           menu: [...document.querySelectorAll('.tb-pop button')].map((b) => b.dataset.act || '').join(',') };
       });
       assert.ok(r.mainEnd <= r.vh, `${gameId}: the main play area ends at ${r.mainEnd}px but the screen is ${r.vh}px`);
       assert.equal(r.direct, 'chat,emotes,more,other', `${gameId}: toolbar is chat, reactions, more, leave (${r.direct})`);
-      assert.match(r.menu, /activityLog/, `${gameId}: the log lives in the more menu`);
+      if (gameId === 'gofish') assert.doesNotMatch(r.menu, /activityLog/, 'gofish: no log, it would show what others asked for');
+      else assert.match(r.menu, /activityLog/, `${gameId}: the log lives in the more menu`);
+      assert.ok(r.leaveLast, `${gameId}: leave is the last button on the bar`);
       assert.match(r.menu, /sound/, `${gameId}: sound lives in the more menu`);
       await page.click('.tb-more-btn');
       assert.equal(await page.isVisible('.tb-pop'), true, `${gameId}: the more menu opens`);
