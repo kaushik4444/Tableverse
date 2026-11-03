@@ -59,6 +59,7 @@
     pendingModalTarget: null, // player id acted on by an open modal (make host / kick)
     menuOpen: false, // the account dropdown in the top bar
     bellOpen: false, // the notifications dropdown in the top bar
+    toolsOpen: false, // the "more" menu in a game's toolbar
     wnSeen: store.get('ct_wn_seen') || '', // the last What's new version this person opened
     createVisibility: 'private',
     sessionListOpen: store.get('ct_sessions_open') !== '0',
@@ -612,6 +613,7 @@
 
   function publicTablesHTML() {
     const count = S.publicTables.length;
+    if (!count) return ''; // nothing open: no empty block on the home page
     const rows = S.publicTables.map((t) => {
       const g = gameMeta(t.gameId) || { name: t.gameId, icon: '🎴' };
       const action = publicTableAction(t);
@@ -795,11 +797,13 @@
     if (e.key !== 'Escape') return;
     if (S.auth) closeOverlay();
     else if (document.getElementById('modal-overlay')) closeModal();
+    else if (S.toolsOpen) { setTools(false); document.querySelector('.tb-more-btn')?.focus(); }
     else if (S.bellOpen) { S.bellOpen = false; render(); document.querySelector('.tb-bell')?.focus(); }
     else if (S.menuOpen) { closeMenu(); document.querySelector('.tb-avatar-btn')?.focus(); }
   });
   // a click anywhere outside the open account menu closes it
   document.addEventListener('click', (e) => {
+    if (S.toolsOpen && (!e.target.closest('.tb-more-wrap') || e.target.closest('.tb-pop button'))) setTools(false);
     if (S.bellOpen && !e.target.closest('.bell-wrap')) { S.bellOpen = false; render(); }
     if (S.menuOpen && !e.target.closest('.menu-wrap')) closeMenu();
   });
@@ -1291,11 +1295,11 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-go-fish';
+  const WHATS_NEW_VERSION = '2026-11-snakes-ladders';
   const WHATS_NEW = [
-    ['🎲', 'Ludo is now playable', 'Create a table for 2–4 players, play with friends and let bots fill empty seats.'],
     ['🔐', 'Wizard scorecard requires sign-in', 'Sign in to open the offline scorecard. Scores remain stored on your device and are not added to profile statistics.'],
     ['🐟', 'Go Fish is now playable', 'Ask for cards, collect four of a kind and make the most books. 2–6 players, with bots for empty seats.'],
+    ['🐍', 'Snakes and Ladders is now playable', 'Roll, climb the ladders and dodge the snakes. 2–4 players, with bots for empty seats.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
@@ -1322,6 +1326,36 @@
         ${item('logoutAll', '🔒', 'Log out everywhere', '', 'dim')}
       </div>` : '';
     return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}">${av}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
+  }
+
+  /**
+   * Every game gets the same compact toolbar: chat, reactions, a "more" menu (sound, log, scores/chips/stats) and leave.
+   * The games render their own buttons; this moves the secondary ones into the menu so one row fits any phone.
+   */
+  function unifyToolbar() {
+    const bar = $app.querySelector('.wz-top > .row, .ludo-tools');
+    if (!bar) return;
+    const leave = bar.querySelector('[data-wz="leave"], [data-t9="leave"], [data-pk="leave"], [data-tm="leave"], [data-lt="leave"]');
+    const chat = bar.querySelector('.chat-btn');
+    const emote = bar.querySelector('[data-act="emotes"]');
+    const extras = [...bar.querySelectorAll('button')].filter((b) => b !== leave && b !== chat && b !== emote);
+    if (!extras.some((b) => b.dataset.act === 'activityLog')) {
+      const log = document.createElement('button');
+      log.type = 'button'; log.className = 'btn ghost small'; log.dataset.act = 'activityLog'; log.setAttribute('aria-label', 'Open game log'); log.textContent = '📜 Log';
+      extras.push(log);
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'tb-more-wrap';
+    wrap.innerHTML = `<button type="button" class="btn ghost small tb-more-btn" data-act="toggleTools" aria-haspopup="true" aria-expanded="${!!S.toolsOpen}" aria-label="More options">⋯</button><div class="tb-pop" role="group" aria-label="More options" ${S.toolsOpen ? '' : 'hidden'}></div>`;
+    const pop = wrap.querySelector('.tb-pop');
+    extras.forEach((b) => pop.appendChild(b));
+    bar.replaceChildren(...[chat, emote, wrap, leave].filter(Boolean));
+  }
+  function setTools(open) {
+    S.toolsOpen = open;
+    const btn = $app.querySelector('.tb-more-btn'); const pop = $app.querySelector('.tb-pop');
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+    if (pop) pop.hidden = !open;
   }
 
   function closeMenu() {
@@ -1546,6 +1580,15 @@
       <p class="opt-desc">${esc(cur.desc)}</p></div>`;
   }
 
+  /** One short line describing the current options, e.g. "Standard · Full game · No limit". */
+  function optionsSummary(g, r) {
+    return (g.options || []).map((o) => {
+      if (o.type === 'boolean') return r.options[o.key] ? o.label : '';
+      const cur = o.choices.find((c) => c.value === r.options[o.key]) || o.choices[0];
+      return cur ? cur.label : '';
+    }).filter(Boolean).join(' · ') || 'Standard rules';
+  }
+
   function renderLobby() {
     const r = S.room;
     const g = gameMeta(r.gameId) || { name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
@@ -1591,17 +1634,16 @@
       ${spectating ? `<section class="panel"><h3>👁 You are watching</h3><p class="hint" style="text-align:left;margin:6px 0 10px">The next game starts when the host presses Start. ${open > 0 ? 'There is an open seat if you want to play.' : 'Ask the host to free a seat if you want to play.'}</p>${open > 0 ? '<button class="btn" data-act="sit">Take a seat</button>' : ''}</section>` : ''}
       ${r.spectators && r.spectators.length ? `<details class="spectator-list"><summary>👁 ${r.spectators.length} watching</summary>${isHost ? `<ul class="spectator-people">${r.spectators.map((x) => `<li><span class="nm">${esc(x.name)}</span><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(x.id)}" data-name="${esc(x.name)}" aria-label="Remove ${esc(x.name)} from the table" title="Remove from table">✕</button></li>`).join('')}</ul>` : `<div class="spectator-names">${r.spectators.map((x) => esc(x.name)).join(', ')}</div>`}</details>` : ''}
       <section class="panel code-card">
-        <div class="label">${r.visibility === 'public' ? 'Table code · share it with your friends' : 'Table code · private, invited friends only'}</div>
+        <div class="label">Table code</div>
         <div class="code">${esc(r.code)}</div>
         ${r.visibility === 'public' ? `<div class="row" style="justify-content:center">
           <button class="btn small" data-act="copyLink">Copy invite link</button>
           <button class="btn small wa" data-act="whatsapp">WhatsApp</button>
           ${navigator.share ? '<button class="btn ghost small" data-act="share">Share…</button>' : ''}
         </div>` : ''}
-        ${isHost ? `<div class="visibility-control"><span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button><small>${r.visibility === 'public' ? 'Anyone can find this table in Sessions in Progress.' : 'Only friends with an accepted invitation can join.'}</small></div>` : ''}
-        ${inviteFriendsHTML()}${r.visibility === 'public' ? '<small>Public table links and codes can be shared freely.</small>' : '<small>Private table links and codes are not access grants. Invite each friend above; they must accept first.</small>'}
+        ${isHost ? `<div class="visibility-control"><span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
+        ${inviteFriendsHTML()}
       </section>
-      <section class="panel">${profileHTML()}</section>
       <section class="panel">
         <div class="row" style="justify-content:space-between">
           <h3>Players <span class="label">${n} joined</span></h3>
@@ -1610,7 +1652,8 @@
         <ul class="seats">${seats.join('')}</ul>
         ${isHost && open > 0 ? `<div class="row" style="margin-top:12px"><button class="btn ghost small" data-act="addBot">+ Add a bot</button><button class="btn ghost small" data-act="fillBots">Fill ${open} open seat${open === 1 ? '' : 's'} with bots</button></div>` : ''}
       </section>
-      ${opts ? `<section class="panel"><h3 style="margin-bottom:10px">Variants &amp; options</h3><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</section>` : ''}
+      <details class="panel fold you-fold"><summary><span class="avatar">${S.avatar ? esc(S.avatar) : '★'}</span><span class="fold-title">${S.named ? esc(S.name) : 'Your profile'}${S.username ? ` <small>@${esc(S.username)}</small>` : ''}</span><span class="fold-hint">Edit</span></summary>${profileHTML()}</details>
+      ${opts ? `<details class="panel fold"><summary><span class="fold-title">Game options</span><span class="fold-hint">${esc(optionsSummary(g, r))}</span></summary><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</details>` : ''}
       ${
         isHost
           ? `<div class="start-bar"><button class="btn big" data-act="start">Start game${open > 0 ? ` <small>· ${open} bot${open === 1 ? '' : 's'} will join</small>` : ''}</button></div>`
@@ -1684,8 +1727,7 @@
     });
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
     announceStatus(statusText ? statusText.textContent : '');
-    const top = $app.querySelector('.wz-top');
-    if (top) top.querySelector('.row')?.insertAdjacentHTML('afterbegin', '<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>');
+    unifyToolbar();
     const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
     const gameInfo = gameMeta(S.room.gameId);
     if (surface && gameInfo) {
@@ -1718,6 +1760,7 @@
       try { await navigator.clipboard.writeText(url); toast('Profile link copied'); } catch { window.prompt('Copy this link:', url); }
     },
     toggleMenu: () => { S.menuOpen = !S.menuOpen; S.bellOpen = false; render(); },
+    toggleTools: () => setTools(!S.toolsOpen),
     toggleBell: () => { S.bellOpen = !S.bellOpen; S.menuOpen = false; render(); if (S.bellOpen) loadSocial({ quiet: true }); },
     openProfilePage: () => { S.menuOpen = false; openPage('profile'); },
     openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },

@@ -14,7 +14,7 @@ const games = require('../../games');
 
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/json' };
-const CASES = process.env.UI_GAME ? [[process.env.UI_GAME, Number(process.env.UI_SEATS || 4)]] : [['gofish', 2], ['gofish', 4], ['gofish', 6], ['wizard', 3], ['wizard', 4], ['wizard', 6], ['twentynine', 4], ['poker', 2], ['poker', 6], ['themind', 2], ['themind', 4], ['ludo', 2], ['ludo', 4]];
+const CASES = process.env.UI_GAME ? [[process.env.UI_GAME, Number(process.env.UI_SEATS || 4)]] : [['snakesladders', 2], ['snakesladders', 4], ['gofish', 2], ['gofish', 4], ['gofish', 6], ['wizard', 3], ['wizard', 4], ['wizard', 6], ['twentynine', 4], ['poker', 2], ['poker', 6], ['themind', 2], ['themind', 4], ['ludo', 2], ['ludo', 4]];
 const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const SEEDS = process.env.UI_SEED ? [Number(process.env.UI_SEED)] : [1, 2, 3, 4, 5, 6];
 const NAMES = ['Aarav the Magnificent', 'Bo', 'Charlotte-Anne', 'Dmitri', 'Eve', 'Frederick'];
@@ -45,7 +45,7 @@ function buildMessages(gameId, n, seed) {
   const view = g.view('p0');
   if (gameId === 'ludo') {
     // Adjacent on-track legal tokens make their enlarged touch halos overlap on phones.
-    view.players[0].tokens = [0, 1, 58, 58];
+    view.players[0].tokens = [0, 1, 56, 56];
     view.phase = 'moving'; view.canMove = true; view.myTurn = true; view.legalTokens = [0, 1]; view.dice = 6;
   }
   return [

@@ -7,6 +7,7 @@ const registry = {
   themind: require('./themind'),
   ludo: require('./ludo'),
   gofish: require('./gofish'),
+  snakesladders: require('./snakesladders'),
 };
 
 module.exports = {

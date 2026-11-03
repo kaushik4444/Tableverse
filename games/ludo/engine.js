@@ -1,46 +1,52 @@
 'use strict';
 // Ludo — pure rules engine (no I/O, no timers).
-// 2-4 players, 4 tokens each. Roll a 6 to bring a token out; move around the board,
-// send opponents home by landing on them (not on safe squares), then race up your
-// home column by exact count. First to get all 4 tokens home wins.
+// 2-4 players, 4 tokens each. Roll a 6 to bring a token out; move clockwise around the cross-shaped board,
+// send opponents back to their yard by landing on them (not on safe squares), then climb your home column
+// by exact count. First to get all 4 tokens home wins.
+//
+// Geometry (the classic board): a ring of 52 squares shared by everyone. A token enters on its colour's start
+// square and travels 51 squares (positions 0..50); the 52nd ring square is never used by its own colour, because
+// it turns into its home column (5 squares, positions 51..55) and then the home triangle (position 56 = home).
 
 const TOKENS = 4;
-const TRACK = 52; // squares around the board
-const HOME_COL = 6; // squares in each home column
-const FINISHED = 58; // internal position: token is home
-const STARTS = [0, 13, 26, 39]; // each player's entry square on the track
-// Safe squares on the track (0-indexed): the four starts plus four safe spots.
+const TRACK = 52; // squares on the shared ring
+const LAP = 51; // squares a token walks on the ring (internal positions 0..50)
+const HOME_COL = 5; // squares in each home column (internal positions 51..55)
+const FINISHED = LAP + HOME_COL; // 56: token is home
+const STARTS = [0, 13, 26, 39]; // ring square where each board seat enters, clockwise from the top-left
+// Safe squares on the ring (0-indexed): the four starts plus the star square eight steps after each start.
 const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
-const COLORS = ['🔴', '🟡', '🟢', '🔵'];
+const SEAT_COLORS = ['🔴', '🟢', '🟡', '🔵']; // board seats clockwise: top-left, top-right, bottom-right, bottom-left
+const COLORS = SEAT_COLORS;
+// Which board seats are used for n players. Two players sit opposite each other, as on a real board.
+const SEATS_FOR = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
 
 function indexOf(g, id) { return g.players.findIndex((p) => p.id === id); }
 function bump(g) { g.version++; }
 function emit(g, ev) { g.seq++; g.event = Object.assign({ seq: g.seq }, ev); }
 
-function absPos(playerIdx, p) {
-  // absolute board square (0-51) for a token at internal track position p
-  return (STARTS[playerIdx] + p) % TRACK;
+function absPos(g, playerIdx, p) {
+  // absolute ring square (0-51) for a token at internal track position p (0..50)
+  return (STARTS[g.players[playerIdx].seat] + p) % TRACK;
 }
 
 function newPosFor(g, playerIdx, p, dice) {
   // internal position after moving a token at `p` by `dice`, or null if illegal
-  const start = STARTS[playerIdx];
   if (p === -1) {
     // in home: only a 6 brings a token out to the start square
     return dice === 6 ? 0 : null;
   }
-  if (p >= 0 && p <= TRACK - 1) {
+  if (p >= 0 && p <= LAP - 1) {
     const np = p + dice;
-    if (np <= TRACK - 1) return np;
-    const excess = np - TRACK; // passed the start square after a lap
-    if (excess < HOME_COL) return TRACK + excess; // into the home column
+    if (np <= LAP - 1) return np;
+    const excess = np - LAP; // squares past the last ring square: into the home column
+    if (excess < HOME_COL) return LAP + excess;
     if (excess === HOME_COL) return FINISHED; // exactly home
     return null; // overshot the finish: exact count needed
   }
-  if (p >= TRACK && p < TRACK + HOME_COL) {
+  if (p >= LAP && p < FINISHED) {
     const np = p + dice;
-    if (np < TRACK + HOME_COL) return np; // further up the home column
-    if (np === TRACK + HOME_COL) return FINISHED; // exactly home
+    if (np <= FINISHED) return np; // further up the home column, or exactly home
     return null; // overshot: exact count needed
   }
   return null; // already finished
@@ -60,16 +66,18 @@ function legalMoves(g, playerIdx) {
 function applyMove(g, playerIdx, tokenIdx, np) {
   const old = g.tokens[playerIdx][tokenIdx];
   g.tokens[playerIdx][tokenIdx] = np;
+  const captured = [];
 
-  // Capture: landing on a non-safe track square occupied by opponent(s) sends them home.
-  if (np >= 0 && np <= TRACK - 1 && !SAFE.has(absPos(playerIdx, np))) {
-    const at = absPos(playerIdx, np);
+  // Capture: landing on a non-safe ring square occupied by opponent(s) sends them back to their yard.
+  if (np >= 0 && np <= LAP - 1 && !SAFE.has(absPos(g, playerIdx, np))) {
+    const at = absPos(g, playerIdx, np);
     for (let i = 0; i < g.n; i++) {
       if (i === playerIdx) continue;
       for (let t = 0; t < TOKENS; t++) {
         const tp = g.tokens[i][t];
-        if (tp >= 0 && tp <= TRACK - 1 && absPos(i, tp) === at) {
+        if (tp >= 0 && tp <= LAP - 1 && absPos(g, i, tp) === at) {
           g.tokens[i][t] = -1;
+          captured.push({ player: i, token: t });
           g.log.push({ by: g.players[playerIdx].name, card: `sent ${g.players[i].name} home`, kind: 'capture' });
         }
       }
@@ -79,11 +87,13 @@ function applyMove(g, playerIdx, tokenIdx, np) {
   if (np === FINISHED) {
     g.log.push({ by: g.players[playerIdx].name, card: 'got a token home', kind: 'home' });
   }
+  g.lastMove = { player: playerIdx, token: tokenIdx, from: old, to: np, dice: g.dice, captured };
   g.log.push({ by: g.players[playerIdx].name, card: `moved token ${tokenIdx + 1} by ${g.dice}`, kind: 'move' });
-  emit(g, { type: 'moved', by: playerIdx, token: tokenIdx, from: old, to: np, dice: g.dice });
+  emit(g, { type: 'moved', by: playerIdx, token: tokenIdx, from: old, to: np, dice: g.dice, captured });
   if (g.tokens[playerIdx].every((x) => x === FINISHED)) {
     finishPlayer(g, playerIdx);
   }
+  return { captured: captured.length > 0, home: np === FINISHED };
 }
 
 function finishPlayer(g, playerIdx) {
@@ -121,7 +131,9 @@ function createGame(playerList, options = {}, rng = Math.random) {
   const g = {
     game: 'ludo',
     n,
-    players: playerList.map((p, i) => ({ id: p.id, name: p.name, color: COLORS[i % COLORS.length] })),
+    players: playerList.map((p, i) => ({ id: p.id, name: p.name, seat: SEATS_FOR[n][i], color: SEAT_COLORS[SEATS_FOR[n][i]] })),
+    bonus: options.bonusRolls === 'generous' ? 'generous' : 'classic',
+    lastMove: null,
     rng,
     tokens: playerList.map(() => Array.from({ length: TOKENS }, () => -1)),
     ready: new Set(),
@@ -191,14 +203,14 @@ function applyAction(g, playerId, action) {
       const np = newPosFor(g, who, g.tokens[who][token], g.dice);
       if (np === null) return { ok: false, error: 'Cannot move that token' };
       const justSix = g.dice === 6;
-      applyMove(g, who, token, np);
+      const result = applyMove(g, who, token, np);
       g.dice = null;
       if (g.phase === 'gameOver') { bump(g); return { ok: true }; }
       if (g.finishedOrder.includes(who)) {
         // A player who has brought all four tokens home cannot use a bonus six.
         endTurn(g);
-      } else if (justSix && g.sixes > 0 && g.sixes < 3) {
-        // a 6 earns another roll for the same player
+      } else if ((justSix && g.sixes > 0 && g.sixes < 3) || (g.bonus === 'generous' && (result.captured || result.home))) {
+        // a 6 earns another roll for the same player (and, in the generous variant, so does a capture or getting home)
         g.phase = 'rolling';
       } else {
         endTurn(g);
@@ -217,13 +229,70 @@ function awaitingList(g) {
   return [];
 }
 
+/**
+ * Bot strategy: finish a token, then capture, then bring a token out, then move to safety, otherwise advance the token
+ * that is furthest along. Squares an opponent could hit next turn count against a move. Deterministic for a given state.
+ */
+function scoreMove(g, who, move) {
+  const from = g.tokens[who][move.token];
+  const to = move.to;
+  let score = 0;
+  if (to === FINISHED) score += 100;
+  if (to >= LAP && to < FINISHED) score += 25; // into the safe home column
+  if (from === -1) score += 40; // bring a token out
+  if (to >= 0 && to <= LAP - 1) {
+    const at = absPos(g, who, to);
+    if (!SAFE.has(at)) {
+      let hits = 0;
+      for (let i = 0; i < g.n; i++) {
+        if (i === who) continue;
+        for (let t = 0; t < TOKENS; t++) {
+          const tp = g.tokens[i][t];
+          if (tp >= 0 && tp <= LAP - 1 && absPos(g, i, tp) === at) hits++;
+        }
+      }
+      score += hits * 80; // capture
+      // danger: an opponent token 1-6 squares behind could land on us
+      let danger = 0;
+      for (let i = 0; i < g.n; i++) {
+        if (i === who) continue;
+        for (let t = 0; t < TOKENS; t++) {
+          const tp = g.tokens[i][t];
+          if (tp < 0 || tp > LAP - 1) continue;
+          const gap = (at - absPos(g, i, tp) + TRACK) % TRACK;
+          if (gap >= 1 && gap <= 6) danger++;
+        }
+      }
+      score -= danger * 12;
+    } else score += 15; // safe square
+    if (from >= 0 && from <= LAP - 1 && !SAFE.has(absPos(g, who, from))) {
+      // leaving a square that was under threat is good
+      for (let i = 0; i < g.n; i++) {
+        if (i === who) continue;
+        for (let t = 0; t < TOKENS; t++) {
+          const tp = g.tokens[i][t];
+          if (tp < 0 || tp > LAP - 1) continue;
+          const gap = (absPos(g, who, from) - absPos(g, i, tp) + TRACK) % TRACK;
+          if (gap >= 1 && gap <= 6) score += 10;
+        }
+      }
+    }
+  }
+  return score + to / 10; // prefer the token that is furthest along
+}
+
 function botAction(g, playerId) {
   const who = indexOf(g, playerId);
   if (g.phase === 'ready') return { type: 'ready' };
   if (g.phase === 'rolling') return { type: 'roll' };
   if (g.phase === 'moving') {
     const moves = legalMoves(g, who);
-    if (moves.length) return { type: 'move', token: moves[0].token };
+    if (moves.length) {
+      let best = moves[0];
+      let bestScore = -Infinity;
+      for (const m of moves) { const sc = scoreMove(g, who, m); if (sc > bestScore) { best = m; bestScore = sc; } }
+      return { type: 'move', token: best.token };
+    }
   }
   return null;
 }
@@ -240,6 +309,7 @@ function viewFor(g, playerId) {
       id: p.id,
       name: p.name,
       color: p.color,
+      seat: p.seat,
       ready: g.ready.has(i),
       tokens: g.tokens[i].slice(),
       finished: g.tokens[i].every((x) => x === FINISHED),
@@ -258,11 +328,13 @@ function viewFor(g, playerId) {
     winner: g.winner,
     finishedOrder: g.finishedOrder.slice(),
     event: g.event,
+    lastMove: g.lastMove,
+    bonus: g.bonus,
     log: g.log ? g.log.slice(-30) : [],
   };
 }
 
 module.exports = {
-  TOKENS, TRACK, HOME_COL, FINISHED, STARTS, SAFE, COLORS,
+  TOKENS, TRACK, LAP, HOME_COL, FINISHED, STARTS, SAFE, COLORS, SEAT_COLORS, SEATS_FOR, absPos,
   createGame, applyAction, awaitingList, botAction, viewFor, newPosFor, legalMoves,
 };

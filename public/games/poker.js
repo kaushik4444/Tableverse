@@ -28,7 +28,7 @@
     const h = window.innerHeight;
     let board = w < 480 ? 42 : w < 900 ? 58 : 70;
     let hand = w < 480 ? 74 : w < 900 ? 92 : 104;
-    if (h < 640) { board = Math.min(board, 38); hand = Math.min(hand, 64); }
+    if (h <= 700) { board = Math.min(board, 38); hand = Math.min(hand, 60); }
     return { board, hand };
   }
 

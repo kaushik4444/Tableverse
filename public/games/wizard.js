@@ -16,7 +16,7 @@
     const w = window.innerWidth;
     const h = window.innerHeight;
     let cw = w < 480 ? 62 : w < 900 ? 78 : 90;
-    if (h < 620) cw = Math.min(cw, 56);
+    if (h <= 700) cw = Math.min(cw, 50); // short phones: smaller cards so the table, bid panel and hand fit one screen
     let tcw = w < 480 ? 50 : w < 900 ? 62 : 76;
     if (v.n >= 5) tcw = Math.round(tcw * 0.86);
     // Hand: overlap cards when they don't fit, scroll sideways if still too wide.

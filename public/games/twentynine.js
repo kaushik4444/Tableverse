@@ -29,7 +29,7 @@
     const w = window.innerWidth;
     const h = window.innerHeight;
     let cw = w < 480 ? 62 : w < 900 ? 78 : 90;
-    if (h < 620) cw = Math.min(cw, 56);
+    if (h <= 700) cw = Math.min(cw, 54); // short phones: smaller cards so the table, bid panel and hand fit one screen
     const tcw = w < 480 ? 50 : w < 900 ? 62 : 76;
     const n = v.hand.length;
     const avail = Math.min(w, 980) - 20;
