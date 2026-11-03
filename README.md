@@ -13,6 +13,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 - **Poker (No-Limit Texas Hold’em)** (2–8): blinds, all-ins, side pots, showdown resolution.
 - **The Mind** (2–4): co-op, real-time ascending play with lives/stars and difficulty options.
 - **Ludo** (2–4): race your four tokens home — roll a six to get out, send opponents back, finish by exact count.
+- **Snakes and Ladders** (2–4): roll to race along a 10×10 path to square 100. Ladders lift you, snakes drop you. Optional exact roll to finish and roll again on a six.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
 
 Bots can fill open seats so tables can start quickly.
@@ -39,6 +40,11 @@ Tableverse is currently open for friend testing.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
+## What's new in v0.10 — Snakes and Ladders
+
+- **Snakes and Ladders** is playable (2–4 players, bots fill empty seats). One tap to roll, the token slides along the path, ladders lift and snakes drop. Options: exact roll to finish (on by default) and roll again on a six (three in a row ends the turn). The board is the same every game and carries original artwork. Everyone sees the same board; there is no hidden information.
+- Removed from the Coming soon list (10 planned games remain).
+
 ## What's new in v0.9 — Go Fish
 
 - **Go Fish** is playable (2–6 players, bots fill empty seats, 2 players get 7 cards, otherwise 5). Ask for a rank you hold, pick a player (or tap them at the table), press Ask. Books are laid down at once; most books wins, equal books share the win. Only your own hand is ever sent to you.
@@ -47,7 +53,7 @@ Tableverse is currently open for friend testing.
 ## What's new in v0.8 — a simpler home
 
 - **Home page.** Greeting and table-code join, then the games straight away. Friends are a compact card (who is online); the full friends list, search, requests and sent invitations are on their own page at `#friends` (account menu → Friends). A **notification bell** in the top bar shows a count of friend requests and table invitations and lets you accept or decline them in place (refreshed every minute and when opened). Recent and public tables sit below the games.
-- **Coming soon.** Monopoly and Snakes and Ladders are listed as non-playable cards ahead of their release. Ludo shipped in v0.8 and is playable now (2–4 players).
+- **Coming soon.** Upcoming games are listed as non-playable cards ahead of their release. Ludo (v0.8), Go Fish (v0.9) and Snakes and Ladders (v0.10) have shipped and are playable now.
 - **What's new** is also linked from the home footer. No server, database or API changes. Home/social markup now lives in `public/home-ui.js` (loaded before `app.js`).
 
 ## What's new in v0.7 — friends, private tables, host tools
