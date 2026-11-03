@@ -20,15 +20,16 @@
     return `<${tag} class="card ${s.cls} ${cls}" aria-label="${esc(c.rank + ' of ' + s.name)}" ${attrs}><span class="rk">${esc(c.rank)}<i>${s.sym}</i></span><span class="pip">${s.sym}</span><span class="rk br">${esc(c.rank)}<i>${s.sym}</i></span></${tag}>`;
   }
   const backHTML = (cls = '') => `<div class="card back ${cls}" aria-hidden="true"><span class="pip">🐟</span></div>`;
-  const nameOf = (v, i) => (i === v.me ? 'You' : esc(v.players[i].name));
+  const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
 
   /** What just happened, in words. Only public facts (and, for the player who fished, the card they drew). */
   function eventText(v) {
     const e = v.event;
     if (!e) return '';
+    if (e.type === 'over') return 'All the books are down.'; // the closing event names nobody
     const by = nameOf(v, e.by);
     const you = e.by === v.me;
-    const to = e.target !== undefined ? (e.target === v.me ? 'you' : esc(v.players[e.target].name)) : '';
+    const to = e.target !== undefined ? (e.target === v.me ? 'you' : nameOf(v, e.target)) : '';
     const bookText = e.books && e.books.length ? ` 📚 ${e.books.map(word).join(', ')} complete!` : '';
     switch (e.type) {
       case 'take': return `${by} asked ${to} for ${word(e.rank)} and got <b>${e.count}</b>.${bookText}`;
@@ -65,9 +66,10 @@
 
   function tableHTML(v, ctx) {
     const text = eventText(v);
-    const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>
-      ${text ? `<p class="cap gf-event" role="status">${text}</p>` : ''}`;
-    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null });
+    // The stock sits on the felt; what just happened is a line under the table (on a phone the felt has no room for both)
+    const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>`;
+    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })
+      + (text ? `<p class="gf-event gf-event-bar" role="status">${text}</p>` : '');
   }
 
   function sizes(v) {
