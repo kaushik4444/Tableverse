@@ -23,12 +23,15 @@
   }
   const backHTML = (cls = '') => `<div class="pkc back ${cls}" aria-hidden="true"></div>`;
 
-  function sizes() {
+  function sizes(n = 2) {
     const w = window.innerWidth;
     const h = window.innerHeight;
     let board = w < 480 ? 42 : w < 900 ? 58 : 70;
     let hand = w < 480 ? 74 : w < 900 ? 92 : 104;
     if (h <= 700) { board = Math.min(board, 38); hand = Math.min(hand, 60); }
+    // With four or more players the side seats sit beside the board: five cards must fit between them
+    // (seat centres are 13% in from each edge and a seat is 84px wide on a phone).
+    if (n >= 4 && w < 520) board = Math.max(26, Math.min(board, Math.floor((w * 0.74 - 84 - 20) / 5)));
     return { board, hand };
   }
 
@@ -210,7 +213,7 @@
     }
     if (v.myTurn && v.canRaise) ui.raiseTo = Math.max(v.minRaiseTo, Math.min(v.maxRaiseTo, ui.raiseTo));
     playSounds(v);
-    const z = sizes();
+    const z = sizes(v.players.length);
     const b = v.blinds;
     const rise = b.next && b.handsLeft ? ` · up to ${b.next[0]}/${b.next[1]} in ${b.handsLeft} hand${b.handsLeft === 1 ? '' : 's'}` : '';
     const limit = v.limit ? ` · of ${v.limit}` : '';

@@ -66,9 +66,10 @@
 
   function tableHTML(v, ctx) {
     const text = eventText(v);
-    const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>
-      ${text ? `<p class="cap gf-event" role="status">${text}</p>` : ''}`;
-    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null });
+    // The stock sits on the felt; what just happened is a line under the table (on a phone the felt has no room for both)
+    const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>`;
+    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })
+      + (text ? `<p class="gf-event gf-event-bar" role="status">${text}</p>` : '');
   }
 
   function sizes(v) {

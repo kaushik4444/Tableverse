@@ -6,7 +6,7 @@
 
   const RX = 37; // seat ellipse radii, in % of the table area
   const RY = 38;
-  const CARD_K = 0.5; // played cards lie halfway between the centre and the seat
+  const CARD_K = 0.44; // played cards lie halfway between the centre and the seat
 
   /** Positions for n players, with player `me` at the bottom and the turn order running clockwise. */
   function layout(n, me) {
@@ -61,7 +61,7 @@
       if (c) {
         const sweep = opts.collect !== undefined && opts.collect >= 0 && L[opts.collect];
         const to = sweep ? `;--tx:${L[opts.collect].sx}%;--ty:${L[opts.collect].sy}%` : '';
-        out += `<div class="pt-card ${c.win ? 'win' : ''} ${c.lead ? 'lead' : ''} ${sweep ? 'sweep' : ''}" style="left:${L[i].cx}%;top:${L[i].cy}%;--fx:${L[i].fx}%;--fy:${L[i].fy}%${to}">${c.html}</div>`;
+        out += `<div class="pt-card ${c.win ? 'win' : ''} ${c.lead ? 'lead' : ''} ${sweep ? 'sweep' : ''}" style="left:${L[i].cx}%;top:calc(${L[i].cy}% + ${(-L[i].fy / 150).toFixed(2)} * var(--card-push, 16px));--fx:${L[i].fx}%;--fy:${L[i].fy}%${to}">${c.html}</div>`;
       }
     }
     for (let i = 0; i < opts.n; i++) out += `<div class="pt-seat" style="left:${L[i].sx}%;top:${L[i].sy}%">${opts.seat(i)}</div>`;

@@ -104,6 +104,8 @@ button.card { cursor: pointer; }
 .pt-center .tcard { --cw: calc(var(--cw0, 62px) * .72); }
 .pt-center .cap { font-size: 12px; color: rgba(255, 255, 255, .78); line-height: 1.25; }
 .pt-center .cap b { color: var(--gold); }
+.pt { --card-push: 16px; } /* a played card is nudged away from its seat's name plate, further on the larger desktop plates */
+@media (min-width: 900px) { .pt { --card-push: 36px; } }
 .pt-card { position: absolute; transform: translate(-50%, -50%); z-index: 2; --cw: var(--tcw, 62px); }
 .pt-card.win .card { box-shadow: 0 0 0 3px var(--gold), 0 0 22px 6px rgba(242, 193, 78, .65); }
 .pt-card .pop { animation: fly .38s cubic-bezier(.2, .8, .3, 1); }
@@ -157,6 +159,9 @@ button.card { cursor: pointer; }
   .pt-info { display: none; }
   .wc-name { display: none; }
 }
+/* Short phones (about 640px high or less): spend less height on the table so the hand and the bid or bet controls stay on screen */
+@media (max-width: 520px) and (max-height: 700px) { .wz { --av: 38px; } .pt { --pt-min: 250px; } }
+@media (max-width: 520px) and (max-height: 600px) { .pt { --pt-min: 215px; } }
 @media (min-width: 900px) { .wz { --av: 66px; } .pt-seat { width: 130px; } .plate b { font-size: 14px; } .plate span { font-size: 12px; } }
 
 /* =====================================================================
@@ -380,9 +385,9 @@ button.card { cursor: pointer; }
 
 /* wider than a phone the header already names the trump suit, so the corner shows just the turned-up card */
 @media (min-width: 521px) { .pt-corner .cap { display: none; } }
-@media (max-width: 520px) { .pt-corner { padding: 4px 6px; gap: 2px; } .pt-corner .tcard { --cw: calc(var(--cw0, 62px) * .5); } }
+@media (max-width: 520px) { .pt-corner { padding: 4px 6px; gap: 2px; max-width: min(38%, 140px); } .pt-corner .cap { overflow-wrap: anywhere; } .pt-corner .tcard { --cw: calc(var(--cw0, 62px) * .5); } }
 /* Three, five or more players: the ring of seats reaches the table's top corners, so the trump card moves into a strip above the table instead of sitting on a seat. */
 .pt:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"]):has(.pt-corner) { margin-top: 68px; }
-.pt:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"]) .pt-corner { top: -68px; right: 0; grid-auto-flow: column; align-items: center; gap: 8px; padding: 4px 10px 4px 6px; }
+.pt:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"]) .pt-corner { max-width: none; top: -68px; right: 0; grid-auto-flow: column; align-items: center; gap: 8px; padding: 4px 10px 4px 6px; }
 .pt:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"]) .pt-corner .tcard { --cw: 30px; }
 .pt:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"]) .pt-corner .cap br { display: none; }

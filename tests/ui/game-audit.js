@@ -188,9 +188,9 @@ function inPage() {
   await browser.close(); server.close();
   // group identical messages across sizes/states so the report stays readable
   const groups = new Map();
-  for (const f of all) { const key = `${f.sev} ${f.kind}: ${f.msg.replace(/\d+/g, '#')}`; const g = groups.get(key) || { n: 0, first: f }; g.n++; groups.set(key, g); }
+  for (const f of all) { const key = `${f.sev} ${f.kind}: ${f.msg.replace(/\d+/g, '#')}`; const g = groups.get(key) || { n: 0, first: f, sizes: new Set() }; g.n++; g.sizes.add(f.tag.split(' ').pop()); groups.set(key, g); }
   const sorted = [...groups.entries()].sort((a, b) => (a[0].startsWith('ERROR') ? 0 : 1) - (b[0].startsWith('ERROR') ? 0 : 1) || b[1].n - a[1].n);
-  for (const [key, g] of sorted) console.log(`${String(g.n).padStart(4)}x ${key}\n        e.g. ${g.first.tag}: ${g.first.msg}`);
+  for (const [key, g] of sorted) console.log(`${String(g.n).padStart(4)}x ${key}\n        e.g. ${g.first.tag}: ${g.first.msg}\n        sizes: ${[...g.sizes].join(', ')}`);
   const errors = all.filter((f) => f.sev === 'ERROR').length;
   console.log(`\n${CASES.length} game setups, ${errors} errors, ${all.length - errors} warnings`);
   if (errors) process.exitCode = 1;
