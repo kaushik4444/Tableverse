@@ -88,12 +88,12 @@ async function lobbyCheck(browser, url) {
       const r = await page.evaluate(() => {
         const d = document.querySelector('.game-supporting-details');
         const bar = document.querySelector('.wz-top > .row, .ludo-tools');
-        return { mainEnd: Math.round(d.getBoundingClientRect().top + scrollY), vh: innerHeight, direct: bar ? [...bar.children].map((c) => (c.classList.contains('chat-btn') ? 'chat' : c.dataset.act === 'emotes' ? 'emotes' : c.classList.contains('tb-more-wrap') ? 'more' : 'other')).join(',') : null,
+        return { mainEnd: Math.round(d.getBoundingClientRect().top + scrollY), vh: innerHeight, direct: bar ? [...bar.children].map((c) => (c.classList.contains('chat-btn') ? 'chat' : c.dataset.act === 'emotes' ? 'emotes' : c.classList.contains('vc-mic') ? 'mic' : c.classList.contains('vc-spk') ? 'speaker' : c.classList.contains('tb-more-wrap') ? 'more' : 'other')).join(',') : null,
           leaveLast: !!bar && Object.values(bar.lastElementChild.dataset).includes('leave'),
           menu: [...document.querySelectorAll('.tb-pop button')].map((b) => b.dataset.act || '').join(',') };
       });
       assert.ok(r.mainEnd <= r.vh, `${gameId}: the main play area ends at ${r.mainEnd}px but the screen is ${r.vh}px`);
-      assert.equal(r.direct, 'chat,emotes,more,other', `${gameId}: toolbar is chat, reactions, more, leave (${r.direct})`);
+      assert.equal(r.direct, 'chat,emotes,mic,speaker,more,other', `${gameId}: toolbar is chat, reactions, mic, speaker, more, leave (${r.direct})`);
       if (gameId === 'gofish') assert.doesNotMatch(r.menu, /activityLog/, 'gofish: no log, it would show what others asked for');
       else assert.match(r.menu, /activityLog/, `${gameId}: the log lives in the more menu`);
       assert.ok(r.leaveLast, `${gameId}: leave is the last button on the bar`);

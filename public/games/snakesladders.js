@@ -98,7 +98,7 @@
 
   function players(v) {
     const lead = window.CardTable.pt.leaderOf(v.players.length, (k) => shownPos(v, k)) ;
-    return `<ol class="sl-players">${v.players.map((p, i) => `<li class="${i === v.turn && v.phase !== 'gameOver' ? 'on' : ''} ${i === v.me ? 'you' : ''}"><span class="sl-dot ${p.color}" aria-hidden="true"></span><span class="sl-pname">${i === lead && v.phase !== 'gameOver' ? '<span class="crown" title="In the lead">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' <small>(you)</small>' : ''}</span><span class="sl-pos">${p.pos ? 'Square ' + p.pos : 'Start'}</span></li>`).join('')}</ol>`;
+    return `<ol class="sl-players">${v.players.map((p, i) => `<li data-vid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'on' : ''} ${i === v.me ? 'you' : ''}"><span class="sl-dot ${p.color}" aria-hidden="true"></span><span class="sl-pname">${i === lead && v.phase !== 'gameOver' ? '<span class="crown" title="In the lead">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' <small>(you)</small>' : ''}</span><span class="sl-pos">${p.pos ? 'Square ' + p.pos : 'Start'}</span></li>`).join('')}</ol>`;
   }
 
   function panel(v, tumble) {

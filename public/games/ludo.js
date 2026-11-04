@@ -144,7 +144,7 @@
       const home = p.tokens.filter((x) => x === FINISHED).length;
       const active = i === v.turn && v.phase !== 'gameOver' && v.phase !== 'ready';
       const pips = [0, 1, 2, 3].map((k) => `<i class="${k < home ? 'on' : ''}"></i>`).join('');
-      return `<li class="ludo-player ${active ? 'active' : ''} ${i === v.me ? 'you' : ''}" style="--c:${seat.hex}"><span class="player-dot"></span><b>${i === lead && (v.phase === 'rolling' || v.phase === 'moving') ? '<span class="crown" title="In the lead">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' <small>you</small>' : ''}</b><span class="pips" title="${home} of 4 home">${pips}</span></li>`;
+      return `<li data-vid="${esc(p.id)}" class="ludo-player ${active ? 'active' : ''} ${i === v.me ? 'you' : ''}" style="--c:${seat.hex}"><span class="player-dot"></span><b>${i === lead && (v.phase === 'rolling' || v.phase === 'moving') ? '<span class="crown" title="In the lead">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' <small>you</small>' : ''}</b><span class="pips" title="${home} of 4 home">${pips}</span></li>`;
     }).join('')}</ul>`;
   }
 

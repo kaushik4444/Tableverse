@@ -126,3 +126,19 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 
 /* A crown marks who is ahead (most books, furthest along, most progress), the same cue Wizard and 29 give with "Leading". */
 .crown { font-size: .95em; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
+
+/* Table voice chat: microphone and speaker buttons, a little mic next to people in voice, a ring round whoever is talking. */
+.vc-btn { position: relative; }
+.vc-btn.on { border-color: #43c07a; background: rgba(67, 192, 122, .18); }
+.vc-btn.muted { opacity: .8; }
+.vc-btn.muted::after { content: ''; position: absolute; left: 22%; right: 22%; top: 50%; height: 2px; background: #ff8a7a; border-radius: 2px; transform: rotate(-35deg); box-shadow: 0 0 0 1px rgba(0, 0, 0, .35); }
+.wz-top .row, .ludo-tools { gap: 4px; }
+@media (max-width: 400px) { .wz-top .row .btn.small, .ludo-tools .btn.small { min-width: 38px; padding-inline: 5px; } .wz-top .wz-round .label { display: none; } }
+
+[data-voice]::before { content: '🎙️'; position: absolute; z-index: 3; top: -4px; right: -4px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: #1b3a2b; font-size: 11px; line-height: 1; box-shadow: 0 0 0 1px rgba(255, 255, 255, .25); pointer-events: none; }
+[data-voice="muted"]::before { content: '🔇'; background: #3a2323; }
+.pseat[data-voice]::before { top: 18px; right: 6px; }
+.seat[data-vid], .ludo-player[data-vid], .sl-players li[data-vid], .pr-players li[data-vid] { position: relative; }
+.pseat.speaking .av, .pseat.speaking .avatar { box-shadow: 0 0 0 3px #43c07a, 0 0 16px 4px rgba(67, 192, 122, .7); }
+.seat.speaking .avatar, .ludo-player.speaking, .sl-players li.speaking, .pr-players li.speaking { box-shadow: 0 0 0 2px #43c07a, 0 0 12px 2px rgba(67, 192, 122, .6); }
+@media (prefers-reduced-motion: no-preference) { .speaking { transition: box-shadow .15s ease; } }

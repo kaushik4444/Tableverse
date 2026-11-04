@@ -58,7 +58,7 @@
       const owned = v.land.reduce((n, l) => n + (l && l.owner === i ? 1 : 0), 0);
       const st = p.bankrupt ? '💀 bankrupt' : p.inLockup ? '🔒 lockup' : '';
       const keep = p.keeps ? ` · 🎟️${p.keeps}` : '';
-      return `<li class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most cash">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small></span><span class="pr-cash">${coins(p.cash)}</span></li>`;
+      return `<li data-vid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most cash">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small></span><span class="pr-cash">${coins(p.cash)}</span></li>`;
     }).join('')}</ul>`;
   }
 

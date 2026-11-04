@@ -154,6 +154,46 @@
   // ------------------------------------------------------------ auth + connection
   const send = (msg) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); };
 
+  // ------------------------------------------------------------ table voice chat (public/voice.js)
+  const voiceAudio = document.createElement('div');
+  voiceAudio.hidden = true; // the <audio> elements of the other people at the table live here
+  document.body.appendChild(voiceAudio);
+  const voice = window.TVVoice({ send, getIce: () => S.ice, myId: () => S.id, onChange: () => { refreshVoiceUI(); if (voice.state.error && voice.state.error !== lastVoiceError) toast(voice.state.error); lastVoiceError = voice.state.error; }, audioRoot: voiceAudio });
+  let lastVoiceError = '';
+  /** Microphone and speaker buttons: shown in the lobby header and in every game's toolbar. */
+  function voiceButtonsHTML() {
+    const st = voice.state;
+    if (!st.supported) return '';
+    const talking = st.joined && !st.muted;
+    const hearing = st.joined && !st.deafened;
+    return `<button type="button" class="btn ghost small vc-btn vc-mic ${talking ? 'on' : st.joined ? 'muted' : ''}" data-act="voiceMic" aria-pressed="${talking}" aria-label="${talking ? 'Mute your microphone' : st.joined ? 'Unmute your microphone' : 'Join voice chat and talk'}" title="${talking ? 'Microphone on: tap to mute' : st.joined ? 'Microphone muted: tap to talk' : 'Talk to the table'}">🎙️</button>`
+      + `<button type="button" class="btn ghost small vc-btn vc-spk ${hearing ? 'on' : st.joined ? 'muted' : ''}" data-act="voiceSpeaker" aria-pressed="${hearing}" aria-label="${hearing ? 'Silence the other players' : st.joined ? 'Hear the other players' : 'Join voice chat and listen'}" title="${hearing ? 'Hearing everyone: tap to silence' : st.joined ? 'Silenced: tap to hear' : 'Listen to the table'}">${hearing ? '🔊' : '🔈'}</button>`;
+  }
+  /** Update the voice buttons, the little mic next to people in voice, and the ring around whoever is talking, in place. */
+  function refreshVoiceUI() {
+    const st = voice.state;
+    const root = $app;
+    if (!root) return;
+    const html = voiceButtonsHTML();
+    const mic = root.querySelector('.vc-mic'), spk = root.querySelector('.vc-spk');
+    if (mic && spk && html) {
+      const tmp = document.createElement('div'); tmp.innerHTML = html;
+      mic.className = tmp.children[0].className; mic.setAttribute('aria-pressed', tmp.children[0].getAttribute('aria-pressed')); mic.setAttribute('aria-label', tmp.children[0].getAttribute('aria-label')); mic.title = tmp.children[0].title;
+      spk.className = tmp.children[1].className; spk.setAttribute('aria-pressed', tmp.children[1].getAttribute('aria-pressed')); spk.setAttribute('aria-label', tmp.children[1].getAttribute('aria-label')); spk.title = tmp.children[1].title; spk.textContent = tmp.children[1].textContent;
+    }
+    const byId = new Map(st.list.map((v) => [v.id, v]));
+    root.querySelectorAll('[data-vid], .pseat[data-pid]').forEach((el) => {
+      const id = el.dataset.vid || el.dataset.pid;
+      const v = byId.get(id);
+      if (v) el.dataset.voice = v.muted && id !== S.id ? 'muted' : id === S.id && st.muted ? 'muted' : 'on'; else delete el.dataset.voice;
+      el.classList.toggle('speaking', st.speaking.has(id));
+    });
+    const note = root.querySelector('.vc-note');
+    if (note) { note.textContent = st.error; note.hidden = !st.error; }
+  }
+  // browsers start audio only after a tap
+  document.addEventListener('click', () => voice.resumeAudio(), true);
+
   // CSRF: the server sets a ct_csrf cookie; every POST repeats its value in a header (the cookie alone proves nothing).
   async function ensureCsrf(force) {
     if (S.csrf && !force) return S.csrf;
@@ -403,6 +443,7 @@
     };
     ws.onclose = (e) => {
       S.ready = false;
+      voice.reset(); // the server drops us from voice when the connection drops
       if (e.code === 4000) {
         $banner.textContent = 'Tableverse is open in another tab. Reload to play here.';
         $banner.hidden = false;
@@ -642,6 +683,7 @@
         S.announcement = typeof m.announcement === 'string' ? m.announcement : '';
         S.avatars = m.avatars || [];
         S.emotes = m.emotes || [];
+        S.ice = Array.isArray(m.ice) ? m.ice : [];
         if (!S.name) S.name = m.name;
         if (!S.avatar) S.avatar = m.avatar;
         S.ready = true;
@@ -682,6 +724,12 @@
         break;
       case 'chat':
         onChat(m.m);
+        break;
+      case 'voice':
+        voice.updateList(m.ids);
+        break;
+      case 'rtc':
+        voice.handleRtc(m.from, m.data);
         break;
       case 'chatlog':
         S.chat = m.messages || [];
@@ -732,6 +780,7 @@
         break;
       }
       case 'left':
+        voice.reset();
         S.card = null; closeModal();
         S.page = 'home';
         loadRecent();
@@ -1351,7 +1400,8 @@
     wrap.innerHTML = `<button type="button" class="btn ghost small tb-more-btn" data-act="toggleTools" aria-haspopup="true" aria-expanded="${!!S.toolsOpen}" aria-label="More options">⋯</button><div class="tb-pop" role="group" aria-label="More options" ${S.toolsOpen ? '' : 'hidden'}></div>`;
     const pop = wrap.querySelector('.tb-pop');
     extras.forEach((b) => pop.appendChild(b));
-    bar.replaceChildren(...[chat, emote, wrap, leave].filter(Boolean)); // chat, reactions, ⋯, then leave as the last button
+    const vc = document.createElement('span'); vc.innerHTML = voiceButtonsHTML(); // microphone and speaker
+    bar.replaceChildren(...[chat, emote, ...vc.children, wrap, leave].filter(Boolean)); // chat, reactions, voice, ⋯, then leave as the last button
   }
   function setTools(open) {
     S.toolsOpen = open;
@@ -1604,7 +1654,7 @@
       const label = r.seatLabels ? `<span class="tag team t${i % 2}">${esc(r.seatLabels[i])}</span>` : '';
       if (m) {
         seats.push(`
-      <li class="seat">
+      <li class="seat" data-vid="${esc(m.id)}">
         ${avatar(m)}
         <span class="nm">${esc(m.name)}${m.id === S.id ? ' <em>(you)</em>' : ''}</span>
         ${label}
@@ -1631,7 +1681,7 @@
       <div class="row" style="justify-content:space-between">
         <button class="btn ghost small" data-act="leave">← Leave</button>
         <h2>${esc(g.icon)} ${esc(g.name)}</h2>
-        <span class="row" style="gap:6px">${CardTable.chat.button()}<button class="btn ghost small" data-act="rules" data-game="${esc(r.gameId)}">Rules</button></span>
+        <span class="row" style="gap:6px">${voiceButtonsHTML()}${CardTable.chat.button()}<button class="btn ghost small" data-act="rules" data-game="${esc(r.gameId)}">Rules</button></span>
       </div>
       ${spectating ? `<section class="panel"><h3>👁 You are watching</h3><p class="hint" style="text-align:left;margin:6px 0 10px">The next game starts when the host presses Start. ${open > 0 ? 'There is an open seat if you want to play.' : 'Ask the host to free a seat if you want to play.'}</p>${open > 0 ? '<button class="btn" data-act="sit">Take a seat</button>' : ''}</section>` : ''}
       ${r.spectators && r.spectators.length ? `<details class="spectator-list"><summary>👁 ${r.spectators.length} watching</summary>${isHost ? `<ul class="spectator-people">${r.spectators.map((x) => `<li><span class="nm">${esc(x.name)}</span><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(x.id)}" data-name="${esc(x.name)}" aria-label="Remove ${esc(x.name)} from the table" title="Remove from table">✕</button></li>`).join('')}</ul>` : `<div class="spectator-names">${r.spectators.map((x) => esc(x.name)).join(', ')}</div>`}</details>` : ''}
@@ -1661,6 +1711,7 @@
           : '<div class="start-bar wait"><p class="label" style="text-align:center;margin:0">Waiting for the host to start…</p></div>'
       }
     </main>`;
+    refreshVoiceUI();
   }
 
   // ------------------------------------------------------------ player stats
@@ -1729,6 +1780,7 @@
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();
+    refreshVoiceUI();
     const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
     const gameInfo = gameMeta(S.room.gameId);
     if (surface && gameInfo) {
@@ -1770,6 +1822,8 @@
     toggleAvatars: () => { S.avatarOpen = !S.avatarOpen; render(); },
     emotes: () => toggleEmoteBar(),
     activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
+    voiceMic: () => voice.toggleMic(),
+    voiceSpeaker: () => voice.toggleSpeaker(),
     sound: () => { CardTable.sound.toggle(); render(); },
     create: (el) => {
       if (!authed()) return gateLogin(() => actions.create(el));
