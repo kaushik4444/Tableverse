@@ -33,6 +33,13 @@ Status legend: Fixed (in this branch, with a test) · Open · Accepted (document
 - **Fix (owner-approved):** new tables default to the 60-round game (richest player wins). The classic "until one player is left" is still a lobby choice, now labelled as possibly never ending. Rules unchanged. The simulation test plays the 60-round variant.
 - **Test:** `tests/propertyrivals.test.js` asserts the default; the simulation covers termination.
 
+### F12 — One account could fill the server with parked tables — High — Fixed
+- **Where:** `server.js` `leaveRoom()`: when the last human leaves a running game it is parked for 10 minutes so they can come back with one tap.
+- **Problem (confirmed):** a create / start / leave loop from a single verified account left one parked table per loop (12 loops = 12 tables, reproduced by `tests/room-limits.test.js`). With `MAX_ROOMS = 500` an account could make "Server is full" appear for everyone for 10+ minutes.
+- **Fix:** a player keeps at most one parked table; leaving a second running game closes the previous parked one. Legitimate comebacks to the latest table are unchanged.
+- **Remaining (theory):** several accounts can still do this, bounded by account creation limits and email verification.
+- **Test:** `tests/room-limits.test.js`.
+
 ### F5 — Game logic robustness (engines) — Verified, no defect found
 `tests/simulation.test.js` (new, runs in `npm test`) plays 120 seeded games across all 8 games and every seat count (min / default / max) and asserts: bots always produce accepted actions, the game ends, garbage actions (null, wrong types, prototype keys, NaN, huge numbers, unknown seats) never throw and never change the public view, finished games accept nothing and await nobody, views serialise and never include another seat's `hand`. Existing per-game suites cover rules, scoring and hidden information in depth. **Not covered:** deep per-game scoring invariants for Poker side pots and Property Rivals trades under random play (existing unit tests cover scripted cases only).
 

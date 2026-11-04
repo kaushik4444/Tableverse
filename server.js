@@ -761,7 +761,11 @@ function start(opts = {}) {
     notifyOthers(room, p.id, `🚪 ${p.name} left the table`);
     if (!humans(room).length && room.status === 'playing') {
       // the last human stepped out of a running game (e.g. a solo game against bots): keep it paused so they can come
-      // back with one tap; the idle collector closes it after 10 minutes if nobody does
+      // back with one tap; the idle collector closes it after 10 minutes if nobody does.
+      // A player keeps only ONE such parked table: otherwise a create/start/leave loop fills the server (MAX_ROOMS).
+      const prev = p.parkedRoom && p.parkedRoom !== room.code ? rooms.get(p.parkedRoom) : null;
+      if (prev && !humans(prev).length) destroyRoom(prev);
+      p.parkedRoom = room.code;
       broadcast(room);
       return;
     }
