@@ -61,6 +61,9 @@ Render free instances sleep when idle and cold-start (first visitor waits, in-me
 ### F13 — Accessibility basics — Verified clean (scripted)
 `tests/ui/a11y.js` (in `test:ui`) checks the home page and all 8 game tables for controls without accessible names, unlabeled fields, images without alt, missing `lang`/viewport, and a visible focus ring; a negative control proves the scanner catches an unnamed button. Not covered: screen-reader announcement quality, colour contrast measurement, zoom/text scaling.
 
+### F14 — WebSocket fuzzing — Verified, no defect found
+`tests/ws-fuzz.test.js` sends ~4,000 random, malformed and hostile messages (all 18 handler types, discovered from `server.js`, plus truncated JSON, prototype keys, NaN/huge numbers, oversized strings) while a game runs. No internal error is logged, the prototype is not polluted, other players keep their connections and a new table works afterwards.
+
 ### F11 — Front end — Improvement
 Layout audits (`tests/ui/game-audit.js`, `mobile-fit.js`, `wizard-layout.js`) are clean at six sizes for all games after PRs #30, #32, #33. Open: below-the-fold controls on 320 px screens (scroll to reach), small tap targets (e.g. "What's new" link). Real-device and screen-reader testing has **not** been done.
 
