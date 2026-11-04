@@ -30,6 +30,7 @@ async function until(fn, label, ms = 8000) {
     await until(() => got.room, 'table');
     ws.send(JSON.stringify({ t: 'start' }));
     await until(() => got.room && got.room.status === 'playing', 'game running');
+    assert.match(srv.statusLine(), /^\[stats\] rooms=1 playing=1 sockets=1 players=\d+ rssMB=\d+ matches\(saved=0 pending=0 failed=0 retried=0\)$/, 'the status line reports rooms, sockets and match-queue health');
     await srv.close();
     await until(() => got.code !== null, 'socket closed');
     assert.equal(got.code, 1012, 'closed with "service restart"');

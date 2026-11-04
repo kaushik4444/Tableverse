@@ -7,6 +7,11 @@ One Render web service (Node 22, single instance) and one Neon PostgreSQL databa
 - `GET /readyz` — database reachable. 503 `database unavailable` when Neon cannot be reached, 503 `shutting down` during a restart. When match writes are pending or failed the body says so: `ready (matches: 2 pending, 0 failed)`.
 - Free uptime monitoring: any free pinger against `/readyz`; Render's own health check uses `/healthz`.
 
+## Free log dashboard
+Every 5 minutes (every minute while a match result is pending or failed) the server logs one line, searchable in Render's log view:
+`[stats] rooms=12 playing=5 sockets=31 players=40 rssMB=96 matches(saved=118 pending=0 failed=0 retried=2)`.
+Watch `rssMB` (Render free has 512 MB), `pending`/`failed` (a database problem) and `sockets` (load).
+
 ## What happens to players on a restart
 Tables, games in progress, chat and presence live in memory and are **lost** on every restart or deploy. Players get a notice and a normal reconnect; they must create a new table. Unfinished games are not recorded. Finished matches are written to PostgreSQL (retried, idempotent) and the server waits up to 15 s for pending writes on SIGTERM. Deploy when few tables are active.
 

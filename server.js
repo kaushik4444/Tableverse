@@ -1469,7 +1469,24 @@ function start(opts = {}) {
   ticker.unref();
   gc.unref();
 
+  /** One line of operational numbers for the logs (Render's log search is the free dashboard). */
+  function statusLine() {
+    const q = matchQueue.stats();
+    let sockets = 0; for (const ws of wss.clients) if (ws.player) sockets++;
+    let playing = 0; for (const r of rooms.values()) if (r.status === 'playing') playing++;
+    return `[stats] rooms=${rooms.size} playing=${playing} sockets=${sockets} players=${players.size} rssMB=${Math.round(process.memoryUsage().rss / 1048576)} matches(saved=${q.saved} pending=${q.pending} failed=${q.failed} retried=${q.retried})`;
+  }
+  // every 5 minutes, and every minute while a match result is pending or failed (so a database problem is easy to spot in the logs)
+  let statsAt = 0;
+  const statsTimer = setInterval(() => {
+    const q = matchQueue.stats();
+    const urgent = q.pending || q.failed;
+    if (Date.now() - statsAt >= (urgent ? 55000 : 299000)) { statsAt = Date.now(); (opts.log || console).log(statusLine()); }
+  }, 30000);
+  statsTimer.unref();
+
   async function close({ drainMs = 0 } = {}) {
+    clearInterval(statsTimer);
     shuttingDown = true;
     // Tables live in memory and do not survive a restart: say so, and close sockets with 1012 ("service restart") so the
     // app shows a calm message instead of a mysterious disconnect. Running games are NOT recorded as finished.
@@ -1507,7 +1524,7 @@ function start(opts = {}) {
       purgeTimer = setInterval(purge, 6 * 60 * 60 * 1000);
       purgeTimer.unref();
     }
-    return new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue })));
+    return new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine })));
   });
 }
 
