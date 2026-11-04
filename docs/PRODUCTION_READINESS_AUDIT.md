@@ -43,7 +43,7 @@ Argon2id (`@node-rs/argon2`), constant-time dummy hash for unknown users, HttpOn
 Pool of 10 with 5 s connect and 10 s statement timeouts; migrations transactional under an advisory lock; indexes match the queries read (sessions by token hash, matches by finish time, participants by player, friends both directions, invitations by invitee/status). **Not tested here:** the PostgreSQL integration suites need a database (they run in CI); no query-plan comparison against production-sized data.
 
 ### F8 — Memory and cleanup — Reviewed
-Rooms: idle (no connected human) for 10 min, lobbies idle 15 min, games idle 60 min are destroyed; spectators and players pruned; per-IP maps pruned; `MAX_ROOMS=500`; the chat log and event queues are bounded. Theory: `players` entries for connected-but-idle sessions live until the socket closes. No leak measured; no long-duration soak was run (**not yet tested**).
+Rooms: idle (no connected human) for 10 min, lobbies idle 15 min, games idle 60 min are destroyed; spectators and players pruned; per-IP maps pruned; `MAX_ROOMS=500`; the per-room chat log is capped (`CHAT_KEEP`). Theory: `players` entries for connected-but-idle sessions live until the socket closes. No leak measured; no long-duration soak was run (**not yet tested**).
 
 ### F9 — Single instance — Accepted
 Rooms, sockets and presence are in process memory. One instance only; documented in `docs/PRODUCTION_READINESS.md`. Do not scale horizontally without a shared layer.
