@@ -120,7 +120,7 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - 13.5 (9fdac40, 69fa417, done) `tests/ui/snakesladders-ui.js` (9 browser tests), Snakes and Ladders in the `wizard-layout.js` matrix (2 and 4 seats), `test:ui` and `build`; smoke test through the server socket.
 - 13.6 (done) PR #26 opened; CI green on both Node versions (build, tests with PostgreSQL, browser checks, Docker image, audit). Not merged: the owner merges.
 - Verified here: engine tests 21/21, `coming-soon.test.js`, screenshots at 390 and 1280 px (no horizontal overflow). NOT run here: anything needing `ws`/`pg` (npm registry blocked in this sandbox): the server smoke test and all `*.pg.test.js`; CI covers them.
-- Known: tokens slide in a straight line between squares (also along a snake or ladder); there is no square-by-square walk yet.
+- (Done in stage 15: tokens now walk square by square.)
 
 ## Stage 11 — Ludo polish (branch `feature/stage-11-ludo-polish`, from main e94d9fa; not merged)
 - Engine (`games/ludo`): board geometry now matches a real board: a token walks 51 ring squares (positions 0..50), then a 5-square home column (51..55), home = 56 (was 52 + 6, which skipped a diagonal into the lane). Two players sit opposite (seats 0 and 2); colours follow the board clockwise (red, green, yellow, blue); `seatLabel(i, seats)`. Smarter bot (finish > capture > bring out > safety/danger > furthest). New option `bonusRolls` (sixes only | sixes, captures and home). `view.players[i].seat`, `view.lastMove`.
@@ -158,14 +158,38 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - 15.7 (done) `tests/ui/propertyrivals-ui.js` (8 browser tests), wizard-layout matrix (2/4/6 seats), smoke test, `test:ui`/`build`; leaves Coming soon (9 planned), What's new, README v0.11.
 - 15.8 (todo) PR + CI. Verified locally: engine tests, coming-soon test, browser tests. NOT run locally: `smoke.test.js` and PostgreSQL suites (need `ws`/`pg`, CI only).
 - Known: no bank house limit; trades only on your own turn; tokens jump (no square-by-square walk).
+## Stage 15 — your bug list, consistency across games (branch `feature/stage-15-consistency`, from main 92dcc65)
+- 15.1 Friends header on home is one tappable button (opens #friends), not only "Manage". The waiting lobby no longer has the profile/avatar editor (edit it from the account menu).
+- 15.2 Toolbar everywhere: chat, reactions, ⋯ (sound, log, rules, scores…), leave. Go Fish and Snakes were not matched by `unifyToolbar` (their leave button uses `data-gf`/`data-sl`); it now finds leave by any data attribute equal to `leave`.
+- 15.3 Go Fish: no game log (it would show what others asked for): not in the ⋯ menu, not under the table, and `viewFor` no longer sends `log`. The centre action line is 15px/bold (was 12px).
+- 15.4 Snakes and Ladders: the token walks square by square (340 ms each), a ladder or snake is one long slide, the Roll button waits ("Moving…"), the result overlay waits, and bots pause 3.4–4 s so turns do not run together. Reduced motion skips the walk.
+- 15.5 Ludo: when only one move is possible (tokens on the same square that land on the same square count as one) the server plays it (`forcedPlay`, 700 ms) and the status says "Only one move: playing it".
+- 15.6 Phones (360x640): Go Fish and Snakes fit with the shared toolbar (mobile-fit now covers 7 games). Go Fish drops the stock pile picture on short phones (count only) and hides the rank/player labels visually.
+- 15.7 Consistency: a crown marks who is ahead in Go Fish (most books), Snakes (furthest) and Ludo (most progress), like "Leading"/"Winner" in Wizard and 29 (which already had them). Merged the audit branch: Go Fish no longer crashes when a game ends (the closing event names no player) and `tests/ui/game-audit.js` (plays every engine to 4 moments at 6 screen sizes; not in `npm test`).
+- Audit left over (known): poker with 8 players on a 320px-wide phone overlaps seat plates; 29 shows a played card slightly behind the top seat plate at 320x568 and 1280x800.
+- 15.8 Property Rivals (merged from main): the same toolbar already applied; it now fits 360x640 (square board sized to the screen height, Roll and Trade in one row, players in two columns) and a crown marks who has the most cash. mobile-fit covers 8 games.
 
-## Stage 16 — status labels and the line games (branch `feature/stage-16-simple-games`, from main f9b5cb5)
+## Stage 15 — Layout audit of every game except Ludo (branch `audit/game-ui-layout`, from main)
+- Tool: `tests/ui/game-audit.js` plays each game's real engine to four moments and checks six screen sizes for cut-off, overlapping and tiny controls (`UI_GAME=poker UI_SEATS=6 UI_SHOTS=dir node tests/ui/game-audit.js`; not part of `npm test`).
+- Fixes: Go Fish crash when a game ended (results never drew; regression test added); shorter table on short phones; Poker board sized to fit between side seats at 4+ players; 29 trump label bounded; played cards nudged off seat plates; Go Fish event line moved below the table; Wizard trump corner/strip clear of seats at 320x568.
+- Checked: `npm run build`; `wizard-layout.js` all viewports ok (one Ludo tap flake on a first run, clean on rerun); `gofish-ui.js` 10/10; `social-ui.js` 12/12; `host-tools-ui.js` 9/9.
+- Known remaining (audit): Poker 6p/8p seats overlap at 320x568 (8p also at 360x640); some below-the-fold hands and small tap targets (e.g. the "What's new" link) on the smallest phones.
+- Not done (perf ideas): per-viewer `view()` at big tables, chat log resent in full on join, keyed diff instead of whole-screen rebuild.
+- Not run: server/PG suites (no `ws`/`pg` here); CI covers them.
+
+## Stage 16 — Audit of merged changes (branch `cleanup/css-and-build`)
+- Audited main after the parallel branches merged: build, all runnable suites, layout audit across all 7 games (0 overlaps), duplicate functions / debug logging (none).
+- `public/style.css`: removed the declarations of 9 duplicated home/roadmap rules that a later rule already overrides (join-form, section, game-grid, home-hero, home-intro p, soon-grid/card/ico/tag). Computed styles of 13 home selectors at 360/768/1280 px compared before and after: identical.
+- `npm run build` now runs `scripts/check-syntax.js`, which syntax-checks every .js file (110) instead of a hand-kept list (several engines were missing). New `npm run test:audit` runs `tests/ui/game-audit.js` (not in CI: slow).
+- Poker 8p on a 320px phone: fixed (narrower plates and action chip, taller table at 7-8 players); audit now 0 errors and 0 warnings. Known: below-the-fold warnings on the smallest phones.
+
+## Stage 17 — status labels and the line games (branch `feature/stage-16-simple-games` (PR #31), from main f9b5cb5)
 Resume from the first stage not marked done. Each stage is one commit, pushed at once.
-- 16.1 (done) Coming soon shows a status per card: Hidden Miners "In development", the rest "Planned" (`home-ui.js`, `style.css`, `coming-soon.test.js`).
-- 16.2 (done) `games/linegames/{engine,index}.js`: Tic-Tac-Toe and Four in a Row (option Line length 4 or 5; 5 plays on a 9x8 grid) on one engine, registered in `games/index.js` (no migration). `tests/linegames.test.js` (12 tests).
-- 16.3 (done) `public/games/linegames.js` + `.css` (one renderer, three ids), `tests/ui/linegames-ui.js` (6 browser tests), wizard-layout matrix, `build`/`test`/`test:ui`.
-- 16.4 (done) Launch: Four in a Row and Tic-Tac-Toe leave Coming soon (7 planned), What's new, README v0.12, smoke test for all three.
-- 16.5 (todo) PR + CI. Verified locally: engine tests, coming-soon, browser tests, layout matrix. NOT run locally: smoke test, PostgreSQL suites (CI only).
-- 16.6 (done) Four and Five in a Row merged into one game with a Line length option (was a separate 15x15 game); Go Fish end-of-game crash fixed (the closing `over` event names no player and the renderer threw), empty-hand rules clarified, endgame tests.
+- 17.1 (done) Coming soon shows a status per card: Hidden Miners "In development", the rest "Planned" (`home-ui.js`, `style.css`, `coming-soon.test.js`).
+- 17.2 (done) `games/linegames/{engine,index}.js`: Tic-Tac-Toe and Four in a Row (option Line length 4 or 5; 5 plays on a 9x8 grid) on one engine, registered in `games/index.js` (no migration). `tests/linegames.test.js` (12 tests).
+- 17.3 (done) `public/games/linegames.js` + `.css` (one renderer, three ids), `tests/ui/linegames-ui.js` (6 browser tests), wizard-layout matrix, `build`/`test`/`test:ui`.
+- 17.4 (done) Launch: Four in a Row and Tic-Tac-Toe leave Coming soon (7 planned), What's new, README v0.12, smoke test for all three.
+- 17.5 (todo) PR + CI. Verified locally: engine tests, coming-soon, browser tests, layout matrix. NOT run locally: smoke test, PostgreSQL suites (CI only).
+- 17.6 (done) Four and Five in a Row merged into one game with a Line length option (was a separate 15x15 game); Go Fish end-of-game crash fixed (the closing `over` event names no player and the renderer threw), empty-hand rules clarified, endgame tests.
 - Known: no undo or draw offer; stats are not tracked for these games (kind none).
-- 16.7 (done) Property Rivals: tokens walk square by square (back 3 walks back, lockup jumps), action buttons wait for arrival, and new log lines float over the board as messages (log entries are numbered; rolls and landings are now logged).
+- 17.7 (done) Property Rivals: tokens walk square by square (back 3 walks back, lockup jumps), action buttons wait for arrival, and new log lines float over the board as messages (log entries are numbered; rolls and landings are now logged).

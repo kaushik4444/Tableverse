@@ -20,16 +20,16 @@
     return `<${tag} class="card ${s.cls} ${cls}" aria-label="${esc(c.rank + ' of ' + s.name)}" ${attrs}><span class="rk">${esc(c.rank)}<i>${s.sym}</i></span><span class="pip">${s.sym}</span><span class="rk br">${esc(c.rank)}<i>${s.sym}</i></span></${tag}>`;
   }
   const backHTML = (cls = '') => `<div class="card back ${cls}" aria-hidden="true"><span class="pip">🐟</span></div>`;
-  const nameOf = (v, i) => (i === v.me ? 'You' : v.players[i] ? esc(v.players[i].name) : '');
+  const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
 
   /** What just happened, in words. Only public facts (and, for the player who fished, the card they drew). */
   function eventText(v) {
     const e = v.event;
     if (!e) return '';
-    if (e.type === 'over') return 'All the books are down.'; // the closing event names no player
+    if (e.type === 'over') return 'All the books are down.'; // the closing event names nobody
     const by = nameOf(v, e.by);
     const you = e.by === v.me;
-    const to = e.target !== undefined ? (e.target === v.me ? 'you' : esc(v.players[e.target].name)) : '';
+    const to = e.target !== undefined ? (e.target === v.me ? 'you' : nameOf(v, e.target)) : '';
     const bookText = e.books && e.books.length ? ` 📚 ${e.books.map(word).join(', ')} complete!` : '';
     switch (e.type) {
       case 'take': return `${by} asked ${to} for ${word(e.rank)} and got <b>${e.count}</b>.${bookText}`;
@@ -59,21 +59,24 @@
     const askable = v.myTurn && v.targets.includes(p.id);
     const backs = Array.from({ length: Math.min(p.cards, 5) }, () => '<i></i>').join('');
     const books = p.books.length ? `<div class="gf-books" title="${p.books.length} book${p.books.length === 1 ? '' : 's'}">${p.books.map((r) => `<span>${esc(r)}</span>`).join('')}</div>` : '';
+    const lead = pt.leaderOf(v.players.length, (k) => v.players[k].bookCount) === i && v.phase === 'playing';
     const sub = `${p.cards} card${p.cards === 1 ? '' : 's'} · 📚 ${p.bookCount}`;
-    const html = pt.seatHTML({ pid: p.id, name: p.name, avatar: pt.avatarOf(ctx.room, p.id), sub, turn: i === v.turn && v.phase === 'playing', me: i === v.me, extra: `<div class="gf-backs">${backs}</div>`, under: books });
+    const html = pt.seatHTML({ pid: p.id, name: p.name, avatar: pt.avatarOf(ctx.room, p.id), sub, turn: i === v.turn && v.phase === 'playing', me: i === v.me, extra: `<div class="gf-backs">${backs}</div>`, under: books, badges: lead ? '<span class="bdg l" title="Most books so far">👑 Lead</span>' : '' });
     return askable ? html.replace('class="pseat', `data-gf-seat="${esc(p.id)}" class="pseat gf-askable ${ui.target === p.id ? 'gf-picked' : ''}`) : html;
   }
 
   function tableHTML(v, ctx) {
     const text = eventText(v);
-    const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>
-      ${text ? `<p class="cap gf-event" role="status">${text}</p>` : ''}`;
-    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null });
+    // The stock sits on the felt; what just happened is a line under the table (on a phone the felt has no room for both)
+    const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>`;
+    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })
+      + (text ? `<p class="gf-event gf-event-bar" role="status">${text}</p>` : '');
   }
 
   function sizes(v) {
     const w = window.innerWidth;
-    const cw = w < 480 ? 58 : w < 900 ? 72 : 84;
+    let cw = w < 480 ? 58 : w < 900 ? 72 : 84;
+    if (innerHeight <= 700) cw = Math.min(cw, 48); // short phones: the table, the ask and the hand share one screen
     const n = v.hand.length;
     const avail = Math.min(w, 980) - 20;
     let overlap = -6;

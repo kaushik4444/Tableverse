@@ -94,3 +94,5 @@
   .pk-act { font-size: 9.5px; max-width: 84px; }
   .pk-stand li { grid-template-columns: 70px 1fr auto; }
 }
+/* 7 or 8 players on a very narrow phone: the action chip stays inside its narrow seat */
+@media (max-width: 360px) { .pt:is([data-n="7"], [data-n="8"]) .pk-act { max-width: 60px; padding: 1px 4px; font-size: 9.5px; } }

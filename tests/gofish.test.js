@@ -211,4 +211,11 @@ test('every game ends with the closing event and 13 books, for 2 to 6 players', 
   }
 });
 
+test('the view carries no game log: it would reveal what other players asked for', () => {
+  const g = E.createGame(people(3), {}, mulberry32(5));
+  const v = E.viewFor(g, 'p0');
+  assert.equal('log' in v, false);
+  assert.equal(JSON.stringify(v).includes('"kind"'), false);
+});
+
 console.log(`\n${passed} go fish tests passed`);

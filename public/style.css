@@ -141,7 +141,6 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
   color: var(--gold);
   margin-bottom: 8px;
 }
-.join-form { display: flex; gap: 10px; }
 .join-form input {
   text-transform: uppercase;
   letter-spacing: .3em;
@@ -186,11 +185,10 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
   box-shadow: 0 0 0 2px rgba(255, 201, 77, .25);
   transform: scale(1.06);
 }
-.section { font-size: 22px; margin-top: 0; }
+.section { margin-top: 0; }
 .section-sub { font-size: 13px; color: var(--muted); }
 
 /* Game Grid Tiles */
-.game-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
 @media (min-width: 700px) { .game-grid { grid-template-columns: 1fr 1fr; } }
 .game-art {
   display: grid; place-items: center; font-size: 52px;
@@ -379,11 +377,11 @@ html { scroll-behavior: auto; }
 
 /* ---------- home */
 .home { gap: 26px; }
-.home-hero { display: grid; gap: 18px; align-items: end; padding-top: 6px; }
+.home-hero { display: grid; align-items: end; padding-top: 6px; }
 @media (min-width: 760px) { .home-hero { grid-template-columns: 1fr minmax(280px, 360px); gap: 32px; } }
 .home-intro { display: grid; gap: 8px; justify-items: start; }
 .home-intro h1 { font-size: clamp(28px, 5vw, 42px); line-height: 1.1; background: linear-gradient(90deg, #fff, #c9b8ff 60%, #7ff0da); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.home-intro p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.45; max-width: 46ch; }
+.home-intro p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.45; }
 .join-form { display: grid; gap: 6px; }
 .join-row { display: flex; gap: 8px; }
 .join-row .btn { min-width: 84px; }
@@ -478,12 +476,8 @@ html { scroll-behavior: auto; }
 .fs-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .fs-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 4px; border-radius: 999px; background: rgba(255,255,255,.07); font-size: 13px; }
 .friends-strip .social-list { margin-top: 8px; }
-.soon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
-.soon-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--line, rgba(255,255,255,.18)); opacity: .8; }
 .soon-card b { display: block; }
 .soon-card small { color: var(--muted); }
-.soon-ico { font-size: 26px; }
-.soon-tag { margin-left: auto; font-style: normal; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; }
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; }
 .linklike:hover { color: var(--ink); }
 .tb-bell { position: relative; min-width: 44px; min-height: 44px; border-radius: 999px; border: 1px solid var(--panel-line); background: rgba(255, 255, 255, .05); color: var(--ink); font-size: 18px; cursor: pointer; }
@@ -572,3 +566,8 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 }
 
 .soon-card.in-dev .soon-tag { color: var(--gold, #f2c14e); border-color: currentColor; }
+/* The whole friends header is tappable, not just Manage. */
+.fs-title { display: block; flex: 1 1 auto; min-width: 0; padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.fs-title h2 { margin: 0; }
+.fs-title .hint { display: block; margin: 2px 0 0; }
+.fs-title:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 8px; }

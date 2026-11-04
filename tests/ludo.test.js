@@ -352,6 +352,25 @@ test('bonus rolls: captures and getting home earn another roll only in the gener
   }
 });
 
+test('a single possible move is played for you; a real choice is not', async () => {
+  const g = E.createGame(people(2), {}, mulberry32(1));
+  readyAll(g);
+  g.tokens[1] = [-1, -1, -1, -1];
+  g.phase = 'moving'; g.turn = 0; g.sixes = 0;
+  g.tokens[0] = [10, -1, -1, -1]; g.dice = 3; // only token 0 can move (the others need a six)
+  assert.deepEqual(E.forcedPlay(g), { playerId: 'p0', action: { type: 'move', token: 0 } });
+  assert.equal(E.viewFor(g, 'p0').autoPlay, true, 'the player is told the move is automatic');
+  g.tokens[0] = [-1, -1, -1, -1]; g.dice = 6; // every token would leave the yard to the same square
+  assert.equal(E.forcedPlay(g).action.type, 'move', 'four identical yard moves are one move');
+  g.tokens[0] = [10, -1, -1, -1]; g.dice = 6; // a token on the board or a new one: a real choice
+  assert.equal(E.forcedPlay(g), null);
+  g.tokens[0] = [10, 20, -1, -1]; g.dice = 3; // two tokens can move
+  assert.equal(E.forcedPlay(g), null);
+  assert.equal(E.viewFor(g, 'p0').autoPlay, false);
+  g.tokens[0] = [-1, -1, -1, -1]; g.dice = 3; g.phase = 'rolling';
+  assert.equal(E.forcedPlay(g), null, 'nothing to play while rolling');
+});
+
 test('bot: finishes a token first, then captures, then brings a token out, and never makes an illegal move', async () => {
   const g = E.createGame(people(2), {}, mulberry32(1));
   readyAll(g);

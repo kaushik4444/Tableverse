@@ -114,6 +114,9 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     assert.equal(new URL(page.url()).hash, '#friends');
     await page.click('.back-link');
     await page.waitForSelector('.game-grid');
+    await page.click('.friends-strip .fs-title'); // tapping the Friends heading itself opens the page too, not just Manage
+    await page.waitForSelector('#friends-panel');
+    assert.equal(new URL(page.url()).hash, '#friends');
     await ctx.close();
   });
 

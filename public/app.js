@@ -1297,7 +1297,7 @@
   // ------------------------------------------------------------ top bar, account menu and its dialogs
   const WHATS_NEW_VERSION = '2026-11-line-games';
   const WHATS_NEW = [
-    ['🐍', 'Snakes and Ladders is now playable', 'Roll, climb the ladders and dodge the snakes. 2–4 players, with bots for empty seats.'],
+    ['✨', 'Smoother, tidier games', 'One toolbar in every game, tokens that walk square by square in Snakes and Ladders, Ludo plays your only possible move, and a crown shows who is ahead.'],
     ['🏠', 'Property Rivals is now playable', 'Buy cities, ports and utilities, build, trade and bankrupt your rivals on an original world-tour board. 2–6 players, with bots for empty seats.'],
     ['🟡', 'Tic-Tac-Toe and Four in a Row', 'Two quick two-player games: line up three marks, or drop discs and connect four, or five on a bigger grid. Play a friend or a bot.'],
   ];
@@ -1335,11 +1335,13 @@
   function unifyToolbar() {
     const bar = $app.querySelector('.wz-top > .row, .ludo-tools');
     if (!bar) return;
-    const leave = bar.querySelector('[data-wz="leave"], [data-t9="leave"], [data-pk="leave"], [data-tm="leave"], [data-lt="leave"]');
+    const isLeave = (b) => Object.values(b.dataset).includes('leave');
+    const leave = [...bar.querySelectorAll('button')].find(isLeave);
     const chat = bar.querySelector('.chat-btn');
     const emote = bar.querySelector('[data-act="emotes"]');
     const extras = [...bar.querySelectorAll('button')].filter((b) => b !== leave && b !== chat && b !== emote);
-    if (!extras.some((b) => b.dataset.act === 'activityLog')) {
+    // Go Fish has no log: it would show what other players asked for
+    if (!bar.closest('.gf') && !extras.some((b) => b.dataset.act === 'activityLog')) {
       const log = document.createElement('button');
       log.type = 'button'; log.className = 'btn ghost small'; log.dataset.act = 'activityLog'; log.setAttribute('aria-label', 'Open game log'); log.textContent = '📜 Log';
       extras.push(log);
@@ -1349,7 +1351,7 @@
     wrap.innerHTML = `<button type="button" class="btn ghost small tb-more-btn" data-act="toggleTools" aria-haspopup="true" aria-expanded="${!!S.toolsOpen}" aria-label="More options">⋯</button><div class="tb-pop" role="group" aria-label="More options" ${S.toolsOpen ? '' : 'hidden'}></div>`;
     const pop = wrap.querySelector('.tb-pop');
     extras.forEach((b) => pop.appendChild(b));
-    bar.replaceChildren(...[chat, emote, wrap, leave].filter(Boolean));
+    bar.replaceChildren(...[chat, emote, wrap, leave].filter(Boolean)); // chat, reactions, ⋯, then leave as the last button
   }
   function setTools(open) {
     S.toolsOpen = open;
@@ -1652,7 +1654,6 @@
         <ul class="seats">${seats.join('')}</ul>
         ${isHost && open > 0 ? `<div class="row" style="margin-top:12px"><button class="btn ghost small" data-act="addBot">+ Add a bot</button><button class="btn ghost small" data-act="fillBots">Fill ${open} open seat${open === 1 ? '' : 's'} with bots</button></div>` : ''}
       </section>
-      <details class="panel fold you-fold"><summary><span class="avatar">${S.avatar ? esc(S.avatar) : '★'}</span><span class="fold-title">${S.named ? esc(S.name) : 'Your profile'}${S.username ? ` <small>@${esc(S.username)}</small>` : ''}</span><span class="fold-hint">Edit</span></summary>${profileHTML()}</details>
       ${opts ? `<details class="panel fold"><summary><span class="fold-title">Game options</span><span class="fold-hint">${esc(optionsSummary(g, r))}</span></summary><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</details>` : ''}
       ${
         isHost
@@ -1713,7 +1714,7 @@
       room: S.room,
       game: gameMeta(S.room.gameId),
       isHost: S.room.hostId === S.id,
-      activityLog: () => openActivityLog(),
+      activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
       act: (action) => send({ t: 'act', action }),
       leave: () => {
         const playing = S.room.status === 'playing' && !isSpectator();
@@ -1731,7 +1732,7 @@
     const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
     const gameInfo = gameMeta(S.room.gameId);
     if (surface && gameInfo) {
-      const log = (S.view.log || []).slice(-12).reverse();
+      const log = S.room.gameId === 'gofish' ? [] : (S.view.log || []).slice(-12).reverse(); // Go Fish has no log: it would reveal what others asked for
       const supporting = document.createElement('section');
       supporting.className = 'game-supporting-details';
       supporting.innerHTML = `${log.length ? `<details class="game-info-panel"><summary>📜 Game log <span>${S.view.log.length} plays</span></summary><ol>${log.map((e) => `<li><span>${esc(logLine(e))}</span></li>`).join('')}</ol></details>` : ''}${(gameInfo.rules || []).length ? `<details class="game-info-panel"><summary>📖 How to play</summary>${gameInfo.rules.map((rule) => `<p>${esc(rule)}</p>`).join('')}</details>` : ''}`;
@@ -1768,7 +1769,7 @@
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
     toggleAvatars: () => { S.avatarOpen = !S.avatarOpen; render(); },
     emotes: () => toggleEmoteBar(),
-    activityLog: () => openActivityLog(),
+    activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
     sound: () => { CardTable.sound.toggle(); render(); },
     create: (el) => {
       if (!authed()) return gateLogin(() => actions.create(el));

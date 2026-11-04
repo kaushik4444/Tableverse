@@ -6,7 +6,7 @@
 
   const RX = 37; // seat ellipse radii, in % of the table area
   const RY = 38;
-  const CARD_K = 0.5; // played cards lie halfway between the centre and the seat
+  const CARD_K = 0.44; // played cards lie halfway between the centre and the seat
 
   /** Positions for n players, with player `me` at the bottom and the turn order running clockwise. */
   function layout(n, me) {
@@ -61,7 +61,7 @@
       if (c) {
         const sweep = opts.collect !== undefined && opts.collect >= 0 && L[opts.collect];
         const to = sweep ? `;--tx:${L[opts.collect].sx}%;--ty:${L[opts.collect].sy}%` : '';
-        out += `<div class="pt-card ${c.win ? 'win' : ''} ${c.lead ? 'lead' : ''} ${sweep ? 'sweep' : ''}" style="left:${L[i].cx}%;top:${L[i].cy}%;--fx:${L[i].fx}%;--fy:${L[i].fy}%${to}">${c.html}</div>`;
+        out += `<div class="pt-card ${c.win ? 'win' : ''} ${c.lead ? 'lead' : ''} ${sweep ? 'sweep' : ''}" style="left:${L[i].cx}%;top:calc(${L[i].cy}% + ${(-L[i].fy / 150).toFixed(2)} * var(--card-push, 16px));--fx:${L[i].fx}%;--fy:${L[i].fy}%${to}">${c.html}</div>`;
       }
     }
     for (let i = 0; i < opts.n; i++) out += `<div class="pt-seat" style="left:${L[i].sx}%;top:${L[i].sy}%">${opts.seat(i)}</div>`;
@@ -115,5 +115,11 @@
 
   window.CardTable = window.CardTable || {};
   window.CardTable.TRICK_HOLD_MS = TRICK.show + TRICK.sweep;
-  window.CardTable.pt = { trickHold, layout, seatHTML, tableHTML, avatarOf, avatarColor };
+  /** Index of the single player strictly ahead on `score(i)` (at least `min`), or -1 when it is tied or nobody has scored. */
+  function leaderOf(n, score, min = 1) {
+    let best = -Infinity, at = -1, tie = false;
+    for (let i = 0; i < n; i++) { const s = score(i); if (s > best) { best = s; at = i; tie = false; } else if (s === best) tie = true; }
+    return !tie && best >= min ? at : -1;
+  }
+  window.CardTable.pt = { trickHold, layout, seatHTML, tableHTML, avatarOf, avatarColor, leaderOf };
 })();

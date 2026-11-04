@@ -210,7 +210,6 @@ function viewFor(g, playerId) {
     event: g.event ? { ...g.event } : null,
     myDraw: draw ? { seq: draw.seq, card: { ...draw.card } } : null,
     winners: over && g.event && g.event.type === 'over' ? g.event.winners.slice() : [],
-    log: g.log.slice(-30),
   };
 }
 
