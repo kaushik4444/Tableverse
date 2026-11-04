@@ -666,10 +666,24 @@ function start(opts = {}) {
     room.timer = setTimeout(() => {
       room.timer = null;
       if (room.game !== g || g.isOver()) return;
-      if (!valid()) return schedule(room);
-      const res = run();
-      if (!res.ok) console.error('auto action failed:', res.error);
-      afterChange(room);
+      // A bug in one game must not take the whole server (and every other table) down: an exception here would
+      // otherwise be an uncaught exception in a timer callback. Retry a couple of times, then close only this table.
+      try {
+        if (!valid()) return schedule(room);
+        const res = run();
+        if (!res || !res.ok) console.error('auto action failed:', res && res.error);
+        room.autoFailures = 0;
+        afterChange(room);
+      } catch (e) {
+        room.autoFailures = (room.autoFailures || 0) + 1;
+        console.error(`[server] table ${room.code} (${room.gameId}): automatic play failed (${room.autoFailures}/3):`, e && e.stack || e);
+        if (room.autoFailures >= 3) {
+          for (const m of viewers(room)) { const q = players.get(m.id); if (q && q.connected) send(q.ws, { t: 'notice', text: 'This game hit an error and had to be closed. Sorry! Please start a new table.' }); }
+          destroyRoom(room);
+        } else {
+          try { schedule(room); } catch { /* the next gc pass closes an unhealthy table */ }
+        }
+      }
     }, delay);
     if (room.timer.unref) room.timer.unref();
   }
@@ -1485,6 +1499,16 @@ module.exports = { start };
 if (require.main === module) {
   start().then(
     ({ port, database, close }) => {
+      // Last-resort guards. A rejected promise nobody awaited is logged and the server keeps running; a genuinely
+      // uncaught exception leaves the process in an unknown state, so finish pending match writes and exit (the host restarts us).
+      process.on('unhandledRejection', (reason) => console.error('[server] unhandled rejection:', reason && reason.stack || reason));
+      let crashing = false;
+      process.on('uncaughtException', (err) => {
+        console.error('[server] uncaught exception:', err && err.stack || err);
+        if (crashing) return;
+        crashing = true;
+        close({ drainMs: 5000 }).then(() => process.exit(1), () => process.exit(1));
+      });
       console.log(`Tableverse running on http://localhost:${port} (${database.mode} store)`);
       // Render sends SIGTERM on deploy/restart: finish pending match writes first (it waits 30 s before killing us)
       let stopping = false;
