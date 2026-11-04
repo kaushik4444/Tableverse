@@ -1785,6 +1785,41 @@
     document.body.appendChild(overlay);
   }
 
+  /**
+   * A bot is playing a seat for a person who left or went offline: a small robot on that player's seat or list row, removed
+   * again when they come back. Games mark their players with data-pid; this works the same for every game.
+   */
+  function markStandIns(root) {
+    if (!root || !S.room) return;
+    const standIn = new Set((S.room.members || []).filter((m) => m.standIn).map((m) => m.id));
+    root.querySelectorAll('[data-pid]').forEach((el) => {
+      if (el.classList.contains('ludo-token')) return;
+      const want = standIn.has(el.dataset.pid);
+      const has = el.querySelector('.standin');
+      if (want && !has) {
+        const m = S.room.members.find((x) => x.id === el.dataset.pid);
+        const badge = document.createElement('span');
+        badge.className = 'standin';
+        badge.setAttribute('role', 'img');
+        badge.setAttribute('aria-label', `A bot is playing for ${m ? m.name : 'this player'}`);
+        badge.title = `A bot is playing for ${m ? m.name : 'this player'} until they come back`;
+        badge.textContent = '🤖';
+        (el.querySelector(':scope > .av') || el.querySelector('.sl-pname, .pr-pn > b, .ludo-player > b') || el).appendChild(badge);
+      } else if (!want && has) has.remove();
+    });
+  }
+  let standInWatch = null;
+  function watchStandIns() {
+    if (standInWatch || typeof MutationObserver === 'undefined') return;
+    let queued = false;
+    standInWatch = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; if (S.room && S.view) markStandIns($app); });
+    });
+    standInWatch.observe($app, { childList: true, subtree: true });
+  }
+
   function renderGame() {
     const plugin = plugins[S.room.gameId];
     if (!plugin || !S.view) {
@@ -1807,6 +1842,8 @@
       rerender: render,
       toast,
     });
+    markStandIns($app);
+    watchStandIns();
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();

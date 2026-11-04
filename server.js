@@ -432,6 +432,13 @@ function start(opts = {}) {
     }
   }
   const isConnected = (m) => m.bot || !!players.get(m.id)?.connected;
+  /** A bot is playing this seat for a person: they left the running game, or they have been offline long enough for the server to play for them. */
+  const isStandIn = (room, m) => {
+    if (room.status !== 'playing') return false;
+    if (m.bot) return !!(room.leftEarly && room.leftEarly.has(m.id));
+    const q = players.get(m.id);
+    return !!q && !q.connected && Date.now() - (q.lastSeen || 0) >= absentMs;
+  };
   /** The public @handle of a registered human at the table (null for bots, guests and anonymous players). */
   const usernameOf = (m) => (m.bot ? null : (players.get(m.id) || {}).username || null);
   /** Smoothed round-trip time in ms of a connected human (null for bots and people who are offline or not measured yet). */
@@ -455,7 +462,7 @@ function start(opts = {}) {
       min: def.seats.min,
       max: def.seats.max,
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
-      members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m) })),
+      members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m), standIn: isStandIn(room, m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
       outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
