@@ -40,6 +40,12 @@ Status legend: Fixed (in this branch, with a test) · Open · Accepted (document
 - **Remaining (theory):** several accounts can still do this, bounded by account creation limits and email verification.
 - **Test:** `tests/room-limits.test.js`.
 
+### F14 — An HTTP route error left the request hanging — Low — Fixed
+- **Where:** `server.js` top-level request handler (async, no outer guard).
+- **Problem (confirmed):** an exception outside `authRoutes` (for example in the public table listing) became an unhandled rejection and the request hung until the 30 s timeout; without a process handler it would also have crashed the server.
+- **Fix:** every request is wrapped: 500 immediately, logged with method and path (no query string, so no tokens).
+- **Test:** `tests/room-fault.test.js` (second case).
+
 ### F5 — Game logic robustness (engines) — Verified, no defect found
 `tests/simulation.test.js` (new, runs in `npm test`) plays 120 seeded games across all 8 games and every seat count (min / default / max) and asserts: bots always produce accepted actions, the game ends, garbage actions (null, wrong types, prototype keys, NaN, huge numbers, unknown seats) never throw and never change the public view, finished games accept nothing and await nobody, views serialise and never include another seat's `hand`. Existing per-game suites cover rules, scoring and hidden information in depth. **Not covered:** deep per-game scoring invariants for Poker side pots and Property Rivals trades under random play (existing unit tests cover scripted cases only).
 
@@ -72,3 +78,12 @@ Load (hundreds of sockets), long-running soak, database outage drills against a 
 
 ## Requires paid infrastructure
 Always-on hosting (no sleep), persistent disk for the spool, multi-instance scaling, managed monitoring/alerts, point-in-time restore beyond Neon free limits.
+
+## Final assessment (this branch)
+- **Verified and fixed:** F1 table crash isolation, F2 graceful shutdown, F4 Property Rivals default, F12 parked-table flood, F14 HTTP error guard; each with a regression test that fails without the fix.
+- **Verified, no defect found:** engine robustness under seeded random play and garbage input (F5), reconnect/duplicate-identity handling, auth/session design (F6), database pool/timeouts/indexes by reading (F7), scripted accessibility basics (F13), memory over 650 table lifecycles.
+- **Verified but not fixed (cannot be fixed for free):** match spool durability on an ephemeral disk (F3), free-tier sleep and cold starts (F10).
+- **Not yet tested:** hours-long soak, real-Argon2 signup bursts, outage drills against Neon, real devices, screen readers, colour contrast, email deliverability.
+- **Requires paid infrastructure:** always-on hosting, persistent disk, multi-instance scaling, managed alerting.
+- **Future scalability:** shared realtime layer before more than one instance; keyed UI diff; per-viewer view caching at large tables.
+CI green is necessary, not sufficient: see the release checklist in `docs/PRODUCTION_READINESS.md`.
