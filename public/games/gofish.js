@@ -59,8 +59,9 @@
     const askable = v.myTurn && v.targets.includes(p.id);
     const backs = Array.from({ length: Math.min(p.cards, 5) }, () => '<i></i>').join('');
     const books = p.books.length ? `<div class="gf-books" title="${p.books.length} book${p.books.length === 1 ? '' : 's'}">${p.books.map((r) => `<span>${esc(r)}</span>`).join('')}</div>` : '';
+    const lead = pt.leaderOf(v.players.length, (k) => v.players[k].bookCount) === i && v.phase === 'playing';
     const sub = `${p.cards} card${p.cards === 1 ? '' : 's'} · 📚 ${p.bookCount}`;
-    const html = pt.seatHTML({ pid: p.id, name: p.name, avatar: pt.avatarOf(ctx.room, p.id), sub, turn: i === v.turn && v.phase === 'playing', me: i === v.me, extra: `<div class="gf-backs">${backs}</div>`, under: books });
+    const html = pt.seatHTML({ pid: p.id, name: p.name, avatar: pt.avatarOf(ctx.room, p.id), sub, turn: i === v.turn && v.phase === 'playing', me: i === v.me, extra: `<div class="gf-backs">${backs}</div>`, under: books, badges: lead ? '<span class="bdg l" title="Most books so far">👑 Lead</span>' : '' });
     return askable ? html.replace('class="pseat', `data-gf-seat="${esc(p.id)}" class="pseat gf-askable ${ui.target === p.id ? 'gf-picked' : ''}`) : html;
   }
 
@@ -74,7 +75,8 @@
 
   function sizes(v) {
     const w = window.innerWidth;
-    const cw = w < 480 ? 58 : w < 900 ? 72 : 84;
+    let cw = w < 480 ? 58 : w < 900 ? 72 : 84;
+    if (innerHeight <= 700) cw = Math.min(cw, 48); // short phones: the table, the ask and the hand share one screen
     const n = v.hand.length;
     const avail = Math.min(w, 980) - 20;
     let overlap = -6;

@@ -119,3 +119,10 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .wz .btn, .ludo .btn, .tm .btn, .bidbtn, .suitbtn, .pk-size, .pk-step, .wz-status, .tm-status, .ludo-dice-panel, .hand .card, .tm-hand .tcard { transition: none; }
   .wz .btn:active, .ludo .btn:active, .tm .btn:active { transform: none; }
 }
+
+
+/* A long game name never runs under the toolbar buttons. */
+.wz-top .wz-round { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A crown marks who is ahead (most books, furthest along, most progress), the same cue Wizard and 29 give with "Leading". */
+.crown { font-size: .95em; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }

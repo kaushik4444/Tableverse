@@ -37,7 +37,7 @@ module.exports = {
       },
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId),
-      botDelayMs: () => 900 + g.rng() * 500,
+      botDelayMs: () => 3400 + g.rng() * 600, // long enough for the token to walk square by square, plus a gap
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // score is the placing (first = n, ... last = 1)

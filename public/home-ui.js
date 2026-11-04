@@ -48,7 +48,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
       ? (online.length ? `${online.length} of ${S.friends.length} friends online` : `${S.friends.length} friend${S.friends.length === 1 ? '' : 's'}, none online`)
       : 'Add friends to play private tables.';
     return `<section class="home-section friends-strip" aria-label="Friends">
-      <div class="fs-head"><div><h2 class="section">Friends</h2><p class="hint">${summary}${pend ? ` · <b>${pend} waiting in your bell</b>` : ''}</p></div><button type="button" class="btn ghost small" data-act="openFriendsPage">Manage</button></div>
+      <div class="fs-head"><button type="button" class="fs-title" data-act="openFriendsPage" aria-label="Open friends"><h2 class="section">Friends</h2><span class="hint">${summary}${pend ? ` · <b>${pend} waiting in your bell</b>` : ''}</span></button><button type="button" class="btn ghost small" data-act="openFriendsPage">Manage</button></div>
       ${chips ? `<div class="fs-chips">${chips}</div>` : ''}
     </section>`;
   }

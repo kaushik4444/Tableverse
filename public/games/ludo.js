@@ -111,7 +111,7 @@
     if (v.phase === 'gameOver') return v.winner >= 0 ? `${nm(v.winner)} wins!` : 'Game over';
     if (v.phase === 'ready') return v.me >= 0 && !v.players[v.me].ready ? 'Ready to start?' : 'Waiting for the others…';
     if (v.phase === 'rolling') return v.canRoll ? 'Your turn — roll the dice' : `${nm(v.turn)} is rolling…`;
-    if (v.phase === 'moving') return v.canMove ? 'Pick a glowing token' : `${nm(v.turn)} is moving…`;
+    if (v.phase === 'moving') return v.canMove ? (v.autoPlay ? 'Only one move: playing it' : 'Pick a glowing token') : `${nm(v.turn)} is moving…`;
     return 'Ludo';
   }
   function lastEvent(v) {
@@ -138,12 +138,13 @@
   }
 
   function playersHTML(v) {
+    const lead = (window.CardTable.pt ? window.CardTable.pt.leaderOf : () => -1)(v.players.length, (k) => v.players[k].tokens.reduce((s, x) => s + (x === FINISHED ? 100 : Math.max(x, 0)), 0), 1);
     return `<ul class="ludo-players" aria-label="Players">${v.players.map((p, i) => {
       const seat = SEAT[Number.isInteger(p.seat) ? p.seat : seatsFor(v.n)[i]];
       const home = p.tokens.filter((x) => x === FINISHED).length;
       const active = i === v.turn && v.phase !== 'gameOver' && v.phase !== 'ready';
       const pips = [0, 1, 2, 3].map((k) => `<i class="${k < home ? 'on' : ''}"></i>`).join('');
-      return `<li class="ludo-player ${active ? 'active' : ''} ${i === v.me ? 'you' : ''}" style="--c:${seat.hex}"><span class="player-dot"></span><b>${esc(p.name)}${i === v.me ? ' <small>you</small>' : ''}</b><span class="pips" title="${home} of 4 home">${pips}</span></li>`;
+      return `<li class="ludo-player ${active ? 'active' : ''} ${i === v.me ? 'you' : ''}" style="--c:${seat.hex}"><span class="player-dot"></span><b>${i === lead && (v.phase === 'rolling' || v.phase === 'moving') ? '<span class="crown" title="In the lead">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' <small>you</small>' : ''}</b><span class="pips" title="${home} of 4 home">${pips}</span></li>`;
     }).join('')}</ul>`;
   }
 

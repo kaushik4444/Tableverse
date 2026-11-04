@@ -115,5 +115,11 @@
 
   window.CardTable = window.CardTable || {};
   window.CardTable.TRICK_HOLD_MS = TRICK.show + TRICK.sweep;
-  window.CardTable.pt = { trickHold, layout, seatHTML, tableHTML, avatarOf, avatarColor };
+  /** Index of the single player strictly ahead on `score(i)` (at least `min`), or -1 when it is tied or nobody has scored. */
+  function leaderOf(n, score, min = 1) {
+    let best = -Infinity, at = -1, tie = false;
+    for (let i = 0; i < n; i++) { const s = score(i); if (s > best) { best = s; at = i; tie = false; } else if (s === best) tie = true; }
+    return !tie && best >= min ? at : -1;
+  }
+  window.CardTable.pt = { trickHold, layout, seatHTML, tableHTML, avatarOf, avatarColor, leaderOf };
 })();

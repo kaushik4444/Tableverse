@@ -570,3 +570,9 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
   .game-card .game-actions .btn { min-height: 40px; }
   .game-grid { gap: 10px; }
 }
+
+/* The whole friends header is tappable, not just Manage. */
+.fs-title { display: block; flex: 1 1 auto; min-width: 0; padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.fs-title h2 { margin: 0; }
+.fs-title .hint { display: block; margin: 2px 0 0; }
+.fs-title:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 8px; }
