@@ -1579,6 +1579,10 @@
   function render() {
     const ae = document.activeElement;
     const focusedId = ae && KEEP_FIELDS.includes(ae.id) ? ae.id : null;
+    // A folded panel the person opened (game options, spectators) stays open when the screen redraws, and a changed option
+    // keeps its keyboard focus: changing one setting must not slam the panel shut.
+    const openFolds = [...document.querySelectorAll('details[id]')].filter((d) => d.open).map((d) => d.id);
+    const focusedOpt = ae && ae.dataset && ae.dataset.opt ? ae.dataset.opt : null;
     const saved = {};
     for (const id of KEEP_FIELDS) {
       const el = document.getElementById(id);
@@ -1595,6 +1599,8 @@
     else renderGame();
     updateWatchers();
     if ($chat && S.chatOpen) drawChat();
+    for (const id of openFolds) { const d = document.getElementById(id); if (d && d.tagName === 'DETAILS') d.open = true; }
+    if (focusedOpt) { const el = $app.querySelector(`[data-opt="${CSS.escape(focusedOpt)}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
     for (const id of KEEP_FIELDS) {
       const el = document.getElementById(id);
       const was = saved[id];
@@ -1714,7 +1720,7 @@
         <span class="row" style="gap:6px">${voiceButtonsHTML()}${CardTable.chat.button()}<button class="btn ghost small" data-act="rules" data-game="${esc(r.gameId)}">Rules</button></span>
       </div>
       ${spectating ? `<section class="panel"><h3>👁 You are watching</h3><p class="hint" style="text-align:left;margin:6px 0 10px">The next game starts when the host presses Start. ${open > 0 ? 'There is an open seat if you want to play.' : 'Ask the host to free a seat if you want to play.'}</p>${open > 0 ? '<button class="btn" data-act="sit">Take a seat</button>' : ''}</section>` : ''}
-      ${r.spectators && r.spectators.length ? `<details class="spectator-list"><summary>👁 ${r.spectators.length} watching</summary>${isHost ? `<ul class="spectator-people">${r.spectators.map((x) => `<li><span class="nm">${esc(x.name)}</span><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(x.id)}" data-name="${esc(x.name)}" aria-label="Remove ${esc(x.name)} from the table" title="Remove from table">✕</button></li>`).join('')}</ul>` : `<div class="spectator-names">${r.spectators.map((x) => esc(x.name)).join(', ')}</div>`}</details>` : ''}
+      ${r.spectators && r.spectators.length ? `<details id="fold-spectators" class="spectator-list"><summary>👁 ${r.spectators.length} watching</summary>${isHost ? `<ul class="spectator-people">${r.spectators.map((x) => `<li><span class="nm">${esc(x.name)}</span><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(x.id)}" data-name="${esc(x.name)}" aria-label="Remove ${esc(x.name)} from the table" title="Remove from table">✕</button></li>`).join('')}</ul>` : `<div class="spectator-names">${r.spectators.map((x) => esc(x.name)).join(', ')}</div>`}</details>` : ''}
       <section class="panel code-card">
         <div class="label">Table code</div>
         <div class="code">${esc(r.code)}</div>
@@ -1734,7 +1740,7 @@
         <ul class="seats">${seats.join('')}</ul>
         ${isHost && open > 0 ? `<div class="row" style="margin-top:12px"><button class="btn ghost small" data-act="addBot">+ Add a bot</button><button class="btn ghost small" data-act="fillBots">Fill ${open} open seat${open === 1 ? '' : 's'} with bots</button></div>` : ''}
       </section>
-      ${opts ? `<details class="panel fold"><summary><span class="fold-title">Game options</span><span class="fold-hint">${esc(optionsSummary(g, r))}</span></summary><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</details>` : ''}
+      ${opts ? `<details id="fold-options" class="panel fold"><summary><span class="fold-title">Game options</span><span class="fold-hint">${esc(optionsSummary(g, r))}</span></summary><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</details>` : ''}
       ${
         isHost
           ? `<div class="start-bar"><button class="btn big" data-act="start">Start game${open > 0 ? ` <small>· ${open} bot${open === 1 ? '' : 's'} will join</small>` : ''}</button></div>`
