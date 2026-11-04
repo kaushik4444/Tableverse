@@ -565,6 +565,7 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
   .game-grid { gap: 10px; }
 }
 
+.soon-card.in-dev .soon-tag { color: var(--gold, #f2c14e); border-color: currentColor; }
 /* The whole friends header is tappable, not just Manage. */
 .fs-title { display: block; flex: 1 1 auto; min-width: 0; padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .fs-title h2 { margin: 0; }
