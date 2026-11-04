@@ -58,6 +58,9 @@ Rooms, sockets and presence are in process memory. One instance only; documented
 ### F10 — Free-tier hosting behaviour — Accepted
 Render free instances sleep when idle and cold-start (first visitor waits, in-memory tables are gone). Neon free scales to zero (first query slower; the 5 s connect timeout covers typical cold starts). No change possible without paying.
 
+### F13 — Accessibility basics — Verified clean (scripted)
+`tests/ui/a11y.js` (in `test:ui`) checks the home page and all 8 game tables for controls without accessible names, unlabeled fields, images without alt, missing `lang`/viewport, and a visible focus ring; a negative control proves the scanner catches an unnamed button. Not covered: screen-reader announcement quality, colour contrast measurement, zoom/text scaling.
+
 ### F11 — Front end — Improvement
 Layout audits (`tests/ui/game-audit.js`, `mobile-fit.js`, `wizard-layout.js`) are clean at six sizes for all games after PRs #30, #32, #33. Open: below-the-fold controls on 320 px screens (scroll to reach), small tap targets (e.g. "What's new" link). Real-device and screen-reader testing has **not** been done.
 
