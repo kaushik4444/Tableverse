@@ -14,6 +14,8 @@ Real server in memory mode, real WebSocket clients, tables of four (Go Fish, Wiz
 
 Caveats: the clients stay connected but do not play, so most traffic is deals, bot turns for timeouts and lobby updates, not a full human-speed game; account creation uses a fast stand-in for Argon2 in this sandbox (real signups are far more CPU-heavy: see below); Render's free instance has less CPU and 512 MB RAM, so absolute numbers there will be lower. Treat this as a regression baseline (compare before/after a change), not a capacity promise.
 
+**Table churn (sandbox, one account, forced GC):** 650 create/start/leave lifecycles with a socket each: heap 9.2 MB after warm-up -> 9.9 MB after 600 more, one parked table left (after the fix for audit F12; before it, every loop left a table behind). This is a short leak check, not an hours-long soak.
+
 **Not yet measured:** hours-long memory growth, real-Argon2 signup bursts (each hash is deliberately expensive and serialised by the auth queue), query plans on production-sized data.
 
 Known scaling limit: one process, state in memory. Per-viewer `view()` is computed for every player on each change (cost grows with table size, fine up to 8 seats); the chat log is resent in full on join; the client rebuilds the whole game screen on each state (a keyed diff would be cheaper on low-end phones).
