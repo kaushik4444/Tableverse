@@ -176,3 +176,9 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - Known remaining (audit): Poker 6p/8p seats overlap at 320x568 (8p also at 360x640); some below-the-fold hands and small tap targets (e.g. the "What's new" link) on the smallest phones.
 - Not done (perf ideas): per-viewer `view()` at big tables, chat log resent in full on join, keyed diff instead of whole-screen rebuild.
 - Not run: server/PG suites (no `ws`/`pg` here); CI covers them.
+
+## Stage 16 — Audit of merged changes (branch `cleanup/css-and-build`)
+- Audited main after the parallel branches merged: build, all runnable suites, layout audit across all 7 games (0 overlaps), duplicate functions / debug logging (none).
+- `public/style.css`: removed the declarations of 9 duplicated home/roadmap rules that a later rule already overrides (join-form, section, game-grid, home-hero, home-intro p, soon-grid/card/ico/tag). Computed styles of 13 home selectors at 360/768/1280 px compared before and after: identical.
+- `npm run build` now runs `scripts/check-syntax.js`, which syntax-checks every .js file (110) instead of a hand-kept list (several engines were missing). New `npm run test:audit` runs `tests/ui/game-audit.js` (not in CI: slow).
+- Known: Poker 8p seat overlap on a 320px phone not re-verified; below-the-fold warnings on the smallest phones.
