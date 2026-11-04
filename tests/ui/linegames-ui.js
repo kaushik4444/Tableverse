@@ -1,5 +1,5 @@
 'use strict';
-// Tic-Tac-Toe, Four in a Row and Five in a Row in a real browser: tapping, previewing, wins, draws, spectators, small screens.
+// Tic-Tac-Toe and Four in a Row (four or five) in a real browser: tapping, wins, draws, spectators, small screens.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk } = require('./harness');
 const { chromium } = loadPlaywright();
@@ -48,17 +48,16 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
-  await test('five in a row: 225 points, the first tap previews, the second tap or Place sends', async () => {
-    const { page, ctx } = await open(msgs('fiveinarow'));
-    assert.equal(await page.locator('.lg-cell').count(), 225);
-    assert.equal(await page.isDisabled('[data-lg="place"]'), true);
-    await page.click('[data-cell="112"]');
-    assert.equal((await sent(page)).length, 0, 'a first tap only previews');
-    assert.equal(await page.locator('.lg-piece.ghost').count(), 1);
-    await page.click('[data-lg="place"]');
-    assert.deepEqual((await sent(page)).at(-1).action, { type: 'place', cell: 112 });
-    await page.click('[data-cell="113"]'); await page.click('[data-cell="113"]');
-    assert.deepEqual((await sent(page)).at(-1).action, { type: 'place', cell: 113 });
+  await test('five in a row option: a 9x8 grid of columns and the header says five', async () => {
+    const E = require('../../games/linegames/engine');
+    const m = msgs('fourinarow'); const g = E.createGame('fourinarow', [{ id: 'me', name: 'Aarav' }, { id: 'p1', name: 'Bo' }], { starter: 'host', line: '5' }, () => 0.1);
+    m[1].view = E.viewFor(g, 'me');
+    const { page, ctx } = await open(m);
+    assert.equal(await page.locator('.lg-col').count(), 9);
+    assert.equal(await page.locator('.lg-col .lg-cell').count(), 72);
+    assert.match(await page.textContent('.wz-round'), /Five in a Row/);
+    await page.click('[data-col="8"]');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'drop', col: 8 });
     await ctx.close();
   });
 
@@ -73,7 +72,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
   });
 
   await test('spectators cannot move; every game fits a phone without sideways scroll', async () => {
-    for (const id of ['tictactoe', 'fourinarow', 'fiveinarow']) {
+    for (const id of ['tictactoe', 'fourinarow']) {
       const { page, ctx } = await open(msgs(id, (v) => { v.me = -1; v.myTurn = false; v.legal = []; }), { width: 360, height: 740 });
       assert.equal(await page.locator('.lg-cell:not(:disabled):not(.lg-gravity .lg-cell)').count(), 0, id);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${id}: no horizontal scroll`);

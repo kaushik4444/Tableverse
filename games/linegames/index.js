@@ -1,9 +1,13 @@
 'use strict';
-/** Plugins for Tic-Tac-Toe, Four in a Row and Five in a Row: one engine, three games. */
+/** Plugins for Tic-Tac-Toe and Four in a Row (which has a Five in a Row option): one engine, two games. */
 const engine = require('./engine');
 const { scrubDeep } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
 
+const LINE = { key: 'line', type: 'select', label: 'Line length', default: '4', choices: [
+  { value: '4', label: 'Four in a row', desc: 'Classic: a 7×6 grid, connect four.' },
+  { value: '5', label: 'Five in a row', desc: 'A bigger 9×8 grid, connect five.' },
+] };
 const STARTER = { key: 'starter', type: 'select', label: 'Who starts', default: 'random', choices: [
   { value: 'random', label: 'Random', desc: 'The first move is decided by chance.' },
   { value: 'host', label: 'First seat', desc: 'The first seat always starts.' },
@@ -13,11 +17,11 @@ const STARTER = { key: 'starter', type: 'select', label: 'Who starts', default: 
 function make(variantId, meta) {
   const v = engine.VARIANTS[variantId];
   return {
-    id: v.id, name: v.name, ...meta,
+    id: v.id, name: v.name, ...meta, extraOptions: undefined,
     seats: { min: 2, max: 2, default: 2 },
     seatLabel: (i) => (v.gravity ? ['Red', 'Yellow'] : ['X', 'O'])[i],
     stats: { kind: 'none', bestLabel: null, bestOf: null },
-    options: [STARTER, TIME_LIMIT_OPTION],
+    options: [...(meta.extraOptions || []), STARTER, TIME_LIMIT_OPTION],
     create(players, options, rng) {
       const g = engine.createGame(variantId, players, options, rng);
       return {
@@ -47,21 +51,12 @@ module.exports = [
     ],
   }),
   make('fourinarow', {
-    icon: '🟡', accent: '#e17055',
-    tagline: 'Drop discs into a 7×6 grid and connect four before your opponent does.',
+    icon: '🟡', accent: '#e17055', extraOptions: [LINE],
+    tagline: 'Drop discs into the grid and connect four before your opponent does. Or go bigger and connect five.',
     rules: [
-      'Two players take turns dropping a disc into one of the seven columns. The disc falls to the lowest free space.',
-      'The first player to connect four of their discs in a line, across, down or diagonally, wins.',
-      'If the grid fills up with no line of four, the game is a draw.',
-    ],
-  }),
-  make('fiveinarow', {
-    icon: '⚫', accent: '#2d3436',
-    tagline: 'Place stones on a 15×15 board and get five in a row, in any direction.',
-    rules: [
-      'Two players take turns placing a stone on any free point of the 15×15 board.',
-      'The first player to get five or more of their stones in an unbroken line, across, down or diagonally, wins.',
-      'If the board fills up with no line, the game is a draw. The player who moves first has an edge, so the starter can be changed in the table options.',
+      'Two players take turns dropping a disc into one of the columns. The disc falls to the lowest free space.',
+      'The first player to connect four of their discs in a line, across, down or diagonally, wins. With “Line length” set to five you play on a bigger 9×8 grid and need five in a row.',
+      'If the grid fills up with no line, the game is a draw.',
     ],
   }),
 ];

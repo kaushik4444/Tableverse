@@ -1,5 +1,5 @@
 'use strict';
-// Tic-Tac-Toe, Four in a Row and Five in a Row: placement, gravity, win lines in every direction, draws, turn order, bots, plugins.
+// Tic-Tac-Toe and Four in a Row (with the Five in a Row option): placement, gravity, win lines in every direction, draws, turn order, bots, plugins.
 require('./helpers/env');
 const assert = require('node:assert/strict');
 const E = require('../games/linegames/engine');
@@ -17,13 +17,14 @@ const drop = (g, who, col) => E.applyAction(g, who === 0 ? 'a' : 'b', { type: 'd
 const okPlace = (g, who, cell) => { const r = place(g, who, cell); assert.ok(r.ok, r.error); };
 const okDrop = (g, who, col) => { const r = drop(g, who, col); assert.ok(r.ok, r.error); };
 
-test('three games share the engine, and are registered with 2 seats', () => {
-  for (const [id, rows, cols, win, gravity] of [['tictactoe', 3, 3, 3, false], ['fourinarow', 6, 7, 4, true], ['fiveinarow', 15, 15, 5, false]]) {
+test('two games share the engine, and are registered with 2 seats', () => {
+  for (const [id, rows, cols, win, gravity] of [['tictactoe', 3, 3, 3, false], ['fourinarow', 6, 7, 4, true]]) {
     const g = mk(id);
     assert.equal(g.board.length, rows * cols); assert.equal(g.v.win, win); assert.equal(g.v.gravity, gravity);
     const def = games.get(id); assert.ok(def, id); assert.deepEqual([def.seats.min, def.seats.max], [2, 2]);
   }
-  assert.equal(plugins.length, 3);
+  assert.equal(plugins.length, 2);
+  assert.deepEqual(games.get('fourinarow').options.map((o) => o.key), ['line', 'starter', 'timeLimit']);
   assert.throws(() => E.createGame('tictactoe', [two[0]], {}), /exactly 2/);
   assert.throws(() => E.createGame('chess', two, {}), /Unknown/);
 });
@@ -94,20 +95,19 @@ test('four in a row: a full grid with no four is a draw', () => {
   assert.equal(g.phase, 'gameOver'); assert.equal(g.winner, null); assert.equal(E.viewFor(g, 'a').draw, true);
 });
 
-test('five in a row: five wins in all directions, four does not, six also wins', () => {
-  const g = mk('fiveinarow'); const row = 7 * 15;
-  for (let i = 0; i < 4; i++) { okPlace(g, 0, row + i); okPlace(g, 1, i); }
-  assert.equal(g.phase, 'playing', 'four is not enough'); okPlace(g, 0, row + 4);
-  assert.equal(g.winner, 0); assert.deepEqual(g.line, [0, 1, 2, 3, 4].map((i) => row + i));
-  for (const [dr, dc] of [[1, 0], [1, 1], [1, -1]]) {
-    const h = mk('fiveinarow'); const cells = [0, 1, 2, 3, 4].map((i) => (3 + dr * i) * 15 + 6 + dc * i);
-    const spare = [0, 1, 2, 3].map((i) => i * 15 + 14);
-    cells.slice(0, 4).forEach((c, i) => { okPlace(h, 0, c); okPlace(h, 1, spare[i]); }); okPlace(h, 0, cells[4]);
-    assert.equal(h.winner, 0, `direction ${dr},${dc}`);
-  }
-  const six = mk('fiveinarow'); const r6 = 7 * 15; // 5 + 6 with a gap filled last: makes six at once
-  [0, 1, 2, 4, 5].forEach((c, i) => { okPlace(six, 0, r6 + c); okPlace(six, 1, [0, 2, 4, 9, 11][i] * 15 + 14); });
-  assert.equal(six.phase, 'playing'); okPlace(six, 0, r6 + 3); assert.equal(six.winner, 0); assert.equal(six.line.length, 6);
+test('line length option: five in a row is a bigger 9x8 grid and needs five; four is not enough', () => {
+  const g = mk('fourinarow', { starter: 'host', line: '5' });
+  assert.equal(g.v.name, 'Five in a Row'); assert.equal(g.v.win, 5); assert.equal(g.v.cols, 9); assert.equal(g.v.rows, 8); assert.equal(g.board.length, 72);
+  assert.equal(E.viewFor(g, 'a').name, 'Five in a Row'); assert.equal(E.viewFor(g, 'a').cols, 9); assert.equal(E.viewFor(g, 'a').win, 5);
+  assert.equal(drop(g, 0, 9).ok, false, 'column 9 does not exist, 0-8 do'); okDrop(g, 0, 8);
+  const across = mk('fourinarow', { starter: 'host', line: '5' }); // seat 0 builds the bottom row, seat 1 stacks on column 8
+  [0, 8, 1, 8, 2, 8, 3, 7].forEach((c, i) => okDrop(across, i % 2, c));
+  assert.equal(across.phase, 'playing', 'four is not enough'); okDrop(across, 0, 4);
+  assert.equal(across.winner, 0, 'five across wins'); assert.equal(across.line.length, 5);
+  const down = mk('fourinarow', { starter: 'host', line: '5' }); [0, 1, 0, 1, 0, 1, 0, 1].forEach((c, i) => okDrop(down, i % 2, c));
+  assert.equal(down.phase, 'playing'); okDrop(down, 0, 0); assert.equal(down.winner, 0, 'five down wins');
+  assert.equal(mk('fourinarow', { starter: 'host', line: '7' }).v.win, 4, 'an unknown length falls back to four');
+  assert.equal(mk('fourinarow', { starter: 'host' }).v.win, 4); assert.equal(mk('tictactoe', { starter: 'host', line: '5' }).v.win, 3, 'tic-tac-toe ignores it');
 });
 
 test('the view: spectators have no moves, legal cells match the game, nothing hidden', () => {
@@ -130,9 +130,9 @@ test('bots win in one, block in one, and never make an illegal move', () => {
   assert.equal(E.botAction(E.createGame('tictactoe', two, { starter: 'host' }, mulberry32(1)), 'a').type, 'place');
 });
 
-test('bot against bot: tic-tac-toe is always a draw, and all three games finish with consistent results', () => {
-  for (const id of ['tictactoe', 'fourinarow', 'fiveinarow']) for (let seed = 1; seed <= 6; seed++) {
-    const g = E.createGame(id, two, {}, mulberry32(seed * 7)); let steps = 0;
+test('bot against bot: tic-tac-toe is always a draw, and every game and line length finish with consistent results', () => {
+  for (const [id, opts] of [['tictactoe', {}], ['fourinarow', {}], ['fourinarow', { line: '5' }]]) for (let seed = 1; seed <= 6; seed++) {
+    const g = E.createGame(id, two, opts, mulberry32(seed * 7)); let steps = 0;
     while (g.phase !== 'gameOver') {
       assert.ok(++steps <= g.board.length, `${id}/${seed} too long`);
       const who = g.players[g.turn].id; const a = E.botAction(g, who); const r = E.applyAction(g, who, a);
@@ -146,7 +146,7 @@ test('bot against bot: tic-tac-toe is always a draw, and all three games finish 
 
 test('plugins: wiring, results (win 1, draw 0.5 each, loss 0), match record, name scrub, bad input', () => {
   for (const p of plugins) {
-    const game = p.create(two, { starter: 'host' }, mulberry32(3));
+    const game = p.create(two, { starter: 'host', line: '5' }, mulberry32(3));
     assert.deepEqual(game.awaiting(), ['a']); assert.equal(game.isOver(), false);
     assert.equal(game.act('a', 'garbage').ok, false); assert.equal(game.act('a', { type: 'place', cell: 'x' }).ok, false);
     assert.ok(p.options.some((o) => o.key === 'starter')); assert.ok(p.rules.length >= 3);

@@ -15,7 +15,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 - **Ludo** (2–4): race your four tokens home on the classic cross board — roll a six to get out, send opponents back, finish by exact count. Two players sit opposite each other; optional bonus rolls for captures and getting home.
 - **Snakes and Ladders** (2–4): roll to race along a 10×10 path to square 100. Ladders lift you, snakes drop you. Optional exact roll to finish and roll again on a six.
 - **Property Rivals** (2–6): an original world-tour board game: buy cities, ports and utilities, collect rent, build houses and hotels, trade, auction and bankrupt your rivals. Options: game length, starting cash, auctions, Rest Stop jackpot.
-- **Tic-Tac-Toe**, **Four in a Row** and **Five in a Row** (2): three quick line games on one engine. Line up three on a 3×3 grid, drop discs into a 7×6 grid, or place stones on a 15×15 board. Choose who starts; bots fill the second seat.
+- **Tic-Tac-Toe** and **Four in a Row** (2): two quick line games on one engine. Line up three on a 3×3 grid, or drop discs into a 7×6 grid and connect four. Four in a Row has a *Line length* option: choose five for a bigger 9×8 grid. Choose who starts; a bot fills the second seat.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
 
 Bots can fill open seats so tables can start quickly.
@@ -42,9 +42,9 @@ Tableverse is currently open for friend testing.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
-## What's new in v0.12 — Tic-Tac-Toe, Four in a Row and Five in a Row
+## What's new in v0.12 — Tic-Tac-Toe and Four in a Row
 
-- Three quick two-player games are playable: **Tic-Tac-Toe** (3×3), **Four in a Row** (drop discs into a 7×6 grid) and **Five in a Row** (15×15 board, with a tap-to-preview stone so small phone taps don't misplace). A winning line is highlighted; a full board is a draw. Option: who starts (random, first or second seat). Bots fill an empty seat: perfect in Tic-Tac-Toe, a look-ahead search in Four in a Row and a pattern heuristic in Five in a Row.
+- Two quick two-player games are playable: **Tic-Tac-Toe** (3×3) and **Four in a Row** (drop discs into a 7×6 grid). Set *Line length* to five for **Five in a Row**: connect five on a bigger 9×8 grid. A winning line is highlighted; a full board is a draw. Option: who starts (random, first or second seat). Bots fill an empty seat: perfect in Tic-Tac-Toe, a five-move look-ahead in Four/Five in a Row.
 - The Coming soon list now shows a status per game: **Hidden Miners is in development**, the others are planned (7 remain; Four in a Row and Tic-Tac-Toe left the list).
 
 ## What's new in v0.11 — Property Rivals
@@ -66,7 +66,7 @@ Tableverse is currently open for friend testing.
 ## What's new in v0.8 — a simpler home
 
 - **Home page.** Greeting and table-code join, then the games straight away. Friends are a compact card (who is online); the full friends list, search, requests and sent invitations are on their own page at `#friends` (account menu → Friends). A **notification bell** in the top bar shows a count of friend requests and table invitations and lets you accept or decline them in place (refreshed every minute and when opened). Recent and public tables sit below the games.
-- **Coming soon.** Upcoming games are listed as non-playable cards ahead of their release. Ludo (v0.8), Go Fish (v0.9), Snakes and Ladders (v0.10), Property Rivals (v0.11), Tic-Tac-Toe, Four in a Row and Five in a Row (v0.12) have shipped and are playable now.
+- **Coming soon.** Upcoming games are listed as non-playable cards ahead of their release. Ludo (v0.8), Go Fish (v0.9), Snakes and Ladders (v0.10), Property Rivals (v0.11), Tic-Tac-Toe and Four in a Row (v0.12) have shipped and are playable now.
 - **What's new** is also linked from the home footer. No server, database or API changes. Home/social markup now lives in `public/home-ui.js` (loaded before `app.js`).
 
 ## What's new in v0.7 — friends, private tables, host tools

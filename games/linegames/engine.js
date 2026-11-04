@@ -1,17 +1,23 @@
 'use strict';
 /**
- * Line games: Tic-Tac-Toe, Four in a Row and Five in a Row on one engine (rules only, no sockets, no timers).
+ * Line games: Tic-Tac-Toe and Four in a Row (with a Five in a Row option) on one engine (rules only, no sockets, no timers).
  * Two players take turns putting a piece on a rows x cols grid; the first to get `win` in a straight line (across, down
  * or diagonal) wins, and a full board is a draw. With `gravity` a piece is dropped into a column and falls to the lowest
  * free cell (Four in a Row); otherwise it goes on any free cell.
  *
  * The board is a flat array of length rows*cols (row-major, row 0 on top); each cell is null or the seat (0 or 1).
  * Option `starter`: 'random' (default), 'host' (seat 0) or 'guest' (seat 1) decides who moves first.
+ * Option `line` (Four in a Row only): '4' (default, 7x6 grid) or '5' (connect five on a bigger 9x8 grid).
  */
 const VARIANTS = {
   tictactoe: { id: 'tictactoe', name: 'Tic-Tac-Toe', rows: 3, cols: 3, win: 3, gravity: false },
   fourinarow: { id: 'fourinarow', name: 'Four in a Row', rows: 6, cols: 7, win: 4, gravity: true },
-  fiveinarow: { id: 'fiveinarow', name: 'Five in a Row', rows: 15, cols: 15, win: 5, gravity: false },
+};
+/** Four in a Row with `line: '5'` becomes Five in a Row on a bigger grid. */
+const LINE5 = { name: 'Five in a Row', rows: 8, cols: 9, win: 5 };
+const variantFor = (id, options) => {
+  const v = VARIANTS[id];
+  return v && id === 'fourinarow' && options && String(options.line) === '5' ? { ...v, ...LINE5 } : v;
 };
 const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
 
@@ -20,7 +26,7 @@ const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
 const say = (g, by, text, kind = 'info') => { g.log.push({ by: g.players[by].name, card: text, kind }); if (g.log.length > 60) g.log.shift(); };
 
 function createGame(variantId, players, options = {}, rng = Math.random) {
-  const v = VARIANTS[variantId];
+  const v = variantFor(variantId, options);
   if (!v) throw new Error('Unknown line game');
   if (players.length !== 2) throw new Error(`${v.name} is for exactly 2 players`);
   const starter = ['host', 'guest'].includes(options && options.starter) ? options.starter : 'random';
@@ -28,7 +34,7 @@ function createGame(variantId, players, options = {}, rng = Math.random) {
   return {
     game: v.id, v, n: 2, rng,
     players: players.map((p) => ({ id: p.id, name: p.name })),
-    options: { starter },
+    options: { starter, line: String(v.win) },
     board: Array(v.rows * v.cols).fill(null),
     turn: first, first, moves: 0,
     phase: 'playing', // playing | gameOver
@@ -152,29 +158,16 @@ function botAction(g, playerId) {
   const board = g.board.slice();
   // 1. win now, 2. block their win
   for (const who of [me, 1 - me]) for (const k of cells) { board[k] = who; const hit = lineThrough(board, g.v, k).length; board[k] = null; if (hit) return act(k); }
-  // 3. small boards: look ahead; large board: pattern heuristic
-  if (g.v.id !== 'fiveinarow') {
-    const depth = g.v.id === 'tictactoe' ? 9 : 5;
-    let best = -Infinity, pick = [];
-    for (const k of cells) {
-      board[k] = me;
-      const s = -search(board, g.v, 1 - me, depth - 1, -Infinity, Infinity, 0) + cellScore(g.board, g.v, k, me) * 0.0001;
-      board[k] = null;
-      if (s > best + 1e-9) { best = s; pick = [k]; } else if (Math.abs(s - best) <= 1e-9) pick.push(k);
-    }
-    return act(pick[Math.floor(g.rng() * pick.length)]);
-  }
-  if (g.moves === 0) return act(Math.floor(g.board.length / 2));
+  // 3. look ahead (tic-tac-toe to the end, Four/Five in a Row five plies), ties broken by the pattern score
+  const depth = g.v.id === 'tictactoe' ? 9 : 5;
   let best = -Infinity, pick = [];
   for (const k of cells) {
-    const r = Math.floor(k / g.v.cols), c = k % g.v.cols;
-    let near = false;
-    for (let dr = -2; dr <= 2 && !near; dr++) for (let dc = -2; dc <= 2; dc++) { const rr = r + dr, cc = c + dc; if (rr >= 0 && rr < g.v.rows && cc >= 0 && cc < g.v.cols && g.board[rr * g.v.cols + cc] !== null) { near = true; break; } }
-    if (!near) continue;
-    const s = cellScore(g.board, g.v, k, me);
+    board[k] = me;
+    const s = -search(board, g.v, 1 - me, depth - 1, -Infinity, Infinity, 0) + cellScore(g.board, g.v, k, me) * 0.0001;
+    board[k] = null;
     if (s > best + 1e-9) { best = s; pick = [k]; } else if (Math.abs(s - best) <= 1e-9) pick.push(k);
   }
-  return act(pick[Math.floor(g.rng() * pick.length)] ?? cells[0]);
+  return act(pick[Math.floor(g.rng() * pick.length)]);
 }
 
 function viewFor(g, playerId) {
@@ -193,4 +186,4 @@ function viewFor(g, playerId) {
   };
 }
 
-module.exports = { VARIANTS, createGame, applyAction, awaiting, botAction, viewFor, dropCell, lineThrough, legalCells };
+module.exports = { VARIANTS, variantFor, createGame, applyAction, awaiting, botAction, viewFor, dropCell, lineThrough, legalCells };

@@ -1,14 +1,12 @@
-/* Tic-Tac-Toe, Four in a Row and Five in a Row: one renderer for the three line games (see games/linegames).
- * Tic-Tac-Toe and Four in a Row play on tap; Five in a Row previews a stone first (tap again or press Place) because
- * its 15x15 points are small on a phone. Styles in linegames.css. */
+/* Tic-Tac-Toe and Four in a Row (Four or Five, by option): one renderer for the line games (see games/linegames).
+ * Tic-Tac-Toe taps a square, Four/Five in a Row taps a column. Styles in linegames.css. */
 (() => {
   'use strict';
   const { esc, pt } = window.CardTable;
-  const ui = { ctx: null, v: null, pick: null, seq: null, hoverCol: null };
+  const ui = { ctx: null, v: null, seq: null };
   const MARKS = {
     tictactoe: [{ cls: 'x', sym: 'X', name: 'X' }, { cls: 'o', sym: 'O', name: 'O' }],
     fourinarow: [{ cls: 'red', sym: '', name: 'Red' }, { cls: 'yellow', sym: '', name: 'Yellow' }],
-    fiveinarow: [{ cls: 'black', sym: '', name: 'Black' }, { cls: 'white', sym: '', name: 'White' }],
   };
   const marks = (v) => MARKS[v.game];
   const nameOf = (v, i) => (i === v.me ? 'You' : esc(v.players[i].name));
@@ -20,7 +18,6 @@
     }
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} to move`;
     if (!v.myTurn) return `${esc(v.players[v.turn].name)} is thinking…`;
-    if (v.game === 'fiveinarow') return ui.pick === null ? 'Your move: tap a point' : 'Tap it again, or press Place';
     return v.gravity ? 'Your move: pick a column' : 'Your move';
   }
 
@@ -40,8 +37,8 @@
     for (let k = 0; k < v.board.length; k++) {
       const r = Math.floor(k / v.cols), c = k % v.cols;
       const owner = v.board[k];
-      const piece = owner !== null ? pieceHTML(v, owner) : (ui.pick === k && v.game === 'fiveinarow' ? `<span class="lg-piece ghost ${marks(v)[v.me].cls}"></span>` : '');
-      const cls = ['lg-cell', owner === null ? 'free' : 'full', lit.has(k) ? 'win' : '', v.last === k ? 'last' : '', ui.pick === k ? 'pick' : ''].filter(Boolean).join(' ');
+      const piece = owner !== null ? pieceHTML(v, owner) : '';
+      const cls = ['lg-cell', owner === null ? 'free' : 'full', lit.has(k) ? 'win' : '', v.last === k ? 'last' : ''].filter(Boolean).join(' ');
       const label = `Row ${r + 1}, column ${c + 1}, ${owner === null ? 'empty' : marks(v)[owner].name}`;
       if (v.gravity) out.push(`<div class="${cls}" data-col="${c}" role="presentation">${piece}</div>`);
       else out.push(`<button type="button" class="${cls}" data-cell="${k}" aria-label="${label}" ${owner === null && legal.has(k) ? '' : 'disabled'}>${piece}</button>`);
@@ -60,7 +57,7 @@
         }).join('');
         return `<button type="button" class="lg-col" data-col="${c}" aria-label="Drop in column ${c + 1}" ${open ? '' : 'disabled'}>${cells}</button>`;
       }).join('');
-      return `<div class="lg-board lg-gravity" style="--cols:${v.cols};--rows:${v.rows}" role="group" aria-label="Four in a Row board">${cols}</div>`;
+      return `<div class="lg-board lg-gravity" style="--cols:${v.cols};--rows:${v.rows}" role="group" aria-label="${esc(v.name)} board">${cols}</div>`;
     }
     return `<div class="lg-board lg-${v.game}" style="--cols:${v.cols};--rows:${v.rows}" role="group" aria-label="${esc(v.name)} board">${cellsHTML(v)}</div>`;
   }
@@ -85,15 +82,12 @@
 
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.v = v; react(v);
-    if (!v.myTurn || (ui.pick !== null && v.board[ui.pick] !== null)) ui.pick = null;
-    const place = v.game === 'fiveinarow' && v.myTurn ? `<button class="btn big" data-lg="place" ${ui.pick === null ? 'disabled' : ''}>Place stone</button>` : '';
     root.innerHTML = `<div class="wz lg" data-game="${esc(v.game)}">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.win} in a row</span></div>
         <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lg="rules">Rules</button><button class="btn ghost small" data-lg="leave" aria-label="Leave table">✕</button></div></div>
       ${seatsHTML(v, ctx)}
       ${boardHTML(v)}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
-      ${place ? `<div class="lg-actions">${place}</div>` : ''}
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
   }
@@ -105,17 +99,15 @@
     if (el.dataset.cell !== undefined) {
       if (!v.myTurn) return;
       const k = Number(el.dataset.cell);
-      if (v.game === 'fiveinarow') { if (ui.pick === k) { ui.pick = null; ctx.act({ type: 'place', cell: k }); } else { ui.pick = k; ctx.rerender(); } }
-      else ctx.act({ type: 'place', cell: k });
+      ctx.act({ type: 'place', cell: k });
       return;
     }
     switch (el.dataset.lg) {
-      case 'place': if (v.myTurn && ui.pick !== null) { const k = ui.pick; ui.pick = null; ctx.act({ type: 'place', cell: k }); } break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
     }
   }
 
-  for (const id of ['tictactoe', 'fourinarow', 'fiveinarow']) window.CardTable.register(id, { render });
+  for (const id of ['tictactoe', 'fourinarow']) window.CardTable.register(id, { render });
 })();

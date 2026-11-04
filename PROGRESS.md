@@ -162,8 +162,9 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 ## Stage 16 — status labels and the line games (branch `feature/stage-16-simple-games`, from main f9b5cb5)
 Resume from the first stage not marked done. Each stage is one commit, pushed at once.
 - 16.1 (done) Coming soon shows a status per card: Hidden Miners "In development", the rest "Planned" (`home-ui.js`, `style.css`, `coming-soon.test.js`).
-- 16.2 (done) `games/linegames/{engine,index}.js`: Tic-Tac-Toe, Four in a Row, Five in a Row on one engine (gravity flag, win length, board size), registered in `games/index.js` (no migration). `tests/linegames.test.js` (12 tests).
+- 16.2 (done) `games/linegames/{engine,index}.js`: Tic-Tac-Toe and Four in a Row (option Line length 4 or 5; 5 plays on a 9x8 grid) on one engine, registered in `games/index.js` (no migration). `tests/linegames.test.js` (12 tests).
 - 16.3 (done) `public/games/linegames.js` + `.css` (one renderer, three ids), `tests/ui/linegames-ui.js` (6 browser tests), wizard-layout matrix, `build`/`test`/`test:ui`.
 - 16.4 (done) Launch: Four in a Row and Tic-Tac-Toe leave Coming soon (7 planned), What's new, README v0.12, smoke test for all three.
 - 16.5 (todo) PR + CI. Verified locally: engine tests, coming-soon, browser tests, layout matrix. NOT run locally: smoke test, PostgreSQL suites (CI only).
-- Known: no undo or draw offer; the Five in a Row bot is a heuristic (beatable); stats are not tracked for these games (kind none).
+- 16.6 (done) Four and Five in a Row merged into one game with a Line length option (was a separate 15x15 game); Go Fish end-of-game crash fixed (the closing `over` event names no player and the renderer threw), empty-hand rules clarified, endgame tests.
+- Known: no undo or draw offer; stats are not tracked for these games (kind none).
