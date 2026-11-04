@@ -399,3 +399,6 @@ button.card { cursor: pointer; }
   .pt:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"]):has(.pt-corner) { margin-top: 76px; }
   .pt:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"]) .pt-corner { top: -76px; }
 }
+/* 7 or 8 players on a very narrow phone: narrower seat plates so neighbours do not overlap */
+@media (max-width: 360px) { .pt:is([data-n="7"], [data-n="8"]) .pt-seat { width: 62px; } .pt:is([data-n="7"], [data-n="8"]) .plate b { font-size: 11px; } }
+@media (max-width: 360px) { .pt:is([data-n="7"], [data-n="8"]) { --pt-min: 300px; } }
