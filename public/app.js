@@ -1729,6 +1729,7 @@
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();
+    if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
     const gameInfo = gameMeta(S.room.gameId);
     if (surface && gameInfo) {

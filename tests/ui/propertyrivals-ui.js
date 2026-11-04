@@ -120,9 +120,9 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     assert.equal(seen.at(-1), after.players[0].pos, 'the token ends where the server put it');
     assert.ok(seen.length >= 6, `it passed through the squares one by one: ${seen}`);
     assert.deepEqual(seen, seen.slice().sort((a, b) => a - b), 'it only moves forward');
-    await page.waitForSelector('.pr-msg', { timeout: 3000 });
-    assert.match(await page.textContent('.pr-feed'), /rolled 3 \+ 2 = 5/);
-    await page.waitForFunction(() => /landed on/.test(document.querySelector('.pr-feed').textContent), null, { timeout: 6000 });
+    await page.waitForSelector('.cf-msg', { timeout: 3000 });
+    assert.match(await page.textContent('.cf-feed'), /rolled 3 \+ 2 = 5/);
+    await page.waitForFunction(() => /landed on/.test(document.querySelector('.cf-feed').textContent), null, { timeout: 6000 });
     await ctx.close();
   });
 
