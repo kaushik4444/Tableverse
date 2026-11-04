@@ -59,8 +59,9 @@
     if (p.out) sub = 'Out';
     else if (p.allIn && p.inHand && !p.folded) sub = `${fmt(p.chips + p.bet)} · all-in`;
     else sub = fmt(p.chips);
+    const lead = v.phase !== 'gameOver' && pt.leaderOf(v.players.length, (k) => (v.players[k].out ? 0 : v.players[k].chips + v.players[k].bet)) === i && v.players.filter((q) => !q.out).length > 2; // chip leader (not shown heads-up: it is obvious)
     const badges =
-      (inHandNow && i === v.sbIdx ? '<span class="bdg b" title="Small blind">SB</span>' : '') + (inHandNow && i === v.bbIdx ? '<span class="bdg b" title="Big blind">BB</span>' : '');
+      (lead ? '<span class="bdg l" title="Chip leader">👑 Lead</span>' : '') + (inHandNow && i === v.sbIdx ? '<span class="bdg b" title="Small blind">SB</span>' : '') + (inHandNow && i === v.bbIdx ? '<span class="bdg b" title="Big blind">BB</span>' : '');
     let extra = '';
     let under = '';
     if (p.inHand && !p.folded && i !== v.me) {

@@ -42,6 +42,12 @@ Tableverse is currently open for friend testing.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
+## What's new in v0.13 — shared feed and crowns
+
+- **Floating messages**: new public log lines (a bid, a raise, a capture, a mistake, a rent payment) float over the table for a few seconds in Wizard, 29, Poker, Ludo, The Mind and Property Rivals. One shared module (`public/feed.js`) reads each game's log; a game picks which kinds float. Snakes and Ladders keeps its move banner, and Go Fish has no log (it would show what others asked for).
+- **Crown for who is ahead** is now in every scoring game: Wizard (score), Poker (chips, three or more players) and 29 (team score) join Go Fish, Snakes and Ladders, Ludo and Property Rivals.
+- The phone-fit and audit checks now cover Property Rivals, Tic-Tac-Toe and Four in a Row.
+
 ## What's new in v0.12 — Tic-Tac-Toe and Four in a Row
 
 - Two quick two-player games are playable: **Tic-Tac-Toe** (3×3) and **Four in a Row** (drop discs into a 7×6 grid). Set *Line length* to five for **Five in a Row**: connect five on a bigger 9×8 grid. A winning line is highlighted; a full board is a draw. Option: who starts (random, first or second seat). Bots fill an empty seat: perfect in Tic-Tac-Toe, a five-move look-ahead in Four/Five in a Row.

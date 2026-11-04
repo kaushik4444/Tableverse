@@ -83,9 +83,9 @@
     const us = mine, them = 1 - mine;
     const bid = v.highBidder >= 0 && v.phase !== 'bidding' ? `<span class="bidinfo">Bid ${v.highBid} by ${esc(v.players[v.highBidder].name)}</span>` : '';
     return `<div class="t29-strip">
-      <div class="tbox us"><span class="label">${usName(v)}</span><b>${v.teamScore[us]}</b><small>game pts · hand ${v.handPoints[us]}</small></div>
+      <div class="tbox us"><span class="label">${v.teamScore[us] > v.teamScore[them] ? '👑 ' : ''}${usName(v)}</span><b>${v.teamScore[us]}</b><small>game pts · hand ${v.handPoints[us]}</small></div>
       ${bid}
-      <div class="tbox them"><span class="label">${themName(v)}</span><b>${v.teamScore[them]}</b><small>game pts · hand ${v.handPoints[them]}</small></div>
+      <div class="tbox them"><span class="label">${v.teamScore[them] > v.teamScore[us] ? '👑 ' : ''}${themName(v)}</span><b>${v.teamScore[them]}</b><small>game pts · hand ${v.handPoints[them]}</small></div>
     </div>`;
   }
 
