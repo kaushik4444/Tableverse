@@ -119,6 +119,7 @@ function start(opts = {}) {
   }
   let purgeTimer = null;
   let spoolTimer = null;
+  let shuttingDown = false; // set when the process is asked to stop: readiness fails, no new tables, players are told
 
   // ------------------------------------------------------------ http
   const readJsonBody = (req) =>
@@ -277,6 +278,7 @@ function start(opts = {}) {
       return res.end('ok');
     }
     if (rel === '/readyz') {
+      if (shuttingDown) { res.setHeader('Cache-Control', 'no-store'); res.writeHead(503, { 'Content-Type': 'text/plain' }); return res.end('shutting down'); }
       const respond = (status, text) => {
         res.setHeader('Cache-Control', 'no-store');
         res.writeHead(status, { 'Content-Type': 'text/plain' });
@@ -879,6 +881,7 @@ function start(opts = {}) {
     create(p, msg) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
+      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
       if (p.room) leaveRoom(p);
@@ -1463,6 +1466,15 @@ function start(opts = {}) {
   gc.unref();
 
   async function close({ drainMs = 0 } = {}) {
+    shuttingDown = true;
+    // Tables live in memory and do not survive a restart: say so, and close sockets with 1012 ("service restart") so the
+    // app shows a calm message instead of a mysterious disconnect. Running games are NOT recorded as finished.
+    for (const ws of wss.clients) {
+      try {
+        send(ws, { t: 'notice', text: 'The server is restarting for an update. Tables are not kept across a restart, so unfinished games are lost. Please start a new table in a minute.' });
+        ws.close(1012, 'server restarting');
+      } catch { /* already closing */ }
+    }
     clearInterval(ticker);
     clearTimeout(tablesTimer);
     clearInterval(gc);
@@ -1471,6 +1483,7 @@ function start(opts = {}) {
     if (drainMs) await matchQueue.drain(drainMs); // let pending match writes finish (shutdown)
     matchQueue.close();
     for (const room of rooms.values()) clearTimeout(room.timer);
+    await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
     for (const ws of wss.clients) ws.terminate();
     return new Promise((resolve) => wss.close(() => server.close(() => resolve())));
   }
