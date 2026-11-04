@@ -78,13 +78,13 @@ const msgsFor = (id) => [welcome({ id, name: id === 'a' ? 'Ann' : 'Bo', games: g
     }
   });
 
-  await test('two real pages talk to each other: audio flows both ways, and leaving closes it', async () => {
+  /** Two pages joined by a tiny stand-in for the server: the voice list, and setup messages passed to the person they are for. */
+  async function pair() {
     const pa = await scriptedPage(browser, { messages: msgsFor('a') });
     const pb = await scriptedPage(browser, { messages: msgsFor('b') });
     const pages = { a: pa.page, b: pb.page };
     await Promise.all([pa.page.goto(url + '/'), pb.page.goto(url + '/')]);
     await Promise.all([pa.page.waitForSelector('.code-card'), pb.page.waitForSelector('.code-card')]);
-    // a tiny stand-in for the server: the voice list, and setup messages passed to the person they are for
     const inVoice = new Map(); const seen = { a: 0, b: 0 };
     const pump = setInterval(async () => {
       for (const id of ['a', 'b']) {
@@ -99,15 +99,18 @@ const msgsFor = (id) => [welcome({ id, name: id === 'a' ? 'Ann' : 'Bo', games: g
         }
       }
     }, 40);
+    return { pages, pa, pb, close: async () => { clearInterval(pump); await pa.ctx.close(); await pb.ctx.close(); } };
+  }
+  const hasAudio = (page) => page.evaluate(() => { const au = document.querySelector('audio[data-voice-from]'); return !!au && !!au.srcObject && au.srcObject.getAudioTracks().length === 1; });
+
+  await test('two real pages talk to each other: audio flows both ways, and leaving closes it', async () => {
+    const { pages, pa, pb, close } = await pair();
     try {
       await pa.page.click('.vc-mic');
       await pb.page.click('.vc-mic');
-      for (const id of ['a', 'b']) {
-        await until(() => pages[id].evaluate(() => { const au = document.querySelector('audio[data-voice-from]'); return !!au && !!au.srcObject && au.srcObject.getAudioTracks().length === 1; }), `${id} receives audio from the other`, 20000);
-      }
+      for (const id of ['a', 'b']) await until(() => hasAudio(pages[id]), `${id} receives audio from the other`, 20000);
       assert.equal(await pa.page.locator('.seat[data-vid="b"][data-voice="on"]').count(), 1, 'Ann sees Bo in voice');
-      // the fake microphone beeps, so the other side should see a speaking ring at some point
-      await until(() => pa.page.locator('.seat[data-vid="b"].speaking').count(), 'Ann sees Bo speaking', 15000).catch(() => { throw new Error('no speaking ring appeared for the fake microphone'); });
+      await until(() => pa.page.locator('.seat[data-vid="b"].speaking').count(), 'Ann sees Bo speaking (the fake microphone beeps)', 20000);
       await pb.page.click('.vc-mic'); await pb.page.click('.vc-mic'); // mute, unmute: still connected
       assert.equal(await pb.page.locator('audio[data-voice-from]').count(), 1);
       await pb.page.evaluate(() => document.querySelector('.vc-spk').click()); // Bo silences everyone
@@ -115,9 +118,30 @@ const msgsFor = (id) => [welcome({ id, name: id === 'a' ? 'Ann' : 'Bo', games: g
       await pb.page.evaluate(() => document.querySelector('.vc-spk').click());
       assert.equal(await pb.page.evaluate(() => document.querySelector('audio[data-voice-from]').muted), false, 'heard again');
       await pa.page.evaluate(() => window.__push({ t: 'left' })); // Ann leaves the table
-      await pa.page.waitForSelector('.game-grid, .home-section', { timeout: 8000 }).catch(() => {});
-      assert.equal(await pa.page.locator('audio[data-voice-from]').count(), 0, 'Ann has no audio connection left');
-    } finally { clearInterval(pump); await pa.ctx.close(); await pb.ctx.close(); }
+      await until(async () => (await pa.page.locator('audio[data-voice-from]').count()) === 0, 'Ann has no audio connection left');
+    } finally { await close(); }
+  });
+
+  await test('someone who first only listened can start talking later and is heard without reconnecting', async () => {
+    const { pages, pa, pb, close } = await pair();
+    try {
+      await pa.page.click('.vc-spk'); // Ann listens only
+      await pb.page.click('.vc-mic'); // Bo talks
+      for (const id of ['a', 'b']) await until(() => hasAudio(pages[id]), `${id} has an audio line`, 20000);
+      await until(() => pa.page.locator('.seat[data-vid="b"].speaking').count(), 'Ann hears Bo', 20000);
+      assert.equal(await pb.page.locator('.seat[data-vid="a"].speaking').count(), 0, 'Ann is silent while she only listens');
+      await pa.page.click('.vc-mic'); // now Ann talks
+      await until(() => pb.page.locator('.seat[data-vid="a"].speaking').count(), 'Bo hears Ann on the same connection', 20000);
+    } finally { await close(); }
+  });
+
+  await test('a spectator gets no voice buttons (watchers take a seat first)', async () => {
+    const room = { ...lobbyRoom, members: [members[1]], spectators: [{ id: 'a', name: 'Ann', avatar: '🧙', connected: true, ping: null, username: null }] };
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ id: 'a', name: 'Ann', games: games.list(), ice: [] }), { t: 'state', room, view: null }] });
+    await page.goto(url + '/');
+    await page.waitForSelector('.code-card');
+    assert.equal(await page.locator('.vc-btn').count(), 0);
+    await ctx.close();
   });
 
   await browser.close(); server.close();

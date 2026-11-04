@@ -163,7 +163,7 @@
   /** Microphone and speaker buttons: shown in the lobby header and in every game's toolbar. */
   function voiceButtonsHTML() {
     const st = voice.state;
-    if (!st.supported) return '';
+    if (!st.supported || (S.room && isSpectator())) return ''; // watchers can listen to nobody and talk to nobody: take a seat first
     const talking = st.joined && !st.muted;
     const hearing = st.joined && !st.deafened;
     return `<button type="button" class="btn ghost small vc-btn vc-mic ${talking ? 'on' : st.joined ? 'muted' : ''}" data-act="voiceMic" aria-pressed="${talking}" aria-label="${talking ? 'Mute your microphone' : st.joined ? 'Unmute your microphone' : 'Join voice chat and talk'}" title="${talking ? 'Microphone on: tap to mute' : st.joined ? 'Microphone muted: tap to talk' : 'Talk to the table'}">🎙️</button>`
@@ -1344,10 +1344,10 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-smoother-games';
+  const WHATS_NEW_VERSION = '2026-11-table-voice';
   const WHATS_NEW = [
     ['✨', 'Smoother, tidier games', 'One toolbar in every game, tokens that walk square by square in Snakes and Ladders, Ludo plays your only possible move, and a crown shows who is ahead.'],
-    ['🐍', 'Snakes and Ladders is now playable', 'Roll, climb the ladders and dodge the snakes. 2–4 players, with bots for empty seats.'],
+    ['🎙️', 'Talk at the table', 'Tap the microphone to talk with everyone at your table, in the lobby and during the game. Tap the speaker to listen, or silence everyone. A green ring shows who is talking.'],
     ['🏠', 'Property Rivals is now playable', 'Buy cities, ports and utilities, build, trade and bankrupt your rivals on an original world-tour board. 2–6 players, with bots for empty seats.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });

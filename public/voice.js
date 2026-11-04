@@ -88,7 +88,8 @@ window.TVVoice = function TVVoice(o) {
     for (const p of peers.values()) { const s = p.pc.getSenders && p.pc.getSenders()[0]; if (s) s.replaceTrack(null).catch(() => {}); }
     local = null;
   }
-  const announce = () => o.send({ t: 'voice', on: true, muted: state.muted });
+  let lastAnnounce = 0;
+  const announce = (force) => { const now = Date.now(); if (!force && now - lastAnnounce < 2000) return; lastAnnounce = now; o.send({ t: 'voice', on: true, muted: state.muted }); };
 
   // ---- one connection per other person
   const inList = (id) => state.list.some((v) => v.id === id);
@@ -188,7 +189,7 @@ window.TVVoice = function TVVoice(o) {
     state.muted = true;
     if (audioCtx() && ctx.state === 'suspended') ctx.resume().catch(() => {});
     if (withMic && await acquireMic()) state.muted = false;
-    announce();
+    announce(true);
     startMeter();
     reconcile();
     changed();
@@ -200,7 +201,7 @@ window.TVVoice = function TVVoice(o) {
       state.muted = false;
     } else state.muted = true;
     if (local) local.track.enabled = !state.muted;
-    announce();
+    announce(true);
     changed();
   }
   function toggleSpeaker() {

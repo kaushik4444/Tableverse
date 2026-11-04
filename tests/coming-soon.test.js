@@ -33,7 +33,7 @@ const appSource = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
 const whatsNew = appSource.match(/const WHATS_NEW = \[([\s\S]*?)\n  \];/);
 assert.ok(whatsNew, 'What’s new release notes exist');
 assert.equal((whatsNew[1].match(/^\s*\[/gm) || []).length, 3, 'What’s new only contains the latest three highlights');
-assert.match(whatsNew[1], /Snakes and Ladders is now playable/);
+assert.match(whatsNew[1], /Talk at the table/);
 assert.ok(!html.includes('Snakes and Ladders'), 'a playable game is not listed as coming soon');
 assert.match(whatsNew[1], /Smoother, tidier games/);
 assert.match(whatsNew[1], /Property Rivals is now playable/);
