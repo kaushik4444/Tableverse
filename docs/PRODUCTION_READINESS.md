@@ -4,6 +4,8 @@ Last reviewed: 2026-11-02
 
 This document separates protections implemented in the application from operational work that still requires deployment-owner decisions. A passing CI run is not, by itself, a production launch approval.
 
+> Overhaul status (branch `production-readiness-overhaul`): see `docs/PRODUCTION_READINESS_AUDIT.md` for verified findings and fixes, `docs/OPERATIONS_RUNBOOK.md` for deploy/rollback/outage steps and `docs/PERFORMANCE.md` for measured numbers. Added: per-table crash isolation, graceful shutdown notice, one-parked-table-per-player limit, seeded simulation of all games, reconnect tests, accessibility checks, load test, `[stats]` log line.
+
 ## Application controls present
 
 - Production startup refuses to run without PostgreSQL, a working `pg` driver, a reachable database, and successful migrations.

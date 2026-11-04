@@ -15,9 +15,9 @@ module.exports = {
   stats: { kind: 'solo', bestLabel: 'Highest net worth', bestOf: (row) => row.score },
   options: [
     {
-      key: 'rounds', type: 'select', label: 'Game length', default: 'off',
+      key: 'rounds', type: 'select', label: 'Game length', default: '60',
       choices: [
-        { value: 'off', label: 'Until one player is left', desc: 'The classic game: it can take a long time.' },
+        { value: 'off', label: 'Until one player is left', desc: 'The classic game: it can take a very long time, and with cautious players it may never end.' },
         { value: '30', label: 'Short: 30 rounds', desc: 'After 30 rounds the richest player wins (cash, properties and buildings).' },
         { value: '60', label: 'Medium: 60 rounds', desc: 'After 60 rounds the richest player wins.' },
       ],
