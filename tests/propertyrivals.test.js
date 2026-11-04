@@ -315,4 +315,15 @@ test('plugin: wiring, results (net worth), match record, name scrub, stats shape
   assert.ok(plugin.options.some((o) => o.key === 'rounds') && plugin.rules.length >= 5);
 });
 
+test('the log numbers every entry and says what was rolled and where the token landed', () => {
+  const g = game(2); dice(g, [3, 2]);
+  must(g, 0, { type: 'roll' });
+  const texts = g.log.map((e) => e.card);
+  assert.deepEqual(texts.slice(-2), ['rolled 3 + 2 = 5', 'landed on Rotterdam Port']);
+  assert.ok(g.log.every((e, i) => e.n === (i ? g.log[i - 1].n + 1 : e.n)), 'numbers are consecutive');
+  const before = g.log.at(-1).n; must(g, 0, { type: 'decline' });
+  assert.ok(A.viewFor(g, 'p1').log.at(-1).n > before, 'new entries get higher numbers, so a client can tell which are new');
+  assert.equal(g.afterDebtMove, null, 'the pending lockup-fine move is initialised');
+});
+
 console.log(`\n${passed} property rivals tests passed`);

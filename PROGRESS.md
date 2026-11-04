@@ -168,3 +168,4 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - 16.5 (todo) PR + CI. Verified locally: engine tests, coming-soon, browser tests, layout matrix. NOT run locally: smoke test, PostgreSQL suites (CI only).
 - 16.6 (done) Four and Five in a Row merged into one game with a Line length option (was a separate 15x15 game); Go Fish end-of-game crash fixed (the closing `over` event names no player and the renderer threw), empty-hand rules clarified, endgame tests.
 - Known: no undo or draw offer; stats are not tracked for these games (kind none).
+- 16.7 (done) Property Rivals: tokens walk square by square (back 3 walks back, lockup jumps), action buttons wait for arrival, and new log lines float over the board as messages (log entries are numbered; rolls and landings are now logged).

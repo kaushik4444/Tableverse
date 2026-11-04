@@ -102,6 +102,45 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a move walks the token square by square, then the messages describe the roll and the landing', async () => {
+    const E = require('../../games/propertyrivals/engine'); const A = require('../../games/propertyrivals/actions');
+    const people = four.map((p, i) => ({ id: i === 0 ? 'me' : 'p' + i, name: p.name }));
+    const g = E.createGame(people, {}, () => 0.5);
+    const m = tableMessages('propertyrivals', four); const room = m[1].room;
+    m[1].view = A.viewFor(g, 'me');
+    const q = [3, 2].map((d) => (d - 0.5) / 6); g.rng = () => (q.length ? q.shift() : 0.5);
+    A.applyAction(g, 'me', { type: 'roll' }); // 3 + 2 = 5: lands on Rotterdam Port, five squares away
+    const after = A.viewFor(g, 'me');
+    const { page, ctx } = await open(m);
+    const seats = () => page.evaluate(() => { const t = document.querySelector('.pr-tok.p-a'); return t ? Number(t.closest('.pr-sq').dataset.sq) : -1; });
+    assert.equal(await seats(), 0);
+    await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room, view: after });
+    const seen = [];
+    for (let i = 0; i < 40; i++) { const at = await seats(); if (seen[seen.length - 1] !== at) seen.push(at); if (at === after.players[0].pos && i > 3) break; await page.waitForTimeout(60); }
+    assert.equal(seen.at(-1), after.players[0].pos, 'the token ends where the server put it');
+    assert.ok(seen.length >= 6, `it passed through the squares one by one: ${seen}`);
+    assert.deepEqual(seen, seen.slice().sort((a, b) => a - b), 'it only moves forward');
+    await page.waitForSelector('.pr-msg', { timeout: 3000 });
+    assert.match(await page.textContent('.pr-feed'), /rolled 3 \+ 2 = 5/);
+    await page.waitForFunction(() => /landed on/.test(document.querySelector('.pr-feed').textContent), null, { timeout: 6000 });
+    await ctx.close();
+  });
+
+  await test('while a token is walking the action buttons wait; they come back on arrival', async () => {
+    const E = require('../../games/propertyrivals/engine'); const A = require('../../games/propertyrivals/actions');
+    const people = four.map((p, i) => ({ id: i === 0 ? 'me' : 'p' + i, name: p.name }));
+    const g = E.createGame(people, {}, () => 0.5); const m = tableMessages('propertyrivals', four); const room = m[1].room;
+    m[1].view = A.viewFor(g, 'me');
+    const q = [3, 2].map((d) => (d - 0.5) / 6); g.rng = () => (q.length ? q.shift() : 0.5);
+    A.applyAction(g, 'me', { type: 'roll' });
+    const { page, ctx } = await open(m);
+    await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room, view: A.viewFor(g, 'me') });
+    await page.waitForTimeout(250);
+    assert.match(await page.textContent('.pr-actions'), /Moving/);
+    await page.waitForFunction(() => !/Moving/.test(document.querySelector('.pr-actions') ? document.querySelector('.pr-actions').textContent : ''), null, { timeout: 5000 });
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

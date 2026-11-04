@@ -50,6 +50,7 @@ Tableverse is currently open for friend testing.
 ## What's new in v0.11 — Property Rivals
 
 - **Property Rivals** is playable (2–6 players, bots fill empty seats). 40-square original board with 22 cities in 8 colour groups, 4 ports and 2 utilities; rent doubles on a full colour set, even building up to a hotel, mortgages, auctions when you pass on a purchase, player-to-player trades, a lockup, and Surprise / Community Fund cards. Options: short game (30 or 60 rounds, richest wins), starting cash, auctions on/off, Rest Stop jackpot.
+- Tokens walk square by square and what happens (roll, landing, rent, cards) floats over the board as it happens.
 - Simplified on purpose: the bank has unlimited houses, and building and trading happen on your own turn.
 - Removed from the Coming soon list (9 planned games remain).
 
