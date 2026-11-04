@@ -251,7 +251,7 @@ function start(opts = {}) {
   });
 
   const staticFiles = createStaticFiles();
-  const server = http.createServer(async (req, res) => {
+  const handleHttp = async (req, res) => {
     setSecurityHeaders(res); // apply to success and error responses, including health checks and 404s
     let rel;
     try {
@@ -316,6 +316,16 @@ function start(opts = {}) {
         ...SECURITY_HEADERS,
         ...(production ? { 'Strict-Transport-Security': 'max-age=15552000; includeSubDomains' } : {}),
       });
+    });
+  };
+  // An unexpected error in any route answers 500 (and is logged) instead of leaving the request hanging until the timeout.
+  const server = http.createServer((req, res) => {
+    handleHttp(req, res).catch((err) => {
+      (opts.log || console).error(`[http] ${req.method} ${String(req.url).split('?')[0]} failed: ${err && err.stack || err}`);
+      try {
+        if (!res.headersSent) { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end('Server error'); }
+        else res.destroy();
+      } catch { /* the socket is gone */ }
     });
   });
   // Bound incomplete HTTP requests and idle keep-alive sockets. These are request-receive timeouts,

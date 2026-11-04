@@ -61,6 +61,15 @@ function client(port, token) {
     b.send({ t: 'start' });
     await until(() => b.room && b.room.status === 'playing', 'healthy game running');
     console.log('  ok  a throwing game closes only its own table; the server keeps serving others');
+    // an unexpected error inside an HTTP route answers 500 at once instead of hanging the request
+    const realList = games.list; games.list = () => { throw new Error('boom (http test)'); };
+    const t0 = Date.now();
+    const res = await fetch(`http://127.0.0.1:${srv.port}/api/games`);
+    games.list = realList;
+    assert.equal(res.status, 500);
+    assert.ok(Date.now() - t0 < 2000, 'the answer is immediate, not a timeout');
+    assert.ok(errors.some((e) => /\[http\] GET \/api\/games failed/.test(e)), 'the failure is logged');
+    console.log('  ok  an unexpected error in an HTTP route answers 500 immediately and is logged');
   } catch (e) { console.error = origError; console.error('FAIL', e.stack); process.exitCode = 1; }
   console.error = origError;
   await srv.close();
