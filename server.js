@@ -119,6 +119,7 @@ function start(opts = {}) {
   }
   let purgeTimer = null;
   let spoolTimer = null;
+  let shuttingDown = false; // set when the process is asked to stop: readiness fails, no new tables, players are told
 
   // ------------------------------------------------------------ http
   const readJsonBody = (req) =>
@@ -250,7 +251,7 @@ function start(opts = {}) {
   });
 
   const staticFiles = createStaticFiles();
-  const server = http.createServer(async (req, res) => {
+  const handleHttp = async (req, res) => {
     setSecurityHeaders(res); // apply to success and error responses, including health checks and 404s
     let rel;
     try {
@@ -277,6 +278,7 @@ function start(opts = {}) {
       return res.end('ok');
     }
     if (rel === '/readyz') {
+      if (shuttingDown) { res.setHeader('Cache-Control', 'no-store'); res.writeHead(503, { 'Content-Type': 'text/plain' }); return res.end('shutting down'); }
       const respond = (status, text) => {
         res.setHeader('Cache-Control', 'no-store');
         res.writeHead(status, { 'Content-Type': 'text/plain' });
@@ -314,6 +316,16 @@ function start(opts = {}) {
         ...SECURITY_HEADERS,
         ...(production ? { 'Strict-Transport-Security': 'max-age=15552000; includeSubDomains' } : {}),
       });
+    });
+  };
+  // An unexpected error in any route answers 500 (and is logged) instead of leaving the request hanging until the timeout.
+  const server = http.createServer((req, res) => {
+    handleHttp(req, res).catch((err) => {
+      (opts.log || console).error(`[http] ${req.method} ${String(req.url).split('?')[0]} failed: ${err && err.stack || err}`);
+      try {
+        if (!res.headersSent) { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end('Server error'); }
+        else res.destroy();
+      } catch { /* the socket is gone */ }
     });
   });
   // Bound incomplete HTTP requests and idle keep-alive sockets. These are request-receive timeouts,
@@ -666,10 +678,24 @@ function start(opts = {}) {
     room.timer = setTimeout(() => {
       room.timer = null;
       if (room.game !== g || g.isOver()) return;
-      if (!valid()) return schedule(room);
-      const res = run();
-      if (!res.ok) console.error('auto action failed:', res.error);
-      afterChange(room);
+      // A bug in one game must not take the whole server (and every other table) down: an exception here would
+      // otherwise be an uncaught exception in a timer callback. Retry a couple of times, then close only this table.
+      try {
+        if (!valid()) return schedule(room);
+        const res = run();
+        if (!res || !res.ok) console.error('auto action failed:', res && res.error);
+        room.autoFailures = 0;
+        afterChange(room);
+      } catch (e) {
+        room.autoFailures = (room.autoFailures || 0) + 1;
+        console.error(`[server] table ${room.code} (${room.gameId}): automatic play failed (${room.autoFailures}/3):`, e && e.stack || e);
+        if (room.autoFailures >= 3) {
+          for (const m of viewers(room)) { const q = players.get(m.id); if (q && q.connected) send(q.ws, { t: 'notice', text: 'This game hit an error and had to be closed. Sorry! Please start a new table.' }); }
+          destroyRoom(room);
+        } else {
+          try { schedule(room); } catch { /* the next gc pass closes an unhealthy table */ }
+        }
+      }
     }, delay);
     if (room.timer.unref) room.timer.unref();
   }
@@ -745,7 +771,11 @@ function start(opts = {}) {
     notifyOthers(room, p.id, `🚪 ${p.name} left the table`);
     if (!humans(room).length && room.status === 'playing') {
       // the last human stepped out of a running game (e.g. a solo game against bots): keep it paused so they can come
-      // back with one tap; the idle collector closes it after 10 minutes if nobody does
+      // back with one tap; the idle collector closes it after 10 minutes if nobody does.
+      // A player keeps only ONE such parked table: otherwise a create/start/leave loop fills the server (MAX_ROOMS).
+      const prev = p.parkedRoom && p.parkedRoom !== room.code ? rooms.get(p.parkedRoom) : null;
+      if (prev && !humans(prev).length) destroyRoom(prev);
+      p.parkedRoom = room.code;
       broadcast(room);
       return;
     }
@@ -865,6 +895,7 @@ function start(opts = {}) {
     create(p, msg) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
+      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
       if (p.room) leaveRoom(p);
@@ -1448,7 +1479,33 @@ function start(opts = {}) {
   ticker.unref();
   gc.unref();
 
+  /** One line of operational numbers for the logs (Render's log search is the free dashboard). */
+  function statusLine() {
+    const q = matchQueue.stats();
+    let sockets = 0; for (const ws of wss.clients) if (ws.player) sockets++;
+    let playing = 0; for (const r of rooms.values()) if (r.status === 'playing') playing++;
+    return `[stats] rooms=${rooms.size} playing=${playing} sockets=${sockets} players=${players.size} rssMB=${Math.round(process.memoryUsage().rss / 1048576)} matches(saved=${q.saved} pending=${q.pending} failed=${q.failed} retried=${q.retried})`;
+  }
+  // every 5 minutes, and every minute while a match result is pending or failed (so a database problem is easy to spot in the logs)
+  let statsAt = 0;
+  const statsTimer = setInterval(() => {
+    const q = matchQueue.stats();
+    const urgent = q.pending || q.failed;
+    if (Date.now() - statsAt >= (urgent ? 55000 : 299000)) { statsAt = Date.now(); (opts.log || console).log(statusLine()); }
+  }, 30000);
+  statsTimer.unref();
+
   async function close({ drainMs = 0 } = {}) {
+    clearInterval(statsTimer);
+    shuttingDown = true;
+    // Tables live in memory and do not survive a restart: say so, and close sockets with 1012 ("service restart") so the
+    // app shows a calm message instead of a mysterious disconnect. Running games are NOT recorded as finished.
+    for (const ws of wss.clients) {
+      try {
+        send(ws, { t: 'notice', text: 'The server is restarting for an update. Tables are not kept across a restart, so unfinished games are lost. Please start a new table in a minute.' });
+        ws.close(1012, 'server restarting');
+      } catch { /* already closing */ }
+    }
     clearInterval(ticker);
     clearTimeout(tablesTimer);
     clearInterval(gc);
@@ -1457,6 +1514,7 @@ function start(opts = {}) {
     if (drainMs) await matchQueue.drain(drainMs); // let pending match writes finish (shutdown)
     matchQueue.close();
     for (const room of rooms.values()) clearTimeout(room.timer);
+    await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
     for (const ws of wss.clients) ws.terminate();
     return new Promise((resolve) => wss.close(() => server.close(() => resolve())));
   }
@@ -1476,7 +1534,7 @@ function start(opts = {}) {
       purgeTimer = setInterval(purge, 6 * 60 * 60 * 1000);
       purgeTimer.unref();
     }
-    return new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue })));
+    return new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine })));
   });
 }
 
@@ -1485,6 +1543,16 @@ module.exports = { start };
 if (require.main === module) {
   start().then(
     ({ port, database, close }) => {
+      // Last-resort guards. A rejected promise nobody awaited is logged and the server keeps running; a genuinely
+      // uncaught exception leaves the process in an unknown state, so finish pending match writes and exit (the host restarts us).
+      process.on('unhandledRejection', (reason) => console.error('[server] unhandled rejection:', reason && reason.stack || reason));
+      let crashing = false;
+      process.on('uncaughtException', (err) => {
+        console.error('[server] uncaught exception:', err && err.stack || err);
+        if (crashing) return;
+        crashing = true;
+        close({ drainMs: 5000 }).then(() => process.exit(1), () => process.exit(1));
+      });
       console.log(`Tableverse running on http://localhost:${port} (${database.mode} store)`);
       // Render sends SIGTERM on deploy/restart: finish pending match writes first (it waits 30 s before killing us)
       let stopping = false;
