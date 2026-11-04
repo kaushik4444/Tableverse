@@ -26,12 +26,12 @@ Status legend: Fixed (in this branch, with a test) · Open · Accepted (document
 - **Mitigation that exists:** retries with jitter, idempotent inserts (match key), failed/pending counts on `/readyz`, loud logs with the players' names so a record can be re-entered by hand (see runbook). Neon outages are normally short; the exposure is "database down AND redeploy in the same window".
 - **Open improvement:** expose the pending/failed counters as a log line every minute while non-zero (cheap alerting via Render log search).
 
-### F4 — Classic Property Rivals can run forever with bots — Medium — Open (game-design decision, not changed)
-- **Where:** `games/propertyrivals` ("Until one player is left", default).
-- **Problem (confirmed):** `tests/simulation.test.js` found a seeded 4-bot game (seed 3) that reached 2,000+ rounds with nobody bankrupt (cash grows without limit: salary at Start, no sink). The option text already warns it "can take a long time".
-- **Impact:** an all-bot or stalled-human table stays active indefinitely and is never garbage collected. Humans can leave, which ends it, so real-world risk is low.
-- **Not changed:** altering the rules was out of scope. Options: default to 60 rounds, or add a very high round cap that ends the game by net worth.
-- **Test required:** a simulation with `rounds: 'off'` that asserts termination once a cap exists.
+### F4 — Classic Property Rivals can run forever with bots — Medium — Fixed (default changed, classic still selectable)
+- **Where:** `games/propertyrivals` ("Until one player is left").
+- **Problem (confirmed):** `tests/simulation.test.js` found a seeded 4-bot game (seed 3) that reached 2,000+ rounds with nobody bankrupt (cash grows without limit: salary at Start, no sink).
+- **Impact:** an all-bot or stalled table stays active indefinitely and is never garbage collected.
+- **Fix (owner-approved):** new tables default to the 60-round game (richest player wins). The classic "until one player is left" is still a lobby choice, now labelled as possibly never ending. Rules unchanged. The simulation test plays the 60-round variant.
+- **Test:** `tests/propertyrivals.test.js` asserts the default; the simulation covers termination.
 
 ### F5 — Game logic robustness (engines) — Verified, no defect found
 `tests/simulation.test.js` (new, runs in `npm test`) plays 120 seeded games across all 8 games and every seat count (min / default / max) and asserts: bots always produce accepted actions, the game ends, garbage actions (null, wrong types, prototype keys, NaN, huge numbers, unknown seats) never throw and never change the public view, finished games accept nothing and await nobody, views serialise and never include another seat's `hand`. Existing per-game suites cover rules, scoring and hidden information in depth. **Not covered:** deep per-game scoring invariants for Poker side pots and Property Rivals trades under random play (existing unit tests cover scripted cases only).

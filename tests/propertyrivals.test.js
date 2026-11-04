@@ -313,6 +313,7 @@ test('plugin: wiring, results (net worth), match record, name scrub, stats shape
   assert.equal(JSON.stringify(game3.view('p0')).includes('P1'), false);
   assert.equal(game3.act('p0', 'garbage').ok, false);
   assert.ok(plugin.options.some((o) => o.key === 'rounds') && plugin.rules.length >= 5);
+  assert.equal(plugin.options.find((o) => o.key === 'rounds').default, '60', 'a new table is a 60-round game: the open-ended classic can circle forever');
 });
 
 console.log(`\n${passed} property rivals tests passed`);
