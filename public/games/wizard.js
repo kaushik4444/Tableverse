@@ -259,7 +259,7 @@
       <div class="wz-top">
         <div class="wz-round"><b>Round ${v.round}</b><span class="label"> / ${v.totalRounds}</span></div>
         <div class="wz-trump">${v.phase === 'chooseTrump' ? '<span class="label">Trump: dealer picks</span>' : `<span class="label">Trump</span> ${trump}`}</div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-wz="scores">Scores</button><button class="btn ghost small" data-wz="leave" aria-label="Leave table">✕</button></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-wz="scores">Scores</button>', 'wz')}
       </div>
       ${bidStrip(v)}
       ${tableHTML(v, ctx, z)}

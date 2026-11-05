@@ -234,7 +234,7 @@
       <div class="wz-top">
         <div class="wz-round"><b>Hand ${v.handNo}</b><span class="label"> · to ${v.options.target}</span></div>
         <div class="wz-trump">${trumpHTML(v)}</div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-t9="scores">Scores</button><button class="btn ghost small" data-t9="leave" aria-label="Leave table">✕</button></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-t9="scores">Scores</button>', 't9')}
       </div>
       ${scoreStrip(v)}
       ${tableHTML(v, ctx)}

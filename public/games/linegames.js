@@ -84,7 +84,7 @@
     ui.ctx = ctx; ui.v = v; react(v);
     root.innerHTML = `<div class="wz lg" data-game="${esc(v.game)}">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.win} in a row</span></div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-lg="rules">Rules</button><button class="btn ghost small" data-lg="leave" aria-label="Leave table">✕</button></div></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-lg="rules">Rules</button>', 'lg')}</div>
       ${seatsHTML(v, ctx)}
       ${boardHTML(v)}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
