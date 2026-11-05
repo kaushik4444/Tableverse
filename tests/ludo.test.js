@@ -287,6 +287,7 @@ test('renderer exposes clickable own yard, track and home tokens only when legal
     toast: () => {},
     sound: { button: () => '' },
     chat: { button: () => '' },
+    toolbarSeed: (midHTML, leaveKey, cls) => `<div class="${cls || 'row'}"${cls ? '' : ' style="gap:6px"'}>${cardTable.sound.button()}${cardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button>${midHTML}<button class="btn ghost small" data-${leaveKey}="leave" aria-label="Leave table">✕</button></div>`,
     register: (id, renderer) => { if (id === 'ludo') registered = renderer; },
   };
   const window = { CardTable: cardTable, innerWidth: 900 };
