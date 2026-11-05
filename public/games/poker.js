@@ -197,6 +197,8 @@
     else if (cur.pot > prev.pot) snd.play('chip');
     else if (cur.folds > prev.folds) snd.play('fold');
     if (v.phase === 'handEnd' && v.result && v.result.winners.some((w) => w.player === v.me) && prev.phase !== 'handEnd') setTimeout(() => snd.play('win'), 250);
+    // The table's own final result, in place of app.js's generic always-fanfare fallback: whoever did not take the title hears it too.
+    if (v.phase === 'gameOver' && prev.phase !== 'gameOver') snd.play(v.me === v.standings[0].player ? 'fanfare' : 'lose');
   }
 
   // ------------------------------------------------------------------ render
