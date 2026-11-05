@@ -93,6 +93,17 @@ function connect(port, token) {
       assert.ok(live[0].view && live[0].view.me === seatA, 'and it owns the seat');
       for (const s of socks) s.ws.close();
     });
+    await test('a seat is marked "stand-in" while a bot plays for someone who left, and cleared when they rejoin', async () => {
+      await sleep(100);
+      a = connect(srv.port, tokA); // the earlier connections were replaced by the flood test
+      await until(() => a.room && a.view && a.view.me === seatA, 'Alice is back');
+      assert.ok(!a.room.members.some((m) => m.standIn), 'nobody is a stand-in yet');
+      b.send({ t: 'leave' });
+      await until(() => a.room && a.room.members.some((m) => m.id === b.id && m.standIn), 'Bob is marked as played by a bot');
+      assert.equal(a.room.members.find((m) => m.id === b.id).bot, true);
+      b.send({ t: 'join', code: a.room.code });
+      await until(() => a.room.members.find((m) => m.id === b.id && !m.standIn && !m.bot), 'mark cleared after Bob rejoins');
+    });
     console.log(`${passed} reconnect tests passed`);
   } catch (e) { console.error('FAIL', e.stack); process.exitCode = 1; }
   await srv.close();

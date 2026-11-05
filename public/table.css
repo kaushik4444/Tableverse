@@ -412,3 +412,7 @@ button.card { cursor: pointer; }
 .cf-msg.k-buy, .cf-msg.k-salary, .cf-msg.k-win, .cf-msg.k-build, .cf-msg.k-ladder, .cf-msg.k-home, .cf-msg.k-star, .cf-msg.k-marriage { background: rgba(30, 110, 70, .94); }
 @keyframes cf-float { 0% { opacity: 0; transform: translateY(14px); } 8% { opacity: 1; transform: translateY(0); } 80% { opacity: 1; transform: translateY(-6px); } 100% { opacity: 0; transform: translateY(-22px); } }
 @media (prefers-reduced-motion: reduce) { .cf-msg { animation-name: cf-fade; } @keyframes cf-fade { 0%, 100% { opacity: 0; } 10%, 85% { opacity: 1; } } }
+/* A bot is playing for someone who left or went offline (marked on their seat or list row until they come back) */
+.standin { font-size: 15px; line-height: 1; padding: 2px 3px; border-radius: 999px; background: rgba(8, 9, 30, .92); border: 1px solid var(--gold, #f2c14e); box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+.pseat .av .standin { position: absolute; right: -6px; bottom: -4px; z-index: 4; font-size: calc(var(--av) * .36); }
+li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-size: 12px; padding: 1px 3px; }
