@@ -16,6 +16,8 @@ window.TVVoice = function TVVoice(o) {
   const media = o.media || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? navigator.mediaDevices : null);
   const state = { supported: !!(rtc && media && (window.isSecureContext !== false)), joined: false, muted: true, deafened: false, error: '', list: [], speaking: new Set(), blocked: false };
   const peers = new Map(); // id -> { pc, audio, pending: [], analyser, stream }
+  const failures = new Map(); // id -> how many times in a row the audio link to that person failed
+  const LINK_ERROR = 'Cannot connect audio to someone at this table. Their network may block direct audio (a TURN server is needed).';
   let local = null; // { stream, track }
   let ctx = null; // AudioContext for the "who is talking" rings
   let meter = null;
@@ -97,7 +99,7 @@ window.TVVoice = function TVVoice(o) {
     const p = peers.get(id);
     if (!p) return;
     peers.delete(id);
-    try { p.pc.onicecandidate = null; p.pc.ontrack = null; p.pc.onconnectionstatechange = null; p.pc.close(); } catch { /* already closed */ }
+    try { clearTimeout(p.dropTimer); p.pc.onicecandidate = null; p.pc.ontrack = null; p.pc.onconnectionstatechange = null; p.pc.close(); } catch { /* already closed */ }
     if (p.audio) { p.audio.srcObject = null; p.audio.remove(); }
   }
   function makePeer(id, answering) {
@@ -125,8 +127,21 @@ window.TVVoice = function TVVoice(o) {
       if (play && play.catch) play.catch(() => { state.blocked = true; state.error = 'Tap anywhere on the screen to hear the other players.'; changed(); }); // the browser wants a tap first
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        if (peers.get(id) === p) { closePeer(id); setTimeout(reconcile, 1500); }
+      const s = pc.connectionState;
+      if (peers.get(id) !== p) return;
+      clearTimeout(p.dropTimer);
+      if (s === 'connected') {
+        failures.delete(id);
+        if (state.error === LINK_ERROR) { state.error = ''; changed(); }
+      } else if (s === 'disconnected') {
+        // usually a short network blip that heals by itself; if it does not, start over with this person
+        p.dropTimer = setTimeout(() => { if (peers.get(id) === p && pc.connectionState !== 'connected') { closePeer(id); reconcile(); } }, 5000);
+      } else if (s === 'failed' || s === 'closed') {
+        const n = (failures.get(id) || 0) + 1;
+        failures.set(id, n);
+        closePeer(id);
+        if (n >= 2 && state.error !== LINK_ERROR) { state.error = LINK_ERROR; changed(); } // tell the user instead of failing silently
+        setTimeout(reconcile, Math.min(1500 * n, 6000));
       }
     };
     return p;
@@ -215,6 +230,7 @@ window.TVVoice = function TVVoice(o) {
     for (const id of [...peers.keys()]) closePeer(id);
     releaseMic();
     stopMeter();
+    failures.clear();
     state.joined = false; state.muted = true; state.deafened = false; state.error = '';
     if (was) o.send({ t: 'voice', on: false });
     changed();
@@ -222,7 +238,7 @@ window.TVVoice = function TVVoice(o) {
   /** Reset without telling the server (we left the table or the connection dropped: the server already forgot us). */
   function reset() {
     for (const id of [...peers.keys()]) closePeer(id);
-    releaseMic(); stopMeter();
+    releaseMic(); stopMeter(); failures.clear();
     state.joined = false; state.muted = true; state.deafened = false; state.error = ''; state.list = [];
     changed();
   }
