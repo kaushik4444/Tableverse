@@ -457,6 +457,8 @@ function start(opts = {}) {
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
       members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
+      outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at } : null,
+      votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
       now: Date.now(), // lets clients correct for clock differences
     };
@@ -597,11 +599,23 @@ function start(opts = {}) {
     room.waiting = now;
   }
 
+  /** Who won, for the pop-up at the end of a game: seats whose result says `winner`. Empty for a draw or a co-op loss. */
+  function outcomeOf(room, g) {
+    let results = null;
+    try { results = typeof g.results === 'function' ? g.results() : null; } catch { results = null; }
+    const winners = Array.isArray(results) && results.length === room.members.length
+      ? room.members.filter((m, i) => results[i] && results[i].winner).map((m) => ({ id: m.id, name: m.name }))
+      : [];
+    return { winners, at: Date.now() };
+  }
+
   function afterChange(room) {
     const g = room.game;
     if (g) {
       if (g.isOver() && room.status !== 'finished') {
         room.status = 'finished';
+        room.votes = new Set(); // who wants to play again (the host just starts it)
+        room.outcome = outcomeOf(room, g);
         for (const m of humans(room)) schedulePresence(m.id);
         // Persist the completed match once (the status guard above plus the per-game key make a second attempt a no-op)
         try {
@@ -763,6 +777,7 @@ function start(opts = {}) {
     p.dropAnnounced = false;
     if (!room) return;
     if (voiceRelay.dropVoice(room, p.id)) broadcastVoice(room);
+    if (room.votes) room.votes.delete(p.id);
     const si = room.spectators.findIndex((s) => s.id === p.id);
     if (si >= 0) {
       room.spectators.splice(si, 1);
@@ -1187,6 +1202,16 @@ function start(opts = {}) {
       afterChange(room);
     },
 
+    /** A player who is not the host asks for another game (tap again to take it back). The host sees the count and starts it. */
+    rematchVote(p, msg) {
+      const room = rooms.get(p.room);
+      if (!room || room.status !== 'finished') return;
+      if (!room.members.some((m) => m.id === p.id && !m.bot)) return sendError(p, 'Take a seat to vote');
+      room.votes = room.votes || new Set();
+      if (msg.on === false) room.votes.delete(p.id); else room.votes.add(p.id);
+      broadcast(room);
+    },
+
     async rematch(p) {
       const room = hostRoom(p, 'finished');
       if (!room) return;
@@ -1197,6 +1222,7 @@ function start(opts = {}) {
       room.game = null;
       room.status = 'lobby';
       room.deadline = null;
+      room.votes = new Set(); room.outcome = null;
       // Spectators stay spectators: watching is a choice. They take an open seat themselves with `sit`.
       broadcast(room);
     },

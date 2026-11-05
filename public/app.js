@@ -1557,6 +1557,7 @@
       const el = document.getElementById(id);
       if (el && el.value !== undefined) saved[id] = { value: el.value, start: el.selectionStart, end: el.selectionEnd };
     }
+    if (!S.room || S.room.status !== 'finished') S.endFlow = null;
     if (!S.ready && !S.guest && !S.room) {
       $app.innerHTML = '<div class="page"><div class="brand"><div class="mark">🂡</div><h1>Tableverse</h1><p>Connecting…</p></div></div>';
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
@@ -1783,6 +1784,7 @@
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();
     refreshVoiceUI();
+    endFlow();
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
     const gameInfo = gameMeta(S.room.gameId);
@@ -1798,8 +1800,55 @@
     updateTimer();
   }
 
+  // ------------------------------------------------------------ end of a game
+  const END_BOARD_MS = 3500; // the finished table stays visible
+  const END_WINNER_MS = 2800; // then the "<name> won" pop-up
+  /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
+  function endFlow() {
+    const r = S.room;
+    if (!r || r.status !== 'finished') { $app.classList.remove('endhold'); return; }
+    if (!S.endFlow || S.endFlow.code !== r.code) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0), timer: null };
+    const f = S.endFlow;
+    clearTimeout(f.timer);
+    const t = Date.now() - f.start;
+    const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
+    $app.classList.toggle('endhold', stage !== 'result');
+    if (stage !== 'result') f.timer = setTimeout(() => { if (S.room && S.room.code === f.code && S.room.status === 'finished') render(); }, (stage === 'board' ? END_BOARD_MS : END_BOARD_MS + END_WINNER_MS) - t + 30);
+    if (stage === 'winner') {
+      const w = (r.outcome && r.outcome.winners) || [];
+      const names = w.map((x) => (x.id === S.id ? 'You' : x.name));
+      const text = !names.length ? 'Game over' : names.length === 1 ? (w[0].id === S.id ? 'You won! 🎉' : `${esc(names[0])} won!`) : `${esc(names.join(' & '))} won!`;
+      $app.insertAdjacentHTML('beforeend', `<div class="end-pop" role="status" aria-live="polite"><div class="end-pop-card"><div class="end-pop-ico" aria-hidden="true">🏆</div><b>${text}</b></div></div>`);
+    }
+    if (stage === 'result') {
+      const spectator = isSpectator();
+      const isHost = r.hostId === S.id;
+      const humans = r.members.filter((m) => !m.bot);
+      const voters = humans.filter((m) => m.id !== r.hostId).length;
+      const votes = (r.votes || []).filter((id) => id !== r.hostId).length;
+      const mine = (r.votes || []).includes(S.id);
+      const again = isHost ? '<button class="btn" type="button" data-act="endAgain">Play again</button>'
+        : spectator ? ''
+        : `<button class="btn${mine ? ' ghost' : ''}" type="button" data-act="endVote">${mine ? 'Voted ✓ (tap to undo)' : 'Vote to play again'}</button>`;
+      const count = voters ? `<span class="hint end-votes">${isHost ? 'Players who want another game' : 'Votes to play again'}: <b>${votes}/${voters}</b></span>` : '';
+      const html = `<div class="row end-actions">${again}<button class="btn ghost" type="button" data-act="endLeave">Leave game</button></div>${count}`;
+      for (const b of $app.querySelectorAll('button')) {
+        if (!Object.values(b.dataset).includes('again') || b.dataset.act) continue;
+        const row = b.closest('.row') || b.parentElement;
+        row.classList.add('end-actions-wrap');
+        row.innerHTML = html;
+      }
+      // Games whose non-host sees only a hint (no button) are covered by the row of the host button; if none was found, add a bar.
+      for (const h of $app.querySelectorAll('.overlay .hint, .ludo-end .hint')) if (/waiting for the host/i.test(h.textContent)) h.remove();
+      if (!$app.querySelector('.end-actions')) $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
+    }
+  }
+
   // ------------------------------------------------------------ events
   const actions = {
+    endAgain: () => send({ t: 'rematch' }),
+    endVote: () => send({ t: 'rematchVote', on: !(S.room.votes || []).includes(S.id) }),
+    endLeave: () => send({ t: 'leave' }),
     playerCard: (el) => openPlayerCard(el.dataset.pid),
     avatar: (el) => { S.avatarOpen = false; changeAvatar(el.dataset.a); },
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
