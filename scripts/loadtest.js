@@ -1,12 +1,39 @@
 'use strict';
 /**
- * Lightweight in-process load test (zero cost, no external services): starts the real server in memory mode, opens N
- * authenticated WebSocket players, seats them at tables of 4 with bots and plays real games, then reports memory,
- * event-loop delay, message volume and connection health.
+ * Lightweight in-process load test (zero cost, no external services).
  *
  *   NODE_ENV=test node scripts/loadtest.js [players=200] [seconds=20]
  *
- * It measures this machine only: use it to compare before/after a change, not as a capacity promise for Render's free plan.
+ * WHAT IT SIMULATES
+ * -----------------
+ * - Registers N authenticated accounts and opens one WebSocket per account.
+ * - Groups players into tables of 4 and starts a real game on each table
+ *   (cycling through Go Fish, Wizard, 29 and Poker).
+ * - Human clients stay passively connected; the server's absent-player bot
+ *   handles all in-game moves. This models N concurrent idle-to-spectator
+ *   connections under moderate bot-driven message traffic, NOT N fully
+ *   interactive humans each making moves every second.
+ * - After `seconds` the script closes every socket and reports.
+ *
+ * WHAT IT MEASURES
+ * ----------------
+ * - connectionsOpen / closedUnexpectedly — WebSocket health.
+ * - messages / msgsPerSec / kbPerSec — server→client broadcast volume.
+ * - eventLoopDelayMs (mean / p99 / max) — event-loop saturation indicator;
+ *   p99 above ~50 ms suggests the server is becoming CPU-bound.
+ * - rssMB / heapMB (start → end) — rough memory growth indicator;
+ *   large growth over 20 s may indicate a leak path worth investigating.
+ * - playersInFinishedGames — how many games completed during the window.
+ *
+ * CAVEATS
+ * -------
+ * - Runs in-process on the test machine; numbers will differ on Render's
+ *   free tier (512 MB RAM, shared CPU, cold starts, ephemeral disk).
+ * - Database is disabled (DELETE DATABASE_URL); auth uses in-memory stubs.
+ *   No real Argon2 hashing, no real session persistence, no Neon latency.
+ * - Rate-limit and connection caps are disabled so N players can connect.
+ * - Use this to compare before/after a specific change, not as a capacity
+ *   promise for production. See docs/PRODUCTION_READINESS_AUDIT.md §F5.
  */
 process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 delete process.env.DATABASE_URL;
