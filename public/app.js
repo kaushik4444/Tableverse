@@ -973,12 +973,13 @@
 
   let prevView = null;
   const bidSig = (v) => JSON.stringify(v.bids || (v.players || []).map((p) => (p.bid !== undefined && p.bid !== null ? p.bid : p.hasBid ? 1 : null)));
-  /** Play a sound for whatever changed between two game views. */
+  /** Play a sound for whatever changed between two game views. Only the trick-taking games (Wizard, 29) have the
+   *  `trick`/`lastTrick`/`bids` fields this looks at; every other game plays its own sounds, including its final
+   *  result (a plain "gameOver" check here could not tell a winner from a loser without knowing each game's shape). */
   function soundsFor(a, b) {
     const snd = CardTable.sound;
     if (!b || !snd) return;
     if (!a || a.phase === undefined) return;
-    if (b.phase === 'gameOver' && a.phase !== 'gameOver') return snd.play(b.won === false ? 'lose' : 'fanfare'); // co-op games report won=false when the team loses
     if ((b.phase === 'roundEnd' || b.phase === 'handEnd') && a.phase !== b.phase) return snd.play('round');
     if (b.lastTrick && (!a.lastTrick || JSON.stringify(a.lastTrick) !== JSON.stringify(b.lastTrick)) && b.trick && !b.trick.length) {
       snd.play(b.lastTrick.winner === b.me ? 'win' : 'card');
