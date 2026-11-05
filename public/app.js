@@ -152,7 +152,33 @@
   window.CardTable.showRules = showRules;
 
   // ------------------------------------------------------------ auth + connection
-  const send = (msg) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); };
+  // Slow steps (joining, creating, starting a table) put up a spinner that blocks every other tap until the server answers.
+  const BUSY_LABELS = { join: 'Joining table…', create: 'Creating your table…', start: 'Starting the game…', rematch: 'Setting up another game…', sit: 'Taking your seat…', leave: 'Leaving…' };
+  let busyTimer = null;
+  function showBusy(label) {
+    let el = document.getElementById('busyBlock');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'busyBlock'; el.className = 'busy-block'; el.setAttribute('role', 'alert'); el.setAttribute('aria-live', 'assertive');
+      el.innerHTML = '<div class="busy-card"><span class="busy-spin" aria-hidden="true"></span><b></b></div>';
+      document.body.appendChild(el);
+    }
+    el.querySelector('b').textContent = label;
+    if ($app) $app.setAttribute('inert', '');
+    clearTimeout(busyTimer);
+    busyTimer = setTimeout(() => { hideBusy(); toast('That is taking longer than usual. Check your connection and try again.'); }, 20000);
+  }
+  function hideBusy() {
+    clearTimeout(busyTimer);
+    const el = document.getElementById('busyBlock');
+    if (el) el.remove();
+    if ($app) $app.removeAttribute('inert');
+  }
+  const send = (msg) => {
+    if (!(ws && ws.readyState === 1)) return;
+    ws.send(JSON.stringify(msg));
+    if (BUSY_LABELS[msg.t]) showBusy(BUSY_LABELS[msg.t]);
+  };
 
   // ------------------------------------------------------------ table voice chat (public/voice.js)
   const voiceAudio = document.createElement('div');
@@ -550,11 +576,11 @@
   }
 
   function joinAcceptedInvitation(invitation) {
-    if (!invitation || invitation.status !== 'accepted') return toast('Accept the invitation before joining.');
+    if (!invitation || invitation.status !== 'accepted') { hideBusy(); return toast('Accept the invitation before joining.'); }
     const game = gameMeta(invitation.game_id || invitation.gameId);
     toast(`Joining ${(game && game.name) || 'private'} table…`);
     const code = invitation.room_code || invitation.roomCode;
-    if (!code) return toast('This invitation has no table code. Ask the host to invite you again.');
+    if (!code) { hideBusy(); return toast('This invitation has no table code. Ask the host to invite you again.'); }
     joinTable(code, 'join');
   }
 
@@ -674,6 +700,7 @@
 
 
   function onMessage(m) {
+    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') hideBusy();
     switch (m.t) {
       case 'welcome': {
         S.id = m.id;
@@ -1349,8 +1376,8 @@
   const WHATS_NEW_VERSION = '2026-11-table-voice';
   const WHATS_NEW = [
     ['✨', 'Smoother, tidier games', 'One toolbar in every game, tokens that walk square by square, Ludo plays your only possible move, a crown shows who is ahead in every game, and what just happened floats over the table.'],
+    ['🏆', 'A proper ending', 'When a game ends you see the final table for a few seconds, then who won, then the result. The host starts another game; everyone else can vote for one and see the votes.'],
     ['🎙️', 'Talk at the table', 'Tap the microphone to talk with everyone at your table, in the lobby and during the game. Tap the speaker to listen, or silence everyone. A green ring shows who is talking.'],
-    ['🟡', 'Tic-Tac-Toe and Four in a Row', 'Two quick two-player games: line up three marks, or drop discs and connect four, or five on a bigger grid. Play a friend or a bot.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
@@ -1557,6 +1584,7 @@
       const el = document.getElementById(id);
       if (el && el.value !== undefined) saved[id] = { value: el.value, start: el.selectionStart, end: el.selectionEnd };
     }
+    if (!S.room || S.room.status !== 'finished') S.endFlow = null;
     if (!S.ready && !S.guest && !S.room) {
       $app.innerHTML = '<div class="page"><div class="brand"><div class="mark">🂡</div><h1>Tableverse</h1><p>Connecting…</p></div></div>';
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
@@ -1783,6 +1811,7 @@
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();
     refreshVoiceUI();
+    endFlow();
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
     const gameInfo = gameMeta(S.room.gameId);
@@ -1798,8 +1827,55 @@
     updateTimer();
   }
 
+  // ------------------------------------------------------------ end of a game
+  const END_BOARD_MS = 3500; // the finished table stays visible
+  const END_WINNER_MS = 2800; // then the "<name> won" pop-up
+  /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
+  function endFlow() {
+    const r = S.room;
+    if (!r || r.status !== 'finished') { $app.classList.remove('endhold'); return; }
+    if (!S.endFlow || S.endFlow.code !== r.code) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0), timer: null };
+    const f = S.endFlow;
+    clearTimeout(f.timer);
+    const t = Date.now() - f.start;
+    const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
+    $app.classList.toggle('endhold', stage !== 'result');
+    if (stage !== 'result') f.timer = setTimeout(() => { if (S.room && S.room.code === f.code && S.room.status === 'finished') render(); }, (stage === 'board' ? END_BOARD_MS : END_BOARD_MS + END_WINNER_MS) - t + 30);
+    if (stage === 'winner') {
+      const w = (r.outcome && r.outcome.winners) || [];
+      const names = w.map((x) => (x.id === S.id ? 'You' : x.name));
+      const text = !names.length ? 'Game over' : names.length === 1 ? (w[0].id === S.id ? 'You won! 🎉' : `${esc(names[0])} won!`) : `${esc(names.join(' & '))} won!`;
+      $app.insertAdjacentHTML('beforeend', `<div class="end-pop" role="status" aria-live="polite"><div class="end-pop-card"><div class="end-pop-ico" aria-hidden="true">🏆</div><b>${text}</b></div></div>`);
+    }
+    if (stage === 'result') {
+      const spectator = isSpectator();
+      const isHost = r.hostId === S.id;
+      const humans = r.members.filter((m) => !m.bot);
+      const voters = humans.filter((m) => m.id !== r.hostId).length;
+      const votes = (r.votes || []).filter((id) => id !== r.hostId).length;
+      const mine = (r.votes || []).includes(S.id);
+      const again = isHost ? '<button class="btn" type="button" data-act="endAgain">Play again</button>'
+        : spectator ? ''
+        : `<button class="btn${mine ? ' ghost' : ''}" type="button" data-act="endVote">${mine ? 'Voted ✓ (tap to undo)' : 'Vote to play again'}</button>`;
+      const count = voters ? `<span class="hint end-votes">${isHost ? 'Players who want another game' : 'Votes to play again'}: <b>${votes}/${voters}</b></span>` : '';
+      const html = `<div class="row end-actions">${again}<button class="btn ghost" type="button" data-act="endLeave">Leave game</button></div>${count}`;
+      for (const b of $app.querySelectorAll('button')) {
+        if (!Object.values(b.dataset).includes('again') || b.dataset.act) continue;
+        const row = b.closest('.row') || b.parentElement;
+        row.classList.add('end-actions-wrap');
+        row.innerHTML = html;
+      }
+      // Games whose non-host sees only a hint (no button) are covered by the row of the host button; if none was found, add a bar.
+      for (const h of $app.querySelectorAll('.overlay .hint, .ludo-end .hint')) if (/waiting for the host/i.test(h.textContent)) h.remove();
+      if (!$app.querySelector('.end-actions')) $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
+    }
+  }
+
   // ------------------------------------------------------------ events
   const actions = {
+    endAgain: () => send({ t: 'rematch' }),
+    endVote: () => send({ t: 'rematchVote', on: !(S.room.votes || []).includes(S.id) }),
+    endLeave: () => send({ t: 'leave' }),
     playerCard: (el) => openPlayerCard(el.dataset.pid),
     avatar: (el) => { S.avatarOpen = false; changeAvatar(el.dataset.a); },
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
@@ -1869,10 +1945,11 @@
     acceptInvitation: async (el) => {
       try {
         const known = S.invitations.incoming.find((i) => String(i.id) === String(el.dataset.id)); // the list is reloaded below, so keep what we know about it
+        showBusy('Joining table…');
         const out = await postJson('/api/me/table-invitations/accept', { invitationId: el.dataset.id });
         await loadSocial({ quiet: true });
         joinAcceptedInvitation({ ...(known || {}), ...(out.invitation || {}), status: (out.invitation && out.invitation.status) || 'accepted' });
-      } catch (error) { S.socialError = error.message || 'Could not accept invitation.'; render(); }
+      } catch (error) { hideBusy(); S.socialError = error.message || 'Could not accept invitation.'; render(); }
     },
     declineInvitation: (el) => socialPost('/api/me/table-invitations/decline', { invitationId: el.dataset.id }),
     revokeInvitation: (el) => socialPost('/api/me/table-invitations/revoke', { invitationId: el.dataset.id }),

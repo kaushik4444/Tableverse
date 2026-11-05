@@ -571,3 +571,24 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .fs-title h2 { margin: 0; }
 .fs-title .hint { display: block; margin: 2px 0 0; }
 .fs-title:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 8px; }
+
+/* End of a game: the finished table stays visible, a winner pop-up follows, then the result with Leave / Play again / vote */
+.endhold .overlay, .endhold .ludo-end, .endhold .end-bar { display: none !important; }
+.end-pop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(8, 10, 20, .55); animation: endFade .35s ease both; }
+.end-pop-card { display: grid; justify-items: center; gap: 8px; padding: 26px 34px; border-radius: 22px; background: linear-gradient(160deg, #3b2a73, #1d1740); color: #fff; box-shadow: 0 20px 60px rgba(0, 0, 0, .5), 0 0 0 2px rgba(255, 215, 110, .55); animation: endPop .55s cubic-bezier(.2, 1.3, .4, 1) both; text-align: center; max-width: min(88vw, 420px); }
+.end-pop-card b { font-size: clamp(1.4rem, 6vw, 2rem); overflow-wrap: anywhere; }
+.end-pop-ico { font-size: 3rem; animation: endBounce 1.2s ease-in-out infinite; }
+.end-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 12px; }
+.end-votes { display: block; text-align: center; margin-top: 8px; }
+.end-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(20, 16, 44, .94); border-top: 1px solid rgba(255, 255, 255, .15); }
+@keyframes endFade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes endPop { from { transform: scale(.6); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+@keyframes endBounce { 50% { transform: translateY(-6px) } }
+@media (prefers-reduced-motion: reduce) { .end-pop, .end-pop-card, .end-pop-ico { animation: none; } }
+
+/* Blocks every other tap while a slow step (joining, creating, starting) is in flight */
+.busy-block { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(8, 10, 20, .6); cursor: progress; }
+.busy-card { display: grid; justify-items: center; gap: 14px; padding: 24px 30px; border-radius: 18px; background: #1d1740; color: #fff; box-shadow: 0 16px 50px rgba(0, 0, 0, .5); }
+.busy-spin { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(255, 255, 255, .25); border-top-color: #ffd76e; animation: busySpin .8s linear infinite; }
+@keyframes busySpin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .busy-spin { animation-duration: 2s; } }

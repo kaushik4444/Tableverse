@@ -5,7 +5,9 @@
   const { esc } = window.CardTable;
   const ui = { ctx: null, v: null, root: null, seq: null, mgr: false, trade: null, bid: 0, scores: false,
     disp: {}, plans: {}, stepTimer: null };
-  const STEP_MS = 170; // one square per step; long advances go faster
+  const STEP_MS = 420; // one square per step: slow enough to follow every tile
+  const FAST_MS = 280; // very long advances (over 14 squares) a little quicker
+  const DWELL_MS = 700; // the token rests on the square it lands on before the text and buttons follow
   const DIE = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
   const ICON = { start: '➡️', fund: '💰', surprise: '❓', tax: '💸', lockup: '🔒', rest: '☕', golockup: '👮', port: '⚓', utility: '💡' };
 
@@ -33,9 +35,9 @@
       const card = v.lastCard && v.lastCard.by === i ? v.lastCard.text : '';
       if (p.inLockup && to === 10) { ui.disp[p.id] = to; delete ui.plans[p.id]; return; } // sent to the lockup: no walking there
       const back = /back/i.test(card) && bwd <= 4;
-      ui.plans[p.id] = { to, dir: back ? -1 : 1, ms: (back ? bwd : fwd) > 14 ? 90 : STEP_MS };
+      ui.plans[p.id] = { to, dir: back ? -1 : 1, ms: (back ? bwd : fwd) > 14 ? FAST_MS : STEP_MS };
     });
-    if (Object.keys(ui.plans).length && !ui.stepTimer) ui.stepTimer = setInterval(stepTokens, 90);
+    if (Object.keys(ui.plans).length && !ui.stepTimer) ui.stepTimer = setInterval(stepTokens, 60);
   }
   let tickAt = 0;
   function stepTokens() {
@@ -43,15 +45,16 @@
     const now = Date.now(); let changed = false;
     for (const id of Object.keys(ui.plans)) {
       const pl = ui.plans[id];
+      if (ui.disp[id] === pl.to) { if (now >= pl.hold) { delete ui.plans[id]; changed = true; } continue; } // resting on the landing square
       if (now - (pl.last || 0) < pl.ms - 10) continue;
       pl.last = now; ui.disp[id] = (ui.disp[id] + pl.dir + 40) % 40; changed = true;
-      if (ui.disp[id] === pl.to) delete ui.plans[id];
+      if (ui.disp[id] === pl.to) pl.hold = now + DWELL_MS;
     }
     if (!Object.keys(ui.plans).length) { clearInterval(ui.stepTimer); ui.stepTimer = null; }
     if (changed) ui.ctx.rerender();
   }
   /** Milliseconds the walks still need, so the text that describes the landing appears when the token arrives. */
-  const walkLeft = () => Math.max(0, ...Object.keys(ui.plans).map((id) => { const pl = ui.plans[id]; const d = ((pl.to - ui.disp[id]) * pl.dir + 40) % 40; return d * pl.ms; }));
+  const walkLeft = () => Math.max(0, ...Object.keys(ui.plans).map((id) => { const pl = ui.plans[id]; const d = ((pl.to - ui.disp[id]) * pl.dir + 40) % 40; return d * pl.ms + DWELL_MS; }));
 
   function squareHTML(v, i) {
     const s = v.squares[i], l = v.land[i], [r, c] = cell(i);
@@ -59,7 +62,7 @@
     const price = s.price ? `<small>${s.price}</small>` : s.amount ? `<small>-${s.amount}</small>` : '';
     const own = l && l.owner >= 0 ? ` owned ${colour(v, l.owner)}${l.mortgaged ? ' mort' : ''}` : '';
     const houses = l && l.houses ? `<span class="pr-houses">${l.houses === 5 ? '🏨' : '🏠'.repeat(l.houses)}</span>` : '';
-    const here = v.players.map((p, k) => (!p.bankrupt && shown(p) === i ? `<span class="pr-tok ${colour(v, k)} ${k === v.turn ? 'now' : ''} ${ui.plans[p.id] ? 'walk' : ''}" title="${esc(p.name)}">${p.token}</span>` : '')).join('');
+    const here = v.players.map((p, k) => (!p.bankrupt && shown(p) === i ? `<span class="pr-tok ${colour(v, k)} ${k === v.turn ? 'now' : ''} ${ui.plans[p.id] && ui.disp[p.id] !== ui.plans[p.id].to ? 'walk' : ''}" title="${esc(p.name)}">${p.token}</span>` : '')).join('');
     const corner = [0, 10, 20, 30].includes(i) ? ' corner' : '';
     return `<div class="pr-sq${own}${corner}" style="grid-row:${r};grid-column:${c}" data-sq="${i}" title="${esc(s.name)}">${band}<b>${esc(s.name)}</b>${price}${houses}<div class="pr-here">${here}</div></div>`;
   }
@@ -69,7 +72,9 @@
     const dice = d && d[0] ? `<div class="pr-dice" aria-label="Dice ${d[0]} and ${d[1]}"><span>${DIE[d[0]]}</span><span>${DIE[d[1]]}</span></div>` : '<div class="pr-dice"><span>🎲</span></div>';
     const card = v.lastCard ? `<p class="pr-card ${v.lastCard.deck}"><b>${v.lastCard.deck === 'fund' ? 'Community Fund' : 'Surprise'}</b> ${esc(v.lastCard.text)}</p>` : '';
     const jack = v.options.jackpot ? `<small>Rest Stop jackpot ${coins(v.jackpot)}</small>` : '';
-    return `<div class="pr-mid">${dice}<small>Round ${v.round}${v.options.rounds !== 'off' ? ' / ' + v.options.rounds : ''}</small>${jack}${card}</div>`;
+    const cur = v.players[v.turn];
+    const turn = v.phase !== 'gameOver' && cur ? `<div class="pr-turn ${colour(v, v.turn)}"><span class="pr-turntok">${cur.token}</span><b>${v.turn === v.me ? 'Your turn' : esc(cur.name) + '’s turn'}</b></div>` : '';
+    return `<div class="pr-mid">${turn}${dice}<small>Round ${v.round}${v.options.rounds !== 'off' ? ' / ' + v.options.rounds : ''}</small>${jack}${card}</div>`;
   }
 
   function guidance(v) {
