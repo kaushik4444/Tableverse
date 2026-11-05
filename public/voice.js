@@ -122,7 +122,7 @@ window.TVVoice = function TVVoice(o) {
       p.audio.muted = state.deafened;
       p.analyser = analyserFor(stream);
       const play = p.audio.play && p.audio.play();
-      if (play && play.catch) play.catch(() => { state.blocked = true; changed(); }); // the browser wants a tap first
+      if (play && play.catch) play.catch(() => { state.blocked = true; state.error = 'Tap anywhere on the screen to hear the other players.'; changed(); }); // the browser wants a tap first
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
@@ -234,7 +234,7 @@ window.TVVoice = function TVVoice(o) {
   /** Browsers only start audio after a tap: call this from any click. */
   function resumeAudio() {
     if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
-    if (state.blocked) { state.blocked = false; for (const p of peers.values()) if (p.audio && p.audio.paused) p.audio.play().catch(() => {}); changed(); }
+    if (state.blocked) { state.blocked = false; state.error = ''; for (const p of peers.values()) if (p.audio && p.audio.paused) p.audio.play().catch(() => {}); changed(); }
   }
 
   return { state, join, toggleMic, toggleSpeaker, leave, reset, updateList, handleRtc, resumeAudio, _peers: peers };

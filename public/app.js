@@ -156,7 +156,9 @@
 
   // ------------------------------------------------------------ table voice chat (public/voice.js)
   const voiceAudio = document.createElement('div');
-  voiceAudio.hidden = true; // the <audio> elements of the other people at the table live here
+  // the <audio> elements of the other people at the table live here. Visually hidden, NOT display:none: some mobile
+  // browsers (iOS Safari) do not play audio from an element that is not rendered.
+  voiceAudio.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
   document.body.appendChild(voiceAudio);
   const voice = window.TVVoice({ send, getIce: () => S.ice, myId: () => S.id, onChange: () => { refreshVoiceUI(); if (voice.state.error && voice.state.error !== lastVoiceError) toast(voice.state.error); lastVoiceError = voice.state.error; }, audioRoot: voiceAudio });
   let lastVoiceError = '';
