@@ -21,6 +21,7 @@ const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
+const voiceRelay = require('./lib/voiceRelay');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -38,7 +39,7 @@ const SECURITY_HEADERS = {
   'Referrer-Policy': 'no-referrer',
   'Content-Security-Policy':
     "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()', // the microphone is for table voice chat
 };
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
 const BOT_NAMES = ['Merlin', 'Morgana', 'Gandalf', 'Circe', 'Rincewind', 'Radagast', 'Elminster', 'Oz'];
@@ -58,6 +59,7 @@ function start(opts = {}) {
   const botDelay = opts.botDelay || [900, 1600]; // ms range a bot "thinks"
   const autoAdvanceMs = opts.autoAdvanceMs ?? 8000; // pause between rounds
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
+  const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
   const maxMsgsPerSec = opts.maxMsgsPerSec ?? 30; // per socket; humans send a handful of messages per minute
   const maxQueuedMessages = opts.maxQueuedMessages ?? 100; // bound async work queued behind slow database operations
   const maxPendingHellos = opts.maxPendingHellos ?? 250; // bound the global serial authentication queue during connection floods
@@ -65,6 +67,7 @@ function start(opts = {}) {
   const botScale = opts.botDelay ? Math.min(1, opts.botDelay[1] / 1600) : 1; // tests run with fast bots; plugin-timed bots follow
   const trickPauseMs = opts.trickPauseMs ?? 1700; // time everybody gets to see a finished trick being collected
   const env = opts.env || process.env;
+  const iceServers = opts.iceServers ?? voiceRelay.iceServers(env); // sent to browsers for table voice chat
   const production = env.NODE_ENV === 'production';
   const trustProxy = opts.trustProxy ?? (env.TRUST_PROXY ? env.TRUST_PROXY === '1' : production); // behind Render's proxy the client address is in X-Forwarded-For
   const allowedOrigins = String(opts.allowedOrigins ?? env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -555,7 +558,15 @@ function start(opts = {}) {
     }
   }
   const sys = (room, text) => pushChat(room, { sys: true, text });
-  const sendChatLog = (p, room) => send(p.ws, { t: 'chatlog', messages: room.chat });
+  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: room.chat }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
+  /** Tell everyone at the table who is in voice (and who is muted). */
+  function broadcastVoice(room) {
+    const msg = { t: 'voice', ids: voiceRelay.voiceList(room) };
+    for (const v of viewers(room)) {
+      const q = players.get(v.id);
+      if (q && q.connected) send(q.ws, msg);
+    }
+  }
   function notifyOthers(room, exceptId, text) {
     for (const v of viewers(room)) {
       if (v.id === exceptId) continue;
@@ -751,6 +762,7 @@ function start(opts = {}) {
     clearTimeout(p.dropTimer);
     p.dropAnnounced = false;
     if (!room) return;
+    if (voiceRelay.dropVoice(room, p.id)) broadcastVoice(room);
     const si = room.spectators.findIndex((s) => s.id === p.id);
     if (si >= 0) {
       room.spectators.splice(si, 1);
@@ -879,6 +891,26 @@ function start(opts = {}) {
         const q = players.get(m.id);
         if (q && q.connected) send(q.ws, { t: 'emote', id: p.id, e: msg.e });
       }
+    },
+
+    /** Join or leave the table's voice chat, or change mute. The audio itself never passes through the server. */
+    voice(p, msg) {
+      const room = rooms.get(p.room);
+      if (!room) return;
+      const r = voiceRelay.setVoice(room, p.id, msg.on === true, msg.muted === true);
+      if (!r.ok) return sendError(p, r.error);
+      if (r.changed) broadcastVoice(room);
+    },
+
+    /** One setup message (offer, answer, ICE) for another person in voice at the same table. */
+    rtc(p, msg) {
+      const room = rooms.get(p.room);
+      if (!room) return;
+      const r = voiceRelay.relay(room, p.id, msg.to, msg.data, (toId, m) => {
+        const q = players.get(toId);
+        if (q && q.connected) send(q.ws, m);
+      });
+      if (!r.ok) return sendError(p, r.error);
     },
 
     chat(p, msg) {
@@ -1314,7 +1346,7 @@ function start(opts = {}) {
     p.connected = true;
     p.pingMs = null; // measured again on this connection
     ws.player = p;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
     if (room && await canEnterRoom(p, room, { present: true })) {
@@ -1352,6 +1384,7 @@ function start(opts = {}) {
     ws.isAlive = true;
     ws.player = null;
     ws.msgs = 0;
+    ws.rtcMsgs = 0;
     ws.queueDepth = 0;
     ws.on('pong', (data) => {
       ws.isAlive = true;
@@ -1365,7 +1398,6 @@ function start(opts = {}) {
       }
     });
     ws.on('message', (raw) => {
-      if (++ws.msgs > maxMsgsPerSec) return ws.close(1008, 'slow down'); // flood guard; counter is reset every second
       let msg;
       try {
         msg = JSON.parse(raw);
@@ -1373,6 +1405,9 @@ function start(opts = {}) {
         return;
       }
       if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return;
+      // flood guard; counters are reset every second. Voice setup messages come in bursts (several ICE candidates per
+      // person at the table), so they have their own, larger allowance and do not use up the normal one.
+      if (msg.t === 'rtc') { if (++ws.rtcMsgs > maxRtcPerSec) return ws.close(1008, 'slow down'); } else if (++ws.msgs > maxMsgsPerSec) return ws.close(1008, 'slow down');
       if (msg.t === 'hello') {
         // onHello is async (database lookup): a failure must close this socket, not crash the process with an unhandled rejection
         onHello(ws, msg).catch((e) => {
@@ -1413,6 +1448,7 @@ function start(opts = {}) {
       publishPresence(p.id);
       const room = rooms.get(p.room);
       if (room) {
+        if (voiceRelay.dropVoice(room, p.id)) broadcastVoice(room); // a dropped connection ends their voice; they rejoin it when they are back
         broadcast(room);
         schedule(room);
         onDrop(p);
@@ -1425,6 +1461,7 @@ function start(opts = {}) {
   const ticker = setInterval(() => {
     for (const ws of wss.clients) {
       ws.msgs = 0;
+      ws.rtcMsgs = 0;
       if (ws.player && (!ws.probeSentAt || Date.now() - ws.probeSentAt >= 8000)) {
         ws.probeId = (ws.probeId || 0) + 1;
         ws.probeSentAt = Date.now();

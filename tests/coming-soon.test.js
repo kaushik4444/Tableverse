@@ -38,7 +38,7 @@ assert.ok(whatsNew, 'What’s new release notes exist');
 assert.equal((whatsNew[1].match(/^\s*\[/gm) || []).length, 3, 'What’s new only contains the latest three highlights');
 assert.ok(!html.includes('Snakes and Ladders'), 'a playable game is not listed as coming soon');
 assert.match(whatsNew[1], /Smoother, tidier games/);
-assert.match(whatsNew[1], /Property Rivals is now playable/);
+assert.match(whatsNew[1], /Talk at the table/);
 assert.match(whatsNew[1], /Tic-Tac-Toe and Four in a Row/);
 for (const shipped of ['Four in a Row', 'Tic-Tac-Toe']) assert.ok(!html.includes(shipped), `${shipped} is playable, not coming soon`);
 assert.ok(!html.includes('Property Rivals'), 'a playable game is not listed as coming soon');

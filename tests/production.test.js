@@ -195,27 +195,37 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     await srv.close();
   });
 
-  await test('health, readiness, static and error responses carry security headers; HSTS is production-only', async () => {
-    const srv = await start(base);
-    const r = await fetch(`http://127.0.0.1:${srv.port}/readyz`);
-    assert.equal(r.status, 200);
-    const home = await fetch(`http://127.0.0.1:${srv.port}/`);
-    const health = await fetch(`http://127.0.0.1:${srv.port}/healthz`);
-    const missing = await fetch(`http://127.0.0.1:${srv.port}/missing`);
-    assert.equal(r.headers.get('cache-control'), 'no-store');
-    assert.equal(health.headers.get('cache-control'), 'no-store');
-    for (const response of [r, home, health, missing]) {
-      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
-      assert.match(response.headers.get('content-security-policy') || '', /object-src 'none'/);
-      assert.match(response.headers.get('content-security-policy') || '', /base-uri 'self'/);
-      assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
-      assert.equal(response.headers.get('strict-transport-security'), null);
+  await test('health, readiness, static and error responses carry security headers; voice microphone is same-origin only; HSTS is production-only', async () => {
+    let srv;
+    let prod;
+    try {
+      srv = await start(base);
+      const r = await fetch(`http://127.0.0.1:${srv.port}/readyz`);
+      assert.equal(r.status, 200);
+      const home = await fetch(`http://127.0.0.1:${srv.port}/`);
+      const health = await fetch(`http://127.0.0.1:${srv.port}/healthz`);
+      const missing = await fetch(`http://127.0.0.1:${srv.port}/missing`);
+      assert.equal(r.headers.get('cache-control'), 'no-store');
+      assert.equal(health.headers.get('cache-control'), 'no-store');
+      for (const response of [r, home, health, missing]) {
+        assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+        assert.match(response.headers.get('content-security-policy') || '', /object-src 'none'/);
+        assert.match(response.headers.get('content-security-policy') || '', /base-uri 'self'/);
+        // Voice chat needs the site's microphone, but must not grant camera or geolocation access.
+        assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(self), geolocation=()');
+        assert.equal(response.headers.get('strict-transport-security'), null);
+      }
+      await srv.close();
+      srv = null;
+
+      prod = await start({ ...base, env: { NODE_ENV: 'production' } });
+      const secure = await fetch(`http://127.0.0.1:${prod.port}/`);
+      assert.match(secure.headers.get('strict-transport-security'), /max-age/);
+    } finally {
+      // Always release listening sockets, even when a security-header assertion fails.
+      if (srv) await srv.close();
+      if (prod) await prod.close();
     }
-    await srv.close();
-    const prod = await start({ ...base, env: { NODE_ENV: 'production' } });
-    const secure = await fetch(`http://127.0.0.1:${prod.port}/`);
-    assert.match(secure.headers.get('strict-transport-security'), /max-age/);
-    await prod.close();
   });
 
   console.log(`\n${passed} production tests passed`);
