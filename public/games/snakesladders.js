@@ -174,7 +174,7 @@
     <div class="wz sl">
       <div class="wz-top">
         <div class="wz-round"><b>Snakes and Ladders</b></div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-sl="rules">Rules</button><button class="btn ghost small" data-sl="leave" aria-label="Leave table">✕</button></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-sl="rules">Rules</button>', 'sl')}
       </div>
       <div class="wz-status ${v.myTurn && v.phase !== 'gameOver' ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${feedback(v)}

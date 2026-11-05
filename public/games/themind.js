@@ -171,7 +171,7 @@
     <div class="wz tm ${ui.flash === 'mistake' ? 'oops' : ''}">
       <div class="wz-top">
         <div class="wz-round"><b>Level ${v.phase === 'levelEnd' ? v.nextLevel : v.level}</b><span class="label"> / ${v.maxLevel}</span></div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-tm="scores">Stats</button><button class="btn ghost small" data-tm="leave" aria-label="Leave table">✕</button></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-tm="scores">Stats</button>', 'tm')}
       </div>
       <div class="tm-sub"><span class="tm-lives" title="Lives">${lives}</span><div class="tm-dots" aria-hidden="true">${dots}</div>${stars || '<span></span>'}</div>
       ${tableHTML(v, ctx)}

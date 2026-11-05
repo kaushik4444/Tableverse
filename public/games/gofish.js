@@ -150,7 +150,7 @@
     <div class="wz gf" style="--cw:${z.cw}px;--cw0:${z.cw}px">
       <div class="wz-top">
         <div class="wz-round"><b>Go Fish</b><span class="label"> · ${totalBooks}/13 books</span></div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-gf="rules">Rules</button><button class="btn ghost small" data-gf="leave" aria-label="Leave table">✕</button></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-gf="rules">Rules</button>', 'gf')}
       </div>
       ${tableHTML(v, ctx)}
       <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''}"><span>${guidance(v)}</span></div>

@@ -183,7 +183,7 @@
     const before = new Map();
     root.querySelectorAll('.ludo-token[data-pid]').forEach((el) => before.set(el.dataset.pid, [el.style.left, el.style.top]));
     root.innerHTML = `<section class="ludo ${v.phase === 'gameOver' ? 'over' : ''}">
-      <div class="ludo-tools">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button><button class="btn ghost small" data-lt="leave" aria-label="Leave table">✕</button></div>
+      ${CardTable.toolbarSeed('<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>', 'lt', 'ludo-tools')}
       <div class="ludo-layout">
         <div class="ludo-main">${barHTML(v)}<div class="ludo-board" style="--n:${v.n}">${boardSVG(v.n)}<div class="ludo-tokens">${tokensHTML(v)}</div></div></div>
         <aside class="ludo-side">${playersHTML(v)}${endHTML(v, ctx)}</aside>

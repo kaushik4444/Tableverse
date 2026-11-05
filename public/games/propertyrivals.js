@@ -194,7 +194,7 @@
     const focus = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.pr : null;
     root.innerHTML = `<div class="wz pr" data-game="propertyrivals">
       <div class="wz-top"><div class="wz-round"><b>Property Rivals</b><span class="label"> · round ${v.round}</span></div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-pr="rules">Rules</button><button class="btn ghost small" data-pr="leave" aria-label="Leave table">✕</button></div></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-pr="rules">Rules</button>', 'pr')}</div>
       ${board}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${actionsHTML(v)}${auctionHTML(v)}${tradeOfferHTML(v)}${tradeComposerHTML(v)}${playersHTML(v, ctx)}${overlayHTML(v)}</div>`;

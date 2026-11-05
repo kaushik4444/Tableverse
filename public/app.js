@@ -122,6 +122,8 @@
     chat: {
       button: () => `<button class="btn ghost small chat-btn" data-act="chat" aria-label="Open chat">💬<span class="cb" ${S.unread ? '' : 'hidden'}>${S.unread}</span></button>`,
     },
+    // Shared toolbar seed: sound, chat, reactions, game-specific controls, then leave.
+    toolbarSeed: (midHTML, leaveKey, cls) => `<div class="${cls || 'row'}"${cls ? '' : ' style="gap:6px"'}>${window.CardTable.sound.button()}${window.CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button>${midHTML}<button class="btn ghost small" data-${leaveKey}="leave" aria-label="Leave table">✕</button></div>`,
   });
 
   const gameMeta = (id) => S.games.find((g) => g.id === id);

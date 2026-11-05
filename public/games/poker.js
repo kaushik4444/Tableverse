@@ -225,7 +225,7 @@
       <div class="wz-top">
         <div class="wz-round"><b>Hand ${v.handNo}</b><span class="label">${limit}</span></div>
         <div class="pk-blinds"><span class="label">Blinds</span> <b>${b.sb} / ${b.bb}</b><small>${rise}</small></div>
-        <div class="row" style="gap:6px">${CardTable.sound.button()}${CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button><button class="btn ghost small" data-pk="standings">Chips</button><button class="btn ghost small" data-pk="leave" aria-label="Leave table">✕</button></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-pk="standings">Chips</button>', 'pk')}
       </div>
       ${tableHTML(v, ctx, z)}
       ${handHTML(v)}
