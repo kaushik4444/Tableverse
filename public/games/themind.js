@@ -131,6 +131,8 @@
       setTimeout(() => { ui.shake = 0; ui.flash = ''; ui.ctx && ui.ctx.rerender(); }, 900);
     } else if (e.type === 'star') snd && snd.play('collect');
     else if (e.type === 'cleared') snd && snd.play('win');
+    else if (e.type === 'won') snd && snd.play('fanfare');
+    else if (e.type === 'lost') snd && snd.play('lose');
     else if (e.type === 'starPropose') snd && snd.play('chat');
   }
 
