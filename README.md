@@ -45,7 +45,7 @@ Tableverse is currently open for friend testing.
 ## What's new in v0.14 — talk at the table
 - **Voice chat**: everyone at a table can talk to each other, in the lobby and during the game. Tap the microphone to join and talk (tap again to mute), tap the speaker to listen only or silence everyone. A little mic marks who is in voice and a green ring shows who is talking. Up to 8 people per table; spectators can watch but take a seat to talk.
 - It is peer to peer (WebRTC): the audio goes directly between players and never through the server, which only keeps the list of who is in voice and passes the connection setup messages (`lib/voiceRelay.js`). Needs https (or localhost) and microphone permission; without a microphone you can still listen.
-- Strict networks (some offices, mobile carriers) need a TURN relay: set `TURN_URL`, `TURN_USERNAME` and `TURN_CREDENTIAL` (or `ICE_SERVERS` as JSON, or `STUN_URL`). Without them only a public STUN server is used and some pairs of players will not hear each other.
+- Strict networks (some offices, mobile carriers) need a TURN relay: set `TURN_URL`, `TURN_USERNAME` and `TURN_CREDENTIAL` (or `ICE_SERVERS` as JSON, or `STUN_URL`). Without them only a public STUN server is used and some pairs of players will not hear each other. This is the most common reason the microphone ring lights up for the speaker while the others hear nothing: the two browsers cannot reach each other directly. Free TURN tiers (for example Metered or Cloudflare Calls) work; set the three variables on your host and redeploy.
 - Privacy: peers in a WebRTC call can learn each other's network address. Voice is off until you tap the microphone or speaker.
 
 ## What's new in v0.13 — shared feed and crowns

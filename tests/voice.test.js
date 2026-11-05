@@ -60,10 +60,11 @@ test('ICE candidates are cleaned down to the fields browsers use', () => {
 });
 
 test('ICE servers: STUN by default, TURN and custom lists from the environment', () => {
-  assert.deepEqual(V.iceServers({}), [{ urls: 'stun:stun.l.google.com:19302' }]);
+  assert.deepEqual(V.iceServers({}), [{ urls: V.DEFAULT_STUN }]);
+  assert.deepEqual(V.iceServers({ STUN_URL: 'stun:mine:3478' }), [{ urls: 'stun:mine:3478' }]);
   assert.deepEqual(V.iceServers({ TURN_URL: 'turn:t.example:3478', TURN_USERNAME: 'u', TURN_CREDENTIAL: 'c' }).at(-1), { urls: 'turn:t.example:3478', username: 'u', credential: 'c' });
   assert.deepEqual(V.iceServers({ ICE_SERVERS: '[{"urls":"stun:a"}]' }), [{ urls: 'stun:a' }]);
-  assert.deepEqual(V.iceServers({ ICE_SERVERS: 'not json' }), [{ urls: 'stun:stun.l.google.com:19302' }], 'a broken value falls back to the default');
+  assert.deepEqual(V.iceServers({ ICE_SERVERS: 'not json' }), [{ urls: V.DEFAULT_STUN }], 'a broken value falls back to the default');
 });
 
 console.log(`\n${passed} voice tests passed`);
