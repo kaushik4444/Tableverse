@@ -10,7 +10,7 @@
     D: { sym: '♦', name: 'Diamonds', cls: 'suit-Y' },
     C: { sym: '♣', name: 'Clubs', cls: 'suit-G' },
   };
-  const ui = { selected: null, queuedCard: null, bid: null, scores: false, shownKey: null, timer: null, prevTrick: new Set(), ctx: null, latest: null, hand: 0 };
+  const ui = { selected: null, queuedCard: null, bid: null, scores: false, shownKey: null, timer: null, prevTrick: new Set(), ctx: null, latest: null, hand: 0, prevPhase: null };
   const POINTS = { J: 3, 9: 2, A: 1, 10: 1 };
 
   function cardHTML(c, { tag = 'div', cls = '', attrs = '' } = {}) {
@@ -197,6 +197,11 @@
     const v = Object.assign({}, view, { myTurn: view.myTurn && !hold.active, _hold: hold.active ? hold.phase : null });
     ui.ctx = ctx;
     ui.latest = v;
+    // The table's own final result, in place of app.js's generic always-fanfare fallback: a losing team hears it too.
+    if (ui.prevPhase && ui.prevPhase !== 'gameOver' && v.phase === 'gameOver' && window.CardTable.sound) {
+      window.CardTable.sound.play(v.winnerTeam === myTeam(v) ? 'fanfare' : 'lose');
+    }
+    ui.prevPhase = v.phase;
     if (v.handNo !== ui.hand) {
       ui.hand = v.handNo;
       ui.bid = null;
