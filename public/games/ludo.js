@@ -41,7 +41,28 @@
   }
   const ringKey = (seat, pos) => (pos >= 0 && pos < LAP ? 'r' + ((seat * 13 + pos) % 52) : null);
 
-  const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map() };
+  const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map(), seq: null, myTurnWas: false };
+
+  /** Sounds for dice, moves, captures and the finish, from the shared soft palette other games already use. */
+  function react(v) {
+    const snd = window.CardTable.sound;
+    if (!snd) return;
+    const e = v.event;
+    if (ui.seq === null) { ui.seq = e ? e.seq : 0; ui.myTurnWas = v.myTurn; return; } // first render (page load or reconnect): no replay
+    if (e && e.seq !== ui.seq) {
+      ui.seq = e.seq;
+      if (v.phase === 'gameOver') snd.play(v.me === v.winner ? 'fanfare' : 'lose');
+      else {
+        const last = (v.log || []).slice(-1)[0];
+        if (last && last.kind === 'capture') snd.play('fold'); // a sharp swish: someone is sent home
+        else if (last && last.kind === 'home') snd.play('collect'); // a token reaches the centre
+        else if (last && last.kind === 'roll') snd.play('tick');
+        else snd.play('card');
+      }
+    }
+    if (v.myTurn && !ui.myTurnWas && v.phase !== 'gameOver') setTimeout(() => snd.play('turn'), 150);
+    ui.myTurnWas = v.myTurn;
+  }
 
   function boardSVG(n) {
     const seats = seatsFor(n);
@@ -157,6 +178,7 @@
 
   function render(root, v, ctx) {
     ui.latest = v; ui.ctx = ctx; ui.root = root;
+    react(v);
     // remember where tokens were so moves glide instead of jumping
     const before = new Map();
     root.querySelectorAll('.ludo-token[data-pid]').forEach((el) => before.set(el.dataset.pid, [el.style.left, el.style.top]));

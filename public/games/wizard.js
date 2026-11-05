@@ -5,7 +5,7 @@
   const WC = window.WizardCards;
 
   // UI-only state that survives re-renders (the server is the source of truth for the game itself).
-  const ui = { selected: null, queuedCard: null, bid: null, scores: false, shownKey: null, timer: null, prevTrick: new Set(), ctx: null, latest: null, round: 0 };
+  const ui = { selected: null, queuedCard: null, bid: null, scores: false, shownKey: null, timer: null, prevTrick: new Set(), ctx: null, latest: null, round: 0, prevPhase: null };
 
   const cardHTML = WC.cardHTML;
   const suitPill = (s) => `<span class="pill suit-${s}">${WC.suitIcon(s)} ${WC.SUITS[s].name}</span>`;
@@ -213,6 +213,12 @@
     const v = Object.assign({}, view, { myTurn: view.myTurn && !hold.active, _hold: hold.active ? hold.phase : null });
     ui.ctx = ctx;
     ui.latest = v;
+    // The table's own final result, in place of app.js's generic always-fanfare fallback: a losing player hears it too.
+    if (ui.prevPhase && ui.prevPhase !== 'gameOver' && v.phase === 'gameOver' && window.CardTable.sound) {
+      const me = v.me >= 0 ? v.players[v.me] : null;
+      window.CardTable.sound.play(!me || v.winners.includes(me.id) ? 'fanfare' : 'lose');
+    }
+    ui.prevPhase = v.phase;
     if (v.round !== ui.round) {
       ui.round = v.round;
       ui.bid = null;
