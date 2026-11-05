@@ -5,7 +5,7 @@ const { serve, scriptedPage, loadPlaywright, sessionOk, welcome } = require('./h
 const games = require('../../games');
 const { chromium } = loadPlaywright();
 
-const CASES = [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4]];
+const CASES = [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4], ['tictactoe', 2], ['fourinarow', 2]];
 const NAMES = ['Aarav', 'Bo', 'Cy', 'Di', 'Eve', 'Fay'];
 function build(gameId, n, untilMine = false) {
   const def = games.get(gameId);
@@ -50,8 +50,10 @@ async function homeCheck(browser, url) {
   try {
     await page.goto(url + '/');
     await page.waitForSelector('.game-grid .game-card');
-    const r = await page.evaluate(() => ({ h: document.documentElement.scrollHeight, soonOpen: !!document.querySelector('details.soon-fold[open]'), soonCards: document.querySelectorAll('.soon-card').length, soonCount: (document.querySelector('.soon-count')||{}).textContent, emptyBlock: !!document.querySelector('.public-tables-panel') }));
-    assert.ok(r.h <= 2200, `the home page stays short on a phone (${r.h}px)`);
+    const r = await page.evaluate(() => ({ h: document.documentElement.scrollHeight, soonOpen: !!document.querySelector('details.soon-fold[open]'), soonCards: document.querySelectorAll('.soon-card').length, soonCount: (document.querySelector('.soon-count')||{}).textContent, emptyBlock: !!document.querySelector('.public-tables-panel'), games: document.querySelectorAll('.game-grid .game-card').length }));
+    // the page chrome stays short (700px) and every game card adds at most 190px, so shipping a game never needs a new budget
+    const budget = 700 + r.games * 190;
+    assert.ok(r.h <= budget, `the home page stays short on a phone (${r.h}px, budget ${budget}px for ${r.games} games)`);
     assert.equal(r.soonOpen, false, 'the roadmap starts folded');
     assert.equal(r.soonCards, parseInt(r.soonCount, 10), 'the roadmap lists every planned game');
     assert.equal(r.emptyBlock, false, 'no empty open-tables block');

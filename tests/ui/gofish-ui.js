@@ -135,6 +135,22 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('the finished game shows the results (the closing event names no player and used to crash the table)', async () => {
+    const E = require('../../games/gofish/engine');
+    const ps = four.map((p, i) => ({ id: i === 0 ? 'me' : 'p' + i, name: p.name })); let a = 9;
+    const rng = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const g = E.createGame(ps, {}, rng);
+    while (g.phase !== 'gameOver') { const id = E.awaiting(g)[0]; const f = E.forcedPlay(g); E.applyAction(g, id, f ? f.action : E.botAction(g, id)); }
+    const msgs = tableMessages('gofish', four); msgs[1].view = E.viewFor(g, 'me');
+    assert.equal(msgs[1].view.event.type, 'over');
+    const { page, ctx } = await open(msgs);
+    const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+    await page.waitForSelector('.overlay', { timeout: 5000 });
+    assert.match(await page.textContent('.overlay'), /book/);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;

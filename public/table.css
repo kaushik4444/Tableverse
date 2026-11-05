@@ -402,3 +402,13 @@ button.card { cursor: pointer; }
 /* 7 or 8 players on a very narrow phone: narrower seat plates so neighbours do not overlap */
 @media (max-width: 360px) { .pt:is([data-n="7"], [data-n="8"]) .pt-seat { width: 62px; } .pt:is([data-n="7"], [data-n="8"]) .plate b { font-size: 11px; } }
 @media (max-width: 360px) { .pt:is([data-n="7"], [data-n="8"]) { --pt-min: 300px; } }
+
+/* Floating "what just happened" messages (public/feed.js) */
+.cf-feed { position: absolute; left: 0; right: 0; z-index: 4; display: grid; justify-items: center; gap: 4px; pointer-events: none; }
+.cf-feed[data-pos="upper"] { top: 30%; } .cf-feed[data-pos="mid"] { top: 44%; } .cf-feed[data-pos="bottom"] { bottom: 6%; }
+.cf-msg { margin: 0; max-width: 88%; padding: 5px 10px; border-radius: 999px; background: rgba(20, 24, 22, .88); color: #fff; font-size: clamp(11px, 2.9vw, 15px); font-weight: 700; line-height: 1.25; text-align: center; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); animation: cf-float 4200ms ease-out both; }
+.cf-msg i { font-style: normal; margin-right: 5px; }
+.cf-msg.k-rent, .cf-msg.k-tax, .cf-msg.k-debt, .cf-msg.k-bankrupt, .cf-msg.k-mistake, .cf-msg.k-capture, .cf-msg.k-snake, .cf-msg.k-fold { background: rgba(150, 40, 40, .92); }
+.cf-msg.k-buy, .cf-msg.k-salary, .cf-msg.k-win, .cf-msg.k-build, .cf-msg.k-ladder, .cf-msg.k-home, .cf-msg.k-star, .cf-msg.k-marriage { background: rgba(30, 110, 70, .94); }
+@keyframes cf-float { 0% { opacity: 0; transform: translateY(14px); } 8% { opacity: 1; transform: translateY(0); } 80% { opacity: 1; transform: translateY(-6px); } 100% { opacity: 0; transform: translateY(-22px); } }
+@media (prefers-reduced-motion: reduce) { .cf-msg { animation-name: cf-fade; } @keyframes cf-fade { 0%, 100% { opacity: 0; } 10%, 85% { opacity: 1; } } }

@@ -17,7 +17,7 @@ const MAX_HOUSES = 5; // 5 = a hotel
 const indexOf = (g, id) => g.players.findIndex((p) => p.id === id);
 const active = (g) => g.players.map((p, i) => (p.bankrupt ? -1 : i)).filter((i) => i >= 0);
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
-const say = (g, by, text, kind = 'info') => { g.log.push({ by: g.players[by].name, card: text, kind }); if (g.log.length > 80) g.log.shift(); };
+const say = (g, by, text, kind = 'info') => { g.log.push({ n: ++g.logN, by: g.players[by].name, card: text, kind }); if (g.log.length > 80) g.log.shift(); };
 const sq = (i) => B.SQUARES[i];
 
 function shuffled(n, rng) {
@@ -53,7 +53,8 @@ function createGame(players, options, rng = Math.random) {
     winner: -1,
     order: [], // bankruptcies in order
     event: null,
-    log: [],
+    log: [], logN: 0, // logN numbers every log entry so a client can tell which ones are new
+    afterDebtMove: null,
     seq: 0,
     version: 0,
   };
@@ -231,6 +232,7 @@ function drawCard(g, i, deck) {
 function land(g, i, { fromCard = false, doubleRent = false } = {}) {
   const p = g.players[i]; const s = sq(p.pos); const l = g.land[p.pos];
   g.phase = 'manage';
+  say(g, i, `landed on ${s.name}`, 'land');
   if (l) {
     if (l.owner < 0) { g.phase = 'buy'; emit(g, { type: 'landed', by: i, square: p.pos }); return; }
     if (l.owner !== i && !l.mortgaged) {
@@ -271,6 +273,7 @@ function doRoll(g, i) {
     return;
   }
   if (double) { g.doubles++; if (g.doubles >= 3) { say(g, i, 'rolled three doubles in a row', 'lockup'); sendToLockup(g, i); g.phase = 'manage'; return; } g.again = true; } else { g.again = false; g.doubles = 0; }
+  say(g, i, `rolled ${dice[0]} + ${dice[1]} = ${dice[0] + dice[1]}${double ? ' (doubles)' : ''}`, 'roll');
   pass(g, i, dice[0] + dice[1]);
   land(g, i);
 }

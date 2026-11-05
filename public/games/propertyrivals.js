@@ -3,7 +3,9 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, v: null, seq: null, mgr: false, trade: null, bid: 0, scores: false };
+  const ui = { ctx: null, v: null, root: null, seq: null, mgr: false, trade: null, bid: 0, scores: false,
+    disp: {}, plans: {}, stepTimer: null };
+  const STEP_MS = 170; // one square per step; long advances go faster
   const DIE = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
   const ICON = { start: '➡️', fund: '💰', surprise: '❓', tax: '💸', lockup: '🔒', rest: '☕', golockup: '👮', port: '⚓', utility: '💡' };
 
@@ -18,13 +20,46 @@
   const name = (v, i) => (i === v.me ? 'You' : esc(v.players[i].name));
   const coins = (n) => `🪙${n}`;
 
+  const shown = (p) => (ui.disp[p.id] === undefined ? p.pos : ui.disp[p.id]);
+
+  /** Decide how a token gets from where it is shown to where the server says it is: walk square by square, or jump. */
+  function planMoves(v) {
+    const fresh = v.round === 1 && v.dice && v.dice[0] === 0; // a new game: nobody has rolled yet
+    v.players.forEach((p, i) => {
+      if (ui.disp[p.id] === undefined || fresh) { ui.disp[p.id] = p.pos; delete ui.plans[p.id]; return; }
+      const from = ui.disp[p.id], to = p.pos;
+      if (from === to) { delete ui.plans[p.id]; return; }
+      const fwd = (to - from + 40) % 40, bwd = 40 - fwd;
+      const card = v.lastCard && v.lastCard.by === i ? v.lastCard.text : '';
+      if (p.inLockup && to === 10) { ui.disp[p.id] = to; delete ui.plans[p.id]; return; } // sent to the lockup: no walking there
+      const back = /back/i.test(card) && bwd <= 4;
+      ui.plans[p.id] = { to, dir: back ? -1 : 1, ms: (back ? bwd : fwd) > 14 ? 90 : STEP_MS };
+    });
+    if (Object.keys(ui.plans).length && !ui.stepTimer) ui.stepTimer = setInterval(stepTokens, 90);
+  }
+  let tickAt = 0;
+  function stepTokens() {
+    if (!ui.root || !ui.root.isConnected) { clearInterval(ui.stepTimer); ui.stepTimer = null; ui.plans = {}; return; }
+    const now = Date.now(); let changed = false;
+    for (const id of Object.keys(ui.plans)) {
+      const pl = ui.plans[id];
+      if (now - (pl.last || 0) < pl.ms - 10) continue;
+      pl.last = now; ui.disp[id] = (ui.disp[id] + pl.dir + 40) % 40; changed = true;
+      if (ui.disp[id] === pl.to) delete ui.plans[id];
+    }
+    if (!Object.keys(ui.plans).length) { clearInterval(ui.stepTimer); ui.stepTimer = null; }
+    if (changed) ui.ctx.rerender();
+  }
+  /** Milliseconds the walks still need, so the text that describes the landing appears when the token arrives. */
+  const walkLeft = () => Math.max(0, ...Object.keys(ui.plans).map((id) => { const pl = ui.plans[id]; const d = ((pl.to - ui.disp[id]) * pl.dir + 40) % 40; return d * pl.ms; }));
+
   function squareHTML(v, i) {
     const s = v.squares[i], l = v.land[i], [r, c] = cell(i);
     const band = s.group ? `<i class="pr-band" style="background:${v.groups[s.group].color}"></i>` : `<i class="pr-ico">${ICON[s.type] || ''}</i>`;
     const price = s.price ? `<small>${s.price}</small>` : s.amount ? `<small>-${s.amount}</small>` : '';
     const own = l && l.owner >= 0 ? ` owned ${colour(v, l.owner)}${l.mortgaged ? ' mort' : ''}` : '';
     const houses = l && l.houses ? `<span class="pr-houses">${l.houses === 5 ? '🏨' : '🏠'.repeat(l.houses)}</span>` : '';
-    const here = v.players.map((p, k) => (!p.bankrupt && p.pos === i ? `<span class="pr-tok ${colour(v, k)} ${k === v.turn ? 'now' : ''}" title="${esc(p.name)}">${p.token}</span>` : '')).join('');
+    const here = v.players.map((p, k) => (!p.bankrupt && shown(p) === i ? `<span class="pr-tok ${colour(v, k)} ${k === v.turn ? 'now' : ''} ${ui.plans[p.id] ? 'walk' : ''}" title="${esc(p.name)}">${p.token}</span>` : '')).join('');
     const corner = [0, 10, 20, 30].includes(i) ? ' corner' : '';
     return `<div class="pr-sq${own}${corner}" style="grid-row:${r};grid-column:${c}" data-sq="${i}" title="${esc(s.name)}">${band}<b>${esc(s.name)}</b>${price}${houses}<div class="pr-here">${here}</div></div>`;
   }
@@ -74,6 +109,7 @@
 
   function actionsHTML(v) {
     if (v.me < 0 || v.phase === 'gameOver') return '';
+    if (Object.keys(ui.plans).length) return '<div class="pr-actions"><span class="hint">Moving…</span></div>'; // wait for the token to arrive
     const c = v.can, B = [];
     if (c.roll) B.push('<button class="btn big" data-pr="roll">🎲 Roll dice</button>');
     if (c.payLockup) B.push('<button class="btn" data-pr="payLockup">Pay 50 to leave</button>');
@@ -144,7 +180,9 @@
   }
 
   function render(root, v, ctx) {
-    ui.ctx = ctx; ui.v = v; react(v);
+    const key = (ctx.room && ctx.room.code) + ':' + v.players.map((p) => p.id).join();
+    if (ui.key !== key) { ui.key = key; ui.disp = {}; ui.plans = {}; ui.seq = null; } // another table: start clean
+    ui.ctx = ctx; ui.v = v; ui.root = root; react(v); planMoves(v);
     if (!v.can.propose) ui.trade = null;
     if (v.phase !== 'auction') ui.bid = 0;
     const board = `<div class="pr-board" role="group" aria-label="Game board">${v.squares.map((_, i) => squareHTML(v, i)).join('')}<div class="pr-center">${centerHTML(v)}</div></div>`;
@@ -193,5 +231,13 @@
     }
   }
 
+  // The floating messages come from the shared feed (public/feed.js); the one describing a landing waits for the token to arrive.
+  if (window.CardTable.feed) {
+    window.CardTable.feed.register('propertyrivals', {
+      host: '.pr-center', pos: 'bottom',
+      skip: (e) => e.kind === 'info' || e.kind === 'auction' && /^(bid|passed)/.test(e.card),
+      delay: (e, i, all) => (e.kind === 'land' && !all.slice(0, i).some((x) => x.kind === 'land') ? walkLeft() : 0),
+    });
+  }
   window.CardTable.register('propertyrivals', { render });
 })();

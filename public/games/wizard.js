@@ -66,7 +66,9 @@
     else sub = turn && v.phase === 'bidding' ? 'bidding…' : 'no bid yet';
     const fs = (v.foresight || []).find((f) => f.player === i);
     const extra = `<span class="score-badge" title="Score">${p.score}</span>${fs ? `<span class="fs" title="${esc(p.name)}’s card">${cardHTML(fs.card)}</span>` : ''}`;
-    return pt.seatHTML({ pid: p.id, name: p.name, avatar: pt.avatarOf(ctx.room, p.id), sub, turn, dealer: i === v.dealer, first: i === (v.dealer + 1) % v.players.length, me: i === v.me, extra });
+    const lead = v.phase !== 'gameOver' && pt.leaderOf(v.players.length, (k) => v.players[k].score) === i; // the same crown Go Fish, Snakes and Ludo show
+    const badges = lead ? '<span class="bdg l" title="Highest score so far">👑 Lead</span>' : '';
+    return pt.seatHTML({ pid: p.id, name: p.name, avatar: pt.avatarOf(ctx.room, p.id), sub, turn, dealer: i === v.dealer, first: i === (v.dealer + 1) % v.players.length, me: i === v.me, extra, badges });
   }
 
   /** Turned-up trump card and trump suit, in the table corner so the middle stays free for played cards. */

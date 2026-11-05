@@ -1346,9 +1346,9 @@
   // ------------------------------------------------------------ top bar, account menu and its dialogs
   const WHATS_NEW_VERSION = '2026-11-table-voice';
   const WHATS_NEW = [
-    ['✨', 'Smoother, tidier games', 'One toolbar in every game, tokens that walk square by square in Snakes and Ladders, Ludo plays your only possible move, and a crown shows who is ahead.'],
+    ['✨', 'Smoother, tidier games', 'One toolbar in every game, tokens that walk square by square, Ludo plays your only possible move, a crown shows who is ahead in every game, and what just happened floats over the table.'],
     ['🎙️', 'Talk at the table', 'Tap the microphone to talk with everyone at your table, in the lobby and during the game. Tap the speaker to listen, or silence everyone. A green ring shows who is talking.'],
-    ['🏠', 'Property Rivals is now playable', 'Buy cities, ports and utilities, build, trade and bankrupt your rivals on an original world-tour board. 2–6 players, with bots for empty seats.'],
+    ['🟡', 'Tic-Tac-Toe and Four in a Row', 'Two quick two-player games: line up three marks, or drop discs and connect four, or five on a bigger grid. Play a friend or a bot.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
@@ -1781,6 +1781,7 @@
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();
     refreshVoiceUI();
+    if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
     const gameInfo = gameMeta(S.room.gameId);
     if (surface && gameInfo) {

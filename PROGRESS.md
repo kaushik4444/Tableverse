@@ -183,6 +183,22 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - `npm run build` now runs `scripts/check-syntax.js`, which syntax-checks every .js file (110) instead of a hand-kept list (several engines were missing). New `npm run test:audit` runs `tests/ui/game-audit.js` (not in CI: slow).
 - Poker 8p on a 320px phone: fixed (narrower plates and action chip, taller table at 7-8 players); audit now 0 errors and 0 warnings. Known: below-the-fold warnings on the smallest phones.
 
+## Stage 17 — status labels and the line games (branch `feature/stage-16-simple-games` (PR #31), from main f9b5cb5)
+Resume from the first stage not marked done. Each stage is one commit, pushed at once.
+- 17.1 (done) Coming soon shows a status per card: Hidden Miners "In development", the rest "Planned" (`home-ui.js`, `style.css`, `coming-soon.test.js`).
+- 17.2 (done) `games/linegames/{engine,index}.js`: Tic-Tac-Toe and Four in a Row (option Line length 4 or 5; 5 plays on a 9x8 grid) on one engine, registered in `games/index.js` (no migration). `tests/linegames.test.js` (12 tests).
+- 17.3 (done) `public/games/linegames.js` + `.css` (one renderer, three ids), `tests/ui/linegames-ui.js` (6 browser tests), wizard-layout matrix, `build`/`test`/`test:ui`.
+- 17.4 (done) Launch: Four in a Row and Tic-Tac-Toe leave Coming soon (7 planned), What's new, README v0.12, smoke test for all three.
+- 17.5 (todo) PR + CI. Verified locally: engine tests, coming-soon, browser tests, layout matrix. NOT run locally: smoke test, PostgreSQL suites (CI only).
+- 17.6 (done) Four and Five in a Row merged into one game with a Line length option (was a separate 15x15 game); Go Fish end-of-game crash fixed (the closing `over` event names no player and the renderer threw), empty-hand rules clarified, endgame tests.
+- Known: no undo or draw offer; stats are not tracked for these games (kind none).
+- 17.7 (done) Property Rivals: tokens walk square by square (back 3 walks back, lockup jumps), action buttons wait for arrival, and new log lines float over the board as messages (log entries are numbered; rolls and landings are now logged).
+
+## Stage 18 — shared feed and consistency for the new games (branch `feature/stage-18-shared-feed`, on top of PR #31)
+- 18.1 (done) `public/feed.js`: shared floating log feed, hooked in `renderGame()` (`CardTable.feed.sync`), configs for Wizard, 29, Poker, Ludo, The Mind; Property Rivals registers its own (landing line waits for the walking token). New lines are found by entry number when a game numbers its log, else by the overlap of the log tails (no engine changes). `tests/ui/feed-ui.js`.
+- 18.2 (done) Crown for the leader in Wizard, Poker (3+ players) and 29 (team), `tests/ui/lead-ui.js`. 29 already had Wizard's trick "Leading" and "Winner" tags (checked with a real engine mid-trick).
+- 18.3 (done) `mobile-fit.js` and `game-audit.js` cover Property Rivals, Tic-Tac-Toe and Four in a Row (the check found a broken CSS block in my own feed refactor; fixed).
+- Considered and left out: floating feed for Snakes and Ladders (it already prints every move in a banner) and Go Fish (no public log by design).
 ## Stage 17 — table voice chat (branch `feature/stage-17-voice`, from main 4ae6777)
 - 17.1 Server: `lib/voiceRelay.js` (pure: who is in voice per table, cap 8, only seated humans, clean/limit setup messages, ICE server config from env) wired into `server.js`: `voice` {on, muted} and `rtc` {to, data} messages, a `voice` list sent to the table on every change and on join, voice ends on leave or disconnect, `ice` in `welcome`, `rtc` has its own flood allowance (200/s) so ICE bursts do not trip the 30/s limit, Permissions-Policy allows the microphone for the site.
 - 17.2 Client: `public/voice.js` (`TVVoice`): one RTCPeerConnection per pair (smaller id calls), mic can be added later without renegotiation (`replaceTrack`), listen-only join needs no permission, level meter for speaking rings, blocked-autoplay recovery on the next tap. `app.js`: mic and speaker buttons in the lobby header and in every game's toolbar (after reactions, before ⋯), `data-vid` marks on lobby seats and Ludo/Snakes/Property chips, `data-voice`/`.speaking` marks on seats; spectators get no buttons; reset on leave and on disconnect.

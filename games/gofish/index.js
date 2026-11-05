@@ -21,7 +21,8 @@ module.exports = {
     'On your turn ask one other player for a rank you already hold (“Do you have any 7s?”). If they have any, they must give you all of them and you ask again.',
     'If they have none, they say “Go Fish”: you draw the top card of the stock. With “Fish your wish” on, drawing the rank you asked for lets you go again. Otherwise your turn ends.',
     'Four cards of one rank make a book, which you lay down at once. If you have no cards on your turn, you draw one from the stock.',
-    'The game ends when all 13 books are down. The player with the most books wins; equal books share the win.',
+    'If the stock is empty and you have no cards you sit out, and you cannot be asked. If you have cards but nobody else does, or nothing can be asked, your turn is skipped.',
+    'The game ends when all 13 books are down, or as soon as nobody can ask anyone any more. The player with the most books wins; equal books share the win.',
   ],
 
   create(players, options, rng) {
