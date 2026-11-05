@@ -152,7 +152,33 @@
   window.CardTable.showRules = showRules;
 
   // ------------------------------------------------------------ auth + connection
-  const send = (msg) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); };
+  // Slow steps (joining, creating, starting a table) put up a spinner that blocks every other tap until the server answers.
+  const BUSY_LABELS = { join: 'Joining table…', create: 'Creating your table…', start: 'Starting the game…', rematch: 'Setting up another game…', sit: 'Taking your seat…', leave: 'Leaving…' };
+  let busyTimer = null;
+  function showBusy(label) {
+    let el = document.getElementById('busyBlock');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'busyBlock'; el.className = 'busy-block'; el.setAttribute('role', 'alert'); el.setAttribute('aria-live', 'assertive');
+      el.innerHTML = '<div class="busy-card"><span class="busy-spin" aria-hidden="true"></span><b></b></div>';
+      document.body.appendChild(el);
+    }
+    el.querySelector('b').textContent = label;
+    if ($app) $app.setAttribute('inert', '');
+    clearTimeout(busyTimer);
+    busyTimer = setTimeout(() => { hideBusy(); toast('That is taking longer than usual. Check your connection and try again.'); }, 20000);
+  }
+  function hideBusy() {
+    clearTimeout(busyTimer);
+    const el = document.getElementById('busyBlock');
+    if (el) el.remove();
+    if ($app) $app.removeAttribute('inert');
+  }
+  const send = (msg) => {
+    if (!(ws && ws.readyState === 1)) return;
+    ws.send(JSON.stringify(msg));
+    if (BUSY_LABELS[msg.t]) showBusy(BUSY_LABELS[msg.t]);
+  };
 
   // ------------------------------------------------------------ table voice chat (public/voice.js)
   const voiceAudio = document.createElement('div');
@@ -550,11 +576,11 @@
   }
 
   function joinAcceptedInvitation(invitation) {
-    if (!invitation || invitation.status !== 'accepted') return toast('Accept the invitation before joining.');
+    if (!invitation || invitation.status !== 'accepted') { hideBusy(); return toast('Accept the invitation before joining.'); }
     const game = gameMeta(invitation.game_id || invitation.gameId);
     toast(`Joining ${(game && game.name) || 'private'} table…`);
     const code = invitation.room_code || invitation.roomCode;
-    if (!code) return toast('This invitation has no table code. Ask the host to invite you again.');
+    if (!code) { hideBusy(); return toast('This invitation has no table code. Ask the host to invite you again.'); }
     joinTable(code, 'join');
   }
 
@@ -674,6 +700,7 @@
 
 
   function onMessage(m) {
+    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') hideBusy();
     switch (m.t) {
       case 'welcome': {
         S.id = m.id;
@@ -1918,10 +1945,11 @@
     acceptInvitation: async (el) => {
       try {
         const known = S.invitations.incoming.find((i) => String(i.id) === String(el.dataset.id)); // the list is reloaded below, so keep what we know about it
+        showBusy('Joining table…');
         const out = await postJson('/api/me/table-invitations/accept', { invitationId: el.dataset.id });
         await loadSocial({ quiet: true });
         joinAcceptedInvitation({ ...(known || {}), ...(out.invitation || {}), status: (out.invitation && out.invitation.status) || 'accepted' });
-      } catch (error) { S.socialError = error.message || 'Could not accept invitation.'; render(); }
+      } catch (error) { hideBusy(); S.socialError = error.message || 'Could not accept invitation.'; render(); }
     },
     declineInvitation: (el) => socialPost('/api/me/table-invitations/decline', { invitationId: el.dataset.id }),
     revokeInvitation: (el) => socialPost('/api/me/table-invitations/revoke', { invitationId: el.dataset.id }),

@@ -51,6 +51,22 @@ function finished(hostId, sinceMs, votes = []) {
     await ctx.close();
   });
 
+  await test('joining or creating blocks every other tap behind a spinner until the table arrives', async () => {
+    const msgs = tableMessages('gofish', four);
+    const welcomeOnly = [msgs[0]];
+    const { page, ctx } = await scriptedPage(browser, { messages: welcomeOnly });
+    await page.goto(url + '/');
+    await page.waitForSelector('[data-act="create"]', { timeout: 8000 });
+    await page.click('[data-act="create"]');
+    await page.waitForSelector('.busy-block');
+    assert.match(await page.textContent('.busy-block'), /Creating/);
+    assert.equal(await page.evaluate(() => document.getElementById('app').hasAttribute('inert')), true);
+    assert.ok((await page.evaluate(() => window.__sent.filter((m) => m.t === 'create'))).length === 1);
+    await page.evaluate(() => window.__push && window.__push({ t: 'error', message: 'nope' }));
+    await page.waitForSelector('.busy-block', { state: 'detached' });
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
