@@ -122,6 +122,8 @@ window.TVVoice = function TVVoice(o) {
       }
       p.audio.srcObject = stream;
       p.audio.muted = state.deafened;
+      p.audio.volume = 1;
+      stream.onaddtrack = () => { if (p.audio && p.audio.paused) p.audio.play().catch(() => {}); };
       p.analyser = analyserFor(stream);
       const play = p.audio.play && p.audio.play();
       if (play && play.catch) play.catch(() => { state.blocked = true; state.error = 'Tap anywhere on the screen to hear the other players.'; changed(); }); // the browser wants a tap first
@@ -250,7 +252,9 @@ window.TVVoice = function TVVoice(o) {
   /** Browsers only start audio after a tap: call this from any click. */
   function resumeAudio() {
     if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
-    if (state.blocked) { state.blocked = false; state.error = ''; for (const p of peers.values()) if (p.audio && p.audio.paused) p.audio.play().catch(() => {}); changed(); }
+    // Retry every paused element on each tap, not only after a rejected play(): some browsers (iOS) resolve play() and stay paused.
+    for (const p of peers.values()) if (p.audio && p.audio.paused && p.audio.srcObject) p.audio.play().catch(() => {});
+    if (state.blocked) { state.blocked = false; if (state.error.startsWith('Tap anywhere')) state.error = ''; changed(); }
   }
 
   return { state, join, toggleMic, toggleSpeaker, leave, reset, updateList, handleRtc, resumeAudio, _peers: peers };
