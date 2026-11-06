@@ -23,6 +23,11 @@ const { createStaticFiles } = require('./lib/staticFiles');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
+const { createReadinessCheck } = require('./lib/health');
+const { createLogger, requestIdFrom } = require('./lib/log');
+const serverLog = createLogger({ component: 'server' });
+const httpLog = createLogger({ component: 'http' });
+const wsLog = createLogger({ component: 'ws' });
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -128,6 +133,14 @@ function start(opts = {}) {
   let purgeTimer = null;
   let spoolTimer = null;
   let shuttingDown = false; // set when the process is asked to stop: readiness fails, no new tables, players are told
+  // Readiness: the database must answer within 3 s; an outage is logged once when it starts and once when it ends (lib/health.js).
+  const readiness = createReadinessCheck({
+    hasDatabase: () => dbPool.hasDatabase(),
+    ping: () => dbPool.ping(),
+    shuttingDown: () => shuttingDown,
+    queueStats: () => matchQueue.stats(),
+    log: createLogger({ component: 'health' }),
+  });
 
   // ------------------------------------------------------------ http
   const readJsonBody = (req) =>
@@ -294,10 +307,7 @@ function start(opts = {}) {
         res.writeHead(status, { 'Content-Type': 'text/plain' });
         res.end(text);
       };
-      const q = matchQueue.stats();
-      const tail = q.pending || q.failed ? ` (matches: ${q.pending} pending, ${q.failed} failed)` : '';
-      if (!dbPool.hasDatabase()) respond(200, 'ready (in-memory store)' + tail);
-      else dbPool.ping().then(() => respond(200, 'ready' + tail), () => respond(503, 'database unavailable'));
+      readiness().then(({ status, body }) => respond(status, body));
       return;
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
@@ -330,8 +340,11 @@ function start(opts = {}) {
   };
   // An unexpected error in any route answers 500 (and is logged) instead of leaving the request hanging until the timeout.
   const server = http.createServer((req, res) => {
+    // Every response carries an ID so a user report ("it failed at 21:40") can be matched to one log line.
+    const requestId = requestIdFrom(req.headers['x-request-id']);
+    res.setHeader('X-Request-Id', requestId);
     handleHttp(req, res).catch((err) => {
-      (opts.log || console).error(`[http] ${req.method} ${String(req.url).split('?')[0]} failed: ${err && err.stack || err}`);
+      httpLog.error('http.unhandled', { requestId, method: req.method, path: String(req.url).split('?')[0], err });
       try {
         if (!res.headersSent) { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end('Server error'); }
         else res.destroy();
@@ -1420,6 +1433,7 @@ function start(opts = {}) {
     });
     if (open > maxSocketsPerIp) return ws.close(1013, 'too many connections');
     ws.isAlive = true;
+    ws.connId = crypto.randomUUID().slice(0, 8); // correlates this socket's log lines; not a secret
     ws.player = null;
     ws.msgs = 0;
     ws.rtcMsgs = 0;
@@ -1467,7 +1481,7 @@ function start(opts = {}) {
           }
           if (RECENT_ON.has(msg.t) && p.room && (p.room !== before || (msg.t === 'join' && String(msg.code || '').trim().toUpperCase() === p.room))) trackRecent(p);
         } catch (e) {
-          console.error('handler error', msg.t, e);
+          wsLog.error('game.handler_failed', { connId: ws.connId, type: msg.t, room: p.room || null, err: e });
           sendError(p, 'Something went wrong');
         }
       };
@@ -1492,7 +1506,7 @@ function start(opts = {}) {
         onDrop(p);
       }
     });
-    ws.on('error', () => {});
+    ws.on('error', (err) => wsLog.warn('ws.socket_error', { connId: ws.connId, code: err && err.code, err }));
   });
 
   // keep-alive, rate-limit window reset, garbage collection
@@ -1625,7 +1639,7 @@ if (require.main === module) {
       // surface than a thrown exception).
       let crashing = false;
       const crashShutdown = (label, reason) => {
-        console.error(`[server] ${label}:`, reason && reason.stack || reason);
+        serverLog.error('process.crash', { reason: label, err: reason });
         if (crashing) return;
         crashing = true;
         close({ drainMs: 5000 }).then(() => process.exit(1), () => process.exit(1));
@@ -1633,19 +1647,22 @@ if (require.main === module) {
       process.on('unhandledRejection', (reason) => crashShutdown('unhandled rejection', reason));
       process.on('uncaughtException',  (err)    => crashShutdown('uncaught exception',  err));
       console.log(`Tableverse running on http://localhost:${port} (${database.mode} store)`);
+      serverLog.info('server.started', { port, store: database.mode });
       // Render sends SIGTERM on deploy/restart: finish pending match writes first (it waits 30 s before killing us)
       let stopping = false;
       const stop = (sig) => {
         if (stopping) return;
         stopping = true;
         console.log(`[server] ${sig}: finishing pending match writes, then exiting`);
+        serverLog.info('server.stopping', { signal: sig });
         close({ drainMs: 15000 }).then(() => process.exit(0), () => process.exit(1));
       };
       process.on('SIGTERM', () => stop('SIGTERM'));
       process.on('SIGINT', () => stop('SIGINT'));
     },
     (err) => {
-      console.error('[server] FATAL: refusing to start:', err.message);
+      serverLog.error('server.start_failed', { err });
+      console.error('[server] FATAL: refusing to start:', err.message); // operators and tests read this line
       process.exit(1);
     }
   );

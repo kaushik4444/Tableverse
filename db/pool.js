@@ -1,6 +1,9 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { createLogger } = require('../lib/log');
+
+const dbLog = createLogger({ component: 'db' });
 
 // Automatically read .env.local or .env into process.env if present
 function loadEnv() {
@@ -64,7 +67,7 @@ if (connectionString && pg) {
   });
 
   pool.on('error', (err) => {
-    console.error('[db] Unexpected pool error on idle client:', err.message);
+    dbLog.error('db.pool_error', { code: err.code, err });
   });
 }
 
@@ -92,7 +95,14 @@ async function ping() {
 async function query(text, params) {
   if (!pool) throw new Error('Database is not configured. Set DATABASE_URL.');
   const start = Date.now();
-  const res = await pool.query(text, params);
+  let res;
+  try {
+    res = await pool.query(text, params);
+  } catch (err) {
+    // Only the statement's first keyword and the error code are logged, never the parameters (they can hold tokens or e-mails).
+    dbLog.warn('db.query_failed', { op: String(text).trim().split(/\s+/)[0].toUpperCase().slice(0, 20), code: err && err.code, err });
+    throw err;
+  }
   const duration = Date.now() - start;
   if (process.env.DEBUG_SQL) {
     console.log('[db]', { text, duration, rows: res.rowCount });
@@ -125,7 +135,7 @@ async function withTransaction(fn) {
       if (!connectionError) await client.query('ROLLBACK');
     } catch (rollbackErr) {
       // A broken connection cannot roll back; keep the original operation error.
-      if (!connectionError) console.error('[db] ROLLBACK failed:', rollbackErr.message);
+      if (!connectionError) dbLog.warn('db.rollback_failed', { code: rollbackErr && rollbackErr.code, err: rollbackErr });
     }
     throw connectionError || err;
   } finally {

@@ -1,16 +1,50 @@
 # Operations runbook
 
 One Render web service (Node 22, single instance) and one Neon PostgreSQL database. No paid add-ons.
+Status labels used below: **verified in code/tests** (what this repository proves), **owner-recorded** (someone checked it in the provider dashboard and wrote it down), **manual** (still to be checked by a person).
 
 ## Health
-- `GET /healthz` — process is up (always 200 while running).
-- `GET /readyz` — database reachable. 503 `database unavailable` when Neon cannot be reached, 503 `shutting down` during a restart. When match writes are pending or failed the body says so: `ready (matches: 2 pending, 0 failed)`.
-- Free uptime monitoring: any free pinger against `/readyz`; Render's own health check uses `/healthz`.
+| Endpoint | Meaning | Status codes |
+|---|---|---|
+| `GET /healthz` | Liveness: the process is running. Never touches the database. | 200 `ok` |
+| `GET /readyz` | Readiness: the database answered `SELECT 1` within 3 s. | 200 `ready` (with `(matches: n pending, n failed)` when relevant); 200 `ready (in-memory store)` for local play; 503 `database unavailable`; 503 `shutting down` during a restart |
+
+- **Render** must use `/healthz` as its health check (`render.yaml`: `healthCheckPath: /healthz`). A Neon outage must not restart the web service.
+- **External uptime monitor** (optional, manual): point it at `/readyz`. A 503 means the database is unreachable or the service is stopping.
+- Neither endpoint returns hostnames, usernames, driver errors or stack traces.
+
+## Logs
+Most events are one JSON object per line (search by `"event"` in Render's log view). Older human-readable lines still exist and are listed after the table.
+
+| Event | Level | Written when | Useful fields |
+|---|---|---|---|
+| `server.started` / `server.stopping` / `server.start_failed` | info / error | process start, SIGTERM/SIGINT, refused start | `port`, `store`, `signal` |
+| `process.crash` | error | unhandled rejection or uncaught exception | `reason`, `err` |
+| `http.unhandled` | error | a route threw; the response was 500 | `requestId`, `method`, `path`, `err` |
+| `ws.socket_error` | warn | a WebSocket failed (bad frame, reset) | `connId`, `code` |
+| `game.handler_failed` | error | a game action threw; the player got "Something went wrong" | `connId`, `type`, `room` |
+| `db.pool_error` | error | an idle database connection failed | `code`, `err` |
+| `db.query_failed` | warn | a query failed | `op` (first SQL keyword only), `code`, `err` |
+| `db.rollback_failed` | warn | a transaction could not roll back | `code`, `err` |
+| `db.migration_failed` | error | a migration failed at start | `err` |
+| `health.db_unreachable` / `health.db_recovered` | warn / info | the first failed readiness probe, and recovery (not every probe) | `code`, `timeoutMs` |
+| `[email] delivery failed` / `sent` | error / info | a verification or reset e-mail | masked address (`a***@example.com`), provider status |
+
+- **Request IDs.** Every HTTP response carries `X-Request-Id`. A plain ID sent by a proxy or client is kept; anything else is replaced. A 500 log line carries the same ID.
+- **Connection IDs.** `connId` ties together the WebSocket lines for one socket.
+- **Never logged:** passwords, session or verification or reset tokens, API keys, `DATABASE_URL`, chat content, full e-mail addresses. The logger also masks these if they reach it by accident (`lib/log.js`, tested in `tests/log.test.js`).
+- Still human-readable: the `[stats]` line (below), `[matches] ...` spool messages, `[server] automatic play failed` and `Tableverse running ...`.
 
 ## Free log dashboard
 Every 5 minutes (every minute while a match result is pending or failed) the server logs one line, searchable in Render's log view:
 `[stats] rooms=12 playing=5 sockets=31 players=40 rssMB=96 matches(saved=118 pending=0 failed=0 retried=2)`.
 Watch `rssMB` (Render free has 512 MB), `pending`/`failed` (a database problem) and `sockets` (load).
+
+## Diagnose: application or database?
+1. `GET /healthz` fails or times out → the **application** is down or restarting: check Render's Events and the last `process.crash` / `server.start_failed` line.
+2. `/healthz` is 200 but `/readyz` is 503 → the **database** (or a shutdown in progress). Check `health.db_unreachable` in the logs and the status of Neon.
+3. Both 200 but players report errors → look for `http.unhandled`, `game.handler_failed` or `db.query_failed` with the request ID or `connId` the player gives you.
+4. `/readyz` shows `pending` or `failed` matches → a database problem that has not cleared; see "Database failure".
 
 ## What happens to players on a restart
 Tables, games in progress, chat and presence live in memory and are **lost** on every restart or deploy. Players get a notice and a normal reconnect; they must create a new table. Unfinished games are not recorded. Finished matches are written to PostgreSQL (retried, idempotent) and the server waits up to 15 s for pending writes on SIGTERM. Deploy when few tables are active.
@@ -19,20 +53,21 @@ Tables, games in progress, chat and presence live in memory and are **lost** on 
 1. CI must be green on the PR (build, unit, PostgreSQL, browser, Docker, audit).
 2. Merge to `main`; Render redeploys from the blueprint (`npm ci`, `npm start`).
 3. Migrations run at start, transactionally, under an advisory lock. A failing migration makes the new instance refuse to start; Render keeps the previous instance serving.
-4. After deploy: `GET /readyz` is 200; log shows `Tableverse running ... (postgres store)`.
+4. After deploy: `GET /readyz` is 200; log shows `Tableverse running ... (postgres store)` and a `server.started` event.
 
 ## Roll back a broken release
 - Render dashboard > service > Events/Deploys > pick the last good deploy > Rollback. (Or revert the merge commit on `main` and push through a PR.)
 - Migrations are forward-only. Write migrations so the previous code still works with the new schema (add columns/tables, do not drop or rename in the same release).
+- Rolling back does not restore lost in-memory games; it only returns the code.
 
 ## Database failure (Neon down or unreachable)
-- Symptoms: `/readyz` 503, logs `[matches] retry n/5 ...`, logins fail.
+- Symptoms: `/readyz` 503, `health.db_unreachable` in the logs, `db.query_failed` lines, logins fail.
 - Running games continue (they are in memory). Finished matches are retried for ~36 s, then every 10 min while the process runs.
 - Do **not** restart the service while the database is down if matches are pending: the local spool survives a process restart but not a replaced instance. Wait for Neon, then check `/readyz` shows no pending matches.
-- Neon free scales to zero: the first request after idle can be slow; this is not an outage.
+- Neon free scales to zero: the first request after idle can be slow; this is not an outage. A probe that takes longer than 3 s returns 503 `database unavailable`; repeat it before escalating.
 
 ## Migration failure
-Startup log `Database migration failed: ...` and the deploy does not become live. Fix forward with a new migration or roll the deploy back; never edit an applied migration.
+Startup log `db.migration_failed` (or `Database migration failed: ...`) and the deploy does not become live. Fix forward with a new migration or roll the deploy back; never edit an applied migration.
 
 ## Investigate lost or inconsistent match records
 1. Search the logs for `[matches] NOT SAVED` — each line names the match key, game, table code and players.
@@ -40,12 +75,83 @@ Startup log `Database migration failed: ...` and the deploy does not become live
 3. In SQL: `SELECT id, game_id, finished_at FROM matches WHERE finished_at > now() - interval '1 day' ORDER BY finished_at DESC;` and compare with the logged keys (`match_key`).
 4. Re-enter a lost result by hand only with the player ids from the log; the match key makes a repeated insert a no-op.
 
-## Backups and restore (Neon) — verify before relying on it
-Accounts and finished matches are the only persistent data, so the database backup is the only recovery path. **Status: restore verified** — a branch created from point-in-time history on 2026-11-06 matched production's row counts; the test branch was deleted afterwards.
-- Plan and history retention window (Neon > project > Settings > Storage, or the earliest time offered when creating a branch "from a point in time"): `____` (record the exact window next time it's checked — free-tier Neon history is typically short, so don't assume an old incident is still recoverable without re-checking).
-- Restore test last performed: 2026-11-06. Procedure: Neon > Branches > Create branch > "Past data" (pick a time a few minutes ago) > open that branch > Connection Details > copy its connection string > in the Neon SQL editor (switch the branch selector to the test branch) run `SELECT count(*) FROM matches;` and compare against the same query on `production`. Delete the test branch afterwards. Re-run this check periodically — a passing test today doesn't guarantee the retention window still covers an incident months from now.
-- To recover for real: restore into a new branch, point `DATABASE_URL` on Render at it (or restore the branch over the main one in Neon), redeploy, check `/readyz`.
-- Optional extra copy independent of Neon: a scheduled `pg_dump "$DATABASE_URL" -Fc -f tableverse-$(date +%F).dump`, stored somewhere outside Neon and Render.
+## Backups (independent of Neon)
+Persistent data: accounts, sessions, friendships, private-table invitations, recent tables and finished matches. Neon's own history is one recovery path; the dump below is a second one that you control.
+
+**Create a backup** (read-only against the database; nothing is scheduled):
+```sh
+# Keep DATABASE_URL in your shell or secret manager, never in a file in this repository.
+npm run db:backup -- --out "$HOME/tableverse-backups/tableverse-$(date +%F-%H%M).dump"
+npm run db:backup -- --verify "$HOME/tableverse-backups/tableverse-2026-11-06-2100.dump"
+```
+- The script passes the password to `pg_dump` through environment variables, so it does not appear in the process list or in shell history. Do not replace it with `pg_dump "$DATABASE_URL" ...`, which puts the whole URL, password included, on the command line.
+- Output is `<name>.dump` plus `<name>.dump.sha256`, both `0600`. The `.partial` file is created exclusively at `0600` before `pg_dump` starts, so a second run aimed at the same name is refused and never touches the first run's files. The checksum is staged first, and both files are published only after `pg_restore --list` reads the dump and the `schema_migrations` table is present. A failed run removes only the files it created.
+- Refuses: output inside this repository (checked on the resolved path, so a symlinked folder that leads into the checkout is refused too; `backups/` and `*.dump` are git-ignored as well), a name without `.dump`, any existing file or symlink at the destination.
+- `db:restore-check` refuses a dump with no `.sha256` file, a malformed one, or one that does not match its bytes. Read-only `--verify` may report a dump without a checksum, and says so.
+- Needs `pg_dump` and `pg_restore` at least as new as the database server. Check the server's major version in Neon before relying on the tools in a new environment (manual).
+
+**Storage recommendations (manual):** keep dumps off Render and off the repository. Use an encrypted location you control (for example an encrypted disk or a password manager's file attachment for small dumps). Keep at least one copy older than a week. Treat a dump as personal data: it contains e-mail addresses and password hashes.
+
+## Restore test (rehearsal, never production)
+Run this at least once a quarter and after any change to migrations. It never touches production data.
+1. In Neon, create a new **empty** database or branch for the test, or use a local PostgreSQL. Do not reuse the production branch.
+2. Set `RESTORE_TEST_DATABASE_URL` to that database's URL, and keep `DATABASE_URL` pointed at production (the script uses it only to refuse a target that is production).
+3. `npm run db:restore-check -- --dump "$HOME/tableverse-backups/<file>.dump"`
+4. Expect `"ok": true`, all migrations applied, no orphaned rows, no unvalidated foreign keys, and counts in the report.
+5. Compare the counts with production by running `SELECT count(*) FROM players;` (and `matches`, `auth_identities`) read-only on production. Small differences are expected if the dump is older than the query; a large difference means investigate before trusting the backup.
+6. Delete the test database or branch afterwards.
+
+The script refuses a target that already holds tables, and a dump whose checksum has changed. Both refusals are tested (`tests/db-restore.pg.test.js`, run by `npm run test:pg`).
+
+## Validate a populated point-in-time branch (read-only)
+Use this for a Neon branch created from history, which already holds data. It never writes to the branch or to production. Run the queries in the Neon SQL editor with the branch selected, or in `psql` against the branch's connection string.
+1. Confirm you are on the branch, not production (the branch selector shows its name). In `psql`, start with `SET default_transaction_read_only = on;` so any write is rejected. In the Neon editor the setting may not persist between statements, so run only the SELECT queries below and never type INSERT, UPDATE, DELETE or DDL there.
+2. Schema: `SELECT version FROM schema_migrations ORDER BY version;` must list every file in `db/migrations/` (the set this code release expects). A branch missing a later migration predates it, so expect the code to need the migration run before the lobby opens.
+3. Counts, to record: `SELECT count(*) FROM players;`, and the same for `auth_identities`, `matches`, `match_participants` and `friendships`.
+4. Last recorded match: `SELECT max(finished_at) FROM matches;`. It must be at or before the point you chose; anything after is a sign the branch is not the point you think it is.
+5. Orphans, both must be 0: `SELECT count(*) FROM match_participants mp WHERE NOT EXISTS (SELECT 1 FROM matches m WHERE m.id = mp.match_id);` and `SELECT count(*) FROM auth_identities a WHERE NOT EXISTS (SELECT 1 FROM players p WHERE p.id = a.player_id);`.
+6. Foreign keys, must be 0: `SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated;`.
+7. Write the results and the chosen timestamp in the incident record. Counts will be below production's today by everything written after that timestamp; that gap is the expected data loss the owner must approve, not a fault. Delete the branch only after the owner decides.
+
+## Recovery procedure (for real)
+Only with owner approval. Recovery replaces what players see; decide first, then act.
+1. **Stop the bleeding:** if the damage is a bad deploy, roll back first (above). If it is data loss, take a fresh backup of whatever is left (`db:backup`) before changing anything.
+2. **Choose the source:** Neon point-in-time branch (fastest, limited by the retention window), or the most recent verified dump (independent, limited by how old the dump is).
+3. **Restore into a new target, not over production.** Two different paths:
+   - **A dump:** an empty database, then `db:restore-check` against it. The script refuses any target that already has tables.
+   - **A Neon point-in-time branch:** the branch is already populated, so `db:restore-check` does not apply and would refuse it. Validate it with the read-only procedure below instead.
+4. **Point the application at it:** change `DATABASE_URL` on Render to the restored database (or restore the branch over the main one in Neon, which the owner must approve), redeploy, confirm `/readyz` is 200 and `server.started` shows `store: postgres`.
+5. **Verify:** counts as in the restore test; sign in as a known test account; check a recent match appears in the match history.
+6. **Record:** what was restored, from when, what data after that point is lost, and who approved it.
+
+**Limits to tell the owner:** everything written after the chosen point is lost (accounts created, matches finished, friendships made). Tables and games in progress are in memory and are never recovered. Neon point-in-time history is limited by the plan's retention window, which must be checked in the Neon dashboard (manual; see below). Restoring a dump older than the last deploy may bring back schema that the current code does not expect; run migrations and `/readyz` checks before opening the lobby.
+
+## Neon backups — what is verified and what is not
+- **Verified in code and tests:** the dump, verification and restore-rehearsal scripts above, including refusals.
+- **Owner-recorded (2026-11-06):** a branch created "from point-in-time history" matched production's `matches` row count, and the test branch was deleted. This was checked in the Neon dashboard by the owner; it was not re-run as part of this change.
+- **Manual, not yet recorded:** the plan name, whether automatic backups and point-in-time restore are included on the current plan, and the exact retention window. Record them here after checking: Neon > project > Settings. Plan: `____`. Retention window: `____`. Checked on: `____`.
+- Do not assume a window: free-tier history is typically short. Re-check periodically.
+
+## Monitoring and alerts
+| What | How | Status |
+|---|---|---|
+| Failed deploys and health checks | Render service Events/Deploys; Render's health check on `/healthz` | Built in; **manual**: confirm Render's notification e-mail settings in the account |
+| Restarts and crashes | `process.crash` and `server.started` events in Render logs; repeated `server.started` close together = restart loop | Logged; **manual**: search the log view or set a log alert if the plan offers one |
+| Database unreachable | `health.db_unreachable` warn event; `/readyz` 503 | Logged; alert requires an external monitor (below) |
+| Critical application exceptions | `http.unhandled`, `process.crash`, `game.handler_failed` | Logged; no automatic notification today |
+| Resource use | `[stats] rssMB=…` line every 5 minutes | Logged; watch against Render free's 512 MB |
+| Downtime | External uptime monitor against `/readyz` | **Not configured.** Optional and free-tier-capable, but it needs a third-party account: awaiting your approval |
+| Neon compute and connection problems | Neon dashboard monitoring | **Manual**: not verified for this plan |
+
+**Known limitations:** which Render events send notifications on the current plan is not verified in this repository (manual). An external monitor is the only check here that tells you about downtime while nobody is watching. Log lines are only as long-lived as Render's retention for the plan.
+
+## Incident handling
+1. Confirm scope with `/healthz`, `/readyz` and a test sign-in (see "Diagnose").
+2. Note the start time and the most recent `request ID` or `connId` reported by a player.
+3. If the cause is the latest deploy, roll back (above) and record it.
+4. If the database is at fault, wait and re-check `/readyz`; do not restart while matches are pending.
+5. Escalate to the owner immediately for: any data-loss suspicion, any need to restore, any change to Neon or Render settings, or any request to disable email verification (never done in an incident).
+6. Afterwards, write a short note: timeline, cause, what was lost, and which check would have caught it earlier.
 
 ## Voice chat connectivity (TURN) — verify in production
 Voice is peer to peer. With only STUN (the default), players on some mobile carriers or office networks cannot hear each other.
