@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
   <title>Verify Email · Tableverse</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/table.css">
@@ -29,16 +30,17 @@
       margin: 24px auto;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .btn { display: inline-block; padding: 12px 24px; background: var(--primary, #1f6feb); color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; }
+    .btn { display: inline-block; padding: 12px 24px; background: var(--primary, #1f6feb); color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; font: inherit; }
     .btn:hover { opacity: 0.9; }
-    .btn.secondary { background: transparent; border: 1px solid var(--border, rgba(255,255,255,0.2)); color: inherit; margin-top: 8px; }
+    .btn.secondary { background: transparent; border: 1px solid var(--border, rgba(255,255,255,0.2)); color: inherit; margin: 0 4px 8px; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
-  <div id="verifyApp" class="verify-container">
+  <main id="verifyApp" class="verify-container" aria-live="polite">
     <div id="verifyLoading">
       <h1>Verifying your email...</h1>
-      <div class="spinner"></div>
+      <div class="spinner" role="status" aria-label="Loading"></div>
       <p>Please wait while we confirm your account.</p>
     </div>
     <div id="verifySuccess" hidden>
@@ -49,9 +51,10 @@
     <div id="verifyError" hidden>
       <h1 id="errorTitle">Verification failed</h1>
       <p id="errorMsg">The verification link is invalid or has expired.</p>
+      <button id="verifyRetry" class="btn secondary" type="button" hidden>Try again</button>
       <a href="/" class="btn">Back to Home</a>
     </div>
-  </div>
-  <script src="/verify-email.js"></script>
+  </main>
+  <script src="/verify-email.js" defer></script>
 </body>
 </html>
