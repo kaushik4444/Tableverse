@@ -1,7 +1,7 @@
 'use strict';
 // Client address for per-IP limits: a visitor must not be able to choose the address the limits see.
 const assert = require('node:assert/strict');
-const { clientAddress, parseTrustProxy } = require('../lib/clientIp');
+const { clientAddress, parseTrustProxy, parseTrustProxyHops } = require('../lib/clientIp');
 
 let passed = 0;
 function test(name, fn) {
@@ -29,6 +29,25 @@ test('a missing or non-address header falls back to the socket address', () => {
 });
 test('IPv6 addresses are accepted', () => {
   assert.equal(clientAddress(req('2001:db8::1'), true), '2001:db8::1');
+});
+
+console.log('two trusted proxies (Cloudflare in front of Render)');
+test('with hops=2 the entry second from the right is used, ignoring the visitor and the edge address', () => {
+  // visitor sent "6.6.6.6"; Cloudflare appended the visitor "203.0.113.7" and Render appended its edge "172.16.0.5"
+  assert.equal(clientAddress(req('6.6.6.6, 203.0.113.7, 172.16.0.5'), true, 2), '203.0.113.7');
+});
+test('with hops=2 a forged left-most value still cannot choose the address', () => {
+  assert.equal(clientAddress(req('1.1.1.1, 2.2.2.2, 203.0.113.7, 172.16.0.5'), true, 2), '203.0.113.7');
+});
+test('with hops=2 but only one header entry the socket address is used, not the visitor-controlled value', () => {
+  assert.equal(clientAddress(req('6.6.6.6'), true, 2), '10.0.0.9');
+});
+
+console.log('TRUST_PROXY_HOPS');
+test('whole numbers 1 to 5 are accepted; anything else means 1', () => {
+  assert.equal(parseTrustProxyHops('2'), 2);
+  assert.equal(parseTrustProxyHops(' 1 '), 1);
+  for (const v of [undefined, '', '0', '-1', '2.5', 'two', '6', '99']) assert.equal(parseTrustProxyHops(v), 1, String(v));
 });
 
 console.log('TRUST_PROXY');

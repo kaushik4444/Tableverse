@@ -22,7 +22,7 @@ const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 const voiceRelay = require('./lib/voiceRelay');
-const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
+const { clientAddress, parseTrustProxy, parseTrustProxyHops } = require('./lib/clientIp');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -74,6 +74,7 @@ function start(opts = {}) {
   const production = env.NODE_ENV === 'production';
   const trustProxy = opts.trustProxy ?? parseTrustProxy(env.TRUST_PROXY, production); // behind Render's proxy the client address is in X-Forwarded-For
   // Origins are compared exactly as browsers send them: lower case, no trailing slash ("https://www.example.com/" never matches).
+  const trustProxyHops = opts.trustProxyHops ?? parseTrustProxyHops(env.TRUST_PROXY_HOPS); // 1 = Render alone; 2 = Cloudflare proxy in front of Render
   const allowedOrigins = String(opts.allowedOrigins ?? env.ALLOWED_ORIGINS ?? '').split(',')
     .map((s) => s.trim().replace(/\/+$/, '').toLowerCase()).filter(Boolean);
   const maxSocketsPerIp = opts.maxSocketsPerIp ?? 40; // open WebSockets per client address
@@ -176,6 +177,7 @@ function start(opts = {}) {
     env,
     production,
     trustProxy,
+    trustProxyHops,
     emailSender,
     sendJson,
     readJsonBody,
@@ -1286,7 +1288,7 @@ function start(opts = {}) {
   };
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8 * 1024, verifyClient: (info) => originOk(info.req) });
 
-  const clientIp = (req) => clientAddress(req, trustProxy);
+  const clientIp = (req) => clientAddress(req, trustProxy, trustProxyHops);
   const socketsByIp = new Map(); // ip -> open sockets
   const accountsByIp = new Map(); // ip -> creation times within the last hour
   let accountTimes = []; // creation times within the last minute (site-wide)
