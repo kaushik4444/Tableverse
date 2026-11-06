@@ -102,11 +102,23 @@ Run this at least once a quarter and after any change to migrations. It never to
 
 The script refuses a target that already holds tables, and a dump whose checksum has changed. Both refusals are tested (`tests/db-restore.pg.test.js`, run by `npm run test:pg`).
 
+## Validate a populated point-in-time branch (read-only)
+Use this for a Neon branch created from history, which already holds data. It never writes to the branch or to production. Run the queries in the Neon SQL editor with the branch selected, or in `psql` against the branch's connection string.
+1. Confirm you are on the branch, not production (the branch selector shows its name). In `psql`, start with `SET default_transaction_read_only = on;` so any write is rejected. In the Neon editor the setting may not persist between statements, so run only the SELECT queries below and never type INSERT, UPDATE, DELETE or DDL there.
+2. Schema: `SELECT version FROM schema_migrations ORDER BY version;` must list every file in `db/migrations/` (the set this code release expects). A branch missing a later migration predates it, so expect the code to need the migration run before the lobby opens.
+3. Counts, to record: `SELECT count(*) FROM players;`, and the same for `auth_identities`, `matches`, `match_participants` and `friendships`.
+4. Last recorded match: `SELECT max(finished_at) FROM matches;`. It must be at or before the point you chose; anything after is a sign the branch is not the point you think it is.
+5. Orphans, both must be 0: `SELECT count(*) FROM match_participants mp WHERE NOT EXISTS (SELECT 1 FROM matches m WHERE m.id = mp.match_id);` and `SELECT count(*) FROM auth_identities a WHERE NOT EXISTS (SELECT 1 FROM players p WHERE p.id = a.player_id);`.
+6. Foreign keys, must be 0: `SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated;`.
+7. Write the results and the chosen timestamp in the incident record. Counts will be below production's today by everything written after that timestamp; that gap is the expected data loss the owner must approve, not a fault. Delete the branch only after the owner decides.
+
 ## Recovery procedure (for real)
 Only with owner approval. Recovery replaces what players see; decide first, then act.
 1. **Stop the bleeding:** if the damage is a bad deploy, roll back first (above). If it is data loss, take a fresh backup of whatever is left (`db:backup`) before changing anything.
 2. **Choose the source:** Neon point-in-time branch (fastest, limited by the retention window), or the most recent verified dump (independent, limited by how old the dump is).
-3. **Restore into a new target, not over production:** a Neon branch created from the chosen point, or an empty database for a dump. Run `db:restore-check` against it.
+3. **Restore into a new target, not over production.** Two different paths:
+   - **A dump:** an empty database, then `db:restore-check` against it. The script refuses any target that already has tables.
+   - **A Neon point-in-time branch:** the branch is already populated, so `db:restore-check` does not apply and would refuse it. Validate it with the read-only procedure below instead.
 4. **Point the application at it:** change `DATABASE_URL` on Render to the restored database (or restore the branch over the main one in Neon, which the owner must approve), redeploy, confirm `/readyz` is 200 and `server.started` shows `store: postgres`.
 5. **Verify:** counts as in the restore test; sign in as a known test account; check a recent match appears in the match history.
 6. **Record:** what was restored, from when, what data after that point is lost, and who approved it.
