@@ -1613,16 +1613,20 @@ module.exports = { start };
 if (require.main === module) {
   start().then(
     ({ port, database, close }) => {
-      // Last-resort guards. A rejected promise nobody awaited is logged and the server keeps running; a genuinely
-      // uncaught exception leaves the process in an unknown state, so finish pending match writes and exit (the host restarts us).
-      process.on('unhandledRejection', (reason) => console.error('[server] unhandled rejection:', reason && reason.stack || reason));
+      // Last-resort guards. An unhandled rejection means a code path we did not anticipate has gone wrong; the process
+      // may be in an inconsistent state, so we do the same thing as uncaughtException: drain pending match writes and exit
+      // (the host will restart us). We use a single `crashing` flag so that a rejection storm does not spawn multiple
+      // concurrent shutdown sequences, and we give slightly more drain time (5 s) than a crash (the rejection is slower to
+      // surface than a thrown exception).
       let crashing = false;
-      process.on('uncaughtException', (err) => {
-        console.error('[server] uncaught exception:', err && err.stack || err);
+      const crashShutdown = (label, reason) => {
+        console.error(`[server] ${label}:`, reason && reason.stack || reason);
         if (crashing) return;
         crashing = true;
         close({ drainMs: 5000 }).then(() => process.exit(1), () => process.exit(1));
-      });
+      };
+      process.on('unhandledRejection', (reason) => crashShutdown('unhandled rejection', reason));
+      process.on('uncaughtException',  (err)    => crashShutdown('uncaught exception',  err));
       console.log(`Tableverse running on http://localhost:${port} (${database.mode} store)`);
       // Render sends SIGTERM on deploy/restart: finish pending match writes first (it waits 30 s before killing us)
       let stopping = false;
