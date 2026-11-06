@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('./pool');
+const { createLogger } = require('../lib/log');
 
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
 
@@ -53,7 +54,7 @@ if (require.main === module) {
   migrate()
     .then(() => db.close())
     .catch((err) => {
-      console.error('[db:migrate] Error during migration:', err);
+      createLogger({ component: 'db' }).error('db.migration_failed', { err });
       process.exit(1);
     });
 }

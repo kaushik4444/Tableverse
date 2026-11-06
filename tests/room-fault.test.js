@@ -68,7 +68,7 @@ function client(port, token) {
     games.list = realList;
     assert.equal(res.status, 500);
     assert.ok(Date.now() - t0 < 2000, 'the answer is immediate, not a timeout');
-    assert.ok(errors.some((e) => /\[http\] GET \/api\/games failed/.test(e)), 'the failure is logged');
+    assert.ok(errors.some((e) => /"event":"http\.unhandled"/.test(e) && /"path":"\/api\/games"/.test(e)), 'the failure is logged as a structured http.unhandled event');
     console.log('  ok  an unexpected error in an HTTP route answers 500 immediately and is logged');
   } catch (e) { console.error = origError; console.error('FAIL', e.stack); process.exitCode = 1; }
   console.error = origError;
