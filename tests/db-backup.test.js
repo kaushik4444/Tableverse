@@ -9,6 +9,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { pgEnvFromUrl, checkOutPath, backup, verifyArchive, createPrivateExclusive } = require('../scripts/db-backup');
 const { assertSafe } = require('./helpers/testdb');
+const { parseAppliedMigrations } = require('../scripts/db-restore-check');
 
 let passed = 0;
 let skipped = 0;
@@ -16,6 +17,11 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 const have = (cmd) => spawnSync(cmd, ['--version'], { stdio: 'ignore' }).status === 0;
+
+// Regression: psql output must parse identically on LF and CRLF platforms.
+assert.deepEqual(parseAppliedMigrations('001_init.sql\n002_auth.sql\n'), ['001_init.sql', '002_auth.sql']);
+assert.deepEqual(parseAppliedMigrations('001_init.sql\r\n002_auth.sql\r\n'), ['001_init.sql', '002_auth.sql']);
+console.log('  ok  migration versions parse consistently with LF and CRLF output');
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tv-backup-test-'));
 process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
 
