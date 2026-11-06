@@ -7,3 +7,9 @@ node_modules
 .claude/
 neon.ts
 skills-lock.json
+
+# Operational backups: never commit a dump or its checksum
+backups/
+*.dump
+*.dump.partial
+*.dump.sha256
