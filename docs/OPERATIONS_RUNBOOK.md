@@ -85,8 +85,9 @@ npm run db:backup -- --out "$HOME/tableverse-backups/tableverse-$(date +%F-%H%M)
 npm run db:backup -- --verify "$HOME/tableverse-backups/tableverse-2026-11-06-2100.dump"
 ```
 - The script passes the password to `pg_dump` through environment variables, so it does not appear in the process list or in shell history. Do not replace it with `pg_dump "$DATABASE_URL" ...`, which puts the whole URL, password included, on the command line.
-- Output is `<name>.dump` plus `<name>.dump.sha256`, both `0600`. It is written to `.partial` first and only renamed after `pg_restore --list` reads it and the `schema_migrations` table is present.
-- Refuses: output inside this repository (`backups/` and `*.dump` are git-ignored too), a name without `.dump`, an existing file.
+- Output is `<name>.dump` plus `<name>.dump.sha256`, both `0600`. The `.partial` file is created exclusively at `0600` before `pg_dump` starts, so a second run aimed at the same name is refused and never touches the first run's files. The checksum is staged first, and both files are published only after `pg_restore --list` reads the dump and the `schema_migrations` table is present. A failed run removes only the files it created.
+- Refuses: output inside this repository (checked on the resolved path, so a symlinked folder that leads into the checkout is refused too; `backups/` and `*.dump` are git-ignored as well), a name without `.dump`, any existing file or symlink at the destination.
+- `db:restore-check` refuses a dump with no `.sha256` file, a malformed one, or one that does not match its bytes. Read-only `--verify` may report a dump without a checksum, and says so.
 - Needs `pg_dump` and `pg_restore` at least as new as the database server. Check the server's major version in Neon before relying on the tools in a new environment (manual).
 
 **Storage recommendations (manual):** keep dumps off Render and off the repository. Use an encrypted location you control (for example an encrypted disk or a password manager's file attachment for small dumps). Keep at least one copy older than a week. Treat a dump as personal data: it contains e-mail addresses and password hashes.
