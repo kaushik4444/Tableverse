@@ -50,11 +50,11 @@ Accounts and finished matches are the only persistent data, so the database back
 ## Voice chat connectivity (TURN) — verify in production
 Voice is peer to peer. With only STUN (the default), players on some mobile carriers or office networks cannot hear each other.
 - Check: Render > service > Environment has `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (or `ICE_SERVERS`). Status: **configured** (Metered.ca free tier, set on Render, 2026-11-06).
-- Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: `____` (not yet run — do this before relying on it for friend testing on restrictive networks).
+- Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: **passed** (2026-11-06).
 - If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
 
 ## Repository safety
-`main` is protected by a ruleset ("Protect-Main", GitHub > Settings > Rules > Rulesets) that requires a pull request and passing status checks before merge. **Status: enabled.** Required checks currently configured: `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`. `Build and test (Node 20)` should be added to the same ruleset (Rulesets > Protect-Main > Require status checks to pass > Add checks) so a Node 20 failure can't merge either — confirm it's been added and update this line.
+`main` is protected by a ruleset ("Protect-Main", GitHub > Settings > Rules > Rulesets) that requires a pull request and passing status checks before merge. **Status: enabled**, all five CI jobs required: `Build and test (Node 20)`, `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`.
 
 ## Abuse / rate limits
 Auth endpoints are rate limited per address and account in `auth_rate_limits`; WebSockets are limited per IP, per socket message rate, payload (8 KiB) and buffered bytes. Check logs for `slow down` closes and `too many connections` spikes.
