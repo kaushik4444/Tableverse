@@ -129,6 +129,7 @@ async function main() {
   assert.match(html, /<script src="\/reset-password\.js" defer><\/script>/);
   assert.doesNotMatch(html, /app\.js|table-ui|voice\.js|home-ui/, 'the reset page loads none of the game scripts');
   assert.match(html, /name="robots" content="noindex"/);
+  assert.match(html, /<form id="forgotForm" class="reset-form">/, 'the new-link form keeps browser email validation');
 
   console.log('All reset-password frontend behavior tests passed');
 }
