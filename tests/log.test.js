@@ -67,6 +67,17 @@ test('secrets inside a stack trace are masked on every line that carries them', 
   assert.ok(serialised.includes('parseBody'), 'the stack still shows where it failed');
 });
 
+// Regression: short password names and CSRF tokens were logged in clear as object fields.
+test('object fields named pw, pwd, passwd, csrf or X-CSRF are masked wherever they nest', () => {
+  const out = redact({
+    csrf: 'CSRFVAL1', ct_csrf: 'CSRFVAL2', pw: 'PWVAL1', pwd: 'PWVAL2', passwd: 'PWVAL3', newPassword: 'PWVAL4',
+    headers: { 'X-CSRF': 'CSRFVAL4' }, rows: [{ pwd: 'PWVAL6' }], roomCode: 'ABCD',
+  });
+  const serialised = JSON.stringify(out);
+  for (const fragment of ['CSRFVAL', 'PWVAL']) assert.ok(!serialised.includes(fragment), serialised);
+  assert.equal(out.roomCode, 'ABCD', 'ordinary fields are not masked');
+});
+
 test('a JSON-style secret logged as a field keeps valid JSON around the mask', () => {
   const lines = [];
   const log = createLogger({ write: (level, line) => lines.push(line) });
