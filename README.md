@@ -2,7 +2,7 @@
 
 > **Your friends. Your games. One table.**
 
-Live site: **https://game-fmy4.onrender.com**
+Live site: **https://playtableverse.com**
 
 Tableverse is a browser-based multiplayer game arena for quick social sessions with no install.
 
@@ -147,6 +147,18 @@ If provider delivery fails after signup, the account is still created and the re
 - `REQUIRE_EMAIL_VERIFICATION=true` (secure default)
 
 Set `DATABASE_URL` and email variables in Render env settings before deploying.
+
+## Domains
+
+Email links (verification, password reset) are built from `PUBLIC_APP_URL`, so it must always be the one address players actually use, with `https://` and no trailing slash.
+
+`playtableverse.com` is registered (Cloudflare Registrar, DNS-only/grey-clouded records), added as a Render custom domain for both the apex and `www` with the certificate issued, and is the live site: `PUBLIC_APP_URL` is set to `https://playtableverse.com`, `playtableverse.com` is verified as a Resend sending domain, and a signup/reset email was confirmed to link back to the new domain.
+
+To change it again later, or to add another domain:
+1. Render → service → Settings → Custom Domains → add the domain, create the DNS records Render shows, wait for the certificate.
+2. Render → service → Environment → set `PUBLIC_APP_URL` to the new address → redeploy.
+3. In Resend, verify the new sending domain (SPF/DKIM records) and set `EMAIL_FROM` to an address on it.
+4. Send a signup/reset email and confirm the link opens the new domain.
 
 ## Production readiness
 

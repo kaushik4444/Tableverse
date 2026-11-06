@@ -40,5 +40,21 @@ Startup log `Database migration failed: ...` and the deploy does not become live
 3. In SQL: `SELECT id, game_id, finished_at FROM matches WHERE finished_at > now() - interval '1 day' ORDER BY finished_at DESC;` and compare with the logged keys (`match_key`).
 4. Re-enter a lost result by hand only with the player ids from the log; the match key makes a repeated insert a no-op.
 
+## Backups and restore (Neon) — verify before relying on it
+Accounts and finished matches are the only persistent data, so the database backup is the only recovery path. **Status: restore verified** — a branch created from point-in-time history on 2026-11-06 matched production's row counts; the test branch was deleted afterwards.
+- Plan and history retention window (Neon > project > Settings > Storage, or the earliest time offered when creating a branch "from a point in time"): `____` (record the exact window next time it's checked — free-tier Neon history is typically short, so don't assume an old incident is still recoverable without re-checking).
+- Restore test last performed: 2026-11-06. Procedure: Neon > Branches > Create branch > "Past data" (pick a time a few minutes ago) > open that branch > Connection Details > copy its connection string > in the Neon SQL editor (switch the branch selector to the test branch) run `SELECT count(*) FROM matches;` and compare against the same query on `production`. Delete the test branch afterwards. Re-run this check periodically — a passing test today doesn't guarantee the retention window still covers an incident months from now.
+- To recover for real: restore into a new branch, point `DATABASE_URL` on Render at it (or restore the branch over the main one in Neon), redeploy, check `/readyz`.
+- Optional extra copy independent of Neon: a scheduled `pg_dump "$DATABASE_URL" -Fc -f tableverse-$(date +%F).dump`, stored somewhere outside Neon and Render.
+
+## Voice chat connectivity (TURN) — verify in production
+Voice is peer to peer. With only STUN (the default), players on some mobile carriers or office networks cannot hear each other.
+- Check: Render > service > Environment has `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (or `ICE_SERVERS`). Status: **configured** (Metered.ca free tier, set on Render, 2026-11-06).
+- Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: **passed** (2026-11-06).
+- If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
+
+## Repository safety
+`main` is protected by a ruleset ("Protect-Main", GitHub > Settings > Rules > Rulesets) that requires a pull request and passing status checks before merge. **Status: enabled**, all five CI jobs required: `Build and test (Node 20)`, `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`.
+
 ## Abuse / rate limits
 Auth endpoints are rate limited per address and account in `auth_rate_limits`; WebSockets are limited per IP, per socket message rate, payload (8 KiB) and buffered bytes. Check logs for `slow down` closes and `too many connections` spikes.
