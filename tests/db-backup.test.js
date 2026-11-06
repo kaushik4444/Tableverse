@@ -51,7 +51,41 @@ process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
     assert.throws(() => checkOutPath(path.join(scratch, 'missing-folder', 'x.dump')), /folder .* does not exist/);
     fs.writeFileSync(path.join(scratch, 'taken.dump'), '');
     assert.throws(() => checkOutPath(path.join(scratch, 'taken.dump')), /refusing to overwrite/);
-    assert.equal(checkOutPath(path.join(scratch, 'fresh.dump')), path.join(scratch, 'fresh.dump'));
+    assert.equal(checkOutPath(path.join(scratch, 'fresh.dump')), path.join(fs.realpathSync(scratch), 'fresh.dump'));
+  });
+
+  // Regression: path.resolve() does not follow a symlinked folder, so a link pointing into the checkout used to pass.
+  await test('a symlinked folder that leads into the repository is refused, and the canonical path is returned otherwise', async () => {
+    const repoLink = path.join(scratch, 'looks-external');
+    fs.symlinkSync(path.join(__dirname, '..'), repoLink, 'dir');
+    assert.throws(() => checkOutPath(path.join(repoLink, 'x.dump')), /inside the repository/);
+    assert.throws(() => checkOutPath(path.join(repoLink, 'deeper', 'x.dump')), /folder .* does not exist|inside the repository/);
+
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'tv-outside-'));
+    const outsideLink = path.join(scratch, 'backups-link');
+    fs.symlinkSync(outside, outsideLink, 'dir');
+    try {
+      assert.equal(checkOutPath(path.join(outsideLink, 'ok.dump')), path.join(fs.realpathSync(outside), 'ok.dump'));
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  // Regression: a dangling symlink at the destination is not "absent", and writing through it could land in the repo.
+  await test('a dangling symlink at the destination name counts as taken and is not followed', async () => {
+    const target = path.join(__dirname, '..', 'dangling-target.dump');
+    const link = path.join(scratch, 'dangling.dump');
+    fs.symlinkSync(target, link);
+    assert.throws(() => checkOutPath(link), /refusing to overwrite/);
+    assert.ok(!fs.existsSync(target), 'nothing was created at the link target');
+  });
+
+  await test('a backup into a symlinked folder inside the repository writes nothing and refuses before pg_dump runs', async () => {
+    const repoLink = path.join(scratch, 'into-repo');
+    fs.symlinkSync(path.join(__dirname, '..'), repoLink, 'dir');
+    await assert.rejects(backup({ url: 'postgres://u:Sup3rSecretPw@127.0.0.1:1/tv', out: path.join(repoLink, 'refused.dump') }), /inside the repository/);
+    assert.ok(!fs.existsSync(path.join(__dirname, '..', 'refused.dump')));
+    assert.ok(!fs.existsSync(path.join(__dirname, '..', 'refused.dump.partial')));
   });
 
   // ---- failure behaviour against an unreachable server (needs pg_dump, nothing else)

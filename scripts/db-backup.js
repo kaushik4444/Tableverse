@@ -48,17 +48,51 @@ function pgEnvFromUrl(raw) {
   return env;
 }
 
-/** The dump destination: a `.dump` name, outside the repository, not yet taken, in a folder that exists. */
+/** True when something (a file, a folder, or a symlink even if it dangles) already sits at this path. */
+function entryExists(p) {
+  try { fs.lstatSync(p); return true; } catch (err) { if (err.code === 'ENOENT') return false; throw err; }
+}
+
+/**
+ * Resolves symlinks in the longest existing part of a path and keeps the rest (which may not exist yet) as written.
+ * So `/link/new/x.dump` becomes `<real target of /link>/new/x.dump` even when `new/` is missing.
+ */
+function canonicalPath(p) {
+  let current = path.resolve(p);
+  const missing = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(current), ...missing.reverse());
+    } catch (err) {
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
+      const parent = path.dirname(current);
+      if (parent === current) return path.resolve(p);
+      missing.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
+ * The dump destination: a `.dump` name, outside the repository, not yet taken, in a folder that exists.
+ * Containment is decided on canonical paths (symlinks resolved), so a folder link that points into the checkout is
+ * refused. Returns the canonical destination; that is the path every later step uses.
+ */
 function checkOutPath(out) {
   if (!out) throw new Error('pass --out <file>.dump');
   const abs = path.resolve(String(out));
   if (!abs.endsWith('.dump')) throw new Error('the backup file name must end in .dump');
-  if (abs === REPO_ROOT || abs.startsWith(REPO_ROOT + path.sep)) {
+  const dest = canonicalPath(abs);
+  const repo = fs.realpathSync(REPO_ROOT);
+  if (dest === repo || dest.startsWith(repo + path.sep)) {
     throw new Error('refusing to write a backup inside the repository (backups must never be committed)');
   }
-  if (fs.existsSync(abs)) throw new Error('refusing to overwrite an existing file: ' + path.basename(abs));
-  if (!fs.existsSync(path.dirname(abs))) throw new Error('the folder for the backup does not exist');
-  return abs;
+  const folder = path.dirname(dest);
+  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) throw new Error('the folder for the backup does not exist');
+  if (entryExists(dest) || entryExists(dest + '.sha256')) {
+    throw new Error('refusing to overwrite an existing file: ' + path.basename(dest));
+  }
+  return dest;
 }
 
 function run(cmd, args, extraEnv) {
