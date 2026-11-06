@@ -144,7 +144,7 @@ If provider delivery fails after signup, the account is still created and the re
 
 - `NODE_ENV=production`
 - `TRUST_PROXY=1`
-- `TRUST_PROXY_HOPS=1` (number of proxies in front of the app: 1 for Render alone, 2 once Cloudflare's orange-cloud proxy sits in front of Render)
+- `TRUST_PROXY_HOPS=1` (only one trusted proxy is supported until multi-hop chains can be validated against trusted proxy addresses)
 - `REQUIRE_EMAIL_VERIFICATION=true` (secure default)
 
 Set `DATABASE_URL` and email variables in Render env settings before deploying.

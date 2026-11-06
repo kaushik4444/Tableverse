@@ -14,8 +14,7 @@ services:
       # Render's proxy puts the visitor's address in X-Forwarded-For; used for per-address limits.
       - key: TRUST_PROXY
         value: "1"
-      # How many proxies sit in front of the app. 1 = Render alone. Set to 2 ONLY after Cloudflare's proxy (orange cloud)
-      # is enabled on the apex record; otherwise every visitor shares one per-address bucket.
+      # Only one trusted proxy is supported until multi-hop chains can be validated against trusted proxy addresses.
       - key: TRUST_PROXY_HOPS
         value: "1"
       # Postgres (Neon etc.). REQUIRED in production: a missing value makes the deploy fail instead of running on memory.
