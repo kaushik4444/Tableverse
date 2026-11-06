@@ -5,16 +5,19 @@
  *
  *   RESTORE_TEST_DATABASE_URL='postgres://…/tableverse_restore_test' node scripts/db-restore-check.js --dump /secure/tableverse.dump
  *
- * The target must be a database you created for this test (a Neon branch, or a local database). The script refuses:
+ * The target must be a database you created for this test (a Neon branch, or a local database). The script refuses,
+ * before anything is written to the target:
  *  - a target that is the production database (same host, port and name as DATABASE_URL, if it is set),
- *  - a target that already has tables (it never overwrites anything),
- *  - a dump whose checksum or archive table of contents is wrong (verified before anything is written).
+ *  - a dump with no .sha256 file beside it, a malformed one, or one whose bytes do not match it,
+ *  - a dump whose archive table of contents is unreadable or has no schema_migrations table,
+ *  - a target that already has tables (it never overwrites anything).
  * It reads DATABASE_URL only to compare it with the target. It prints counts and checks, never rows or personal data.
  * See docs/OPERATIONS_RUNBOOK.md, "Restore test".
  */
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
-const { pgEnvFromUrl, verifyArchive, runCommand } = require('./db-backup');
+const { pgEnvFromUrl, listArchive, readExpectedChecksum, sha256File, runCommand } = require('./db-backup');
 const { redactText } = require('../lib/log');
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'db', 'migrations');
@@ -41,7 +44,14 @@ function expectedMigrations() {
   return fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
 }
 
-/** Restores `dump` into `target` and returns a report. Throws (before writing) when a safety rule is broken. */
+/**
+ * Restores `dump` into `target` and returns a report. Throws before anything is written when a rule is broken:
+ *  - the target is production, or not empty;
+ *  - the dump has no checksum file, a malformed one, or one that does not match the bytes being restored.
+ * The checksum is required here (unlike the read-only --verify), because pg_restore --list reads only the table of
+ * contents and cannot detect a changed data payload. The bytes are copied to a private folder first, and the copy is
+ * both hashed and restored, so a dump that changes after the check cannot be restored unchecked.
+ */
 async function restoreCheck({ dump, target, production = null, pgRestore = 'pg_restore' }) {
   if (!target) throw new Error('set RESTORE_TEST_DATABASE_URL to an empty database created for this test');
   const targetEnv = pgEnvFromUrl(target);
@@ -49,13 +59,30 @@ async function restoreCheck({ dump, target, production = null, pgRestore = 'pg_r
     const prodEnv = pgEnvFromUrl(production);
     if (sameDatabase(targetEnv, prodEnv)) throw new Error('refusing: the restore target is the production database (same host, port and name as DATABASE_URL)');
   }
-  await verifyArchive(dump, { pgRestore }); // checksum and table of contents, before anything is written
+  const expectedSum = readExpectedChecksum(dump);
+  if (expectedSum === null) {
+    throw new Error(`refusing: there is no checksum file beside the dump (${path.basename(dump)}.sha256). Keep the .sha256 that db:backup wrote next to it.`);
+  }
 
-  const tables = Number(await query(targetEnv, TABLE_COUNT));
-  if (tables !== 0) throw new Error('refusing: the target database is not empty; use a new, empty database for the restore test');
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'tv-restore-check-')); // private (0700) folder for the copy
+  try {
+    const copy = path.join(work, 'restore.dump');
+    fs.copyFileSync(dump, copy, fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(copy, 0o600);
+    if ((await sha256File(copy)) !== expectedSum) {
+      throw new Error('checksum mismatch: refusing to restore a dump that changed after it was written');
+    }
+    const archive = await listArchive(copy, { pgRestore });
+    if (!archive.hasMigrations) throw new Error('the archive has no schema_migrations table');
 
-  const restore = await runCommand(pgRestore, ['--no-owner', '--no-acl', '--exit-on-error', '--dbname', targetEnv.PGDATABASE, dump], targetEnv);
-  if (restore.code !== 0) throw new Error(`pg_restore failed (exit ${restore.code}): ${restore.stderr || 'no details'}`);
+    const tables = Number(await query(targetEnv, TABLE_COUNT));
+    if (tables !== 0) throw new Error('refusing: the target database is not empty; use a new, empty database for the restore test');
+
+    const restore = await runCommand(pgRestore, ['--no-owner', '--no-acl', '--exit-on-error', '--dbname', targetEnv.PGDATABASE, copy], targetEnv);
+    if (restore.code !== 0) throw new Error(`pg_restore failed (exit ${restore.code}): ${restore.stderr || 'no details'}`);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
 
   const applied = (await query(targetEnv, 'SELECT version FROM schema_migrations ORDER BY version')).split('\n').filter(Boolean);
   const expected = expectedMigrations();
@@ -74,6 +101,7 @@ async function restoreCheck({ dump, target, production = null, pgRestore = 'pg_r
     ok,
     database: targetEnv.PGDATABASE,
     restored: true,
+    checksum: 'matched',
     migrations: { applied: applied.length, expected: expected.length, missing, unexpected },
     counts,
     orphans,

@@ -188,19 +188,29 @@ async function backup({ url, out, pgDump = 'pg_dump', pgRestore = 'pg_restore' }
   }
 }
 
-/** Confirms an existing dump: checksum (when a .sha256 file sits beside it) and a readable archive with the right tables. */
+/** The SHA-256 recorded beside a dump, or null when there is no checksum file. A malformed checksum file throws. */
+function readExpectedChecksum(dumpFile) {
+  const sumFile = dumpFile + '.sha256';
+  if (!entryExists(sumFile)) return null;
+  const sum = fs.readFileSync(sumFile, 'utf8').trim().split(/\s+/)[0] || '';
+  if (!/^[0-9a-f]{64}$/.test(sum)) throw new Error('the checksum file is malformed: ' + path.basename(sumFile));
+  return sum;
+}
+
+/**
+ * Inspects an existing dump (read-only): checksum when a .sha256 file sits beside it, and a readable archive with the
+ * Tableverse tables. Used by `--verify`. The checksum is optional here because this is inspection only; the restore
+ * check does not accept a dump without one.
+ */
 async function verifyArchive(file, { pgRestore = 'pg_restore' } = {}) {
   const abs = path.resolve(String(file || ''));
   if (!abs.endsWith('.dump') || !fs.existsSync(abs)) throw new Error('pass the path of an existing .dump file');
   const sha256 = await sha256File(abs);
-  const sumFile = abs + '.sha256';
-  if (fs.existsSync(sumFile)) {
-    const expected = fs.readFileSync(sumFile, 'utf8').split(/\s+/)[0];
-    if (expected !== sha256) throw new Error('checksum mismatch: the file changed after it was written');
-  }
+  const expected = readExpectedChecksum(abs);
+  if (expected !== null && expected !== sha256) throw new Error('checksum mismatch: the file changed after it was written');
   const info = await listArchive(abs, { pgRestore });
   if (!info.hasMigrations) throw new Error('the archive has no schema_migrations table');
-  return { file: abs, bytes: fs.statSync(abs).size, sha256, checksumChecked: fs.existsSync(sumFile), ...info };
+  return { file: abs, bytes: fs.statSync(abs).size, sha256, checksumChecked: expected !== null, ...info };
 }
 
 function parseArgs(argv) {
@@ -226,7 +236,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
   return 0;
 }
 
-module.exports = { pgEnvFromUrl, checkOutPath, backup, verifyArchive, listArchive, parseArgs, runCommand: run };
+module.exports = { pgEnvFromUrl, checkOutPath, backup, verifyArchive, listArchive, readExpectedChecksum, sha256File, parseArgs, runCommand: run };
 
 if (require.main === module) {
   main().then(

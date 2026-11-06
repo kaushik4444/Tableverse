@@ -90,6 +90,33 @@ const have = (cmd) => spawnSync(cmd, ['--version'], { stdio: 'ignore' }).status 
       await assert.rejects(restoreCheck({ dump: tampered, target, production: null }), /checksum mismatch/);
       assert.equal(run(target, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"), '0');
     });
+
+    // Regression: a missing checksum used to pass, because verification only compared a checksum that was present.
+    await test('a dump with no checksum file is refused before anything is written, even though its archive is valid', async () => {
+      const unsummed = path.join(scratch, 'unsummed.dump');
+      fs.copyFileSync(dump, unsummed);
+      const target = createDb(withDb('nosum'));
+      await assert.rejects(restoreCheck({ dump: unsummed, target, production: null }), /no checksum file beside the dump/);
+      assert.equal(run(target, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"), '0');
+    });
+
+    await test('a dump with a malformed checksum file is refused before anything is written', async () => {
+      const junkSum = path.join(scratch, 'junksum.dump');
+      fs.copyFileSync(dump, junkSum);
+      fs.writeFileSync(junkSum + '.sha256', 'not-a-checksum  junksum.dump\n');
+      const target = createDb(withDb('junksum'));
+      await assert.rejects(restoreCheck({ dump: junkSum, target, production: null }), /malformed/);
+      assert.equal(run(target, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"), '0');
+    });
+
+    await test('a dump whose checksum file names a different digest is refused before anything is written', async () => {
+      const wrong = path.join(scratch, 'wrongsum.dump');
+      fs.copyFileSync(dump, wrong);
+      fs.writeFileSync(wrong + '.sha256', `${'0'.repeat(64)}  wrongsum.dump\n`);
+      const target = createDb(withDb('wrongsum'));
+      await assert.rejects(restoreCheck({ dump: wrong, target, production: null }), /checksum mismatch/);
+      assert.equal(run(target, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"), '0');
+    });
   } finally {
     for (const name of created) {
       try { run(maintenance, `DROP DATABASE IF EXISTS ${name} WITH (FORCE)`); } catch { /* best effort: names are unique */ }

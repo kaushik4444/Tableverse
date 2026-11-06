@@ -160,6 +160,16 @@ echo "2; 1259 2 TABLE public players tv"
     assert.deepEqual(leftovers(out), []);
   });
 
+  await test('inspection (--verify) may read a dump without a checksum, but a malformed checksum file is always refused', async () => {
+    const out = path.join(scratch, 'inspect.dump');
+    await backup({ ...fake('ok'), out });
+    fs.rmSync(out + '.sha256');
+    const plain = await verifyArchive(out, { pgRestore: fakeRestore });
+    assert.equal(plain.checksumChecked, false);
+    fs.writeFileSync(out + '.sha256', 'garbage\n');
+    await assert.rejects(verifyArchive(out, { pgRestore: fakeRestore }), /malformed/);
+  });
+
   // ---- failure behaviour against an unreachable server (needs pg_dump, nothing else)
   if (!have('pg_dump')) {
     console.log('SKIPPED  unreachable-database and dump tests: pg_dump is not installed');
