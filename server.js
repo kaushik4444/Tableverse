@@ -23,6 +23,8 @@ const { createStaticFiles } = require('./lib/staticFiles');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
+const { createReadinessCheck } = require('./lib/health');
+const { createLogger } = require('./lib/log');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -128,6 +130,14 @@ function start(opts = {}) {
   let purgeTimer = null;
   let spoolTimer = null;
   let shuttingDown = false; // set when the process is asked to stop: readiness fails, no new tables, players are told
+  // Readiness: the database must answer within 3 s; an outage is logged once when it starts and once when it ends (lib/health.js).
+  const readiness = createReadinessCheck({
+    hasDatabase: () => dbPool.hasDatabase(),
+    ping: () => dbPool.ping(),
+    shuttingDown: () => shuttingDown,
+    queueStats: () => matchQueue.stats(),
+    log: createLogger({ component: 'health' }),
+  });
 
   // ------------------------------------------------------------ http
   const readJsonBody = (req) =>
@@ -294,10 +304,7 @@ function start(opts = {}) {
         res.writeHead(status, { 'Content-Type': 'text/plain' });
         res.end(text);
       };
-      const q = matchQueue.stats();
-      const tail = q.pending || q.failed ? ` (matches: ${q.pending} pending, ${q.failed} failed)` : '';
-      if (!dbPool.hasDatabase()) respond(200, 'ready (in-memory store)' + tail);
-      else dbPool.ping().then(() => respond(200, 'ready' + tail), () => respond(503, 'database unavailable'));
+      readiness().then(({ status, body }) => respond(status, body));
       return;
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
