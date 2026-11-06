@@ -79,12 +79,25 @@
         return;
       }
 
-      const message = data && typeof data.error === 'string'
-        ? data.error
-        : 'The verification link is invalid, expired, or has already been used.';
-      // Client/token errors need a new email; transient server errors can be retried.
-      const retryable = res.status >= 500 || res.status === 429;
-      showError('Verification failed', message, retryable);
+      const serverUnavailable = res.status >= 500;
+      const rateLimited = res.status === 429;
+      const csrfRejected = res.status === 403
+        && data && typeof data.error === 'string'
+        && data.error.toLowerCase().includes('csrf');
+
+      // A proxy may return HTML/plain text for 502/503/429, so do not label
+      // those responses as an invalid verification link.
+      const retryable = serverUnavailable || rateLimited || csrfRejected;
+      const message = serverUnavailable
+        ? 'The verification service is temporarily unavailable. Please try again.'
+        : rateLimited
+          ? 'Too many attempts. Please wait a moment and try again.'
+          : csrfRejected
+            ? 'The security check expired. Please try again.'
+            : data && typeof data.error === 'string'
+              ? data.error
+              : 'The verification link is invalid, expired, or has already been used.';
+      showError(retryable ? 'Temporary verification problem' : 'Verification failed', message, retryable);
     } catch {
       showError('Connection error', 'Could not reach the server. Check your connection and try again.', true);
     }
