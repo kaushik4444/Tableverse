@@ -88,6 +88,78 @@ process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
     assert.ok(!fs.existsSync(path.join(__dirname, '..', 'refused.dump.partial')));
   });
 
+  // ---- reservation, concurrency and cleanup, with stand-in pg_dump / pg_restore (no database needed).
+  // The database name in the URL selects the stand-in's behaviour: ok, slow (sleeps), fail (writes, then exits 4).
+  const fakeDir = path.join(scratch, 'fake-tools');
+  fs.mkdirSync(fakeDir);
+  const script = (name, body) => {
+    const p = path.join(fakeDir, name);
+    fs.writeFileSync(p, '#!/bin/sh\n' + body, { mode: 0o755 });
+    return p;
+  };
+  const fakeDump = script('pg_dump', `file=""
+while [ $# -gt 0 ]; do if [ "$1" = "--file" ]; then file="$2"; fi; shift; done
+# the reservation must already be private before anything is written
+[ "$(stat -c %a "$file")" = "600" ] || exit 3
+case "$PGDATABASE" in
+  slow) sleep 0.4 ;;
+  fail) printf partial > "$file"; echo "simulated failure" >&2; exit 4 ;;
+esac
+printf 'PGDMP fake archive' > "$file"
+`);
+  const fakeRestore = script('pg_restore', `echo "; fake archive"
+echo "1; 1259 1 TABLE public schema_migrations tv"
+echo "2; 1259 2 TABLE public players tv"
+`);
+  const fakeUrl = (db) => `postgres://tv_app:Sup3rSecretPw@127.0.0.1:5432/${db}`;
+  const fake = (db) => ({ url: fakeUrl(db), pgDump: fakeDump, pgRestore: fakeRestore });
+  const leftovers = (out) => [out + '.partial', out + '.sha256.partial'].filter((f) => fs.existsSync(f));
+
+  await test('the working file is private from creation, even under a permissive umask', async () => {
+    const out = path.join(scratch, 'umask.dump');
+    const before = process.umask(0o000);
+    try { await backup({ ...fake('ok'), out }); } finally { process.umask(before); }
+    assert.equal(fs.statSync(out).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(out + '.sha256').mode & 0o777, 0o600);
+    assert.deepEqual(leftovers(out), []);
+  });
+
+  await test('a run that cannot reserve its partial file leaves another run\'s file untouched', async () => {
+    const out = path.join(scratch, 'foreign.dump');
+    fs.writeFileSync(out + '.partial', 'the other run is still writing', { mode: 0o600 });
+    await assert.rejects(backup({ ...fake('ok'), out }), /another backup is writing/);
+    assert.equal(fs.readFileSync(out + '.partial', 'utf8'), 'the other run is still writing');
+    assert.ok(!fs.existsSync(out));
+  });
+
+  await test('a run that reserved its partial file but cannot stage its checksum leaves a foreign checksum file untouched', async () => {
+    const out = path.join(scratch, 'foreign-sum.dump');
+    fs.writeFileSync(out + '.sha256.partial', 'foreign checksum', { mode: 0o600 });
+    await assert.rejects(backup({ ...fake('ok'), out }), /another backup is writing/);
+    assert.equal(fs.readFileSync(out + '.sha256.partial', 'utf8'), 'foreign checksum');
+    assert.ok(!fs.existsSync(out) && !fs.existsSync(out + '.partial'));
+  });
+
+  await test('a failed dump removes its own files and publishes nothing', async () => {
+    const out = path.join(scratch, 'failing.dump');
+    await assert.rejects(backup({ ...fake('fail'), out }), /pg_dump failed/);
+    for (const f of [out, out + '.sha256', out + '.sha256.partial', out + '.partial']) assert.ok(!fs.existsSync(f), f);
+  });
+
+  await test('two runs aimed at the same destination: one publishes, the other is refused and removes nothing', async () => {
+    const out = path.join(scratch, 'shared.dump');
+    const results = await Promise.allSettled([backup({ ...fake('slow'), out }), backup({ ...fake('slow'), out })]);
+    const won = results.filter((r) => r.status === 'fulfilled');
+    const lost = results.filter((r) => r.status === 'rejected');
+    assert.equal(won.length, 1, JSON.stringify(results.map((r) => r.reason && r.reason.message)));
+    assert.equal(lost.length, 1);
+    assert.match(lost[0].reason.message, /another backup is writing/);
+    const check = await verifyArchive(out, { pgRestore: fakeRestore });
+    assert.equal(check.sha256, won[0].value.sha256);
+    assert.equal(check.checksumChecked, true);
+    assert.deepEqual(leftovers(out), []);
+  });
+
   // ---- failure behaviour against an unreachable server (needs pg_dump, nothing else)
   if (!have('pg_dump')) {
     console.log('SKIPPED  unreachable-database and dump tests: pg_dump is not installed');

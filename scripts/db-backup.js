@@ -127,24 +127,63 @@ async function listArchive(file, { pgRestore = 'pg_restore' } = {}) {
   return { entries: entries.length, tables, hasMigrations };
 }
 
-/** Runs pg_dump into `<out>.partial`, verifies it, and only then moves it to `<out>` with a checksum beside it. */
+/**
+ * Creates a new file that must not already exist, with mode 0600 set at creation (not after writing, so no umask or
+ * window can expose it). Fails with EEXIST when the name is taken.
+ */
+function createPrivateExclusive(file, data = '') {
+  const fd = fs.openSync(file, 'wx', 0o600);
+  try {
+    fs.fchmodSync(fd, 0o600);
+    if (data) fs.writeSync(fd, data);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Reserves a working name for this run. A name already taken belongs to another run, so the caller must not delete it. */
+function reserveWorkingFile(file, data = '') {
+  try {
+    createPrivateExclusive(file, data);
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      throw new Error(`another backup is writing this destination, or an earlier run left ${path.basename(file)} behind; nothing was changed`);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Runs pg_dump into a reserved `<out>.partial`, verifies it, stages its checksum, and only then publishes the dump and
+ * its checksum. Publishing uses hard links, which fail rather than replace a file that appeared meanwhile.
+ * On failure only the files this invocation created are removed; a run that could not reserve its name removes nothing.
+ */
 async function backup({ url, out, pgDump = 'pg_dump', pgRestore = 'pg_restore' }) {
   const env = pgEnvFromUrl(url);
   const dest = checkOutPath(out);
   const partial = dest + '.partial';
+  const stagedSum = dest + '.sha256.partial';
+  reserveWorkingFile(partial); // before pg_dump writes anything
+  const created = [partial];
   try {
     const dump = await run(pgDump, ['--format=custom', '--no-owner', '--no-acl', '--file', partial], env);
     if (dump.code !== 0) throw new Error(`pg_dump failed (exit ${dump.code}): ${dump.stderr || 'no details'}`);
     const info = await listArchive(partial, { pgRestore });
     if (!info.hasMigrations) throw new Error('the dump has no schema_migrations table: this is not the Tableverse database');
-    fs.chmodSync(partial, 0o600);
     const sha256 = await sha256File(partial);
     const bytes = fs.statSync(partial).size;
-    fs.renameSync(partial, dest);
-    fs.writeFileSync(dest + '.sha256', `${sha256}  ${path.basename(dest)}\n`, { mode: 0o600 });
+    // Stage the checksum before the dump is published, so a published dump always has its checksum ready beside it.
+    reserveWorkingFile(stagedSum, `${sha256}  ${path.basename(dest)}\n`);
+    created.push(stagedSum); // pushed only once this run has created it
+    fs.linkSync(partial, dest);
+    created.push(dest);
+    fs.linkSync(stagedSum, dest + '.sha256');
+    created.push(dest + '.sha256');
+    fs.rmSync(partial, { force: true });
+    fs.rmSync(stagedSum, { force: true });
     return { file: dest, bytes, sha256, ...info };
   } catch (err) {
-    fs.rmSync(partial, { force: true });
+    for (const f of created.reverse()) fs.rmSync(f, { force: true });
     throw err;
   }
 }
