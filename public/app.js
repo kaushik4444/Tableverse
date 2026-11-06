@@ -523,6 +523,7 @@
 
   async function loadSocial({ quiet = false } = {}) {
     if (!S.ready || S.guest) return;
+    let before = -1;
     if (!quiet) { S.socialLoading = true; S.socialError = ''; render(); }
     try {
       const paths = [
@@ -538,6 +539,7 @@
         if (!r.ok || !data.ok) throw new Error(data.error || 'Could not load friends.');
         return data;
       }));
+      before = (S.friendRequests.incoming || []).length + (S.invitations.incoming || []).length;
       S.friends = results[0].friends || [];
       S.friendRequests = { incoming: results[1].requests || [], outgoing: results[2].requests || [] };
       S.invitations = { incoming: results[3].invitations || [], outgoing: results[4].invitations || [] };
@@ -546,7 +548,8 @@
       S.socialError = error.message || 'Could not load friends.';
     } finally {
       S.socialLoading = false;
-      if (!S.room) render();
+      const after = (S.friendRequests.incoming || []).length + (S.invitations.incoming || []).length;
+      if (!S.room || S.room.status === 'lobby' || after !== before) render(); // in a running game only redraw when the bell count changed
     }
   }
 
@@ -774,7 +777,7 @@
       case 'socialNotice':
         S.socialNotice = m.text || 'You have a new friends update.';
         toast(S.socialNotice);
-        if (S.ready && !S.room) loadSocial({ quiet: true });
+        if (S.ready) loadSocial({ quiet: true });
         render();
         break;
       case 'latency':
@@ -1433,7 +1436,8 @@
     const pop = wrap.querySelector('.tb-pop');
     extras.forEach((b) => pop.appendChild(b));
     const vc = document.createElement('span'); vc.innerHTML = voiceButtonsHTML(); // microphone and speaker
-    bar.replaceChildren(...[chat, emote, ...vc.children, wrap, leave].filter(Boolean)); // chat, reactions, voice, ⋯, then leave as the last button
+    const bell = document.createElement('span'); bell.innerHTML = S.guest || !pendingSocial() ? '' : bellHTML(); // friend requests and invitations waiting
+    bar.replaceChildren(...[chat, emote, ...bell.children, ...vc.children, wrap, leave].filter(Boolean)); // chat, reactions, voice, ⋯, then leave as the last button
   }
   function setTools(open) {
     S.toolsOpen = open;
@@ -1720,7 +1724,7 @@
       <div class="row" style="justify-content:space-between">
         <button class="btn ghost small" data-act="leave">← Leave</button>
         <h2>${esc(g.icon)} ${esc(g.name)}</h2>
-        <span class="row" style="gap:6px">${voiceButtonsHTML()}${CardTable.chat.button()}<button class="btn ghost small" data-act="rules" data-game="${esc(r.gameId)}">Rules</button></span>
+        <span class="row" style="gap:6px">${S.guest || !pendingSocial() ? '' : bellHTML()}${voiceButtonsHTML()}${CardTable.chat.button()}<button class="btn ghost small" data-act="rules" data-game="${esc(r.gameId)}">Rules</button></span>
       </div>
       ${spectating ? `<section class="panel"><h3>👁 You are watching</h3><p class="hint" style="text-align:left;margin:6px 0 10px">The next game starts when the host presses Start. ${open > 0 ? 'There is an open seat if you want to play.' : 'Ask the host to free a seat if you want to play.'}</p>${open > 0 ? '<button class="btn" data-act="sit">Take a seat</button>' : ''}</section>` : ''}
       ${r.spectators && r.spectators.length ? `<details id="fold-spectators" class="spectator-list"><summary>👁 ${r.spectators.length} watching</summary>${isHost ? `<ul class="spectator-people">${r.spectators.map((x) => `<li><span class="nm">${esc(x.name)}</span><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(x.id)}" data-name="${esc(x.name)}" aria-label="Remove ${esc(x.name)} from the table" title="Remove from table">✕</button></li>`).join('')}</ul>` : `<div class="spectator-names">${r.spectators.map((x) => esc(x.name)).join(', ')}</div>`}</details>` : ''}

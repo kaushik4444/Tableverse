@@ -58,6 +58,7 @@ function wsClient(port, token) {
     if (m.t === 'error') c.errors.push(m.message);
     if (m.t === 'notice') c.notices.push(m.text);
     if (m.t === 'socialPresence') c.presence.push(m);
+    if (m.t === 'socialNotice') c.social = (c.social || []).concat(m);
   });
   return c;
 }
@@ -208,6 +209,20 @@ async function run() {
       assert.ok(seated(creator.client, creator.id), 'and still seated after reconnecting');
     });
 
+    await test('any seated player can invite (not only the host); a decline tells the inviter, who can invite again', async () => {
+      const { host, guests: [g1], code } = await lobby(1);
+      const late = await account('Late'); await befriend(g1, late);
+      assert.equal(await invite(g1, late, code).then(() => 'ok'), 'ok', 'a seated guest invited a friend and that friend got in');
+      assert.ok(seated(late.client, late.id));
+      const other = await account('Other'); await befriend(g1, other);
+      const inv = await g1.browser.post('/api/me/table-invitations', { username: other.username, gameId: 'wizard', roomCode: code, expiresAt: expiresAt() });
+      assert.equal(inv.status, 201);
+      assert.equal((await other.browser.post('/api/me/table-invitations/decline', { invitationId: inv.json.invitation.id })).status, 200);
+      await until(() => (g1.client.social || []).some((n) => n.kind === 'invitation-declined'), 'the inviter hears about the decline');
+      assert.equal((await g1.browser.post('/api/me/table-invitations', { username: other.username, gameId: 'wizard', roomCode: code, expiresAt: expiresAt() })).status, 201, 'invite again after a decline');
+      const stranger = await account('Stranger'); await befriend(other, stranger);
+      assert.equal((await other.browser.post('/api/me/table-invitations', { username: stranger.username, gameId: 'wizard', roomCode: code, expiresAt: expiresAt() })).status, 404, 'someone who is not seated cannot invite');
+    });
     await test('new invitations after a removal: refused until they are friends again; the old (revoked) invitation never works again; a fresh one does', async () => {
       const { host, guests: [g1], code } = await lobby(1);
       await unfriend(host, g1);

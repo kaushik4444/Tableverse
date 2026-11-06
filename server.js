@@ -184,7 +184,9 @@ function start(opts = {}) {
       validateRoomInvite: async (inviterId, gameId, roomCode) => {
         const room = rooms.get(roomCode);
         const player = players.get(inviterId);
-        return Boolean(room && player && room.visibility === 'private' && room.status === 'lobby' && room.gameId === gameId && room.hostId === inviterId && player.room === roomCode);
+        return Boolean(room && player && room.visibility === 'private' && room.status === 'lobby' && room.gameId === gameId && player.room === roomCode
+          && (room.hostId === inviterId || room.members.some((m) => m.id === inviterId && !m.bot)) // any seated player can invite, not only the host
+          && ((room.hosts || (room.hosts = new Set())).add(inviterId), true)); // their accepted invitations stay valid like a host's
       },
       onEvent: (event) => (event.type === 'friend-removed' ? onFriendRemoved(event.playerId, event.friendId) : notifyAccount(event.playerId, event)),
     },
@@ -347,6 +349,7 @@ function start(opts = {}) {
       'friend-request': 'You have a new friend request.',
       'friend-accepted': 'Your friend request was accepted.',
       'table-invitation': 'You have a new private-table invitation.',
+      'invitation-declined': 'A friend declined your table invitation. You can invite them again.',
     }[event.type];
     if (!text) return;
     send(recipient.ws, { t: 'socialNotice', kind: event.type, text, invitationId: event.invitationId });
