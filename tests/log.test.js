@@ -24,6 +24,58 @@ test('key=value and JSON-style secrets are masked', () => {
   assert.ok(!redactText('Authorization: Bearer eyJhbGciOi.sig').includes('eyJhbGciOi'));
 });
 
+// Regression: a quoted secret used to be masked only up to its first space, comma, ampersand or escaped quote, leaving
+// the rest of the password in logs. Each fragment below must be gone from the output.
+test('a quoted password is masked in full: spaces, commas, ampersands and escaped quotes', () => {
+  const cases = [
+    { input: '{"password":"correct horse battery staple"}', leaks: ['horse', 'battery', 'staple'] },
+    { input: '{"password":"a,b,c"}', leaks: ['b,c'] },
+    { input: '{"password":"x&y=z"}', leaks: ['&y=z'] },
+    { input: '{"password":"say \\"hi\\" now"}', leaks: ['hi', 'now'] },
+    { input: "{ password: 'two words, & more' }", leaks: ['words', 'more'] },
+    { input: '{"password":"abc def', leaks: ['def'] }, // unterminated: masked to the end
+  ];
+  for (const { input, leaks } of cases) {
+    const out = redactText(input);
+    assert.match(out, /\[redacted\]/, out);
+    for (const fragment of leaks) assert.ok(!out.includes(fragment), `"${fragment}" leaked in: ${out}`);
+  }
+});
+
+test('a password inside an error message keeps the message readable and loses the secret', () => {
+  const out = redactText('Error: login failed for ada password="pass word, & more" (attempt 2)');
+  assert.ok(!out.includes('pass word') && !out.includes('more'), out);
+  assert.match(out, /login failed for ada password="\[redacted\]" \(attempt 2\)/);
+});
+
+test('a password in an escaped JSON string (as logged inside another JSON field) is masked', () => {
+  const out = redactText('{"body":"{\\"password\\":\\"two words\\"}"}');
+  assert.ok(!out.includes('two words'), out);
+});
+
+test('secrets inside a stack trace are masked on every line that carries them', () => {
+  const err = new Error('request body {"password":"hunter two & three"} was rejected');
+  err.stack = [
+    'Error: request body {"password":"hunter two & three"} was rejected',
+    '    at parseBody (/app/lib/http.js:12:9)',
+    '    at handle (/app/lib/routes.js:40:3) password: "tail end, of secret"',
+  ].join('\n');
+  const serialised = JSON.stringify(redact({ err }));
+  for (const fragment of ['hunter', 'three', 'tail end', 'of secret']) {
+    assert.ok(!serialised.includes(fragment), `"${fragment}" leaked: ${serialised}`);
+  }
+  assert.ok(serialised.includes('parseBody'), 'the stack still shows where it failed');
+});
+
+test('a JSON-style secret logged as a field keeps valid JSON around the mask', () => {
+  const lines = [];
+  const log = createLogger({ write: (level, line) => lines.push(line) });
+  log.error('auth.failed', { body: { password: 'two words, & more', email: 'ada@example.com' } });
+  const entry = JSON.parse(lines[0]);
+  assert.equal(entry.body.password, '[redacted]');
+  assert.ok(!lines[0].includes('two words') && !lines[0].includes('more'));
+});
+
 test('Resend-style API keys are masked', () => {
   assert.ok(!redactText(`key ${RESEND_KEY} rejected`).includes('secretvalue'));
 });
