@@ -76,6 +76,26 @@ test('a JSON-style secret logged as a field keeps valid JSON around the mask', (
   assert.ok(!lines[0].includes('two words') && !lines[0].includes('more'));
 });
 
+// Regression: names that carry a prefix or suffix (secret_key, password_hash, session_id), cookie headers, Basic auth,
+// and a URL whose password holds an unencoded @ all leaked part or all of the secret.
+test('compound secret names, cookies, Basic auth and unencoded @ in URL passwords are masked', () => {
+  const cases = [
+    ['config secret_key=s3cr3tVALUE rejected', 's3cr3tVALUE'],
+    ['row password_hash=$argon2id$v=19$SECRETHASH', 'SECRETHASH'],
+    ['session_id=sidSECRETVALUE expired', 'sidSECRETVALUE'],
+    ['Cookie: ct_session=abc123SECRETxyz; ct_csrf=csrfSECRETval', 'abc123SECRETxyz'],
+    ['Cookie: ct_session=abc123SECRETxyz; ct_csrf=csrfSECRETval', 'csrfSECRETval'],
+    ['Authorization: Basic dXNlcjpTRUNSRVRwYXNz', 'dXNlcjpTRUNSRVRwYXNz'],
+    ['connect postgres://u:pa@SECRETss@db.example.net/app failed', 'SECRETss'],
+    ['access_token=accSECRETVALUE', 'accSECRETVALUE'],
+    ['{"client_secret": "two SECRET words"}', 'SECRET'],
+  ];
+  for (const [input, secret] of cases) {
+    const out = redactText(input);
+    assert.ok(!out.includes(secret), `"${secret}" leaked in: ${out}`);
+  }
+});
+
 test('Resend-style API keys are masked', () => {
   assert.ok(!redactText(`key ${RESEND_KEY} rejected`).includes('secretvalue'));
 });
