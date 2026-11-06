@@ -12,7 +12,7 @@ function response(status, body) {
   return { ok: status >= 200 && status < 300, status, async json() { return body; } };
 }
 
-async function scenario({ search = '?token=secret-token', fetch }) {
+async function scenario({ search = '?token=secret-token', fetch, waitForInitial = true }) {
   const elements = Object.fromEntries(
     ['verifyLoading', 'verifySuccess', 'verifyError', 'successTitle', 'errorTitle', 'errorMsg', 'verifyRetry']
       .map((id) => [id, { hidden: id !== 'verifyLoading', textContent: '', handler: null, focused: false, focus() { this.focused = true; }, addEventListener(type, fn) { if (type === 'click') this.handler = fn; } }])
@@ -29,8 +29,9 @@ async function scenario({ search = '?token=secret-token', fetch }) {
     window,
   };
   vm.runInNewContext(script, context, { filename: 'verify-email.js' });
-  await window.__tableverseVerification;
-  return { elements, historyCalls, location };
+  const completion = window.__tableverseVerification;
+  if (waitForInitial) await completion;
+  return { elements, historyCalls, location, completion };
 }
 
 async function main() {
@@ -56,6 +57,26 @@ async function main() {
   assert.equal(calls[1].options.credentials, 'same-origin');
   assert.deepEqual(JSON.parse(calls[1].options.body), { token: 'secret-token' });
 
+  // The loading state remains visible while the initial CSRF request is pending.
+  let releaseCsrf;
+  let pendingPost = null;
+  const pending = await scenario({
+    waitForInitial: false,
+    fetch: async (url, options = {}) => {
+      if (url.endsWith('/csrf')) return new Promise((resolve) => { releaseCsrf = resolve; });
+      pendingPost = { url, options };
+      return response(200, { ok: true });
+    }
+  });
+  assert.equal(pending.elements.verifyLoading.hidden, false);
+  assert.equal(pending.elements.verifySuccess.hidden, true);
+  assert.equal(pending.elements.verifyError.hidden, true);
+  assert.equal(pending.historyCalls.length, 1);
+  releaseCsrf(response(200, { csrfToken: 'pending-csrf' }));
+  await pending.completion;
+  assert.equal(pending.elements.verifySuccess.hidden, false);
+  assert.equal(pendingPost.url, '/api/auth/verify-email');
+  assert.equal(pendingPost.options.headers['X-CSRF-Token'], 'pending-csrf');
   // Missing token produces a useful terminal state and makes no request.
   let missingCalls = 0;
   const missing = await scenario({ search: '', fetch: async () => { missingCalls++; throw new Error('must not fetch'); } });
@@ -106,12 +127,27 @@ async function main() {
     assert.match(transient.elements.errorMsg.textContent, /temporarily|wait a moment/i);
   }
 
-  // Only the backend's CSRF-specific 403 is retryable; other authorization failures stay terminal.
-  const csrf403 = await scenario({ fetch: async (url) => url.endsWith('/csrf')
-    ? response(200, { csrfToken: 'csrf-value' })
-    : response(403, { error: 'Invalid CSRF token.' }) });
+  // A stale shared CSRF cookie can produce 403 without consuming the email token.
+  // Retry fetches the current cookie/header pair and resubmits the same email token.
+  let csrf403Fetches = 0;
+  let verify403Posts = 0;
+  const csrf403 = await scenario({ fetch: async (url, options = {}) => {
+    if (url.endsWith('/csrf')) {
+      csrf403Fetches++;
+      return response(200, { csrfToken: csrf403Fetches === 1 ? 'stale-csrf' : 'fresh-csrf' });
+    }
+    verify403Posts++;
+    assert.deepEqual(JSON.parse(options.body), { token: 'secret-token' });
+    if (verify403Posts === 1) return response(403, { error: 'Invalid CSRF token.' });
+    assert.equal(options.headers['X-CSRF-Token'], 'fresh-csrf');
+    return response(200, { ok: true });
+  } });
   assert.equal(csrf403.elements.verifyRetry.hidden, false);
   assert.match(csrf403.elements.errorMsg.textContent, /security check expired/i);
+  await csrf403.elements.verifyRetry.handler();
+  assert.equal(csrf403Fetches, 2);
+  assert.equal(verify403Posts, 2);
+  assert.equal(csrf403.elements.verifySuccess.hidden, false);
 
   const forbidden = await scenario({ fetch: async (url) => url.endsWith('/csrf')
     ? response(200, { csrfToken: 'csrf-value' })
@@ -129,7 +165,7 @@ async function main() {
   const server = await scenario({ fetch: async (url) => url.endsWith('/csrf')
     ? response(200, { csrfToken: 'csrf-value' })
     : response(503, { error: 'Temporarily unavailable' }) });
-  assert.equal(server.elements.errorMsg.textContent, 'Temporarily unavailable');
+  assert.equal(server.elements.errorMsg.textContent, 'The verification service is temporarily unavailable. Please try again.');
   assert.equal(server.elements.verifyRetry.hidden, false);
 
   console.log('All verify-email frontend behavior tests passed');
