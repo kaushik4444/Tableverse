@@ -1,0 +1,83 @@
+'use strict';
+// Structured logs must never write a password, token, key, database URL or full e-mail address.
+const assert = require('node:assert/strict');
+const { createLogger, redactText, redact, requestIdFrom } = require('../lib/log');
+
+let passed = 0;
+function test(name, fn) {
+  try { fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
+}
+
+const DB_URL = 'postgres://tv_app:Sup3rSecretPw@ep-cool-name-123.eu-central-1.aws.neon.tech/neondb?sslmode=require';
+const RESEND_KEY = 're_AbCdEf123456_secretvalue';
+
+test('database URLs lose their credentials wherever they appear in text', () => {
+  const out = redactText(`connect failed for ${DB_URL}`);
+  assert.ok(!out.includes('Sup3rSecretPw'), out);
+  assert.ok(!out.includes('tv_app:'), out);
+  assert.match(out, /postgres:\/\/\[redacted\]@ep-cool-name/);
+});
+
+test('key=value and JSON-style secrets are masked', () => {
+  assert.equal(redactText('token=abc123def456 next'), 'token=[redacted] next');
+  assert.ok(!redactText('{"password":"hunter2hunter2"}').includes('hunter2'));
+  assert.ok(!redactText('Authorization: Bearer eyJhbGciOi.sig').includes('eyJhbGciOi'));
+});
+
+test('Resend-style API keys are masked', () => {
+  assert.ok(!redactText(`key ${RESEND_KEY} rejected`).includes('secretvalue'));
+});
+
+test('e-mail addresses are masked to the first letter and domain', () => {
+  assert.equal(redactText('sent to ada.lovelace@example.com'), 'sent to a***@example.com');
+});
+
+test('sensitive object fields are replaced by name, whatever their content', () => {
+  const out = redact({ roomCode: 'ABCD', verifyToken: 'x'.repeat(40), password: 'p', databaseUrl: DB_URL, nested: { apiKey: 'k' } });
+  assert.equal(out.roomCode, 'ABCD');
+  assert.equal(out.verifyToken, '[redacted]');
+  assert.equal(out.password, '[redacted]');
+  assert.equal(out.databaseUrl, '[redacted]');
+  assert.equal(out.nested.apiKey, '[redacted]');
+});
+
+test('an Error is flattened to name, code, scrubbed message and stack', () => {
+  const err = new Error(`boom for ${DB_URL}`);
+  err.code = '28P01';
+  const out = redact({ err });
+  assert.equal(out.err.code, '28P01');
+  assert.equal(out.err.name, 'Error');
+  assert.ok(!JSON.stringify(out).includes('Sup3rSecretPw'));
+});
+
+test('a logged line is one JSON object with time, level, component, event and scrubbed fields', () => {
+  const lines = [];
+  const log = createLogger({ component: 'db', write: (level, line) => lines.push({ level, line }), clock: () => new Date('2026-11-06T12:00:00Z') });
+  log.error('db.pool_error', { code: '57P01', detail: DB_URL, verifyToken: 'abcdefghijklmnop' });
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].level, 'error');
+  const entry = JSON.parse(lines[0].line);
+  assert.deepEqual(Object.keys(entry).slice(0, 4), ['time', 'level', 'component', 'event']);
+  assert.equal(entry.event, 'db.pool_error');
+  assert.equal(entry.component, 'db');
+  assert.equal(entry.time, '2026-11-06T12:00:00.000Z');
+  assert.equal(entry.verifyToken, '[redacted]');
+  assert.ok(!lines[0].line.includes('Sup3rSecretPw'));
+});
+
+test('info goes to the info channel, warnings and errors to the error channel', () => {
+  const seen = [];
+  const log = createLogger({ write: (level) => seen.push(level) });
+  log.info('a'); log.warn('b'); log.error('c');
+  assert.deepEqual(seen, ['info', 'warn', 'error']);
+});
+
+test('a caller-supplied request ID is kept only when it is a plain token', () => {
+  assert.equal(requestIdFrom('abc-DEF_123.456'), 'abc-DEF_123.456');
+  const injected = requestIdFrom('ok\nSet-Cookie: x=1');
+  assert.match(injected, /^[0-9a-f-]{36}$/);
+  assert.match(requestIdFrom(undefined), /^[0-9a-f-]{36}$/);
+  assert.match(requestIdFrom('short'), /^[0-9a-f-]{36}$/);
+});
+
+console.log(`\n${passed} log tests passed`);
