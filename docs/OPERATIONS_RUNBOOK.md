@@ -41,16 +41,16 @@ Startup log `Database migration failed: ...` and the deploy does not become live
 4. Re-enter a lost result by hand only with the player ids from the log; the match key makes a repeated insert a no-op.
 
 ## Backups and restore (Neon) — verify before relying on it
-Accounts and finished matches are the only persistent data, so the database backup is the only recovery path. **Status: not yet verified.** Fill in the blanks below after checking in the Neon console.
-- Plan and history retention window (Neon > project > Settings > Storage): `____` (the free plan keeps a short window; anything older cannot be restored).
-- Restore test last performed: `____` by `____`. Procedure: Neon > Branches > Create branch > "Past data" (pick a time a few minutes ago) > copy that branch's connection string > `psql "<string>" -c "SELECT count(*) FROM matches;"` and compare with production. Delete the test branch afterwards.
+Accounts and finished matches are the only persistent data, so the database backup is the only recovery path. **Status: partially verified** — a test branch was created from history on 2026-11-06, but the row-count comparison and the retention-window check below were not completed. Treat restore as unconfirmed until both blanks are filled in.
+- Plan and history retention window (Neon > project > Settings > Storage, or the earliest time offered when creating a branch "from a point in time"): `____`.
+- Restore test last performed: `____` by `____`. Procedure: Neon > Branches > Create branch > "Past data" (pick a time a few minutes ago) > open that branch > Connection Details > copy its connection string > in the Neon SQL editor (switch the branch selector to the test branch) run `SELECT count(*) FROM matches;` and compare against the same query on `production`. Delete the test branch afterwards.
 - To recover for real: restore into a new branch, point `DATABASE_URL` on Render at it (or restore the branch over the main one in Neon), redeploy, check `/readyz`.
 - Optional extra copy independent of Neon: a scheduled `pg_dump "$DATABASE_URL" -Fc -f tableverse-$(date +%F).dump`, stored somewhere outside Neon and Render.
 
 ## Voice chat connectivity (TURN) — verify in production
 Voice is peer to peer. With only STUN (the default), players on some mobile carriers or office networks cannot hear each other.
-- Check: Render > service > Environment has `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (or `ICE_SERVERS`). Status: `____`.
-- Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other.
+- Check: Render > service > Environment has `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (or `ICE_SERVERS`). Status: **configured** (Metered.ca free tier, set on Render, 2026-11-06).
+- Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: `____` (not yet run — do this before relying on it for friend testing on restrictive networks).
 - If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
 
 ## Repository safety
