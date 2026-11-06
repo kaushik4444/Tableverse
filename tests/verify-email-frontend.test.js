@@ -96,6 +96,29 @@ async function main() {
   const csrfMissing = await scenario({ fetch: async () => response(200, {}) });
   assert.equal(csrfMissing.elements.verifyRetry.hidden, false);
 
+  // Non-JSON proxy failures must be presented as temporary, retryable service errors.
+  for (const status of [429, 502, 503]) {
+    const transient = await scenario({ fetch: async (url) => url.endsWith('/csrf')
+      ? response(200, { csrfToken: 'csrf-value' })
+      : { ok: false, status, async json() { throw new Error('not JSON'); } } });
+    assert.equal(transient.elements.errorTitle.textContent, 'Temporary verification problem');
+    assert.equal(transient.elements.verifyRetry.hidden, false);
+    assert.match(transient.elements.errorMsg.textContent, /temporarily|wait a moment/i);
+  }
+
+  // Only the backend's CSRF-specific 403 is retryable; other authorization failures stay terminal.
+  const csrf403 = await scenario({ fetch: async (url) => url.endsWith('/csrf')
+    ? response(200, { csrfToken: 'csrf-value' })
+    : response(403, { error: 'Invalid CSRF token.' }) });
+  assert.equal(csrf403.elements.verifyRetry.hidden, false);
+  assert.match(csrf403.elements.errorMsg.textContent, /security check expired/i);
+
+  const forbidden = await scenario({ fetch: async (url) => url.endsWith('/csrf')
+    ? response(200, { csrfToken: 'csrf-value' })
+    : response(403, { error: 'Forbidden' }) });
+  assert.equal(forbidden.elements.verifyRetry.hidden, true);
+  assert.equal(forbidden.elements.errorMsg.textContent, 'Forbidden');
+
   // Network errors are retryable and do not expose the token in the UI.
   const network = await scenario({ fetch: async () => { throw new Error('offline'); } });
   assert.equal(network.elements.errorTitle.textContent, 'Connection error');
