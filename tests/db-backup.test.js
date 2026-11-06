@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { pgEnvFromUrl, checkOutPath, backup, verifyArchive } = require('../scripts/db-backup');
+const { pgEnvFromUrl, checkOutPath, backup, verifyArchive, createPrivateExclusive } = require('../scripts/db-backup');
 const { assertSafe } = require('./helpers/testdb');
 
 let passed = 0;
@@ -108,6 +108,18 @@ process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
     await assert.rejects(backup({ url: 'postgres://u:Sup3rSecretPw@127.0.0.1:1/tv', out: path.join(repoLink, 'refused.dump') }), /inside the repository/);
     assert.ok(!fs.existsSync(path.join(__dirname, '..', 'refused.dump')));
     assert.ok(!fs.existsSync(path.join(__dirname, '..', 'refused.dump.partial')));
+  });
+
+  await test('failed checksum initialization removes only the file this invocation created', async () => {
+    const file = path.join(scratch, 'init-failure.partial');
+    const originalWrite = fs.writeSync;
+    fs.writeSync = () => { const err = new Error('simulated disk full'); err.code = 'ENOSPC'; throw err; };
+    try {
+      assert.throws(() => createPrivateExclusive(file, 'checksum'), /simulated disk full/);
+      assert.ok(!fs.existsSync(file), 'the incomplete file is removed');
+    } finally {
+      fs.writeSync = originalWrite;
+    }
   });
 
   // ---- reservation, concurrency and cleanup, with stand-in pg_dump / pg_restore (no database needed).
