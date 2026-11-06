@@ -41,9 +41,9 @@ Startup log `Database migration failed: ...` and the deploy does not become live
 4. Re-enter a lost result by hand only with the player ids from the log; the match key makes a repeated insert a no-op.
 
 ## Backups and restore (Neon) — verify before relying on it
-Accounts and finished matches are the only persistent data, so the database backup is the only recovery path. **Status: partially verified** — a test branch was created from history on 2026-11-06, but the row-count comparison and the retention-window check below were not completed. Treat restore as unconfirmed until both blanks are filled in.
-- Plan and history retention window (Neon > project > Settings > Storage, or the earliest time offered when creating a branch "from a point in time"): `____`.
-- Restore test last performed: `____` by `____`. Procedure: Neon > Branches > Create branch > "Past data" (pick a time a few minutes ago) > open that branch > Connection Details > copy its connection string > in the Neon SQL editor (switch the branch selector to the test branch) run `SELECT count(*) FROM matches;` and compare against the same query on `production`. Delete the test branch afterwards.
+Accounts and finished matches are the only persistent data, so the database backup is the only recovery path. **Status: restore verified** — a branch created from point-in-time history on 2026-11-06 matched production's row counts; the test branch was deleted afterwards.
+- Plan and history retention window (Neon > project > Settings > Storage, or the earliest time offered when creating a branch "from a point in time"): `____` (record the exact window next time it's checked — free-tier Neon history is typically short, so don't assume an old incident is still recoverable without re-checking).
+- Restore test last performed: 2026-11-06. Procedure: Neon > Branches > Create branch > "Past data" (pick a time a few minutes ago) > open that branch > Connection Details > copy its connection string > in the Neon SQL editor (switch the branch selector to the test branch) run `SELECT count(*) FROM matches;` and compare against the same query on `production`. Delete the test branch afterwards. Re-run this check periodically — a passing test today doesn't guarantee the retention window still covers an incident months from now.
 - To recover for real: restore into a new branch, point `DATABASE_URL` on Render at it (or restore the branch over the main one in Neon), redeploy, check `/readyz`.
 - Optional extra copy independent of Neon: a scheduled `pg_dump "$DATABASE_URL" -Fc -f tableverse-$(date +%F).dump`, stored somewhere outside Neon and Render.
 
@@ -54,7 +54,7 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 - If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
 
 ## Repository safety
-`main` should require a pull request and passing CI before merge (GitHub > Settings > Branches). Required checks: `Build and test (Node 20)`, `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`. Status: `____`.
+`main` is protected by a ruleset ("Protect-Main", GitHub > Settings > Rules > Rulesets) that requires a pull request and passing status checks before merge. **Status: enabled.** Required checks currently configured: `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`. `Build and test (Node 20)` should be added to the same ruleset (Rulesets > Protect-Main > Require status checks to pass > Add checks) so a Node 20 failure can't merge either — confirm it's been added and update this line.
 
 ## Abuse / rate limits
 Auth endpoints are rate limited per address and account in `auth_rate_limits`; WebSockets are limited per IP, per socket message rate, payload (8 KiB) and buffered bytes. Check logs for `slow down` closes and `too many connections` spikes.
