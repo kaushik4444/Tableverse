@@ -3,21 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
   <title>Verify Email · Tableverse</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/table.css">
+  <style>
+    .verify-container {
+      max-width: 480px;
+      margin: 80px auto;
+      padding: 32px;
+      background: var(--surface, #1e1e24);
+      border: 1px solid var(--border, rgba(255,255,255,0.1));
+      border-radius: 12px;
+      text-align: center;
+      color: var(--text, #f0f0f5);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .verify-container h1 { font-size: 24px; margin-bottom: 16px; }
+    .verify-container p { margin-bottom: 24px; color: var(--muted, #a0a0b0); line-height: 1.5; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--primary, #1f6feb);
+      border-radius: 50%;
+      margin: 24px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn { display: inline-block; padding: 12px 24px; background: var(--primary, #1f6feb); color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; font: inherit; }
+    .btn:hover { opacity: 0.9; }
+    .btn.secondary { background: transparent; border: 1px solid var(--border, rgba(255,255,255,0.2)); color: inherit; margin: 0 4px 8px; }
+    [hidden] { display: none !important; }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
-  <div id="banner" hidden>Reconnecting…</div>
-  <div id="toasts" aria-live="polite"></div>
-  <script src="/sound.js" defer></script>
-  <script src="/app.js" defer></script>
-  <script src="/table-ui.js" defer></script>
-  <script src="/wizard-cards.js" defer></script>
-  <script src="/games/wizard.js" defer></script>
-  <script src="/games/twentynine.js" defer></script>
-  <script src="/games/poker.js" defer></script>
-  <script src="/games/themind.js" defer></script>
+  <main id="verifyApp" class="verify-container" role="status" aria-live="polite" aria-atomic="true">
+    <div id="verifyLoading">
+      <h1>Verifying your email...</h1>
+      <div class="spinner" role="status" aria-label="Loading"></div>
+      <p>Please wait while we confirm your account.</p>
+    </div>
+    <div id="verifySuccess" hidden>
+      <h1 id="successTitle" tabindex="-1">Email verified successfully!</h1>
+      <p>Your email has been confirmed. You can now sign in and join the table.</p>
+      <a href="/" class="btn">Sign in to Tableverse</a>
+    </div>
+    <div id="verifyError" hidden>
+      <h1 id="errorTitle" tabindex="-1">Verification failed</h1>
+      <p id="errorMsg">The verification link is invalid or has expired.</p>
+      <button id="verifyRetry" class="btn secondary" type="button" hidden>Try again</button>
+      <a href="/" class="btn">Back to Home</a>
+    </div>
+  </main>
+  <script src="/verify-email.js" defer></script>
 </body>
 </html>
