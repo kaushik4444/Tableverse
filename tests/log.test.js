@@ -67,6 +67,16 @@ test('secrets inside a stack trace are masked on every line that carries them', 
   assert.ok(serialised.includes('parseBody'), 'the stack still shows where it failed');
 });
 
+// Regression: a 64-hex request ID is a plain token that responses echo; masking it broke log correlation.
+test('a validated 64-hex request ID stays searchable in the log line, while other hex tokens are masked', () => {
+  const lines = [];
+  const log = createLogger({ write: (level, line) => lines.push(line) });
+  const requestId = '9f8a1c0e7b3d5a2f4e6c8b0d1a3f5e7c9b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a';
+  log.info('http.request', { requestId, note: `raw ${requestId} seen` });
+  assert.ok(lines[0].includes(`"requestId":"${requestId}"`), lines[0]);
+  assert.ok(!lines[0].includes(`raw ${requestId}`), 'the same value in free text is still masked');
+});
+
 // Regression: short password names and CSRF tokens were logged in clear as object fields.
 test('object fields named pw, pwd, passwd, csrf or X-CSRF are masked wherever they nest', () => {
   const out = redact({
