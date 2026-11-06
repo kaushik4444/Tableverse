@@ -100,6 +100,10 @@ test('compound secret names, cookies, Basic auth and unencoded @ in URL password
     ['connect postgres://u:pa@SECRETss@db.example.net/app failed', 'SECRETss'],
     ['access_token=accSECRETVALUE', 'accSECRETVALUE'],
     ['{"client_secret": "two SECRET words"}', 'SECRET'],
+    ['reset failed reset_code=482913 sent', '482913'],
+    ['login failed hash=$argon2id$v=19$m=19456,t=2,p=1$0GgPfIM9$iKR5A2M4KmSECRETHASH', 'SECRETHASH'],
+    ['token 9f8a1c0e7b3d5a2f4e6c8b0d1a3f5e7c9b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a rejected', '9f8a1c0e7b3d5a2f4e6c'],
+    ['verify link https://playtableverse.com/verify-email.html?token=9f8a1c0e7b3d5a2f4e6c8b0d1a3f5e7c9b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a', '9f8a1c0e7b3d5a2f4e6c'],
   ];
   for (const [input, secret] of cases) {
     const out = redactText(input);

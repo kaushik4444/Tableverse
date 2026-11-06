@@ -52,7 +52,7 @@ const quietLog = () => { const calls = []; return { calls, info: (e, f) => calls
   await test('an outage is logged once, and recovery is logged once', async () => {
     const log = quietLog();
     let up = false;
-    const check = createReadinessCheck({ hasDatabase: () => true, ping: async () => { if (!up) throw new Error('down'); }, log });
+    const check = createReadinessCheck({ hasDatabase: () => true, ping: async () => { if (!up) throw new Error('down'); }, log, cacheMs: 0 });
     await check(); await check(); await check();
     assert.deepEqual(log.calls.map((c) => c[1]), ['health.db_unreachable']);
     up = true;
@@ -70,6 +70,39 @@ const quietLog = () => { const calls = []; return { calls, info: (e, f) => calls
     assert.ok(lines[0].includes('ECONNREFUSED'));
     assert.ok(!lines[0].includes('Sup3rSecretPw'));
     assert.ok(lines[0].includes('health.db_unreachable'));
+  });
+
+  // Regression: /readyz is public. During an outage every request used to start its own database round trip, so a burst
+  // of requests queued that many connection requests on the pool. Now one probe runs at a time and its answer is reused.
+  await test('a burst of concurrent readiness requests during an outage starts exactly one database probe', async () => {
+    let calls = 0;
+    let release;
+    const hang = new Promise((resolve) => { release = resolve; });
+    const check = createReadinessCheck({ hasDatabase: () => true, ping: () => { calls++; return hang; }, timeoutMs: 50, cacheMs: 0 });
+    const answers = await Promise.all(Array.from({ length: 200 }, () => check()));
+    release();
+    assert.equal(calls, 1, `probes started: ${calls}`);
+    assert.ok(answers.every((a) => a.status === 503 && a.body === 'database unavailable'));
+  });
+
+  await test('readiness polls inside the cache window reuse the last answer instead of querying again', async () => {
+    let calls = 0;
+    const check = createReadinessCheck({ hasDatabase: () => true, ping: async () => { calls++; }, cacheMs: 2000 });
+    await check();
+    await check();
+    await check();
+    assert.equal(calls, 1);
+  });
+
+  await test('after the cache window a readiness request probes again, so recovery is seen', async () => {
+    let up = false;
+    let calls = 0;
+    const check = createReadinessCheck({ hasDatabase: () => true, ping: async () => { calls++; if (!up) throw new Error('down'); }, cacheMs: 20 });
+    assert.equal((await check()).status, 503);
+    up = true;
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal((await check()).status, 200);
+    assert.equal(calls, 2);
   });
 
   console.log(`\n${passed} health tests passed`);
