@@ -21,6 +21,12 @@ process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
 
 (async () => {
   // ---- connection strings: parts go to PG* variables, never to a command line
+  await test('a URL host parameter selects the Unix socket and does not force TLS', async () => {
+    const env = pgEnvFromUrl('postgres://u:p@localhost/app?host=%2Fvar%2Frun%2Fpostgresql');
+    assert.equal(env.PGHOST, '/var/run/postgresql');
+    assert.equal(env.PGSSLMODE, undefined);
+  });
+
   await test('a Neon-style URL with an encoded password is split into PG* variables', async () => {
     const env = pgEnvFromUrl('postgres://tv%5Fapp:p%40ss%2Fw@ep-x.eu-central-1.aws.neon.tech/neondb?sslmode=require');
     assert.deepEqual(env, { PGHOST: 'ep-x.eu-central-1.aws.neon.tech', PGPORT: '5432', PGUSER: 'tv_app', PGPASSWORD: 'p@ss/w', PGDATABASE: 'neondb', PGSSLMODE: 'require' });
