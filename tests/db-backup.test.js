@@ -43,6 +43,22 @@ process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
     }
   });
 
+  // Regression: libpq reads a database name with `=` or a postgres:// prefix as a connection string, so it could point
+  // pg_restore at another server (and past the production check). Such names are refused before any tool runs.
+  await test('a database name the PostgreSQL tools would read as a connection string is refused', async () => {
+    for (const bad of [
+      'postgres://u:Sup3rSecretPw@127.0.0.1:5432/tv%3Dhost%3Devil',
+      'postgres://u:Sup3rSecretPw@127.0.0.1:5432/postgres:%2F%2Fother%2Fdb',
+      'postgres://u:Sup3rSecretPw@127.0.0.1:5432/host=other',
+    ]) {
+      let message = '';
+      try { pgEnvFromUrl(bad); } catch (e) { message = e.message; }
+      assert.match(message, /connection string/, `expected a refusal for ${bad}`);
+      assert.ok(!message.includes('Sup3rSecretPw'), message);
+    }
+    assert.equal(pgEnvFromUrl('postgres://u:p@127.0.0.1:5432/tv_test_restore_abc123').PGDATABASE, 'tv_test_restore_abc123');
+  });
+
   // ---- output path rules
   await test('the backup must be a .dump file outside the repository and must not overwrite', async () => {
     const repoFile = path.join(__dirname, '..', 'backups', 'x.dump');

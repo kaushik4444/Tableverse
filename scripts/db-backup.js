@@ -34,6 +34,11 @@ function pgEnvFromUrl(raw) {
   const user = decodeURIComponent(u.username);
   if (!host) throw new Error('DATABASE_URL has no host');
   if (!database) throw new Error('DATABASE_URL has no database name');
+  // libpq (used by pg_dump, pg_restore and psql) reads a database name that contains `=` or starts with a postgres://
+  // prefix as a connection string, which could point the tool at another server and skip the production check.
+  if (/=/.test(database) || /^postgres(ql)?:\/\//i.test(database)) {
+    throw new Error('DATABASE_URL names a database in a form the PostgreSQL tools read as a connection string; use a plain database name');
+  }
   if (!user) throw new Error('DATABASE_URL has no user name');
   const env = {
     PGHOST: host,
