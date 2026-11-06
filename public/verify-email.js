@@ -7,6 +7,7 @@
   const errorTitleEl = document.getElementById('errorTitle');
   const errorMsgEl = document.getElementById('errorMsg');
   const retryEl = document.getElementById('verifyRetry');
+  const successTitleEl = document.getElementById('successTitle');
 
   const token = new URLSearchParams(location.search).get('token');
 
@@ -20,6 +21,7 @@
     errorTitleEl.textContent = title;
     errorMsgEl.textContent = message;
     retryEl.hidden = !retryable;
+    errorTitleEl.focus();
   }
 
   async function verify() {
@@ -73,6 +75,7 @@
         loadingEl.hidden = true;
         errorEl.hidden = true;
         successEl.hidden = false;
+        successTitleEl.focus();
         return;
       }
 
