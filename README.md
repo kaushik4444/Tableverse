@@ -2,7 +2,7 @@
 
 > **Your friends. Your games. One table.**
 
-Live site: **https://game-fmy4.onrender.com**
+Live site: the canonical address is whatever `PUBLIC_APP_URL` is set to on Render (the Render default address, `https://game-fmy4.onrender.com`, keeps working). See [Domains](#domains) before moving to a custom domain such as playtableverse.com.
 
 Tableverse is a browser-based multiplayer game arena for quick social sessions with no install.
 
@@ -147,6 +147,17 @@ If provider delivery fails after signup, the account is still created and the re
 - `REQUIRE_EMAIL_VERIFICATION=true` (secure default)
 
 Set `DATABASE_URL` and email variables in Render env settings before deploying.
+
+## Domains
+
+Email links (verification, password reset) are built from `PUBLIC_APP_URL`, so it must always be the one address players actually use, with `https://` and no trailing slash.
+
+To move to a custom domain (for example `https://playtableverse.com`):
+1. Render → service → Settings → Custom Domains → add the domain (and `www`), then create the DNS records Render shows. Wait for the certificate to show as issued.
+2. Set `PUBLIC_APP_URL` to the new address and redeploy.
+3. In Resend, verify the sending domain (SPF/DKIM records) and set `EMAIL_FROM` to an address on it.
+4. Decide whether the old `onrender.com` address should redirect to the new one (Render can redirect `www` to the apex; the old subdomain keeps serving unless you add a redirect) and update this README's live-site line.
+5. Check a signup email: the link must open the new domain.
 
 ## Production readiness
 

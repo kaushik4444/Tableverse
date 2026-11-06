@@ -40,5 +40,21 @@ Startup log `Database migration failed: ...` and the deploy does not become live
 3. In SQL: `SELECT id, game_id, finished_at FROM matches WHERE finished_at > now() - interval '1 day' ORDER BY finished_at DESC;` and compare with the logged keys (`match_key`).
 4. Re-enter a lost result by hand only with the player ids from the log; the match key makes a repeated insert a no-op.
 
+## Backups and restore (Neon) — verify before relying on it
+Accounts and finished matches are the only persistent data, so the database backup is the only recovery path. **Status: not yet verified.** Fill in the blanks below after checking in the Neon console.
+- Plan and history retention window (Neon > project > Settings > Storage): `____` (the free plan keeps a short window; anything older cannot be restored).
+- Restore test last performed: `____` by `____`. Procedure: Neon > Branches > Create branch > "Past data" (pick a time a few minutes ago) > copy that branch's connection string > `psql "<string>" -c "SELECT count(*) FROM matches;"` and compare with production. Delete the test branch afterwards.
+- To recover for real: restore into a new branch, point `DATABASE_URL` on Render at it (or restore the branch over the main one in Neon), redeploy, check `/readyz`.
+- Optional extra copy independent of Neon: a scheduled `pg_dump "$DATABASE_URL" -Fc -f tableverse-$(date +%F).dump`, stored somewhere outside Neon and Render.
+
+## Voice chat connectivity (TURN) — verify in production
+Voice is peer to peer. With only STUN (the default), players on some mobile carriers or office networks cannot hear each other.
+- Check: Render > service > Environment has `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (or `ICE_SERVERS`). Status: `____`.
+- Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other.
+- If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
+
+## Repository safety
+`main` should require a pull request and passing CI before merge (GitHub > Settings > Branches). Required checks: `Build and test (Node 20)`, `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`. Status: `____`.
+
 ## Abuse / rate limits
 Auth endpoints are rate limited per address and account in `auth_rate_limits`; WebSockets are limited per IP, per socket message rate, payload (8 KiB) and buffered bytes. Check logs for `slow down` closes and `too many connections` spikes.
