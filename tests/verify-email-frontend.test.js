@@ -14,8 +14,8 @@ function response(status, body) {
 
 async function scenario({ search = '?token=secret-token', fetch, waitForInitial = true }) {
   const elements = Object.fromEntries(
-    ['verifyLoading', 'verifySuccess', 'verifyError', 'successTitle', 'errorTitle', 'errorMsg', 'verifyRetry']
-      .map((id) => [id, { hidden: id !== 'verifyLoading', textContent: '', handler: null, focused: false, focus() { this.focused = true; }, addEventListener(type, fn) { if (type === 'click') this.handler = fn; } }])
+    ['verifyLoading', 'verifySuccess', 'verifyError', 'successTitle', 'errorTitle', 'errorMsg', 'verifyRetry', 'resendForm', 'resendEmail', 'resendSubmit', 'resendMsg']
+      .map((id) => [id, { hidden: id !== 'verifyLoading', value: '', disabled: false, textContent: '', handler: null, listeners: {}, focused: false, focus() { this.focused = true; }, addEventListener(type, fn) { this.listeners[type] = fn; if (type === 'click') this.handler = fn; } }])
   );
   const historyCalls = [];
   const location = { search, pathname: '/verify-email.html' };
@@ -167,6 +167,71 @@ async function main() {
     : response(503, { error: 'Temporarily unavailable' }) });
   assert.equal(server.elements.errorMsg.textContent, 'The verification service is temporarily unavailable. Please try again.');
   assert.equal(server.elements.verifyRetry.hidden, false);
+
+  // An expired, used or invalid link cannot be retried, so the form for a new link is offered instead.
+  const expired = await scenario({ fetch: async (url) => url.endsWith('/csrf')
+    ? response(200, { csrfToken: 'csrf-value' })
+    : response(400, { ok: false, error: 'This verification link has expired.' }) });
+  assert.equal(expired.elements.errorMsg.textContent, 'This verification link has expired.');
+  assert.equal(expired.elements.verifyRetry.hidden, true);
+  assert.equal(expired.elements.resendForm.hidden, false);
+  assert.equal(expired.elements.resendMsg.hidden, true);
+
+  // A retryable error keeps the retry button and hides the resend form.
+  const transientForm = await scenario({ fetch: async (url) => url.endsWith('/csrf')
+    ? response(200, { csrfToken: 'csrf-value' })
+    : response(503, { error: 'Temporarily unavailable' }) });
+  assert.equal(transientForm.elements.resendForm.hidden, true);
+
+  // A missing token offers the resend form as well.
+  const noToken = await scenario({ search: '', fetch: async () => { throw new Error('must not fetch'); } });
+  assert.equal(noToken.elements.resendForm.hidden, false);
+
+  // Submitting the form fetches CSRF, posts only the typed email with the header, and shows one neutral message.
+  const sent = [];
+  const resend = await scenario({ search: '', fetch: async (url, options = {}) => {
+    sent.push({ url, options });
+    return url.endsWith('/csrf') ? response(200, { csrfToken: 'csrf-value' }) : response(200, { ok: true, message: 'If this account exists, a verification email has been sent.' });
+  } });
+  resend.elements.resendEmail.value = '  Player@Example.com ';
+  await resend.elements.resendForm.listeners.submit({ preventDefault() {} });
+  const post = sent.find((c) => c.url === '/api/auth/resend-verification');
+  assert.ok(post, 'the resend endpoint is called');
+  assert.equal(post.options.method, 'POST');
+  assert.equal(post.options.headers['X-CSRF-Token'], 'csrf-value');
+  assert.deepEqual(JSON.parse(post.options.body), { email: 'Player@Example.com' });
+  assert.equal(resend.elements.resendMsg.hidden, false);
+  assert.match(resend.elements.resendMsg.textContent, /a new link has been sent/i);
+  assert.equal(resend.elements.resendEmail.value, '');
+  assert.equal(resend.elements.resendSubmit.disabled, false);
+
+  // An empty address is refused without a request.
+  const empty = await scenario({ search: '', fetch: async () => { throw new Error('must not fetch'); } });
+  await empty.elements.resendForm.listeners.submit({ preventDefault() {} });
+  assert.match(empty.elements.resendMsg.textContent, /enter the email/i);
+
+  // Rate limiting and server errors get their own messages, and the button is re-enabled.
+  const limited = await scenario({ search: '', fetch: async (url) => url.endsWith('/csrf')
+    ? response(200, { csrfToken: 'csrf-value' })
+    : response(429, { ok: false, error: 'Too many requests.' }) });
+  limited.elements.resendEmail.value = 'a@example.com';
+  await limited.elements.resendForm.listeners.submit({ preventDefault() {} });
+  assert.match(limited.elements.resendMsg.textContent, /too many requests/i);
+  assert.equal(limited.elements.resendSubmit.disabled, false);
+
+  // A network failure shows a retry message and never echoes the address or token.
+  const offline = await scenario({ search: '?token=secret-token', fetch: async (url) => {
+    if (url.endsWith('/csrf')) return response(200, { csrfToken: 'csrf-value' });
+    throw new Error('offline');
+  } });
+  offline.elements.resendEmail.value = 'private@example.com';
+  await offline.elements.resendForm.listeners.submit({ preventDefault() {} });
+  assert.match(offline.elements.resendMsg.textContent, /could not reach the server/i);
+  assert.ok(!offline.elements.resendMsg.textContent.includes('private@example.com'));
+  assert.ok(!offline.elements.resendMsg.textContent.includes('secret-token'));
+
+  assert.match(html, /id="resendForm"/);
+  assert.match(html, /type="email"[^>]*required/);
 
   console.log('All verify-email frontend behavior tests passed');
 }

@@ -8,6 +8,10 @@
   const errorMsgEl = document.getElementById('errorMsg');
   const retryEl = document.getElementById('verifyRetry');
   const successTitleEl = document.getElementById('successTitle');
+  const resendForm = document.getElementById('resendForm');
+  const resendEmailEl = document.getElementById('resendEmail');
+  const resendSubmitEl = document.getElementById('resendSubmit');
+  const resendMsgEl = document.getElementById('resendMsg');
 
   const token = new URLSearchParams(location.search).get('token');
 
@@ -21,6 +25,9 @@
     errorTitleEl.textContent = title;
     errorMsgEl.textContent = message;
     retryEl.hidden = !retryable;
+    // Expired, used, invalid or missing links cannot be retried, so offer a new link instead.
+    resendForm.hidden = retryable;
+    resendMsgEl.hidden = true;
     errorTitleEl.focus();
   }
 
@@ -34,6 +41,7 @@
     successEl.hidden = true;
     errorEl.hidden = true;
     retryEl.hidden = true;
+    resendForm.hidden = true;
 
     try {
       const csrfRes = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
@@ -103,6 +111,47 @@
     }
   }
 
+  // Same answer whether or not the address has an account (the server never reveals which do), so this only confirms receipt.
+  const RESEND_DONE = 'If an account with that email needs verifying, a new link has been sent. Check your inbox and spam folder.';
+
+  async function requestNewLink(event) {
+    event.preventDefault();
+    const email = String(resendEmailEl.value || '').trim();
+    resendMsgEl.hidden = false;
+    if (!email) {
+      resendMsgEl.textContent = 'Enter the email address you signed up with.';
+      return;
+    }
+    resendSubmitEl.disabled = true;
+    resendMsgEl.textContent = 'Sending…';
+    try {
+      const csrfRes = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
+      const csrfData = csrfRes.ok ? await csrfRes.json().catch(() => null) : null;
+      const csrfToken = csrfData && typeof csrfData.csrfToken === 'string' ? csrfData.csrfToken : '';
+      if (!csrfToken) throw new Error('csrf unavailable');
+      // The token is never read or logged here; only the address the person typed is sent.
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email })
+      });
+      if (res.status === 429) {
+        resendMsgEl.textContent = 'Too many requests. Please wait a while before asking for another link.';
+      } else if (!res.ok) {
+        resendMsgEl.textContent = 'We could not send a new link right now. Please try again in a moment.';
+      } else {
+        resendMsgEl.textContent = RESEND_DONE;
+        resendEmailEl.value = '';
+      }
+    } catch {
+      resendMsgEl.textContent = 'Could not reach the server. Check your connection and try again.';
+    } finally {
+      resendSubmitEl.disabled = false;
+    }
+  }
+
   retryEl.addEventListener('click', verify);
+  resendForm.addEventListener('submit', requestNewLink);
   window.__tableverseVerification = verify();
 })();

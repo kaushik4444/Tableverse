@@ -33,6 +33,11 @@
     .btn { display: inline-block; padding: 12px 24px; background: var(--primary, #1f6feb); color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; font: inherit; }
     .btn:hover { opacity: 0.9; }
     .btn.secondary { background: transparent; border: 1px solid var(--border, rgba(255,255,255,0.2)); color: inherit; margin: 0 4px 8px; }
+    .resend-form { margin: 0 0 20px; display: grid; gap: 8px; text-align: left; }
+    .resend-form label { font-size: 14px; color: var(--muted, #a0a0b0); }
+    .resend-form input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid var(--border, rgba(255,255,255,0.2)); background: transparent; color: inherit; font: inherit; }
+    .resend-form .btn { width: 100%; margin: 0; }
+    .resend-form p { margin: 0; font-size: 14px; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -52,6 +57,12 @@
       <h1 id="errorTitle" tabindex="-1">Verification failed</h1>
       <p id="errorMsg">The verification link is invalid or has expired.</p>
       <button id="verifyRetry" class="btn secondary" type="button" hidden>Try again</button>
+      <form id="resendForm" class="resend-form" hidden>
+        <label for="resendEmail">Email address</label>
+        <input id="resendEmail" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="320" placeholder="you@example.com">
+        <button id="resendSubmit" class="btn secondary" type="submit">Send a new verification link</button>
+        <p id="resendMsg" role="status" hidden></p>
+      </form>
       <a href="/" class="btn">Back to Home</a>
     </div>
   </main>
