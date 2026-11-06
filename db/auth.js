@@ -287,13 +287,16 @@ async function verifyEmailToken(rawToken) {
       throw new AuthError('This verification link has expired.');
     }
 
+    // The token names the account it was issued for. Mark that account's identity; if no row matches, throw so the
+    // transaction rolls back and the link is NOT spent on nothing.
     const t = use.rows[0];
-    await client.query(
+    const marked = await client.query(
       `UPDATE auth_identities
        SET email_verified_at = COALESCE(email_verified_at, NOW())
        WHERE player_id = $1 AND provider = $2 AND provider_user_id = $3`,
-      [t.player_id, PROVIDER_EMAIL, t.email]
+      [t.player_id, PROVIDER_EMAIL, normEmail(t.email)]
     );
+    if (marked.rowCount !== 1) throw new AuthError('Invalid verification token.');
     return { ok: true };
   });
 }
