@@ -257,7 +257,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
   return 0;
 }
 
-module.exports = { pgEnvFromUrl, checkOutPath, backup, verifyArchive, listArchive, readExpectedChecksum, sha256File, parseArgs, runCommand: run };
+module.exports = { pgEnvFromUrl, checkOutPath, backup, verifyArchive, listArchive, readExpectedChecksum, sha256File, createPrivateExclusive, parseArgs, runCommand: run };
 
 if (require.main === module) {
   main().then(
