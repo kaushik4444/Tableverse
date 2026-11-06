@@ -1662,6 +1662,7 @@ if (require.main === module) {
     },
     (err) => {
       serverLog.error('server.start_failed', { err });
+      console.error('[server] FATAL: refusing to start:', err.message); // operators and tests read this line
       process.exit(1);
     }
   );
