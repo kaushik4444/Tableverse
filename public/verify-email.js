@@ -6,59 +6,87 @@
   const errorEl = document.getElementById('verifyError');
   const errorTitleEl = document.getElementById('errorTitle');
   const errorMsgEl = document.getElementById('errorMsg');
+  const retryEl = document.getElementById('verifyRetry');
 
-  const params = new URLSearchParams(location.search);
-  const token = params.get('token');
+  const token = new URLSearchParams(location.search).get('token');
 
-  if (!token) {
+  // Keep the one-time token only in memory; do not leave it in the address bar/history.
+  if (token) history.replaceState(null, '', location.pathname);
+
+  function showError(title, message, retryable) {
     loadingEl.hidden = true;
+    successEl.hidden = true;
     errorEl.hidden = false;
-    errorTitleEl.textContent = 'Missing token';
-    errorMsgEl.textContent = 'No verification token was provided in the link.';
-    return;
+    errorTitleEl.textContent = title;
+    errorMsgEl.textContent = message;
+    retryEl.hidden = !retryable;
   }
 
-  try {
-    // Fetch CSRF token first
-    let csrfToken = '';
+  async function verify() {
+    if (!token) {
+      showError('Missing token', 'No verification token was provided in the link.', false);
+      return;
+    }
+
+    loadingEl.hidden = false;
+    successEl.hidden = true;
+    errorEl.hidden = true;
+    retryEl.hidden = true;
+
     try {
       const csrfRes = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
-      const csrfData = await csrfRes.json();
-      if (csrfData && csrfData.csrfToken) csrfToken = csrfData.csrfToken;
+      if (!csrfRes.ok) {
+        showError('Could not start verification', 'We could not establish a secure connection. Please try again.', true);
+        return;
+      }
+
+      let csrfData;
+      try {
+        csrfData = await csrfRes.json();
+      } catch {
+        csrfData = null;
+      }
+      const csrfToken = csrfData && typeof csrfData.csrfToken === 'string' ? csrfData.csrfToken : '';
+      if (!csrfToken) {
+        showError('Could not start verification', 'The security check could not be completed. Please try again.', true);
+        return;
+      }
+
+      const res = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ token })
+      });
+
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        // A non-JSON response is handled below using the HTTP status.
+      }
+
+      if (res.ok && data && data.ok) {
+        loadingEl.hidden = true;
+        errorEl.hidden = true;
+        successEl.hidden = false;
+        return;
+      }
+
+      const message = data && typeof data.error === 'string'
+        ? data.error
+        : 'The verification link is invalid, expired, or has already been used.';
+      // Client/token errors need a new email; transient server errors can be retried.
+      const retryable = res.status >= 500 || res.status === 429;
+      showError('Verification failed', message, retryable);
     } catch {
-      // Ignore CSRF fetch error if API handles or doesn't strictly require for this call
+      showError('Connection error', 'Could not reach the server. Check your connection and try again.', true);
     }
-
-    const res = await fetch('/api/auth/verify-email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({ token })
-    });
-
-    let data = {};
-    try {
-      data = await res.json();
-    } catch {
-      // non-JSON response
-    }
-
-    if (res.ok && data.ok) {
-      loadingEl.hidden = true;
-      successEl.hidden = false;
-    } else {
-      loadingEl.hidden = true;
-      errorEl.hidden = false;
-      errorTitleEl.textContent = 'Verification failed';
-      errorMsgEl.textContent = data.error || 'The verification link is invalid, expired, or has already been used.';
-    }
-  } catch (err) {
-    loadingEl.hidden = true;
-    errorEl.hidden = false;
-    errorTitleEl.textContent = 'Connection error';
-    errorMsgEl.textContent = 'Could not reach the server. Please check your connection and try again.';
   }
+
+  retryEl.addEventListener('click', verify);
+  window.__tableverseVerification = verify();
 })();
