@@ -29,7 +29,8 @@ function pgEnvFromUrl(raw) {
   let u;
   try { u = new URL(String(raw || '')); } catch { throw new Error('DATABASE_URL is missing or is not a valid URL'); }
   if (!/^postgres(ql)?:$/.test(u.protocol)) throw new Error('DATABASE_URL must start with postgres://');
-  const host = u.hostname.replace(/^\[|\]$/g, '');
+  // Match node-postgres: a URL `host` parameter can select a Unix socket instead of the URL authority host.
+  const host = u.searchParams.get('host') || u.hostname.replace(/^\[|\]$/g, '');
   const database = decodeURIComponent(u.pathname.replace(/^\//, ''));
   const user = decodeURIComponent(u.username);
   if (!host) throw new Error('DATABASE_URL has no host');
@@ -48,7 +49,8 @@ function pgEnvFromUrl(raw) {
     PGDATABASE: database,
   };
   // Never talk to a remote server without TLS, even when the URL forgot sslmode (Neon's URL already has it).
-  const sslmode = u.searchParams.get('sslmode') || (LOCAL_HOSTS.has(host) ? null : 'require');
+  const localHost = LOCAL_HOSTS.has(host) || host.startsWith('/');
+  const sslmode = u.searchParams.get('sslmode') || (localHost ? null : 'require');
   if (sslmode) env.PGSSLMODE = sslmode;
   return env;
 }
@@ -138,11 +140,24 @@ async function listArchive(file, { pgRestore = 'pg_restore' } = {}) {
  */
 function createPrivateExclusive(file, data = '') {
   const fd = fs.openSync(file, 'wx', 0o600);
+  let failure = null;
   try {
     fs.fchmodSync(fd, 0o600);
     if (data) fs.writeSync(fd, data);
-  } finally {
+  } catch (err) {
+    failure = err;
+  }
+  try {
     fs.closeSync(fd);
+  } catch (err) {
+    failure ||= err;
+  }
+  if (failure) {
+    // open('wx') succeeded, so this path belongs to this invocation. Remove it if initialization was incomplete.
+    try { fs.unlinkSync(file); } catch (cleanupErr) {
+      if (cleanupErr.code !== 'ENOENT') failure.cleanupError = cleanupErr;
+    }
+    throw failure;
   }
 }
 
@@ -180,10 +195,11 @@ async function backup({ url, out, pgDump = 'pg_dump', pgRestore = 'pg_restore' }
     // Stage the checksum before the dump is published, so a published dump always has its checksum ready beside it.
     reserveWorkingFile(stagedSum, `${sha256}  ${path.basename(dest)}\n`);
     created.push(stagedSum); // pushed only once this run has created it
-    fs.linkSync(partial, dest);
-    created.push(dest);
+    // Publish the checksum first and the dump last. The final .dump is the completion marker.
     fs.linkSync(stagedSum, dest + '.sha256');
     created.push(dest + '.sha256');
+    fs.linkSync(partial, dest);
+    created.push(dest);
     fs.rmSync(partial, { force: true });
     fs.rmSync(stagedSum, { force: true });
     return { file: dest, bytes, sha256, ...info };
