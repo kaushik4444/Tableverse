@@ -26,7 +26,6 @@
       border: 3px solid rgba(255,255,255,0.1);
       border-top-color: var(--primary, #1f6feb);
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
       margin: 24px auto;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -37,19 +36,19 @@
   </style>
 </head>
 <body>
-  <main id="verifyApp" class="verify-container" aria-live="polite">
+  <main id="verifyApp" class="verify-container" role="status" aria-live="polite" aria-atomic="true">
     <div id="verifyLoading">
       <h1>Verifying your email...</h1>
       <div class="spinner" role="status" aria-label="Loading"></div>
       <p>Please wait while we confirm your account.</p>
     </div>
     <div id="verifySuccess" hidden>
-      <h1>Email verified successfully!</h1>
+      <h1 id="successTitle" tabindex="-1">Email verified successfully!</h1>
       <p>Your email has been confirmed. You can now sign in and join the table.</p>
       <a href="/" class="btn">Sign in to Tableverse</a>
     </div>
     <div id="verifyError" hidden>
-      <h1 id="errorTitle">Verification failed</h1>
+      <h1 id="errorTitle" tabindex="-1">Verification failed</h1>
       <p id="errorMsg">The verification link is invalid or has expired.</p>
       <button id="verifyRetry" class="btn secondary" type="button" hidden>Try again</button>
       <a href="/" class="btn">Back to Home</a>
