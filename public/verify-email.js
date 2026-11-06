@@ -126,9 +126,18 @@
     resendMsgEl.textContent = 'Sending…';
     try {
       const csrfRes = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
-      const csrfData = csrfRes.ok ? await csrfRes.json().catch(() => null) : null;
+      if (!csrfRes.ok) {
+        resendMsgEl.textContent = csrfRes.status === 429
+          ? 'Too many requests. Please wait a while before asking for another link.'
+          : 'We could not send a new link right now. Please try again in a moment.';
+        return;
+      }
+      const csrfData = await csrfRes.json().catch(() => null);
       const csrfToken = csrfData && typeof csrfData.csrfToken === 'string' ? csrfData.csrfToken : '';
-      if (!csrfToken) throw new Error('csrf unavailable');
+      if (!csrfToken) {
+        resendMsgEl.textContent = 'The security check could not be completed. Please try again.';
+        return;
+      }
       // The token is never read or logged here; only the address the person typed is sent.
       const res = await fetch('/api/auth/resend-verification', {
         method: 'POST',
