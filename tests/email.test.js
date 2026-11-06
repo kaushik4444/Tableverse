@@ -88,5 +88,34 @@ const ENV = { EMAIL_PROVIDER: 'resend', EMAIL_FROM: 'Tableverse <noreply@example
     assert.doesNotMatch(keys.join(' '), /t1|t2/);
   });
 
+  console.log('production domain links');
+  const LIVE = { ...ENV, PUBLIC_APP_URL: 'https://playtableverse.com/' }; // trailing slash must not produce "//"
+  const capture = () => {
+    const sent = [];
+    const sender = makeAuthEmailSender({ env: LIVE, logger: quietLog(), fetch: async (url, o) => { sent.push(JSON.parse(o.body)); return { ok: true, status: 200, json: async () => ({ id: 'x' }) }; } });
+    return { sent, sender };
+  };
+  await test('the verification mail links to https://playtableverse.com/verify-email.html?token=… in both html and text', async () => {
+    const { sent, sender } = capture();
+    await sender.sendVerification({ email: 'player@example.test', token: 'abc123' });
+    const expected = 'https://playtableverse.com/verify-email.html?token=abc123';
+    assert.ok(sent[0].html.includes(`href="${expected}"`), 'button href');
+    assert.ok(sent[0].html.includes(expected), 'fallback link text');
+    assert.ok(sent[0].text.includes(expected), 'plain-text body');
+    assert.doesNotMatch(sent[0].html + sent[0].text, /playtableverse\.com\/\/|www\.playtableverse|\.onrender\.com|localhost/, 'no double slash, www or other host');
+  });
+  await test('the password-reset mail links to https://playtableverse.com/reset-password.html?token=… in both bodies', async () => {
+    const { sent, sender } = capture();
+    await sender.sendPasswordReset({ email: 'player@example.test', token: 'res456' });
+    const expected = 'https://playtableverse.com/reset-password.html?token=res456';
+    assert.ok(sent[0].html.includes(expected) && sent[0].text.includes(expected));
+    assert.doesNotMatch(sent[0].html + sent[0].text, /verify-email/, 'a reset mail never points at the verify page');
+  });
+  await test('a token with URL-reserved characters is percent-encoded, so it cannot add query parameters', async () => {
+    const { sent, sender } = capture();
+    await sender.sendVerification({ email: 'player@example.test', token: 'a&b=c#d' });
+    assert.ok(sent[0].text.includes('verify-email.html?token=a%26b%3Dc%23d'), sent[0].text);
+  });
+
   console.log(`\n${passed} email adapter tests passed`);
 })();

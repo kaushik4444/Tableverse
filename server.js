@@ -22,6 +22,7 @@ const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 const voiceRelay = require('./lib/voiceRelay');
+const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = {
@@ -32,6 +33,8 @@ const MIME = {
   '.webmanifest': 'application/manifest+json',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
   '.ico': 'image/x-icon',
 };
 const SECURITY_HEADERS = {
@@ -69,8 +72,10 @@ function start(opts = {}) {
   const env = opts.env || process.env;
   const iceServers = opts.iceServers ?? voiceRelay.iceServers(env); // sent to browsers for table voice chat
   const production = env.NODE_ENV === 'production';
-  const trustProxy = opts.trustProxy ?? (env.TRUST_PROXY ? env.TRUST_PROXY === '1' : production); // behind Render's proxy the client address is in X-Forwarded-For
-  const allowedOrigins = String(opts.allowedOrigins ?? env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const trustProxy = opts.trustProxy ?? parseTrustProxy(env.TRUST_PROXY, production); // behind Render's proxy the client address is in X-Forwarded-For
+  // Origins are compared exactly as browsers send them: lower case, no trailing slash ("https://www.example.com/" never matches).
+  const allowedOrigins = String(opts.allowedOrigins ?? env.ALLOWED_ORIGINS ?? '').split(',')
+    .map((s) => s.trim().replace(/\/+$/, '').toLowerCase()).filter(Boolean);
   const maxSocketsPerIp = opts.maxSocketsPerIp ?? 40; // open WebSockets per client address
   const maxNewAccountsPerIp = opts.maxNewAccountsPerIp ?? 30; // new anonymous accounts per client address per hour
   const maxNewAccountsPerMin = opts.maxNewAccountsPerMin ?? 120; // site-wide backstop: stops a spoofed-address flood from filling the database
@@ -1277,14 +1282,11 @@ function start(opts = {}) {
     if (!origin) return true;
     let host;
     try { host = new URL(origin).host; } catch { return false; }
-    return host === req.headers.host || allowedOrigins.includes(origin) || allowedOrigins.includes(host);
+    return host === req.headers.host || allowedOrigins.includes(origin.toLowerCase()) || allowedOrigins.includes(host.toLowerCase());
   };
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8 * 1024, verifyClient: (info) => originOk(info.req) });
 
-  const clientIp = (req) => {
-    const xff = trustProxy ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
-    return xff || req.socket.remoteAddress || 'unknown';
-  };
+  const clientIp = (req) => clientAddress(req, trustProxy);
   const socketsByIp = new Map(); // ip -> open sockets
   const accountsByIp = new Map(); // ip -> creation times within the last hour
   let accountTimes = []; // creation times within the last minute (site-wide)

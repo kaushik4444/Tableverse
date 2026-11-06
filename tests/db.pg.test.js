@@ -238,6 +238,15 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       assert.equal(settled.filter((r) => r.status === 'fulfilled').length, 1);
       assert.equal(settled.filter((r) => r.status === 'rejected').length, 1);
     });
+    await test('verification with no matching identity is rejected and leaves the token unspent', async () => {
+      const email = `nomatch.${Date.now()}@test.local`;
+      const reg = await dbAuth.registerEmail({ email, username: `nomatch${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'N' });
+      await x.query('DELETE FROM auth_identities WHERE player_id = $1', [reg.player.id]); // the account's identity is gone
+      await assert.rejects(dbAuth.verifyEmailToken(reg.verifyToken), /invalid verification token/i);
+      const th = crypto.createHash('sha256').update(reg.verifyToken).digest('hex');
+      const row = (await x.query('SELECT used_at FROM auth_email_tokens WHERE token_hash = $1', [th])).rows[0];
+      assert.equal(row.used_at, null, 'the rollback must not spend the link');
+    });
     await test('password-reset token is single-use, concurrency-safe, and revokes all existing sessions', async () => {
       const email = `reset.${Date.now()}@test.local`;
       const reg = await dbAuth.registerEmail({ email, username: `reset${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'R' });
