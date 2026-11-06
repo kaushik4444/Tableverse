@@ -44,6 +44,11 @@ function expectedMigrations() {
   return fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
 }
 
+// psql emits CRLF on Windows and LF on Unix; do not treat CR as part of a version.
+function parseAppliedMigrations(output) {
+  return output.split(/\r?\n/).filter(Boolean);
+}
+
 /**
  * Restores `dump` into `target` and returns a report. Throws before anything is written when a rule is broken:
  *  - the target is production, or not empty;
@@ -84,7 +89,7 @@ async function restoreCheck({ dump, target, production = null, pgRestore = 'pg_r
     fs.rmSync(work, { recursive: true, force: true });
   }
 
-  const applied = (await query(targetEnv, 'SELECT version FROM schema_migrations ORDER BY version')).split('\n').filter(Boolean);
+  const applied = parseAppliedMigrations(await query(targetEnv, 'SELECT version FROM schema_migrations ORDER BY version'));
   const expected = expectedMigrations();
   const missing = expected.filter((m) => !applied.includes(m));
   const unexpected = applied.filter((m) => !expected.includes(m));
@@ -119,7 +124,7 @@ function parseArgs(argv) {
   return args;
 }
 
-module.exports = { restoreCheck, sameDatabase, parseArgs, expectedMigrations, COUNTED_TABLES };
+module.exports = { restoreCheck, sameDatabase, parseArgs, expectedMigrations, parseAppliedMigrations, COUNTED_TABLES };
 
 if (require.main === module) {
   (async () => {
