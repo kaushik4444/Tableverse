@@ -14,8 +14,8 @@ function response(status, body) {
 
 async function scenario({ search = '?token=secret-token', fetch }) {
   const elements = Object.fromEntries(
-    ['verifyLoading', 'verifySuccess', 'verifyError', 'errorTitle', 'errorMsg', 'verifyRetry']
-      .map((id) => [id, { hidden: id !== 'verifyLoading', textContent: '', handler: null, addEventListener(type, fn) { if (type === 'click') this.handler = fn; } }])
+    ['verifyLoading', 'verifySuccess', 'verifyError', 'successTitle', 'errorTitle', 'errorMsg', 'verifyRetry']
+      .map((id) => [id, { hidden: id !== 'verifyLoading', textContent: '', handler: null, focused: false, focus() { this.focused = true; }, addEventListener(type, fn) { if (type === 'click') this.handler = fn; } }])
   );
   const historyCalls = [];
   const location = { search, pathname: '/verify-email.html' };
@@ -42,6 +42,10 @@ async function main() {
   } });
   assert.equal(ok.elements.verifySuccess.hidden, false);
   assert.equal(ok.elements.verifyLoading.hidden, true);
+  assert.equal(ok.elements.successTitle.focused, true);
+  assert.match(html, /aria-live="polite"/);
+  assert.match(html, /id="successTitle" tabindex="-1"/);
+  assert.doesNotMatch(html, /animation:\s*spin\s+0\.8s/);
   assert.equal(ok.historyCalls.length, 1);
   assert.deepEqual(ok.historyCalls[0], [null, '', '/verify-email.html']);
   assert.equal(calls.length, 2);
@@ -57,6 +61,7 @@ async function main() {
   const missing = await scenario({ search: '', fetch: async () => { missingCalls++; throw new Error('must not fetch'); } });
   assert.equal(missing.elements.verifyError.hidden, false);
   assert.equal(missing.elements.errorTitle.textContent, 'Missing token');
+  assert.equal(missing.elements.errorTitle.focused, true);
   assert.equal(missing.elements.verifyRetry.hidden, true);
   assert.equal(missing.historyCalls.length, 0);
   assert.equal(missingCalls, 0);
