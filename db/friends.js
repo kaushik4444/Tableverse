@@ -259,6 +259,7 @@ async function transitionInvitation(actorId, invitationId, action) {
       `SELECT inviter_id, invitee_id FROM private_table_invitations
        WHERE id = $1 AND ${owner} = $2 AND status = 'pending' AND expires_at > NOW()`, [invitationId, actorId]
     );
+    const inviterId = observed.rows.length ? observed.rows[0].inviter_id : null;
     if (!observed.rows.length) throw new AuthError('Invitation not found.', 404);
     const [playerA, playerB] = canonicalPair(observed.rows[0].inviter_id, observed.rows[0].invitee_id);
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${playerA}:${playerB}`]);
@@ -279,7 +280,7 @@ async function transitionInvitation(actorId, invitationId, action) {
        RETURNING id, status, game_id, room_code`, [invitationId, actorId, status] // the client joins with the room code
     );
     if (!updated.rows.length) throw new AuthError('Invitation not found.', 404);
-    return updated.rows[0];
+    return { ...updated.rows[0], inviterId }; // the route tells the inviter when it was declined
   });
 }
 

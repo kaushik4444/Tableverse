@@ -15,7 +15,7 @@ This is the rule the server enforces (`canEnterRoom`, `onFriendRemoved`, `enforc
 The database is the authority. Being seated is **not** a pass: every entry (join, sit, reconnect, rematch) re-checks it.
 Only the three exceptions above are remembered in memory (`creatorId`, `hostId`, `admitted`).
 
-Invitations can only be created by the current host while the table is a lobby. An accepted invitation survives a host change:
+Invitations can be created by anyone seated at the table while it is a lobby (not only the host). A declined invitation tells the inviter, and anyone seated can send it again; a member who invited someone counts as an inviter, like a past host, so that invitation stays valid after they leave. An accepted invitation survives a host change:
 guests are not thrown out because the person who invited them stopped hosting. It does **not** survive the end of the friendship
 (`removeFriend` revokes every pending and accepted invitation between the two people).
 
