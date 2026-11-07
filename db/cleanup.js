@@ -233,6 +233,8 @@ const SAMPLE_SQL = {
   friendships: 'SELECT player_a_id, player_b_id, created_at FROM public."friendships" ORDER BY created_at DESC LIMIT $1',
   friend_requests: 'SELECT requester_id, recipient_id, status, created_at, updated_at FROM public."friend_requests" ORDER BY created_at DESC LIMIT $1',
   private_table_invitations: 'SELECT inviter_id, invitee_id, game_id, room_code, status, created_at, expires_at, updated_at FROM public."private_table_invitations" ORDER BY created_at DESC LIMIT $1',
+  // Report bodies and user-supplied details are private free text: never print them in a cleanup preview.
+  chat_reports: 'SELECT id, reporter_id, reported_id, room_code, message_id, reason, created_at FROM public."chat_reports" ORDER BY created_at DESC LIMIT $1',
 };
 
 // Table-specific samples are added as the new social tables are introduced; keep empty results useful and explicit.
