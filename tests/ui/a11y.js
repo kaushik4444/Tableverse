@@ -40,6 +40,96 @@ function scan() {
   if (!document.querySelector('meta[name=viewport]')) bad.push('no viewport meta');
   const unnamedDialogs = [...document.querySelectorAll('dialog[open], [role=dialog]')].filter((d) => visible(d) && !nameOf(d) && !d.getAttribute('aria-labelledby'));
   for (const d of unnamedDialogs) bad.push('dialog without a name');
+  // WCAG 2.x contrast of visible text against the colour it is drawn on (semi-transparent backgrounds are composited).
+  // Text on a background image or gradient cannot be measured this way and is skipped.
+  const parse = (s) => { const m = /rgba?\(([^)]+)\)/.exec(s); if (!m) return null; const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+  const over = (top, under) => {
+    const a = top.a + under.a * (1 - top.a);
+    if (!a) return { r: 0, g: 0, b: 0, a: 0 };
+    return {
+      r: (top.r * top.a + under.r * under.a * (1 - top.a)) / a,
+      g: (top.g * top.a + under.g * under.a * (1 - top.a)) / a,
+      b: (top.b * top.a + under.b * under.a * (1 - top.a)) / a,
+      a
+    };
+  };
+  const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
+  const ratio = (x, y) => { const [hi, lo] = [lum(x), lum(y)].sort((p, q) => q - p); return (hi + 0.05) / (lo + 0.05); };
+  const backdrop = (el) => { // stack of colours from the element up to the first opaque background, composited bottom-up
+    const layers = []; let node = el;
+    for (; node && node.nodeType === 1; node = node.parentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.backgroundImage !== 'none') return null;
+      const c = parse(cs.backgroundColor);
+      if (c && c.a > 0) { layers.unshift(c); if (c.a >= 1) break; }
+    }
+    if (!layers.length || layers[0].a < 1) layers.unshift({ r: 255, g: 255, b: 255, a: 1 }); // page default is white when nothing is opaque
+    return layers.reduce((acc, l) => over(l, acc), { r: 0, g: 0, b: 0, a: 1 });
+  };
+  // colours from el up to the group root, composited over the backdrop behind the group (null if an image is involved)
+  const groupBackdrop = (el, root, base) => {
+    const layers = []; let node = el;
+    for (; node && node.nodeType === 1; node = node.parentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.backgroundImage !== 'none') return null;
+      const c = parse(cs.backgroundColor);
+      if (c && c.a > 0) { layers.unshift(c); if (c.a >= 1) break; }
+      if (node === root) break;
+    }
+    return layers.reduce((acc, l) => over(l, acc), base);
+  };
+  // Contrast of text painted in colour fg on el, as the browser paints it. Nested opacity groups are composited from the inside out.
+  // A backdrop that cannot be read from styles (an image) is not measured.
+  const contrastOf = (el, fg) => {
+    const levels = [];
+    for (let x = el; x; x = x.parentElement) { const o = parseFloat(getComputedStyle(x).opacity); if (o < 1) levels.push({ g: x, o }); }
+    if (!levels.length) { const bg = backdrop(el); return bg ? ratio(over(fg, bg), bg) : null; }
+    let bg = groupBackdrop(el, levels[0].g, { r: 0, g: 0, b: 0, a: 0 });
+    if (!bg) return null;
+    let front = over(fg, bg);
+    for (let i = 0; i < levels.length; i++) {
+      const { g, o } = levels[i];
+      const outer = levels[i + 1];
+      const behind = outer
+        ? groupBackdrop(g.parentElement, outer.g, { r: 0, g: 0, b: 0, a: 0 })
+        : g.parentElement ? backdrop(g.parentElement) : null;
+      if (!behind) return null;
+      front = over({ ...front, a: front.a * o }, behind);
+      bg = over({ ...bg, a: bg.a * o }, behind);
+    }
+    return ratio(front, bg);
+  };
+  const seen = new Set();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const el = n.parentElement;
+    // pictograms (emoji on board pieces and icons) carry no letters or digits; they are graphics, not text (WCAG 1.4.3 exempts them)
+    if (!el || seen.has(el) || !/[\p{L}\p{N}]/u.test(n.textContent) || el.closest('script, style, svg, [hidden], [disabled]') || !visible(el)) continue;
+    seen.add(el);
+    const cs = getComputedStyle(el);
+    // Painted as the browser paints it. Each opacity group is composited with its backdrop, from the innermost group out.
+    // Disabled controls are excluded above.
+    const fg = parse(cs.color);
+    const r = fg ? contrastOf(el, fg) : null;
+    if (r === null) continue; // not measurable (an image behind it)
+    const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
+    const need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+    if (r < need) bad.push(`low contrast ${r.toFixed(2)}:1 (needs ${need}) for "${n.textContent.trim().slice(0, 30)}"`);
+  }
+  // form values and placeholders are text too
+  for (const el of document.querySelectorAll('input:not([type=hidden]), textarea')) {
+    if (el.disabled || !visible(el)) continue;
+    const cs = getComputedStyle(el);
+    const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
+    const need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+    const shown = el.value ? [cs.color, 'value'] : null;
+    const hint = getComputedStyle(el, '::placeholder').color;
+    for (const [colour, what] of [[shown && shown[0], 'value'], [!el.value && el.placeholder ? hint : null, 'placeholder']]) {
+      const fg = colour && parse(colour); if (!fg) continue;
+      const r = contrastOf(el, fg); if (r === null) continue;
+      if (r < need) bad.push(`low contrast ${r.toFixed(2)}:1 (needs ${need}) for ${what} "${(el.value || el.placeholder || el.id || el.tagName).slice(0, 30)}"`);
+    }
+  }
   return bad;
 }
 
@@ -52,13 +142,64 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
     await page.waitForTimeout(350);
     const bad = await page.evaluate(scan);
     assert.deepEqual([...new Set(bad)], [], `${label}: accessibility problems`);
-    // keyboard: Tab moves focus onto something with a visible ring
-    await page.keyboard.press('Tab');
-    const ring = await page.evaluate(() => { const el = document.activeElement; if (!el || el === document.body) return 'none'; const cs = getComputedStyle(el); return (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none' ? 'ring' : 'no ring: ' + el.tagName + '.' + el.className; });
-    assert.ok(ring === 'ring' || ring === 'none', `${label}: ${ring}`);
-    if (label === 'home') { // negative control: the scanner really does catch an unnamed control
-      const caught = await page.evaluate((fn) => { const b = document.createElement('button'); b.className = 'probe'; document.body.appendChild(b); const r = (new Function('return (' + fn + ')()'))(); b.remove(); return r; }, scan.toString());
-      assert.ok(caught.some((m) => /probe/.test(m)), 'the scanner flags a button with no name');
+    // keyboard: every Tab stop (up to 40) is on-screen and shows a visible focus ring; the walk reaches more than one control
+    // the browser's own tab order: every visible element with tabIndex >= 0 that is not disabled
+    const expected = await page.evaluate(() => [...document.querySelectorAll('*')].filter((el) => el.tabIndex >= 0 && !el.disabled && el.checkVisibility({ checkVisibilityCSS: true })).length);
+    const stops = [];
+    let wrapped = false; let leftPage = false;
+    for (let i = 0; i < 300; i++) {
+      await page.keyboard.press('Tab');
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement;
+        if (!el || el === document.body) return null;
+        const cs = getComputedStyle(el);
+        // a ring must APPEAR on focus: compare the focused look with the unfocused look, so a decorative shadow that is always there does not count
+        const paints = (c) => !/transparent|rgba\([^)]*,\s*0(\.0+)?\)/.test(c);
+        const ring = (c) => ({ outline: c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0 && paints(c.outlineColor) ? c.outlineStyle + c.outlineWidth + c.outlineColor : '', shadow: paints(c.boxShadow) ? c.boxShadow : 'none' });
+        const focused = ring(cs);
+        el.blur(); const unfocused = ring(getComputedStyle(el)); el.focus({ preventScroll: true });
+        const ringed = (focused.outline !== '' && focused.outline !== unfocused.outline) || (focused.shadow !== 'none' && focused.shadow !== unfocused.shadow);
+        const r = el.getBoundingClientRect();
+        const onScreen = r.width > 0 && r.height > 0 && r.left < innerWidth && r.right > 0 && r.top < innerHeight && r.bottom > 0;
+        window.__walkKeys = window.__walkKeys || new WeakMap(); window.__walkN = window.__walkN || 0; if (!window.__walkKeys.has(el)) window.__walkKeys.set(el, ++window.__walkN);
+        return { key: window.__walkKeys.get(el), name: (el.getAttribute('aria-label') || el.textContent || el.id || el.tagName).trim().slice(0, 30), ringed, onScreen, visible: el.checkVisibility({ checkVisibilityCSS: true }) };
+      });
+      if (!stop) { leftPage = true; break; } // Tab past the last control leaves the page
+      if (stops.length > 1 && stop.key === stops[0].key) { wrapped = true; break; } // the focus cycle has come back to its start
+      stops.push(stop);
+    }
+    const unringed = stops.filter((s) => !s.ringed).map((s) => s.name);
+    assert.deepEqual(unringed, [], `${label}: focused without a visible ring`);
+    assert.deepEqual(stops.filter((s) => !s.visible).map((s) => s.name), [], `${label}: focus landed on hidden controls`);
+    assert.deepEqual(stops.filter((s) => !s.onScreen).map((s) => s.name), [], `${label}: focus landed outside the viewport`);
+    // every visible tabbable control is reached before focus cycles; a focus trap over two or a few controls fails here
+    const distinct = new Set(stops.map((x) => x.key)).size;
+    assert.ok(wrapped || leftPage, `${label}: the keyboard walk neither completed a cycle nor left the page within 300 Tab presses`);
+    assert.equal(distinct, expected, `${label}: the keyboard cycle reaches ${distinct} of ${expected} visible controls`);
+    if (label === 'home') { // negative controls: the scanner really does catch an unnamed control and low-contrast text
+      const caught = await page.evaluate((fn) => {
+        const b = document.createElement('button'); b.className = 'probe'; document.body.appendChild(b);
+        const faint = document.createElement('p'); faint.className = 'probe-faint'; faint.style.cssText = 'color:#333;background:#111;font-size:14px'; faint.textContent = 'faint text'; document.body.appendChild(faint);
+        const wrap = document.createElement('div'); wrap.style.cssText = 'background:#fff;padding:4px'; document.body.appendChild(wrap);
+        const fade = document.createElement('p'); fade.className = 'probe-fade'; fade.style.cssText = 'color:#000;background:#fff;opacity:.2;font-size:14px;margin:0'; fade.textContent = 'faded text'; wrap.appendChild(fade);
+        const nest = document.createElement('div'); nest.style.cssText = 'background:#000;opacity:.5;padding:4px'; wrap.appendChild(nest); const inside = document.createElement('p'); inside.className = 'probe-nested'; inside.style.cssText = 'color:#fff;font-size:14px;margin:0'; inside.textContent = 'nested faded'; nest.appendChild(inside);
+        const wrapD = document.createElement('div'); wrapD.style.cssText = 'background:#fff;padding:4px'; document.body.appendChild(wrapD);
+        const outerD = document.createElement('div'); outerD.style.cssText = 'background:#fff;opacity:.95;padding:4px'; wrapD.appendChild(outerD);
+        const innerD = document.createElement('p'); innerD.className = 'probe-double'; innerD.style.cssText = 'color:#000;background:#fff;opacity:.5;font-size:14px;margin:0'; innerD.textContent = 'double faded'; outerD.appendChild(innerD);
+        const outerCombined = document.createElement('div'); outerCombined.style.cssText = 'background:#fff;opacity:.8;padding:4px'; wrapD.appendChild(outerCombined);
+        const innerCombined = document.createElement('p'); innerCombined.className = 'probe-combined'; innerCombined.style.cssText = 'color:#000;background:#fff;opacity:.6;font-size:14px;margin:0'; innerCombined.textContent = 'combined faded'; outerCombined.appendChild(innerCombined);
+        const transparentRing = document.createElement('button'); transparentRing.className = 'probe-ring'; transparentRing.style.cssText = 'outline:2px solid transparent'; document.body.appendChild(transparentRing); transparentRing.focus();
+        const ringText = getComputedStyle(transparentRing).outlineColor; transparentRing.remove();
+        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); fade.remove(); nest.remove(); wrap.remove(); wrapD.remove(); outerCombined.remove(); return { r, ringText };
+      }, scan.toString());
+      const caughtText = caught.r;
+      assert.ok(caughtText.some((m) => /has no accessible name/.test(m) && /probe/.test(m)), 'the scanner flags a button with no name');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /faint text/.test(m)), 'the scanner flags low-contrast text');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /faded text/.test(m)), 'the scanner flags faded text whose faded contrast is too low');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /double faded/.test(m)), 'the scanner flags text under two faded groups (black at half opacity inside a 95% group is 3.94:1)');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /combined faded/.test(m)), 'the scanner composes nested opacity groups before checking contrast');
+      assert.ok(/transparent|rgba\([^)]*,\s*0\)/.test(caught.ringText) , 'a transparent outline is recognised as not painting');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /nested faded/.test(m)), 'the scanner flags text faded by an ancestor group (white on black at half opacity over white is 3.98:1)');
     }
     console.log('  ok  ' + label);
   } catch (e) { failed++; console.error('FAIL  ' + label + '\n' + (e.stack || e)); }
@@ -70,6 +211,25 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
   const browser = await chromium.launch();
   await check(browser, url, 'home', [welcome({ games: games.list() })]);
   for (const [id, n] of [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4]]) await check(browser, url, `${id} table`, build(id, n));
+  // the same scan on the smallest phone and on a desktop, so text and focus are checked at both extremes
+  await check(browser, url, 'home 320px', [welcome({ games: games.list() })], { width: 320, height: 568 });
+  await check(browser, url, 'home 1280px', [welcome({ games: games.list() })], { width: 1280, height: 800 });
+  await check(browser, url, 'wizard table 320px', build('wizard', 4), { width: 320, height: 568 });
+  await check(browser, url, 'ludo table 1280px', build('ludo', 4), { width: 1280, height: 800 });
+  { // live regions: the page announces notices politely, so a screen reader hears them without a focus move
+    const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages: build('wizard', 4) });
+    try {
+      await page.goto(url + '/');
+      await page.waitForSelector('#app *', { timeout: 8000 });
+      const live = await page.evaluate(() => [...document.querySelectorAll('[aria-live]')].map((el) => el.getAttribute('aria-live')));
+      assert.equal(await page.getAttribute('#toasts', 'aria-live'), 'polite', 'the notices region announces politely');
+      assert.ok(live.every((v) => v === 'polite' || v === 'assertive' || v === 'off'), 'live regions use a valid politeness');
+      await page.evaluate(() => window.__push({ t: 'notice', text: 'Scripted notice for the live region' }));
+      await page.waitForFunction(() => (document.getElementById('toasts') || {}).textContent.includes('Scripted notice for the live region'), null, { timeout: 8000 });
+      console.log('  ok  live regions');
+    } catch (e) { failed++; console.error('FAIL  live regions\n' + (e.stack || e)); }
+    await ctx.close();
+  }
   const cssOk = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../public/style.css'), 'utf8') + require('node:fs').readFileSync(require('node:path').join(__dirname, '../../public/table.css'), 'utf8');
   assert.ok(/prefers-reduced-motion/.test(cssOk), 'reduced-motion rules exist');
   await browser.close(); server.close();
