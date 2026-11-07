@@ -169,6 +169,58 @@ function cookieSocket(port, cookie) {
       assert.equal((await u.browser.post('/api/auth/logout', {}, { csrf: false })).status, 403, 'no header');
       assert.equal((await u.browser.get('/api/auth/session')).json.authenticated, true, 'every refused attempt left the session alone');
     });
+    // Regression: a socket's session check and its registration were separate steps, so a logout that ran between them
+    // found no socket to close, and a revoked session stayed connected. The hello is held here after its session check and
+    // before registration (its block-list query waits on a table lock), the session is revoked, then the hello resumes.
+    await test('a session revoked while its socket is still opening never becomes an active socket', async () => {
+      const { Client } = require('pg');
+      const u = await newUser(srv, 'Opening');
+      const lock = new Client({ connectionString: t.url });
+      await lock.connect();
+      try {
+        await lock.query('BEGIN');
+        await lock.query('LOCK TABLE player_blocks IN ACCESS EXCLUSIVE MODE');
+        const s = cookieSocket(srv.port, u.browser.cookieHeader);
+        await until(async () => (await lock.query("SELECT count(*)::int AS n FROM pg_locks WHERE relation = 'player_blocks'::regclass AND NOT granted")).rows[0].n > 0, 'hello waiting on the block list');
+        s.ws.send(JSON.stringify({ t: 'create', gameId: 'wizard' })); // a command while the session is still being checked
+        await sleep(200);
+        await u.browser.must('/api/auth/logout', {});
+        await lock.query('COMMIT');
+        await until(() => s.closed !== null, 'socket closed by the sign-out that ran while it was opening');
+        assert.equal(s.closed, 4001, 'closed by the sign-out');
+        assert.equal(s.msgs.some((m) => m.t === 'welcome' || m.t === 'state'), false, 'a revoked session gets no welcome and no state');
+      } finally {
+        await lock.query('ROLLBACK').catch(() => {});
+        await lock.end().catch(() => {});
+      }
+    });
+
+    // Regression: a socket that closed while its hello waited on the database was still registered once the answer came
+    // back. It then replaced the account's open socket and could leave the player "connected" with nothing to clear it.
+    await test('a socket that closes while its hello waits on the database never replaces the open socket', async () => {
+      const { Client } = require('pg');
+      const u = await newUser(srv, 'Vanish');
+      const owner = cookieSocket(srv.port, u.browser.cookieHeader);
+      await until(() => owner.welcome(), 'owner welcome');
+      const lock = new Client({ connectionString: t.url });
+      await lock.connect();
+      try {
+        await lock.query('BEGIN');
+        await lock.query('LOCK TABLE auth_sessions IN ACCESS EXCLUSIVE MODE');
+        const late = cookieSocket(srv.port, u.browser.cookieHeader); // same session: its hello waits in the session check
+        await until(async () => (await lock.query("SELECT count(*)::int AS n FROM pg_locks WHERE relation = 'auth_sessions'::regclass AND NOT granted")).rows[0].n > 0, 'late hello waiting on the database');
+        late.ws.close();
+        await until(() => late.closed !== null, 'late socket closed by the client');
+        await lock.query('COMMIT');
+        await sleep(500); // the late hello resumes here, after its socket has closed
+        assert.equal(owner.closed, null, 'the open socket was replaced by a closed one: ' + owner.closed);
+        assert.equal(late.welcome(), undefined, 'a closed socket got no welcome');
+      } finally {
+        await lock.query('ROLLBACK').catch(() => {});
+        await lock.end().catch(() => {});
+      }
+    });
+
     await test('the WebSocket works from the cookie alone; logout, logout-all and a password reset close open sockets; other accounts are unaffected', async () => {
       const u = await newUser(srv, 'Signout');
       const other = await newUser(srv, 'Bystander');

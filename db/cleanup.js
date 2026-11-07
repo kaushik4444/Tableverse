@@ -27,6 +27,8 @@ const path = require('path');
 const PLAN = [
   { table: 'match_participants', stores: 'Per-player result rows of finished games (name, seat, score, winner/bot/left-early flags, optional account id)', references: ['matches', 'players'] },
   { table: 'private_table_invitations', stores: 'Private-table invitations and their lifecycle metadata', references: ['players'] },
+  { table: 'chat_reports', stores: 'Chat reports: reporter, reported account, table code, message id, a copy of the reported text, reason and details', references: ['players'] },
+  { table: 'player_blocks', stores: 'Chat blocks: which account hid which other account\'s table chat', references: ['players'] },
   { table: 'friend_requests', stores: 'Friend request participants and lifecycle status', references: ['players'] },
   { table: 'friendships', stores: 'Accepted player relationships', references: ['players'] },
   { table: 'matches', stores: 'Finished games (game, room code, seats, options, time, idempotency key)', references: [] },
@@ -55,6 +57,10 @@ const EXPECTED_FKS = [
   { child: 'friend_requests', parent: 'players', onDelete: 'CASCADE' },
   { child: 'private_table_invitations', parent: 'players', onDelete: 'CASCADE' },
   { child: 'private_table_invitations', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'chat_reports', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'chat_reports', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'player_blocks', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'player_blocks', parent: 'players', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'matches', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'players', onDelete: 'SET NULL' },
 ];
@@ -227,6 +233,8 @@ const SAMPLE_SQL = {
   friendships: 'SELECT player_a_id, player_b_id, created_at FROM public."friendships" ORDER BY created_at DESC LIMIT $1',
   friend_requests: 'SELECT requester_id, recipient_id, status, created_at, updated_at FROM public."friend_requests" ORDER BY created_at DESC LIMIT $1',
   private_table_invitations: 'SELECT inviter_id, invitee_id, game_id, room_code, status, created_at, expires_at, updated_at FROM public."private_table_invitations" ORDER BY created_at DESC LIMIT $1',
+  // Report bodies and user-supplied details are private free text: never print them in a cleanup preview.
+  chat_reports: 'SELECT id, reporter_id, reported_id, room_code, message_id, reason, created_at FROM public."chat_reports" ORDER BY created_at DESC LIMIT $1',
 };
 
 // Table-specific samples are added as the new social tables are introduced; keep empty results useful and explicit.

@@ -17,6 +17,8 @@ const { createAuthRoutes } = require('./lib/authRoutes');
 const dbAccount = require('./db/account');
 const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
+const dbModeration = require('./db/moderation');
+const moderation = require('./lib/moderation');
 const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
@@ -214,7 +216,8 @@ function start(opts = {}) {
     // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
     onSignedOut: ({ playerId, token, exceptToken }) => {
       for (const ws of wss.clients) {
-        if (!ws.player || ws.player.id !== playerId) continue;
+        const owner = ws.player || ws.pendingPlayer; // a socket still being checked belongs to its session too
+        if (!owner || owner.id !== playerId) continue;
         if (token && ws.authToken !== token) continue;
         if (exceptToken && ws.authToken === exceptToken) continue;
         ws.close(exceptToken ? 4002 : 4001, exceptToken ? 'signed in elsewhere' : 'signed out');
@@ -268,7 +271,8 @@ function start(opts = {}) {
       try { if (p.room) leaveRoom(p); } catch { /* the player is going away either way */ }
       if (p.ws) p.ws.close(4001, 'account deleted');
       // another device that signed in separately has its own socket (and its own player object): close those too
-      for (const ws of wss.clients) if (ws.player && ws.player.id === playerId) ws.close(4001, 'account deleted');
+      // a socket still being checked for this account (its hello is awaiting the database) is closed too
+      for (const ws of wss.clients) if ((ws.player || ws.pendingPlayer)?.id === playerId) ws.close(4001, 'account deleted');
       for (const [tok, q] of tokens) if (q.id === playerId) tokens.delete(tok);
       clearTimeout(p.dropTimer);
       players.delete(playerId);
@@ -590,17 +594,26 @@ function start(opts = {}) {
   }
 
   // ------------------------------------------------------------ chat
+  // Include blocks whose database writes are queued or in flight. This closes the gap between accepting a request
+  // and its serialized persistence turn, including when another socket reconnects during a slow write.
+  const effectiveBlocked = (p) => {
+    if (!p || !p.pendingBlocks || !p.pendingBlocks.size) return p && p.blocked;
+    return new Set([...(p.blocked || []), ...p.pendingBlocks.keys()]);
+  };
   function pushChat(room, m) {
     m.ts = Date.now();
     room.chat.push(m);
     if (room.chat.length > CHAT_KEEP) room.chat.shift();
     for (const v of viewers(room)) {
       const p = players.get(v.id);
-      if (p && p.connected) send(p.ws, { t: 'chat', m });
+      // a viewer never receives chat from an account they have blocked (server-enforced, not a client-side mute)
+      if (p && p.connected && moderation.shouldDeliver(m, effectiveBlocked(p))) send(p.ws, { t: 'chat', m });
     }
   }
   const sys = (room, text) => pushChat(room, { sys: true, text });
-  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: room.chat }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
+  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
+  /** Re-sends this viewer's chat history after a block or unblock, so the change shows at once. */
+  const resyncChat = (p) => { const room = rooms.get(p.room); if (room) send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); };
   /** Tell everyone at the table who is in voice (and who is muted). */
   function broadcastVoice(room) {
     const msg = { t: 'voice', ids: voiceRelay.voiceList(room) };
@@ -917,6 +930,14 @@ function start(opts = {}) {
   }
 
   // ------------------------------------------------------------ message handlers
+  // Block and unblock for one account run one at a time, in the order they were accepted, whichever socket sent them, so
+  // the in-memory list ends where the database ends. A block takes effect in memory before its database write (hiding
+  // more is safe, and undone if the write fails); an unblock takes effect only after its database write.
+  const inModerationTurn = (p, task) => {
+    const turn = (p.moderationTail || Promise.resolve()).then(task);
+    p.moderationTail = turn.catch(() => {});
+    return turn;
+  };
   const handlers = {
     setName(p, msg) {
       applyProfile(p, msg);
@@ -976,7 +997,80 @@ function start(opts = {}) {
       const now = Date.now();
       if (now - (p.lastChat || 0) < 500) return sendError(p, 'Slow down a little');
       p.lastChat = now;
-      pushChat(room, { id: p.id, name: p.name, avatar: p.avatar, text, spec: isSpec(room, p.id) });
+      // mid identifies the message for reports; the server keeps the text, so a report cannot carry different content
+      pushChat(room, { mid: crypto.randomUUID(), id: p.id, name: p.name, avatar: p.avatar, text, spec: isSpec(room, p.id) });
+    },
+
+    // Report a table chat message. The server looks the message up in its own copy of the table's chat.
+    async report(p, msg) {
+      const room = rooms.get(p.room);
+      if (!room) return sendError(p, 'Join a table to report a message.');
+      const checked = moderation.validateReport(msg);
+      if (!checked.ok) return sendError(p, checked.error);
+      const now = Date.now();
+      if (now - (p.lastReport || 0) < moderation.REPORT_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+      p.lastReport = now;
+      const m = room.chat.find((x) => x.mid === checked.messageId);
+      if (!m || m.sys) return sendError(p, 'That message is no longer available to report.');
+      if (m.id === p.id) return sendError(p, 'You cannot report your own message.');
+      try {
+        const out = await dbModeration.createChatReport({
+          reporterId: p.id, reportedId: m.id, roomCode: room.code, messageId: checked.messageId,
+          messageText: m.text, reason: checked.reason, details: checked.details,
+        });
+        send(p.ws, { t: 'notice', text: out.stored ? 'Thanks. Your report was recorded.' : 'You have already reported this message.' });
+      } catch (e) {
+        if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
+        throw e;
+      }
+    },
+
+    // Blocking hides that account's table chat from this player only. It does not sign anyone out or change the table.
+    async block(p, msg) {
+      const checked = moderation.validateBlockTarget(p.id, msg && msg.id);
+      if (!checked.ok) return sendError(p, checked.error);
+      const now = Date.now();
+      if (now - (p.lastBlock || 0) < moderation.BLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+      p.lastBlock = now;
+      if (!p.blocked) p.blocked = new Set();
+      if (!p.pendingBlocks) p.pendingBlocks = new Map();
+      const target = checked.targetId;
+      // Reserve the filter before entering the serialized database turn. A second block queued behind a slow first
+      // write must hide its own target immediately, including after a reconnect on another socket.
+      p.pendingBlocks.set(target, (p.pendingBlocks.get(target) || 0) + 1);
+      return inModerationTurn(p, async () => {
+        try {
+          await dbModeration.addBlock(p.id, target);
+          p.blocked.add(target); // committed blocks live here; pending ones are included by effectiveBlocked()
+        } catch (e) {
+          if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
+          throw e;
+        } finally {
+          const pending = (p.pendingBlocks.get(target) || 1) - 1;
+          if (pending > 0) p.pendingBlocks.set(target, pending);
+          else p.pendingBlocks.delete(target);
+        }
+        resyncChat(p);
+        send(p.ws, { t: 'notice', text: 'Blocked. Their table chat is hidden from you. Nothing else changes, and they are not told.' });
+      });
+    },
+
+    async unblock(p, msg) {
+      if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
+      return inModerationTurn(p, async () => {
+        // Check inside the serialized turn: a preceding block/unblock may have changed the cached state while this
+        // request was waiting. No-op unblocks must not issue a DELETE or resend the entire chat history.
+        if (!p.blocked || !p.blocked.has(msg.id)) return;
+        const now = Date.now();
+        if (now - (p.lastUnblock || 0) < moderation.UNBLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+        p.lastUnblock = now;
+        // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
+        // failed unblock could not be taken back.
+        await dbModeration.removeBlock(p.id, msg.id);
+        p.blocked.delete(msg.id);
+        resyncChat(p);
+        send(p.ws, { t: 'notice', text: 'Unblocked.' });
+      });
     },
 
     create(p, msg) {
@@ -1382,6 +1476,11 @@ function start(opts = {}) {
       return ws.close(1008, 'invalid session');
     }
 
+    // Tag the socket with its session and player before the first database check. A sign-out or a new login that runs from
+    // now on finds this socket and closes it, even before the socket is registered below. Until registration the socket
+    // cannot send commands or receive broadcasts, so a revoked session is never acted on.
+    ws.authToken = presentedToken;
+    ws.pendingPlayer = p;
     const auth = await dbAuth.sessionInfo(p.token);
     // A player may still be present in the in-memory token map after sign-out, password reset,
     // or session revocation from another request/server instance. Never let that cache bypass
@@ -1396,7 +1495,18 @@ function start(opts = {}) {
       return ws.close(1008, 'email verification required');
     }
 
-    ws.authToken = presentedToken; // lets a sign-out or a newer login close exactly the sockets of that session
+    // Blocks are stored per account and applied on every table; load them once per account on this server.
+    if (!p.blocked) p.blocked = dbPool.hasDatabase() ? await dbModeration.loadBlockedIds(p.id) : new Set();
+
+    // The socket may have closed while the database answered above. A closed socket must not take over the account:
+    // it must not replace the open socket, and there would be nothing left to clean it up.
+    if (ws.readyState !== 1) return;
+    // The account may have been deleted, or its record dropped, while the checks above were pending. Only the player
+    // record that is still registered on this server can be taken over.
+    if (players.get(p.id) !== p) {
+      send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
+      return ws.close(1008, 'invalid session');
+    }
     if (p.ws && p.ws !== ws) {
       p.ws.player = null;
       p.ws.close(4000, 'replaced');
@@ -1411,10 +1521,16 @@ function start(opts = {}) {
     p.connected = true;
     p.pingMs = null; // measured again on this connection
     ws.player = p;
+    // Still the open socket that owns the player? A socket that closed or was replaced while an await was pending has
+    // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
+    // cancelled drop timer, no seat, no room change.
+    const stillOwner = () => ws.readyState === 1 && p.ws === ws;
     send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
-    if (room && await canEnterRoom(p, room, { present: true })) {
+    const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;
+    if (!stillOwner()) return; // closed while the room was checked: the drop its close handler scheduled stays in charge
+    if (room && allowed) {
       if (p.dropAnnounced) {
         p.dropAnnounced = false;
         sys(room, `📶 ${p.name} reconnected`);

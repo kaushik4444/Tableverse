@@ -35,6 +35,7 @@
     named: !!store.get('ct_name'),
     chat: [],
     chatOpen: false,
+    reportMenuFor: null, // message id whose report reason menu is open; kept in state so redraws keep it
     unread: 0,
     skew: 0, // server clock minus this device's clock, for the turn countdown
     announcement: '',
@@ -1113,13 +1114,36 @@
     if (!m.sys && muted.has(m.id) && m.id !== S.id) return '';
     if (m.sys) return `<div class="msg sys">${esc(m.text)}</div>`;
     const mine = m.id === S.id;
-    return `<div class="msg ${mine ? 'mine' : ''}"><span class="mav" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span><div class="mb"><b>${esc(m.name)}${m.spec ? ' <i title="Spectator">👁</i>' : ''}</b><p>${esc(m.text)}</p></div></div>`;
+    // Block and report are enforced by the server; these buttons only send the request.
+    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}" data-mid="${esc(m.mid || '')}" title="Hide this player's table chat from you. Nothing else changes, and they are not told." aria-label="Block chat from ${esc(m.name)}">Block chat</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}">Report</button>` : ''}</span>`;
+    const menu = !mine && m.mid && S.reportMenuFor === m.mid ? reportMenuHTML(m.mid) : '';
+    return `<div class="msg ${mine ? 'mine' : ''}"><span class="mav" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span><div class="mb"><b>${esc(m.name)}${m.spec ? ' <i title="Spectator">👁</i>' : ''}</b><p>${esc(m.text)}</p>${actions}${menu}</div></div>`;
+  }
+  const REPORT_REASONS = [['harassment', 'Harassment'], ['hate', 'Hate'], ['threats', 'Threats'], ['sexual', 'Sexual content'], ['spam', 'Spam'], ['other', 'Other']];
+  function reportMenuHTML(mid) {
+    return `<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-mod="report-send" data-mid="${esc(mid)}" data-reason="${k}">${l}</button>`).join('')}</div>`;
+  }
+  /** A signature for the chat control that has focus, so the same control can be found after the list is rebuilt. */
+  function focusedChatControl(list) {
+    const el = document.activeElement;
+    if (!el || !list.contains(el) || !el.matches('[data-mod]')) return null;
+    return [el.dataset.mod, el.dataset.mid || '', el.dataset.id || '', el.dataset.reason || ''].join('|');
+  }
+  function restoreChatFocus(list, sig) {
+    if (!sig) return;
+    const match = [...list.querySelectorAll('[data-mod]')].find((b) => [b.dataset.mod, b.dataset.mid || '', b.dataset.id || '', b.dataset.reason || ''].join('|') === sig);
+    if (match) match.focus({ preventScroll: true });
   }
   function drawChat() {
     const list = document.getElementById('chat-list');
     if (!list) return;
+    const focusSig = focusedChatControl(list);
+    const previousScrollTop = list.scrollTop;
     list.innerHTML = S.chat.length ? S.chat.map(msgHTML).join('') : '<p class="hint">No messages yet. Say hello!</p>';
-    list.scrollTop = list.scrollHeight;
+    restoreChatFocus(list, focusSig);
+    // Do not auto-scroll a focused moderation control out of view when new chat arrives. Without keyboard focus,
+    // retain the existing behaviour of following the latest message.
+    list.scrollTop = focusSig ? previousScrollTop : list.scrollHeight;
     const w = S.room && S.room.spectators && S.room.spectators.length ? `👁 ${S.room.spectators.map((x) => esc(x.name)).join(', ')} watching` : '';
     $chat.querySelector('.chat-watch').innerHTML = w;
   }
@@ -1150,9 +1174,29 @@
   }
   function closeChat() {
     S.chatOpen = false;
+    S.reportMenuFor = null;
     $chat.hidden = true;
   }
-  $chat.addEventListener('click', (e) => { if (e.target.closest('[data-chat="close"]')) closeChat(); });
+  $chat.addEventListener('click', (e) => {
+    if (e.target.closest('[data-chat="close"]')) return closeChat();
+    const b = e.target.closest('[data-mod]');
+    if (!b) return;
+    if (b.dataset.mod === 'block') {
+      send({ t: 'block', id: b.dataset.id });
+    } else if (b.dataset.mod === 'report-open') {
+      S.reportMenuFor = S.reportMenuFor === b.dataset.mid ? null : b.dataset.mid;
+      drawChat();
+      const first = S.reportMenuFor && $chat.querySelector('.report-menu [data-reason]');
+      if (first) first.focus();
+    } else if (b.dataset.mod === 'report-send') {
+      send({ t: 'report', messageId: b.dataset.mid, reason: b.dataset.reason });
+      S.reportMenuFor = null;
+      drawChat();
+      // the menu's buttons are gone now: keyboard focus goes back to the Report button of the same message
+      const back = $chat.querySelector(`[data-mod="report-open"][data-mid="${b.dataset.mid}"]`);
+      if (back) back.focus();
+    }
+  });
   $chat.addEventListener('submit', (e) => {
     e.preventDefault();
     const inp = document.getElementById('chat-input');
