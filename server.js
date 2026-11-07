@@ -271,7 +271,8 @@ function start(opts = {}) {
       try { if (p.room) leaveRoom(p); } catch { /* the player is going away either way */ }
       if (p.ws) p.ws.close(4001, 'account deleted');
       // another device that signed in separately has its own socket (and its own player object): close those too
-      for (const ws of wss.clients) if (ws.player && ws.player.id === playerId) ws.close(4001, 'account deleted');
+      // a socket still being checked for this account (its hello is awaiting the database) is closed too
+      for (const ws of wss.clients) if ((ws.player || ws.pendingPlayer)?.id === playerId) ws.close(4001, 'account deleted');
       for (const [tok, q] of tokens) if (q.id === playerId) tokens.delete(tok);
       clearTimeout(p.dropTimer);
       players.delete(playerId);
@@ -1465,6 +1466,12 @@ function start(opts = {}) {
     // The socket may have closed while the database answered above. A closed socket must not take over the account:
     // it must not replace the open socket, and there would be nothing left to clean it up.
     if (ws.readyState !== 1) return;
+    // The account may have been deleted, or its record dropped, while the checks above were pending. Only the player
+    // record that is still registered on this server can be taken over.
+    if (players.get(p.id) !== p) {
+      send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
+      return ws.close(1008, 'invalid session');
+    }
     if (p.ws && p.ws !== ws) {
       p.ws.player = null;
       p.ws.close(4000, 'replaced');
