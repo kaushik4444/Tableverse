@@ -44,6 +44,29 @@ async function hitDb(scope, key, limit, windowMs) {
   return { allowed, remaining: Math.max(0, limit - count), resetMs: (Number(row.reset_seconds) || windowSeconds) * 1000, count };
 }
 
+/** Gives back one attempt that was reserved but did not count (a successful login, or a server fault). Never goes below zero. */
+function refundMemory(scope, key) {
+  const entry = mem.get(`${scope}:${key}`);
+  if (entry && nowMs() < entry.resetAt && entry.count > 0) entry.count -= 1;
+}
+
+async function refundDb(scope, key, windowMs) {
+  const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+  // the same bucket the hit used; if the window rolled over in between, the refund finds nothing and the limit is slightly stricter
+  await db.query(
+    `UPDATE auth_rate_limits SET count = count - 1
+       WHERE scope = $1 AND key = $2 AND count > 0
+         AND window_start = to_timestamp(floor(extract(epoch FROM NOW()) / $3::int) * $3::int)`,
+    [scope, key, windowSeconds]
+  );
+}
+
+async function refundRateLimit({ scope, key, windowMs }) {
+  if (!scope || !key || !Number.isFinite(windowMs)) throw new Error('rate limit refund config invalid');
+  if (db.hasDatabase()) return refundDb(scope, key, windowMs);
+  return refundMemory(scope, key);
+}
+
 async function hitRateLimit({ scope, key, limit, windowMs }) {
   if (!scope || !key || !Number.isFinite(limit) || !Number.isFinite(windowMs)) {
     throw new Error('rate limit config invalid');
@@ -52,4 +75,4 @@ async function hitRateLimit({ scope, key, limit, windowMs }) {
   return hitMemory(scope, key, limit, windowMs);
 }
 
-module.exports = { hitRateLimit };
+module.exports = { hitRateLimit, refundRateLimit };
