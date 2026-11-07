@@ -71,6 +71,7 @@ function start(opts = {}) {
   const autoAdvanceMs = opts.autoAdvanceMs ?? 8000; // pause between rounds
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
+  const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket's session is re-checked this often
   const maxMsgsPerSec = opts.maxMsgsPerSec ?? 30; // per socket; humans send a handful of messages per minute
   const maxQueuedMessages = opts.maxQueuedMessages ?? 100; // bound async work queued behind slow database operations
   const maxPendingHellos = opts.maxPendingHellos ?? 250; // bound the global serial authentication queue during connection floods
@@ -220,7 +221,7 @@ function start(opts = {}) {
         if (!owner || owner.id !== playerId) continue;
         if (token && ws.authToken !== token) continue;
         if (exceptToken && ws.authToken === exceptToken) continue;
-        ws.close(exceptToken ? 4002 : 4001, exceptToken ? 'signed in elsewhere' : 'signed out');
+        revokeSocket(ws, exceptToken ? 4002 : 4001, exceptToken ? 'signed in elsewhere' : 'signed out');
       }
     },
     // the display name and/or avatar was changed over HTTP (profile page): same effect as the lobby's own change
@@ -269,10 +270,10 @@ function start(opts = {}) {
         }
       }
       try { if (p.room) leaveRoom(p); } catch { /* the player is going away either way */ }
-      if (p.ws) p.ws.close(4001, 'account deleted');
+      if (p.ws) revokeSocket(p.ws, 4001, 'account deleted');
       // another device that signed in separately has its own socket (and its own player object): close those too
       // a socket still being checked for this account (its hello is awaiting the database) is closed too
-      for (const ws of wss.clients) if ((ws.player || ws.pendingPlayer)?.id === playerId) ws.close(4001, 'account deleted');
+      for (const ws of wss.clients) if ((ws.player || ws.pendingPlayer)?.id === playerId) revokeSocket(ws, 4001, 'account deleted');
       for (const [tok, q] of tokens) if (q.id === playerId) tokens.delete(tok);
       clearTimeout(p.dropTimer);
       players.delete(playerId);
@@ -1429,7 +1430,7 @@ function start(opts = {}) {
   );
 
   async function handleHello(ws, msg) {
-    if (ws.readyState !== 1) return; // the socket closed while waiting in the queue
+    if (ws.readyState !== 1 || ws.revoked) return; // the socket closed or was revoked while waiting in the queue
 
     // Only the HttpOnly session cookie on the upgrade request authenticates a socket. A token sent inside a message is not
     // accepted: anything a page can send can then never be mistaken for a session.
@@ -1502,7 +1503,7 @@ function start(opts = {}) {
 
     // The socket may have closed while the database answered above. A closed socket must not take over the account:
     // it must not replace the open socket, and there would be nothing left to clean it up.
-    if (ws.readyState !== 1) return;
+    if (ws.readyState !== 1 || ws.revoked) return;
     // The account may have been deleted, or its record dropped, while the checks above were pending. Only the player
     // record that is still registered on this server can be taken over.
     if (players.get(p.id) !== p) {
@@ -1526,7 +1527,7 @@ function start(opts = {}) {
     // Still the open socket that owns the player? A socket that closed or was replaced while an await was pending has
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
-    const stillOwner = () => ws.readyState === 1 && p.ws === ws;
+    const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
     send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
@@ -1553,6 +1554,63 @@ function start(opts = {}) {
     publishPresence(p.id);
   }
 
+  /** The player's open socket has ended (it closed, or its session was revoked): presence, voice and the table are updated. */
+  function detachSocket(p) {
+    p.ws = null;
+    p.connected = false;
+    p.lastSeen = Date.now();
+    presence.set(p.id, { online: false, lastSeen: new Date(p.lastSeen).toISOString() });
+    dbAccount.updatePresence(p.id).catch(() => {});
+    publishPresence(p.id);
+    const room = rooms.get(p.room);
+    if (room) {
+      if (voiceRelay.dropVoice(room, p.id)) broadcastVoice(room); // a dropped connection ends their voice; they rejoin it when they are back
+      broadcast(room);
+      schedule(room);
+      onDrop(p);
+    }
+  }
+
+  /**
+   * Ends one socket's session. The socket forgets its player first, so nothing queued behind it can act for that player,
+   * and only then does the close handshake start. Used for sign-out, password reset, a new login elsewhere and failed checks.
+   */
+  function revokeSocket(ws, code, reason) {
+    if (ws.revoked) return;
+    ws.revoked = true;
+    const p = ws.player || ws.pendingPlayer;
+    ws.player = null;
+    ws.pendingPlayer = null;
+    if (p && p.ws === ws) {
+      if (tokens.get(ws.authToken) === p) tokens.delete(ws.authToken);
+      detachSocket(p);
+    }
+    ws.close(code, reason);
+  }
+
+  /**
+   * Is the session behind this open socket still valid? A revoked or expired session ends the socket. Runs on an interval,
+   * not for every message, so a busy socket does not add a database query per message.
+   */
+  async function checkSocketSession(ws) {
+    const p = ws.player;
+    if (!p || ws.revoked || ws.readyState !== 1 || ws.checkingSession) return;
+    ws.checkingSession = true;
+    try {
+      const current = await dbPlayers.authenticateToken(ws.authToken);
+      if (ws.revoked || ws.player !== p) return; // ended while the check was running
+      if (!current || current.id !== p.id) {
+        send(ws, { t: 'authRequired', message: 'Your session has ended. Please log in again.' });
+        revokeSocket(ws, 4001, 'session ended');
+      }
+    } catch (err) {
+      // a database fault does not prove the session ended: keep the socket and check again on the next interval
+      wsLog.warn('session.check_failed', { connId: ws.connId, err });
+    } finally {
+      ws.checkingSession = false;
+    }
+  }
+
   wss.on('connection', (ws, req) => {
     ws.ip = clientIp(req);
     ws.cookieToken = authRoutes.readSessionToken(req);
@@ -1564,6 +1622,9 @@ function start(opts = {}) {
       else socketsByIp.set(ws.ip, n);
     });
     if (open > maxSocketsPerIp) return ws.close(1013, 'too many connections');
+    const sessionTimer = setInterval(() => { void checkSocketSession(ws); }, sessionCheckMs);
+    sessionTimer.unref();
+    ws.once('close', () => clearInterval(sessionTimer));
     ws.isAlive = true;
     ws.connId = crypto.randomUUID().slice(0, 8); // correlates this socket's log lines; not a secret
     ws.player = null;
@@ -1582,6 +1643,7 @@ function start(opts = {}) {
       }
     });
     ws.on('message', (raw) => {
+      if (ws.revoked || ws.readyState !== 1) return; // a revoked or closing socket is not served
       let msg;
       try {
         msg = JSON.parse(raw);
@@ -1603,6 +1665,8 @@ function start(opts = {}) {
       const p = ws.player;
       if (!p || !Object.hasOwn(handlers, msg.t)) return;
       const run = async () => {
+        // queued behind an earlier message: the session may have ended while it waited
+        if (ws.revoked || ws.readyState !== 1 || ws.player !== p) return;
         try {
           const before = p.room;
           await handlers[msg.t](p, msg);
@@ -1624,19 +1688,7 @@ function start(opts = {}) {
     ws.on('close', () => {
       const p = ws.player;
       if (!p || p.ws !== ws) return;
-      p.ws = null;
-      p.connected = false;
-      p.lastSeen = Date.now();
-      presence.set(p.id, { online: false, lastSeen: new Date(p.lastSeen).toISOString() });
-      dbAccount.updatePresence(p.id).catch(() => {});
-      publishPresence(p.id);
-      const room = rooms.get(p.room);
-      if (room) {
-        if (voiceRelay.dropVoice(room, p.id)) broadcastVoice(room); // a dropped connection ends their voice; they rejoin it when they are back
-        broadcast(room);
-        schedule(room);
-        onDrop(p);
-      }
+      detachSocket(p);
     });
     ws.on('error', (err) => wsLog.warn('ws.socket_error', { connId: ws.connId, code: err && err.code, err }));
   });

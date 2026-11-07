@@ -6,7 +6,8 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { registerAndVerify } = require('./helpers/auth');
+const WebSocket = require('ws');
+const { registerAndVerify, sessionSocket } = require('./helpers/auth');
 const testdb = require('./helpers/testdb');
 
 let passed = 0;
@@ -26,7 +27,7 @@ const PW = 'TestPass123!';
     const dbPlayers = require('../db/players');
     const argon2 = require('@node-rs/argon2');
     const { start } = require('../server');
-    const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet() });
+    const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 50 });
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
     let seq = 1;
@@ -84,6 +85,23 @@ const PW = 'TestPass123!';
         await dbAuth.loginEmail({ email, password: PW });
         await dbAuth.loginEmail({ email, password: PW });
         assert.equal(await activeSessions(id), 1);
+      });
+
+      await test('an expired session ends its open socket on the next check', async () => {
+        const email = addr();
+        const { token } = await registerAndVerify(srv.port, { email, password: PW, displayName: 'Expiry' });
+        const msgs = [];
+        let closed = null;
+        const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`, sessionSocket(token));
+        ws.on('open', () => ws.send(JSON.stringify({ t: 'hello' })));
+        ws.on('message', (raw) => msgs.push(JSON.parse(raw)));
+        ws.on('close', (code) => { closed = code; });
+        for (let i = 0; i < 200 && !msgs.some((m) => m.t === 'welcome'); i++) await sleep(10);
+        assert.ok(msgs.some((m) => m.t === 'welcome'), 'connected');
+        await x.query("UPDATE auth_sessions SET expires_at = NOW() - INTERVAL '1 second' WHERE token_hash = $1", [crypto.createHash('sha256').update(token).digest('hex')]);
+        for (let i = 0; i < 200 && closed === null; i++) await sleep(10);
+        assert.equal(closed, 4001, 'the socket ends with the session');
+        assert.ok(msgs.some((m) => m.t === 'authRequired'));
       });
 
       await test('the migration that revokes legacy sessions is safe to run again', async () => {

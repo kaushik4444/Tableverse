@@ -98,7 +98,11 @@ async function revokeAllSessionsForCurrent(rawToken) {
 }
 
 async function readSessionFromCookie(rawToken) {
-  if (!db.hasDatabase() || !dbPlayers.isWellFormedToken(rawToken)) return null;
+  if (!dbPlayers.isWellFormedToken(rawToken)) return null;
+  if (!db.hasDatabase()) {
+    const player = await dbPlayers.authenticateToken(rawToken); // memory mode: the session lives in this process
+    return player ? { player_id: player.id } : null;
+  }
   const tokenHash = hashToken(rawToken);
   const r = await db.query(
     `SELECT player_id
