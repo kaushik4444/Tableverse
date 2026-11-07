@@ -4,7 +4,7 @@
   const { esc } = window.CardTable;
   const STEP_MS = 480, JUMP_MS = 1400; // slow enough to count every square; the server waits for the same times (games/snakesladders/engine.js)
   /** shown[i] is where player i's token is drawn right now; it walks square by square towards the real position. */
-  const ui = { ctx: null, latest: null, root: null, seq: null, rollSeq: null, tumble: false, shown: [], timer: null, animating: false };
+  const ui = { ctx: null, latest: null, root: null, roomCode: null, seq: null, rollSeq: null, tumble: false, shown: [], timer: null, animating: false };
   const shownPos = (v, i) => (ui.shown[i] === undefined ? v.players[i].pos : ui.shown[i]);
   const HEX = { red: '#e5484d', blue: '#3b82f6', green: '#22a35a', yellow: '#e8b923' };
   const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
@@ -172,6 +172,12 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v; ui.root = root;
+    const roomCode = ctx.room && ctx.room.code;
+    if (ui.roomCode !== roomCode) {
+      stopAnimation();
+      ui.roomCode = roomCode;
+      ui.seq = null; ui.rollSeq = null; ui.tumble = false;
+    }
     react(v);
     root.innerHTML = `
     <div class="wz sl">

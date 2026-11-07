@@ -49,6 +49,22 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('joining another table does not replay its previous roll', async () => {
+    const msgs = tableMessages('snakesladders', four);
+    const { page, ctx } = await open(msgs);
+    const players = four.map((p, i) => ({ id: i ? 'p' + i : 'me', name: p.name }));
+    const g = engine.createGame(players, {}, () => (4 - 1) / 6 + 0.01);
+    g.turn = 3;
+    engine.applyAction(g, 'p3', { type: 'roll' });
+    const room = { ...msgs[1].room, code: 'GHIJKL' };
+    const view = engine.viewFor(g, 'me');
+    await page.evaluate((m) => window.__push(m), { t: 'state', room, view });
+    assert.equal(view.lastRoll.to, 25);
+    assert.equal(await page.evaluate(() => document.querySelector('.sl-token[data-i="3"]').getAttribute('aria-label')), 'Dmitri on square 25');
+    assert.equal(await page.isDisabled('[data-sl="roll"]'), false);
+    await ctx.close();
+  });
+
   await test('reduced motion disables token hop animations', async () => {
     const { page, ctx } = await open(tableMessages('snakesladders', four));
     await page.emulateMedia({ reducedMotion: 'reduce' });
