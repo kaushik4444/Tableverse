@@ -125,6 +125,7 @@ function cookieSocket(port, cookie) {
       assert.match(r.stdout, /match_participants\s+12/);
       assert.match(r.stdout, /schema_migrations/);
       assert.match(r.stdout, /--execute --confirm=tv_test_/);
+      assert.doesNotMatch(r.stdout, /PRIVATE_REPORT_(?:TEXT|DETAILS)_SHOULD_NOT_APPEAR/, 'CLI preview must not print report free text');
       assert.deepEqual(await dump(), before);
       const withConfirmOnly = cli([`--confirm=${t.name}`]);
       assert.equal(withConfirmOnly.status, 0);
