@@ -18,6 +18,7 @@ const PW = 'TestPass123!';
   try {
     process.env.DATABASE_URL = t.url;
     const { start } = require('../server');
+    const dbAuth = require('../db/auth');
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
 
@@ -149,6 +150,58 @@ const PW = 'TestPass123!';
         } finally {
           release();
           await (closing || s2.close({ drainMs: 3000 }));
+        }
+      });
+
+      await test('shutdown waits for active auth requests before draining their emails', async () => {
+        let releaseDb;
+        let releaseEmail;
+        let dbStarted;
+        let emailStarted;
+        const dbGate = new Promise((resolve) => { releaseDb = resolve; });
+        const emailGate = new Promise((resolve) => { releaseEmail = resolve; });
+        const dbReady = new Promise((resolve) => { dbStarted = resolve; });
+        const emailReady = new Promise((resolve) => { emailStarted = resolve; });
+        const originalRequestPasswordReset = dbAuth.requestPasswordReset;
+        let srv2;
+        let closing;
+        let request;
+        const sent = [];
+        dbAuth.requestPasswordReset = async (args) => {
+          dbStarted();
+          await dbGate;
+          return originalRequestPasswordReset(args);
+        };
+        try {
+          srv2 = await start({
+            port: 0, trustProxy: false, matchLog: quiet(), log: quiet(),
+            emailSender: {
+              assertReady() {},
+              async sendPasswordReset(m) { emailStarted(); await emailGate; sent.push(m.email); },
+              async sendVerification() {},
+              async sendAccountExists() {},
+            },
+            env: { ...process.env, NODE_ENV: 'production', REQUIRE_EMAIL_VERIFICATION: 'true' },
+          });
+          const b = new Browser(srv2.port); await b.csrf();
+          request = b.post('/api/auth/forgot-password', { email: freshAddr });
+          await Promise.race([dbReady, new Promise((_, reject) => setTimeout(() => reject(new Error('auth request did not reach the database')), 2000))]);
+          let closed = false;
+          closing = srv2.close({ drainMs: 3000 }).then(() => { closed = true; });
+          releaseDb();
+          await Promise.race([emailReady, new Promise((_, reject) => setTimeout(() => reject(new Error('reset email was not enqueued')), 2000))]);
+          await request;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          assert.equal(closed, false, 'shutdown waits for the email enqueued by the active auth request');
+          releaseEmail();
+          await closing;
+          assert.deepEqual(sent, [freshAddr]);
+        } finally {
+          releaseDb();
+          releaseEmail();
+          dbAuth.requestPasswordReset = originalRequestPasswordReset;
+          if (request) await request.catch(() => {});
+          if (srv2) await (closing || srv2.close()).catch(() => {});
         }
       });
     } finally {
