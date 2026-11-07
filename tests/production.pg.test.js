@@ -222,7 +222,7 @@ function cookieSocket(port, cookie) {
       } finally { await rl.close(); }
     });
     await test('production mode: no token reaches scripts, cookies are Secure, a failed email does not strand the account, and account existence is not revealed', async () => {
-      const mail = { sent: [], failNext: 0, assertReady() {}, async sendVerification(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'verify', ...m }); }, async sendPasswordReset(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'reset', ...m }); } };
+      const mail = { sent: [], failNext: 0, assertReady() {}, async sendAccountExists(m) { (this.notices = this.notices || []).push(m.to); }, async sendVerification(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'verify', ...m }); }, async sendPasswordReset(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'reset', ...m }); } };
       const log = quiet();
       const prod = await start({ ...fast, matchLog: quiet(), log, emailSender: mail, env: { ...process.env, NODE_ENV: 'production', REQUIRE_EMAIL_VERIFICATION: 'true' } });
       process.env.AUTH_SESSION_TTL_DAYS = '2';
@@ -240,7 +240,11 @@ function cookieSocket(port, cookie) {
         assert.ok(log.lines.error.some((l) => /verify email could not be delivered/.test(l)), 'the failure is logged');
 
         // the account exists and can get a new link
-        assert.equal((await b.post('/api/auth/register', { email, username: `prodx${Date.now() % 1000000}`, password: PW, displayName: 'Prod' })).status, 400);
+        // a taken address gets the same 201 answer as a new one, creates nothing, and the owner is notified instead
+        const again = await b.post('/api/auth/register', { email, username: `prodx${Date.now() % 1000000}`, password: PW, displayName: 'Prod' });
+        assert.equal(again.status, 201, JSON.stringify(again.json));
+        assert.equal(again.json.player, null);
+        assert.deepEqual(mail.notices, [email], 'the owner is told about the attempt');
         await b.must('/api/auth/resend-verification', { email });
         assert.equal(mail.sent.length, 1);
         await b.must('/api/auth/verify-email', { token: mail.sent[0].token });
