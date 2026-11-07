@@ -1,6 +1,7 @@
 'use strict';
 // Private room access control and live invitation behavior using the DB-free test setup.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const { Browser, registerAndVerify } = require('./helpers/auth');
 const WebSocket = require('ws');
@@ -19,10 +20,10 @@ async function until(check, label, timeout = 5000) {
   }
 }
 function wsClient(port, token) {
-  const c = { messages: [], errors: [], notices: [], online: [], room: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { messages: [], errors: [], notices: [], online: [], room: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (message) => c.ws.send(JSON.stringify(message));
   c.wait = (predicate, label) => until(() => predicate(c), label);
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const message = JSON.parse(raw);
     c.messages.push(message);

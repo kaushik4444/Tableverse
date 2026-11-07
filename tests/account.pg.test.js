@@ -352,9 +352,11 @@ function socket(port, cookie) {
       await until(() => logHas(s, 'Secret Sam') && logHas(w, 'Secret Sam'), 'the real name is in the game log before deleting');
       assert.ok(JSON.stringify(w.msgs).includes('Secret Sam'), 'precondition: the name was visible at the table');
 
-      const mark = w.msgs.length;
+      // The baseline is taken after the deletion answers: broadcasts that were already in flight when the request began may still
+      // carry the name, and counting them made this check race with the bots.
       const del = await u.browser.post('/api/me/delete-account', { password: PW });
       assert.equal(del.status, 200, JSON.stringify(del.json));
+      const mark = w.msgs.length;
       await until(() => s.closed === 4001, 'the deleted player\'s socket is closed');
       await until(() => w.msgs.slice(mark).some((m) => m.t === 'state'), 'a state broadcast after the deletion');
 

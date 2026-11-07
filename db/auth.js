@@ -159,11 +159,13 @@ async function registerEmail({ email, username, password, displayName, avatar })
 
   try {
     return await db.withTransaction(async (client) => {
-      const existsEmail = await client.query('SELECT 1 FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', [PROVIDER_EMAIL, e]);
-      if (existsEmail.rows.length) throw new AuthError('An account already exists for this email.');
-
+      // The username is checked first, for every address: whether it is taken must not depend on whether the email has an account.
       const existsUsername = await client.query('SELECT 1 FROM players WHERE LOWER(username) = LOWER($1) LIMIT 1', [u]);
       if (existsUsername.rows.length) throw new AuthError('This username is already taken.');
+
+      // Not an error: the route answers exactly as it does for a new account, so the response cannot reveal that the address is taken.
+      const existsEmail = await client.query('SELECT 1 FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', [PROVIDER_EMAIL, e]);
+      if (existsEmail.rows.length) return { alreadyRegistered: true, email: e };
 
       const p = await client.query(
         `INSERT INTO players (username, display_name, avatar, is_anonymous)
@@ -186,15 +188,17 @@ async function registerEmail({ email, username, password, displayName, avatar })
         ttlMinutes: verifyTtlMin(),
       });
 
-      const sessionToken = await createSession(client, player.id);
-      return { ...makeSessionResult(player, sessionToken), verifyToken, email: e, username: u };
+      // No session is created here. Registration never signs anyone in: the player verifies the email, then logs in.
+      const { player: publicPlayer } = makeSessionResult(player, null);
+      return { player: publicPlayer, verifyToken, email: e, username: u };
     });
   } catch (err) {
     if (err && (err.code === '23505' || /already exists/i.test(err.message || ''))) {
       if ((err.constraint || '').includes('username') || /username/i.test(err.message || '')) {
         throw new AuthError('This username is already taken.');
       }
-      throw new AuthError('An account already exists for this email.');
+      // a concurrent registration for the same address won the race: same generic answer
+      return { alreadyRegistered: true, email: e };
     }
     if (err && err.code === '23514') throw new AuthError('Username must be 3-24 chars: lowercase letters, numbers, underscore.');
     throw err;
@@ -359,12 +363,15 @@ async function resetPassword({ token, newPassword }) {
     }
 
     const t = use.rows[0];
-    await client.query(
+    const identity = await client.query(
       `UPDATE auth_identities
        SET password_hash = $1
        WHERE player_id = $2 AND provider = $3 AND provider_user_id = $4`,
       [pwHash, t.player_id, PROVIDER_EMAIL, t.email]
     );
+    // Exactly one identity must change. Otherwise the throw rolls back the token use too, so no link is spent for nothing
+    // and the sessions below are not revoked for a password that never changed.
+    if (identity.rowCount !== 1) throw new AuthError('This reset link can no longer be used. Request a new one.', 400);
     await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [t.player_id]);
     return { ok: true, playerId: t.player_id };
   });

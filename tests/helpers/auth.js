@@ -56,4 +56,12 @@ async function registerAndVerify(port, { email, username, password = 'TestPass12
   return { browser, token: login.json.token, player: login.json.player };
 }
 
-module.exports = { Browser, registerAndVerify };
+/**
+ * WebSocket options that present a session the way a browser does: the HttpOnly ct_session cookie on the upgrade request.
+ * Tests must authenticate this way; a token inside a hello message is no longer accepted.
+ */
+function sessionSocket(token) {
+  return token ? { headers: { cookie: `ct_session=${encodeURIComponent(token)}` } } : undefined;
+}
+
+module.exports = { Browser, registerAndVerify, sessionSocket };

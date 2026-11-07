@@ -1,5 +1,6 @@
 'use strict';
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 // Friends and invitation persistence/API on a disposable PostgreSQL database only.
 const assert = require('node:assert/strict');
 const testdb = require('./helpers/testdb');
@@ -12,9 +13,9 @@ async function until(check, label, timeout = 8000) {
   for (;;) { const value = check(); if (value) return value; if (Date.now() - started > timeout) throw new Error(`timeout waiting for ${label}`); await wait(20); }
 }
 function wsClient(port, token) {
-  const c = { messages: [], errors: [], room: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { messages: [], errors: [], room: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (message) => c.ws.send(JSON.stringify(message));
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => { const m = JSON.parse(raw); c.messages.push(m); if (m.t === 'state') c.room = m.room; if (m.t === 'error') c.errors.push(m.message); });
   return c;
 }

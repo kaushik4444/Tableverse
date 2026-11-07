@@ -2,6 +2,7 @@
 // Table voice on the real server (in-memory mode, no database): who is in voice, setup messages reach only the person
 // they are for, leaving or dropping ends voice, spectators cannot talk, and the browsers are told which ICE servers to use.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const WebSocket = require('ws');
 const { registerAndVerify } = require('./helpers/auth');
@@ -18,9 +19,9 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 function client(port, token) {
-  const c = { room: null, errors: [], voice: [], rtc: [], ice: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { room: null, errors: [], voice: [], rtc: [], ice: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') { c.id = m.id; c.ice = m.ice; }

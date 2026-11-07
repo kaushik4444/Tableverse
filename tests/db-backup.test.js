@@ -7,8 +7,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { pgEnvFromUrl, checkOutPath, backup, verifyArchive } = require('../scripts/db-backup');
+const { pgEnvFromUrl, checkOutPath, backup, verifyArchive, createPrivateExclusive } = require('../scripts/db-backup');
 const { assertSafe } = require('./helpers/testdb');
+const { parseAppliedMigrations } = require('../scripts/db-restore-check');
 
 let passed = 0;
 let skipped = 0;
@@ -16,11 +17,22 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 const have = (cmd) => spawnSync(cmd, ['--version'], { stdio: 'ignore' }).status === 0;
+
+// Regression: psql output must parse identically on LF and CRLF platforms.
+assert.deepEqual(parseAppliedMigrations('001_init.sql\n002_auth.sql\n'), ['001_init.sql', '002_auth.sql']);
+assert.deepEqual(parseAppliedMigrations('001_init.sql\r\n002_auth.sql\r\n'), ['001_init.sql', '002_auth.sql']);
+console.log('  ok  migration versions parse consistently with LF and CRLF output');
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tv-backup-test-'));
 process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
 
 (async () => {
   // ---- connection strings: parts go to PG* variables, never to a command line
+  await test('a URL host parameter selects the Unix socket and does not force TLS', async () => {
+    const env = pgEnvFromUrl('postgres://u:p@localhost/app?host=%2Fvar%2Frun%2Fpostgresql');
+    assert.equal(env.PGHOST, '/var/run/postgresql');
+    assert.equal(env.PGSSLMODE, undefined);
+  });
+
   await test('a Neon-style URL with an encoded password is split into PG* variables', async () => {
     const env = pgEnvFromUrl('postgres://tv%5Fapp:p%40ss%2Fw@ep-x.eu-central-1.aws.neon.tech/neondb?sslmode=require');
     assert.deepEqual(env, { PGHOST: 'ep-x.eu-central-1.aws.neon.tech', PGPORT: '5432', PGUSER: 'tv_app', PGPASSWORD: 'p@ss/w', PGDATABASE: 'neondb', PGSSLMODE: 'require' });
@@ -102,6 +114,18 @@ process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
     await assert.rejects(backup({ url: 'postgres://u:Sup3rSecretPw@127.0.0.1:1/tv', out: path.join(repoLink, 'refused.dump') }), /inside the repository/);
     assert.ok(!fs.existsSync(path.join(__dirname, '..', 'refused.dump')));
     assert.ok(!fs.existsSync(path.join(__dirname, '..', 'refused.dump.partial')));
+  });
+
+  await test('failed checksum initialization removes only the file this invocation created', async () => {
+    const file = path.join(scratch, 'init-failure.partial');
+    const originalWrite = fs.writeSync;
+    fs.writeSync = () => { const err = new Error('simulated disk full'); err.code = 'ENOSPC'; throw err; };
+    try {
+      assert.throws(() => createPrivateExclusive(file, 'checksum'), /simulated disk full/);
+      assert.ok(!fs.existsSync(file), 'the incomplete file is removed');
+    } finally {
+      fs.writeSync = originalWrite;
+    }
   });
 
   // ---- reservation, concurrency and cleanup, with stand-in pg_dump / pg_restore (no database needed).

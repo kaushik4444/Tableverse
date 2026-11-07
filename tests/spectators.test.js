@@ -2,6 +2,7 @@
 // Spectator and seat transitions on the real server (in-memory mode, no database): duplicate joins, capacity checks that
 // come after duplicate detection, rejoining, switching tables, player <-> spectator, and no repeated notifications.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const WebSocket = require('ws');
 const { registerAndVerify } = require('./helpers/auth');
@@ -19,9 +20,9 @@ async function test(name, fn) {
 }
 
 function client(port, token) {
-  const c = { room: null, errors: [], chats: [], notices: [], left: 0, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { room: null, errors: [], chats: [], notices: [], left: 0, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') c.id = m.id;
