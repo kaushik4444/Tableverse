@@ -123,27 +123,33 @@ const PW = 'TestPass123!';
           absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), log: quiet(), emailSender: slowMail,
           env: { ...process.env, NODE_ENV: 'production', REQUIRE_EMAIL_VERIFICATION: 'true' },
         });
-        const email = `drain.${Date.now()}@test.local`;
-        const b2 = new Browser(s2.port); await b2.csrf();
-        await b2.post('/api/auth/register', { email, username: `drain${Date.now() % 1000000}`, password: PW, displayName: 'Drain' });
-        const [firstToken] = slowMail.verifyTokens;
+        let closing;
+        try {
+          const email = `drain.${Date.now()}@test.local`;
+          const b2 = new Browser(s2.port); await b2.csrf();
+          await b2.post('/api/auth/register', { email, username: `drain${Date.now() % 1000000}`, password: PW, displayName: 'Drain' });
+          const [firstToken] = slowMail.verifyTokens;
 
-        // Answers must come back while the send is still blocked: a response that waited for delivery would hang here.
-        // The account is still unverified here, so resend has a verification email to send.
-        slowMail.gated = true;
-        const answeredWhileBlocked = (p) => Promise.race([p.then(() => 'answered'), new Promise((r) => setTimeout(() => r('hung'), 2000))]);
-        assert.equal(await answeredWhileBlocked(b2.post('/api/auth/resend-verification', { email })), 'answered', 'resend answers without waiting for the send');
-        await b2.must('/api/auth/verify-email', { token: firstToken });
-        assert.equal(await answeredWhileBlocked(b2.post('/api/auth/forgot-password', { email })), 'answered', 'forgot-password answers without waiting for the send');
-        assert.deepEqual(slowMail.sentReset, [], 'the reset send is still blocked when the answer is returned');
+          // Answers must come back while the send is still blocked.
+          // The account is still unverified here, so resend has a verification email to send.
+          slowMail.gated = true;
+          const answeredWhileBlocked = (p) => Promise.race([p.then(() => 'answered'), new Promise((r) => setTimeout(() => r('hung'), 2000))]);
+          assert.equal(await answeredWhileBlocked(b2.post('/api/auth/resend-verification', { email })), 'answered', 'resend answers without waiting for the send');
+          await b2.must('/api/auth/verify-email', { token: firstToken });
+          assert.equal(await answeredWhileBlocked(b2.post('/api/auth/forgot-password', { email })), 'answered', 'forgot-password answers without waiting for the send');
+          assert.deepEqual(slowMail.sentReset, [], 'the reset send is still blocked when the answer is returned');
 
-        // Shutdown must wait for the blocked sends, then release them, so both emails are finished rather than cut off.
-        const closing = s2.close({ drainMs: 3000 });
-        await new Promise((r) => setTimeout(r, 300));
-        release();
-        await closing;
-        assert.deepEqual(slowMail.sentReset, [email], 'the reset email was finished during shutdown');
-        assert.equal(slowMail.sentVerify.length, 2, 'the resend verification email was finished during shutdown');
+          // Release blocked sends during shutdown and check that both finished.
+          closing = s2.close({ drainMs: 3000 });
+          await new Promise((r) => setTimeout(r, 300));
+          release();
+          await closing;
+          assert.deepEqual(slowMail.sentReset, [email], 'the reset email was finished during shutdown');
+          assert.equal(slowMail.sentVerify.length, 2, 'the resend verification email was finished during shutdown');
+        } finally {
+          release();
+          await (closing || s2.close({ drainMs: 3000 }));
+        }
       });
     } finally {
       await srv.close();
