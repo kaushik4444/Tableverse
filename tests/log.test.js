@@ -59,6 +59,14 @@ test('Digest authorization masks all comma-separated parameters', () => {
   assert.equal(entry.password, '[redacted]');
 });
 
+test('authorization schemes preserve quoted adjacent password keys', () => {
+  for (const separator of [':', '=']) {
+    const input = `authorization: opaquevalue "password"${separator} "PRIVATE SECOND WORD"`;
+    const out = redactText(input);
+    assert.ok(!out.includes('PRIVATE SECOND WORD'), out);
+  }
+});
+
 // Regression: a quoted secret used to be masked only up to its first space, comma, ampersand or escaped quote, leaving
 // the rest of the password in logs. Each fragment below must be gone from the output.
 test('a quoted password is masked in full: spaces, commas, ampersands and escaped quotes', () => {
