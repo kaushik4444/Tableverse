@@ -359,12 +359,15 @@ async function resetPassword({ token, newPassword }) {
     }
 
     const t = use.rows[0];
-    await client.query(
+    const identity = await client.query(
       `UPDATE auth_identities
        SET password_hash = $1
        WHERE player_id = $2 AND provider = $3 AND provider_user_id = $4`,
       [pwHash, t.player_id, PROVIDER_EMAIL, t.email]
     );
+    // Exactly one identity must change. Otherwise the throw rolls back the token use too, so no link is spent for nothing
+    // and the sessions below are not revoked for a password that never changed.
+    if (identity.rowCount !== 1) throw new AuthError('This reset link can no longer be used. Request a new one.', 400);
     await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [t.player_id]);
     return { ok: true, playerId: t.player_id };
   });
