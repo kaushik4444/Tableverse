@@ -1138,9 +1138,12 @@
     const list = document.getElementById('chat-list');
     if (!list) return;
     const focusSig = focusedChatControl(list);
+    const previousScrollTop = list.scrollTop;
     list.innerHTML = S.chat.length ? S.chat.map(msgHTML).join('') : '<p class="hint">No messages yet. Say hello!</p>';
     restoreChatFocus(list, focusSig);
-    list.scrollTop = list.scrollHeight;
+    // Do not auto-scroll a focused moderation control out of view when new chat arrives. Without keyboard focus,
+    // retain the existing behaviour of following the latest message.
+    list.scrollTop = focusSig ? previousScrollTop : list.scrollHeight;
     const w = S.room && S.room.spectators && S.room.spectators.length ? `👁 ${S.room.spectators.map((x) => esc(x.name)).join(', ')} watching` : '';
     $chat.querySelector('.chat-watch').innerHTML = w;
   }
