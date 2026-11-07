@@ -598,7 +598,7 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 
 /* Touch targets: 44px tall on phones and tablets (Apple HIG 44pt; WCAG 2.5.5). Last in the file so it overrides the
    card and form rules above; desktop keeps the compact size. */
-@media (max-width: 900px) { .btn.small, .game-card .game-actions .btn, .tb-brand, button.fs-chip, .fs-title, .home-foot .linklike, .wn-close { min-height: 44px; } }
+@media (max-width: 900px) { .btn.small, .game-card .game-actions .btn, .tb-brand, button.fs-chip, .fs-title, .home-foot .linklike, .wn-close, .recent-table { min-height: 44px; } }
 @media (max-width: 900px) { .wn-close { min-width: 44px; } }
 
 /* Friends strip: on narrow phones the heading and Manage link share a tight row; keep them aligned to the top so a

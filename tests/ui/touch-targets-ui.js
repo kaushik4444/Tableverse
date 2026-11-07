@@ -26,6 +26,13 @@ const MEASURE = (selector) => {
     out.count++;
     if (r.height < 44) out.short.push(`${name(el)} (${Math.round(r.width)}x${Math.round(r.height)})`);
   }
+  // controls that overlap each other (crowded toolbar rows)
+  const boxes = [...document.querySelectorAll(selector)].filter((el) => !el.closest('[hidden],[aria-hidden=true]') && !el.disabled && el.getBoundingClientRect().width > 0).map((el) => el.getBoundingClientRect());
+  out.overlaps = 0;
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i], b = boxes[j];
+    if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) out.overlaps++;
+  }
   return out;
 };
 
@@ -42,7 +49,7 @@ async function check(name, fn) {
   const srv = await serve({
     'GET /api/auth/session': () => sessionOk(),
     'GET /api/me/friends': () => ({ ok: true, friends: [{ id: 'f1', username: 'mira', display_name: 'Mira', avatar: '🦊', online: true }] }),
-    'GET /api/me/recent': () => ({ recent: [] }),
+    'GET /api/me/recent': () => ({ ok: true, tables: [{ code: 'ABCDEF', gameId: 'wizard', status: 'waiting' }] }),
   });
   try {
     for (const [label, width, height] of PHONES) {
@@ -54,6 +61,7 @@ async function check(name, fn) {
           // the online friend's chip and the announcement's dismiss button are part of what is measured
           await page.waitForSelector('.fs-chip', { timeout: 5000 });
           await page.waitForSelector('.wn-close', { timeout: 5000 });
+          await page.waitForSelector('.recent-table', { timeout: 5000 }); // a recent table's button is measured too
           const r = await page.evaluate(MEASURE, HOME_CONTROLS);
           assert.equal(r.overflowX, 0, 'page scrolls sideways');
           assert.ok(r.count >= 6, `expected the home controls, found ${r.count}`);
@@ -75,6 +83,7 @@ async function check(name, fn) {
             assert.equal(r.overflowX, 0, 'page scrolls sideways');
             assert.ok(r.count >= 4, `expected the toolbar, found ${r.count}`);
             assert.deepEqual(r.short, [], 'toolbar controls under 44 px');
+            assert.equal(r.overlaps, 0, 'toolbar controls overlap each other');
           } finally { await ctx.close(); }
         });
       }
