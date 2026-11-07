@@ -103,6 +103,16 @@ function messages(patch) {
     await ctx.close();
   });
 
+  await test('the table has the same top bar as the other games: the game name, then the controls', async () => {
+    const m = messages(() => {});
+    const { page, ctx } = await scriptedPage(browser, { messages: m });
+    await page.goto(url + '/');
+    await page.waitForSelector('.wz-top .wz-round', { timeout: 5000 });
+    assert.match(await page.textContent('.wz-top .wz-round'), /Ludo/);
+    assert.equal(await page.locator('.wz-top .ludo-tools').count(), 1, 'the toolbar sits in the header');
+    await ctx.close();
+  });
+
   await test('on your roll the Roll button is enabled; on someone else’s it is disabled', async () => {
     const mine = await scriptedPage(browser, { messages: messages((v) => Object.assign(v, { phase: 'rolling', turn: 0, canRoll: true, myTurn: true })) });
     await mine.page.goto(url + '/'); await mine.page.waitForSelector('.ludo-roll');
