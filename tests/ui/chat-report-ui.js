@@ -68,6 +68,30 @@ const newer = () => ({ id: 'b', name: 'Bo', text: 'a newer message arrives', mid
     await ctx.close();
   });
 
+  await test('focused moderation controls stay visible when incoming chat overflows the list', async () => {
+    const { page, ctx } = await openTableChat();
+    await page.evaluate(() => {
+      for (let i = 0; i < 35; i++) window.__push({ t: 'chat', m: { id: 'b', name: 'Bo', text: 'overflow message ' + i, mid: crypto.randomUUID() } });
+    });
+    await until(() => page.locator('#chat-list .msg').count().then((n) => n === 36), 'overflow history');
+    const control = page.locator('[data-mod="block"]').nth(20);
+    await control.scrollIntoViewIfNeeded();
+    await control.focus();
+    const before = await page.evaluate(() => ({ mid: document.activeElement.dataset.mid, scrollTop: document.getElementById('chat-list').scrollTop }));
+    await page.evaluate((m) => window.__push({ t: 'chat', m }), newer());
+    await until(() => page.locator('#chat-list .msg').count().then((n) => n === 37), 'overflow redraw');
+    const after = await page.evaluate(() => {
+      const list = document.getElementById('chat-list');
+      const rect = document.activeElement.getBoundingClientRect();
+      const bounds = list.getBoundingClientRect();
+      return { mid: document.activeElement.dataset.mid, scrollTop: list.scrollTop, visible: rect.top >= bounds.top && rect.bottom <= bounds.bottom };
+    });
+    assert.equal(after.mid, before.mid, 'the same moderation control retains focus');
+    assert.equal(after.scrollTop, before.scrollTop, 'chat scroll position is preserved');
+    assert.equal(after.visible, true, 'the focused control remains inside the visible chat area');
+    await ctx.close();
+  });
+
   await test('the Block control says it hides table chat only, in its label and its tooltip', async () => {
     const { page, ctx } = await openTableChat();
     const block = page.locator('[data-mod="block"]').first();
