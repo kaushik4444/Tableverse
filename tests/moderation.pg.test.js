@@ -178,9 +178,18 @@ function socket(port, cookie) {
       try {
         await lock.query('BEGIN');
         await lock.query('LOCK TABLE player_blocks IN ACCESS EXCLUSIVE MODE');
-        const blockedBefore = sb.notices().filter((n) => /Blocked/.test(n)).length;
         sb.send({ t: 'block', id: A.id });
         await until(async () => (await lock.query("SELECT count(*)::int AS n FROM pg_locks WHERE relation = 'player_blocks'::regclass AND NOT granted")).rows[0].n > 0, 'first block waiting');
+        // Reconnect while the first socket's moderation write is still pending. The old socket's message queue is
+        // waiting on that write, but the new socket can submit another block for the same shared player record.
+        const oldSocket = sb;
+        oldSocket.ws.close();
+        await until(() => oldSocket.closed !== null, 'old socket closed');
+        const reopened = socket(srv.port, B.cookie);
+        await until(() => reopened.welcome(), 'reconnected blocker welcome');
+        await until(() => reopened.room, 'reconnected blocker table');
+        sb = reopened;
+        const blockedBefore = sb.notices().filter((n) => /Blocked/.test(n)).length;
         await sleep(BLOCK_GAP + 100);
         sb.send({ t: 'block', id: C.id });
         await say(sc, 'message while second block is queued');
