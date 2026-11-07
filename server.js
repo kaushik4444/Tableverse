@@ -1471,6 +1471,16 @@ function start(opts = {}) {
     p.connected = true;
     p.pingMs = null; // measured again on this connection
     ws.player = p;
+    // The session was checked above, before this socket could be closed by a sign-out or a new login. A revocation that
+    // ran in between found no socket to close. Now that this one is registered, check again: it is closed if the session
+    // is gone, and any later revocation finds it registered and closes it.
+    if (dbPool.hasDatabase()) {
+      const again = await dbAuth.sessionInfo(presentedToken);
+      if (!again.authenticated) {
+        send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
+        return ws.close(1008, 'invalid session');
+      }
+    }
     send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);

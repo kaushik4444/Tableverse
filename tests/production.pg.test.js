@@ -169,6 +169,30 @@ function cookieSocket(port, cookie) {
       assert.equal((await u.browser.post('/api/auth/logout', {}, { csrf: false })).status, 403, 'no header');
       assert.equal((await u.browser.get('/api/auth/session')).json.authenticated, true, 'every refused attempt left the session alone');
     });
+    // Regression: a socket's session check and its registration were separate steps, so a logout that ran between them
+    // found no socket to close, and a revoked session stayed connected. The hello is held here after its session check and
+    // before registration (its block-list query waits on a table lock), the session is revoked, then the hello resumes.
+    await test('a session revoked while its socket is still opening never becomes an active socket', async () => {
+      const { Client } = require('pg');
+      const u = await newUser(srv, 'Opening');
+      const lock = new Client({ connectionString: t.url });
+      await lock.connect();
+      try {
+        await lock.query('BEGIN');
+        await lock.query('LOCK TABLE player_blocks IN ACCESS EXCLUSIVE MODE');
+        const s = cookieSocket(srv.port, u.browser.cookieHeader);
+        await until(async () => (await lock.query("SELECT count(*)::int AS n FROM pg_locks WHERE relation = 'player_blocks'::regclass AND NOT granted")).rows[0].n > 0, 'hello waiting on the block list');
+        await u.browser.must('/api/auth/logout', {});
+        await lock.query('COMMIT');
+        await until(() => s.closed !== null, 'socket closed after the revoked session resumed');
+        assert.equal(s.welcome(), undefined, 'a revoked session gets no welcome');
+        assert.ok(s.msgs.some((m) => m.t === 'authRequired'), 'the client is told to log in again');
+      } finally {
+        await lock.query('ROLLBACK').catch(() => {});
+        await lock.end().catch(() => {});
+      }
+    });
+
     await test('the WebSocket works from the cookie alone; logout, logout-all and a password reset close open sockets; other accounts are unaffected', async () => {
       const u = await newUser(srv, 'Signout');
       const other = await newUser(srv, 'Bystander');

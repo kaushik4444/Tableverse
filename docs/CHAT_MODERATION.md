@@ -32,10 +32,10 @@ the server. It does not replace human review, and it does not take automatic act
 | Report reasons | `harassment`, `hate`, `threats`, `sexual`, `spam`, `other` | `lib/moderation.js`; database `CHECK` |
 | Report details | cleaned of control characters, at most 300 characters | `lib/moderation.js` |
 | Reported text kept | at most 200 characters, the server's copy | `db/moderation.js` |
-| Report cooldown | one per socket every 3 seconds | `server.js` `report` |
+| Report cooldown | one per account every 3 seconds, shared by its sockets | `server.js` `report` |
 | Reports per reporter per day | 20 | `db/moderation.js` (database count, in one transaction) |
 | Duplicate report | the same reporter cannot report the same message twice | database unique key |
-| Block cooldown | one per socket every second | `server.js` `block` |
+| Block cooldown | one per account every second, shared by its sockets | `server.js` `block` |
 | Blocks per account | 500 | `db/moderation.js` (row-locked count) |
 | Cannot block yourself | refused | `lib/moderation.js` |
 | Block target | must be an existing account id | format check, then a foreign key |
@@ -76,5 +76,7 @@ A decision to remove a player's access is a manual action taken outside this fea
 - **Reports are kept until the account is deleted.** No retention period is enforced yet.
 - **The block list is cached in memory per server.** The server runs as a single instance, so this matches the rest of the
   table state. A future multi-instance setup would need the cache moved or invalidated.
-- **Report and block limits are per socket, plus the daily report cap in the database.** A determined user can open more
-  sockets to get more cooldowns; the daily cap bounds reports per account.
+- **Cooldowns are per account on each server, not per socket.** Opening more sockets does not give more cooldowns. The
+  cooldowns reset if the account's in-memory record is dropped after an hour offline, which is harmless: the daily report
+  cap and the block cap are counted in the database. A person can still create more accounts, which is limited separately
+  by the per-IP and site-wide account creation limits.

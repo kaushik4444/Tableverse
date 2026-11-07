@@ -23,5 +23,7 @@ CREATE TABLE IF NOT EXISTS chat_reports (
   CONSTRAINT chat_reports_valid_reason CHECK (reason IN ('harassment', 'hate', 'threats', 'sexual', 'spam', 'other')),
   CONSTRAINT chat_reports_once_per_message UNIQUE (reporter_id, message_id)
 );
+-- The primary key covers blocker_id. Deleting an account must find the blocks that point at it (blocked_id) without a scan.
+CREATE INDEX IF NOT EXISTS idx_player_blocks_blocked ON player_blocks(blocked_id);
 CREATE INDEX IF NOT EXISTS idx_chat_reports_reporter_created ON chat_reports(reporter_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chat_reports_reported_created ON chat_reports(reported_id, created_at DESC);
