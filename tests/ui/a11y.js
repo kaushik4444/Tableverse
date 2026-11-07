@@ -65,9 +65,9 @@ function scan() {
     if (!el || seen.has(el) || !/[\p{L}\p{N}]/u.test(n.textContent) || el.closest('script, style, svg, [hidden], [disabled]') || !visible(el)) continue;
     seen.add(el);
     const cs = getComputedStyle(el);
-    let opacity = 1; for (let x = el; x; x = x.parentElement) opacity *= parseFloat(getComputedStyle(x).opacity);
-    // a faded element is measured at its effective alpha, not skipped (disabled controls are excluded above)
-    const parsed = parse(cs.color); const fg = parsed && opacity < 1 ? { ...parsed, a: parsed.a * opacity } : parsed; const bg = backdrop(el);
+    // Measured as if fully opaque: an element faded by opacity also fades its own backdrop, so blending only the text would pass
+    // low contrast. Disabled controls are excluded above; faded text that still fails here is a real legibility problem.
+    const fg = parse(cs.color); const bg = backdrop(el);
     if (!fg || !bg) continue;
     const text = over(fg, bg);
     const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
@@ -97,7 +97,7 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         const cs = getComputedStyle(el);
         const ringed = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none';
         const r = el.getBoundingClientRect();
-        const onScreen = r.width > 0 && r.height > 0 && r.left < innerWidth && r.right > 0;
+        const onScreen = r.width > 0 && r.height > 0 && r.left < innerWidth && r.right > 0 && r.top < innerHeight && r.bottom > 0;
         return { name: (el.getAttribute('aria-label') || el.textContent || el.id || el.tagName).trim().slice(0, 30), ringed, onScreen, visible: el.checkVisibility({ checkVisibilityCSS: true }) };
       });
       if (!stop) break;
