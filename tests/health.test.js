@@ -113,6 +113,7 @@ const quietLog = () => { const calls = []; return { calls, info: (e, f) => calls
       cacheMs: 0,
     });
     assert.equal((await check()).status, 503);
+    await new Promise((r) => setTimeout(r, 15)); // ensure the original deadline has passed, even if the timer fired slightly early
     const lateCheck = check();
     release();
     assert.equal((await lateCheck).status, 503);
