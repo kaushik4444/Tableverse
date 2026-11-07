@@ -106,6 +106,29 @@ const PW = 'TestPass123!';
         assert.equal(known.json.message, missing.json.message);
         assert.equal(mail.sent.some((m) => m.kind === 'reset' && m.to === unknown), false, 'no reset mail for an unknown address');
       });
+
+      await test('a reset email already being sent is finished before a graceful shutdown', async () => {
+        const slowMail = {
+          sent: [], verify: null,
+          assertReady() {},
+          async sendVerification(m) { this.verify = m.token; },
+          async sendPasswordReset(m) { await new Promise((r) => setTimeout(r, 300)); this.sent.push(m.email); },
+          async sendAccountExists() {},
+        };
+        const s2 = await start({
+          port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01,
+          absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), log: quiet(), emailSender: slowMail,
+          env: { ...process.env, NODE_ENV: 'production', REQUIRE_EMAIL_VERIFICATION: 'true' },
+        });
+        const email = `drain.${Date.now()}@test.local`;
+        const b2 = new Browser(s2.port); await b2.csrf();
+        await b2.post('/api/auth/register', { email, username: `drain${Date.now() % 1000000}`, password: PW, displayName: 'Drain' });
+        await b2.must('/api/auth/verify-email', { token: slowMail.verify });
+        // the reset send starts in the background and the HTTP answer does not wait for it
+        await b2.must('/api/auth/forgot-password', { email });
+        await s2.close({ drainMs: 2000 });
+        assert.deepEqual(slowMail.sent, [email], 'the reset email was finished, not cut off, during shutdown');
+      });
     } finally {
       await srv.close();
     }
