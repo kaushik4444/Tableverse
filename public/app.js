@@ -338,7 +338,8 @@
 
   // The auth sheet: a small dialog over the (public) home page. Logging in is never a place you get sent to —
   // it is a step you take when you try to play, and afterwards you land where you were heading.
-  function openAuthSheet(tab = 'login', msg = '') {
+  // `isError` makes the message an alert, so a failed login or sign-up is announced at once by screen readers.
+  function openAuthSheet(tab = 'login', msg = '', isError = false) {
     S.auth = tab;
     closeOverlay();
     const loginOn = tab === 'login';
@@ -348,7 +349,7 @@
     overlay.className = 'overlay';
     overlay.innerHTML = `<div class="sheet auth-sheet" data-stop="1" role="dialog" aria-label="${loginOn ? 'Log in' : 'Create account'}">
       <div class="row" style="justify-content:space-between"><h2>${loginOn ? 'Welcome back' : 'Create your account'}</h2><button class="btn ghost small" data-auth-close aria-label="Close">✕</button></div>
-      ${msg ? `<p class="auth-msg" role="status">${esc(msg)}</p>` : ''}
+      ${msg ? `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>` : ''}
       <div class="row auth-tabs">
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
@@ -837,7 +838,7 @@
       try {
         await doLogin(email, password);
       } catch (err) {
-        openAuthSheet('login', err.message || 'Login failed');
+        openAuthSheet('login', err.message || 'Login failed', true);
       }
     }
     if (e.target.id === 'registerForm') {
@@ -849,7 +850,7 @@
       try {
         await doRegister(name, username, email, password);
       } catch (err) {
-        openAuthSheet('register', err.message || 'Registration failed');
+        openAuthSheet('register', err.message || 'Registration failed', true);
       }
     }
   });
