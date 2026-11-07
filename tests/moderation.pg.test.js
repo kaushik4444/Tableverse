@@ -144,6 +144,31 @@ function socket(port, cookie) {
       assert.equal((await q('SELECT 1 FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2', [B.id, A.id])).length, 0, 'the block row is removed');
     });
 
+    // Regression: the blocked list changed only after the database write returned, so a message from that author sent
+    // meanwhile was delivered. The block is held here on a table lock while the author speaks.
+    await test('a message sent while a block is still being saved is not delivered to the blocker', async () => {
+      const { Client } = require('pg');
+      await sleep(BLOCK_GAP);
+      const lock = new Client({ connectionString: t.url });
+      await lock.connect();
+      try {
+        await lock.query('BEGIN');
+        await lock.query('LOCK TABLE player_blocks IN ACCESS EXCLUSIVE MODE');
+        sb.send({ t: 'block', id: A.id });
+        await until(async () => (await lock.query("SELECT count(*)::int AS n FROM pg_locks WHERE relation = 'player_blocks'::regclass AND NOT granted")).rows[0].n > 0, 'block waiting on the database');
+        await say(sa, 'sent while the block is being saved');
+        await sleep(500);
+        await lock.query('COMMIT');
+        await until(() => sb.notices().some((n) => /Blocked/.test(n)), 'block saved');
+        assert.equal(sb.texts().includes('sent while the block is being saved'), false, 'a blocked author message was delivered');
+        sb.send({ t: 'unblock', id: A.id }); // back to the state the next tests expect
+        await until(() => sb.notices().includes('Unblocked.'), 'unblock confirmation');
+      } finally {
+        await lock.query('ROLLBACK').catch(() => {});
+        await lock.end().catch(() => {});
+      }
+    });
+
     await test('blocking yourself, a malformed id, or an unknown account is refused without a block', async () => {
       sb.send({ t: 'block', id: B.id });
       await until(() => sb.errors().includes('You cannot block yourself.'), 'self block refused');

@@ -924,6 +924,14 @@ function start(opts = {}) {
   }
 
   // ------------------------------------------------------------ message handlers
+  // Block and unblock for one account run one at a time, in the order they were accepted, whichever socket sent them.
+  // Each one is applied to the in-memory list before its database write and undone if that write fails, so the list
+  // stays in step with the database and a blocked author's message is not delivered after the block is accepted.
+  const inModerationTurn = (p, task) => {
+    const turn = (p.moderationTail || Promise.resolve()).then(task);
+    p.moderationTail = turn.catch(() => {});
+    return turn;
+  };
   const handlers = {
     setName(p, msg) {
       applyProfile(p, msg);
@@ -1018,24 +1026,38 @@ function start(opts = {}) {
       const now = Date.now();
       if (now - (p.lastBlock || 0) < moderation.BLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
       p.lastBlock = now;
-      try {
-        await dbModeration.addBlock(p.id, checked.targetId);
-      } catch (e) {
-        if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
-        throw e;
-      }
-      if (!p.blocked) p.blocked = new Set();
-      p.blocked.add(checked.targetId);
-      resyncChat(p);
-      send(p.ws, { t: 'notice', text: 'Blocked. Their table chat is hidden from you. Nothing else changes, and they are not told.' });
+      return inModerationTurn(p, async () => {
+        if (!p.blocked) p.blocked = new Set();
+        const target = checked.targetId;
+        const was = p.blocked.has(target);
+        p.blocked.add(target); // in effect at once: no message from them is delivered after this block is accepted
+        try {
+          await dbModeration.addBlock(p.id, target);
+        } catch (e) {
+          if (!was) p.blocked.delete(target);
+          if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
+          throw e;
+        }
+        resyncChat(p);
+        send(p.ws, { t: 'notice', text: 'Blocked. Their table chat is hidden from you. Nothing else changes, and they are not told.' });
+      });
     },
 
     async unblock(p, msg) {
       if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
-      await dbModeration.removeBlock(p.id, msg.id);
-      if (p.blocked) p.blocked.delete(msg.id);
-      resyncChat(p);
-      send(p.ws, { t: 'notice', text: 'Unblocked.' });
+      return inModerationTurn(p, async () => {
+        const target = msg.id;
+        const was = Boolean(p.blocked && p.blocked.has(target));
+        if (p.blocked) p.blocked.delete(target);
+        try {
+          await dbModeration.removeBlock(p.id, target);
+        } catch (e) {
+          if (was) p.blocked.add(target);
+          throw e;
+        }
+        resyncChat(p);
+        send(p.ws, { t: 'notice', text: 'Unblocked.' });
+      });
     },
 
     create(p, msg) {
