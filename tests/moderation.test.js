@@ -66,6 +66,7 @@ test('limits are the documented values', () => {
   assert.equal(m.MAX_DETAILS, 300);
   assert.equal(m.MAX_REPORTS_PER_DAY, 20);
   assert.equal(m.MAX_BLOCKS, 500);
+  assert.equal(m.UNBLOCK_COOLDOWN_MS, 1000);
   assert.deepEqual([...m.REPORT_REASONS], ['harassment', 'hate', 'threats', 'sexual', 'spam', 'other']);
 });
 
