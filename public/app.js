@@ -419,14 +419,13 @@
     const out = await postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined });
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
-    adoptPlayer(out.player, { name, username: String(username || '').toLowerCase() });
     S.requireEmailVerification = policyRequiresVerification(out);
-    S.emailVerified = !!(out.player && out.player.email_verified);
     S.signedOutIntentionally = false;
-    if (out.requiresVerification) {
-      openAuthSheet('login', out.emailSent === false
-        ? 'Account created — but the verification email could not be sent. Use “Resend verification email”, then verify and log in.'
-        : 'Account created. Check your email for a verification link, then log in here.');
+    // The answer is the same for a new address and an address that already has an account, so the browser checks its own
+    // session: only a new account has one. Verification-required mode always waits for the email before the lobby.
+    const signedIn = out.requiresVerification ? false : await hydrateSession();
+    if (!signedIn) {
+      openAuthSheet('login', out.message || 'Check your email for next steps, then log in here.');
       return;
     }
     closeOverlay();

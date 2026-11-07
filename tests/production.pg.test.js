@@ -286,7 +286,7 @@ function cookieSocket(port, cookie) {
         assert.equal(reg.status, 201, JSON.stringify(reg.json));
         assert.equal(reg.json.requiresVerification, false);
         assert.equal(reg.json.emailVerificationRequired, false, 'register response exposes policy mode, not just account state');
-        assert.equal(reg.json.player.email_verified, false, 'optional mode does not mark new accounts as verified');
+        assert.equal(reg.json.player, null, 'register answers without a player record (same shape for a taken address)');
         assert.equal(reg.json.emailSent, false);
         const row = (await q('SELECT email_verified_at FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', ['email', email]))[0];
         assert.equal(row.email_verified_at, null, 'stored identity remains unverified');
@@ -340,13 +340,13 @@ function cookieSocket(port, cookie) {
         const unverifiedEmail = `optional.unverified.${authSeq++}@test.local`;
         const regUnverified = await uv.post('/api/auth/register', { email: unverifiedEmail, username: `optuv${Date.now() % 1000000}`, password: PW, displayName: 'Optional UV' });
         assert.equal(regUnverified.status, 201);
-        assert.equal(regUnverified.json.player.email_verified, false);
+        assert.equal(regUnverified.json.player, null);
         const forgot = await uv.post('/api/auth/forgot-password', { email: unverifiedEmail });
         assert.equal(forgot.status, 200);
         assert.equal(forgot.json.debug, undefined, 'no reset token issued for unverified identity');
 
         // registration/login messaging keeps optional-vs-required distinction
-        assert.match(reg.json.message, /optional|log in now/i);
+        assert.match(reg.json.message, /could not be sent/, 'a failed delivery is reported in the message');
 
         const requiredMail = { sent: [], assertReady() {}, async sendVerification(m) { this.sent.push({ kind: 'verify', ...m }); }, async sendPasswordReset() {} };
         const required = await start({ ...fast, matchLog: quiet(), log: quiet(), emailSender: requiredMail, env: { ...process.env, ...testRateLimits, NODE_ENV: 'production', REQUIRE_EMAIL_VERIFICATION: 'true' } });
@@ -355,7 +355,7 @@ function cookieSocket(port, cookie) {
           const remail = `required.${authSeq++}@test.local`;
           const rreg = await rb.post('/api/auth/register', { email: remail, username: `required${Date.now() % 1000000}`, password: PW, displayName: 'Required' });
           assert.equal(rreg.status, 201, JSON.stringify(rreg.json));
-          assert.equal(rreg.json.player.email_verified, false);
+          assert.equal(rreg.json.player, null);
           assert.match(rreg.json.message, /verify your email/i, 'required mode registration message remains blocking');
           const rlogin = await rb.must('/api/auth/login', { email: remail, password: PW });
           assert.equal(rlogin.json.requiresVerification, true, 'required mode still blocks unverified lobby access');

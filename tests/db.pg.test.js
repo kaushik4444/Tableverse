@@ -169,10 +169,12 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       assert.equal(sess.revoked_at, null);
       assert.ok(sess.expires_at);
     });
-    await test('duplicate email and case-insensitive duplicate username are rejected', async () => {
+    await test('a taken email is a generic result that writes nothing; a taken username is still rejected', async () => {
       const email = `dupe.${Date.now()}@test.local`;
       await dbAuth.registerEmail({ email, username: 'sameuser1', password: 'TestPass123!', displayName: 'A' });
-      await assert.rejects(dbAuth.registerEmail({ email, username: 'sameuser2', password: 'TestPass123!', displayName: 'B' }), /already exists/i);
+      const again = await dbAuth.registerEmail({ email, username: 'sameuser2', password: 'TestPass123!', displayName: 'B' });
+      assert.deepEqual(again, { alreadyRegistered: true, email: email.toLowerCase() });
+      assert.equal((await dbAuth.checkUsernameAvailability({ username: 'sameuser2' })).available, true, 'the refused probe did not claim its username');
       await assert.rejects(dbAuth.registerEmail({ email: `other.${Date.now()}@test.local`, username: 'SAMEUSER1', password: 'TestPass123!', displayName: 'C' }), /username is already taken/i);
     });
     await test('concurrent registration for the same username allows only one success', async () => {

@@ -84,13 +84,13 @@ async function run() {
       await browser.csrf();
       const username = `${label.toLowerCase()}_${n}`;
       const reg = await browser.must('/api/auth/register', { email: `${username}@test.local`, username, password: 'TestPass123!', displayName: label });
-      playerIds.push(reg.json.player.id);
       await browser.must('/api/auth/verify-email', { token: reg.json.debug.verifyToken });
       const login = await browser.must('/api/auth/login', { email: `${username}@test.local`, password: 'TestPass123!' });
       const client = wsClient(app.port, login.json.token);
       clients.push(client);
       await until(() => client.welcomed, `${label} welcome`);
-      return { browser, client, username, id: reg.json.player.id, token: login.json.token, label };
+      playerIds.push(login.json.player.id);
+      return { browser, client, username, id: login.json.player.id, token: login.json.token, label };
     }
     /** Close this account's socket and open a new one with the same session, as a phone does after a dropped connection. */
     async function reconnect(a) {

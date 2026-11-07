@@ -160,7 +160,8 @@ async function registerEmail({ email, username, password, displayName, avatar })
   try {
     return await db.withTransaction(async (client) => {
       const existsEmail = await client.query('SELECT 1 FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', [PROVIDER_EMAIL, e]);
-      if (existsEmail.rows.length) throw new AuthError('An account already exists for this email.');
+      // Not an error: the route answers exactly as it does for a new account, so the response cannot reveal that the address is taken.
+      if (existsEmail.rows.length) return { alreadyRegistered: true, email: e };
 
       const existsUsername = await client.query('SELECT 1 FROM players WHERE LOWER(username) = LOWER($1) LIMIT 1', [u]);
       if (existsUsername.rows.length) throw new AuthError('This username is already taken.');
@@ -194,7 +195,8 @@ async function registerEmail({ email, username, password, displayName, avatar })
       if ((err.constraint || '').includes('username') || /username/i.test(err.message || '')) {
         throw new AuthError('This username is already taken.');
       }
-      throw new AuthError('An account already exists for this email.');
+      // a concurrent registration for the same address won the race: same generic answer
+      return { alreadyRegistered: true, email: e };
     }
     if (err && err.code === '23514') throw new AuthError('Username must be 3-24 chars: lowercase letters, numbers, underscore.');
     throw err;

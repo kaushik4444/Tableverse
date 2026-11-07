@@ -55,10 +55,10 @@ async function run() {
       const registered = await browser.must('/api/auth/register', {
         email: `${username}@test.local`, username, password: 'TestPass123!', displayName: label,
       });
-      const playerId = registered.json.player.id;
-      playerIds.push(playerId);
       await browser.must('/api/auth/verify-email', { token: registered.json.debug.verifyToken });
       const login = await browser.must('/api/auth/login', { email: `${username}@test.local`, password: 'TestPass123!' });
+      const playerId = login.json.player.id;
+      playerIds.push(playerId);
       const client = wsClient(app.port, login.json.token);
       clients.push(client);
       await client.wait((c) => c.messages.some((m) => m.t === 'welcome'), `${label} welcome`);
