@@ -145,7 +145,8 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
       const proto = box.querySelector('.gf-chip');
       box.innerHTML = '';
       for (const rank of ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']) {
-        const c = proto.cloneNode(false); c.textContent = rank; box.appendChild(c);
+        // same markup as a real rank button, with a two-digit count (the widest case)
+        const c = proto.cloneNode(false); c.innerHTML = `${rank}<small>×10</small>`; box.appendChild(c);
       }
       const chips = [...box.children];
       return { count: chips.length, rows: new Set(chips.map((c) => Math.round(c.getBoundingClientRect().top))).size };
