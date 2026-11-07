@@ -1273,6 +1273,8 @@ function start(opts = {}) {
         }
         schedulePresence(q.id);
       }
+      // a removed player leaves voice at once: their slot is freed and the remaining table is told
+      if (voiceRelay.dropVoice(room, gone.id)) broadcastVoice(room);
       sys(room, `🚫 ${gone.name} was removed by the host`);
       broadcast(room);
     },

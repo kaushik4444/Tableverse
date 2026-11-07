@@ -133,6 +133,11 @@ function forbiddenBid(g) {
   return f >= 0 && f <= g.round ? f : null;
 }
 
+/** Writes every simultaneous bid into the public log. Called once, at the reveal the variant describes. */
+function revealBids(g) {
+  for (const p of g.players) g.log.push({ by: 'System', card: `${p.name} bid ${p.bid}`, kind: 'bid' });
+}
+
 function endRound(g) {
   const rows = g.players.map((p) => {
     const delta = scoreFor(p.bid, p.tricks);
@@ -140,6 +145,7 @@ function endRound(g) {
     return { bid: p.bid, tricks: p.tricks, delta, score: p.score };
   });
   g.history.push({ round: g.round, dealer: g.dealer, trumpSuit: g.trumpSuit, rows });
+  if (isSimul(g) && g.options.variant === 'secret') revealBids(g); // secret: bids stay hidden until the end of the round
   g.log.push({ by: 'System', card: `Round ${g.round} complete`, kind: 'roundEnd' });
   g.phase = g.round >= g.totalRounds ? 'gameOver' : 'roundEnd';
 }
@@ -175,8 +181,11 @@ function applyAction(g, playerId, action) {
       if (!Number.isInteger(amt) || amt < 0 || amt > g.round) return fail('Invalid bid');
       if (!simul && amt === forbiddenBid(g)) return fail(`The dealer cannot bid ${amt}`);
       g.players[idx].bid = amt;
-      g.log.push({ by: 'System', card: `${g.players[idx].name} bids ${amt}`, kind: 'bid' });
+      // Simultaneous bids stay out of the log until the reveal the variant describes (see revealBids). Ordinary bids are logged as before.
+      if (simul) g.log.push({ by: 'System', card: `${g.players[idx].name} has bid`, kind: 'bid' });
+      else g.log.push({ by: 'System', card: `${g.players[idx].name} bids ${amt}`, kind: 'bid' });
       if (g.players.every((p) => p.bid !== null)) {
+        if (simul && g.options.variant === 'hidden') revealBids(g); // hidden: revealed together just before the round starts
         g.phase = 'playing';
         g.turn = (g.dealer + 1) % g.n;
       } else if (!simul) g.turn = (g.turn + 1) % g.n;
