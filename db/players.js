@@ -85,6 +85,12 @@ const memoryStore = new MemoryPlayerStore();
  * Authenticate a player from their raw bearer token.
  * Returns the player record or null if invalid or revoked.
  */
+/** How long a session lasts, in days (AUTH_SESSION_TTL_DAYS). Shared by login and guest sessions. */
+function sessionTtlDays() {
+  const n = Number(process.env.AUTH_SESSION_TTL_DAYS);
+  return Number.isFinite(n) && n > 0 ? n : 30;
+}
+
 /** Every session token is 32 random bytes in hex. Anything else is refused before the database is asked. */
 const SESSION_TOKEN_RE = /^[a-f0-9]{64}$/;
 function isWellFormedToken(rawToken) {
@@ -142,10 +148,11 @@ async function createAnonymousPlayer({ displayName, avatar }) {
 
     const player = playerRes.rows[0];
 
+    // guest sessions expire like every other session (AUTH_SESSION_TTL_DAYS, default 30 days)
     await client.query(
-      `INSERT INTO auth_sessions (player_id, token_hash)
-       VALUES ($1, $2)`,
-      [player.id, tokenHash]
+      `INSERT INTO auth_sessions (player_id, token_hash, expires_at)
+       VALUES ($1, $2, NOW() + ($3::text || ' days')::interval)`,
+      [player.id, tokenHash, String(sessionTtlDays())]
     );
 
     return { player, rawToken };
@@ -186,6 +193,7 @@ module.exports = {
   hashToken,
   generateToken,
   isWellFormedToken,
+  sessionTtlDays,
   revokeMemoryToken,
   authenticateToken,
   createAnonymousPlayer,

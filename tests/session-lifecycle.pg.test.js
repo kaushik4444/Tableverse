@@ -104,6 +104,14 @@ const PW = 'TestPass123!';
         assert.ok(msgs.some((m) => m.t === 'authRequired'));
       });
 
+      await test('guest sessions work and expire like every other session', async () => {
+        const guest = await dbPlayers.createAnonymousPlayer({ displayName: 'Guest', avatar: '🧙' });
+        assert.equal((await dbPlayers.authenticateToken(guest.rawToken)).id, guest.player.id);
+        const row = (await q("SELECT expires_at IS NOT NULL AS has_expiry, expires_at > NOW() + INTERVAL '29 days' AS long_lived FROM auth_sessions WHERE player_id = $1", [guest.player.id]))[0];
+        assert.equal(row.has_expiry, true);
+        assert.equal(row.long_lived, true, 'the default lifetime is about 30 days');
+      });
+
       await test('the migration that revokes legacy sessions is safe to run again', async () => {
         const sql = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '011_session_expiry_required.sql'), 'utf8');
         await x.query(sql);

@@ -16,7 +16,7 @@ class AuthError extends Error {
 
 const TOKEN_BYTES = 32;
 const positive = (v, fallback) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : fallback);
-const sessionTtlDays = () => positive(process.env.AUTH_SESSION_TTL_DAYS, 30);
+const sessionTtlDays = () => dbPlayers.sessionTtlDays();
 const verifyTtlMin = () => positive(process.env.AUTH_VERIFY_TTL_MIN, 60 * 24);
 const resetTtlMin = () => positive(process.env.AUTH_RESET_TTL_MIN, 30);
 const isEmailVerificationRequired = (env = process.env) => {
