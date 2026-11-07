@@ -24,6 +24,14 @@ test('key=value and JSON-style secrets are masked', () => {
   assert.ok(!redactText('Authorization: Bearer eyJhbGciOi.sig').includes('eyJhbGciOi'));
 });
 
+test('authorization schemes do not consume adjacent password fields', () => {
+  for (const separator of [' ', '\n']) {
+    const input = 'authorization: opaquevalue' + separator + 'password=' + JSON.stringify(['PRIVATE', 'SECOND', 'WORD'].join(' '));
+    const out = redactText(input);
+    assert.ok(!out.includes('PRIVATE') && !out.includes('SECOND WORD'), out);
+  }
+});
+
 // Regression: a quoted secret used to be masked only up to its first space, comma, ampersand or escaped quote, leaving
 // the rest of the password in logs. Each fragment below must be gone from the output.
 test('a quoted password is masked in full: spaces, commas, ampersands and escaped quotes', () => {
