@@ -46,7 +46,7 @@
 
 /* Very narrow phones (< 380 px): rank chips shrink further so all 13 fit in two rows without overflow. */
 @media (max-width: 379px) {
-  .gf .gf-chip { min-width: 36px; min-height: 44px; padding: 4px 6px; font-size: 16px; gap: 3px; }
+  .gf .gf-chip { min-width: 34px; min-height: 44px; padding: 4px 4px; font-size: 16px; gap: 3px; }
   .gf .gf-chip.wide { font-size: 13px; }
   .gf .gf-chips { gap: 4px; }
   .gf .gf-ask .btn.big { font-size: 15px; }

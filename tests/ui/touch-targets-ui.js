@@ -41,16 +41,19 @@ async function check(name, fn) {
   const browser = await chromium.launch();
   const srv = await serve({
     'GET /api/auth/session': () => sessionOk(),
-    'GET /api/me/friends': () => ({ friends: [] }),
+    'GET /api/me/friends': () => ({ ok: true, friends: [{ id: 'f1', username: 'mira', display_name: 'Mira', avatar: '🦊', online: true }] }),
     'GET /api/me/recent': () => ({ recent: [] }),
   });
   try {
     for (const [label, width, height] of PHONES) {
       await check(`home screen, ${label} ${width}x${height}: no horizontal scroll, all controls >= 44 px`, async () => {
-        const { page, ctx } = await scriptedPage(browser, { viewport: { width, height }, messages: [welcome({ games: games.list() })] });
+        const { page, ctx } = await scriptedPage(browser, { viewport: { width, height }, messages: [welcome({ games: games.list(), announcement: 'Maintenance on Sunday night' })] });
         try {
           await page.goto(srv.url + '/', { waitUntil: 'load' });
           await page.waitForSelector('#app .btn', { timeout: 5000 });
+          // the online friend's chip and the announcement's dismiss button are part of what is measured
+          await page.waitForSelector('.fs-chip', { timeout: 5000 });
+          await page.waitForSelector('.wn-close', { timeout: 5000 });
           const r = await page.evaluate(MEASURE, HOME_CONTROLS);
           assert.equal(r.overflowX, 0, 'page scrolls sideways');
           assert.ok(r.count >= 6, `expected the home controls, found ${r.count}`);
@@ -59,8 +62,9 @@ async function check(name, fn) {
       });
     }
 
-    for (const [gameId, n] of [['wizard', 4], ['gofish', 4], ['tictactoe', 2]]) {
-      for (const [label, width, height] of [['iPhone 14', 390, 844], ['tablet', 768, 1024]]) {
+    // Every game's table toolbar, including the sub-360 px wrap case (iPhone SE) that the touch-target rules depend on.
+    for (const [gameId, n] of [['wizard', 4], ['gofish', 4], ['tictactoe', 2], ['poker', 4], ['ludo', 4]]) {
+      for (const [label, width, height] of [['iPhone SE', 320, 568], ['iPhone 14', 390, 844], ['tablet', 768, 1024]]) {
         await check(`table toolbar, ${gameId} on ${label} ${width}x${height}: no horizontal scroll, toolbar >= 44 px`, async () => {
           const names = ['Aarav', 'Bo', 'Cy', 'Di'].slice(0, n).map((name) => ({ name }));
           const { page, ctx } = await scriptedPage(browser, { viewport: { width, height }, messages: tableMessages(gameId, names, { seed: 3 }) });
