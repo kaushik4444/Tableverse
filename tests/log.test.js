@@ -67,6 +67,14 @@ test('authorization schemes preserve quoted adjacent password keys', () => {
   }
 });
 
+test('single-quoted authorization values preserve and redact an adjacent password', () => {
+  const lines = [];
+  const log = createLogger({ write: (level, line) => lines.push(line) });
+  const message = `{'authorization':'Basic abc','password':'PRIVATE "SECOND" WORD'}`;
+  log.info('auth.test', { message });
+  assert.equal(JSON.parse(lines[0]).message, "{'authorization':'[redacted]','password':'[redacted]'}");
+});
+
 // Regression: a quoted secret used to be masked only up to its first space, comma, ampersand or escaped quote, leaving
 // the rest of the password in logs. Each fragment below must be gone from the output.
 test('a quoted password is masked in full: spaces, commas, ampersands and escaped quotes', () => {
