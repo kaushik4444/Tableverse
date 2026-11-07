@@ -32,6 +32,33 @@ test('authorization schemes do not consume adjacent password fields', () => {
   }
 });
 
+test('authorization redaction preserves JSON boundaries and masks adjacent sensitive fields', () => {
+  const lines = [];
+  const log = createLogger({ write: (level, line) => lines.push(line) });
+  for (const [scheme, credential, key] of [
+    ['Basic', 'dXNlcjpwYXNz', 'password'],
+    ['Token', 'TOKEN_SENTINEL', 'client_secret'],
+  ]) {
+    const message = `{"message":"authorization: ${scheme} ${credential}","${key}":"SECOND_SENTINEL words"}`;
+    log.info('auth.test', { message });
+    const entry = JSON.parse(lines.at(-1));
+    assert.ok(!entry.message.includes('SECOND_SENTINEL') && !entry.message.includes('words'), entry.message);
+  }
+});
+
+test('Digest authorization masks all comma-separated parameters', () => {
+  const out = redactText('Authorization: Digest username="alice", nonce="n", response="SENTINEL123"');
+  assert.ok(!out.includes('alice') && !out.includes('SENTINEL123'), out);
+
+  const json = redactText(JSON.stringify({
+    authorization: 'Digest username="alice", nonce="n", response="SENTINEL123"',
+    password: 'SECOND_SENTINEL words',
+  }));
+  const entry = JSON.parse(json);
+  assert.equal(entry.authorization, '[redacted]');
+  assert.equal(entry.password, '[redacted]');
+});
+
 // Regression: a quoted secret used to be masked only up to its first space, comma, ampersand or escaped quote, leaving
 // the rest of the password in logs. Each fragment below must be gone from the output.
 test('a quoted password is masked in full: spaces, commas, ampersands and escaped quotes', () => {

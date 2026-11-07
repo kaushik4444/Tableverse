@@ -102,6 +102,25 @@ const quietLog = () => { const calls = []; return { calls, info: (e, f) => calls
     assert.equal(calls, 2);
   });
 
+  await test('an outstanding probe cannot succeed after its original deadline', async () => {
+    let calls = 0;
+    let release;
+    const pending = new Promise((resolve) => { release = resolve; });
+    const check = createReadinessCheck({
+      hasDatabase: () => true,
+      ping: () => { calls++; return calls === 1 ? pending : Promise.resolve(); },
+      timeoutMs: 30,
+      cacheMs: 0,
+    });
+    assert.equal((await check()).status, 503);
+    const lateCheck = check();
+    release();
+    assert.equal((await lateCheck).status, 503);
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal((await check()).status, 200);
+    assert.equal(calls, 2);
+  });
+
   await test('readiness polls inside the cache window reuse the last answer instead of querying again', async () => {
     let calls = 0;
     const check = createReadinessCheck({ hasDatabase: () => true, ping: async () => { calls++; }, cacheMs: 2000 });
