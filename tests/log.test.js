@@ -119,6 +119,7 @@ test('compound secret names, cookies, Basic auth and unencoded @ in URL password
     ['access_token=accSECRETVALUE', 'accSECRETVALUE'],
     ['{"client_secret": "two SECRET words"}', 'SECRET'],
     ['authorization: Token SCHEMEVAL123', 'SCHEMEVAL123'],
+    ['authorization: none ******"SENTINEL clear text"', 'SENTINEL clear text'],
     ['GET /x?token%3DENCVAL123&a=1', 'ENCVAL123'],
     ['password%3DENCPW%20x', 'ENCPW'],
     ['reset failed reset_code=482913 sent', '482913'],
