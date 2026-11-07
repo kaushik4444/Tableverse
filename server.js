@@ -924,9 +924,9 @@ function start(opts = {}) {
   }
 
   // ------------------------------------------------------------ message handlers
-  // Block and unblock for one account run one at a time, in the order they were accepted, whichever socket sent them.
-  // Each one is applied to the in-memory list before its database write and undone if that write fails, so the list
-  // stays in step with the database and a blocked author's message is not delivered after the block is accepted.
+  // Block and unblock for one account run one at a time, in the order they were accepted, whichever socket sent them, so
+  // the in-memory list ends where the database ends. A block takes effect in memory before its database write (hiding
+  // more is safe, and undone if the write fails); an unblock takes effect only after its database write.
   const inModerationTurn = (p, task) => {
     const turn = (p.moderationTail || Promise.resolve()).then(task);
     p.moderationTail = turn.catch(() => {});
@@ -1046,15 +1046,10 @@ function start(opts = {}) {
     async unblock(p, msg) {
       if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
       return inModerationTurn(p, async () => {
-        const target = msg.id;
-        const was = Boolean(p.blocked && p.blocked.has(target));
-        if (p.blocked) p.blocked.delete(target);
-        try {
-          await dbModeration.removeBlock(p.id, target);
-        } catch (e) {
-          if (was) p.blocked.add(target);
-          throw e;
-        }
+        // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
+        // failed unblock could not be taken back.
+        await dbModeration.removeBlock(p.id, msg.id);
+        if (p.blocked) p.blocked.delete(msg.id);
         resyncChat(p);
         send(p.ws, { t: 'notice', text: 'Unblocked.' });
       });
