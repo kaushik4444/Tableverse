@@ -43,3 +43,11 @@
 @media (max-width: 520px) and (max-height: 700px) { .gf .gf-stock .gf-pile { display: none; } .gf .gf-stock b { font-size: 22px; } } /* on a short phone the stock is just its count, so it never covers a seat plate */
 @media (max-width: 520px) and (min-height: 701px) { .gf .gf-stock .card { --cw: calc(var(--cw0, 62px) * .6); } }
 .gf .gf-event-bar { margin: 8px 0 0; max-width: none; padding: 8px 12px; text-align: center; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-size: 13px; color: var(--ink); }
+
+/* Very narrow phones (< 380 px): rank chips shrink further so all 13 fit in two rows without overflow. */
+@media (max-width: 379px) {
+  .gf .gf-chip { min-width: 36px; min-height: 44px; padding: 4px 6px; font-size: 16px; gap: 3px; }
+  .gf .gf-chip.wide { font-size: 13px; }
+  .gf .gf-chips { gap: 4px; }
+  .gf .gf-ask .btn.big { font-size: 15px; }
+}
