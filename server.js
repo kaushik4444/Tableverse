@@ -1456,6 +1456,9 @@ function start(opts = {}) {
     // Blocks are stored per account and applied on every table; load them once per account on this server.
     if (!p.blocked) p.blocked = dbPool.hasDatabase() ? await dbModeration.loadBlockedIds(p.id) : new Set();
 
+    // The socket may have closed while the database answered above. A closed socket must not take over the account:
+    // it must not replace the open socket, and there would be nothing left to clean it up.
+    if (ws.readyState !== 1) return;
     ws.authToken = presentedToken; // lets a sign-out or a newer login close exactly the sockets of that session
     if (p.ws && p.ws !== ws) {
       p.ws.player = null;
@@ -1474,8 +1477,13 @@ function start(opts = {}) {
     // The session was checked above, before this socket could be closed by a sign-out or a new login. A revocation that
     // ran in between found no socket to close. Now that this one is registered, check again: it is closed if the session
     // is gone, and any later revocation finds it registered and closes it.
+    // Still the open socket that owns the player? A socket that closed or was replaced while the database answered has
+    // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
+    // cancelled drop timer, no seat, no room change.
+    const stillOwner = () => ws.readyState === 1 && p.ws === ws;
     if (dbPool.hasDatabase()) {
       const again = await dbAuth.sessionInfo(presentedToken);
+      if (!stillOwner()) return;
       if (!again.authenticated) {
         send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
         return ws.close(1008, 'invalid session');
@@ -1484,7 +1492,9 @@ function start(opts = {}) {
     send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
-    if (room && await canEnterRoom(p, room, { present: true })) {
+    const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;
+    if (!stillOwner()) return; // closed while the room was checked: the drop its close handler scheduled stays in charge
+    if (room && allowed) {
       if (p.dropAnnounced) {
         p.dropAnnounced = false;
         sys(room, `📶 ${p.name} reconnected`);
