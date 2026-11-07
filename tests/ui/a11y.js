@@ -124,7 +124,11 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         const el = document.activeElement;
         if (!el || el === document.body) return null;
         const cs = getComputedStyle(el);
-        const ringed = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none';
+        // a ring must APPEAR on focus: compare the focused look with the unfocused look, so a decorative shadow that is always there does not count
+        const ring = (c) => ({ outline: c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0 ? c.outlineStyle + c.outlineWidth + c.outlineColor : '', shadow: c.boxShadow });
+        const focused = ring(cs);
+        el.blur(); const unfocused = ring(getComputedStyle(el)); el.focus({ preventScroll: true });
+        const ringed = (focused.outline !== '' && focused.outline !== unfocused.outline) || (focused.shadow !== 'none' && focused.shadow !== unfocused.shadow);
         const r = el.getBoundingClientRect();
         const onScreen = r.width > 0 && r.height > 0 && r.left < innerWidth && r.right > 0 && r.top < innerHeight && r.bottom > 0;
         window.__walkKeys = window.__walkKeys || new WeakMap(); window.__walkN = window.__walkN || 0; if (!window.__walkKeys.has(el)) window.__walkKeys.set(el, ++window.__walkN);
