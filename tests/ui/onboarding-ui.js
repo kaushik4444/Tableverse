@@ -16,28 +16,6 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
   });
   const browser = await chromium.launch();
 
-  await test('a new player with no avatar sees the welcome card with the profile tip, and dismissing it keeps it hidden on reload', async () => {
-    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ avatar: '', games: games.list() })] });
-    await page.route('**/api/auth/session', (route) => route.fulfill({ json: sessionOk({ player: { id: 'me', display_name: 'Aarav', username: 'aarav', avatar: '', email: 'a@b.c' } }) }));
-    await page.goto(url + '/');
-    await page.waitForSelector('.onboarding-card', { timeout: 8000 });
-    assert.match(await page.textContent('.onboarding-card'), /Set an avatar/);
-    await page.click('[data-act="dismissOnboarding"]');
-    assert.equal(await page.locator('.onboarding-card').count(), 0, 'the card closes on dismiss');
-    await page.reload();
-    await page.waitForSelector('#games', { timeout: 8000 });
-    assert.equal(await page.locator('.onboarding-card').count(), 0, 'a dismissed card stays hidden in this browser');
-    await ctx.close();
-  });
-
-  await test('a player who already has an avatar sees no welcome card', async () => {
-    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ avatar: '🦊', games: games.list() })] });
-    await page.goto(url + '/');
-    await page.waitForSelector('#games', { timeout: 8000 });
-    assert.equal(await page.locator('.onboarding-card').count(), 0);
-    await ctx.close();
-  });
-
   await test('a failed login is announced as an alert on the auth sheet', async () => {
     const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
     await page.goto(url + '/');

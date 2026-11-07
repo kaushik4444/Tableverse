@@ -942,15 +942,6 @@
   /** A round avatar for anything with a name and an optional emoji; `cls` adds a size/placement class ('big', 'tb-av'). */
   const avatar = (m, cls = '') => `<span class="avatar${cls ? ' ' + cls : ''}" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span>`;
 
-  /** Home: a short, dismissible profile nudge for a signed-in player who has no avatar yet.
-   *  The dismissal is remembered in this browser only; nothing about it is stored on the account. */
-  function onboardingHTML() {
-    if (S.guest || !S.named || S.avatar || store.get('ct_onboard') === 'done') return ''; // shown only while the profile still needs an avatar
-    const avatarTip = !S.avatar ? ' Set an avatar on your <button type="button" class="linklike" data-act="openProfilePage">profile</button> so friends recognise you.' : '';
-    return `<section class="home-section onboarding-card" aria-labelledby="onboard-title"><div class="onboard-row"><p id="onboard-title" class="onboard-text"><b>Welcome, ${esc(S.name)}.</b> Pick a game below, or add friends to play private tables.${avatarTip}</p><button type="button" class="btn ghost small" data-act="dismissOnboarding">Dismiss</button></div></section>`;
-  }
-
-
   function profileHTML() {
     const userBadge = S.username ? `<div class="profile-user">@${esc(S.username)}</div>` : '';
     const picks = S.avatars
@@ -1695,7 +1686,6 @@
         </form>
       </section>
       ${rejoinBannerHTML()}
-      ${onboardingHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
       ${friendsStripHTML()}
       <section class="home-section" id="games">
@@ -2030,7 +2020,6 @@
       store.set('ct_ann', S.announcement);
       render();
     },
-    dismissOnboarding: () => { store.set('ct_onboard', 'done'); render(); },
     refreshSocial: () => loadSocial(),
     openProfile: (el) => openPage('player', el.dataset.username),
     sendFriend: (el) => socialPost('/api/me/friend-requests', { username: el.dataset.username }, 'Friend request sent.'),
