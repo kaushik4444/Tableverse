@@ -46,6 +46,17 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('reduced motion disables token hop animations', async () => {
+    const { page, ctx } = await open(tableMessages('snakesladders', four));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const animation = await page.locator('.sl-token').first().evaluate((token) => {
+      token.classList.add('hop');
+      return getComputedStyle(token).animationName;
+    });
+    assert.equal(animation, 'none');
+    await ctx.close();
+  });
+
   await test('not your turn: the button is disabled and names who we wait for', async () => {
     const msgs = tableMessages('snakesladders', four);
     const view = msgs[1].view; view.turn = 1; view.myTurn = false; view.canRoll = false;
