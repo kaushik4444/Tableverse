@@ -40,6 +40,41 @@ function scan() {
   if (!document.querySelector('meta[name=viewport]')) bad.push('no viewport meta');
   const unnamedDialogs = [...document.querySelectorAll('dialog[open], [role=dialog]')].filter((d) => visible(d) && !nameOf(d) && !d.getAttribute('aria-labelledby'));
   for (const d of unnamedDialogs) bad.push('dialog without a name');
+  // WCAG 2.x contrast of visible text against the colour it is drawn on (semi-transparent backgrounds are composited).
+  // Text on a background image or gradient cannot be measured this way and is skipped.
+  const parse = (s) => { const m = /rgba?\(([^)]+)\)/.exec(s); if (!m) return null; const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+  const over = (top, under) => ({ r: top.r * top.a + under.r * (1 - top.a), g: top.g * top.a + under.g * (1 - top.a), b: top.b * top.a + under.b * (1 - top.a), a: 1 });
+  const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
+  const ratio = (x, y) => { const [hi, lo] = [lum(x), lum(y)].sort((p, q) => q - p); return (hi + 0.05) / (lo + 0.05); };
+  const backdrop = (el) => { // stack of colours from the element up to the first opaque background, composited bottom-up
+    const layers = []; let node = el;
+    for (; node && node.nodeType === 1; node = node.parentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.backgroundImage !== 'none') return null;
+      const c = parse(cs.backgroundColor);
+      if (c && c.a > 0) { layers.unshift(c); if (c.a >= 1) break; }
+    }
+    if (!layers.length || layers[0].a < 1) layers.unshift({ r: 255, g: 255, b: 255, a: 1 }); // page default is white when nothing is opaque
+    return layers.reduce((acc, l) => over(l, acc), { r: 0, g: 0, b: 0, a: 1 });
+  };
+  const seen = new Set();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const el = n.parentElement;
+    // pictograms (emoji on board pieces and icons) carry no letters or digits; they are graphics, not text (WCAG 1.4.3 exempts them)
+    if (!el || seen.has(el) || !/[\p{L}\p{N}]/u.test(n.textContent) || el.closest('script, style, svg, [hidden], [disabled]') || !visible(el)) continue;
+    seen.add(el);
+    const cs = getComputedStyle(el);
+    let opacity = 1; for (let x = el; x; x = x.parentElement) opacity *= parseFloat(getComputedStyle(x).opacity);
+    if (opacity < 1) continue; // faded out (transitions, disabled looks) is not measured
+    const fg = parse(cs.color); const bg = backdrop(el);
+    if (!fg || !bg) continue;
+    const text = over(fg, bg);
+    const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
+    const need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+    const r = ratio(text, bg);
+    if (r < need) bad.push(`low contrast ${r.toFixed(2)}:1 (needs ${need}) for "${n.textContent.trim().slice(0, 30)}"`);
+  }
   return bad;
 }
 
@@ -52,13 +87,34 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
     await page.waitForTimeout(350);
     const bad = await page.evaluate(scan);
     assert.deepEqual([...new Set(bad)], [], `${label}: accessibility problems`);
-    // keyboard: Tab moves focus onto something with a visible ring
-    await page.keyboard.press('Tab');
-    const ring = await page.evaluate(() => { const el = document.activeElement; if (!el || el === document.body) return 'none'; const cs = getComputedStyle(el); return (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none' ? 'ring' : 'no ring: ' + el.tagName + '.' + el.className; });
-    assert.ok(ring === 'ring' || ring === 'none', `${label}: ${ring}`);
-    if (label === 'home') { // negative control: the scanner really does catch an unnamed control
-      const caught = await page.evaluate((fn) => { const b = document.createElement('button'); b.className = 'probe'; document.body.appendChild(b); const r = (new Function('return (' + fn + ')()'))(); b.remove(); return r; }, scan.toString());
-      assert.ok(caught.some((m) => /probe/.test(m)), 'the scanner flags a button with no name');
+    // keyboard: every Tab stop (up to 40) is on-screen and shows a visible focus ring; the walk reaches more than one control
+    const stops = [];
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press('Tab');
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement;
+        if (!el || el === document.body) return null;
+        const cs = getComputedStyle(el);
+        const ringed = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none';
+        const r = el.getBoundingClientRect();
+        const onScreen = r.width > 0 && r.height > 0 && r.left < innerWidth && r.right > 0;
+        return { name: (el.getAttribute('aria-label') || el.textContent || el.id || el.tagName).trim().slice(0, 30), ringed, onScreen, visible: el.checkVisibility({ checkVisibilityCSS: true }) };
+      });
+      if (!stop) break;
+      stops.push(stop);
+    }
+    const unringed = stops.filter((s) => !s.ringed).map((s) => s.name);
+    assert.deepEqual(unringed, [], `${label}: focused without a visible ring`);
+    assert.deepEqual(stops.filter((s) => !s.visible).map((s) => s.name), [], `${label}: focus landed on hidden controls`);
+    assert.ok(stops.length > 1, `${label}: keyboard reaches only ${stops.length} control(s)`);
+    if (label === 'home') { // negative controls: the scanner really does catch an unnamed control and low-contrast text
+      const caught = await page.evaluate((fn) => {
+        const b = document.createElement('button'); b.className = 'probe'; document.body.appendChild(b);
+        const faint = document.createElement('p'); faint.className = 'probe-faint'; faint.style.cssText = 'color:#333;background:#111;font-size:14px'; faint.textContent = 'faint text'; document.body.appendChild(faint);
+        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); return r;
+      }, scan.toString());
+      assert.ok(caught.some((m) => /has no accessible name/.test(m) && /probe/.test(m)), 'the scanner flags a button with no name');
+      assert.ok(caught.some((m) => /low contrast/.test(m) && /faint text/.test(m)), 'the scanner flags low-contrast text');
     }
     console.log('  ok  ' + label);
   } catch (e) { failed++; console.error('FAIL  ' + label + '\n' + (e.stack || e)); }
@@ -70,6 +126,23 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
   const browser = await chromium.launch();
   await check(browser, url, 'home', [welcome({ games: games.list() })]);
   for (const [id, n] of [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4]]) await check(browser, url, `${id} table`, build(id, n));
+  // the same scan on the smallest phone and on a desktop, so text and focus are checked at both extremes
+  await check(browser, url, 'home 320px', [welcome({ games: games.list() })], { width: 320, height: 568 });
+  await check(browser, url, 'home 1280px', [welcome({ games: games.list() })], { width: 1280, height: 800 });
+  await check(browser, url, 'wizard table 320px', build('wizard', 4), { width: 320, height: 568 });
+  await check(browser, url, 'ludo table 1280px', build('ludo', 4), { width: 1280, height: 800 });
+  { // live regions: the page announces notices politely, so a screen reader hears them without a focus move
+    const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages: build('wizard', 4) });
+    try {
+      await page.goto(url + '/');
+      await page.waitForSelector('#app *', { timeout: 8000 });
+      const live = await page.evaluate(() => [...document.querySelectorAll('[aria-live]')].map((el) => el.getAttribute('aria-live')));
+      assert.ok(live.includes('polite'), 'a polite live region exists for notices');
+      assert.ok(live.every((v) => v === 'polite' || v === 'assertive'), 'live regions use a valid politeness');
+      console.log('  ok  live regions');
+    } catch (e) { failed++; console.error('FAIL  live regions\n' + (e.stack || e)); }
+    await ctx.close();
+  }
   const cssOk = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../public/style.css'), 'utf8') + require('node:fs').readFileSync(require('node:path').join(__dirname, '../../public/table.css'), 'utf8');
   assert.ok(/prefers-reduced-motion/.test(cssOk), 'reduced-motion rules exist');
   await browser.close(); server.close();
