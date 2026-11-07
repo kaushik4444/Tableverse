@@ -24,8 +24,8 @@ const PW = 'TestPass123!';
     const mail = {
       sent: [],
       assertReady() {},
-      async sendVerification(m) { this.sent.push({ kind: 'verify', ...m }); },
-      async sendPasswordReset(m) { this.sent.push({ kind: 'reset', ...m }); },
+      async sendVerification(m) { this.sent.push({ kind: 'verify', to: m.email, token: m.token }); },
+      async sendPasswordReset(m) { this.sent.push({ kind: 'reset', to: m.email, token: m.token }); },
       async sendAccountExists(m) { this.sent.push({ kind: 'exists', to: m.email }); },
     };
     const srv = await start({
