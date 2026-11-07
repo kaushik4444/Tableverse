@@ -1745,14 +1745,16 @@
         seats.push(`<li class="seat empty"><span class="avatar ghost">?</span><span class="nm">Open seat</span>${label}</li>`);
       }
     }
-    // The host's disabled seat controls say why they are unavailable (tooltip text).
-    const seatReason = (can, why) => (can ? '' : ` disabled title="${esc(why)}"`);
+    // A disabled seat control is explained in visible text (the seat status line), linked to the button, not only in a tooltip.
+    const lessWhy = r.seats > g.seats.min ? '' : `${g.name} needs at least ${g.seats.min} players.`;
+    const moreWhy = r.seats < g.seats.max ? '' : `${g.name} allows at most ${g.seats.max} players.`;
+    const seatReason = (why) => (why ? ' disabled aria-describedby="seat-why"' : '');
     const stepper =
       g.seats.min !== g.seats.max
         ? `<div class="stepper" role="group" aria-label="Number of players">
-            <button class="btn ghost small" data-act="seats" data-n="${r.seats - 1}" ${seatReason(r.seats > g.seats.min, `${g.name} needs at least ${g.seats.min} players.`)} aria-label="Fewer players">−</button>
+            <button class="btn ghost small" data-act="seats" data-n="${r.seats - 1}" ${seatReason(lessWhy)} aria-label="Fewer players">−</button>
             <span><b>${r.seats}</b> players</span>
-            <button class="btn ghost small" data-act="seats" data-n="${r.seats + 1}" ${seatReason(r.seats < g.seats.max, `${g.name} allows at most ${g.seats.max} players.`)} aria-label="More players">+</button>
+            <button class="btn ghost small" data-act="seats" data-n="${r.seats + 1}" ${seatReason(moreWhy)} aria-label="More players">+</button>
           </div>`
         : `<span class="label">${r.seats} players</span>`;
     const seatStatus = `${n} of ${r.seats} seat${r.seats === 1 ? '' : 's'} filled${open > 0 ? `; empty seats become bots when the game starts` : ''}.`;
@@ -1782,7 +1784,7 @@
           <h3>Players <span class="label">${n} joined</span></h3>
           ${isHost ? stepper : `<span class="label">${r.seats} seats</span>`}
         </div>
-        <p class="hint seat-status" style="text-align:left;margin:8px 0 0">${esc(seatStatus)}</p>
+        <p class="hint seat-status" id="seat-why" style="text-align:left;margin:8px 0 0">${esc([seatStatus, lessWhy, moreWhy].filter(Boolean).join(' '))}</p>
         <ul class="seats">${seats.join('')}</ul>
         ${isHost && open > 0 ? `<div class="row" style="margin-top:12px"><button class="btn ghost small" data-act="addBot">+ Add a bot</button><button class="btn ghost small" data-act="fillBots">Fill ${open} open seat${open === 1 ? '' : 's'} with bots</button></div>` : ''}
       </section>

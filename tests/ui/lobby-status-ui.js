@@ -31,8 +31,9 @@ const bot = { id: 'b1', name: 'Merlin', bot: true, avatar: '🧙', connected: tr
     await page.waitForSelector('.stepper', { timeout: 8000 });
     const fewer = page.locator('.stepper [aria-label="Fewer players"]');
     assert.equal(await fewer.isDisabled(), true, 'at the minimum the control is disabled');
-    assert.match(await fewer.getAttribute('title'), /needs at least 2 players/);
-    assert.equal(await page.locator('.seat-status').textContent(), '2 of 2 seats filled.', 'a full table says so');
+    assert.match(await page.textContent('.seat-status'), /needs at least 2 players/, 'the reason is visible text');
+    assert.equal(await fewer.getAttribute('aria-describedby'), 'seat-why', 'the disabled control points to that text');
+    assert.match(await page.locator('.seat-status').textContent(), /^2 of 2 seats filled\./, 'a full table says so');
     await ctx.close();
   });
 
