@@ -52,6 +52,22 @@ const newer = () => ({ id: 'b', name: 'Bo', text: 'a newer message arrives', mid
     await ctx.close();
   });
 
+  // Regression: two Block buttons for the same author shared one focus signature, so a redraw could move focus to the
+  // wrong message's control. Each button carries its message id, so focus stays on the one that had it.
+  await test('focus stays on the Block button of the same message when another message from that author arrives', async () => {
+    const { page, ctx } = await openTableChat();
+    await page.evaluate((m) => window.__push({ t: 'chat', m }), newer());
+    await until(() => page.evaluate(() => document.querySelectorAll('#chat-list .msg').length === 2), 'the second message is drawn');
+    await page.locator('[data-mod="block"]').nth(1).focus();
+    const expected = await page.evaluate(() => document.activeElement.dataset.mid);
+    await page.evaluate((m) => window.__push({ t: 'chat', m }), { id: 'b', name: 'Bo', text: 'a third message', mid: crypto.randomUUID() });
+    await until(() => page.evaluate(() => document.querySelectorAll('#chat-list .msg').length === 3), 'the third message is drawn');
+    const after = await page.evaluate(() => document.activeElement && document.activeElement.dataset.mid);
+    assert.ok(expected, 'the focused Block button carries its message id');
+    assert.equal(after, expected, 'focus is still on the same message\'s Block button');
+    await ctx.close();
+  });
+
   await test('the Block control says it hides table chat only, in its label and its tooltip', async () => {
     const { page, ctx } = await openTableChat();
     const block = page.locator('[data-mod="block"]').first();
