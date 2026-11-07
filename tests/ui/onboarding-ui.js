@@ -30,13 +30,11 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await ctx.close();
   });
 
-  await test('a player who already has an avatar sees the first steps but not the avatar tip', async () => {
+  await test('a player who already has an avatar sees no welcome card', async () => {
     const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ avatar: '🦊', games: games.list() })] });
     await page.goto(url + '/');
-    await page.waitForSelector('.onboarding-card', { timeout: 8000 });
-    const text = await page.textContent('.onboarding-card');
-    assert.match(text, /Pick a game below/);
-    assert.doesNotMatch(text, /Set an avatar/);
+    await page.waitForSelector('#games', { timeout: 8000 });
+    assert.equal(await page.locator('.onboarding-card').count(), 0);
     await ctx.close();
   });
 
