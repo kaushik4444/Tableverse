@@ -153,6 +153,17 @@ test('authorization schemes with punctuation are masked', () => {
   }
 });
 
+test('authorization schemes mask base64 credentials ending in padding', () => {
+  const cases = [
+    ['Authorization: Basic dXNlcjpzZWNyZXQ=', 'dXNlcjpzZWNyZXQ='],
+    ['authorization: Negotiate YWJjZA==', 'YWJjZA=='],
+  ];
+  for (const [input, secret] of cases) {
+    const out = redactText(input);
+    assert.ok(!out.includes(secret), `"${secret}" leaked in: ${out}`);
+  }
+});
+
 test('Resend-style API keys are masked', () => {
   assert.ok(!redactText(`key ${RESEND_KEY} rejected`).includes('secretvalue'));
 });
