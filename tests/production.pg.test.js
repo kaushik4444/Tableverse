@@ -413,7 +413,10 @@ function cookieSocket(port, cookie) {
         try {
           const ob = new Browser(freshOptional.port); await ob.csrf();
           const oe = `fresh.optional.${authSeq++}@test.local`;
-          await ob.post('/api/auth/register', { email: oe, username: `fo${Date.now() % 1000000}`, password: PW, displayName: 'FreshOpt' });
+          const reg = await ob.post('/api/auth/register', { email: oe, username: `fo${Date.now() % 1000000}`, password: PW, displayName: 'FreshOpt' });
+          assert.equal(reg.status, 201, JSON.stringify(reg.json));
+          assert.equal(ob.cookies.has('ct_session'), false, 'registration issues no session, even in optional mode');
+          await ob.must('/api/auth/login', { email: oe, password: PW });
           const os = await ob.get('/api/auth/session');
           assert.equal(os.json.emailVerified, false, 'optional mode keeps pending status until real verification');
         } finally { await freshOptional.close(); }
