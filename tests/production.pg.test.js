@@ -222,7 +222,7 @@ function cookieSocket(port, cookie) {
       } finally { await rl.close(); }
     });
     await test('production mode: no token reaches scripts, cookies are Secure, a failed email does not strand the account, and account existence is not revealed', async () => {
-      const mail = { sent: [], failNext: 0, assertReady() {}, async sendAccountExists(m) { (this.notices = this.notices || []).push(m.to); }, async sendVerification(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'verify', ...m }); }, async sendPasswordReset(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'reset', ...m }); } };
+      const mail = { sent: [], failNext: 0, assertReady() {}, async sendAccountExists(m) { (this.notices = this.notices || []).push(m.email); }, async sendVerification(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'verify', ...m }); }, async sendPasswordReset(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'reset', ...m }); } };
       const log = quiet();
       const prod = await start({ ...fast, matchLog: quiet(), log, emailSender: mail, env: { ...process.env, NODE_ENV: 'production', REQUIRE_EMAIL_VERIFICATION: 'true' } });
       process.env.AUTH_SESSION_TTL_DAYS = '2';

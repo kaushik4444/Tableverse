@@ -26,7 +26,7 @@ const PW = 'TestPass123!';
       assertReady() {},
       async sendVerification(m) { this.sent.push({ kind: 'verify', ...m }); },
       async sendPasswordReset(m) { this.sent.push({ kind: 'reset', ...m }); },
-      async sendAccountExists(m) { this.sent.push({ kind: 'exists', ...m }); },
+      async sendAccountExists(m) { this.sent.push({ kind: 'exists', to: m.email }); },
     };
     const srv = await start({
       port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01,
