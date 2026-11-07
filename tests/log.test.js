@@ -67,6 +67,14 @@ test('secrets inside a stack trace are masked on every line that carries them', 
   assert.ok(serialised.includes('parseBody'), 'the stack still shows where it failed');
 });
 
+// Regression: a Buffer or typed array was logged as an object with one entry per byte, so the secret appeared as numbers.
+test('binary values are logged as a marker, never as their bytes', () => {
+  const out = JSON.stringify(redact({ raw: Buffer.from('SECRETBYTES'), arr: new Uint8Array([83, 69, 67]), buf: new ArrayBuffer(4) }));
+  assert.ok(!out.includes('"0":83') && !out.includes('"0":'), out);
+  assert.match(out, /"raw":"\[binary\]"/);
+  assert.match(out, /"arr":"\[binary\]"/);
+});
+
 // Regression: a 64-hex request ID is a plain token that responses echo; masking it broke log correlation.
 test('a validated 64-hex request ID stays searchable in the log line, while other hex tokens are masked', () => {
   const lines = [];
@@ -110,6 +118,9 @@ test('compound secret names, cookies, Basic auth and unencoded @ in URL password
     ['connect postgres://u:pa@SECRETss@db.example.net/app failed', 'SECRETss'],
     ['access_token=accSECRETVALUE', 'accSECRETVALUE'],
     ['{"client_secret": "two SECRET words"}', 'SECRET'],
+    ['authorization: Token SCHEMEVAL123', 'SCHEMEVAL123'],
+    ['GET /x?token%3DENCVAL123&a=1', 'ENCVAL123'],
+    ['password%3DENCPW%20x', 'ENCPW'],
     ['reset failed reset_code=482913 sent', '482913'],
     ['login failed hash=$argon2id$v=19$m=19456,t=2,p=1$0GgPfIM9$iKR5A2M4KmSECRETHASH', 'SECRETHASH'],
     ['token 9f8a1c0e7b3d5a2f4e6c8b0d1a3f5e7c9b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a rejected', '9f8a1c0e7b3d5a2f4e6c'],
