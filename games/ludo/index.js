@@ -1,6 +1,7 @@
 'use strict';
 const engine = require('./engine');
 const { scrubDeep } = require('../scrub');
+const pacing = require('../pacing');
 
 module.exports = {
   id: 'ludo',
@@ -54,6 +55,7 @@ module.exports = {
       act: (playerId, action) => engine.applyAction(g, playerId, action),
       awaiting: () => engine.awaitingList(g),
       botDelayMs: () => 1800,
+      holdMs: () => pacing.remaining(g),
       stamp: () => g.event ? g.event.seq : null,
       botAction: (playerId) => engine.botAction(g, playerId),
       forcedPlay: () => engine.forcedPlay(g),

@@ -698,7 +698,9 @@ function start(opts = {}) {
     if (!humans(room).some(isConnected)) return; // nobody watching: pause
 
     const waiting = awaitingOf(g);
-    const pause = Math.max(0, (room.pauseUntil || 0) - Date.now());
+    // a game that is still animating a move (a token walking square by square) holds its bots back until the walk is done
+    const walkHold = typeof g.holdMs === 'function' ? g.holdMs() * botScale : 0;
+    const pause = Math.max(0, (room.pauseUntil || 0) - Date.now(), walkHold);
     let delay;
     let run;
     let valid;

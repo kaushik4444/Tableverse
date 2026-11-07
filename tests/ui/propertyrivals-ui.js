@@ -115,14 +115,16 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     const seats = () => page.evaluate(() => { const t = document.querySelector('.pr-tok.p-a'); return t ? Number(t.closest('.pr-sq').dataset.sq) : -1; });
     assert.equal(await seats(), 0);
     await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room, view: after });
+    await page.waitForSelector('.pr-news', { timeout: 3000 });
+    assert.match(await page.textContent('.pr-news'), /rolled 3 \+ 2 = 5/, 'while the token walks the line shows the roll');
     const seen = [];
-    for (let i = 0; i < 40; i++) { const at = await seats(); if (seen[seen.length - 1] !== at) seen.push(at); if (at === after.players[0].pos && i > 3) break; await page.waitForTimeout(60); }
+    for (let i = 0; i < 90; i++) { const at = await seats(); if (seen[seen.length - 1] !== at) seen.push(at); if (at === after.players[0].pos && i > 3) break; await page.waitForTimeout(60); }
     assert.equal(seen.at(-1), after.players[0].pos, 'the token ends where the server put it');
     assert.ok(seen.length >= 6, `it passed through the squares one by one: ${seen}`);
     assert.deepEqual(seen, seen.slice().sort((a, b) => a - b), 'it only moves forward');
-    await page.waitForSelector('.cf-msg', { timeout: 3000 });
-    assert.match(await page.textContent('.cf-feed'), /rolled 3 \+ 2 = 5/);
-    await page.waitForFunction(() => /landed on/.test(document.querySelector('.cf-feed').textContent), null, { timeout: 6000 });
+    assert.equal(await page.locator('.cf-feed, .cf-msg').count(), 0, 'no floating feed: one line in the middle says what happened');
+    await page.waitForFunction(() => { const n = document.querySelector('.pr-news'); return n && /landed on/.test(n.textContent); }, null, { timeout: 8000 });
+    assert.equal(await page.locator('.pr-news').count(), 1, 'never more than one line');
     await ctx.close();
   });
 
@@ -137,7 +139,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room, view: A.viewFor(g, 'me') });
     await page.waitForTimeout(250);
     assert.match(await page.textContent('.pr-actions'), /Moving/);
-    await page.waitForFunction(() => !/Moving/.test(document.querySelector('.pr-actions') ? document.querySelector('.pr-actions').textContent : ''), null, { timeout: 5000 });
+    await page.waitForFunction(() => !/Moving/.test(document.querySelector('.pr-actions') ? document.querySelector('.pr-actions').textContent : ''), null, { timeout: 9000 });
     await ctx.close();
   });
 

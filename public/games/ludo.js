@@ -41,7 +41,44 @@
   }
   const ringKey = (seat, pos) => (pos >= 0 && pos < LAP ? 'r' + ((seat * 13 + pos) % 52) : null);
 
-  const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map(), seq: null, myTurnWas: false };
+  const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map(), seq: null, myTurnWas: false,
+    key: null, disp: new Map(), plans: new Map(), snaps: new Map(), timer: null, holdUntil: 0 };
+  const STEP_MS = 400; // one square per step, so every square of the walk can be followed (the server waits for this too)
+  const SNAP_MS = 800; // a captured token stays visible a moment before it goes back to its yard
+  const busy = () => ui.plans.size > 0 || ui.snaps.size > 0 || Date.now() < ui.holdUntil;
+  const shownPos = (id, pos) => (ui.disp.has(id) ? ui.disp.get(id) : pos);
+
+  /** Decide, per token, whether it walks forward square by square (a move), waits and then drops home (a capture) or just appears. */
+  function planMoves(v) {
+    const key = (ui.ctx && ui.ctx.room && ui.ctx.room.code) + ':' + v.players.map((p) => p.id).join();
+    const fresh = ui.key !== key || v.phase === 'ready';
+    ui.key = key;
+    v.players.forEach((p, i) => p.tokens.forEach((pos, t) => {
+      const id = `${i}-${t}`;
+      if (fresh || !ui.disp.has(id)) { ui.disp.set(id, pos); ui.plans.delete(id); ui.snaps.delete(id); return; }
+      const cur = ui.disp.get(id);
+      if (cur === pos) { ui.plans.delete(id); ui.snaps.delete(id); return; }
+      if (pos > cur && pos - cur <= 12 && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) { ui.plans.set(id, pos); ui.snaps.delete(id); }
+      else if (pos === -1 && !ui.plans.size) { ui.snaps.set(id, pos); } // captured: drops back once the capturing token has arrived
+      else if (pos === -1) ui.snaps.set(id, pos);
+      else { ui.disp.set(id, pos); ui.plans.delete(id); } // anything else (a rewind after a reconnect): no walking
+    }));
+    if (busy() && !ui.timer) ui.timer = setInterval(tick, STEP_MS);
+  }
+  function tick() {
+    if (!ui.root || !ui.root.isConnected || !ui.latest) { clearInterval(ui.timer); ui.timer = null; ui.plans.clear(); ui.snaps.clear(); return; }
+    if (ui.plans.size) {
+      for (const [id, to] of [...ui.plans]) {
+        ui.disp.set(id, ui.disp.get(id) + 1);
+        if (ui.disp.get(id) >= to) { ui.disp.set(id, to); ui.plans.delete(id); }
+      }
+      if (!ui.plans.size && ui.snaps.size) ui.holdUntil = Date.now() + SNAP_MS; // the walker has arrived: let the capture register
+    } else if (ui.snaps.size && Date.now() >= ui.holdUntil) {
+      for (const [id, to] of ui.snaps) ui.disp.set(id, to);
+      ui.snaps.clear(); ui.holdUntil = Date.now() + SNAP_MS;
+    } else if (Date.now() >= ui.holdUntil) { clearInterval(ui.timer); ui.timer = null; }
+    render(ui.root, ui.latest, ui.ctx);
+  }
 
   /** Sounds for dice, moves, captures and the finish, from the shared soft palette other games already use. */
   function react(v) {
@@ -92,7 +129,9 @@
     const seats = v.players.map((p, i) => (Number.isInteger(p.seat) ? p.seat : seatsFor(v.n)[i]));
     // tokens that share a ring square are fanned out so each stays visible and tappable
     const groups = new Map();
-    v.players.forEach((p, i) => p.tokens.forEach((pos, t) => {
+    const shownTokens = v.players.map((p, i) => p.tokens.map((pos, t) => shownPos(`${i}-${t}`, pos)));
+    v.players.forEach((p, i) => p.tokens.forEach((realPos, t) => {
+      const pos = shownTokens[i][t];
       const key = ringKey(seats[i], pos);
       if (key) groups.set(key, (groups.get(key) || 0) + 1);
     }));
@@ -100,7 +139,8 @@
     const FAN = { 2: [[-0.2, 0], [0.2, 0]], 3: [[-0.2, -0.16], [0.2, -0.16], [0, 0.2]], 4: [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]] };
     const out = [];
     const last = v.lastMove;
-    v.players.forEach((p, i) => p.tokens.forEach((pos, t) => {
+    v.players.forEach((p, i) => p.tokens.forEach((realPos, t) => {
+      const pos = shownTokens[i][t];
       const seat = seats[i];
       let [x, y] = where(seat, pos, t);
       const key = ringKey(seat, pos);
@@ -111,10 +151,10 @@
         const off = (FAN[stack] || FAN[4])[idx % stack];
         x += off[0]; y += off[1];
       }
-      const legal = i === v.me && v.canMove && (v.legalTokens || []).includes(t);
+      const legal = !busy() && i === v.me && v.canMove && (v.legalTokens || []).includes(t);
       const home = pos === FINISHED;
       const label = pos === -1 ? `Bring token ${t + 1} out` : pos >= LAP && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
-      const moved = last && last.player === i && last.token === t;
+      const moved = ui.plans.has(`${i}-${t}`);
       const pid = `${i}-${t}`;
       out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / 15) * 100}%;top:${(y / 15) * 100}%"><i></i></button>`);
     }));
@@ -131,6 +171,7 @@
     const nm = (i) => (v.players[i] ? esc(v.players[i].name) : 'A player');
     if (v.phase === 'gameOver') return v.winner >= 0 ? `${nm(v.winner)} wins!` : 'Game over';
     if (v.phase === 'ready') return v.me >= 0 && !v.players[v.me].ready ? 'Ready to start?' : 'Waiting for the others…';
+    if (busy() && v.phase !== 'gameOver') return `${nm(v.lastMove ? v.lastMove.player : v.turn)} is moving…`;
     if (v.phase === 'rolling') return v.canRoll ? 'Your turn — roll the dice' : `${nm(v.turn)} is rolling…`;
     if (v.phase === 'moving') return v.canMove ? (v.autoPlay ? 'Only one move: playing it' : 'Pick a glowing token') : `${nm(v.turn)} is moving…`;
     return 'Ludo';
@@ -148,7 +189,7 @@
     let action = '';
     if (v.me >= 0) {
       if (v.phase === 'ready') action = `<button class="btn big ludo-roll" data-lt="ready" ${v.players[v.me].ready ? 'disabled' : ''}>${v.players[v.me].ready ? 'Waiting…' : 'I’m ready'}</button>`;
-      else if (v.phase === 'rolling') action = `<button class="btn big ludo-roll" data-lt="roll" ${v.canRoll ? '' : 'disabled'}>${v.canRoll ? 'Roll dice' : 'Waiting…'}</button>`;
+      else if (v.phase === 'rolling') action = `<button class="btn big ludo-roll" data-lt="roll" ${v.canRoll && !busy() ? '' : 'disabled'}>${v.canRoll ? (busy() ? 'Moving…' : 'Roll dice') : 'Waiting…'}</button>`;
     }
     const sixes = v.sixes ? `<small>${v.sixes === 1 ? 'A six — roll again after moving' : 'Two sixes in a row — a third ends your turn'}</small>` : '';
     return `<div class="ludo-dice-panel ludo-status ${v.myTurn ? 'mine' : ''}" style="--turn:${turnSeat.hex}">
@@ -178,7 +219,7 @@
 
   function render(root, v, ctx) {
     ui.latest = v; ui.ctx = ctx; ui.root = root;
-    react(v);
+    react(v); planMoves(v);
     // remember where tokens were so moves glide instead of jumping
     const before = new Map();
     root.querySelectorAll('.ludo-token[data-pid]').forEach((el) => before.set(el.dataset.pid, [el.style.left, el.style.top]));
@@ -211,14 +252,14 @@
     const v = ui.latest; const ctx = ui.ctx;
     if (!v || !ctx) return;
     const a = el.dataset.lt;
-    if (a === 'roll') ctx.act({ type: 'roll' });
+    if (a === 'roll') { if (!busy()) ctx.act({ type: 'roll' }); }
     else if (a === 'ready') ctx.act({ type: 'ready' });
     else if (a === 'rules') ctx.showRules();
     else if (a === 'again') ctx.rematch();
     else if (a === 'leave') ctx.leave();
     else if (a.startsWith('tok:')) {
       const token = Number(a.slice(4));
-      if (Number.isInteger(token) && v.canMove && (v.legalTokens || []).includes(token)) ctx.act({ type: 'move', token });
+      if (!busy() && Number.isInteger(token) && v.canMove && (v.legalTokens || []).includes(token)) ctx.act({ type: 'move', token });
     }
   }
 

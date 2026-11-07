@@ -119,4 +119,7 @@ const FUND = [
   { text: 'You win second prize in a quiz: collect 10.', gain: 10 },
 ];
 
-module.exports = { GROUPS, SQUARES, SIZE, LOCKUP, START_SALARY, LOCKUP_FINE, SURPRISE, FUND, buyable, groupSquares, portSquares, utilitySquares, mortgageValue, unmortgageCost };
+// How long a token takes per square on every client, and the pause after it lands (kept in step with public/games/propertyrivals.js)
+const WALK_STEP_MS = 480, WALK_SETTLE_MS = 2200;
+
+module.exports = { WALK_STEP_MS, WALK_SETTLE_MS, GROUPS, SQUARES, SIZE, LOCKUP, START_SALARY, LOCKUP_FINE, SURPRISE, FUND, buyable, groupSquares, portSquares, utilitySquares, mortgageValue, unmortgageCost };

@@ -9,6 +9,9 @@
  * (default on) gives another roll after a six; a third six in a row ends your turn with no move, as in Ludo.
  * The board is this game's own layout, fixed for every game so players can learn it.
  */
+const pacing = require('../pacing');
+// Milliseconds the clients take to walk a token one square, to slide it along a ladder or snake, and the pause after (public/games/snakesladders.js)
+const WALK = { step: 480, jump: 1400, settle: 1400 };
 const SIZE = 100;
 const LADDERS = { 4: 25, 9: 31, 20: 41, 28: 55, 40: 62, 51: 72, 63: 81, 71: 91 };
 const SNAKES = { 17: 7, 27: 5, 47: 26, 56: 37, 64: 42, 87: 49, 93: 73, 95: 75, 98: 78 };
@@ -79,6 +82,7 @@ function applyAction(g, playerId, action) {
   else if (via === 'ladder') say(g, who, `rolled a ${dice}, climbed a ladder from ${landed} to ${to}`, 'ladder');
   else if (via === 'snake') say(g, who, `rolled a ${dice}, slid down a snake from ${landed} to ${to}`, 'snake');
   else say(g, who, `rolled a ${dice} and moved to ${to}`, 'roll');
+  pacing.hold(g, 450 + (landed - from) * WALK.step + (to !== landed ? WALK.jump : 0) + WALK.settle); // the walk every client animates
   emit(g, { type: 'rolled', by: who, dice, from, landed, to, via, stuck });
 
   if (to === SIZE) {

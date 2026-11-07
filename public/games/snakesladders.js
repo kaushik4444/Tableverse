@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const STEP_MS = 340, JUMP_MS = 900;
+  const STEP_MS = 480, JUMP_MS = 1400; // slow enough to count every square; the server waits for the same times (games/snakesladders/engine.js)
   /** shown[i] is where player i's token is drawn right now; it walks square by square towards the real position. */
   const ui = { ctx: null, latest: null, root: null, seq: null, rollSeq: null, tumble: false, shown: [], timer: null, animating: false };
   const shownPos = (v, i) => (ui.shown[i] === undefined ? v.players[i].pos : ui.shown[i]);
@@ -126,7 +126,9 @@
       const i = Number(el.dataset.i), n = shownPos(v, i), group = at.get(n);
       const c = centre(n, i);
       const [ox, oy] = n > 0 ? offset(group.indexOf(i), group.length) : [0, 0];
+      const moved = el.style.left !== (c.x + ox) + '%' || el.style.top !== (c.y + oy) + '%';
       el.style.left = (c.x + ox) + '%'; el.style.top = (c.y + oy) + '%';
+      if (moved && !ui.root.querySelector('.sl-jumping')) { el.classList.remove('hop'); void el.offsetWidth; el.classList.add('hop'); }
     });
   }
   function stopAnimation() { clearTimeout(ui.timer); ui.timer = null; ui.animating = false; ui.shown = []; }
