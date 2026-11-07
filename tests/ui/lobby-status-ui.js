@@ -37,6 +37,23 @@ const bot = { id: 'b1', name: 'Merlin', bot: true, avatar: '🧙', connected: tr
     await ctx.close();
   });
 
+  await run('the host at the maximum sees why "more players" is unavailable, and that the table is full', async () => {
+    const max = games.get(game.id).seats.max;
+    const members = [me, ...Array.from({ length: max - 1 }, (_, i) => ({ ...bot, id: 'b' + (i + 1), name: 'Bot ' + (i + 1) }))];
+    const { page, ctx } = await scriptedPage(browser, {
+      viewport: { width: 390, height: 844 },
+      messages: [welcome({ games: games.list() }), lobby({ hostId: 'me', seats: max, members })],
+    });
+    await page.goto(url + '/');
+    await page.waitForSelector('.stepper', { timeout: 8000 });
+    const more = page.locator('.stepper [aria-label="More players"]');
+    assert.equal(await more.isDisabled(), true, 'at the maximum the control is disabled');
+    assert.equal(await more.getAttribute('aria-describedby'), 'seat-why');
+    assert.match(await page.textContent('.seat-status'), new RegExp(`allows at most ${max} players`), 'the reason is visible text');
+    assert.match(await page.textContent('.seat-status'), new RegExp(`^${max} of ${max} seats filled\\.`));
+    await ctx.close();
+  });
+
   await run('the host with an open seat is told the open seat becomes a bot, and "more players" is enabled', async () => {
     const { page, ctx } = await scriptedPage(browser, {
       viewport: { width: 390, height: 844 },
