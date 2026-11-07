@@ -222,6 +222,21 @@ const PW = 'TestPass123!';
         assert.equal((await q('SELECT 1 FROM friendships WHERE player_a_id = LEAST($1::uuid, $2::uuid) AND player_b_id = GREATEST($1::uuid, $2::uuid)', [d.id, e.id])).length, 0);
       });
 
+      await test('a block stops table invitations between friends: creating, listing and accepting', async () => {
+        const dbFriends = require('../db/friends');
+        const f = await user('Foxtrot'); const g = await user('Golf');
+        await q('INSERT INTO friendships (player_a_id, player_b_id) VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid))', [f.id, g.id]);
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        const before = await dbFriends.createInvitation(f.id, g.username, 'wizard', 'ABCDEF', expiresAt);
+        assert.ok(before.id, 'friends can invite before any block');
+        await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)', [g.id, f.id]);
+        await assert.rejects(dbFriends.createInvitation(f.id, g.username, 'wizard', 'ABCDEF', expiresAt), (e) => e.status === 404, 'no new invitation across a block');
+        const incoming = await dbFriends.listInvitations(g.id, 'incoming');
+        assert.equal(incoming.some((i) => i.id === before.id), false, 'the earlier invitation is not listed');
+        await assert.rejects(dbFriends.transitionInvitation(g.id, before.id, 'accept'), (e) => e.status === 404, 'and cannot be accepted');
+        assert.equal((await q('SELECT status FROM private_table_invitations WHERE id = $1', [before.id]))[0].status, 'pending', 'and stays pending');
+      });
+
       hostSocket.ws.terminate();
       await x.end();
     } finally { await srv.close(); }

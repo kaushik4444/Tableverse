@@ -14,6 +14,7 @@ const friends = { ok: true, friends: [
   { id: 'f3', username: 'dia', display_name: 'Di', avatar: '🧙', online: false, playing: null, ping: null, last_seen: '2026-11-01T10:00:00Z' },
 ] };
 
+let searchCalls = 0; // the first search finds someone; the second fails
 let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = friends.friends; // bob, cyd and dia are friends; ann and the others are not
 (async () => {
   const { server, url, calls } = await serve({
@@ -24,6 +25,7 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     'POST /api/me/friend-requests': ({ body }) => { const u = JSON.parse(body).username; if (u === 'broke') return { __status: 409, body: { ok: false, error: 'You already sent a request.' } }; outgoing = [{ id: 'r1', username: u, display_name: u }]; return { ok: true, request: { id: 'r1', status: 'pending' } }; },
     'POST /api/me/avatar': ({ body }) => { const a = JSON.parse(body).avatar; if (a === '🐉') return { __status: 429, body: { ok: false, error: 'Too many changes. Try again later.' } }; profile.profile.avatar = a; return { ok: true, avatar: a }; },
     'GET /api/me/friends': () => ({ ok: true, friends: friendList }),
+    'GET /api/me/friends/search': () => { searchCalls++; return searchCalls === 1 ? { ok: true, players: [{ id: 'p9', username: 'evie', display_name: 'Evie', avatar: '🦊' }] } : { __status: 500, body: { ok: false, error: 'Search is busy.' } }; },
     'GET /api/players/ann': () => ({ ok: true, profile: { username: 'ann', displayName: 'Ann', avatar: '🦊', joinedAt: '2026-02-02T00:00:00Z', played: 12, wins: 5, winRate: 41.7 } }),
     'GET /api/auth/session': () => sessionOk(),
     'GET /api/me/profile': () => profile,
@@ -87,6 +89,19 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await second.page.waitForTimeout(300);
     assert.equal(await second.page.$('.pp-conn'), null, 'a stranger shows no status or ping');
     await second.ctx.close();
+  });
+
+  await test('a failed friend search clears the results it replaces, rather than leaving them on screen', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs });
+    await page.goto(url + '/#friends');
+    await page.waitForSelector('#friendSearch');
+    await page.fill('#friendSearch', 'ev');
+    await page.press('#friendSearch', 'Enter');
+    await page.waitForFunction(() => (document.querySelector('#friends-panel') || document.body).textContent.includes('Evie'), null, { timeout: 8000 });
+    await page.fill('#friendSearch', 'ex');
+    await page.press('#friendSearch', 'Enter');
+    await page.waitForFunction(() => !(document.querySelector('#friends-panel') || document.body).textContent.includes('Evie'), null, { timeout: 8000 });
+    await ctx.close();
   });
 
   await test('the friends list shows each friend’s ping next to their status, and nothing for offline friends', async () => {
