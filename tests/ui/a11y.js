@@ -70,6 +70,22 @@ function scan() {
     }
     return layers.reduce((acc, l) => over(l, acc), base);
   };
+  // Contrast of text painted in colour fg on el, as the browser paints it. Every ancestor with opacity below 1 is a group:
+  // its colours are blended inside it, then the group is blended (by its own opacity only) with the backdrop directly behind it.
+  // Each faded level is checked and the worst one counts. A backdrop that cannot be read from styles (an image) is not measured.
+  const contrastOf = (el, fg) => {
+    const levels = [];
+    for (let x = el; x; x = x.parentElement) { const o = parseFloat(getComputedStyle(x).opacity); if (o < 1) levels.push({ g: x, o }); }
+    if (!levels.length) { const bg = backdrop(el); return bg ? ratio(over(fg, bg), bg) : null; }
+    let worst = Infinity;
+    for (const { g, o } of levels) {
+      const behind = g.parentElement ? backdrop(g.parentElement) : null;
+      if (!behind) return null;
+      const inner = groupBackdrop(el, g, behind); if (!inner) return null;
+      worst = Math.min(worst, ratio(mix(over(fg, inner), behind, o), mix(inner, behind, o)));
+    }
+    return worst;
+  };
   const seen = new Set();
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -82,24 +98,25 @@ function scan() {
     // (its colours blended inside it), then the whole group is blended with what is behind the group, with the product of
     // the opacities. Disabled controls are excluded above.
     const fg = parse(cs.color);
-    if (!fg) continue;
-    let group = null; let alpha = 1;
-    for (let x = el; x; x = x.parentElement) { const o = parseFloat(getComputedStyle(x).opacity); if (o < 1) { group = x; alpha *= o; } }
-    let r;
-    if (!group) {
-      const bg = backdrop(el); if (!bg) continue;
-      r = ratio(over(fg, bg), bg);
-    } else {
-      // the backdrop behind a faded group is read from the page. Where it is an image (a felt, a photo) it cannot be read
-      // from computed styles, so such a group is not measured: a known limit, and the reason the probes below sit on a solid wrapper.
-      const external = group.parentElement ? backdrop(group.parentElement) : null;
-      if (!external) continue;
-      const inner = groupBackdrop(el, group, external); if (!inner) continue;
-      r = ratio(mix(over(fg, inner), external, alpha), mix(inner, external, alpha));
-    }
+    const r = fg ? contrastOf(el, fg) : null;
+    if (r === null) continue; // not measurable (an image behind it)
     const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
     const need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
     if (r < need) bad.push(`low contrast ${r.toFixed(2)}:1 (needs ${need}) for "${n.textContent.trim().slice(0, 30)}"`);
+  }
+  // form values and placeholders are text too
+  for (const el of document.querySelectorAll('input:not([type=hidden]), textarea')) {
+    if (el.disabled || !visible(el)) continue;
+    const cs = getComputedStyle(el);
+    const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
+    const need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+    const shown = el.value ? [cs.color, 'value'] : null;
+    const hint = getComputedStyle(el, '::placeholder').color;
+    for (const [colour, what] of [[shown && shown[0], 'value'], [!el.value && el.placeholder ? hint : null, 'placeholder']]) {
+      const fg = colour && parse(colour); if (!fg) continue;
+      const r = contrastOf(el, fg); if (r === null) continue;
+      if (r < need) bad.push(`low contrast ${r.toFixed(2)}:1 (needs ${need}) for ${what} "${(el.value || el.placeholder || el.id || el.tagName).slice(0, 30)}"`);
+    }
   }
   return bad;
 }
@@ -125,7 +142,8 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         if (!el || el === document.body) return null;
         const cs = getComputedStyle(el);
         // a ring must APPEAR on focus: compare the focused look with the unfocused look, so a decorative shadow that is always there does not count
-        const ring = (c) => ({ outline: c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0 ? c.outlineStyle + c.outlineWidth + c.outlineColor : '', shadow: c.boxShadow });
+        const paints = (c) => !/transparent|rgba?\([^)]*,\s*0(\.0+)?\)/.test(c);
+        const ring = (c) => ({ outline: c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0 && paints(c.outlineColor) ? c.outlineStyle + c.outlineWidth + c.outlineColor : '', shadow: paints(c.boxShadow) ? c.boxShadow : 'none' });
         const focused = ring(cs);
         el.blur(); const unfocused = ring(getComputedStyle(el)); el.focus({ preventScroll: true });
         const ringed = (focused.outline !== '' && focused.outline !== unfocused.outline) || (focused.shadow !== 'none' && focused.shadow !== unfocused.shadow);
@@ -153,12 +171,20 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         const wrap = document.createElement('div'); wrap.style.cssText = 'background:#fff;padding:4px'; document.body.appendChild(wrap);
         const fade = document.createElement('p'); fade.className = 'probe-fade'; fade.style.cssText = 'color:#000;background:#fff;opacity:.2;font-size:14px;margin:0'; fade.textContent = 'faded text'; wrap.appendChild(fade);
         const nest = document.createElement('div'); nest.style.cssText = 'background:#000;opacity:.5;padding:4px'; wrap.appendChild(nest); const inside = document.createElement('p'); inside.className = 'probe-nested'; inside.style.cssText = 'color:#fff;font-size:14px;margin:0'; inside.textContent = 'nested faded'; nest.appendChild(inside);
-        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); fade.remove(); nest.remove(); wrap.remove(); return r;
+        const wrapD = document.createElement('div'); wrapD.style.cssText = 'background:#fff;padding:4px'; document.body.appendChild(wrapD);
+        const outerD = document.createElement('div'); outerD.style.cssText = 'background:#fff;opacity:.95;padding:4px'; wrapD.appendChild(outerD);
+        const innerD = document.createElement('p'); innerD.className = 'probe-double'; innerD.style.cssText = 'color:#000;background:#fff;opacity:.5;font-size:14px;margin:0'; innerD.textContent = 'double faded'; outerD.appendChild(innerD);
+        const transparentRing = document.createElement('button'); transparentRing.className = 'probe-ring'; transparentRing.style.cssText = 'outline:2px solid transparent'; document.body.appendChild(transparentRing); transparentRing.focus();
+        const ringText = getComputedStyle(transparentRing).outlineColor; transparentRing.remove();
+        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); fade.remove(); nest.remove(); wrap.remove(); wrapD.remove(); return { r, ringText };
       }, scan.toString());
-      assert.ok(caught.some((m) => /has no accessible name/.test(m) && /probe/.test(m)), 'the scanner flags a button with no name');
-      assert.ok(caught.some((m) => /low contrast/.test(m) && /faint text/.test(m)), 'the scanner flags low-contrast text');
-      assert.ok(caught.some((m) => /low contrast/.test(m) && /faded text/.test(m)), 'the scanner flags faded text whose faded contrast is too low');
-      assert.ok(caught.some((m) => /low contrast/.test(m) && /nested faded/.test(m)), 'the scanner flags text faded by an ancestor group (white on black at half opacity over white is 3.98:1)');
+      const caughtText = caught.r;
+      assert.ok(caughtText.some((m) => /has no accessible name/.test(m) && /probe/.test(m)), 'the scanner flags a button with no name');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /faint text/.test(m)), 'the scanner flags low-contrast text');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /faded text/.test(m)), 'the scanner flags faded text whose faded contrast is too low');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /double faded/.test(m)), 'the scanner flags text under two faded groups (black at half opacity inside a 95% group is 3.94:1)');
+      assert.ok(/transparent|rgba\([^)]*,\s*0\)/.test(caught.ringText) , 'a transparent outline is recognised as not painting');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /nested faded/.test(m)), 'the scanner flags text faded by an ancestor group (white on black at half opacity over white is 3.98:1)');
     }
     console.log('  ok  ' + label);
   } catch (e) { failed++; console.error('FAIL  ' + label + '\n' + (e.stack || e)); }
