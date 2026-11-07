@@ -202,6 +202,41 @@ const PW = 'TestPass123!';
         assert.ok(pending[0].id);
       });
 
+      console.log('blocking');
+      // Regression for 20.4.3: a block (either direction) hides both accounts from discovery and stops new requests and
+      // acceptance of requests that were already pending.
+      await test('blocked accounts are hidden from search, cannot send requests, and cannot accept a pending one', async () => {
+        const d = await user('Delta'); const e = await user('Echo');
+        const [pending] = await q("INSERT INTO friend_requests (requester_id, recipient_id) VALUES ($1, $2) RETURNING id", [d.id, e.id]);
+        await require('../db/moderation').addBlock(e.id, d.id); // the real block path, with its locks
+        const fromD = await d.browser.get(`/api/me/friends/search?username=${e.username}`);
+        assert.equal(fromD.status, 200);
+        assert.equal(fromD.json.players.some((p) => p.id === e.id), false, 'the blocker is not found by the blocked account');
+        const fromE = await e.browser.get(`/api/me/friends/search?username=${d.username}`);
+        assert.equal(fromE.json.players.some((p) => p.id === d.id), false, 'the blocked account is not found by the blocker');
+        assert.equal((await d.browser.post('/api/me/friend-requests', { username: e.username })).status, 404, 'no new request');
+        const incoming = await e.browser.get('/api/me/friend-requests?direction=incoming');
+        assert.equal(incoming.json.requests.some((r) => r.id === pending.id), false, 'the pending request is hidden');
+        assert.equal((await e.browser.post('/api/me/friend-requests/accept', { requestId: pending.id })).status, 404, 'it cannot be accepted');
+        assert.equal((await q('SELECT status FROM friend_requests WHERE id = $1', [pending.id]))[0].status, 'pending', 'and stays unchanged');
+        assert.equal((await q('SELECT 1 FROM friendships WHERE player_a_id = LEAST($1::uuid, $2::uuid) AND player_b_id = GREATEST($1::uuid, $2::uuid)', [d.id, e.id])).length, 0);
+      });
+
+      await test('a block stops table invitations between friends: creating, listing and accepting', async () => {
+        const dbFriends = require('../db/friends');
+        const f = await user('Foxtrot'); const g = await user('Golf');
+        await q('INSERT INTO friendships (player_a_id, player_b_id) VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid))', [f.id, g.id]);
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        const before = await dbFriends.createInvitation(f.id, g.username, 'wizard', 'ABCDEF', expiresAt);
+        assert.ok(before.id, 'friends can invite before any block');
+        await require('../db/moderation').addBlock(g.id, f.id); // the real block path, with its locks
+        await assert.rejects(dbFriends.createInvitation(f.id, g.username, 'wizard', 'ABCDEF', expiresAt), (e) => e.status === 404, 'no new invitation across a block');
+        const incoming = await dbFriends.listInvitations(g.id, 'incoming');
+        assert.equal(incoming.some((i) => i.id === before.id), false, 'the earlier invitation is not listed');
+        await assert.rejects(dbFriends.transitionInvitation(g.id, before.id, 'accept'), (e) => e.status === 404, 'and cannot be accepted');
+        assert.equal((await q('SELECT status FROM private_table_invitations WHERE id = $1', [before.id]))[0].status, 'pending', 'and stays pending');
+      });
+
       hostSocket.ws.terminate();
       await x.end();
     } finally { await srv.close(); }
