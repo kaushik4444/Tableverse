@@ -122,6 +122,20 @@ function socket(port, cookie) {
       sb = again; // the rest of the tests use the reconnected socket
     });
 
+    await test('a fresh join to the table (not a reconnect) gets a history without the blocked account', async () => {
+      const before = sb.lastChatlog();
+      sb.send({ t: 'leave' });
+      await sleep(300);
+      sb.send({ t: 'join', code });
+      const history = await until(() => { const h = sb.lastChatlog(); return h && h !== before ? h : null; }, 'history after joining');
+      assert.ok(history.messages.some((m) => !m.sys && m.id === B.id), 'the history is real: it still holds the blocker’s own earlier messages');
+      assert.equal(history.messages.some((m) => !m.sys && m.id === A.id), false, 'the joining blocker does not see the blocked account');
+      await say(sa, 'alpha after rejoin');
+      await until(() => sc.texts().includes('alpha after rejoin'), 'other viewer gets it');
+      await sleep(100);
+      assert.equal(sb.texts().includes('alpha after rejoin'), false, 'live chat after a fresh join is filtered too');
+    });
+
     await test('an unblock shows the account again', async () => {
       sb.send({ t: 'unblock', id: A.id });
       await until(() => sb.notices().some((n) => /Unblocked/.test(n)), 'unblock confirmation');
