@@ -17,6 +17,8 @@ const { createAuthRoutes } = require('./lib/authRoutes');
 const dbAccount = require('./db/account');
 const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
+const dbModeration = require('./db/moderation');
+const moderation = require('./lib/moderation');
 const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
@@ -596,11 +598,14 @@ function start(opts = {}) {
     if (room.chat.length > CHAT_KEEP) room.chat.shift();
     for (const v of viewers(room)) {
       const p = players.get(v.id);
-      if (p && p.connected) send(p.ws, { t: 'chat', m });
+      // a viewer never receives chat from an account they have blocked (server-enforced, not a client-side mute)
+      if (p && p.connected && moderation.shouldDeliver(m, p.blocked)) send(p.ws, { t: 'chat', m });
     }
   }
   const sys = (room, text) => pushChat(room, { sys: true, text });
-  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: room.chat }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
+  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, p.blocked) }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
+  /** Re-sends this viewer's chat history after a block or unblock, so the change shows at once. */
+  const resyncChat = (p) => { const room = rooms.get(p.room); if (room) send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, p.blocked) }); };
   /** Tell everyone at the table who is in voice (and who is muted). */
   function broadcastVoice(room) {
     const msg = { t: 'voice', ids: voiceRelay.voiceList(room) };
@@ -976,7 +981,59 @@ function start(opts = {}) {
       const now = Date.now();
       if (now - (p.lastChat || 0) < 500) return sendError(p, 'Slow down a little');
       p.lastChat = now;
-      pushChat(room, { id: p.id, name: p.name, avatar: p.avatar, text, spec: isSpec(room, p.id) });
+      // mid identifies the message for reports; the server keeps the text, so a report cannot carry different content
+      pushChat(room, { mid: crypto.randomUUID(), id: p.id, name: p.name, avatar: p.avatar, text, spec: isSpec(room, p.id) });
+    },
+
+    // Report a table chat message. The server looks the message up in its own copy of the table's chat.
+    async report(p, msg) {
+      const room = rooms.get(p.room);
+      if (!room) return sendError(p, 'Join a table to report a message.');
+      const checked = moderation.validateReport(msg);
+      if (!checked.ok) return sendError(p, checked.error);
+      const now = Date.now();
+      if (now - (p.lastReport || 0) < moderation.REPORT_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+      p.lastReport = now;
+      const m = room.chat.find((x) => x.mid === checked.messageId);
+      if (!m || m.sys) return sendError(p, 'That message is no longer available to report.');
+      if (m.id === p.id) return sendError(p, 'You cannot report your own message.');
+      try {
+        const out = await dbModeration.createChatReport({
+          reporterId: p.id, reportedId: m.id, roomCode: room.code, messageId: checked.messageId,
+          messageText: m.text, reason: checked.reason, details: checked.details,
+        });
+        send(p.ws, { t: 'notice', text: out.stored ? 'Thanks. Your report was sent for review.' : 'You have already reported this message.' });
+      } catch (e) {
+        if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
+        throw e;
+      }
+    },
+
+    // Blocking hides that account's table chat from this player only. It does not sign anyone out or change the table.
+    async block(p, msg) {
+      const checked = moderation.validateBlockTarget(p.id, msg && msg.id);
+      if (!checked.ok) return sendError(p, checked.error);
+      const now = Date.now();
+      if (now - (p.lastBlock || 0) < moderation.BLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+      p.lastBlock = now;
+      try {
+        await dbModeration.addBlock(p.id, checked.targetId);
+      } catch (e) {
+        if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
+        throw e;
+      }
+      if (!p.blocked) p.blocked = new Set();
+      p.blocked.add(checked.targetId);
+      resyncChat(p);
+      send(p.ws, { t: 'notice', text: 'Blocked. You will no longer see their table chat.' });
+    },
+
+    async unblock(p, msg) {
+      if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
+      await dbModeration.removeBlock(p.id, msg.id);
+      if (p.blocked) p.blocked.delete(msg.id);
+      resyncChat(p);
+      send(p.ws, { t: 'notice', text: 'Unblocked.' });
     },
 
     create(p, msg) {
@@ -1395,6 +1452,9 @@ function start(opts = {}) {
       send(ws, { t: 'authRequired', message: 'Please verify your email before entering the lobby.' });
       return ws.close(1008, 'email verification required');
     }
+
+    // Blocks are stored per account and applied on every table; load them once per account on this server.
+    if (!p.blocked) p.blocked = dbPool.hasDatabase() ? await dbModeration.loadBlockedIds(p.id) : new Set();
 
     ws.authToken = presentedToken; // lets a sign-out or a newer login close exactly the sockets of that session
     if (p.ws && p.ws !== ws) {
