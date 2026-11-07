@@ -30,12 +30,14 @@
     v.players.forEach((p, i) => {
       if (ui.disp[p.id] === undefined || fresh) { ui.disp[p.id] = p.pos; delete ui.plans[p.id]; return; }
       const from = ui.disp[p.id], to = p.pos;
+      const current = ui.plans[p.id];
+      if (current && current.to === to) return;
       if (from === to) { delete ui.plans[p.id]; return; }
       const fwd = (to - from + 40) % 40, bwd = 40 - fwd;
       const card = v.lastCard && v.lastCard.by === i ? v.lastCard.text : '';
       if (p.inLockup && to === 10) { ui.disp[p.id] = to; delete ui.plans[p.id]; return; } // sent to the lockup: no walking there
       const back = /back/i.test(card) && bwd <= 4;
-      ui.plans[p.id] = { to, dir: back ? -1 : 1, ms: (back ? bwd : fwd) > 14 ? FAST_MS : STEP_MS };
+      ui.plans[p.id] = { to, dir: back ? -1 : 1, ms: (back ? bwd : fwd) > 14 ? FAST_MS : STEP_MS, last: Date.now() };
     });
     if (Object.keys(ui.plans).length && !ui.stepTimer) ui.stepTimer = setInterval(stepTokens, 60);
   }

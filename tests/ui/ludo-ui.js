@@ -66,9 +66,17 @@ function messages(patch) {
     assert.equal(await page.isDisabled('.ludo-roll'), true, 'the roll button waits while the token walks');
     const seen = new Set();
     const start = Date.now();
-    while (Date.now() - start < 3000) { seen.add(await page.evaluate(() => { const t = document.querySelector('.ludo-token[data-pid="0-0"]'); return t.style.left + '|' + t.style.top; })); await page.waitForTimeout(60); }
+    while (Date.now() - start < 5000) {
+      const state = await page.evaluate(() => { const t = document.querySelector('.ludo-token[data-pid="0-0"]'); return { pos: t.style.left + '|' + t.style.top, moving: t.classList.contains('moved') }; });
+      seen.add(state.pos);
+      if (!state.moving) break;
+      await page.waitForTimeout(60);
+    }
     assert.ok(seen.size >= 5, `it stopped on each square on the way (start + 4 steps): ${seen.size} positions`);
-    assert.equal(await page.isDisabled('.ludo-roll'), false, 'the roll button is back after the walk');
+    assert.equal(await page.isDisabled('.ludo-roll'), true, 'the final landing transition still gates controls');
+    await page.waitForTimeout(120);
+    assert.equal(await page.isDisabled('.ludo-roll'), true, 'controls remain disabled through the landing transition');
+    await page.waitForFunction(() => !document.querySelector('.ludo-roll').disabled, null, { timeout: 2000 });
     await ctx.close();
   });
 

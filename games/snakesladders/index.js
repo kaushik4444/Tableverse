@@ -40,6 +40,7 @@ module.exports = {
       botAction: (playerId) => engine.botAction(g, playerId),
       botDelayMs: () => 1200 + g.rng() * 600, // a bot's thinking time; holdMs adds the walk, the slide and a reading pause
       holdMs: () => pacing.remaining(g),
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // score is the placing (first = n, ... last = 1)

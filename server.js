@@ -1318,7 +1318,8 @@ function start(opts = {}) {
         room.options,
         Math.random
       );
-      pacing.setScale(room.game, botScale);
+      if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
+      else pacing.setScale(room.game, botScale);
       room.status = 'playing';
       room.matchKey = crypto.randomUUID(); // identifies this game in the match history
       room.startedAt = Date.now();

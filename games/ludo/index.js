@@ -60,6 +60,7 @@ module.exports = {
       botAction: (playerId) => engine.botAction(g, playerId),
       forcedPlay: () => engine.forcedPlay(g),
       autoAction: () => null,
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       isOver: () => g.phase === 'gameOver',
       // first to finish all four tokens wins; score is placement (first = n, ... last = 1)
       results: () => {

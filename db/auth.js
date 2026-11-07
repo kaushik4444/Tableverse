@@ -218,15 +218,23 @@ async function loginEmail({ email, password }) {
   if (!isEmail(email) || typeof password !== 'string') throw new AuthError('Invalid email or password.', 401);
 
   // Argon2 takes tens of milliseconds: do it without holding a database connection or transaction open.
-  const r = await db.query(
-    `SELECT p.id, p.username, p.display_name, p.avatar, p.created_at,
-            i.password_hash, i.email, i.email_verified_at
-     FROM auth_identities i
-     JOIN players p ON p.id = i.player_id
-     WHERE i.provider = $1 AND i.provider_user_id = $2
-     LIMIT 1`,
-    [PROVIDER_EMAIL, normEmail(email)]
-  );
+  let r;
+  try {
+    r = await db.query(
+      `SELECT p.id, p.username, p.display_name, p.avatar, p.created_at,
+              i.password_hash, i.email, i.email_verified_at
+       FROM auth_identities i
+       JOIN players p ON p.id = i.player_id
+       WHERE i.provider = $1 AND i.provider_user_id = $2
+       LIMIT 1`,
+      [PROVIDER_EMAIL, normEmail(email)]
+    );
+  } catch (err) {
+    if (db.isTransientConnectionError(err)) {
+      throw new AuthError('Sign-in is temporarily unavailable. Please try again.', 503, { retryable: true });
+    }
+    throw err;
+  }
   if (!r.rows.length) {
     await verifyPassword(DUMMY_HASH, password); // keep the timing close to a real check
     throw new AuthError('Invalid email or password.', 401);

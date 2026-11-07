@@ -260,6 +260,8 @@
     if (data && data.csrfToken) S.csrf = data.csrfToken;
     if (!r.ok || data.ok === false) {
       const err = new Error(data.error || `Request failed (${r.status})`);
+      err.status = r.status;
+      err.retryable = data.retryable === true;
       throw err;
     }
     return data;
@@ -410,10 +412,14 @@
     S.auth = null;
   }
 
-  // One attempt per press. A request that times out at the gateway can still finish on the server, and a second login
-  // would then end the session it created. The in-flight guard in the form keeps a double press from doing that.
+  // Only retry a database lookup explicitly marked safe by the server; ambiguous responses may have created a session.
   async function postLogin(email, password) {
-    return postJson('/api/auth/login', { email, password });
+    for (let attempt = 0; ; attempt++) {
+      try { return await postJson('/api/auth/login', { email, password }); } catch (err) {
+        if (!err.retryable || attempt >= 2) throw err;
+        await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+      }
+    }
   }
 
   async function doLogin(email, password) {

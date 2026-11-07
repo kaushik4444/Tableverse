@@ -58,6 +58,7 @@ module.exports = {
       forcedPlay: () => A.forcedPlay(g),
       botDelayMs: () => 2200 + g.rng() * 900, // unhurried; holdMs adds the time the token needs to walk and be read
       holdMs: () => pacing.remaining(g),
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // the score is each player's net worth at the end; the winner is the last player standing (or the richest in a timed game)

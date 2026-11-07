@@ -38,8 +38,22 @@ test('Snakes and Ladders: the hold covers the walk and a snake or ladder slide',
 });
 
 test('Ludo: a move holds the bots for the walk', () => {
-  const g = games.get('ludo').create(people(2), {}, () => 0.5);
-  assert.equal(g.holdMs(), 0);
+  const g = games.get('ludo').create(people(2), {}, () => 0.999999);
+  g.act('me', { type: 'ready' });
+  g.act('p1', { type: 'ready' });
+  assert.ok(g.act('me', { type: 'roll' }).ok, 'a six gives a move');
+  assert.ok(g.act('me', { type: 'move', token: 0 }).ok, 'apply the move');
+  assert.ok(g.holdMs() >= 1650, `one step plus settle holds about 1700 ms, got ${g.holdMs()}`);
+});
+
+test('Ludo: the plugin scales the engine reservation for fast bots', () => {
+  const g = games.get('ludo').create(people(2), {}, () => 0.999999);
+  g.setPacingScale(0.5);
+  g.act('me', { type: 'ready' });
+  g.act('p1', { type: 'ready' });
+  g.act('me', { type: 'roll' });
+  g.act('me', { type: 'move', token: 0 });
+  assert.ok(g.holdMs() > 800 && g.holdMs() <= 850, `scaled one-step hold is about 850 ms, got ${g.holdMs()}`);
 });
 
 test('a scale shortens the reservation at the time it is made, so the bots wait exactly that long', () => {

@@ -72,7 +72,7 @@
         ui.disp.set(id, ui.disp.get(id) + 1);
         if (ui.disp.get(id) >= to) { ui.disp.set(id, to); ui.plans.delete(id); }
       }
-      if (!ui.plans.size && ui.snaps.size) ui.holdUntil = Date.now() + SNAP_MS; // the walker has arrived: let the capture register
+      if (!ui.plans.size) ui.holdUntil = Date.now() + (ui.snaps.size ? SNAP_MS : STEP_MS); // keep controls gated through the final landing transition
     } else if (ui.snaps.size && Date.now() >= ui.holdUntil) {
       for (const [id, to] of ui.snaps) ui.disp.set(id, to);
       ui.snaps.clear(); ui.holdUntil = Date.now() + SNAP_MS;
