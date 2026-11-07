@@ -150,5 +150,5 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
    The toolbar is flex; wrapping is cheaper than scrolling. */
 @media (max-width: 359px) {
   .wz-top .row, .ludo-tools { flex-wrap: wrap; }
-  .wz-top .row .btn.small, .ludo-tools .btn.small { flex: 1 1 auto; min-width: 0; }
+  .wz-top .row .btn.small, .ludo-tools .btn.small { flex: 1 1 auto; min-width: 32px; }
 }
