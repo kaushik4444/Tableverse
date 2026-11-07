@@ -55,8 +55,9 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
           player: { display_name: 'Aarav', username: 'aarav', avatar: '🧙', email: 'someone@example.com', email_verified: true } };
       },
     });
-    const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome()] });
     await page.goto(retryServer.url + '/');
+    await page.locator('nav.topbar button[data-act="showLogin"]').click();
     await page.waitForSelector('#loginForm', { timeout: 8000 });
     await page.fill('#loginEmail', 'someone@example.com');
     await page.fill('#loginPassword', 'TestPass123!');
@@ -78,6 +79,7 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     });
     const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
     await page.goto(timeoutServer.url + '/');
+    await page.locator('nav.topbar button[data-act="showLogin"]').click();
     await page.waitForSelector('#loginForm', { timeout: 8000 });
     await page.fill('#loginEmail', 'someone@example.com');
     await page.fill('#loginPassword', 'TestPass123!');
