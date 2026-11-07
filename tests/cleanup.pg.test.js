@@ -69,9 +69,11 @@ function cookieSocket(port, cookie) {
       await q("INSERT INTO friendships (player_a_id, player_b_id) VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid))", reg);
       await q("INSERT INTO friend_requests (requester_id, recipient_id) VALUES ($1, $2)", reg);
       await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, expires_at) VALUES ($1, $2, 'wizard', 'ABCDEF', NOW() + INTERVAL '1 day')", reg);
-      return { players: 5, auth_identities: 2, auth_sessions: 4, auth_email_tokens: 2, auth_rate_limits: 3, matches: 3, match_participants: 12, player_recent_tables: 0, friendships: 1, friend_requests: 1, private_table_invitations: 1 };
+      await q("INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)", [reg[0], anon[0]]);
+      await q("INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason, details) VALUES ($1, $2, 'ROOM1', gen_random_uuid(), 'hello', 'spam', '')", [reg[0], anon[0]]);
+      return { players: 5, auth_identities: 2, auth_sessions: 4, auth_email_tokens: 2, auth_rate_limits: 3, matches: 3, match_participants: 12, player_recent_tables: 0, friendships: 1, friend_requests: 1, private_table_invitations: 1, player_blocks: 1, chat_reports: 1 };
     }
-    const SEEDED = { match_participants: 12, private_table_invitations: 1, friend_requests: 1, friendships: 1, matches: 3, auth_email_tokens: 2, auth_sessions: 4, auth_identities: 2, player_recent_tables: 0, auth_rate_limits: 3, players: 5 };
+    const SEEDED = { match_participants: 12, private_table_invitations: 1, friend_requests: 1, friendships: 1, matches: 3, auth_email_tokens: 2, auth_sessions: 4, auth_identities: 2, player_recent_tables: 0, auth_rate_limits: 3, players: 5, player_blocks: 1, chat_reports: 1 };
 
     /** The same database through the command line. NODE_PATH is passed on so a locally borrowed driver still resolves. */
     const cli = (args, url = t.url) => spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'cleanup-user-data.js'), ...args], { env: { PATH: process.env.PATH, NODE_PATH: process.env.NODE_PATH || '', CLEANUP_DATABASE_URL: url }, encoding: 'utf8', timeout: 60000 });
@@ -98,7 +100,7 @@ function cookieSocket(port, cookie) {
       assert.equal(report.mode, 'dry-run');
       assert.equal(report.committed, false);
       assert.deepEqual(report.before, SEEDED);
-      assert.equal(report.totalRows, 34);
+      assert.equal(report.totalRows, 36);
       assert.deepEqual(report.order, cleanup.CLEAN_TABLES);
       assert.deepEqual(report.preserved, ['schema_migrations']);
       assert.deepEqual(report.breakdowns.players, { anonymous: 3, registered: 2 });
@@ -109,7 +111,7 @@ function cookieSocket(port, cookie) {
       assert.deepEqual(writes, [], 'no write statement of any kind: ' + writes.join(' | '));
       const text = cleanup.formatReport(report);
       assert.match(text, /DRY RUN \(read-only; nothing will be changed\)/);
-      assert.match(text, /would delete 34 rows from 11 tables\. Nothing was changed/);
+      assert.match(text, /would delete 36 rows from 13 tables\. Nothing was changed/);
       assert.match(text, /3 legacy anonymous/);
       assert.ok(!text.includes('ada@example.com') && text.includes('a***@example.com'), 'emails are masked');
       assert.ok(!/a{64}|c{64}|e{64}/.test(text + JSON.stringify(report)), 'token hashes are never shown');
@@ -256,12 +258,12 @@ function cookieSocket(port, cookie) {
       const snap = path.join(snapDir, 'pre.json');
       const dry = cli(['--snapshot=' + snap, '--sample=2']);
       assert.equal(dry.status, 0, dry.stdout + dry.stderr);
-      assert.match(dry.stdout, /would delete \d+ rows from 11 tables/);
+      assert.match(dry.stdout, /would delete \d+ rows from 13 tables/);
       const saved = JSON.parse(fs.readFileSync(snap, 'utf8'));
       assert.ok(saved.fingerprint.structureDigest && !JSON.stringify(saved).includes('ada@example.com'), 'the snapshot holds structure and counts, no user data');
       const run = cli(['--execute', `--confirm=${t.name}`, '--snapshot=' + snap]);
       assert.equal(run.status, 0, run.stdout + run.stderr);
-      assert.match(run.stdout, /COMMITTED\. Deleted \d+ rows from 11 tables/);
+      assert.match(run.stdout, /COMMITTED\. Deleted \d+ rows from 13 tables/);
       for (const tbl of cleanup.CLEAN_TABLES) assert.equal(await rows(tbl), 0);
       const ver = cli(['--verify', '--snapshot=' + snap]);
       assert.equal(ver.status, 0, ver.stdout + ver.stderr);
