@@ -17,7 +17,8 @@ the server. It does not replace human review, and it does not take automatic act
 - **Blocks are applied on the server.** When a socket joins, the server loads the account's blocked ids and keeps them on
   the player. Live chat (`pushChat`) and the history sent on join or reconnect both pass through
   `lib/moderation.js` `shouldDeliver` / `visibleChat`, so a blocked message is never sent to the blocker's socket.
-- **Blocks are one way.** A blocks B does not stop B's messages reaching A. A still sees B's chat.
+- **Blocks are one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages, and
+  B is not told about the block.
 - **System lines always show** (the game and table events), even to a blocker.
 - **Report text comes from the server.** Each table message has a random id (`mid`). The report carries only the id, a
   reason and optional details. The server finds the message in the table's own copy of recent chat and stores that text
