@@ -1,6 +1,7 @@
 'use strict';
 /** End-to-end: real HTTP + WebSocket server, two human clients and a bot play a complete Wizard game. */
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const WebSocket = require('ws');
@@ -23,7 +24,7 @@ function get(port, path) {
 }
 
 function client(port, name, token) {
-  const c = { name, last: null, room: null, view: null, errors: [], chats: [], notices: [], tables: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`), playing: false };
+  const c = { name, last: null, room: null, view: null, errors: [], chats: [], notices: [], tables: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)), playing: false };
   c.send = (m) => c.ws.send(JSON.stringify(m));
   c.waiters = [];
   c.until = (pred, label) =>
@@ -35,7 +36,7 @@ function client(port, name, token) {
       };
       if (!check()) c.waiters.push(check);
     });
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') Object.assign(c, { id: m.id, token: m.token, games: m.games, tables: m.tables || [], rejoin: m.rejoin || [], announcement: m.announcement });
@@ -90,11 +91,11 @@ function client(port, name, token) {
     });
     if (regRes.ok) {
       const reg = await regRes.json();
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(reg.token));
       const msgs = [];
       await new Promise((r) => ws.on('open', r));
       ws.on('message', (raw) => msgs.push(JSON.parse(raw)));
-      ws.send(JSON.stringify({ t: 'hello', token: reg.token }));
+      ws.send(JSON.stringify({ t: 'hello' }));
       await new Promise((r) => setTimeout(r, 120));
       assert.ok(msgs.some((m) => m.t === 'authRequired' && /verify/i.test(m.message || '')));
       ws.close();

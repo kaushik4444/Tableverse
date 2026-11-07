@@ -1323,7 +1323,9 @@ function start(opts = {}) {
   async function handleHello(ws, msg) {
     if (ws.readyState !== 1) return; // the socket closed while waiting in the queue
 
-    const presentedToken = (msg && typeof msg.token === 'string' && msg.token) || ws.cookieToken || null;
+    // Only the HttpOnly session cookie on the upgrade request authenticates a socket. A token sent inside a message is not
+    // accepted: anything a page can send can then never be mistaken for a session.
+    const presentedToken = ws.cookieToken || null;
     if (!presentedToken) {
       send(ws, { t: 'authRequired', message: 'Please log in to play.' });
       return ws.close(1008, 'auth required');

@@ -3,6 +3,7 @@
 // real game runs. The server must stay up, must not log an internal "handler error" (a bug that only a client could trigger),
 // and must still serve a normal table afterwards.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -37,9 +38,9 @@ const KEYS = ['gameId', 'code', 'visibility', 'seats', 'text', 'action', 'option
   try {
     const mk = async (name) => {
       const u = await registerAndVerify(srv.port, { email: `${name.toLowerCase()}@test.local`, displayName: name, password: 'TestPass123!' });
-      const c = { room: null, ws: new WebSocket(`ws://127.0.0.1:${srv.port}/ws`), closed: false };
+      const c = { room: null, ws: new WebSocket(`ws://127.0.0.1:${srv.port}/ws`, sessionSocket(u.token)), closed: false };
       c.send = (m) => { if (c.ws.readyState === 1) c.ws.send(typeof m === 'string' ? m : JSON.stringify(m)); };
-      c.ws.on('open', () => c.send({ t: 'hello', token: u.token }));
+      c.ws.on('open', () => c.send({ t: 'hello' }));
       c.ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'welcome') c.id = m.id; if (m.t === 'state') c.room = m.room; if (m.t === 'left') c.room = null; });
       c.ws.on('close', () => { c.closed = true; });
       await until(() => c.id, name + ' welcome');

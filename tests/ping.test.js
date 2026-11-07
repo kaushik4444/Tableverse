@@ -2,6 +2,7 @@
 // Connection quality on the real server (in-memory mode, no database): every connected player is probed, the player is told
 // their own smoothed round trip, table members carry it for the other humans, bots have none, and it disappears on disconnect.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const WebSocket = require('ws');
 const { registerAndVerify } = require('./helpers/auth');
@@ -17,9 +18,9 @@ let passed = 0;
 async function test(name, fn) { try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; } }
 
 function client(port, token) {
-  const c = { room: null, latency: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { room: null, latency: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'welcome') c.id = m.id; if (m.t === 'state') c.room = m.room; if (m.t === 'latency') c.latency.push(m.ms); });
   return c;
 }

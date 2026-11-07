@@ -1,5 +1,6 @@
 'use strict';
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 /**
  * Private-table access across the room lifecycle, on a REAL PostgreSQL through the running server.
  * Policy under test: docs/PRIVATE_TABLES.md. In short: the creator and the current host always have access; everyone else needs
@@ -34,7 +35,7 @@ async function until(check, label, timeout = 15000) {
 /** A socket that behaves like the browser: cookie-less, token hello, keeps the latest room/view and what the server said. */
 function wsClient(port, token) {
   const c = { room: null, view: null, errors: [], notices: [], lefts: 0, rejoin: [], presence: [], messages: [], welcomed: false, auto: false, lastKey: null,
-    ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+    ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
   c.step = () => { // plays wizard: enough to finish a game
     const v = c.view;
@@ -46,7 +47,7 @@ function wsClient(port, token) {
     else if (v.phase === 'bidding') c.send({ t: 'act', action: { type: 'bid', amount: v.forbiddenBid === 0 ? 1 : 0 } });
     else if (v.phase === 'playing') c.send({ t: 'act', action: { type: 'play', cardId: v.legal[0] } });
   };
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('error', () => {});
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);

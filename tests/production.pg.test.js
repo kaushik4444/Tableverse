@@ -1,5 +1,6 @@
 'use strict';
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 // Production path on a REAL PostgreSQL: a finished game goes through the server, the queue and the database; plus failures.
 // Runs only with TEST_DATABASE_URL; every run uses its own throw-away database.
 const assert = require('node:assert/strict');
@@ -29,9 +30,9 @@ async function until(fn, label, ms = 30000) {
 const quiet = () => { const lines = { log: [], warn: [], error: [] }; return { lines, log: (m) => lines.log.push(m), warn: (m) => lines.warn.push(m), error: (m) => lines.error.push(m) }; };
 
 function client(port, name, token) {
-  const c = { name, room: null, view: null, chats: [], notices: [], errors: [], stats: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { name, room: null, view: null, chats: [], notices: [], errors: [], stats: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') Object.assign(c, { id: m.id, token: m.token });
@@ -463,7 +464,7 @@ function cookieSocket(port, cookie) {
         const ps = await q('SELECT * FROM match_participants WHERE match_id = $1 ORDER BY seat', [m.id]);
         assert.deepEqual(ps.map((p) => [p.left_early, p.is_bot]), [[false, false], [true, false], [false, true]]);
         assert.equal((await a.getStats()).played, 1);
-        b.send({ t: 'hello', token: b.token });
+        b.send({ t: 'hello' });
         assert.equal((await b.getStats()).played, 0, 'leaving a game early is not a loss');
       } finally {
         if (a?.ws && a.ws.readyState !== WebSocket.CLOSED) a.ws.terminate();

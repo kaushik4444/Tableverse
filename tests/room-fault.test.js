@@ -2,6 +2,7 @@
 // A bug in one game must not crash the server or the other tables: automatic (bot) play that throws is retried and then
 // closes only that table.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const WebSocket = require('ws');
 const games = require('../games');
@@ -15,9 +16,9 @@ async function until(fn, label, ms = 8000) {
   for (;;) { const v = fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(15); }
 }
 function client(port, token) {
-  const c = { room: null, notices: [], left: 0, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { room: null, notices: [], left: 0, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') c.id = m.id;

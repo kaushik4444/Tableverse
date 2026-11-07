@@ -2,6 +2,7 @@
 // Reconnect behaviour on the real server (memory mode): a second connection with the same identity replaces the first,
 // a reconnecting player gets the current state of their own seat (and only theirs), and a replaced socket cannot act.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const WebSocket = require('ws');
 const { registerAndVerify } = require('./helpers/auth');
@@ -17,9 +18,9 @@ let passed = 0;
 async function test(name, fn) { try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; } }
 
 function connect(port, token) {
-  const c = { room: null, view: null, chats: [], closeCode: null, errors: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { room: null, view: null, chats: [], closeCode: null, errors: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') c.id = m.id;
