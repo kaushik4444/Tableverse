@@ -9,6 +9,15 @@ function hashToken(rawToken) {
   return crypto.createHash('sha256').update(String(rawToken)).digest('hex');
 }
 
+/** Revokes an in-memory session (no database). Returns true when a live session was revoked. */
+function revokeMemoryToken(rawToken) {
+  if (!isWellFormedToken(rawToken)) return false;
+  const s = memoryStore.sessions.get(hashToken(rawToken));
+  if (!s || s.revokedAt) return false;
+  s.revokedAt = new Date();
+  return true;
+}
+
 /**
  * Generate a cryptographically secure random bearer token.
  */
@@ -76,8 +85,14 @@ const memoryStore = new MemoryPlayerStore();
  * Authenticate a player from their raw bearer token.
  * Returns the player record or null if invalid or revoked.
  */
+/** Every session token is 32 random bytes in hex. Anything else is refused before the database is asked. */
+const SESSION_TOKEN_RE = /^[a-f0-9]{64}$/;
+function isWellFormedToken(rawToken) {
+  return typeof rawToken === 'string' && SESSION_TOKEN_RE.test(rawToken);
+}
+
 async function authenticateToken(rawToken) {
-  if (!rawToken || typeof rawToken !== 'string') return null;
+  if (!isWellFormedToken(rawToken)) return null;
 
   if (!db.hasDatabase()) {
     return memoryStore.getPlayerByToken(rawToken);
@@ -90,7 +105,7 @@ async function authenticateToken(rawToken) {
     JOIN players p ON s.player_id = p.id
     WHERE s.token_hash = $1
       AND s.revoked_at IS NULL
-      AND (s.expires_at IS NULL OR s.expires_at > NOW())
+      AND s.expires_at > NOW()
     LIMIT 1;
   `;
 
@@ -170,6 +185,8 @@ async function updateLastSeen(playerId) {
 module.exports = {
   hashToken,
   generateToken,
+  isWellFormedToken,
+  revokeMemoryToken,
   authenticateToken,
   createAnonymousPlayer,
   updateProfile,

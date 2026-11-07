@@ -75,4 +75,7 @@ async function hitRateLimit({ scope, key, limit, windowMs }) {
   return hitMemory(scope, key, limit, windowMs);
 }
 
-module.exports = { hitRateLimit, refundRateLimit };
+/** Tests only: forget every in-memory counter so each test starts from zero. Has no effect when PostgreSQL is used. */
+function resetMemoryCountersForTests() { mem.clear(); }
+
+module.exports = { hitRateLimit, refundRateLimit, resetMemoryCountersForTests };
