@@ -36,10 +36,13 @@
  *   promise for production. See docs/PRODUCTION_READINESS_AUDIT.md §F5.
  */
 process.env.NODE_ENV = process.env.NODE_ENV || 'test';
+// This script starts its own local server and registers accounts through the test helper, which needs the debug-token opt-in
+// (see lib/debugTokens.js). It is refused on a hosted deployment by the server itself.
+process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS = process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS || '1';
 delete process.env.DATABASE_URL;
 const WebSocket = require('ws');
 const { monitorEventLoopDelay } = require('node:perf_hooks');
-const { registerAndVerify } = require('../tests/helpers/auth');
+const { registerAndVerify, sessionSocket } = require('../tests/helpers/auth');
 const { start } = require('../server');
 
 const PLAYERS = Number(process.argv[2] || 200);
@@ -55,8 +58,9 @@ const mb = (n) => Math.round(n / 1048576);
   const t0 = Date.now();
   for (let i = 0; i < PLAYERS; i++) {
     const u = await registerAndVerify(srv.port, { email: `load${i}@test.local`, displayName: 'P' + i, password: 'TestPass123!' });
-    const c = { i, ws: new WebSocket(`ws://127.0.0.1:${srv.port}/ws`), room: null, id: null, tables: [] };
-    c.ws.on('open', () => c.ws.send(JSON.stringify({ t: 'hello', token: u.token })));
+    // the session travels as the ct_session cookie on the upgrade request, the way a browser presents it
+    const c = { i, ws: new WebSocket(`ws://127.0.0.1:${srv.port}/ws`, sessionSocket(u.token)), room: null, id: null, tables: [] };
+    c.ws.on('open', () => c.ws.send(JSON.stringify({ t: 'hello' })));
     c.ws.on('message', (raw) => {
       stats.msgs++; stats.bytes += raw.length;
       const m = JSON.parse(raw);
