@@ -43,7 +43,16 @@ function scan() {
   // WCAG 2.x contrast of visible text against the colour it is drawn on (semi-transparent backgrounds are composited).
   // Text on a background image or gradient cannot be measured this way and is skipped.
   const parse = (s) => { const m = /rgba?\(([^)]+)\)/.exec(s); if (!m) return null; const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
-  const over = (top, under) => ({ r: top.r * top.a + under.r * (1 - top.a), g: top.g * top.a + under.g * (1 - top.a), b: top.b * top.a + under.b * (1 - top.a), a: 1 });
+  const over = (top, under) => {
+    const a = top.a + under.a * (1 - top.a);
+    if (!a) return { r: 0, g: 0, b: 0, a: 0 };
+    return {
+      r: (top.r * top.a + under.r * under.a * (1 - top.a)) / a,
+      g: (top.g * top.a + under.g * under.a * (1 - top.a)) / a,
+      b: (top.b * top.a + under.b * under.a * (1 - top.a)) / a,
+      a
+    };
+  };
   const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
   const ratio = (x, y) => { const [hi, lo] = [lum(x), lum(y)].sort((p, q) => q - p); return (hi + 0.05) / (lo + 0.05); };
   const backdrop = (el) => { // stack of colours from the element up to the first opaque background, composited bottom-up
@@ -57,7 +66,6 @@ function scan() {
     if (!layers.length || layers[0].a < 1) layers.unshift({ r: 255, g: 255, b: 255, a: 1 }); // page default is white when nothing is opaque
     return layers.reduce((acc, l) => over(l, acc), { r: 0, g: 0, b: 0, a: 1 });
   };
-  const mix = (c, under, k) => ({ r: c.r * k + under.r * (1 - k), g: c.g * k + under.g * (1 - k), b: c.b * k + under.b * (1 - k), a: 1 });
   // colours from el up to the group root, composited over the backdrop behind the group (null if an image is involved)
   const groupBackdrop = (el, root, base) => {
     const layers = []; let node = el;
@@ -70,21 +78,26 @@ function scan() {
     }
     return layers.reduce((acc, l) => over(l, acc), base);
   };
-  // Contrast of text painted in colour fg on el, as the browser paints it. Every ancestor with opacity below 1 is a group:
-  // its colours are blended inside it, then the group is blended (by its own opacity only) with the backdrop directly behind it.
-  // Each faded level is checked and the worst one counts. A backdrop that cannot be read from styles (an image) is not measured.
+  // Contrast of text painted in colour fg on el, as the browser paints it. Nested opacity groups are composited from the inside out.
+  // A backdrop that cannot be read from styles (an image) is not measured.
   const contrastOf = (el, fg) => {
     const levels = [];
     for (let x = el; x; x = x.parentElement) { const o = parseFloat(getComputedStyle(x).opacity); if (o < 1) levels.push({ g: x, o }); }
     if (!levels.length) { const bg = backdrop(el); return bg ? ratio(over(fg, bg), bg) : null; }
-    let worst = Infinity;
-    for (const { g, o } of levels) {
-      const behind = g.parentElement ? backdrop(g.parentElement) : null;
+    let bg = groupBackdrop(el, levels[0].g, { r: 0, g: 0, b: 0, a: 0 });
+    if (!bg) return null;
+    let front = over(fg, bg);
+    for (let i = 0; i < levels.length; i++) {
+      const { g, o } = levels[i];
+      const outer = levels[i + 1];
+      const behind = outer
+        ? groupBackdrop(g.parentElement, outer.g, { r: 0, g: 0, b: 0, a: 0 })
+        : g.parentElement ? backdrop(g.parentElement) : null;
       if (!behind) return null;
-      const inner = groupBackdrop(el, g, behind); if (!inner) return null;
-      worst = Math.min(worst, ratio(mix(over(fg, inner), behind, o), mix(inner, behind, o)));
+      front = over({ ...front, a: front.a * o }, behind);
+      bg = over({ ...bg, a: bg.a * o }, behind);
     }
-    return worst;
+    return ratio(front, bg);
   };
   const seen = new Set();
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -94,9 +107,8 @@ function scan() {
     if (!el || seen.has(el) || !/[\p{L}\p{N}]/u.test(n.textContent) || el.closest('script, style, svg, [hidden], [disabled]') || !visible(el)) continue;
     seen.add(el);
     const cs = getComputedStyle(el);
-    // Painted as the browser paints it. An ancestor with opacity below 1 is a group: the group is composited on its own
-    // (its colours blended inside it), then the whole group is blended with what is behind the group, with the product of
-    // the opacities. Disabled controls are excluded above.
+    // Painted as the browser paints it. Each opacity group is composited with its backdrop, from the innermost group out.
+    // Disabled controls are excluded above.
     const fg = parse(cs.color);
     const r = fg ? contrastOf(el, fg) : null;
     if (r === null) continue; // not measurable (an image behind it)
@@ -174,15 +186,18 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         const wrapD = document.createElement('div'); wrapD.style.cssText = 'background:#fff;padding:4px'; document.body.appendChild(wrapD);
         const outerD = document.createElement('div'); outerD.style.cssText = 'background:#fff;opacity:.95;padding:4px'; wrapD.appendChild(outerD);
         const innerD = document.createElement('p'); innerD.className = 'probe-double'; innerD.style.cssText = 'color:#000;background:#fff;opacity:.5;font-size:14px;margin:0'; innerD.textContent = 'double faded'; outerD.appendChild(innerD);
+        const outerCombined = document.createElement('div'); outerCombined.style.cssText = 'background:#fff;opacity:.8;padding:4px'; document.body.appendChild(outerCombined);
+        const innerCombined = document.createElement('p'); innerCombined.className = 'probe-combined'; innerCombined.style.cssText = 'color:#000;background:#fff;opacity:.6;font-size:14px;margin:0'; innerCombined.textContent = 'combined faded'; outerCombined.appendChild(innerCombined);
         const transparentRing = document.createElement('button'); transparentRing.className = 'probe-ring'; transparentRing.style.cssText = 'outline:2px solid transparent'; document.body.appendChild(transparentRing); transparentRing.focus();
         const ringText = getComputedStyle(transparentRing).outlineColor; transparentRing.remove();
-        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); fade.remove(); nest.remove(); wrap.remove(); wrapD.remove(); return { r, ringText };
+        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); fade.remove(); nest.remove(); wrap.remove(); wrapD.remove(); outerCombined.remove(); return { r, ringText };
       }, scan.toString());
       const caughtText = caught.r;
       assert.ok(caughtText.some((m) => /has no accessible name/.test(m) && /probe/.test(m)), 'the scanner flags a button with no name');
       assert.ok(caughtText.some((m) => /low contrast/.test(m) && /faint text/.test(m)), 'the scanner flags low-contrast text');
       assert.ok(caughtText.some((m) => /low contrast/.test(m) && /faded text/.test(m)), 'the scanner flags faded text whose faded contrast is too low');
       assert.ok(caughtText.some((m) => /low contrast/.test(m) && /double faded/.test(m)), 'the scanner flags text under two faded groups (black at half opacity inside a 95% group is 3.94:1)');
+      assert.ok(caughtText.some((m) => /low contrast/.test(m) && /combined faded/.test(m)), 'the scanner composes nested opacity groups before checking contrast');
       assert.ok(/transparent|rgba\([^)]*,\s*0\)/.test(caught.ringText) , 'a transparent outline is recognised as not painting');
       assert.ok(caughtText.some((m) => /low contrast/.test(m) && /nested faded/.test(m)), 'the scanner flags text faded by an ancestor group (white on black at half opacity over white is 3.98:1)');
     }
