@@ -60,9 +60,10 @@ function applyAction(g, playerId, action) {
 
   const dice = Math.floor(g.rng() * 6) + 1;
   const from = g.pos[who];
-  g.lastRoll = { by: who, dice, seq: g.seq + 1 };
+  g.lastRoll = { by: who, dice, seq: g.seq + 1, from };
   if (dice === 6 && g.options.sixAgain && g.sixes === 2) {
     say(g, who, 'rolled three sixes in a row: turn over', 'miss');
+    Object.assign(g.lastRoll, { landed: from, to: from, via: null, stuck: true, forfeited: true });
     emit(g, { type: 'rolled', by: who, dice, from, to: from, via: null, forfeited: true });
     endTurn(g);
     bump(g);
@@ -76,6 +77,7 @@ function applyAction(g, playerId, action) {
   let to = landed;
   let via = null;
   if (!stuck && JUMPS[landed]) { to = JUMPS[landed]; via = LADDERS[landed] ? 'ladder' : 'snake'; }
+  Object.assign(g.lastRoll, { landed, to, via, stuck });
   g.pos[who] = to;
 
   if (stuck) say(g, who, `rolled a ${dice}: needs exactly ${SIZE - from} to finish`, 'miss');

@@ -80,6 +80,29 @@ function messages(patch) {
     await ctx.close();
   });
 
+  await test('switching tables clears unfinished animation state', async () => {
+    const m = messages((v) => {
+      v.players[3].tokens = [3, -1, -1, -1];
+      Object.assign(v, { phase: 'rolling', turn: 0, canRoll: true, myTurn: true, canMove: false, dice: 4 });
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages: m });
+    await page.goto(url + '/');
+    await page.waitForSelector('.ludo-roll');
+    const moved = JSON.parse(JSON.stringify(m[1].view));
+    moved.players[3].tokens[0] = 7;
+    await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room: m[1].room, view: moved });
+    await page.waitForTimeout(60);
+
+    const next = JSON.parse(JSON.stringify(m[1]));
+    next.room.code = 'GHIJKL';
+    next.room.seats = 2;
+    next.view.players = next.view.players.slice(0, 2);
+    Object.assign(next.view, { n: 2, phase: 'rolling', turn: 0, me: 0, canRoll: true, myTurn: true, canMove: false, dice: null });
+    await page.evaluate((st) => window.__push(st), next);
+    assert.equal(await page.isDisabled('.ludo-roll'), false, 'the new table is not blocked by the old walk');
+    await ctx.close();
+  });
+
   await test('on your roll the Roll button is enabled; on someone else’s it is disabled', async () => {
     const mine = await scriptedPage(browser, { messages: messages((v) => Object.assign(v, { phase: 'rolling', turn: 0, canRoll: true, myTurn: true })) });
     await mine.page.goto(url + '/'); await mine.page.waitForSelector('.ludo-roll');

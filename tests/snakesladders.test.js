@@ -77,6 +77,8 @@ test('lastRoll stays in the view after the turn has passed', () => {
   const v = E.viewFor(g, 'p0');
   assert.equal(v.lastRoll.dice, 3);
   assert.equal(v.lastRoll.by, 0);
+  assert.deepEqual({ from: v.lastRoll.from, landed: v.lastRoll.landed, to: v.lastRoll.to, via: v.lastRoll.via, stuck: v.lastRoll.stuck },
+    { from: 14, landed: 17, to: 7, via: 'snake', stuck: false });
   assert.equal(g.event.type, 'turn');
   assert.equal(g.turn, 1);
 });

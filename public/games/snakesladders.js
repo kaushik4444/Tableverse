@@ -156,11 +156,12 @@
     const e = v.event;
     const snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; ui.rollSeq = v.lastRoll ? v.lastRoll.seq : 0; return; } // first render (page load or reconnect): no replay
+    const newRoll = v.lastRoll && v.lastRoll.seq !== ui.rollSeq;
     ui.tumble = Boolean(v.lastRoll && v.lastRoll.seq !== ui.rollSeq);
     ui.rollSeq = v.lastRoll ? v.lastRoll.seq : 0;
+    if (newRoll && v.lastRoll.from !== undefined && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) animate(v.lastRoll);
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
-    if ((e.type === 'rolled' || e.type === 'won') && e.from !== undefined && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) animate(e);
     if (!snd) return;
     const last = (v.log || []).slice(-1)[0];
     if (v.phase === 'gameOver') snd.play(v.winner === v.me ? 'win' : 'lose');

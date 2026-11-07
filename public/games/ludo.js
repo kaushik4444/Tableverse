@@ -53,6 +53,12 @@
     const key = (ui.ctx && ui.ctx.room && ui.ctx.room.code) + ':' + v.players.map((p) => p.id).join();
     const fresh = ui.key !== key || v.phase === 'ready';
     ui.key = key;
+    if (fresh) {
+      if (ui.timer) clearInterval(ui.timer);
+      ui.timer = null;
+      ui.disp.clear(); ui.plans.clear(); ui.snaps.clear();
+      ui.holdUntil = 0;
+    }
     v.players.forEach((p, i) => p.tokens.forEach((pos, t) => {
       const id = `${i}-${t}`;
       if (fresh || !ui.disp.has(id)) { ui.disp.set(id, pos); ui.plans.delete(id); ui.snaps.delete(id); return; }
