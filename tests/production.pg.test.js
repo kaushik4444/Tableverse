@@ -182,11 +182,13 @@ function cookieSocket(port, cookie) {
         await lock.query('LOCK TABLE player_blocks IN ACCESS EXCLUSIVE MODE');
         const s = cookieSocket(srv.port, u.browser.cookieHeader);
         await until(async () => (await lock.query("SELECT count(*)::int AS n FROM pg_locks WHERE relation = 'player_blocks'::regclass AND NOT granted")).rows[0].n > 0, 'hello waiting on the block list');
+        s.ws.send(JSON.stringify({ t: 'create', gameId: 'wizard' })); // a command while the session is still being checked
+        await sleep(200);
         await u.browser.must('/api/auth/logout', {});
         await lock.query('COMMIT');
-        await until(() => s.closed !== null, 'socket closed after the revoked session resumed');
-        assert.equal(s.welcome(), undefined, 'a revoked session gets no welcome');
-        assert.ok(s.msgs.some((m) => m.t === 'authRequired'), 'the client is told to log in again');
+        await until(() => s.closed !== null, 'socket closed by the sign-out that ran while it was opening');
+        assert.equal(s.closed, 4001, 'closed by the sign-out');
+        assert.equal(s.msgs.some((m) => m.t === 'welcome' || m.t === 'state'), false, 'a revoked session gets no welcome and no state');
       } finally {
         await lock.query('ROLLBACK').catch(() => {});
         await lock.end().catch(() => {});

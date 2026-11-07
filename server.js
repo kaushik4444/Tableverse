@@ -216,7 +216,8 @@ function start(opts = {}) {
     // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
     onSignedOut: ({ playerId, token, exceptToken }) => {
       for (const ws of wss.clients) {
-        if (!ws.player || ws.player.id !== playerId) continue;
+        const owner = ws.player || ws.pendingPlayer; // a socket still being checked belongs to its session too
+        if (!owner || owner.id !== playerId) continue;
         if (token && ws.authToken !== token) continue;
         if (exceptToken && ws.authToken === exceptToken) continue;
         ws.close(exceptToken ? 4002 : 4001, exceptToken ? 'signed in elsewhere' : 'signed out');
@@ -1439,6 +1440,11 @@ function start(opts = {}) {
       return ws.close(1008, 'invalid session');
     }
 
+    // Tag the socket with its session and player before the first database check. A sign-out or a new login that runs from
+    // now on finds this socket and closes it, even before the socket is registered below. Until registration the socket
+    // cannot send commands or receive broadcasts, so a revoked session is never acted on.
+    ws.authToken = presentedToken;
+    ws.pendingPlayer = p;
     const auth = await dbAuth.sessionInfo(p.token);
     // A player may still be present in the in-memory token map after sign-out, password reset,
     // or session revocation from another request/server instance. Never let that cache bypass
@@ -1459,7 +1465,6 @@ function start(opts = {}) {
     // The socket may have closed while the database answered above. A closed socket must not take over the account:
     // it must not replace the open socket, and there would be nothing left to clean it up.
     if (ws.readyState !== 1) return;
-    ws.authToken = presentedToken; // lets a sign-out or a newer login close exactly the sockets of that session
     if (p.ws && p.ws !== ws) {
       p.ws.player = null;
       p.ws.close(4000, 'replaced');
@@ -1474,21 +1479,10 @@ function start(opts = {}) {
     p.connected = true;
     p.pingMs = null; // measured again on this connection
     ws.player = p;
-    // The session was checked above, before this socket could be closed by a sign-out or a new login. A revocation that
-    // ran in between found no socket to close. Now that this one is registered, check again: it is closed if the session
-    // is gone, and any later revocation finds it registered and closes it.
-    // Still the open socket that owns the player? A socket that closed or was replaced while the database answered has
+    // Still the open socket that owns the player? A socket that closed or was replaced while an await was pending has
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && p.ws === ws;
-    if (dbPool.hasDatabase()) {
-      const again = await dbAuth.sessionInfo(presentedToken);
-      if (!stillOwner()) return;
-      if (!again.authenticated) {
-        send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
-        return ws.close(1008, 'invalid session');
-      }
-    }
     send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
