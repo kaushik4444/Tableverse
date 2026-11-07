@@ -186,7 +186,7 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         const wrapD = document.createElement('div'); wrapD.style.cssText = 'background:#fff;padding:4px'; document.body.appendChild(wrapD);
         const outerD = document.createElement('div'); outerD.style.cssText = 'background:#fff;opacity:.95;padding:4px'; wrapD.appendChild(outerD);
         const innerD = document.createElement('p'); innerD.className = 'probe-double'; innerD.style.cssText = 'color:#000;background:#fff;opacity:.5;font-size:14px;margin:0'; innerD.textContent = 'double faded'; outerD.appendChild(innerD);
-        const outerCombined = document.createElement('div'); outerCombined.style.cssText = 'background:#fff;opacity:.8;padding:4px'; document.body.appendChild(outerCombined);
+        const outerCombined = document.createElement('div'); outerCombined.style.cssText = 'background:#fff;opacity:.8;padding:4px'; wrapD.appendChild(outerCombined);
         const innerCombined = document.createElement('p'); innerCombined.className = 'probe-combined'; innerCombined.style.cssText = 'color:#000;background:#fff;opacity:.6;font-size:14px;margin:0'; innerCombined.textContent = 'combined faded'; outerCombined.appendChild(innerCombined);
         const transparentRing = document.createElement('button'); transparentRing.className = 'probe-ring'; transparentRing.style.cssText = 'outline:2px solid transparent'; document.body.appendChild(transparentRing); transparentRing.focus();
         const ringText = getComputedStyle(transparentRing).outlineColor; transparentRing.remove();
