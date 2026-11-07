@@ -9,6 +9,15 @@ function hashToken(rawToken) {
   return crypto.createHash('sha256').update(String(rawToken)).digest('hex');
 }
 
+/** Revokes an in-memory session (no database). Returns true when a live session was revoked. */
+function revokeMemoryToken(rawToken) {
+  if (!isWellFormedToken(rawToken)) return false;
+  const s = memoryStore.sessions.get(hashToken(rawToken));
+  if (!s || s.revokedAt) return false;
+  s.revokedAt = new Date();
+  return true;
+}
+
 /**
  * Generate a cryptographically secure random bearer token.
  */
@@ -76,8 +85,20 @@ const memoryStore = new MemoryPlayerStore();
  * Authenticate a player from their raw bearer token.
  * Returns the player record or null if invalid or revoked.
  */
+/** How long a session lasts, in days (AUTH_SESSION_TTL_DAYS). Shared by login and guest sessions. */
+function sessionTtlDays() {
+  const n = Number(process.env.AUTH_SESSION_TTL_DAYS);
+  return Number.isFinite(n) && n > 0 ? n : 30;
+}
+
+/** Every session token is 32 random bytes in hex. Anything else is refused before the database is asked. */
+const SESSION_TOKEN_RE = /^[a-f0-9]{64}$/;
+function isWellFormedToken(rawToken) {
+  return typeof rawToken === 'string' && SESSION_TOKEN_RE.test(rawToken);
+}
+
 async function authenticateToken(rawToken) {
-  if (!rawToken || typeof rawToken !== 'string') return null;
+  if (!isWellFormedToken(rawToken)) return null;
 
   if (!db.hasDatabase()) {
     return memoryStore.getPlayerByToken(rawToken);
@@ -90,7 +111,7 @@ async function authenticateToken(rawToken) {
     JOIN players p ON s.player_id = p.id
     WHERE s.token_hash = $1
       AND s.revoked_at IS NULL
-      AND (s.expires_at IS NULL OR s.expires_at > NOW())
+      AND s.expires_at > NOW()
     LIMIT 1;
   `;
 
@@ -127,10 +148,11 @@ async function createAnonymousPlayer({ displayName, avatar }) {
 
     const player = playerRes.rows[0];
 
+    // guest sessions expire like every other session (AUTH_SESSION_TTL_DAYS, default 30 days)
     await client.query(
-      `INSERT INTO auth_sessions (player_id, token_hash)
-       VALUES ($1, $2)`,
-      [player.id, tokenHash]
+      `INSERT INTO auth_sessions (player_id, token_hash, expires_at)
+       VALUES ($1, $2, NOW() + ($3::text || ' days')::interval)`,
+      [player.id, tokenHash, String(sessionTtlDays())]
     );
 
     return { player, rawToken };
@@ -170,6 +192,9 @@ async function updateLastSeen(playerId) {
 module.exports = {
   hashToken,
   generateToken,
+  isWellFormedToken,
+  sessionTtlDays,
+  revokeMemoryToken,
   authenticateToken,
   createAnonymousPlayer,
   updateProfile,

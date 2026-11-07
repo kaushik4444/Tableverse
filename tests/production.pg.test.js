@@ -266,7 +266,7 @@ function cookieSocket(port, cookie) {
         const blocked = await b.post('/api/auth/login', { email, password: 'wrong-password' });
         assert.ok(Number(blocked.headers.get('retry-after')) >= 1);
         const key = crypto.createHash('sha256').update(email).digest('hex');
-        const row = (await q("SELECT count FROM auth_rate_limits WHERE scope = 'auth:login:email' AND key = $1", [key]))[0];
+        const row = (await q("SELECT count FROM auth_rate_limits WHERE scope = 'auth:login:emailip' AND key LIKE $1", [key + ':%']))[0];
         assert.ok(row && row.count === 5, 'the counter lives in the database, so every app instance shares it');
         const names = [];
         for (let i = 0; i < 4; i++) names.push((await b.get('/api/auth/username-available?username=someone_' + i)).status);
