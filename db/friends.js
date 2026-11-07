@@ -152,9 +152,10 @@ async function sendRequest(actorId, targetUsername) {
     const target = await client.query('SELECT id FROM players WHERE LOWER(username) = $1 AND is_anonymous = FALSE', [username]);
     if (!target.rows.length || target.rows[0].id === actorId) throw new AuthError('Player not found.', 404);
     const targetId = target.rows[0].id;
-    if (await isBlockedBetween(client, actorId, targetId)) throw new AuthError('Player not found.', 404); // same answer as an unknown name: a block reveals nothing
     const pairLock = `${[actorId, targetId].sort().join(':')}`;
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [pairLock]);
+    // checked under the pair lock, so a block committed by db/moderation.js cannot slip in between the check and the write
+    if (await isBlockedBetween(client, actorId, targetId)) throw new AuthError('Player not found.', 404); // same answer as an unknown name: a block reveals nothing
     await client.query('SELECT id FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[actorId, targetId]]);
     const [a, b] = canonicalPair(actorId, targetId);
     const existingFriend = await client.query('SELECT 1 FROM friendships WHERE player_a_id = $1 AND player_b_id = $2', [a, b]);
@@ -239,9 +240,10 @@ async function createInvitation(actorId, inviteeUsername, game, code, expiresAt,
   if (!Number.isFinite(expires.getTime()) || expires <= new Date() || expires > new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) badInput();
   const target = await db.query('SELECT id FROM players WHERE LOWER(username) = $1 AND is_anonymous = FALSE', [username]);
   if (!target.rows.length || target.rows[0].id === actorId) throw new AuthError('Player not found.', 404);
-  if (await isBlockedBetween(db, actorId, target.rows[0].id)) throw new AuthError('Player not found.', 404);
   const [playerA, playerB] = canonicalPair(actorId, target.rows[0].id);
   return db.withTransaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${playerA}:${playerB}`]); // the same pair lock as blocks and requests
+    if (await isBlockedBetween(client, actorId, target.rows[0].id)) throw new AuthError('Player not found.', 404);
     const friends = await client.query('SELECT 1 FROM friendships WHERE player_a_id = $1 AND player_b_id = $2 FOR SHARE', [playerA, playerB]);
     if (!friends.rows.length) throw new AuthError('Player not found.', 404);
     try {
