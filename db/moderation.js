@@ -16,6 +16,9 @@ async function loadBlockedIds(blockerId) {
 /** Blocks another account. Idempotent. Refuses when the list is full or the account does not exist. */
 async function addBlock(blockerId, blockedId) {
   return db.withTransaction(async (client) => {
+    // the same pair lock db/friends.js takes for requests and invitations, taken first (pair, then player rows, everywhere)
+    const [x, y] = [blockerId, blockedId].sort();
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${x}:${y}`]);
     // lock the blocker's row so two concurrent blocks cannot both pass the size check
     await client.query('SELECT 1 FROM players WHERE id = $1 FOR NO KEY UPDATE', [blockerId]);
     const count = await client.query('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocker_id = $1', [blockerId]);

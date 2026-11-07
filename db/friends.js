@@ -13,6 +13,12 @@ const normUsername = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''
 const canonicalPair = (a, b) => (a < b ? [a, b] : [b, a]);
 const requireDb = () => { if (!db.hasDatabase()) throw new AuthError('This feature requires PostgreSQL.', 503); };
 const badInput = () => { throw new AuthError('Invalid request.'); };
+/** SQL that is TRUE when no block exists between the two accounts in either direction (blocking hides both ways). */
+const notBlockedSql = (a, b) => `NOT EXISTS (SELECT 1 FROM player_blocks pb WHERE (pb.blocker_id = ${a} AND pb.blocked_id = ${b}) OR (pb.blocker_id = ${b} AND pb.blocked_id = ${a}))`;
+async function isBlockedBetween(client, a, b) {
+  const r = await client.query(`SELECT 1 FROM player_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1`, [a, b]);
+  return r.rows.length > 0;
+}
 
 function validateUsername(value) {
   const username = normUsername(value);
@@ -45,7 +51,7 @@ async function searchPlayers(actorId, value) {
   const r = await db.query(
     `SELECT p.id, p.username, p.display_name, p.avatar
      FROM players p
-     WHERE p.is_anonymous = FALSE AND p.username LIKE $1 ESCAPE E'\\\\' AND p.id <> $2
+     WHERE p.is_anonymous = FALSE AND p.username LIKE $1 ESCAPE E'\\\\' AND p.id <> $2 AND ${notBlockedSql('$2', 'p.id')}
      ORDER BY p.username
      LIMIT 20`, [`${escaped}%`, actorId]
   );
@@ -133,7 +139,7 @@ async function listRequests(playerId, direction) {
     `SELECT r.id, r.status, r.created_at, r.updated_at,
             p.id AS player_id, p.username, p.display_name, p.avatar
      FROM friend_requests r JOIN players p ON p.id = ${other}
-     WHERE ${owner} = $1 AND r.status = 'pending'
+     WHERE ${owner} = $1 AND r.status = 'pending' AND ${notBlockedSql('r.requester_id', 'r.recipient_id')}
      ORDER BY r.created_at DESC LIMIT 100`, [playerId]
   );
   return r.rows;
@@ -148,6 +154,8 @@ async function sendRequest(actorId, targetUsername) {
     const targetId = target.rows[0].id;
     const pairLock = `${[actorId, targetId].sort().join(':')}`;
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [pairLock]);
+    // checked under the pair lock, so a block committed by db/moderation.js cannot slip in between the check and the write
+    if (await isBlockedBetween(client, actorId, targetId)) throw new AuthError('Player not found.', 404); // same answer as an unknown name: a block reveals nothing
     await client.query('SELECT id FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[actorId, targetId]]);
     const [a, b] = canonicalPair(actorId, targetId);
     const existingFriend = await client.query('SELECT 1 FROM friendships WHERE player_a_id = $1 AND player_b_id = $2', [a, b]);
@@ -178,6 +186,7 @@ async function transitionRequest(actorId, requestId, action) {
     const req = await client.query(`SELECT id, requester_id, recipient_id FROM friend_requests WHERE id = $1 AND ${ownerColumn} = $2 AND status = 'pending' FOR UPDATE`, [requestId, actorId]);
     if (!req.rows.length) throw new AuthError('Request not found.', 404);
     const row = req.rows[0];
+    if (action === 'accept' && await isBlockedBetween(client, row.requester_id, row.recipient_id)) throw new AuthError('Request not found.', 404);
     await client.query('UPDATE friend_requests SET status = $2, updated_at = NOW() WHERE id = $1', [requestId, status]);
     if (action === 'accept') {
       const [a, b] = canonicalPair(row.requester_id, row.recipient_id);
@@ -215,7 +224,7 @@ async function listInvitations(playerId, direction) {
      FROM private_table_invitations i JOIN players p ON p.id = ${other}
      WHERE ${owner} = $1 AND i.status = 'pending' AND i.expires_at > NOW() AND EXISTS (
        SELECT 1 FROM friendships f WHERE f.player_a_id = LEAST(i.inviter_id, i.invitee_id) AND f.player_b_id = GREATEST(i.inviter_id, i.invitee_id)
-     )
+     ) AND ${notBlockedSql('i.inviter_id', 'i.invitee_id')}
      ORDER BY i.created_at DESC LIMIT 100`, [playerId]
   );
   return r.rows;
@@ -233,6 +242,8 @@ async function createInvitation(actorId, inviteeUsername, game, code, expiresAt,
   if (!target.rows.length || target.rows[0].id === actorId) throw new AuthError('Player not found.', 404);
   const [playerA, playerB] = canonicalPair(actorId, target.rows[0].id);
   return db.withTransaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${playerA}:${playerB}`]); // the same pair lock as blocks and requests
+    if (await isBlockedBetween(client, actorId, target.rows[0].id)) throw new AuthError('Player not found.', 404);
     const friends = await client.query('SELECT 1 FROM friendships WHERE player_a_id = $1 AND player_b_id = $2 FOR SHARE', [playerA, playerB]);
     if (!friends.rows.length) throw new AuthError('Player not found.', 404);
     try {
@@ -273,6 +284,7 @@ async function transitionInvitation(actorId, invitationId, action) {
         'SELECT 1 FROM friendships WHERE player_a_id = $1 AND player_b_id = $2 FOR UPDATE', [playerA, playerB]
       );
       if (!friendship.rows.length) throw new AuthError('Invitation not found.', 404);
+      if (await isBlockedBetween(client, playerA, playerB)) throw new AuthError('Invitation not found.', 404);
     }
     const updated = await client.query(
       `UPDATE private_table_invitations SET status = $3, updated_at = NOW()
