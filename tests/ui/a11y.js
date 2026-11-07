@@ -154,7 +154,7 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         if (!el || el === document.body) return null;
         const cs = getComputedStyle(el);
         // a ring must APPEAR on focus: compare the focused look with the unfocused look, so a decorative shadow that is always there does not count
-        const paints = (c) => !/transparent|rgba?\([^)]*,\s*0(\.0+)?\)/.test(c);
+        const paints = (c) => !/transparent|rgba\([^)]*,\s*0(\.0+)?\)/.test(c);
         const ring = (c) => ({ outline: c.outlineStyle !== 'none' && parseFloat(c.outlineWidth) > 0 && paints(c.outlineColor) ? c.outlineStyle + c.outlineWidth + c.outlineColor : '', shadow: paints(c.boxShadow) ? c.boxShadow : 'none' });
         const focused = ring(cs);
         el.blur(); const unfocused = ring(getComputedStyle(el)); el.focus({ preventScroll: true });
