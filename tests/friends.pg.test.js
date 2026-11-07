@@ -208,7 +208,7 @@ const PW = 'TestPass123!';
       await test('blocked accounts are hidden from search, cannot send requests, and cannot accept a pending one', async () => {
         const d = await user('Delta'); const e = await user('Echo');
         const [pending] = await q("INSERT INTO friend_requests (requester_id, recipient_id) VALUES ($1, $2) RETURNING id", [d.id, e.id]);
-        await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)', [e.id, d.id]);
+        await require('../db/moderation').addBlock(e.id, d.id); // the real block path, with its locks
         const fromD = await d.browser.get(`/api/me/friends/search?username=${e.username}`);
         assert.equal(fromD.status, 200);
         assert.equal(fromD.json.players.some((p) => p.id === e.id), false, 'the blocker is not found by the blocked account');
@@ -229,7 +229,7 @@ const PW = 'TestPass123!';
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
         const before = await dbFriends.createInvitation(f.id, g.username, 'wizard', 'ABCDEF', expiresAt);
         assert.ok(before.id, 'friends can invite before any block');
-        await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)', [g.id, f.id]);
+        await require('../db/moderation').addBlock(g.id, f.id); // the real block path, with its locks
         await assert.rejects(dbFriends.createInvitation(f.id, g.username, 'wizard', 'ABCDEF', expiresAt), (e) => e.status === 404, 'no new invitation across a block');
         const incoming = await dbFriends.listInvitations(g.id, 'incoming');
         assert.equal(incoming.some((i) => i.id === before.id), false, 'the earlier invitation is not listed');
