@@ -66,8 +66,8 @@ function scan() {
     seen.add(el);
     const cs = getComputedStyle(el);
     let opacity = 1; for (let x = el; x; x = x.parentElement) opacity *= parseFloat(getComputedStyle(x).opacity);
-    if (opacity < 1) continue; // faded out (transitions, disabled looks) is not measured
-    const fg = parse(cs.color); const bg = backdrop(el);
+    // a faded element is measured at its effective alpha, not skipped (disabled controls are excluded above)
+    const parsed = parse(cs.color); const fg = parsed && opacity < 1 ? { ...parsed, a: parsed.a * opacity } : parsed; const bg = backdrop(el);
     if (!fg || !bg) continue;
     const text = over(fg, bg);
     const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
@@ -106,6 +106,7 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
     const unringed = stops.filter((s) => !s.ringed).map((s) => s.name);
     assert.deepEqual(unringed, [], `${label}: focused without a visible ring`);
     assert.deepEqual(stops.filter((s) => !s.visible).map((s) => s.name), [], `${label}: focus landed on hidden controls`);
+    assert.deepEqual(stops.filter((s) => !s.onScreen).map((s) => s.name), [], `${label}: focus landed outside the viewport`);
     assert.ok(stops.length > 1, `${label}: keyboard reaches only ${stops.length} control(s)`);
     if (label === 'home') { // negative controls: the scanner really does catch an unnamed control and low-contrast text
       const caught = await page.evaluate((fn) => {
