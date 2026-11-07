@@ -149,6 +149,8 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 /* Sub-360 px safety net: game toolbars must not overflow horizontally on the smallest common handsets.
    The toolbar is flex; wrapping is cheaper than scrolling. */
 @media (max-width: 359px) {
+  .wz-top { flex-wrap: wrap; }
+  .wz-top > .row { flex: 1 0 100%; width: 100%; }
   .wz-top .row, .ludo-tools { flex-wrap: wrap; }
   .wz-top .row .btn.small, .ludo-tools .btn.small { flex: 1 1 auto; min-width: 32px; }
 }
