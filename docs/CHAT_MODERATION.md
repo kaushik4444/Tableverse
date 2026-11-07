@@ -16,7 +16,7 @@ the server. It does not replace human review, and it does not take automatic act
 
 - **Blocks are applied on the server.** When a socket joins, the server loads the account's blocked ids and keeps them on
   the player. Live chat (`pushChat`) and the history sent on join or reconnect both pass through
-  `lib/moderation.js` `shouldDeliver` / `visibleChat`, so a blocked message is never sent to the blocker's socket.
+  `lib/moderation.js` `shouldDeliver` / `visibleChat`, so a blocked message is never sent to the blocker's socket. A pending block is filtered immediately while its database write is queued or in flight.
 - **Blocks are one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages, and
   B is not told about the block.
 - **System lines always show** (the game and table events), even to a blocker.
@@ -36,6 +36,7 @@ the server. It does not replace human review, and it does not take automatic act
 | Reports per reporter per day | 20 | `db/moderation.js` (database count, in one transaction) |
 | Duplicate report | the same reporter cannot report the same message twice | database unique key |
 | Block cooldown | one per account every second, shared by its sockets | `server.js` `block` |
+| Unblock cooldown | one per account every second, shared by its sockets; no-op unblocks are ignored without a database write | `server.js` `unblock` |
 | Blocks per account | 500 | `db/moderation.js` (row-locked count) |
 | Cannot block yourself | refused | `lib/moderation.js` |
 | Block target | must be an existing account id | format check, then a foreign key |
