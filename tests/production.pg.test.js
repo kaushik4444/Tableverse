@@ -361,7 +361,7 @@ function cookieSocket(port, cookie) {
           const rreg = await rb.post('/api/auth/register', { email: remail, username: `required${Date.now() % 1000000}`, password: PW, displayName: 'Required' });
           assert.equal(rreg.status, 201, JSON.stringify(rreg.json));
           assert.equal(rreg.json.player, null);
-          assert.match(rreg.json.message, /verify your email/i, 'required mode registration message remains blocking');
+          assert.match(rreg.json.message, /after verifying, log in/i, 'required mode registration message tells the player to verify, then log in');
           const rlogin = await rb.must('/api/auth/login', { email: remail, password: PW });
           assert.equal(rlogin.json.requiresVerification, true, 'required mode still blocks unverified lobby access');
           await rb.must('/api/auth/resend-verification', { email: remail });
