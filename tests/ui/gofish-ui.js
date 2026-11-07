@@ -135,6 +135,26 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  // Regression: on a tall 320 px phone the rank panel had room for only seven chips per row, so the full hand needed three rows.
+  await test('a full set of rank chips fits in two rows on a tall 320 px phone', async () => {
+    const { page, ctx } = await open(tableMessages('gofish', [{ name: 'Aarav the Magnificent' }, { name: 'Charlotte-Anne' }, { name: 'Dmitri' }, { name: 'Eve' }, { name: 'Frederick' }, { name: 'Bo' }]), { width: 320, height: 740 });
+    await page.waitForSelector('.gf-ask .gf-chip', { timeout: 5000 });
+    // A hand only offers the ranks it holds, so build the worst case (all 13 ranks) in the real rank row and measure it.
+    const { count, rows } = await page.evaluate(() => {
+      const box = document.querySelector('.gf-ask .gf-chips');
+      const proto = box.querySelector('.gf-chip');
+      box.innerHTML = '';
+      for (const rank of ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']) {
+        const c = proto.cloneNode(false); c.textContent = rank; box.appendChild(c);
+      }
+      const chips = [...box.children];
+      return { count: chips.length, rows: new Set(chips.map((c) => Math.round(c.getBoundingClientRect().top))).size };
+    });
+    assert.equal(count, 13);
+    assert.ok(rows <= 2, `the thirteen rank chips take ${rows} rows`);
+    await ctx.close();
+  });
+
   await test('the finished game shows the results (the closing event names no player and used to crash the table)', async () => {
     const E = require('../../games/gofish/engine');
     const ps = four.map((p, i) => ({ id: i === 0 ? 'me' : 'p' + i, name: p.name })); let a = 9;
