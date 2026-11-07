@@ -13,10 +13,10 @@
 .ludo-dice-copy { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .ludo-dice-copy b { font-size: 15px; }
 .ludo-dice-copy small { font-size: 12px; color: var(--muted, #9db3a7); }
-.ludo-roll { min-height: 48px; min-width: 128px; }
+.ludo-roll { min-height: 48px; min-width: 128px; touch-action: manipulation; }
 
 /* die with pips */
-.ludo-die { width: 52px; height: 52px; padding: 7px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); place-items: center; border-radius: 14px; background: linear-gradient(145deg, #fff, #e6ebe8); box-shadow: 0 3px 8px rgba(0, 0, 0, .35), inset 0 -2px 3px rgba(0, 0, 0, .12); }
+.ludo-die { width: 52px; height: 52px; padding: 7px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); place-items: center; border-radius: 14px; background: linear-gradient(145deg, #fff, #e6ebe8); box-shadow: 0 3px 8px rgba(0, 0, 0, .35), inset 0 -2px 3px rgba(0, 0, 0, .12); touch-action: manipulation; }
 .ludo-die span { width: 80%; height: 80%; border-radius: 50%; }
 .ludo-die span.on { background: radial-gradient(circle at 35% 30%, #4b5563, #111827); }
 .ludo-die.blank b { grid-area: 2 / 2; font-size: 22px; color: #64748b; }
