@@ -1113,7 +1113,9 @@
     if (!m.sys && muted.has(m.id) && m.id !== S.id) return '';
     if (m.sys) return `<div class="msg sys">${esc(m.text)}</div>`;
     const mine = m.id === S.id;
-    return `<div class="msg ${mine ? 'mine' : ''}"><span class="mav" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span><div class="mb"><b>${esc(m.name)}${m.spec ? ' <i title="Spectator">👁</i>' : ''}</b><p>${esc(m.text)}</p></div></div>`;
+    // Block and report are enforced by the server; these buttons only send the request.
+    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}">Block</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}">Report</button>` : ''}</span>`;
+    return `<div class="msg ${mine ? 'mine' : ''}"><span class="mav" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span><div class="mb"><b>${esc(m.name)}${m.spec ? ' <i title="Spectator">👁</i>' : ''}</b><p>${esc(m.text)}</p>${actions}</div></div>`;
   }
   function drawChat() {
     const list = document.getElementById('chat-list');
@@ -1152,7 +1154,23 @@
     S.chatOpen = false;
     $chat.hidden = true;
   }
-  $chat.addEventListener('click', (e) => { if (e.target.closest('[data-chat="close"]')) closeChat(); });
+  const REPORT_REASONS = [['harassment', 'Harassment'], ['hate', 'Hate'], ['threats', 'Threats'], ['sexual', 'Sexual content'], ['spam', 'Spam'], ['other', 'Other']];
+  $chat.addEventListener('click', (e) => {
+    if (e.target.closest('[data-chat="close"]')) return closeChat();
+    const b = e.target.closest('[data-mod]');
+    if (!b) return;
+    if (b.dataset.mod === 'block') {
+      send({ t: 'block', id: b.dataset.id });
+    } else if (b.dataset.mod === 'report-open') {
+      const box = b.closest('.mb');
+      const open = box.querySelector('.report-menu');
+      if (open) open.remove();
+      else box.insertAdjacentHTML('beforeend', `<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-mod="report-send" data-mid="${esc(b.dataset.mid)}" data-reason="${k}">${l}</button>`).join('')}</div>`);
+    } else if (b.dataset.mod === 'report-send') {
+      send({ t: 'report', messageId: b.dataset.mid, reason: b.dataset.reason });
+      b.closest('.report-menu').remove();
+    }
+  });
   $chat.addEventListener('submit', (e) => {
     e.preventDefault();
     const inp = document.getElementById('chat-input');
