@@ -23,6 +23,7 @@ const { createStaticFiles } = require('./lib/staticFiles');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
+const { debugTokensEnabled, assertSafeDebugConfig } = require('./lib/debugTokens');
 const { createReadinessCheck } = require('./lib/health');
 const { createLogger, requestIdFrom } = require('./lib/log');
 const serverLog = createLogger({ component: 'server' });
@@ -76,6 +77,7 @@ function start(opts = {}) {
   const trickPauseMs = opts.trickPauseMs ?? 1700; // time everybody gets to see a finished trick being collected
   const env = opts.env || process.env;
   const iceServers = opts.iceServers ?? voiceRelay.iceServers(env); // sent to browsers for table voice chat
+  assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';
   const trustProxy = opts.trustProxy ?? parseTrustProxy(env.TRUST_PROXY, production); // behind Render's proxy the client address is in X-Forwarded-For
   // Origins are compared exactly as browsers send them: lower case, no trailing slash ("https://www.example.com/" never matches).
@@ -183,7 +185,7 @@ function start(opts = {}) {
     res.end(JSON.stringify(body));
   };
 
-  const includeDebugTokens = env.NODE_ENV === 'test'; // only tests receive raw tokens in responses (they are not browsers)
+  const includeDebugTokens = debugTokensEnabled(env); // only tests receive raw tokens in responses (they are not browsers)
   const emailSender = opts.emailSender || makeAuthEmailSender({ env, logger: opts.log || console });
   const authRoutes = createAuthRoutes({
     env,
