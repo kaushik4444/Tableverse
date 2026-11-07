@@ -145,3 +145,10 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 
 /* Phones and tablets: table-toolbar controls and the game card's actions are at least 44px tall (the desktop size stays). */
 @media (max-width: 900px) { .wz-top .btn, .wz-top .row .btn.small, .ludo-tools .btn.small { min-height: 44px; } }
+
+/* Sub-360 px safety net: game toolbars must not overflow horizontally on the smallest common handsets.
+   The toolbar is flex; wrapping is cheaper than scrolling. */
+@media (max-width: 359px) {
+  .wz-top .row, .ludo-tools { flex-wrap: wrap; }
+  .wz-top .row .btn.small, .ludo-tools .btn.small { flex: 1 1 auto; min-width: 0; }
+}
