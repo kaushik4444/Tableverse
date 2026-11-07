@@ -88,6 +88,7 @@ const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
     });
 
     await test('the IP limit aggregates failed attempts across accounts', async () => {
+      await q("DELETE FROM auth_rate_limits WHERE scope = 'auth:login:ip'"); // earlier tests in this file used the same address; start from zero
       const srv = await serverWith({ RL_LOGIN_EMAIL_LIMIT: '100', RL_LOGIN_IP_LIMIT: '5' });
       try {
         const b = new Browser(srv.port); await b.csrf();
