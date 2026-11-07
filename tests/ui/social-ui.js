@@ -147,7 +147,7 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     assert.equal(await page.$('.bell-panel'), null, 'closed until opened');
     await page.click('.tb-bell');
     const txt = await page.textContent('.bell-panel');
-    assert.match(txt, /Eve/); assert.match(txt, /invited you to a Wizard table/);
+    assert.match(txt, /Eve/); assert.match(txt, /Wizard table · code/);
     await page.click('.bell-panel [data-act="acceptFriend"]');
     await page.waitForFunction(() => !document.querySelector('.bell-panel')?.textContent.includes('Eve'));
     assert.ok(calls.some((c) => c.method === 'POST' && /friend-requests\/accept$/.test(c.path)));
