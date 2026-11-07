@@ -110,6 +110,39 @@ function client(port, token) {
       assert.equal(host.ws.readyState, WebSocket.OPEN, 'the sender is still connected');
     });
 
+    await test('kicking a player frees their voice slot at once, tells the table, and stops their signalling both ways', async () => {
+      const eveUser = await registerAndVerify(srv.port, { email: 'eve.kick@test.local', displayName: 'Eve', password: 'TestPass123!' });
+      const eve = client(srv.port, eveUser.token); all.push(eve);
+      await until(() => eve.id, 'eve welcome');
+      eve.send({ t: 'join', code, spectate: false }); await until(() => eve.room && eve.room.code === code, 'eve joined');
+      eve.send({ t: 'voice', on: true }); await until(() => host.inVoice().includes(eve.id), 'eve in voice');
+
+      host.send({ t: 'kick', id: eve.id });
+      await until(() => eve.room === null, 'eve removed from the table');
+      await until(() => !host.inVoice().includes(eve.id) && !ann.inVoice().includes(eve.id) && !spec.inVoice().includes(eve.id), 'the table is told eve left voice');
+
+      const hostErrors = host.errors.length;
+      host.send({ t: 'rtc', to: eve.id, data: { kind: 'offer', sdp: 'v=0 after kick' } });
+      await until(() => host.errors.length > hostErrors && /Not in voice/.test(host.errors[host.errors.length - 1]), 'host signal refused');
+      // a kicked player has no table any more, so their setup message is dropped before it can be relayed
+      eve.send({ t: 'rtc', to: host.id, data: { kind: 'answer', sdp: 'v=0 kicked' } });
+      await sleep(80);
+      assert.equal(host.rtc.some((m) => m.from === eve.id), false, 'the kicked player cannot signal the host');
+      assert.equal(eve.rtc.length, 0, 'the kicked player receives no signalling');
+
+      // reconnecting with the same session does not put them back in voice
+      const eveAgain = client(srv.port, eveUser.token); all.push(eveAgain);
+      await until(() => eveAgain.id, 'eve reconnected');
+      assert.equal(eveAgain.room, null, 'reconnecting does not put them back at the table');
+      eveAgain.send({ t: 'voice', on: true });
+      await sleep(80);
+      assert.equal(host.inVoice().includes(eve.id), false, 'still out of voice after reconnecting');
+      assert.equal(eveAgain.inVoice().includes(eveAgain.id), false, 'the reconnected player is not in the voice list');
+      host.send({ t: 'rtc', to: eveAgain.id, data: { kind: 'offer', sdp: 'v=0 reconnect' } });
+      await sleep(80);
+      assert.equal(eveAgain.rtc.length, 0, 'a reconnected, kicked player receives no signalling');
+    });
+
     console.log(`\n${passed} voice server tests passed`);
   } finally {
     clearTimeout(guard);

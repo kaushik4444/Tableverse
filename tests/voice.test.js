@@ -67,4 +67,29 @@ test('ICE servers: STUN by default, TURN and custom lists from the environment',
   assert.deepEqual(V.iceServers({ ICE_SERVERS: 'not json' }), [{ urls: V.DEFAULT_STUN }], 'a broken value falls back to the default');
 });
 
+test('a kicked or departed player is refused even if an old voice entry is still there', () => {
+  // the voice map still lists p2, but p2 is no longer a seated member (for example, removed by the host)
+  const r = room(3);
+  r.members = r.members.filter((m) => m.id !== 'p2');
+  V.setVoice(r, 'p0', true);
+  V.setVoice(r, 'p1', true);
+  r.voice.set('p2', { muted: false });
+  const sent = [];
+  const deliver = (to, m) => sent.push([to, m]);
+  assert.equal(V.relay(r, 'p2', 'p0', { kind: 'offer', sdp: 'v=0' }, deliver).ok, false, 'a removed sender is refused');
+  assert.equal(V.relay(r, 'p0', 'p2', { kind: 'offer', sdp: 'v=0' }, deliver).ok, false, 'a removed recipient is refused');
+  assert.equal(V.relay(r, 'p0', 'p1', { kind: 'offer', sdp: 'v=0' }, deliver).ok, true, 'two seated players still connect');
+  assert.equal(sent.length, 1, 'nothing was delivered to the removed player');
+  assert.equal(V.isSeatedHuman(r, 'bot'), false, 'bots are not voice members');
+});
+
+test('dropping a player frees their slot, and the list no longer offers them', () => {
+  const r = room(3);
+  V.setVoice(r, 'p0', true);
+  V.setVoice(r, 'p1', true);
+  assert.equal(V.dropVoice(r, 'p1'), true, 'the list changed');
+  assert.equal(V.dropVoice(r, 'p1'), false, 'dropping again changes nothing');
+  assert.deepEqual(V.voiceList(r).map((v) => v.id), ['p0']);
+});
+
 console.log(`\n${passed} voice tests passed`);
