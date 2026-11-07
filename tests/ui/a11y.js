@@ -102,7 +102,8 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         const ringed = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== 'none';
         const r = el.getBoundingClientRect();
         const onScreen = r.width > 0 && r.height > 0 && r.left < innerWidth && r.right > 0 && r.top < innerHeight && r.bottom > 0;
-        return { name: (el.getAttribute('aria-label') || el.textContent || el.id || el.tagName).trim().slice(0, 30), ringed, onScreen, visible: el.checkVisibility({ checkVisibilityCSS: true }) };
+        window.__walkKeys = window.__walkKeys || new WeakMap(); window.__walkN = window.__walkN || 0; if (!window.__walkKeys.has(el)) window.__walkKeys.set(el, ++window.__walkN);
+        return { key: window.__walkKeys.get(el), name: (el.getAttribute('aria-label') || el.textContent || el.id || el.tagName).trim().slice(0, 30), ringed, onScreen, visible: el.checkVisibility({ checkVisibilityCSS: true }) };
       });
       if (!stop) break;
       stops.push(stop);
@@ -111,7 +112,9 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
     assert.deepEqual(unringed, [], `${label}: focused without a visible ring`);
     assert.deepEqual(stops.filter((s) => !s.visible).map((s) => s.name), [], `${label}: focus landed on hidden controls`);
     assert.deepEqual(stops.filter((s) => !s.onScreen).map((s) => s.name), [], `${label}: focus landed outside the viewport`);
-    assert.ok(stops.length > 1, `${label}: keyboard reaches only ${stops.length} control(s)`);
+    // distinct controls, not repeated focus: a focus loop on one control must not pass as a traversal
+    const distinct = new Set(stops.map((x) => x.key)).size;
+    assert.ok(distinct > 1, `${label}: keyboard reaches only ${distinct} distinct control(s)`);
     if (label === 'home') { // negative controls: the scanner really does catch an unnamed control and low-contrast text
       const caught = await page.evaluate((fn) => {
         const b = document.createElement('button'); b.className = 'probe'; document.body.appendChild(b);
