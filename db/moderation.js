@@ -17,7 +17,7 @@ async function loadBlockedIds(blockerId) {
 async function addBlock(blockerId, blockedId) {
   return db.withTransaction(async (client) => {
     // lock the blocker's row so two concurrent blocks cannot both pass the size check
-    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [blockerId]);
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR NO KEY UPDATE', [blockerId]);
     const count = await client.query('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocker_id = $1', [blockerId]);
     const already = await client.query('SELECT 1 FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2', [blockerId, blockedId]);
     if (!already.rows.length && count.rows[0].n >= MAX_BLOCKS) {
@@ -50,7 +50,7 @@ async function removeBlock(blockerId, blockedId) {
 async function createChatReport({ reporterId, reportedId, roomCode, messageId, messageText, reason, details }) {
   if (!REPORT_REASONS.includes(reason)) throw new ModerationError('Choose a reason for the report.', 400);
   return db.withTransaction(async (client) => {
-    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [reporterId]);
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR NO KEY UPDATE', [reporterId]);
     const today = await client.query(
       "SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1 AND created_at > NOW() - INTERVAL '1 day'",
       [reporterId]
