@@ -15,6 +15,8 @@ finds a table or foreign key that is not in this list, a trigger, or a migration
 | Table | What it stores | Action | Foreign keys | Delete order |
 |---|---|---|---|---|
 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `match_id` → `matches` (CASCADE); `player_id` → `players` (SET NULL) | 1 |
+| `chat_reports` | Chat reports (migration 010): reporter, reported account, table code, message id, a copy of the reported text, reason, details | **Empty** | `reporter_id`, `reported_id` → `players` (CASCADE) | before `players` |
+| `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `blocker_id`, `blocked_id` → `players` (CASCADE) | before `players` |
 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` | 2 |
 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `player_id` → `players` (CASCADE) | 3 |
 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `player_id` → `players` (CASCADE) | 4 |
