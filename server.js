@@ -1604,8 +1604,8 @@ function start(opts = {}) {
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
-    if (drainMs) await matchQueue.drain(drainMs); // let pending match writes finish (shutdown)
-    if (drainMs) await authRoutes.drainDeliveries(drainMs); // let verification and notice emails already being sent finish
+    // Pending match writes and in-flight auth emails share one drain window, so shutdown stays within drainMs in total.
+    if (drainMs) await Promise.all([matchQueue.drain(drainMs), authRoutes.drainDeliveries(drainMs)]);
     matchQueue.close();
     for (const room of rooms.values()) clearTimeout(room.timer);
     await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
