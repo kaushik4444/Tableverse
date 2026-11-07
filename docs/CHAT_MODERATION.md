@@ -7,8 +7,8 @@ the server. It does not replace human review, and it does not take automatic act
 
 | Action | Where | Effect |
 | --- | --- | --- |
-| **Block** a player | Block button on another player's chat message | Their table chat is never sent to you, on any table, until you unblock. Chat history already on your screen is re-sent without them. |
-| **Report** a message | Report button, then a reason | Stores a report for review. Nothing is hidden or sanctioned automatically. |
+| **Block** a player's chat | "Block chat" button on another player's chat message | Their table chat is never sent to you, on any table, until you unblock. Chat history already on your screen is re-sent without them. |
+| **Report** a message | Report button, then a reason | Records the report in the database. There is no review queue yet. Nothing is hidden or sanctioned automatically. |
 | **Unblock** | WebSocket action `unblock` (no button yet) | Restores their chat. |
 | **Mute** (local) | Existing mute in the chat list | Hides that player's messages in this browser only. Not enforced on the server. |
 

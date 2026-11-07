@@ -1002,7 +1002,7 @@ function start(opts = {}) {
           reporterId: p.id, reportedId: m.id, roomCode: room.code, messageId: checked.messageId,
           messageText: m.text, reason: checked.reason, details: checked.details,
         });
-        send(p.ws, { t: 'notice', text: out.stored ? 'Thanks. Your report was sent for review.' : 'You have already reported this message.' });
+        send(p.ws, { t: 'notice', text: out.stored ? 'Thanks. Your report was recorded.' : 'You have already reported this message.' });
       } catch (e) {
         if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
         throw e;
@@ -1025,7 +1025,7 @@ function start(opts = {}) {
       if (!p.blocked) p.blocked = new Set();
       p.blocked.add(checked.targetId);
       resyncChat(p);
-      send(p.ws, { t: 'notice', text: 'Blocked. You will no longer see their table chat.' });
+      send(p.ws, { t: 'notice', text: 'Blocked. Their table chat is hidden from you. Nothing else changes, and they are not told.' });
     },
 
     async unblock(p, msg) {

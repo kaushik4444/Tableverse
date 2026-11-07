@@ -52,6 +52,15 @@ const newer = () => ({ id: 'b', name: 'Bo', text: 'a newer message arrives', mid
     await ctx.close();
   });
 
+  await test('the Block control says it hides table chat only, in its label and its tooltip', async () => {
+    const { page, ctx } = await openTableChat();
+    const block = page.locator('[data-mod="block"]').first();
+    assert.equal((await block.textContent()).trim(), 'Block chat');
+    assert.match(await block.getAttribute('title'), /table chat/i);
+    assert.match(await block.getAttribute('aria-label'), /Block chat from Bo/);
+    await ctx.close();
+  });
+
   await test('choosing a reason sends one report for that message and closes the menu', async () => {
     const { page, ctx, first } = await openTableChat();
     await page.click('[data-mod="report-open"]');
