@@ -34,3 +34,25 @@ Each account has at most one active session at a time.
 | Single session across login and reset | `tests/session.pg.test.js`, `tests/db.pg.test.js` |
 
 Changing this policy is a product decision. Do not change it as a side effect of another change.
+
+## Login throttling (Stage 20.3.5 Task C)
+
+- Only failed logins count. A successful login gives its attempt back, so a player who signs in often is never throttled.
+- Each attempt reserves one count on two counters before the password is checked, so concurrent guesses cannot slip past the limit together:
+  - per address and account (`RL_LOGIN_EMAIL_LIMIT`, default 8 per 15 minutes): a wrong guess against one account from one place. A different account, or the same account from another address, is not locked out.
+  - per address in total (`RL_LOGIN_IP_LIMIT`, default 25 per 10 minutes), across all accounts.
+- A server fault (for example, the database is down) gives its attempt back, so an outage does not lock players out.
+- Password recovery and resend-verification have their own counters and are never blocked by failed logins.
+- A refused login gets the same answer whether or not the account exists.
+- Known limitation: an attacker who spreads guesses across many addresses is limited only by the per-IP and per-account-address counters. A cross-address counter per account would stop that, but it would let one attacker lock the owner out, so it is a product decision and is not made here.
+
+## Sessions (Stage 20.3.5 Task C)
+
+- Every session has an expiry date. Migration 011 revoked the older sessions that had none; players sign in again once. Nothing is deleted.
+- A malformed session token is refused before the database is asked.
+- A password reset and a login cannot both succeed: the login re-checks the password under the same account lock the reset takes, so a session is never issued for a password that has just been replaced.
+- Each open WebSocket re-checks its session every 60 seconds (`sessionCheckMs` in the server options; not an environment variable). A revoked or expired session ends its socket with code 4001 and a notice to sign in again. Sign-out, login from another device, password reset and account deletion end the socket at once, on the instance that handled the request.
+- Limitation: when another instance revokes a session (for example, a sign-out there), an open socket here ends within the check interval, not at once. A message sent after the socket is marked as revoked is never acted on.
+- The session and logout routes are rate limited per address (`RL_SESSION_IP_LIMIT`, default 120 per 10 minutes; `RL_LOGOUT_IP_LIMIT`, default 60 per 10 minutes).
+
+Operator notes: the new limits and the session check are on by default and need no environment change. Migration 011 runs with the normal deploy migration; it changes only sessions that had no expiry date.
