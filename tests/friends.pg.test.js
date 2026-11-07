@@ -202,6 +202,26 @@ const PW = 'TestPass123!';
         assert.ok(pending[0].id);
       });
 
+      console.log('blocking');
+      // Regression for 20.4.3: a block (either direction) hides both accounts from discovery and stops new requests and
+      // acceptance of requests that were already pending.
+      await test('blocked accounts are hidden from search, cannot send requests, and cannot accept a pending one', async () => {
+        const d = await user('Delta'); const e = await user('Echo');
+        const [pending] = await q("INSERT INTO friend_requests (requester_id, recipient_id) VALUES ($1, $2) RETURNING id", [d.id, e.id]);
+        await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)', [e.id, d.id]);
+        const fromD = await d.browser.get(`/api/me/friends/search?username=${e.username}`);
+        assert.equal(fromD.status, 200);
+        assert.equal(fromD.json.players.some((p) => p.id === e.id), false, 'the blocker is not found by the blocked account');
+        const fromE = await e.browser.get(`/api/me/friends/search?username=${d.username}`);
+        assert.equal(fromE.json.players.some((p) => p.id === d.id), false, 'the blocked account is not found by the blocker');
+        assert.equal((await d.browser.post('/api/me/friend-requests', { username: e.username })).status, 404, 'no new request');
+        const incoming = await e.browser.get('/api/me/friend-requests?direction=incoming');
+        assert.equal(incoming.json.requests.some((r) => r.id === pending.id), false, 'the pending request is hidden');
+        assert.equal((await e.browser.post('/api/me/friend-requests/accept', { requestId: pending.id })).status, 404, 'it cannot be accepted');
+        assert.equal((await q('SELECT status FROM friend_requests WHERE id = $1', [pending.id]))[0].status, 'pending', 'and stays unchanged');
+        assert.equal((await q('SELECT 1 FROM friendships WHERE player_a_id = LEAST($1::uuid, $2::uuid) AND player_b_id = GREATEST($1::uuid, $2::uuid)', [d.id, e.id])).length, 0);
+      });
+
       hostSocket.ws.terminate();
       await x.end();
     } finally { await srv.close(); }

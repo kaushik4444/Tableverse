@@ -14,7 +14,7 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     'GET /api/auth/session': () => sessionOk(), 'GET /api/me/friends': () => ({ ok: true, friends: [] }),
     'GET /api/me/friend-requests?direction=incoming': () => ({ ok: true, requests: [{ id: 'r1', username: 'zoe', display_name: 'Zoe' }] }),
     'GET /api/me/friend-requests?direction=outgoing': () => ({ ok: true, requests: [] }),
-    'GET /api/me/table-invitations?direction=incoming': () => ({ ok: true, invitations: [{ id: 'i1', username: 'zoe', display_name: 'Zoe', game_id: 'wizard' }] }),
+    'GET /api/me/table-invitations?direction=incoming': () => ({ ok: true, invitations: [{ id: 'i1', username: 'zoe', display_name: 'Zoe', game_id: 'wizard', room_code: 'KQRTVX', expires_at: new Date(Date.now() + 3600e3).toISOString() }] }),
     'GET /api/me/table-invitations?direction=outgoing': () => ({ ok: true, invitations: [] }),
     'POST /api/me/friend-requests/accept': (req, body) => { posts.push(body); return { ok: true }; },
   });
@@ -33,6 +33,17 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     assert.ok(noOverflow, 'no horizontal overflow');
     await page.keyboard.press('Escape');
     assert.equal(await page.isVisible('.bell-panel'), false, 'Escape closes the panel');
+    await ctx.close();
+  });
+  await test('lobby: the bell groups friend requests and table invitations under their own headings, with the invitation code and expiry', async () => {
+    const { page, ctx } = await scriptedPage(browser, { viewport: { width: 360, height: 640 }, messages: lobbyMsgs });
+    await page.goto(url + '/'); await page.waitForSelector('.tb-bell .bell-count', { timeout: 8000 });
+    await page.click('.tb-bell');
+    const groups = await page.locator('.bell-panel .bell-group').allTextContents();
+    assert.deepEqual(groups.map((g) => g.replace(/\s+/g, ' ').trim()), ['Friend requests 1', 'Table invitations 1']);
+    const invite = await page.textContent('.bell-panel .bell-list:last-of-type li small');
+    assert.match(invite, /KQRTVX/, 'the invitation shows its table code');
+    assert.match(invite, /expires/, 'and when it expires');
     await ctx.close();
   });
   for (const id of ['wizard', 'twentynine', 'poker', 'themind', 'ludo', 'gofish', 'snakesladders', 'propertyrivals']) {
