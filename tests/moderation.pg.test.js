@@ -165,6 +165,8 @@ function socket(port, cookie) {
       const message = sc.messageOf('hello from alpha');
       sc.send({ t: 'report', messageId: message.mid, reason: 'because' });
       await until(() => sc.errors().includes('Choose a reason for the report.'), 'unknown reason refused');
+      // a well-formed report spends the per-socket cooldown even when its message is unknown, so wait it out first
+      await sleep(REPORT_GAP);
       sc.send({ t: 'report', messageId: crypto.randomUUID(), reason: 'spam' });
       await until(() => sc.errors().includes('That message is no longer available to report.'), 'unknown message refused');
       await sleep(REPORT_GAP);
