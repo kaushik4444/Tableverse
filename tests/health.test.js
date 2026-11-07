@@ -85,6 +85,42 @@ const quietLog = () => { const calls = []; return { calls, info: (e, f) => calls
     assert.ok(answers.every((a) => a.status === 503 && a.body === 'database unavailable'));
   });
 
+  // Regression: a probe that timed out returned, and the next probe started a second database call while the first was
+  // still waiting for a pool connection. Probes now wait for the outstanding call instead of stacking on the pool.
+  await test('a timed-out database call still running blocks new probes until it settles', async () => {
+    let calls = 0;
+    let release;
+    const hang = new Promise((resolve) => { release = resolve; });
+    const check = createReadinessCheck({ hasDatabase: () => true, ping: () => { calls++; return hang; }, timeoutMs: 30, cacheMs: 0 });
+    assert.equal((await check()).status, 503);
+    await new Promise((r) => setTimeout(r, 60)); // the first probe's timeout has passed; the database call has not
+    assert.equal((await check()).status, 503);
+    assert.equal(calls, 1, 'no second database call while the first is outstanding');
+    release();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal((await check()).status, 200);
+    assert.equal(calls, 2);
+  });
+
+  await test('an outstanding probe cannot succeed after its original deadline', async () => {
+    let calls = 0;
+    let release;
+    const pending = new Promise((resolve) => { release = resolve; });
+    const check = createReadinessCheck({
+      hasDatabase: () => true,
+      ping: () => { calls++; return calls === 1 ? pending : Promise.resolve(); },
+      timeoutMs: 30,
+      cacheMs: 0,
+    });
+    assert.equal((await check()).status, 503);
+    const lateCheck = check();
+    release();
+    assert.equal((await lateCheck).status, 503);
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal((await check()).status, 200);
+    assert.equal(calls, 2);
+  });
+
   await test('readiness polls inside the cache window reuse the last answer instead of querying again', async () => {
     let calls = 0;
     const check = createReadinessCheck({ hasDatabase: () => true, ping: async () => { calls++; }, cacheMs: 2000 });
