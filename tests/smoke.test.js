@@ -85,12 +85,18 @@ function client(port, name, token) {
 
   // unverified token: enforced only when PostgreSQL auth is enabled
   {
+    const email = `u.${Date.now()}@test.local`;
     const regRes = await fetch(`http://127.0.0.1:${port}/api/auth/register`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: `u.${Date.now()}@test.local`, password: 'TestPass123!', displayName: 'Unverified' }),
+      body: JSON.stringify({ email, password: 'TestPass123!', displayName: 'Unverified' }),
     });
     if (regRes.ok) {
-      const reg = await regRes.json();
+      // registration issues no session; an unverified player logs in (allowed) and gets a session to test with
+      const loginRes = await fetch(`http://127.0.0.1:${port}/api/auth/login`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password: 'TestPass123!' }),
+      });
+      const reg = await loginRes.json();
       const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(reg.token));
       const msgs = [];
       await new Promise((r) => ws.on('open', r));

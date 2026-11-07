@@ -51,7 +51,8 @@ const PW = 'TestPass123!';
         assert.deepEqual(Object.keys(again.json).sort(), shapeNew, 'same keys for a taken address');
         assert.equal(again.json.player, null);
         assert.equal(again.json.error, undefined);
-        assert.equal(attacker.cookies.has('ct_session'), false, 'no session is issued for an address that already has an account');
+        assert.equal(attacker.cookies.has('ct_session'), false, 'no session for an address that already has an account');
+        assert.equal(again.setCookie.some((c) => c.startsWith('ct_session=')), false, 'no ct_session Set-Cookie for a taken address');
         assert.equal(again.json.message, first.json.message, 'same message text');
         assert.equal(again.json.emailSent, first.json.emailSent);
         assert.ok(mail.sent.some((m) => m.kind === 'exists' && m.to === taken), 'the owner gets a notice');
@@ -67,13 +68,19 @@ const PW = 'TestPass123!';
         assert.equal((await q('SELECT COUNT(*)::int AS n FROM players WHERE LOWER(username) = $1', [probeName]))[0].n, 0, 'no player row for the probe');
       });
 
-      await test('registration of a free address still issues a session and a verification email', async () => {
+      await test('registration of a free address sends a verification email and sets no session', async () => {
         const b = new Browser(srv.port); await b.csrf();
         const r = await b.post('/api/auth/register', { email: freshAddr, username: `new${Date.now() % 1000000}`, password: PW, displayName: 'New' });
         assert.equal(r.status, 201, JSON.stringify(r.json));
         assert.deepEqual(Object.keys(r.json).sort(), shapeNew, 'same keys as the taken-address answer');
-        assert.equal(b.cookies.has('ct_session'), true, 'a new account gets its session cookie');
-        assert.ok(mail.sent.some((m) => m.kind === 'verify' && m.to === freshAddr));
+        assert.equal(r.setCookie.some((c) => c.startsWith('ct_session=')), false, 'registration sets no ct_session, even for a new account');
+        assert.equal(b.cookies.has('ct_session'), false);
+        const mailed = mail.sent.find((m) => m.kind === 'verify' && m.to === freshAddr);
+        assert.ok(mailed, 'a verification email was sent');
+        // a session exists only after the email is verified and the player logs in
+        await b.must('/api/auth/verify-email', { token: mailed.token });
+        await b.must('/api/auth/login', { email: freshAddr, password: PW });
+        assert.equal(b.cookies.has('ct_session'), true, 'login after verifying issues the session cookie');
       });
 
       const anon = async () => { const b = new Browser(srv.port); await b.csrf(); return b; };

@@ -188,8 +188,9 @@ async function registerEmail({ email, username, password, displayName, avatar })
         ttlMinutes: verifyTtlMin(),
       });
 
-      const sessionToken = await createSession(client, player.id);
-      return { ...makeSessionResult(player, sessionToken), verifyToken, email: e, username: u };
+      // No session is created here. Registration never signs anyone in: the player verifies the email, then logs in.
+      const { player: publicPlayer } = makeSessionResult(player, null);
+      return { player: publicPlayer, verifyToken, email: e, username: u };
     });
   } catch (err) {
     if (err && (err.code === '23505' || /already exists/i.test(err.message || ''))) {

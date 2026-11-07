@@ -235,8 +235,7 @@ function cookieSocket(port, cookie) {
         assert.equal(reg.json.emailSent, false);
         assert.match(reg.json.message, /could not be sent/);
         assert.equal(reg.json.token, undefined); assert.equal(reg.json.debug, undefined);
-        const sess = reg.setCookie.find((c) => c.startsWith('ct_session='));
-        assert.ok(/Secure/.test(sess) && /HttpOnly/.test(sess) && /Max-Age=172800/.test(sess), 'Secure, HttpOnly, and the lifetime follows AUTH_SESSION_TTL_DAYS: ' + sess);
+        assert.equal(reg.setCookie.some((c) => c.startsWith('ct_session=')), false, 'registration sets no session cookie');
         assert.ok(log.lines.error.some((l) => /verify email could not be delivered/.test(l)), 'the failure is logged');
 
         // the account exists and can get a new link
@@ -249,6 +248,8 @@ function cookieSocket(port, cookie) {
         assert.equal(mail.sent.length, 1);
         await b.must('/api/auth/verify-email', { token: mail.sent[0].token });
         const login = await b.must('/api/auth/login', { email, password: PW });
+        const sess = login.setCookie.find((c) => c.startsWith('ct_session='));
+        assert.ok(sess && /Secure/.test(sess) && /HttpOnly/.test(sess) && /Max-Age=172800/.test(sess), 'login sets Secure, HttpOnly, and the lifetime follows AUTH_SESSION_TTL_DAYS: ' + sess);
         assert.equal(login.json.token, undefined);
         assert.equal(login.json.debug, undefined);
 

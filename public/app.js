@@ -421,18 +421,9 @@
     if (out.csrfToken) S.csrf = out.csrfToken;
     S.requireEmailVerification = policyRequiresVerification(out);
     S.signedOutIntentionally = false;
-    // The answer is the same for a new address and an address that already has an account, so the browser checks its own
-    // session: only a new account has one. Verification-required mode always waits for the email before the lobby.
-    const signedIn = out.requiresVerification ? false : await hydrateSession();
-    if (!signedIn) {
-      openAuthSheet('login', out.message || 'Check your email for next steps, then log in here.');
-      return;
-    }
-    closeOverlay();
-    connect();
-    toast(out.emailSent === false
-      ? 'Account created. Email verification is still pending, and delivery failed. Friend-testing mode lets you play now.'
-      : 'Account created. Email verification is still pending; friend-testing mode lets you play now.');
+    // Registration never signs the browser in. The player verifies the email, then logs in here. The same answer is given
+    // whether or not the address already had an account.
+    openAuthSheet('login', out.message || 'Check your email for a verification link, then log in here.');
   }
 
   async function doResendVerification() {
