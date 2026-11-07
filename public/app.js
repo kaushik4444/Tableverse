@@ -946,12 +946,10 @@
    *  The dismissal is remembered in this browser only; nothing about it is stored on the account. */
   function onboardingHTML() {
     if (S.guest || !S.named || store.get('ct_onboard') === 'done') return '';
-    const avatarTip = !S.avatar ? '<li>Choose an avatar on your <button type="button" class="linklike" data-act="openProfilePage">profile</button> so friends recognise you at the table.</li>' : '';
-    return `<section class="home-section onboarding-card" aria-labelledby="onboard-title">
-      <div class="row" style="justify-content:space-between"><h2 class="section" id="onboard-title">Welcome, ${esc(S.name)}</h2><button type="button" class="btn ghost small" data-act="dismissOnboarding">Dismiss</button></div>
-      <ul class="onboard-list"><li>Pick a game below to start a table, or join one with a code.</li><li>Add friends by username to invite them to private tables.</li>${avatarTip}</ul>
-    </section>`;
+    const avatarTip = !S.avatar ? ' Set an avatar on your <button type="button" class="linklike" data-act="openProfilePage">profile</button> so friends recognise you.' : '';
+    return `<section class="home-section onboarding-card" aria-labelledby="onboard-title"><div class="onboard-row"><p id="onboard-title" class="onboard-text"><b>Welcome, ${esc(S.name)}.</b> Pick a game below, or add friends to play private tables.${avatarTip}</p><button type="button" class="btn ghost small" data-act="dismissOnboarding">Dismiss</button></div></section>`;
   }
+
 
   function profileHTML() {
     const userBadge = S.username ? `<div class="profile-user">@${esc(S.username)}</div>` : '';
