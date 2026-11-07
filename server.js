@@ -594,6 +594,12 @@ function start(opts = {}) {
   }
 
   // ------------------------------------------------------------ chat
+  // Include blocks whose database writes are queued or in flight. This closes the gap between accepting a request
+  // and its serialized persistence turn, including when another socket reconnects during a slow write.
+  const effectiveBlocked = (p) => {
+    if (!p || !p.pendingBlocks || !p.pendingBlocks.size) return p && p.blocked;
+    return new Set([...(p.blocked || []), ...p.pendingBlocks.keys()]);
+  };
   function pushChat(room, m) {
     m.ts = Date.now();
     room.chat.push(m);
@@ -601,11 +607,11 @@ function start(opts = {}) {
     for (const v of viewers(room)) {
       const p = players.get(v.id);
       // a viewer never receives chat from an account they have blocked (server-enforced, not a client-side mute)
-      if (p && p.connected && moderation.shouldDeliver(m, p.blocked)) send(p.ws, { t: 'chat', m });
+      if (p && p.connected && moderation.shouldDeliver(m, effectiveBlocked(p))) send(p.ws, { t: 'chat', m });
     }
   }
   const sys = (room, text) => pushChat(room, { sys: true, text });
-  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, p.blocked) }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
+  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
   /** Re-sends this viewer's chat history after a block or unblock, so the change shows at once. */
   const resyncChat = (p) => { const room = rooms.get(p.room); if (room) send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, p.blocked) }); };
   /** Tell everyone at the table who is in voice (and who is muted). */
@@ -1026,17 +1032,23 @@ function start(opts = {}) {
       const now = Date.now();
       if (now - (p.lastBlock || 0) < moderation.BLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
       p.lastBlock = now;
+      if (!p.blocked) p.blocked = new Set();
+      if (!p.pendingBlocks) p.pendingBlocks = new Map();
+      const target = checked.targetId;
+      // Reserve the filter before entering the serialized database turn. A second block queued behind a slow first
+      // write must hide its own target immediately, including after a reconnect on another socket.
+      p.pendingBlocks.set(target, (p.pendingBlocks.get(target) || 0) + 1);
       return inModerationTurn(p, async () => {
-        if (!p.blocked) p.blocked = new Set();
-        const target = checked.targetId;
-        const was = p.blocked.has(target);
-        p.blocked.add(target); // in effect at once: no message from them is delivered after this block is accepted
         try {
           await dbModeration.addBlock(p.id, target);
+          p.blocked.add(target); // committed blocks live here; pending ones are included by effectiveBlocked()
         } catch (e) {
-          if (!was) p.blocked.delete(target);
           if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
           throw e;
+        } finally {
+          const pending = (p.pendingBlocks.get(target) || 1) - 1;
+          if (pending > 0) p.pendingBlocks.set(target, pending);
+          else p.pendingBlocks.delete(target);
         }
         resyncChat(p);
         send(p.ws, { t: 'notice', text: 'Blocked. Their table chat is hidden from you. Nothing else changes, and they are not told.' });
@@ -1046,10 +1058,16 @@ function start(opts = {}) {
     async unblock(p, msg) {
       if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
       return inModerationTurn(p, async () => {
+        // Check inside the serialized turn: a preceding block/unblock may have changed the cached state while this
+        // request was waiting. No-op unblocks must not issue a DELETE or resend the entire chat history.
+        if (!p.blocked || !p.blocked.has(msg.id)) return;
+        const now = Date.now();
+        if (now - (p.lastUnblock || 0) < moderation.UNBLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+        p.lastUnblock = now;
         // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
         // failed unblock could not be taken back.
         await dbModeration.removeBlock(p.id, msg.id);
-        if (p.blocked) p.blocked.delete(msg.id);
+        p.blocked.delete(msg.id);
         resyncChat(p);
         send(p.ws, { t: 'notice', text: 'Unblocked.' });
       });
