@@ -65,14 +65,18 @@ function scan() {
     if (!el || seen.has(el) || !/[\p{L}\p{N}]/u.test(n.textContent) || el.closest('script, style, svg, [hidden], [disabled]') || !visible(el)) continue;
     seen.add(el);
     const cs = getComputedStyle(el);
-    // Measured as if fully opaque: an element faded by opacity also fades its own backdrop, so blending only the text would pass
-    // low contrast. Disabled controls are excluded above; faded text that still fails here is a real legibility problem.
+    // Painted as the browser paints it: an element's opacity fades its text and its background together, so both are
+    // blended with what is behind the element before the ratio is taken. Disabled controls are excluded above.
+    let opacity = 1; for (let x = el; x; x = x.parentElement) opacity *= parseFloat(getComputedStyle(x).opacity);
     const fg = parse(cs.color); const bg = backdrop(el);
     if (!fg || !bg) continue;
-    const text = over(fg, bg);
+    const behind = (opacity < 1 && el.parentElement && backdrop(el.parentElement)) || bg; // only needed for faded elements
+    const mix = (c, under, k) => ({ r: c.r * k + under.r * (1 - k), g: c.g * k + under.g * (1 - k), b: c.b * k + under.b * (1 - k), a: 1 });
+    let text = over(fg, bg); let back = bg;
+    if (opacity < 1) { text = mix(text, behind, opacity); back = mix(bg, behind, opacity); }
     const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
     const need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
-    const r = ratio(text, bg);
+    const r = ratio(text, back);
     if (r < need) bad.push(`low contrast ${r.toFixed(2)}:1 (needs ${need}) for "${n.textContent.trim().slice(0, 30)}"`);
   }
   return bad;
@@ -112,10 +116,12 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
       const caught = await page.evaluate((fn) => {
         const b = document.createElement('button'); b.className = 'probe'; document.body.appendChild(b);
         const faint = document.createElement('p'); faint.className = 'probe-faint'; faint.style.cssText = 'color:#333;background:#111;font-size:14px'; faint.textContent = 'faint text'; document.body.appendChild(faint);
-        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); return r;
+        const fade = document.createElement('p'); fade.className = 'probe-fade'; fade.style.cssText = 'color:#000;background:#fff;opacity:.2;font-size:14px'; fade.textContent = 'faded text'; document.body.appendChild(fade);
+        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); fade.remove(); return r;
       }, scan.toString());
       assert.ok(caught.some((m) => /has no accessible name/.test(m) && /probe/.test(m)), 'the scanner flags a button with no name');
       assert.ok(caught.some((m) => /low contrast/.test(m) && /faint text/.test(m)), 'the scanner flags low-contrast text');
+      assert.ok(caught.some((m) => /low contrast/.test(m) && /faded text/.test(m)), 'the scanner flags faded text whose faded contrast is too low');
     }
     console.log('  ok  ' + label);
   } catch (e) { failed++; console.error('FAIL  ' + label + '\n' + (e.stack || e)); }
