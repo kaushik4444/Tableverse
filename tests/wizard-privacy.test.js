@@ -86,7 +86,8 @@ test('hidden prediction: no bid amount is in any payload before the bids are rev
 test('secret prediction: no bid amount is in any payload until the round ends, then every bid is shown', () => {
   const n = 3;
   const g = W.create(players(n), { variant: 'secret' }, mulberry32(4));
-  bidRound1(g, n);
+  // after every submission, not only at the end: nothing may name an amount while bids are hidden
+  bidRound1(g, n, () => assert.equal(anyPayload(g, n, LEAKED_BID), false, 'no amount after an intermediate bid'));
   assert.equal(g.autoAction(), null, 'round is in play');
   assert.equal(anyPayload(g, n, LEAKED_BID), false, 'no amount during the play of the round');
   assert.ok(payloads(g, n).every((s) => s.includes('has bid')), 'the table sees that bids were made');
