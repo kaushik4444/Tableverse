@@ -555,7 +555,7 @@
       if (!r.ok || !data.ok) throw new Error(data.error || 'Search failed.');
       S.friendSearch = data.players || [];
       S.socialError = '';
-    } catch (error) { S.socialError = error.message || 'Search failed.'; }
+    } catch (error) { S.friendSearch = []; S.socialError = error.message || 'Search failed.'; } // a failed search must not leave older results on screen
     finally { S.friendSearchBusy = false; if (!S.room) render(); }
   }
 
