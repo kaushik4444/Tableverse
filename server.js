@@ -613,7 +613,7 @@ function start(opts = {}) {
   const sys = (room, text) => pushChat(room, { sys: true, text });
   const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
   /** Re-sends this viewer's chat history after a block or unblock, so the change shows at once. */
-  const resyncChat = (p) => { const room = rooms.get(p.room); if (room) send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, p.blocked) }); };
+  const resyncChat = (p) => { const room = rooms.get(p.room); if (room) send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); };
   /** Tell everyone at the table who is in voice (and who is muted). */
   function broadcastVoice(room) {
     const msg = { t: 'voice', ids: voiceRelay.voiceList(room) };
