@@ -77,7 +77,10 @@
       for (const [id, to] of ui.snaps) ui.disp.set(id, to);
       ui.snaps.clear(); ui.holdUntil = Date.now() + SNAP_MS;
     } else if (Date.now() >= ui.holdUntil) { clearInterval(ui.timer); ui.timer = null; }
-    render(ui.root, ui.latest, ui.ctx);
+    // The app's renderer draws whatever screen is current (this table, or the lobby / home after leaving it). Drawing the board
+    // directly would paint it over the home screen, because the root element stays in the page.
+    if (ui.ctx && ui.ctx.rerender) ui.ctx.rerender();
+    else render(ui.root, ui.latest, ui.ctx);
   }
 
   /** Sounds for dice, moves, captures and the finish, from the shared soft palette other games already use. */

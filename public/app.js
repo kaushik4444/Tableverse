@@ -248,9 +248,8 @@
         body: JSON.stringify(body || {}),
       });
     } catch {
-      const err = new Error('Could not reach the server. It may be waking up: try again in a moment.');
-      err.transient = true; // no answer at all: safe to try again
-      throw err;
+      const err = new Error('Could not reach the server. Check your connection, wait a moment, then try again.');
+      throw err; // no answer at all: the sign-in may still finish on the server, so it is not retried automatically
     }
     let data = {};
     try { data = await r.json(); } catch { /* ignore */ }
@@ -261,7 +260,6 @@
     if (data && data.csrfToken) S.csrf = data.csrfToken;
     if (!r.ok || data.ok === false) {
       const err = new Error(data.error || `Request failed (${r.status})`);
-      err.transient = [502, 503, 504].includes(r.status); // a gateway or sleeping server, not a wrong password
       throw err;
     }
     return data;
@@ -412,15 +410,10 @@
     S.auth = null;
   }
 
-  // The server (Render) or the database (Neon) can be asleep for the first request after a quiet spell. Retry that quietly
-  // instead of showing an error that makes people press the button again (every successful login ends the older session).
+  // One attempt per press. A request that times out at the gateway can still finish on the server, and a second login
+  // would then end the session it created. The in-flight guard in the form keeps a double press from doing that.
   async function postLogin(email, password) {
-    for (let attempt = 0; ; attempt++) {
-      try { return await postJson('/api/auth/login', { email, password }); } catch (e) {
-        if (!e.transient || attempt >= 2) throw e;
-        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-      }
-    }
+    return postJson('/api/auth/login', { email, password });
   }
 
   async function doLogin(email, password) {

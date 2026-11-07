@@ -42,4 +42,13 @@ test('Ludo: a move holds the bots for the walk', () => {
   assert.equal(g.holdMs(), 0);
 });
 
+test('a scale shortens the reservation at the time it is made, so the bots wait exactly that long', () => {
+  const g = {};
+  pacing.setScale(g, 0.25);
+  pacing.hold(g, 4000); // 1000 ms reserved
+  pacing.hold(g, 4000); // queues another 1000 ms behind it
+  const r = pacing.remaining(g);
+  assert.ok(r > 1900 && r <= 2000, `two holds of 4000 at scale 0.25 give ~2000 ms: ${r}`);
+});
+
 console.log(`\n${passed} pacing tests passed`);

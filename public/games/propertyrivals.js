@@ -70,7 +70,7 @@
   function newsHTML(v, walking, cardShown) {
     const log = v.log || [];
     const skip = (e) => e.kind === 'info' || (e.kind === 'auction' && /^(bid|passed)/.test(e.card)) || (cardShown && e.kind === 'card');
-    const e = walking ? [...log].reverse().find((x) => x.kind === 'roll') : [...log].reverse().find((x) => !skip(x));
+    const e = walking ? [...log].reverse().find((x) => x.kind === 'roll' || x.kind === 'lockup') : [...log].reverse().find((x) => !skip(x));
     if (!e) return '';
     const text = e.by === 'System' || e.by === 'Table' ? e.card : `${e.by} ${e.card}`;
     return `<p class="pr-news k-${esc(e.kind)}" role="status">${esc(text)}</p>`;

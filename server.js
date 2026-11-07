@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const games = require('./games');
+const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
 const { buildMatchRecord } = require('./db/matchRecord');
@@ -699,7 +700,7 @@ function start(opts = {}) {
 
     const waiting = awaitingOf(g);
     // a game that is still animating a move (a token walking square by square) holds its bots back until the walk is done
-    const walkHold = typeof g.holdMs === 'function' ? g.holdMs() * botScale : 0;
+    const walkHold = typeof g.holdMs === 'function' ? g.holdMs() : 0; // already scaled when it was recorded (games/pacing.js)
     const pause = Math.max(0, (room.pauseUntil || 0) - Date.now(), walkHold);
     let delay;
     let run;
@@ -1317,6 +1318,7 @@ function start(opts = {}) {
         room.options,
         Math.random
       );
+      pacing.setScale(room.game, botScale);
       room.status = 'playing';
       room.matchKey = crypto.randomUUID(); // identifies this game in the match history
       room.startedAt = Date.now();
