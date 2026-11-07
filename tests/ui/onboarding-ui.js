@@ -21,7 +21,7 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await page.route('**/api/auth/session', (route) => route.fulfill({ json: sessionOk({ player: { id: 'me', display_name: 'Aarav', username: 'aarav', avatar: '', email: 'a@b.c' } }) }));
     await page.goto(url + '/');
     await page.waitForSelector('.onboarding-card', { timeout: 8000 });
-    assert.match(await page.textContent('.onboarding-card'), /Choose an avatar/);
+    assert.match(await page.textContent('.onboarding-card'), /Set an avatar/);
     await page.click('[data-act="dismissOnboarding"]');
     assert.equal(await page.locator('.onboarding-card').count(), 0, 'the card closes on dismiss');
     await page.reload();
@@ -36,7 +36,7 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await page.waitForSelector('.onboarding-card', { timeout: 8000 });
     const text = await page.textContent('.onboarding-card');
     assert.match(text, /Pick a game below/);
-    assert.doesNotMatch(text, /Choose an avatar/);
+    assert.doesNotMatch(text, /Set an avatar/);
     await ctx.close();
   });
 
