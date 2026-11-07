@@ -285,7 +285,7 @@ function cookieSocket(port, cookie) {
         await until(() => s.welcome(), 'lobby welcome');
         s.ws.close();
         assert.equal(await rows('players'), 1);
-        assert.equal(await rows('auth_sessions'), 2);
+        assert.equal(await rows('auth_sessions'), 1, 'only the login creates a session; registration does not');
         assert.ok(await rows('auth_rate_limits') >= 1, 'rate limiting works again');
       } finally { await srv.close(); }
       const m = await require('../db/migrate').migrate();

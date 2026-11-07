@@ -1,5 +1,6 @@
 'use strict';
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 /**
  * Private-table access across the room lifecycle, on a REAL PostgreSQL through the running server.
  * Policy under test: docs/PRIVATE_TABLES.md. In short: the creator and the current host always have access; everyone else needs
@@ -34,7 +35,7 @@ async function until(check, label, timeout = 15000) {
 /** A socket that behaves like the browser: cookie-less, token hello, keeps the latest room/view and what the server said. */
 function wsClient(port, token) {
   const c = { room: null, view: null, errors: [], notices: [], lefts: 0, rejoin: [], presence: [], messages: [], welcomed: false, auto: false, lastKey: null,
-    ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+    ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
   c.step = () => { // plays wizard: enough to finish a game
     const v = c.view;
@@ -46,7 +47,7 @@ function wsClient(port, token) {
     else if (v.phase === 'bidding') c.send({ t: 'act', action: { type: 'bid', amount: v.forbiddenBid === 0 ? 1 : 0 } });
     else if (v.phase === 'playing') c.send({ t: 'act', action: { type: 'play', cardId: v.legal[0] } });
   };
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('error', () => {});
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
@@ -83,13 +84,13 @@ async function run() {
       await browser.csrf();
       const username = `${label.toLowerCase()}_${n}`;
       const reg = await browser.must('/api/auth/register', { email: `${username}@test.local`, username, password: 'TestPass123!', displayName: label });
-      playerIds.push(reg.json.player.id);
       await browser.must('/api/auth/verify-email', { token: reg.json.debug.verifyToken });
       const login = await browser.must('/api/auth/login', { email: `${username}@test.local`, password: 'TestPass123!' });
       const client = wsClient(app.port, login.json.token);
       clients.push(client);
       await until(() => client.welcomed, `${label} welcome`);
-      return { browser, client, username, id: reg.json.player.id, token: login.json.token, label };
+      playerIds.push(login.json.player.id);
+      return { browser, client, username, id: login.json.player.id, token: login.json.token, label };
     }
     /** Close this account's socket and open a new one with the same session, as a phone does after a dropped connection. */
     async function reconnect(a) {

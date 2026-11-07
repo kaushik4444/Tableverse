@@ -23,6 +23,7 @@ const { createStaticFiles } = require('./lib/staticFiles');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
+const { debugTokensEnabled, assertSafeDebugConfig } = require('./lib/debugTokens');
 const { createReadinessCheck } = require('./lib/health');
 const { createLogger, requestIdFrom } = require('./lib/log');
 const serverLog = createLogger({ component: 'server' });
@@ -76,6 +77,7 @@ function start(opts = {}) {
   const trickPauseMs = opts.trickPauseMs ?? 1700; // time everybody gets to see a finished trick being collected
   const env = opts.env || process.env;
   const iceServers = opts.iceServers ?? voiceRelay.iceServers(env); // sent to browsers for table voice chat
+  assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';
   const trustProxy = opts.trustProxy ?? parseTrustProxy(env.TRUST_PROXY, production); // behind Render's proxy the client address is in X-Forwarded-For
   // Origins are compared exactly as browsers send them: lower case, no trailing slash ("https://www.example.com/" never matches).
@@ -183,7 +185,7 @@ function start(opts = {}) {
     res.end(JSON.stringify(body));
   };
 
-  const includeDebugTokens = env.NODE_ENV === 'test'; // only tests receive raw tokens in responses (they are not browsers)
+  const includeDebugTokens = debugTokensEnabled(env); // only tests receive raw tokens in responses (they are not browsers)
   const emailSender = opts.emailSender || makeAuthEmailSender({ env, logger: opts.log || console });
   const authRoutes = createAuthRoutes({
     env,
@@ -274,6 +276,7 @@ function start(opts = {}) {
   });
 
   const staticFiles = createStaticFiles();
+  const activeAuthRequests = new Set();
   const handleHttp = async (req, res) => {
     setSecurityHeaders(res); // apply to success and error responses, including health checks and 404s
     let rel;
@@ -288,7 +291,12 @@ function start(opts = {}) {
       return res.end();
     }
 
-    if (await authRoutes.handle(req, res, rel)) return;
+    const authRequest = authRoutes.handle(req, res, rel);
+    if (rel.startsWith('/api/auth/')) {
+      activeAuthRequests.add(authRequest);
+      authRequest.then(() => activeAuthRequests.delete(authRequest), () => activeAuthRequests.delete(authRequest));
+    }
+    if (await authRequest) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, { Allow: 'GET, HEAD, POST' });
@@ -343,6 +351,10 @@ function start(opts = {}) {
     // Every response carries an ID so a user report ("it failed at 21:40") can be matched to one log line.
     const requestId = requestIdFrom(req.headers['x-request-id']);
     res.setHeader('X-Request-Id', requestId);
+    if (shuttingDown) {
+      res.writeHead(503, { 'Connection': 'close' });
+      return res.end('shutting down');
+    }
     handleHttp(req, res).catch((err) => {
       httpLog.error('http.unhandled', { requestId, method: req.method, path: String(req.url).split('?')[0], err });
       try {
@@ -1323,7 +1335,9 @@ function start(opts = {}) {
   async function handleHello(ws, msg) {
     if (ws.readyState !== 1) return; // the socket closed while waiting in the queue
 
-    const presentedToken = (msg && typeof msg.token === 'string' && msg.token) || ws.cookieToken || null;
+    // Only the HttpOnly session cookie on the upgrade request authenticates a socket. A token sent inside a message is not
+    // accepted: anything a page can send can then never be mistaken for a session.
+    const presentedToken = ws.cookieToken || null;
     if (!presentedToken) {
       send(ws, { t: 'authRequired', message: 'Please log in to play.' });
       return ws.close(1008, 'auth required');
@@ -1587,6 +1601,8 @@ function start(opts = {}) {
   async function close({ drainMs = 0 } = {}) {
     clearInterval(statsTimer);
     shuttingDown = true;
+    const deadline = Date.now() + drainMs;
+    const httpClosed = new Promise((resolve) => server.close(resolve));
     // Tables live in memory and do not survive a restart: say so, and close sockets with 1012 ("service restart") so the
     // app shows a calm message instead of a mysterious disconnect. Running games are NOT recorded as finished.
     for (const ws of wss.clients) {
@@ -1600,12 +1616,23 @@ function start(opts = {}) {
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
-    if (drainMs) await matchQueue.drain(drainMs); // let pending match writes finish (shutdown)
+    // Let auth handlers finish before taking the delivery snapshot, within one shared shutdown window.
+    if (drainMs) {
+      const matchDrain = matchQueue.drain(drainMs);
+      let timer;
+      await Promise.race([
+        Promise.allSettled([...activeAuthRequests]),
+        new Promise((resolve) => { timer = setTimeout(resolve, drainMs); }),
+      ]);
+      clearTimeout(timer);
+      await Promise.all([matchDrain, authRoutes.drainDeliveries(Math.max(0, deadline - Date.now()))]);
+    }
     matchQueue.close();
     for (const room of rooms.values()) clearTimeout(room.timer);
     await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
     for (const ws of wss.clients) ws.terminate();
-    return new Promise((resolve) => wss.close(() => server.close(() => resolve())));
+    await new Promise((resolve) => wss.close(resolve));
+    await httpClosed;
   }
 
   // Verify the database and run migrations BEFORE accepting anybody. Any failure rejects start(): the process must not

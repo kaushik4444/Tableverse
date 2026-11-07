@@ -2,6 +2,7 @@
 // One account must not be able to fill the server with abandoned tables: leaving a running game parks it for a
 // comeback (10 minutes), but a player only ever has ONE such parked table.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const WebSocket = require('ws');
 const { registerAndVerify } = require('./helpers/auth');
@@ -19,11 +20,11 @@ async function until(fn, label, ms = 5000) {
   try {
     const u = await registerAndVerify(srv.port, { email: 'loop@test.local', displayName: 'Looper', password: 'TestPass123!' });
     const tables = async () => (await (await fetch(`http://127.0.0.1:${srv.port}/api/games`)).json()).tables;
-    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`);
+    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`, sessionSocket(u.token));
     let room = null; let left = 0;
     ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'state') room = m.room; if (m.t === 'left') { room = null; left++; } });
     await new Promise((r) => ws.on('open', r));
-    ws.send(JSON.stringify({ t: 'hello', token: u.token }));
+    ws.send(JSON.stringify({ t: 'hello' }));
     await sleep(30);
     const codes = new Set();
     for (let i = 0; i < 12; i++) {

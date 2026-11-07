@@ -72,8 +72,10 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
 
   console.log('abuse limits');
   const base = { port: 0, trustProxy: false, database: { prepare: async () => ({ mode: 'memory' }) } };
-  const connect = (srv, headers) => new Promise((resolve) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`, { headers });
+  // token: the session the browser would hold; it is sent as the ct_session cookie on the upgrade request
+  const connect = (srv, headers, token) => new Promise((resolve) => {
+    const cookie = token ? { cookie: `ct_session=${encodeURIComponent(token)}` } : {};
+    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`, { headers: { ...headers, ...cookie } });
     const o = { ws, closed: null, msgs: [] };
     ws.on('message', (d) => o.msgs.push(JSON.parse(d)));
     ws.on('close', (code) => (o.closed = code));
@@ -145,8 +147,8 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     const evil = await connect(srv, { Origin: 'http://evil.example' });
     assert.match(evil.error || '', /403|401|400/);
     const session = await auth(srv, 'Origin OK');
-    const good = await connect(srv, { Origin: `http://127.0.0.1:${srv.port}` });
-    hello(good, { token: session.token }); await wait(150);
+    const good = await connect(srv, { Origin: `http://127.0.0.1:${srv.port}` }, session.token);
+    hello(good); await wait(150);
     assert.ok(good.msgs.some((m) => m.t === 'welcome'));
     good.ws.close(); await srv.close();
   });
@@ -165,8 +167,8 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     const one = await auth(srv, 'Auth One');
     const two = await auth(srv, 'Auth Two');
 
-    const a = await connect(srv); hello(a, { token: one.token }); await wait(150);
-    const b = await connect(srv); hello(b, { token: two.token }); await wait(150);
+    const a = await connect(srv, undefined, one.token); hello(a); await wait(150);
+    const b = await connect(srv, undefined, two.token); hello(b); await wait(150);
     assert.ok(a.msgs.some((m) => m.t === 'welcome'));
     assert.ok(b.msgs.some((m) => m.t === 'welcome'));
 
@@ -174,7 +176,7 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     assert.equal(missing.closed, 1008);
     assert.ok(missing.msgs.some((m) => m.t === 'authRequired'));
 
-    const bad = await connect(srv); hello(bad, { token: 'bad-token' }); await wait(150);
+    const bad = await connect(srv, undefined, 'bad-token'); hello(bad); await wait(150);
     assert.equal(bad.closed, 1008);
     assert.ok(bad.msgs.some((m) => m.t === 'authRequired'));
 
@@ -186,8 +188,8 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     let welcomed = 0;
     for (let i = 0; i < 5; i++) {
       const s = await auth(srv, `Flood ${i}`);
-      const c = await connect(srv, { 'X-Forwarded-For': `10.0.0.${i}` });
-      hello(c, { token: s.token }); await wait(120);
+      const c = await connect(srv, { 'X-Forwarded-For': `10.0.0.${i}` }, s.token);
+      hello(c); await wait(120);
       if (c.msgs.some((m) => m.t === 'welcome')) welcomed++;
       c.ws.close();
     }

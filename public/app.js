@@ -419,21 +419,11 @@
     const out = await postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined });
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
-    adoptPlayer(out.player, { name, username: String(username || '').toLowerCase() });
     S.requireEmailVerification = policyRequiresVerification(out);
-    S.emailVerified = !!(out.player && out.player.email_verified);
     S.signedOutIntentionally = false;
-    if (out.requiresVerification) {
-      openAuthSheet('login', out.emailSent === false
-        ? 'Account created — but the verification email could not be sent. Use “Resend verification email”, then verify and log in.'
-        : 'Account created. Check your email for a verification link, then log in here.');
-      return;
-    }
-    closeOverlay();
-    connect();
-    toast(out.emailSent === false
-      ? 'Account created. Email verification is still pending, and delivery failed. Friend-testing mode lets you play now.'
-      : 'Account created. Email verification is still pending; friend-testing mode lets you play now.');
+    // Registration never signs the browser in. The player verifies the email, then logs in here. The same answer is given
+    // whether or not the address already had an account.
+    openAuthSheet('login', out.message || 'Check your email for a verification link, then log in here.');
   }
 
   async function doResendVerification() {

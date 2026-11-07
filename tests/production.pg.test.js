@@ -1,5 +1,6 @@
 'use strict';
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 // Production path on a REAL PostgreSQL: a finished game goes through the server, the queue and the database; plus failures.
 // Runs only with TEST_DATABASE_URL; every run uses its own throw-away database.
 const assert = require('node:assert/strict');
@@ -29,9 +30,9 @@ async function until(fn, label, ms = 30000) {
 const quiet = () => { const lines = { log: [], warn: [], error: [] }; return { lines, log: (m) => lines.log.push(m), warn: (m) => lines.warn.push(m), error: (m) => lines.error.push(m) }; };
 
 function client(port, name, token) {
-  const c = { name, room: null, view: null, chats: [], notices: [], errors: [], stats: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  const c = { name, room: null, view: null, chats: [], notices: [], errors: [], stats: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
-  c.ws.on('open', () => c.send({ t: 'hello', token }));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') Object.assign(c, { id: m.id, token: m.token });
@@ -221,7 +222,7 @@ function cookieSocket(port, cookie) {
       } finally { await rl.close(); }
     });
     await test('production mode: no token reaches scripts, cookies are Secure, a failed email does not strand the account, and account existence is not revealed', async () => {
-      const mail = { sent: [], failNext: 0, assertReady() {}, async sendVerification(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'verify', ...m }); }, async sendPasswordReset(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'reset', ...m }); } };
+      const mail = { sent: [], failNext: 0, assertReady() {}, async sendAccountExists(m) { (this.notices = this.notices || []).push(m.email); }, async sendVerification(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'verify', ...m }); }, async sendPasswordReset(m) { if (this.failNext-- > 0) throw new Error('provider down'); this.sent.push({ kind: 'reset', ...m }); } };
       const log = quiet();
       const prod = await start({ ...fast, matchLog: quiet(), log, emailSender: mail, env: { ...process.env, NODE_ENV: 'production', REQUIRE_EMAIL_VERIFICATION: 'true' } });
       process.env.AUTH_SESSION_TTL_DAYS = '2';
@@ -234,16 +235,21 @@ function cookieSocket(port, cookie) {
         assert.equal(reg.json.emailSent, false);
         assert.match(reg.json.message, /could not be sent/);
         assert.equal(reg.json.token, undefined); assert.equal(reg.json.debug, undefined);
-        const sess = reg.setCookie.find((c) => c.startsWith('ct_session='));
-        assert.ok(/Secure/.test(sess) && /HttpOnly/.test(sess) && /Max-Age=172800/.test(sess), 'Secure, HttpOnly, and the lifetime follows AUTH_SESSION_TTL_DAYS: ' + sess);
+        assert.equal(reg.setCookie.some((c) => c.startsWith('ct_session=')), false, 'registration sets no session cookie');
         assert.ok(log.lines.error.some((l) => /verify email could not be delivered/.test(l)), 'the failure is logged');
 
         // the account exists and can get a new link
-        assert.equal((await b.post('/api/auth/register', { email, username: `prodx${Date.now() % 1000000}`, password: PW, displayName: 'Prod' })).status, 400);
+        // a taken address gets the same 201 answer as a new one, creates nothing, and the owner is notified instead
+        const again = await b.post('/api/auth/register', { email, username: `prodx${Date.now() % 1000000}`, password: PW, displayName: 'Prod' });
+        assert.equal(again.status, 201, JSON.stringify(again.json));
+        assert.equal(again.json.player, null);
+        assert.deepEqual(mail.notices, [email], 'the owner is told about the attempt');
         await b.must('/api/auth/resend-verification', { email });
         assert.equal(mail.sent.length, 1);
         await b.must('/api/auth/verify-email', { token: mail.sent[0].token });
         const login = await b.must('/api/auth/login', { email, password: PW });
+        const sess = login.setCookie.find((c) => c.startsWith('ct_session='));
+        assert.ok(sess && /Secure/.test(sess) && /HttpOnly/.test(sess) && /Max-Age=172800/.test(sess), 'login sets Secure, HttpOnly, and the lifetime follows AUTH_SESSION_TTL_DAYS: ' + sess);
         assert.equal(login.json.token, undefined);
         assert.equal(login.json.debug, undefined);
 
@@ -285,7 +291,7 @@ function cookieSocket(port, cookie) {
         assert.equal(reg.status, 201, JSON.stringify(reg.json));
         assert.equal(reg.json.requiresVerification, false);
         assert.equal(reg.json.emailVerificationRequired, false, 'register response exposes policy mode, not just account state');
-        assert.equal(reg.json.player.email_verified, false, 'optional mode does not mark new accounts as verified');
+        assert.equal(reg.json.player, null, 'register answers without a player record (same shape for a taken address)');
         assert.equal(reg.json.emailSent, false);
         const row = (await q('SELECT email_verified_at FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', ['email', email]))[0];
         assert.equal(row.email_verified_at, null, 'stored identity remains unverified');
@@ -339,13 +345,13 @@ function cookieSocket(port, cookie) {
         const unverifiedEmail = `optional.unverified.${authSeq++}@test.local`;
         const regUnverified = await uv.post('/api/auth/register', { email: unverifiedEmail, username: `optuv${Date.now() % 1000000}`, password: PW, displayName: 'Optional UV' });
         assert.equal(regUnverified.status, 201);
-        assert.equal(regUnverified.json.player.email_verified, false);
+        assert.equal(regUnverified.json.player, null);
         const forgot = await uv.post('/api/auth/forgot-password', { email: unverifiedEmail });
         assert.equal(forgot.status, 200);
         assert.equal(forgot.json.debug, undefined, 'no reset token issued for unverified identity');
 
         // registration/login messaging keeps optional-vs-required distinction
-        assert.match(reg.json.message, /optional|log in now/i);
+        assert.match(reg.json.message, /could not be sent/, 'a failed delivery is reported in the message');
 
         const requiredMail = { sent: [], assertReady() {}, async sendVerification(m) { this.sent.push({ kind: 'verify', ...m }); }, async sendPasswordReset() {} };
         const required = await start({ ...fast, matchLog: quiet(), log: quiet(), emailSender: requiredMail, env: { ...process.env, ...testRateLimits, NODE_ENV: 'production', REQUIRE_EMAIL_VERIFICATION: 'true' } });
@@ -354,8 +360,8 @@ function cookieSocket(port, cookie) {
           const remail = `required.${authSeq++}@test.local`;
           const rreg = await rb.post('/api/auth/register', { email: remail, username: `required${Date.now() % 1000000}`, password: PW, displayName: 'Required' });
           assert.equal(rreg.status, 201, JSON.stringify(rreg.json));
-          assert.equal(rreg.json.player.email_verified, false);
-          assert.match(rreg.json.message, /verify your email/i, 'required mode registration message remains blocking');
+          assert.equal(rreg.json.player, null);
+          assert.match(rreg.json.message, /after verifying, log in/i, 'required mode registration message tells the player to verify, then log in');
           const rlogin = await rb.must('/api/auth/login', { email: remail, password: PW });
           assert.equal(rlogin.json.requiresVerification, true, 'required mode still blocks unverified lobby access');
           await rb.must('/api/auth/resend-verification', { email: remail });
@@ -407,7 +413,10 @@ function cookieSocket(port, cookie) {
         try {
           const ob = new Browser(freshOptional.port); await ob.csrf();
           const oe = `fresh.optional.${authSeq++}@test.local`;
-          await ob.post('/api/auth/register', { email: oe, username: `fo${Date.now() % 1000000}`, password: PW, displayName: 'FreshOpt' });
+          const reg = await ob.post('/api/auth/register', { email: oe, username: `fo${Date.now() % 1000000}`, password: PW, displayName: 'FreshOpt' });
+          assert.equal(reg.status, 201, JSON.stringify(reg.json));
+          assert.equal(ob.cookies.has('ct_session'), false, 'registration issues no session, even in optional mode');
+          await ob.must('/api/auth/login', { email: oe, password: PW });
           const os = await ob.get('/api/auth/session');
           assert.equal(os.json.emailVerified, false, 'optional mode keeps pending status until real verification');
         } finally { await freshOptional.close(); }
@@ -463,7 +472,7 @@ function cookieSocket(port, cookie) {
         const ps = await q('SELECT * FROM match_participants WHERE match_id = $1 ORDER BY seat', [m.id]);
         assert.deepEqual(ps.map((p) => [p.left_early, p.is_bot]), [[false, false], [true, false], [false, true]]);
         assert.equal((await a.getStats()).played, 1);
-        b.send({ t: 'hello', token: b.token });
+        b.send({ t: 'hello' });
         assert.equal((await b.getStats()).played, 0, 'leaving a game early is not a loss');
       } finally {
         if (a?.ws && a.ws.readyState !== WebSocket.CLOSED) a.ws.terminate();

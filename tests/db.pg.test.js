@@ -29,6 +29,8 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
     const dbPlayers = require('../db/players');
     dbPlayersRef = dbPlayers;
     const dbAuth = require('../db/auth');
+    // Registration issues no session: tests that need one log in, exactly as the browser does after verifying.
+    const loginToken = async (email) => (await dbAuth.loginEmail({ email, password: 'TestPass123!' })).token;
     const { hitRateLimit } = require('../db/rateLimit');
     const dbMatches = require('../db/matches');
     const x = await t.client(); // the test's own connection, to look at the tables
@@ -149,9 +151,10 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
     });
 
     console.log('authentication');
-    await test('registration stores permanent identity, argon2 hash, verify token hash and session', async () => {
+    await test('registration stores permanent identity, argon2 hash and verify token hash, and issues no session', async () => {
       const out = await dbAuth.registerEmail({ email: `auth.${Date.now()}@test.local`, username: 'wizardhero', password: 'TestPass123!', displayName: 'Wizard Hero', avatar: '🧙' });
-      assert.ok(out.token && out.verifyToken);
+      assert.equal(out.token, undefined, 'registration returns no session token');
+      assert.ok(out.verifyToken);
       const p = (await x.query('SELECT id, username, is_anonymous FROM players WHERE id = $1', [out.player.id])).rows[0];
       assert.deepEqual([p.username, p.is_anonymous], ['wizardhero', false]);
       const id = (await x.query("SELECT provider, provider_user_id, email, password_hash, email_verified_at FROM auth_identities WHERE player_id = $1", [out.player.id])).rows[0];
@@ -164,15 +167,15 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       assert.equal(tok.purpose, 'verify_email');
       assert.equal(tok.used_at, null);
       assert.equal(tok.token_hash.length, 64);
-      const sess = (await x.query('SELECT token_hash, revoked_at, expires_at FROM auth_sessions WHERE player_id = $1 ORDER BY created_at DESC LIMIT 1', [out.player.id])).rows[0];
-      assert.equal(sess.token_hash.length, 64);
-      assert.equal(sess.revoked_at, null);
-      assert.ok(sess.expires_at);
+      const sessions = (await x.query('SELECT COUNT(*)::int AS n FROM auth_sessions WHERE player_id = $1', [out.player.id])).rows[0].n;
+      assert.equal(sessions, 0, 'registration creates no session row');
     });
-    await test('duplicate email and case-insensitive duplicate username are rejected', async () => {
+    await test('a taken email is a generic result that writes nothing; a taken username is still rejected', async () => {
       const email = `dupe.${Date.now()}@test.local`;
       await dbAuth.registerEmail({ email, username: 'sameuser1', password: 'TestPass123!', displayName: 'A' });
-      await assert.rejects(dbAuth.registerEmail({ email, username: 'sameuser2', password: 'TestPass123!', displayName: 'B' }), /already exists/i);
+      const again = await dbAuth.registerEmail({ email, username: 'sameuser2', password: 'TestPass123!', displayName: 'B' });
+      assert.deepEqual(again, { alreadyRegistered: true, email: email.toLowerCase() });
+      assert.equal((await dbAuth.checkUsernameAvailability({ username: 'sameuser2' })).available, true, 'the refused probe did not claim its username');
       await assert.rejects(dbAuth.registerEmail({ email: `other.${Date.now()}@test.local`, username: 'SAMEUSER1', password: 'TestPass123!', displayName: 'C' }), /username is already taken/i);
     });
     await test('concurrent registration for the same username allows only one success', async () => {
@@ -190,7 +193,7 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       const email = `uv.${Date.now()}@test.local`;
       const reg = await dbAuth.registerEmail({ email, username: `uv${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'UV' });
       await assert.rejects(dbAuth.loginEmail({ email, password: 'bad-pass' }), /invalid email or password/i);
-      const info = await dbAuth.sessionInfo(reg.token);
+      const info = await dbAuth.sessionInfo((await loginToken(reg.email)));
       assert.equal(info.authenticated, true);
       assert.equal(info.emailVerified, false, 'an unverified account has a session but is not allowed into the lobby');
     });
@@ -216,7 +219,7 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       try {
         const email = `opt.${Date.now()}@test.local`;
         const reg = await dbAuth.registerEmail({ email, username: `opt${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'Optional' });
-        const info = await dbAuth.sessionInfo(reg.token);
+        const info = await dbAuth.sessionInfo((await loginToken(reg.email)));
         assert.equal(info.authenticated, true);
         assert.equal(info.emailVerified, false, 'optional mode does not mark an identity as verified');
         const row = (await x.query('SELECT email_verified_at FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', ['email', email])).rows[0];
@@ -231,7 +234,7 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       const reg = await dbAuth.registerEmail({ email, username: `verify${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'V' });
       await dbAuth.verifyEmailToken(reg.verifyToken);
       await assert.rejects(dbAuth.verifyEmailToken(reg.verifyToken), /already been used/i);
-      assert.equal((await dbAuth.sessionInfo(reg.token)).emailVerified, true);
+      assert.equal((await dbAuth.sessionInfo((await loginToken(reg.email)))).emailVerified, true);
 
       const reg2 = await dbAuth.registerEmail({ email: `verify2.${Date.now()}@test.local`, username: `verifyb${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'V2' });
       const settled = await Promise.allSettled([dbAuth.verifyEmailToken(reg2.verifyToken), dbAuth.verifyEmailToken(reg2.verifyToken)]);
@@ -263,10 +266,8 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       await dbAuth.loginEmail({ email, password: 'NewPass123!' });
       const active = (await x.query('SELECT count(*)::int AS n FROM auth_sessions WHERE player_id = $1 AND revoked_at IS NULL', [reg.player.id])).rows[0].n;
       assert.equal(active, 1, 'only the newest login remains active after reset');
-      const old1 = await dbPlayers.authenticateToken(reg.token);
-      const old2 = await dbPlayers.authenticateToken(login2.token);
-      assert.equal(old1, null);
-      assert.equal(old2, null);
+      // the reset revoked every session, including the one from before the reset
+      assert.equal(await dbPlayers.authenticateToken(login2.token), null);
     });
     await test('expired verification and reset tokens are rejected', async () => {
       const email = `exp.${Date.now()}@test.local`;
@@ -291,14 +292,16 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       const other = await dbAuth.registerEmail({ email: `sess.other.${Date.now()}@test.local`, username: `other${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'O' });
       await dbAuth.verifyEmailToken(other.verifyToken);
 
-      await dbAuth.revokeSession(reg.token);
-      assert.equal(await dbPlayers.authenticateToken(reg.token), null);
-      assert.ok(await dbPlayers.authenticateToken(login2.token));
-
-      const all = await dbAuth.revokeAllSessionsForCurrent(login2.token);
-      assert.ok(all.revoked >= 1);
+      await dbAuth.revokeSession(login2.token);
       assert.equal(await dbPlayers.authenticateToken(login2.token), null);
-      assert.ok(await dbPlayers.authenticateToken(other.token), 'other account session must remain');
+      const login3 = await dbAuth.loginEmail({ email, password: 'TestPass123!' });
+      assert.ok(await dbPlayers.authenticateToken(login3.token));
+      const otherToken = (await dbAuth.loginEmail({ email: other.email, password: 'TestPass123!' })).token;
+
+      const all = await dbAuth.revokeAllSessionsForCurrent(login3.token);
+      assert.ok(all.revoked >= 1);
+      assert.equal(await dbPlayers.authenticateToken(login3.token), null);
+      assert.ok(await dbPlayers.authenticateToken(otherToken), 'other account session must remain');
 
       const newLogin = await dbAuth.loginEmail({ email, password: 'TestPass123!' });
       const h = crypto.createHash('sha256').update(newLogin.token).digest('hex');

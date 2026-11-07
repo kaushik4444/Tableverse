@@ -10,5 +10,7 @@
  */
 if (process.env.DATABASE_URL && !process.env.TV_ORIGINAL_DATABASE_URL) process.env.TV_ORIGINAL_DATABASE_URL = process.env.DATABASE_URL;
 process.env.NODE_ENV = 'test';
+// Debug tokens (raw verification and reset tokens in API responses) are an explicit test-only opt-in; see lib/debugTokens.js.
+process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS = '1';
 process.env.TABLEVERSE_SKIP_DOTENV = '1';
 delete process.env.DATABASE_URL;

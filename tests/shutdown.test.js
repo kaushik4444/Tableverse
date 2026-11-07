@@ -2,6 +2,7 @@
 // A restart must not look like a mystery: connected players get a notice and a 1012 ("service restart") close, and
 // a game that was still running is not recorded as a finished match.
 require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
 const assert = require('node:assert/strict');
 const WebSocket = require('ws');
 const { registerAndVerify } = require('./helpers/auth');
@@ -20,9 +21,9 @@ async function until(fn, label, ms = 8000) {
     matchRecord: async (rec) => { saved.push(rec); return { matchId: rec.matchKey }; } });
   try {
     const u = await registerAndVerify(srv.port, { email: 'sd@test.local', displayName: 'Sam', password: 'TestPass123!' });
-    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`);
+    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`, sessionSocket(u.token));
     const got = { notices: [], code: null, room: null };
-    ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', token: u.token })));
+    ws.on('open', () => ws.send(JSON.stringify({ t: 'hello' })));
     ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'notice') got.notices.push(m.text); if (m.t === 'state') got.room = m.room; });
     ws.on('close', (code) => { got.code = code; });
     await until(() => got.room === null && ws.readyState === 1, 'connected');
