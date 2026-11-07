@@ -266,10 +266,8 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       await dbAuth.loginEmail({ email, password: 'NewPass123!' });
       const active = (await x.query('SELECT count(*)::int AS n FROM auth_sessions WHERE player_id = $1 AND revoked_at IS NULL', [reg.player.id])).rows[0].n;
       assert.equal(active, 1, 'only the newest login remains active after reset');
-      const old1 = await dbPlayers.authenticateToken((await loginToken(reg.email)));
-      const old2 = await dbPlayers.authenticateToken(login2.token);
-      assert.equal(old1, null);
-      assert.equal(old2, null);
+      // the reset revoked every session, including the one from before the reset
+      assert.equal(await dbPlayers.authenticateToken(login2.token), null);
     });
     await test('expired verification and reset tokens are rejected', async () => {
       const email = `exp.${Date.now()}@test.local`;
@@ -294,14 +292,16 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       const other = await dbAuth.registerEmail({ email: `sess.other.${Date.now()}@test.local`, username: `other${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'O' });
       await dbAuth.verifyEmailToken(other.verifyToken);
 
-      await dbAuth.revokeSession((await loginToken(reg.email)));
-      assert.equal(await dbPlayers.authenticateToken((await loginToken(reg.email))), null);
-      assert.ok(await dbPlayers.authenticateToken(login2.token));
-
-      const all = await dbAuth.revokeAllSessionsForCurrent(login2.token);
-      assert.ok(all.revoked >= 1);
+      await dbAuth.revokeSession(login2.token);
       assert.equal(await dbPlayers.authenticateToken(login2.token), null);
-      assert.ok(await dbPlayers.authenticateToken((await loginToken(other.email))), 'other account session must remain');
+      const login3 = await dbAuth.loginEmail({ email, password: 'TestPass123!' });
+      assert.ok(await dbPlayers.authenticateToken(login3.token));
+      const otherToken = (await dbAuth.loginEmail({ email: other.email, password: 'TestPass123!' })).token;
+
+      const all = await dbAuth.revokeAllSessionsForCurrent(login3.token);
+      assert.ok(all.revoked >= 1);
+      assert.equal(await dbPlayers.authenticateToken(login3.token), null);
+      assert.ok(await dbPlayers.authenticateToken(otherToken), 'other account session must remain');
 
       const newLogin = await dbAuth.loginEmail({ email, password: 'TestPass123!' });
       const h = crypto.createHash('sha256').update(newLogin.token).digest('hex');
