@@ -51,6 +51,7 @@ function socket(port, cookie) {
   try {
     process.env.DATABASE_URL = t.url;
     const dbAccount = require('../db/account');
+    const dbModeration = require('../db/moderation');
     const { start } = require('../server');
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
@@ -166,6 +167,57 @@ function socket(port, cookie) {
       } finally {
         await lock.query('ROLLBACK').catch(() => {});
         await lock.end().catch(() => {});
+      }
+    });
+
+    await test('a second block queued behind a stalled write hides its target immediately', async () => {
+      const { Client } = require('pg');
+      await sleep(BLOCK_GAP);
+      const lock = new Client({ connectionString: t.url });
+      await lock.connect();
+      try {
+        await lock.query('BEGIN');
+        await lock.query('LOCK TABLE player_blocks IN ACCESS EXCLUSIVE MODE');
+        const blockedBefore = sb.notices().filter((n) => /Blocked/.test(n)).length;
+        sb.send({ t: 'block', id: A.id });
+        await until(async () => (await lock.query("SELECT count(*)::int AS n FROM pg_locks WHERE relation = 'player_blocks'::regclass AND NOT granted")).rows[0].n > 0, 'first block waiting');
+        await sleep(BLOCK_GAP + 100);
+        sb.send({ t: 'block', id: C.id });
+        await say(sc, 'message while second block is queued');
+        await sleep(300);
+        assert.equal(sb.texts().includes('message while second block is queued'), false, 'the queued target is hidden before its database write starts');
+        await lock.query('COMMIT');
+        await until(() => sb.notices().filter((n) => /Blocked/.test(n)).length >= blockedBefore + 2, 'both blocks saved');
+        assert.equal((await q('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2', [B.id, C.id]))[0].n, 1);
+        const beforeUnblocks = sb.notices().filter((n) => n === 'Unblocked.').length;
+        await sleep(BLOCK_GAP);
+        sb.send({ t: 'unblock', id: A.id });
+        await until(() => sb.notices().filter((n) => n === 'Unblocked.').length === beforeUnblocks + 1, 'first target unblocked');
+        const slowBefore = sb.errors().filter((e) => e === 'Slow down a little').length;
+        sb.send({ t: 'unblock', id: C.id });
+        await until(() => sb.errors().filter((e) => e === 'Slow down a little').length > slowBefore, 'rapid second unblock is rate limited');
+        assert.equal((await q('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2', [B.id, C.id]))[0].n, 1, 'rate-limited unblock leaves the row intact');
+        await sleep(BLOCK_GAP + 100);
+        sb.send({ t: 'unblock', id: C.id });
+        await until(() => sb.notices().filter((n) => n === 'Unblocked.').length === beforeUnblocks + 2, 'second target unblocked');
+      } finally {
+        await lock.query('ROLLBACK').catch(() => {});
+        await lock.end().catch(() => {});
+      }
+    });
+
+    await test('a no-op unblock does not query the database or resend chat history', async () => {
+      const original = dbModeration.removeBlock;
+      let calls = 0;
+      dbModeration.removeBlock = async (...args) => { calls++; return original(...args); };
+      try {
+        const before = sb.msgs.filter((m) => m.t === 'chatlog').length;
+        for (let i = 0; i < 5; i++) sb.send({ t: 'unblock', id: A.id });
+        await sleep(300);
+        assert.equal(calls, 0, 'an account that is not blocked causes no DELETE');
+        assert.equal(sb.msgs.filter((m) => m.t === 'chatlog').length, before, 'no-op does not resend history');
+      } finally {
+        dbModeration.removeBlock = original;
       }
     });
 
