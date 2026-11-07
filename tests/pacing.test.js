@@ -31,6 +31,15 @@ test('Property Rivals: a longer walk holds the bots for longer', () => {
   assert.ok(long > short + 7 * 480, `an 11-square walk holds much longer: ${long} vs ${short}`);
 });
 
+test('Property Rivals: long card advances reserve the full walk', () => {
+  const E = require('../games/propertyrivals/engine');
+  const g = E.createGame(people(2), {}, () => 0.5);
+  g.players[0].pos = 5;
+  E.pass(g, 0, 20);
+  const hold = pacing.remaining(g);
+  assert.ok(hold > 20 * 480 + 2200 - 50, `20-square walk holds ${hold}`);
+});
+
 test('Snakes and Ladders: the hold covers the walk and a snake or ladder slide', () => {
   const g = games.get('snakesladders').create(people(2), {}, () => 0.5);
   g.act('me', { type: 'roll' }); // a 4

@@ -649,7 +649,10 @@ function start(opts = {}) {
     const sameBatch = prev.length > 1 && now.length > 0 && now.every((id) => prev.includes(id));
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
     if (!limit || !humanWaiting) room.deadline = null;
-    else if (!sameBatch || !room.deadline) room.deadline = Date.now() + Math.max(0, (room.pauseUntil || 0) - Date.now()) + limit;
+    else if (!sameBatch || !room.deadline) {
+      const walkHold = typeof g.holdMs === 'function' ? g.holdMs() : 0;
+      room.deadline = Date.now() + Math.max(0, (room.pauseUntil || 0) - Date.now(), walkHold) + limit;
+    }
     room.waiting = now;
   }
 

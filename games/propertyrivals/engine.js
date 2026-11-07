@@ -186,7 +186,7 @@ function advance(g) {
 function pass(g, i, steps) {
   const p = g.players[i];
   const from = p.pos;
-  if (steps) pacing.hold(g, Math.min(Math.abs(steps), 14) * B.WALK_STEP_MS + B.WALK_SETTLE_MS); // the token walks this far on every screen
+  if (steps) pacing.hold(g, Math.abs(steps) * B.WALK_STEP_MS + B.WALK_SETTLE_MS); // the token walks this far on every screen
   p.pos = (from + steps + B.SIZE) % B.SIZE;
   if (steps > 0 && p.pos < from) { p.cash += B.START_SALARY; say(g, i, `passed Start and collected ${B.START_SALARY}`, 'salary'); }
 }
