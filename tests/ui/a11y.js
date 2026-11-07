@@ -57,6 +57,19 @@ function scan() {
     if (!layers.length || layers[0].a < 1) layers.unshift({ r: 255, g: 255, b: 255, a: 1 }); // page default is white when nothing is opaque
     return layers.reduce((acc, l) => over(l, acc), { r: 0, g: 0, b: 0, a: 1 });
   };
+  const mix = (c, under, k) => ({ r: c.r * k + under.r * (1 - k), g: c.g * k + under.g * (1 - k), b: c.b * k + under.b * (1 - k), a: 1 });
+  // colours from el up to the group root, composited over the backdrop behind the group (null if an image is involved)
+  const groupBackdrop = (el, root, base) => {
+    const layers = []; let node = el;
+    for (; node && node.nodeType === 1; node = node.parentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.backgroundImage !== 'none') return null;
+      const c = parse(cs.backgroundColor);
+      if (c && c.a > 0) { layers.unshift(c); if (c.a >= 1) break; }
+      if (node === root) break;
+    }
+    return layers.reduce((acc, l) => over(l, acc), base);
+  };
   const seen = new Set();
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -65,18 +78,27 @@ function scan() {
     if (!el || seen.has(el) || !/[\p{L}\p{N}]/u.test(n.textContent) || el.closest('script, style, svg, [hidden], [disabled]') || !visible(el)) continue;
     seen.add(el);
     const cs = getComputedStyle(el);
-    // Painted as the browser paints it: an element's opacity fades its text and its background together, so both are
-    // blended with what is behind the element before the ratio is taken. Disabled controls are excluded above.
-    let opacity = 1; for (let x = el; x; x = x.parentElement) opacity *= parseFloat(getComputedStyle(x).opacity);
-    const fg = parse(cs.color); const bg = backdrop(el);
-    if (!fg || !bg) continue;
-    const behind = (opacity < 1 && el.parentElement && backdrop(el.parentElement)) || bg; // only needed for faded elements
-    const mix = (c, under, k) => ({ r: c.r * k + under.r * (1 - k), g: c.g * k + under.g * (1 - k), b: c.b * k + under.b * (1 - k), a: 1 });
-    let text = over(fg, bg); let back = bg;
-    if (opacity < 1) { text = mix(text, behind, opacity); back = mix(bg, behind, opacity); }
+    // Painted as the browser paints it. An ancestor with opacity below 1 is a group: the group is composited on its own
+    // (its colours blended inside it), then the whole group is blended with what is behind the group, with the product of
+    // the opacities. Disabled controls are excluded above.
+    const fg = parse(cs.color);
+    if (!fg) continue;
+    let group = null; let alpha = 1;
+    for (let x = el; x; x = x.parentElement) { const o = parseFloat(getComputedStyle(x).opacity); if (o < 1) { group = x; alpha *= o; } }
+    let r;
+    if (!group) {
+      const bg = backdrop(el); if (!bg) continue;
+      r = ratio(over(fg, bg), bg);
+    } else {
+      // the backdrop behind a faded group is read from the page. Where it is an image (a felt, a photo) it cannot be read
+      // from computed styles, so such a group is not measured: a known limit, and the reason the probes below sit on a solid wrapper.
+      const external = group.parentElement ? backdrop(group.parentElement) : null;
+      if (!external) continue;
+      const inner = groupBackdrop(el, group, external); if (!inner) continue;
+      r = ratio(mix(over(fg, inner), external, alpha), mix(inner, external, alpha));
+    }
     const size = parseFloat(cs.fontSize); const bold = parseInt(cs.fontWeight, 10) >= 700;
     const need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
-    const r = ratio(text, back);
     if (r < need) bad.push(`low contrast ${r.toFixed(2)}:1 (needs ${need}) for "${n.textContent.trim().slice(0, 30)}"`);
   }
   return bad;
@@ -92,8 +114,11 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
     const bad = await page.evaluate(scan);
     assert.deepEqual([...new Set(bad)], [], `${label}: accessibility problems`);
     // keyboard: every Tab stop (up to 40) is on-screen and shows a visible focus ring; the walk reaches more than one control
+    // the browser's own tab order: every visible element with tabIndex >= 0 that is not disabled
+    const expected = await page.evaluate(() => [...document.querySelectorAll('*')].filter((el) => el.tabIndex >= 0 && !el.disabled && el.checkVisibility({ checkVisibilityCSS: true })).length);
     const stops = [];
-    for (let i = 0; i < 40; i++) {
+    let wrapped = false; let leftPage = false;
+    for (let i = 0; i < 300; i++) {
       await page.keyboard.press('Tab');
       const stop = await page.evaluate(() => {
         const el = document.activeElement;
@@ -105,26 +130,31 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
         window.__walkKeys = window.__walkKeys || new WeakMap(); window.__walkN = window.__walkN || 0; if (!window.__walkKeys.has(el)) window.__walkKeys.set(el, ++window.__walkN);
         return { key: window.__walkKeys.get(el), name: (el.getAttribute('aria-label') || el.textContent || el.id || el.tagName).trim().slice(0, 30), ringed, onScreen, visible: el.checkVisibility({ checkVisibilityCSS: true }) };
       });
-      if (!stop) break;
+      if (!stop) { leftPage = true; break; } // Tab past the last control leaves the page
+      if (stops.length > 1 && stop.key === stops[0].key) { wrapped = true; break; } // the focus cycle has come back to its start
       stops.push(stop);
     }
     const unringed = stops.filter((s) => !s.ringed).map((s) => s.name);
     assert.deepEqual(unringed, [], `${label}: focused without a visible ring`);
     assert.deepEqual(stops.filter((s) => !s.visible).map((s) => s.name), [], `${label}: focus landed on hidden controls`);
     assert.deepEqual(stops.filter((s) => !s.onScreen).map((s) => s.name), [], `${label}: focus landed outside the viewport`);
-    // distinct controls, not repeated focus: a focus loop on one control must not pass as a traversal
+    // every visible tabbable control is reached before focus cycles; a focus trap over two or a few controls fails here
     const distinct = new Set(stops.map((x) => x.key)).size;
-    assert.ok(distinct > 1, `${label}: keyboard reaches only ${distinct} distinct control(s)`);
+    assert.ok(wrapped || leftPage, `${label}: the keyboard walk neither completed a cycle nor left the page within 300 Tab presses`);
+    assert.equal(distinct, expected, `${label}: the keyboard cycle reaches ${distinct} of ${expected} visible controls`);
     if (label === 'home') { // negative controls: the scanner really does catch an unnamed control and low-contrast text
       const caught = await page.evaluate((fn) => {
         const b = document.createElement('button'); b.className = 'probe'; document.body.appendChild(b);
         const faint = document.createElement('p'); faint.className = 'probe-faint'; faint.style.cssText = 'color:#333;background:#111;font-size:14px'; faint.textContent = 'faint text'; document.body.appendChild(faint);
-        const fade = document.createElement('p'); fade.className = 'probe-fade'; fade.style.cssText = 'color:#000;background:#fff;opacity:.2;font-size:14px'; fade.textContent = 'faded text'; document.body.appendChild(fade);
-        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); fade.remove(); return r;
+        const wrap = document.createElement('div'); wrap.style.cssText = 'background:#fff;padding:4px'; document.body.appendChild(wrap);
+        const fade = document.createElement('p'); fade.className = 'probe-fade'; fade.style.cssText = 'color:#000;background:#fff;opacity:.2;font-size:14px;margin:0'; fade.textContent = 'faded text'; wrap.appendChild(fade);
+        const nest = document.createElement('div'); nest.style.cssText = 'background:#000;opacity:.5;padding:4px'; wrap.appendChild(nest); const inside = document.createElement('p'); inside.className = 'probe-nested'; inside.style.cssText = 'color:#fff;font-size:14px;margin:0'; inside.textContent = 'nested faded'; nest.appendChild(inside);
+        const r = (new Function('return (' + fn + ')()'))(); b.remove(); faint.remove(); fade.remove(); nest.remove(); wrap.remove(); return r;
       }, scan.toString());
       assert.ok(caught.some((m) => /has no accessible name/.test(m) && /probe/.test(m)), 'the scanner flags a button with no name');
       assert.ok(caught.some((m) => /low contrast/.test(m) && /faint text/.test(m)), 'the scanner flags low-contrast text');
       assert.ok(caught.some((m) => /low contrast/.test(m) && /faded text/.test(m)), 'the scanner flags faded text whose faded contrast is too low');
+      assert.ok(caught.some((m) => /low contrast/.test(m) && /nested faded/.test(m)), 'the scanner flags text faded by an ancestor group (white on black at half opacity over white is 3.98:1)');
     }
     console.log('  ok  ' + label);
   } catch (e) { failed++; console.error('FAIL  ' + label + '\n' + (e.stack || e)); }
@@ -147,8 +177,10 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
       await page.goto(url + '/');
       await page.waitForSelector('#app *', { timeout: 8000 });
       const live = await page.evaluate(() => [...document.querySelectorAll('[aria-live]')].map((el) => el.getAttribute('aria-live')));
-      assert.ok(live.includes('polite'), 'a polite live region exists for notices');
-      assert.ok(live.every((v) => v === 'polite' || v === 'assertive'), 'live regions use a valid politeness');
+      assert.equal(await page.getAttribute('#toasts', 'aria-live'), 'polite', 'the notices region announces politely');
+      assert.ok(live.every((v) => v === 'polite' || v === 'assertive' || v === 'off'), 'live regions use a valid politeness');
+      await page.evaluate(() => window.__push({ t: 'notice', text: 'Scripted notice for the live region' }));
+      await page.waitForFunction(() => (document.getElementById('toasts') || {}).textContent.includes('Scripted notice for the live region'), null, { timeout: 8000 });
       console.log('  ok  live regions');
     } catch (e) { failed++; console.error('FAIL  live regions\n' + (e.stack || e)); }
     await ctx.close();
