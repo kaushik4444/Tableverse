@@ -87,6 +87,8 @@ const newer = () => ({ id: 'b', name: 'Bo', text: 'a newer message arrives', mid
     assert.equal(sent.messageId, first.mid);
     assert.equal(sent.reason, 'harassment');
     assert.equal(await page.locator('.report-menu').count(), 0, 'the menu closes after sending');
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.mod), 'report-open', 'focus returns to the Report button');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.mid), first.mid, 'of the same message');
     await ctx.close();
   });
 

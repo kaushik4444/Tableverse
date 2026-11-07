@@ -1189,6 +1189,9 @@
       send({ t: 'report', messageId: b.dataset.mid, reason: b.dataset.reason });
       S.reportMenuFor = null;
       drawChat();
+      // the menu's buttons are gone now: keyboard focus goes back to the Report button of the same message
+      const back = $chat.querySelector(`[data-mod="report-open"][data-mid="${b.dataset.mid}"]`);
+      if (back) back.focus();
     }
   });
   $chat.addEventListener('submit', (e) => {
