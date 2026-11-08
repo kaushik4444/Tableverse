@@ -16,7 +16,7 @@ class AuthError extends Error {
 
 const TOKEN_BYTES = 32;
 const positive = (v, fallback) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : fallback);
-const sessionTtlDays = () => positive(process.env.AUTH_SESSION_TTL_DAYS, 30);
+const sessionTtlDays = () => dbPlayers.sessionTtlDays();
 const verifyTtlMin = () => positive(process.env.AUTH_VERIFY_TTL_MIN, 60 * 24);
 const resetTtlMin = () => positive(process.env.AUTH_RESET_TTL_MIN, 30);
 const isEmailVerificationRequired = (env = process.env) => {
@@ -70,14 +70,15 @@ async function verifyPassword(hash, password) {
 }
 
 async function revokeSession(rawToken) {
-  if (!db.hasDatabase() || !rawToken) return false;
+  if (!dbPlayers.isWellFormedToken(rawToken)) return false; // refused before any lookup
+  if (!db.hasDatabase()) return dbPlayers.revokeMemoryToken(rawToken);
   const tokenHash = hashToken(rawToken);
   const res = await db.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]);
   return res.rowCount > 0;
 }
 
 async function revokeAllSessionsForCurrent(rawToken) {
-  if (!db.hasDatabase() || !rawToken) return { revoked: 0 };
+  if (!db.hasDatabase() || !dbPlayers.isWellFormedToken(rawToken)) return { revoked: 0 };
   const tokenHash = hashToken(rawToken);
   return db.withTransaction(async (client) => {
     const s = await client.query(
@@ -85,7 +86,7 @@ async function revokeAllSessionsForCurrent(rawToken) {
        FROM auth_sessions
        WHERE token_hash = $1
          AND revoked_at IS NULL
-         AND (expires_at IS NULL OR expires_at > NOW())
+         AND expires_at > NOW()
        LIMIT 1`,
       [tokenHash]
     );
@@ -97,14 +98,18 @@ async function revokeAllSessionsForCurrent(rawToken) {
 }
 
 async function readSessionFromCookie(rawToken) {
-  if (!db.hasDatabase() || !rawToken) return null;
+  if (!dbPlayers.isWellFormedToken(rawToken)) return null;
+  if (!db.hasDatabase()) {
+    const player = await dbPlayers.authenticateToken(rawToken); // memory mode: the session lives in this process
+    return player ? { player_id: player.id } : null;
+  }
   const tokenHash = hashToken(rawToken);
   const r = await db.query(
     `SELECT player_id
      FROM auth_sessions
      WHERE token_hash = $1
        AND revoked_at IS NULL
-       AND (expires_at IS NULL OR expires_at > NOW())
+       AND expires_at > NOW()
      LIMIT 1`,
     [tokenHash]
   );
@@ -242,7 +247,18 @@ async function loginEmail({ email, password }) {
   const row = r.rows[0];
   if (!(await verifyPassword(row.password_hash, password))) throw new AuthError('Invalid email or password.', 401);
 
-  return makeSessionResult(row, await db.withTransaction((client) => createSession(client, row.id)));
+  // Re-check under the account lock, the same lock a password reset takes. A reset that committed while this login was
+  // checking the old password has changed the stored hash by now, so no session is issued for a password that no longer works.
+  const token = await db.withTransaction(async (client) => {
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [row.id]);
+    const now = await client.query(
+      'SELECT password_hash FROM auth_identities WHERE player_id = $1 AND provider = $2 AND provider_user_id = $3',
+      [row.id, PROVIDER_EMAIL, normEmail(email)]
+    );
+    if (!now.rows.length || now.rows[0].password_hash !== row.password_hash) throw new AuthError('Invalid email or password.', 401);
+    return createSession(client, row.id);
+  });
+  return makeSessionResult(row, token);
 }
 
 async function resendVerification({ email }) {
@@ -346,7 +362,29 @@ async function resetPassword({ token, newPassword }) {
   const tokenHash = hashToken(token);
   const pwHash = await hashPassword(newPassword);
 
+  const reasonFor = async (client) => {
+    const reason = await client.query(
+      `SELECT used_at, expires_at
+       FROM auth_email_tokens
+       WHERE token_hash = $1 AND purpose = 'password_reset'
+       LIMIT 1`,
+      [tokenHash]
+    );
+    if (!reason.rows.length) throw new AuthError('Invalid reset token.');
+    if (reason.rows[0].used_at) throw new AuthError('This reset link has already been used.');
+    throw new AuthError('This reset link has expired.');
+  };
+
   return db.withTransaction(async (client) => {
+    // Lock order matches loginEmail: the account row first, then the token. Find the account without locking the token.
+    const peek = await client.query(
+      `SELECT player_id FROM auth_email_tokens
+       WHERE token_hash = $1 AND purpose = 'password_reset' AND used_at IS NULL AND expires_at > NOW()
+       LIMIT 1`,
+      [tokenHash]
+    );
+    if (!peek.rows.length) await reasonFor(client);
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [peek.rows[0].player_id]);
     const use = await client.query(
       `UPDATE auth_email_tokens
          SET used_at = NOW()
@@ -357,18 +395,7 @@ async function resetPassword({ token, newPassword }) {
        RETURNING player_id, email`,
       [tokenHash]
     );
-    if (!use.rows.length) {
-      const reason = await client.query(
-        `SELECT used_at, expires_at
-         FROM auth_email_tokens
-         WHERE token_hash = $1 AND purpose = 'password_reset'
-         LIMIT 1`,
-        [tokenHash]
-      );
-      if (!reason.rows.length) throw new AuthError('Invalid reset token.');
-      if (reason.rows[0].used_at) throw new AuthError('This reset link has already been used.');
-      throw new AuthError('This reset link has expired.');
-    }
+    if (!use.rows.length) await reasonFor(client); // spent or expired while the account lock was waiting
 
     const t = use.rows[0];
     const identity = await client.query(
@@ -421,7 +448,7 @@ async function purgeExpired() {
   return {
     rateLimits: await run("DELETE FROM auth_rate_limits WHERE window_start < NOW() - INTERVAL '1 day'"),
     tokens: await run("DELETE FROM auth_email_tokens WHERE expires_at < NOW() - INTERVAL '7 days' OR used_at < NOW() - INTERVAL '7 days'"),
-    // rows without expires_at are legacy anonymous sessions: kept
+    // migration 011 revoked the legacy rows that had no expiry; revoked rows are removed here after 30 days like the rest
     sessions: await run("DELETE FROM auth_sessions WHERE (expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days') OR revoked_at < NOW() - INTERVAL '30 days'"),
   };
 }

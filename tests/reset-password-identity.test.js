@@ -24,6 +24,7 @@ async function runReset(identityRowCount) {
       query: async (sql) => {
         const head = sql.trim().split(/\s+/).slice(0, 2).join(' ');
         statements.push(head);
+        if (/SELECT player_id FROM auth_email_tokens/.test(sql)) return { rows: [{ player_id: 'player-1' }], rowCount: 1 };
         if (/UPDATE auth_email_tokens/.test(sql)) return { rows: [{ player_id: 'player-1', email: 'user@example.test' }], rowCount: 1 };
         if (/UPDATE auth_identities/.test(sql)) return { rows: [], rowCount: identityRowCount };
         return { rows: [], rowCount: 1 };
