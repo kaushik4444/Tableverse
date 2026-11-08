@@ -62,6 +62,12 @@ test('the filter tolerates missing lists and missing block sets', () => {
   assert.deepEqual(m.visibleChat([{ id: OTHER, text: 'x' }], undefined).length, 1);
 });
 
+test('a lobby listing shows a blocked host under a generic name, and the real name otherwise', () => {
+  assert.equal(m.listedHostName('Ada', false), 'Ada');
+  assert.equal(m.listedHostName('Ada', true), m.GENERIC_HOST);
+  assert.equal(m.listedHostName(undefined, false), m.GENERIC_HOST, 'a host with no name still gets a label');
+});
+
 test('limits are the documented values', () => {
   assert.equal(m.MAX_DETAILS, 300);
   assert.equal(m.MAX_REPORTS_PER_DAY, 20);

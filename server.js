@@ -511,7 +511,8 @@ function start(opts = {}) {
     };
   }
 
-  function publicTables() {
+  /** The table directory. With a viewer, a host the viewer is blocked with (either way) is shown under a generic name. */
+  function publicTables(viewerId = null) {
     return [...rooms.values()]
       .filter((room) => room.visibility === 'public' && (room.status === 'lobby' || room.status === 'playing'))
       .map((room) => ({
@@ -523,7 +524,7 @@ function start(opts = {}) {
         // always reflects the live table population rather than only humans.
         members: room.members.length,
         humans: room.members.filter((m) => !m.bot).length,
-        host: room.members.find((m) => m.id === room.hostId)?.name || 'Host',
+        host: moderation.listedHostName(room.members.find((m) => m.id === room.hostId)?.name, viewerId !== null && room.hostId !== viewerId && pairBlocked(viewerId, room.hostId)),
         spectators: room.spectators.length,
       }));
   }
@@ -539,7 +540,7 @@ function start(opts = {}) {
     return out;
   }
 
-  const tablesMsg = (p) => ({ t: 'tables', tables: publicTables(), rejoin: rejoinFor(p) });
+  const tablesMsg = (p) => ({ t: 'tables', tables: publicTables(p.id), rejoin: rejoinFor(p) });
 
   /** Who can take a seat back: playerId -> [{code, gameId, paused}], built in one pass over the rooms (not once per player). */
   function rejoinIndex() {
@@ -572,14 +573,13 @@ function start(opts = {}) {
   }
   function flushTables() {
     tablesTimer = null;
-    const tables = publicTables();
-    const tablesKey = JSON.stringify(tables);
     const rejoin = rejoinIndex();
     for (const p of players.values()) {
       if (!p.connected) continue;
       if (p.room) { p.tablesKey = null; continue; } // inside a table: it gets a fresh directory when it leaves
+      const tables = publicTables(p.id); // per viewer: blocked hosts are shown under a generic name
       const mine = rejoin.get(p.id) || [];
-      const key = tablesKey + '|' + JSON.stringify(mine);
+      const key = JSON.stringify(tables) + '|' + JSON.stringify(mine);
       if (p.tablesKey === key) continue;
       p.tablesKey = key;
       send(p.ws, { t: 'tables', tables, rejoin: mine });
@@ -1556,7 +1556,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceFor(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ice: iceFor(p.id) });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
     const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;

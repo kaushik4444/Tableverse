@@ -159,6 +159,10 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 - Security: the current static pair is sent to every visitor in the welcome message. To stop that, set `TURN_SHARED_SECRET` (per-player, one-hour logins) only after confirming the TURN provider accepts REST-scheme credentials; then rotate the static credential. Status: **open, needs your decision** (depends on provider support and whether the static pair is rotated).
 - Switch-over (do these in order, in one redeploy; do not run a half-switched state):
   1. Confirm the provider accepts REST-scheme credentials (coturn `use-auth-secret`, or the provider's documented equivalent).
+     Metered does NOT, as checked on 2026-11-08 (https://www.metered.ca/docs/turnserver-guides/expiring-turn-credentials): its expiring
+     credentials are created by a server-side API call (`POST https://mla2.metered.live/api/v1/turn/credential` with the account secret
+     key, `expiryInSeconds`), and the lobby fetches them with a `GET`. `TURN_SHARED_SECRET` as implemented here will not authenticate
+     against Metered. Using Metered with per-player logins needs a separate server-side integration, which is not built yet.
   2. Remove `ICE_SERVERS` from the environment if it is set. It overrides every other TURN setting, including the per-player login, and any static pair inside it would still be sent to visitors.
   3. Remove `TURN_USERNAME` and `TURN_CREDENTIAL`. Keep `TURN_URL`; add `TURN_SHARED_SECRET` (and optionally `TURN_TTL_SECONDS`).
   4. Redeploy, then check the welcome message of a test connection: the TURN entry must carry a `username` of the form `<expiry>:<player id>` and no static login.
