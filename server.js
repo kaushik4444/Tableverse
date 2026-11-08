@@ -28,6 +28,8 @@ const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
 const { debugTokensEnabled, assertSafeDebugConfig } = require('./lib/debugTokens');
 const { createReadinessCheck } = require('./lib/health');
+const { createAnalytics } = require('./lib/analytics');
+const { createAdminRoutes } = require('./lib/adminRoutes');
 const { createLogger, requestIdFrom } = require('./lib/log');
 const serverLog = createLogger({ component: 'server' });
 const httpLog = createLogger({ component: 'http' });
@@ -191,8 +193,22 @@ function start(opts = {}) {
 
   const includeDebugTokens = debugTokensEnabled(env); // only tests receive raw tokens in responses (they are not browsers)
   const emailSender = opts.emailSender || makeAuthEmailSender({ env, logger: opts.log || console });
+  // Stage 20.5: privacy-light analytics (buffered, never blocks) and the admin store. Both need PostgreSQL; without it they are off.
+  const dbAdmin = dbPool.hasDatabase() ? require('./db/admin') : null;
+  let authRoutesSignedOut = () => {}; // set by the onSignedOut option below; the admin routes use it to close a signed-out player's sockets
+  const analytics = createAnalytics({ store: dbAdmin, enabled: env.ANALYTICS_ENABLED !== '0', log: opts.log || console });
+  const trackError = (code) => analytics.track('error', code);
+  const adminPlatform = () => ({
+    uptimeSec: Math.round(process.uptime()), node: process.version, memoryMb: Math.round(process.memoryUsage().rss / 1048576),
+    mode: dbPool.hasDatabase() ? 'postgres' : 'memory', rooms: rooms.size, players: players.size, sockets: wss.clients.size, shuttingDown,
+  });
   const authRoutes = createAuthRoutes({
     env,
+    onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
+    extraRoutes: (ctx) => createAdminRoutes({
+      env, store: dbAdmin, analytics, platform: adminPlatform, ctx,
+      onSignedOut: (o) => authRoutesSignedOut(o),
+    }).routes,
     production,
     trustProxy,
     emailSender,
@@ -216,7 +232,7 @@ function start(opts = {}) {
     },
     // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
     // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
-    onSignedOut: ({ playerId, token, exceptToken }) => {
+    onSignedOut: (authRoutesSignedOut = ({ playerId, token, exceptToken }) => {
       for (const ws of wss.clients) {
         const owner = ws.player || ws.pendingPlayer; // a socket still being checked belongs to its session too
         if (!owner || owner.id !== playerId) continue;
@@ -224,7 +240,7 @@ function start(opts = {}) {
         if (exceptToken && ws.authToken === exceptToken) continue;
         revokeSocket(ws, exceptToken ? 4002 : 4001, exceptToken ? 'signed in elsewhere' : 'signed out');
       }
-    },
+    }),
     // the display name and/or avatar was changed over HTTP (profile page): same effect as the lobby's own change
     onProfileChanged: ({ playerId, displayName, avatar }) => {
       const p = players.get(playerId);
@@ -247,6 +263,7 @@ function start(opts = {}) {
     },
     // the account no longer exists: leave the table, close the socket, forget the player on this server
     onAccountDeleted: ({ playerId }) => {
+      if (dbAdmin) dbAdmin.forgetActor(playerId).catch(() => {}); // drop this account's pseudonymous activity rows (best effort)
       const p = players.get(playerId);
       if (!p) return;
       // The real name must not outlive the account anywhere: not in the table, its log or chat, and not in the match
@@ -362,6 +379,7 @@ function start(opts = {}) {
       return res.end('shutting down');
     }
     handleHttp(req, res).catch((err) => {
+      trackError('http_unhandled');
       httpLog.error('http.unhandled', { requestId, method: req.method, path: String(req.url).split('?')[0], err });
       try {
         if (!res.headersSent) { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end('Server error'); }
@@ -676,6 +694,7 @@ function start(opts = {}) {
     if (g) {
       if (g.isOver() && room.status !== 'finished') {
         room.status = 'finished';
+        analytics.track('game_finished', room.gameId);
         room.votes = new Set(); // who wants to play again (the host just starts it)
         room.outcome = outcomeOf(room, g);
         for (const m of humans(room)) schedulePresence(m.id);
@@ -777,6 +796,7 @@ function start(opts = {}) {
         afterChange(room);
       } catch (e) {
         room.autoFailures = (room.autoFailures || 0) + 1;
+        trackError('auto_play');
         console.error(`[server] table ${room.code} (${room.gameId}): automatic play failed (${room.autoFailures}/3):`, e && e.stack || e);
         if (room.autoFailures >= 3) {
           for (const m of viewers(room)) { const q = players.get(m.id); if (q && q.connected) send(q.ws, { t: 'notice', text: 'This game hit an error and had to be closed. Sorry! Please start a new table.' }); }
@@ -1344,6 +1364,7 @@ function start(opts = {}) {
       if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
       else pacing.setScale(room.game, botScale);
       room.status = 'playing';
+      analytics.track('game_started', room.gameId);
       room.matchKey = crypto.randomUUID(); // identifies this game in the match history
       room.startedAt = Date.now();
       room.leftEarly = new Set();
@@ -1556,6 +1577,7 @@ function start(opts = {}) {
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
     send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
+    if (ws.authToken) analytics.active(p.id); // registered accounts only; the store keeps a keyed hash, not the id
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
     const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;
@@ -1639,6 +1661,7 @@ function start(opts = {}) {
   }
 
   wss.on('connection', (ws, req) => {
+    analytics.track('session'); // one count per socket; no address or identity is recorded
     ws.ip = clientIp(req);
     ws.cookieToken = authRoutes.readSessionToken(req);
     const open = (socketsByIp.get(ws.ip) || 0) + 1;
@@ -1704,6 +1727,7 @@ function start(opts = {}) {
           }
           if (RECENT_ON.has(msg.t) && p.room && (p.room !== before || (msg.t === 'join' && String(msg.code || '').trim().toUpperCase() === p.room))) trackRecent(p);
         } catch (e) {
+          trackError('ws_handler');
           wsLog.error('game.handler_failed', { connId: ws.connId, type: msg.t, room: p.room || null, err: e });
           sendError(p, 'Something went wrong');
         }
@@ -1824,6 +1848,7 @@ function start(opts = {}) {
       clearTimeout(timer);
       await Promise.all([matchDrain, authRoutes.drainDeliveries(Math.max(0, deadline - Date.now()))]);
     }
+    await analytics.close(Math.max(0, Math.min(2000, deadline - Date.now()))); // last counters; gives up quickly, never delays shutdown
     matchQueue.close();
     for (const room of rooms.values()) clearTimeout(room.timer);
     await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
@@ -1843,8 +1868,12 @@ function start(opts = {}) {
       spoolTimer.unref();
       // old rate-limit rows, expired sessions and used tokens: once now, then every 6 hours (best effort)
       const purge = () => dbAuth.purgeExpired().catch((e) => (opts.log || console).error('[auth] housekeeping failed: ' + e.message));
+      const purgeAdmin = () => dbAdmin.purge().catch((e) => (opts.log || console).error('[admin] retention housekeeping failed: ' + e.message));
+      dbAdmin.bootstrapOwner(env).then((r) => { if (r.claimed) (opts.log || console).log('[admin] owner account set from server configuration'); }, (e) => (opts.log || console).error('[admin] owner bootstrap failed: ' + e.message));
+      analytics.start();
       purge();
-      purgeTimer = setInterval(purge, 6 * 60 * 60 * 1000);
+      purgeAdmin();
+      purgeTimer = setInterval(() => { purge(); purgeAdmin(); }, 6 * 60 * 60 * 1000);
       purgeTimer.unref();
     }
     return new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine })));
