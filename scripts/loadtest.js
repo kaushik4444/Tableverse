@@ -40,12 +40,15 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 // (see lib/debugTokens.js). It is refused on a hosted deployment by the server itself.
 process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS = process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS || '1';
 delete process.env.DATABASE_URL;
+// Registration is limited per address (8 per 10 min in production, 500 in test mode). Every simulated player registers from
+// this one loopback address, so lift that limit for the run to cover the player count (server defaults are unchanged).
 const WebSocket = require('ws');
 const { monitorEventLoopDelay } = require('node:perf_hooks');
 const { registerAndVerify, sessionSocket } = require('../tests/helpers/auth');
 const { start } = require('../server');
 
 const PLAYERS = Number(process.argv[2] || 200);
+process.env.RL_REGISTER_IP_LIMIT = process.env.RL_REGISTER_IP_LIMIT || String(PLAYERS * 2 + 10);
 const SECONDS = Number(process.argv[3] || 20);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mb = (n) => Math.round(n / 1048576);
