@@ -163,18 +163,25 @@ const ADMIN_POSTS = [
         assert.equal((await u.b.post('/api/admin/roles', { playerId: u.id, role: 'owner' })).status, 403);
       } finally { await b.close(); }
     });
-    await test('ADMIN_OWNER_ID (the stable account id) takes precedence over the e-mail setting', async () => {
-      const probe = await start({});
-      const target = await probe.login({ email: 'target@example.com', verified: true });
-      const id = target.id;
-      await probe.close();
-      const b = await start({ env: { ADMIN_OWNER_ID: id, ADMIN_OWNER_EMAIL: 'mail@example.com' } });
+    await test('ADMIN_OWNER_ID is used when the e-mail setting does not match a verified account (email first, id as fallback)', async () => {
+      const b = await start({ env: { ADMIN_OWNER_EMAIL: 'mail@example.com' } });
       try {
-        const viaMail = await b.login({ email: 'mail@example.com', verified: true });
-        assert.equal((await viaMail.b.get('/api/admin/me')).json.isOwner, false, 'the e-mail setting is ignored when an id is configured');
+        const target = await b.login({ email: 'target@example.com', verified: true });
+        const other = await b.login({ email: 'mail@example.com', verified: false });
+        assert.equal((await other.b.get('/api/admin/me')).json.isOwner, false, 'an unverified address does not qualify');
+        b.env.ADMIN_OWNER_ID = target.id; // the operator sets the id (server configuration)
+        assert.equal((await target.b.get('/api/admin/me')).json.isOwner, true, 'the configured id claims ownership');
       } finally { await b.close(); }
     });
-
+    await test('a verified ADMIN_OWNER_EMAIL is used first; the id is then ignored', async () => {
+      const b = await start({ env: { ADMIN_OWNER_ID: '00000000-0000-4000-8000-00000000abcd', ADMIN_OWNER_EMAIL: 'mail@example.com' } });
+      try {
+        const viaMail = await b.login({ email: 'mail@example.com', verified: true });
+        assert.equal((await viaMail.b.get('/api/admin/me')).json.isOwner, true);
+        const stranger = await b.login({ email: 'x@example.com', verified: true });
+        assert.equal((await stranger.b.get('/api/admin/me')).json.isOwner, false);
+      } finally { await b.close(); }
+    });
     console.log('audit log');
     await test('admin changes are recorded and only staff can read the log', async () => {
       assert.equal((await user.b.get('/api/admin/audit')).status, 403);

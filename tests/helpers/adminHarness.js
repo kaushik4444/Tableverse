@@ -54,7 +54,7 @@ async function start({ env = {}, analytics = null, store: given = null, clock = 
     return b;
   }
   async function guest() { const b = new Browser(port); await b.csrf(); return b; }
-  return { port, store, clock, signedOutCalls, login, otherDevice, guest, close: () => new Promise((r) => server.close(r)) };
+  return { port, store, clock, env: e, signedOutCalls, login, otherDevice, guest, close: () => new Promise((r) => server.close(r)) };
 }
 
 module.exports = { start };

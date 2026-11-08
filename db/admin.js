@@ -61,20 +61,33 @@ async function claimOwnerIfConfigured(playerId, env = process.env) {
   });
 }
 
-/** At start-up: resolves the configured account (by id, or by verified e-mail) and claims ownership for it. */
+/**
+ * At start-up: finds the configured owner account and claims ownership for it. The verified e-mail (ADMIN_OWNER_EMAIL) is tried
+ * first; if no verified account has that address, the stable account id (ADMIN_OWNER_ID) is used.
+ */
 async function bootstrapOwner(env = process.env) {
-  const id = String(env.ADMIN_OWNER_ID || '').trim();
+  const id = String(env.ADMIN_OWNER_ID || '').trim().toLowerCase();
   const email = String(env.ADMIN_OWNER_EMAIL || '').trim().toLowerCase();
   if (!id && !email) return { claimed: false };
-  let playerId = null;
-  if (id) {
-    if (!/^[0-9a-f-]{36}$/i.test(id)) return { claimed: false, reason: 'ADMIN_OWNER_ID is not a UUID' };
-    playerId = (await db.query('SELECT id FROM players WHERE id = $1', [id.toLowerCase()])).rows[0]?.id || null;
-  } else {
-    playerId = (await db.query('SELECT player_id FROM auth_identities WHERE LOWER(email) = $1 AND email_verified_at IS NOT NULL LIMIT 1', [email])).rows[0]?.player_id || null;
+  if (await hasOwner()) return { claimed: false };
+  const candidates = [];
+  if (email) {
+    const r = await db.query('SELECT player_id FROM auth_identities WHERE LOWER(email) = $1 AND email_verified_at IS NOT NULL LIMIT 1', [email]);
+    if (r.rows[0]) candidates.push(r.rows[0].player_id);
   }
-  if (!playerId) return { claimed: false, reason: 'the configured owner has no verified account yet' };
-  return { claimed: await claimOwnerIfConfigured(playerId, env) };
+  if (id && /^[0-9a-f-]{36}$/.test(id)) {
+    const r = await db.query('SELECT id FROM players WHERE id = $1', [id]);
+    if (r.rows[0]) candidates.push(r.rows[0].id);
+  }
+  if (!candidates.length) return { claimed: false, reason: 'the configured owner has no verified account yet' };
+  for (const playerId of candidates) {
+    if (await claimOwnerIfConfigured(playerId, env)) return { claimed: true };
+  }
+  return { claimed: false };
+}
+
+async function hasOwner() {
+  return (await db.query("SELECT 1 FROM players WHERE role = 'owner' LIMIT 1")).rows.length > 0;
 }
 
 async function setRole({ actorId, targetId, role }) {

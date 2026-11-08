@@ -26,10 +26,10 @@ Protections (each is covered by `tests/admin.test.js` or `tests/admin.pg.test.js
 
 Set one of these on the server (for example in the Render dashboard; nothing is committed and `render.yaml` is unchanged):
 
-- `ADMIN_OWNER_ID`: the owner's stable account id (UUID). Preferred. When set, `ADMIN_OWNER_EMAIL` is ignored.
-- `ADMIN_OWNER_EMAIL`: the e-mail address of your existing account. Only a **verified** address qualifies, so nobody can claim ownership by registering your address first.
+- `ADMIN_OWNER_EMAIL`: the e-mail address of your existing account. Tried **first**. Only a **verified** address qualifies, so nobody can claim ownership by registering your address first.
+- `ADMIN_OWNER_ID`: the owner's stable account id (UUID). Used as the **fallback** when the e-mail setting is not set or does not match a verified account. Either setting works on its own.
 
-The account becomes the owner the first time it is known to the server while **no owner exists**: at start-up, or when that signed-in account first opens the console. After that the stable account id is what counts: changing or removing the setting has no effect, and nobody else can ever claim ownership. The claim is written to the audit log (`owner.claimed`). Without either setting there is no owner and nobody can become one.
+The account becomes the owner the first time it is known to the server while **no owner exists**: at start-up, or when that signed-in account first opens the console. Once an owner exists nothing else can claim it, whatever the settings say: changing or removing the settings has no effect. The claim is written to the audit log (`owner.claimed`). Without either setting there is no owner and nobody can become one.
 
 Handing ownership to someone else is deliberately not an API feature. It is an operator action on the database (demote the old owner and promote the new account in one transaction); ask before doing it in production.
 
