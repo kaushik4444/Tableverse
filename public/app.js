@@ -559,6 +559,7 @@
         return;
       }
       if (e.code === 4001) { // signed out elsewhere, or the password was reset
+        S.signingIn = false;
         hideBusy();
         clearClientSession();
         $banner.hidden = true;
@@ -568,6 +569,7 @@
         return;
       }
       if (e.code === 4002) { // a newer login (another device) took over the single active session
+        S.signingIn = false;
         hideBusy();
         clearClientSession();
         $banner.hidden = true;
