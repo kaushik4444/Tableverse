@@ -621,6 +621,11 @@ function start(opts = {}) {
   const blocksPlayer = (p, id) => { const s = effectiveBlocked(p); return !!s && s.has(id); };
   const pairBlocked = (a, b) => { const x = players.get(a); const y = players.get(b); return (!!x && blocksPlayer(x, b)) || (!!y && blocksPlayer(y, a)); };
   const voiceFor = (room, viewerId) => voiceRelay.voiceList(room, (id) => pairBlocked(viewerId, id), viewerId);
+  /** Sends this player their list of blocked accounts (names come from the database; none without one). */
+  async function sendBlocks(p) {
+    const blocks = dbPool.hasDatabase() ? await dbModeration.listBlocked(p.id) : [];
+    send(p.ws, { t: 'blocks', blocks });
+  }
   const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); send(p.ws, { t: 'voice', ids: voiceFor(room, p.id) }); };
   /** Re-sends this viewer's chat history after a block or unblock, so the change shows at once. */
   const resyncChat = (p) => { const room = rooms.get(p.room); if (room) send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); };
@@ -1084,11 +1089,15 @@ function start(opts = {}) {
           if (current && current !== room) broadcastVoice(current);
         }
         resyncChat(p);
+        await sendBlocks(p);
         const roomNow = rooms.get(p.room);
         if (roomNow) broadcastVoice(roomNow); // a voice connection to them closes now, on both sides
         send(p.ws, { t: 'notice', text: 'Blocked. They are hidden from your table chat and table voice. Nothing else changes, and they are not told.' });
       });
     },
+
+    /** The accounts this player has blocked, with names, for the Account tab. Answered after every block or unblock too. */
+    blocks(p) { return sendBlocks(p); },
 
     async unblock(p, msg) {
       if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
@@ -1104,6 +1113,7 @@ function start(opts = {}) {
         await dbModeration.removeBlock(p.id, msg.id);
         p.blocked.delete(msg.id);
         resyncChat(p);
+        await sendBlocks(p);
         const roomNow = rooms.get(p.room);
         if (roomNow) broadcastVoice(roomNow); // they may be offered voice again
         send(p.ws, { t: 'notice', text: 'Unblocked.' });

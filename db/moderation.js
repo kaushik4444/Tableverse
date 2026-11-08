@@ -13,6 +13,19 @@ async function loadBlockedIds(blockerId) {
   return new Set(r.rows.map((row) => row.blocked_id));
 }
 
+/** The accounts this one has blocked, with their display names, for the settings list. Newest first is not needed: sorted by name. */
+async function listBlocked(blockerId) {
+  const r = await db.query(
+    `SELECT b.blocked_id AS id, p.display_name AS name
+       FROM player_blocks b JOIN players p ON p.id = b.blocked_id
+      WHERE b.blocker_id = $1
+      ORDER BY p.display_name, b.blocked_id
+      LIMIT $2`,
+    [blockerId, MAX_BLOCKS]
+  );
+  return r.rows;
+}
+
 /** Blocks another account. Idempotent. Refuses when the list is full or the account does not exist. */
 async function addBlock(blockerId, blockedId) {
   return db.withTransaction(async (client) => {
@@ -78,4 +91,4 @@ async function createChatReport({ reporterId, reportedId, roomCode, messageId, m
   });
 }
 
-module.exports = { ModerationError, loadBlockedIds, addBlock, removeBlock, createChatReport, MAX_REPORTS_PER_DAY, MAX_BLOCKS };
+module.exports = { ModerationError, loadBlockedIds, listBlocked, addBlock, removeBlock, createChatReport, MAX_REPORTS_PER_DAY, MAX_BLOCKS };

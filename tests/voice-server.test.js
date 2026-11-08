@@ -19,7 +19,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 function client(port, token) {
-  const c = { room: null, errors: [], voice: [], rtc: [], ice: null, iceReplies: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
+  const c = { room: null, errors: [], voice: [], rtc: [], ice: null, iceReplies: [], blockLists: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
   c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
@@ -30,6 +30,7 @@ function client(port, token) {
     if (m.t === 'voice') c.voice = m.ids;
     if (m.t === 'rtc') c.rtc.push(m);
     if (m.t === 'ice') c.iceReplies.push(m);
+    if (m.t === 'blocks') c.blockLists.push(m.blocks);
     if (m.t === 'left') c.room = null;
   });
   c.inVoice = () => c.voice.map((v) => v.id).sort();
@@ -65,6 +66,12 @@ function client(port, token) {
       ann.send({ t: 'ice' });
       await sleep(150);
       assert.equal(ann.iceReplies.length, before + 1, 'a second request straight away gets no answer');
+    });
+
+    await test('without a database there are no blocks to list, and the list request is answered', async () => {
+      ann.send({ t: 'blocks' });
+      await until(() => ann.blockLists.length > 0, 'blocks reply');
+      assert.deepEqual(ann.blockLists[0], []);
     });
 
     await test('joining voice tells everyone at the table, spectators included', async () => {
