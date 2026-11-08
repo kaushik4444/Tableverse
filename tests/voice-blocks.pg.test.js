@@ -88,6 +88,10 @@ function socket(port, cookie) {
       assert.equal(B.s.rtcFrom(A.id), before, 'B receives nothing from A');
     });
 
+    // The server ignores reactions in the lobby, so the table starts its game before anyone reacts.
+    A.s.send({ t: 'start' });
+    await until(() => A.s.room && A.s.room.status === 'playing', 'the game is running');
+
     await test('a reaction from B does not reach A; C still sees it', async () => {
       const toA = A.s.msgs.filter((m) => m.t === 'emote').length;
       const toC = C.s.msgs.filter((m) => m.t === 'emote').length;

@@ -15,6 +15,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 (async () => {
   const t = await testdb.create(); // exits (SKIPPED) when PostgreSQL tests are not configured
+  process.env.DATABASE_URL = t.url; // only now: db/pool reads it when it is first required, and env.js removed it
   try {
     await require('../db/migrate').migrate();
     const x = await t.client();
