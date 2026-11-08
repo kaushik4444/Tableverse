@@ -43,11 +43,6 @@ process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS = process.env.TABLEVERSE_ALLOW_DEBUG_T
 delete process.env.DATABASE_URL;
 // Registration is limited per address (8 per 10 min in production, 500 in test mode). Every simulated player registers from
 // this one loopback address, so lift that limit for the run to cover the player count (server defaults are unchanged).
-const WebSocket = require('ws');
-const { monitorEventLoopDelay } = require('node:perf_hooks');
-const { registerAndVerify, sessionSocket } = require('../tests/helpers/auth');
-const { start } = require('../server');
-
 // Arguments are whole numbers: a typo must stop the run, not turn into NaN and a run with no players.
 const wholeArg = (v, fallback, label) => {
   if (v === undefined) return fallback;
@@ -58,6 +53,12 @@ const wholeArg = (v, fallback, label) => {
 const PLAYERS = wholeArg(process.argv[2], 200, 'players');
 process.env.RL_REGISTER_IP_LIMIT = process.env.RL_REGISTER_IP_LIMIT || String(PLAYERS * 2 + 10);
 const SECONDS = wholeArg(process.argv[3], 20, 'seconds');
+
+const WebSocket = require('ws');
+const { monitorEventLoopDelay } = require('node:perf_hooks');
+const { registerAndVerify, sessionSocket } = require('../tests/helpers/auth');
+const { start } = require('../server');
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mb = (n) => Math.round(n / 1048576);
 
