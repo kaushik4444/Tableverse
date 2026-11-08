@@ -156,6 +156,7 @@ Only with owner approval. Recovery replaces what players see; decide first, then
 ## Voice chat connectivity (TURN) — verify in production
 Voice is peer to peer. With only STUN (the default), players on some mobile carriers or office networks cannot hear each other.
 - Check: Render > service > Environment has `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (or `ICE_SERVERS`). Status: **configured** (Metered.ca free tier, set on Render, 2026-11-06).
+- Security: the current static pair is sent to every visitor in the welcome message. To stop that, set `TURN_SHARED_SECRET` (per-player, one-hour logins) only after confirming the TURN provider accepts REST-scheme credentials; then rotate the static credential. Status: **open, needs your decision** (depends on provider support and whether the static pair is rotated).
 - Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: **passed** (2026-11-06).
 - If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
 

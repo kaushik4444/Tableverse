@@ -103,4 +103,32 @@ test('dropping a player frees their slot, and the list no longer offers them', (
   assert.deepEqual(V.voiceList(r).map((v) => v.id), ['p0']);
 });
 
+test('with a shared secret, TURN gets a short-lived login per player and no static credential is sent', () => {
+  const crypto = require('node:crypto');
+  const env = { TURN_URL: 'turn:t.example:3478', TURN_SHARED_SECRET: 'top-secret', TURN_USERNAME: 'static-user', TURN_CREDENTIAL: 'static-pass' };
+  const now = 1_700_000_000_000;
+  const a = V.iceServers(env, { playerId: 'player-a', now });
+  const b = V.iceServers(env, { playerId: 'player-b', now });
+  const turnA = a.at(-1);
+  assert.equal(turnA.urls, 'turn:t.example:3478');
+  assert.equal(turnA.username, `${1_700_000_000 + 3600}:player-a`, 'expiry is one hour ahead, bound to the player');
+  const expected = crypto.createHmac('sha1', 'top-secret').update(turnA.username).digest('base64');
+  assert.equal(turnA.credential, expected, 'the credential is the HMAC the TURN server can verify');
+  assert.notEqual(b.at(-1).username, turnA.username, 'each player gets their own login');
+  const wire = JSON.stringify([a, b]);
+  assert.ok(!wire.includes('static-pass') && !wire.includes('static-user') && !wire.includes('top-secret'), 'no static credential and no secret is sent');
+});
+
+test('a player-less TURN request is refused rather than handing out a static login', () => {
+  const list = V.iceServers({ TURN_URL: 'turn:t.example:3478', TURN_SHARED_SECRET: 's', TURN_CREDENTIAL: 'static-pass' });
+  assert.deepEqual(list, [{ urls: V.DEFAULT_STUN }], 'STUN only: TURN needs a player to be named');
+});
+
+test('the TURN login lifetime is clamped to 5 minutes .. 24 hours', () => {
+  const now = 1_700_000_000_000;
+  assert.equal(V.turnRestCredential('s', 'p', { now, ttlSeconds: 10 }).expiresAt, 1_700_000_000 + 300);
+  assert.equal(V.turnRestCredential('s', 'p', { now, ttlSeconds: 10_000_000 }).expiresAt, 1_700_000_000 + 86400);
+  assert.equal(V.turnRestCredential('s', 'p', { now, ttlSeconds: 'nonsense' }).expiresAt, 1_700_000_000 + 3600);
+});
+
 console.log(`\n${passed} voice tests passed`);

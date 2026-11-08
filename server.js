@@ -80,7 +80,8 @@ function start(opts = {}) {
   const botScale = opts.botDelay ? Math.min(1, opts.botDelay[1] / 1600) : 1; // tests run with fast bots; plugin-timed bots follow
   const trickPauseMs = opts.trickPauseMs ?? 1700; // time everybody gets to see a finished trick being collected
   const env = opts.env || process.env;
-  const iceServers = opts.iceServers ?? voiceRelay.iceServers(env); // sent to browsers for table voice chat
+  // ICE servers for table voice, sent in each welcome. TURN may get a login made for that player (see lib/voiceRelay.js).
+  const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId });
   assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';
   const trustProxy = opts.trustProxy ?? parseTrustProxy(env.TRUST_PROXY, production); // behind Render's proxy the client address is in X-Forwarded-For
@@ -1555,7 +1556,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceFor(p.id) });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
     const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;
