@@ -53,6 +53,66 @@ function messages(patch) {
     await ctx.close();
   });
 
+  await test('a move walks the token square by square, then buttons come back', async () => {
+    const base = (v) => { v.players[0].tokens = [3, -1, -1, -1]; Object.assign(v, { phase: 'moving', turn: 1, canMove: false, myTurn: false, canRoll: false, dice: 4, legalTokens: [] }); };
+    const m = messages(base);
+    const { page, ctx } = await scriptedPage(browser, { messages: m });
+    await page.goto(url + '/');
+    await page.waitForSelector('.ludo-token[data-pid="0-0"]');
+    const moved = JSON.parse(JSON.stringify(m[1].view)); moved.players[0].tokens = [7, -1, -1, -1];
+    Object.assign(moved, { phase: 'rolling', turn: 0, canRoll: true, myTurn: true, dice: null, lastMove: { player: 0, token: 0, from: 3, to: 7, dice: 4, captured: [] } });
+    await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room: m[1].room, view: moved });
+    await page.waitForTimeout(120);
+    assert.equal(await page.isDisabled('.ludo-roll'), true, 'the roll button waits while the token walks');
+    const seen = new Set();
+    const start = Date.now();
+    while (Date.now() - start < 5000) {
+      const state = await page.evaluate(() => { const t = document.querySelector('.ludo-token[data-pid="0-0"]'); return { pos: t.style.left + '|' + t.style.top, moving: t.classList.contains('moved') }; });
+      seen.add(state.pos);
+      if (!state.moving) break;
+      await page.waitForTimeout(60);
+    }
+    assert.ok(seen.size >= 5, `it stopped on each square on the way (start + 4 steps): ${seen.size} positions`);
+    assert.equal(await page.isDisabled('.ludo-roll'), true, 'the final landing transition still gates controls');
+    await page.waitForTimeout(120);
+    assert.equal(await page.isDisabled('.ludo-roll'), true, 'controls remain disabled through the landing transition');
+    await page.waitForFunction(() => !document.querySelector('.ludo-roll').disabled, null, { timeout: 2000 });
+    await ctx.close();
+  });
+
+  await test('switching tables clears unfinished animation state', async () => {
+    const m = messages((v) => {
+      v.players[3].tokens = [3, -1, -1, -1];
+      Object.assign(v, { phase: 'rolling', turn: 0, canRoll: true, myTurn: true, canMove: false, dice: 4 });
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages: m });
+    await page.goto(url + '/');
+    await page.waitForSelector('.ludo-roll');
+    const moved = JSON.parse(JSON.stringify(m[1].view));
+    moved.players[3].tokens[0] = 7;
+    await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room: m[1].room, view: moved });
+    await page.waitForTimeout(60);
+
+    const next = JSON.parse(JSON.stringify(m[1]));
+    next.room.code = 'GHIJKL';
+    next.room.seats = 2;
+    next.view.players = next.view.players.slice(0, 2);
+    Object.assign(next.view, { n: 2, phase: 'rolling', turn: 0, me: 0, canRoll: true, myTurn: true, canMove: false, dice: null });
+    await page.evaluate((st) => window.__push(st), next);
+    assert.equal(await page.isDisabled('.ludo-roll'), false, 'the new table is not blocked by the old walk');
+    await ctx.close();
+  });
+
+  await test('the table has the same top bar as the other games: the game name, then the controls', async () => {
+    const m = messages(() => {});
+    const { page, ctx } = await scriptedPage(browser, { messages: m });
+    await page.goto(url + '/');
+    await page.waitForSelector('.wz-top .wz-round', { timeout: 5000 });
+    assert.match(await page.textContent('.wz-top .wz-round'), /Ludo/);
+    assert.equal(await page.locator('.wz-top .ludo-tools').count(), 1, 'the toolbar sits in the header');
+    await ctx.close();
+  });
+
   await test('on your roll the Roll button is enabled; on someone else’s it is disabled', async () => {
     const mine = await scriptedPage(browser, { messages: messages((v) => Object.assign(v, { phase: 'rolling', turn: 0, canRoll: true, myTurn: true })) });
     await mine.page.goto(url + '/'); await mine.page.waitForSelector('.ludo-roll');

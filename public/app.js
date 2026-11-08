@@ -72,6 +72,7 @@
   const plugins = {};
   let ws = null;
   let retry = 0;
+  let loginBusy = false;
   let wasMyTurn = false;
   let nameTimer = null;
 
@@ -238,12 +239,18 @@
 
   async function postJson(url, body, retried) {
     await ensureCsrf();
-    const r = await fetch(url, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': S.csrf },
-      body: JSON.stringify(body || {}),
-    });
+    let r;
+    try {
+      r = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': S.csrf },
+        body: JSON.stringify(body || {}),
+      });
+    } catch {
+      const err = new Error('Could not reach the server. Check your connection, wait a moment, then try again.');
+      throw err; // no answer at all: the sign-in may still finish on the server, so it is not retried automatically
+    }
     let data = {};
     try { data = await r.json(); } catch { /* ignore */ }
     if (r.status === 403 && /CSRF/i.test(data.error || '') && !retried) { // cookie expired or was cleared: fetch a fresh pair once
@@ -251,7 +258,12 @@
       return postJson(url, body, true);
     }
     if (data && data.csrfToken) S.csrf = data.csrfToken;
-    if (!r.ok || data.ok === false) throw new Error(data.error || `Request failed (${r.status})`);
+    if (!r.ok || data.ok === false) {
+      const err = new Error(data.error || `Request failed (${r.status})`);
+      err.status = r.status;
+      err.retryable = data.retryable === true;
+      throw err;
+    }
     return data;
   }
 
@@ -400,8 +412,18 @@
     S.auth = null;
   }
 
+  // Only retry a database lookup explicitly marked safe by the server; ambiguous responses may have created a session.
+  async function postLogin(email, password) {
+    for (let attempt = 0; ; attempt++) {
+      try { return await postJson('/api/auth/login', { email, password }); } catch (err) {
+        if (!err.retryable || attempt >= 2) throw err;
+        await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+      }
+    }
+  }
+
   async function doLogin(email, password) {
-    const out = await postJson('/api/auth/login', { email, password });
+    const out = await postLogin(email, password);
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     adoptPlayer(out.player);
@@ -451,19 +473,28 @@
   }
 
   // The session cookie rides along with the WebSocket upgrade, so the page never handles the session token.
+  let reconnectTimer = null;
   function connect() {
-    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+    // Exactly one socket at a time. A second one (a reconnect timer firing after a login, or a slow first connection)
+    // would take the account over from the first with "replaced", and the page could end up talking to the dead one.
+    clearTimeout(reconnectTimer); reconnectTimer = null;
+    if (ws) { const old = ws; ws = null; old.onopen = old.onmessage = old.onclose = null; try { old.close(); } catch { /* already closed */ } }
+    const sock = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+    ws = sock;
     ws.onopen = () => {
+      if (sock !== ws) return;
       retry = 0;
       $banner.hidden = true;
       send({ t: 'hello' });
     };
     ws.onmessage = (e) => {
+      if (sock !== ws) return;
       let m;
       try { m = JSON.parse(e.data); } catch { return; }
       onMessage(m);
     };
     ws.onclose = (e) => {
+      if (sock !== ws) return;
       S.ready = false;
       voice.reset(); // the server drops us from voice when the connection drops
       if (e.code === 4000) {
@@ -489,7 +520,7 @@
       if (e.code === 1008) return; // refused (not logged in, not verified): the login sheet is already showing, do not loop
       $banner.textContent = 'Reconnecting…';
       $banner.hidden = false;
-      setTimeout(connect, Math.min(5000, 500 * 2 ** retry++));
+      reconnectTimer = setTimeout(connect, Math.min(5000, 500 * 2 ** retry++));
     };
   }
 
@@ -835,10 +866,18 @@
       e.preventDefault();
       const email = (document.getElementById('loginEmail') || {}).value;
       const password = (document.getElementById('loginPassword') || {}).value;
+      if (loginBusy) return; // a second press while the first is still running would end the first one's session
+      loginBusy = true;
+      const btn = e.target.querySelector('[type="submit"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
       try {
         await doLogin(email, password);
       } catch (err) {
         openAuthSheet('login', err.message || 'Login failed', true);
+        const again = document.getElementById('loginEmail');
+        if (again) again.value = email || ''; // keep what was typed
+      } finally {
+        loginBusy = false;
       }
     }
     if (e.target.id === 'registerForm') {

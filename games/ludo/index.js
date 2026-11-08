@@ -1,6 +1,7 @@
 'use strict';
 const engine = require('./engine');
 const { scrubDeep } = require('../scrub');
+const pacing = require('../pacing');
 
 module.exports = {
   id: 'ludo',
@@ -54,10 +55,12 @@ module.exports = {
       act: (playerId, action) => engine.applyAction(g, playerId, action),
       awaiting: () => engine.awaitingList(g),
       botDelayMs: () => 1800,
+      holdMs: () => pacing.remaining(g),
       stamp: () => g.event ? g.event.seq : null,
       botAction: (playerId) => engine.botAction(g, playerId),
       forcedPlay: () => engine.forcedPlay(g),
       autoAction: () => null,
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       isOver: () => g.phase === 'gameOver',
       // first to finish all four tokens wins; score is placement (first = n, ... last = 1)
       results: () => {

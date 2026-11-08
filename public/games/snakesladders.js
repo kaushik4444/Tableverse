@@ -2,9 +2,9 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const STEP_MS = 340, JUMP_MS = 900;
+  const STEP_MS = 480, JUMP_MS = 1400; // slow enough to count every square; the server waits for the same times (games/snakesladders/engine.js)
   /** shown[i] is where player i's token is drawn right now; it walks square by square towards the real position. */
-  const ui = { ctx: null, latest: null, root: null, seq: null, rollSeq: null, tumble: false, shown: [], timer: null, animating: false };
+  const ui = { ctx: null, latest: null, root: null, roomCode: null, seq: null, rollSeq: null, tumble: false, shown: [], timer: null, animating: false };
   const shownPos = (v, i) => (ui.shown[i] === undefined ? v.players[i].pos : ui.shown[i]);
   const HEX = { red: '#e5484d', blue: '#3b82f6', green: '#22a35a', yellow: '#e8b923' };
   const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
@@ -126,7 +126,9 @@
       const i = Number(el.dataset.i), n = shownPos(v, i), group = at.get(n);
       const c = centre(n, i);
       const [ox, oy] = n > 0 ? offset(group.indexOf(i), group.length) : [0, 0];
+      const moved = el.style.left !== (c.x + ox) + '%' || el.style.top !== (c.y + oy) + '%';
       el.style.left = (c.x + ox) + '%'; el.style.top = (c.y + oy) + '%';
+      if (moved && !ui.root.querySelector('.sl-jumping')) { el.classList.remove('hop'); void el.offsetWidth; el.classList.add('hop'); }
     });
   }
   function stopAnimation() { clearTimeout(ui.timer); ui.timer = null; ui.animating = false; ui.shown = []; }
@@ -154,11 +156,12 @@
     const e = v.event;
     const snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; ui.rollSeq = v.lastRoll ? v.lastRoll.seq : 0; return; } // first render (page load or reconnect): no replay
+    const newRoll = v.lastRoll && v.lastRoll.seq !== ui.rollSeq;
     ui.tumble = Boolean(v.lastRoll && v.lastRoll.seq !== ui.rollSeq);
     ui.rollSeq = v.lastRoll ? v.lastRoll.seq : 0;
+    if (newRoll && v.lastRoll.from !== undefined && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) animate(v.lastRoll);
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
-    if ((e.type === 'rolled' || e.type === 'won') && e.from !== undefined && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) animate(e);
     if (!snd) return;
     const last = (v.log || []).slice(-1)[0];
     if (v.phase === 'gameOver') snd.play(v.winner === v.me ? 'win' : 'lose');
@@ -169,6 +172,12 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v; ui.root = root;
+    const roomCode = ctx.room && ctx.room.code;
+    if (ui.roomCode !== roomCode) {
+      stopAnimation();
+      ui.roomCode = roomCode;
+      ui.seq = null; ui.rollSeq = null; ui.tumble = false;
+    }
     react(v);
     root.innerHTML = `
     <div class="wz sl">

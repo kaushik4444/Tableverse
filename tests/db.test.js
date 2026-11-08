@@ -1,8 +1,17 @@
 'use strict';
 require('./helpers/env'); // first: NODE_ENV=test, no .env loading, no DATABASE_URL (memory-mode test)
 const assert = require('assert');
+const db = require('../db/pool');
 const dbPlayers = require('../db/players');
 const dbMatches = require('../db/matches');
+
+function testTransientConnectionErrors() {
+  assert.equal(db.isTransientConnectionError({ code: '57P03' }), true);
+  assert.equal(db.isTransientConnectionError({ code: 'ECONNRESET' }), true);
+  assert.equal(db.isTransientConnectionError({ code: '23505' }), false);
+  assert.equal(db.isTransientConnectionError(new Error('temporary failure')), false);
+  console.log('  ok  only known connection failures are marked transient');
+}
 
 async function testPlayers() {
   console.log('db players');
@@ -67,6 +76,7 @@ async function testMatches() {
 }
 
 async function run() {
+  testTransientConnectionErrors();
   await testPlayers();
   await testMatches();
   console.log('\nAll database layer unit tests passed.\n');

@@ -44,6 +44,52 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await ctx.close();
   });
 
+  await test('a login retries only a server-marked safe temporary failure', async () => {
+    let attempts = 0;
+    const retryServer = await serve({
+      'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }),
+      'POST /api/auth/login': () => {
+        attempts++;
+        if (attempts === 1) return { __status: 503, body: { ok: false, retryable: true, error: 'Sign-in is temporarily unavailable.' } };
+        return { ok: true, csrfToken: 'new-csrf', emailVerificationRequired: false,
+          player: { display_name: 'Aarav', username: 'aarav', avatar: '🧙', email: 'someone@example.com', email_verified: true } };
+      },
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome()] });
+    await page.goto(retryServer.url + '/');
+    await page.locator('nav.topbar button[data-act="showLogin"]').click();
+    await page.waitForSelector('#loginForm', { timeout: 8000 });
+    await page.fill('#loginEmail', 'someone@example.com');
+    await page.fill('#loginPassword', 'TestPass123!');
+    await page.click('#loginForm button[type="submit"]');
+    await page.waitForFunction(() => !document.getElementById('auth-overlay'), null, { timeout: 8000 });
+    assert.equal(attempts, 2);
+    await ctx.close();
+    retryServer.server.close();
+  });
+
+  await test('a gateway timeout is not replayed because the login may have completed', async () => {
+    let attempts = 0;
+    const timeoutServer = await serve({
+      'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }),
+      'POST /api/auth/login': () => {
+        attempts++;
+        return { __status: 504, body: { ok: false, error: 'Gateway timeout.' } };
+      },
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+    await page.goto(timeoutServer.url + '/');
+    await page.locator('nav.topbar button[data-act="showLogin"]').click();
+    await page.waitForSelector('#loginForm', { timeout: 8000 });
+    await page.fill('#loginEmail', 'someone@example.com');
+    await page.fill('#loginPassword', 'TestPass123!');
+    await page.click('#loginForm button[type="submit"]');
+    await page.waitForSelector('#auth-overlay .auth-msg[role="alert"]', { timeout: 8000 });
+    assert.equal(attempts, 1);
+    await ctx.close();
+    timeoutServer.server.close();
+  });
+
   await browser.close(); server.close();
   console.log(failed ? `${failed} failed` : 'onboarding UI: all passed');
   process.exit(failed ? 1 : 0);

@@ -2,6 +2,7 @@
 // Snakes and Ladders in a real browser: rolling, whose turn it is, the drawn board and tokens, spectators, results, small screens.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk } = require('./harness');
+const engine = require('../../games/snakesladders/engine');
 const { chromium } = loadPlaywright();
 
 let passed = 0; let failed = 0;
@@ -30,19 +31,48 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
 
   await test('after a roll the token walks square by square to its new square', async () => {
     const msgs = tableMessages('snakesladders', four);
+    const g = engine.createGame(four.map((p, i) => ({ id: i ? 'p' + i : 'me', name: p.name })), {}, () => (4 - 1) / 6 + 0.01);
+    engine.applyAction(g, 'me', { type: 'roll' });
+    const view = engine.viewFor(g, 'me');
+    assert.equal(view.event.type, 'turn');
+    assert.equal(view.lastRoll.to, 25);
     const { page, ctx } = await open(msgs);
-    const v = JSON.parse(JSON.stringify(msgs[1].view));
-    v.players[0].pos = 5; v.lastRoll = { by: 0, dice: 5, seq: 9 }; v.turn = 1; v.myTurn = false; v.canRoll = false;
-    v.event = { seq: 9, type: 'rolled', by: 0, dice: 5, from: 0, landed: 5, to: 5, via: null, stuck: false };
-    v.log = [{ by: 'Aarav', card: 'rolled a 5 and moved to 5', kind: 'roll' }];
-    await page.evaluate((m) => window.__push(m), { t: 'state', room: msgs[1].room, view: v });
+    await page.evaluate((m) => window.__push(m), { t: 'state', room: msgs[1].room, view });
     const seen = new Set();
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 60; i++) {
       seen.add(await page.evaluate(() => { const t = document.querySelector('.sl-token[data-i="0"]'); return t ? t.style.left + '|' + t.style.top : ''; }));
+      if (await page.evaluate(() => document.querySelector('.sl-token[data-i="0"]').getAttribute('aria-label') === 'Aarav on square 25')) break;
       await page.waitForTimeout(100);
     }
-    assert.ok(seen.size >= 4, `the token was drawn on several squares on its way (${seen.size} distinct positions)`);
-    assert.equal(await page.evaluate(() => document.querySelector('.sl-token[data-i="0"]').getAttribute('aria-label')), 'Aarav on square 5');
+    assert.ok(seen.size >= 5, `the token was drawn on several squares on its way (${seen.size} distinct positions)`);
+    assert.equal(await page.evaluate(() => document.querySelector('.sl-token[data-i="0"]').getAttribute('aria-label')), 'Aarav on square 25');
+    await ctx.close();
+  });
+
+  await test('joining another table does not replay its previous roll', async () => {
+    const msgs = tableMessages('snakesladders', four);
+    const { page, ctx } = await open(msgs);
+    const players = four.map((p, i) => ({ id: i ? 'p' + i : 'me', name: p.name }));
+    const g = engine.createGame(players, {}, () => (4 - 1) / 6 + 0.01);
+    g.turn = 3;
+    engine.applyAction(g, 'p3', { type: 'roll' });
+    const room = { ...msgs[1].room, code: 'GHIJKL' };
+    const view = engine.viewFor(g, 'me');
+    await page.evaluate((m) => window.__push(m), { t: 'state', room, view });
+    assert.equal(view.lastRoll.to, 25);
+    assert.equal(await page.evaluate(() => document.querySelector('.sl-token[data-i="3"]').getAttribute('aria-label')), 'Dmitri on square 25');
+    assert.equal(await page.isDisabled('[data-sl="roll"]'), false);
+    await ctx.close();
+  });
+
+  await test('reduced motion disables token hop animations', async () => {
+    const { page, ctx } = await open(tableMessages('snakesladders', four));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const animation = await page.locator('.sl-token').first().evaluate((token) => {
+      token.classList.add('hop');
+      return getComputedStyle(token).animationName;
+    });
+    assert.equal(animation, 'none');
     await ctx.close();
   });
 

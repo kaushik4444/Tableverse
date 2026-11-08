@@ -5,9 +5,9 @@
   const { esc } = window.CardTable;
   const ui = { ctx: null, v: null, root: null, seq: null, mgr: false, trade: null, bid: 0, scores: false,
     disp: {}, plans: {}, stepTimer: null };
-  const STEP_MS = 420; // one square per step: slow enough to follow every tile
-  const FAST_MS = 280; // very long advances (over 14 squares) a little quicker
-  const DWELL_MS = 700; // the token rests on the square it lands on before the text and buttons follow
+  const STEP_MS = 480; // one square per step: slow enough to follow every tile (the server waits for the same time: games/propertyrivals/board.js)
+  const FAST_MS = 320; // very long advances (over 14 squares) a little quicker
+  const DWELL_MS = 800; // the token rests on the square it lands on before the text and buttons follow
   const DIE = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
   const ICON = { start: '➡️', fund: '💰', surprise: '❓', tax: '💸', lockup: '🔒', rest: '☕', golockup: '👮', port: '⚓', utility: '💡' };
 
@@ -30,12 +30,14 @@
     v.players.forEach((p, i) => {
       if (ui.disp[p.id] === undefined || fresh) { ui.disp[p.id] = p.pos; delete ui.plans[p.id]; return; }
       const from = ui.disp[p.id], to = p.pos;
+      const current = ui.plans[p.id];
+      if (current && current.to === to) return;
       if (from === to) { delete ui.plans[p.id]; return; }
       const fwd = (to - from + 40) % 40, bwd = 40 - fwd;
       const card = v.lastCard && v.lastCard.by === i ? v.lastCard.text : '';
       if (p.inLockup && to === 10) { ui.disp[p.id] = to; delete ui.plans[p.id]; return; } // sent to the lockup: no walking there
       const back = /back/i.test(card) && bwd <= 4;
-      ui.plans[p.id] = { to, dir: back ? -1 : 1, ms: (back ? bwd : fwd) > 14 ? FAST_MS : STEP_MS };
+      ui.plans[p.id] = { to, dir: back ? -1 : 1, ms: (back ? bwd : fwd) > 14 ? FAST_MS : STEP_MS, last: Date.now() };
     });
     if (Object.keys(ui.plans).length && !ui.stepTimer) ui.stepTimer = setInterval(stepTokens, 60);
   }
@@ -53,28 +55,39 @@
     if (!Object.keys(ui.plans).length) { clearInterval(ui.stepTimer); ui.stepTimer = null; }
     if (changed) ui.ctx.rerender();
   }
-  /** Milliseconds the walks still need, so the text that describes the landing appears when the token arrives. */
-  const walkLeft = () => Math.max(0, ...Object.keys(ui.plans).map((id) => { const pl = ui.plans[id]; const d = ((pl.to - ui.disp[id]) * pl.dir + 40) % 40; return d * pl.ms + DWELL_MS; }));
 
   function squareHTML(v, i) {
     const s = v.squares[i], l = v.land[i], [r, c] = cell(i);
     const band = s.group ? `<i class="pr-band" style="background:${v.groups[s.group].color}"></i>` : `<i class="pr-ico">${ICON[s.type] || ''}</i>`;
     const price = s.price ? `<small>${s.price}</small>` : s.amount ? `<small>-${s.amount}</small>` : '';
     const own = l && l.owner >= 0 ? ` owned ${colour(v, l.owner)}${l.mortgaged ? ' mort' : ''}` : '';
+    const badge = l && l.owner >= 0 && v.players[l.owner] ? `<span class="pr-owner" aria-hidden="true">${v.players[l.owner].token}</span>` : '';
     const houses = l && l.houses ? `<span class="pr-houses">${l.houses === 5 ? '🏨' : '🏠'.repeat(l.houses)}</span>` : '';
     const here = v.players.map((p, k) => (!p.bankrupt && shown(p) === i ? `<span class="pr-tok ${colour(v, k)} ${k === v.turn ? 'now' : ''} ${ui.plans[p.id] && ui.disp[p.id] !== ui.plans[p.id].to ? 'walk' : ''}" title="${esc(p.name)}">${p.token}</span>` : '')).join('');
     const corner = [0, 10, 20, 30].includes(i) ? ' corner' : '';
-    return `<div class="pr-sq${own}${corner}" style="grid-row:${r};grid-column:${c}" data-sq="${i}" title="${esc(s.name)}">${band}<b>${esc(s.name)}</b>${price}${houses}<div class="pr-here">${here}</div></div>`;
+    return `<div class="pr-sq${own}${corner}" style="grid-row:${r};grid-column:${c}" data-sq="${i}" title="${esc(s.name)}">${band}${badge}<b>${esc(s.name)}</b>${price}${houses}<div class="pr-here">${here}</div></div>`;
+  }
+
+  /** One line says what just happened. It replaces itself (nothing stacks or floats): the roll while the token walks, the outcome once it arrives. */
+  function newsHTML(v, walking, cardShown) {
+    const log = v.log || [];
+    const skip = (e) => e.kind === 'info' || (e.kind === 'auction' && /^(bid|passed)/.test(e.card)) || (cardShown && e.kind === 'card');
+    const e = walking ? [...log].reverse().find((x) => x.kind === 'roll' || x.kind === 'lockup') : [...log].reverse().find((x) => !skip(x));
+    if (!e) return '';
+    const text = e.by === 'System' || e.by === 'Table' ? e.card : `${e.by} ${e.card}`;
+    return `<p class="pr-news k-${esc(e.kind)}" role="status">${esc(text)}</p>`;
   }
 
   function centerHTML(v) {
     const d = v.dice;
     const dice = d && d[0] ? `<div class="pr-dice" aria-label="Dice ${d[0]} and ${d[1]}"><span>${DIE[d[0]]}</span><span>${DIE[d[1]]}</span></div>` : '<div class="pr-dice"><span>🎲</span></div>';
-    const card = v.lastCard ? `<p class="pr-card ${v.lastCard.deck}"><b>${v.lastCard.deck === 'fund' ? 'Community Fund' : 'Surprise'}</b> ${esc(v.lastCard.text)}</p>` : '';
+    const walking = Object.keys(ui.plans).length > 0;
+    const cardFresh = !walking && v.lastCard && v.event && v.event.seq - v.lastCard.seq <= 4;
+    const card = cardFresh ? `<p class="pr-card ${v.lastCard.deck}"><b>${v.lastCard.deck === 'fund' ? 'Community Fund' : 'Surprise'}</b> ${esc(v.lastCard.text)}</p>` : '';
     const jack = v.options.jackpot ? `<small>Rest Stop jackpot ${coins(v.jackpot)}</small>` : '';
     const cur = v.players[v.turn];
     const turn = v.phase !== 'gameOver' && cur ? `<div class="pr-turn ${colour(v, v.turn)}"><span class="pr-turntok">${cur.token}</span><b>${v.turn === v.me ? 'Your turn' : esc(cur.name) + '’s turn'}</b></div>` : '';
-    return `<div class="pr-mid">${turn}${dice}<small>Round ${v.round}${v.options.rounds !== 'off' ? ' / ' + v.options.rounds : ''}</small>${jack}${card}</div>`;
+    return `<div class="pr-mid">${turn}${dice}${newsHTML(v, walking, cardFresh)}<small>Round ${v.round}${v.options.rounds !== 'off' ? ' / ' + v.options.rounds : ''}</small>${jack}${card}</div>`;
   }
 
   function guidance(v) {
@@ -97,8 +110,10 @@
     return `<ul class="pr-players">${v.players.map((p, i) => {
       const owned = v.land.reduce((n, l) => n + (l && l.owner === i ? 1 : 0), 0);
       const st = p.bankrupt ? '💀 bankrupt' : p.inLockup ? '🔒 lockup' : '';
+      const mine = v.land.map((l, k) => (l && l.owner === i ? k : -1)).filter((k) => k >= 0);
+      const holdings = mine.length ? `<span class="pr-hold" aria-hidden="true">${mine.map((k) => { const s = v.squares[k]; const m = v.land[k].mortgaged ? ' mort' : ''; return `<i class="${s.group ? '' : 'plain'}${m}" style="${s.group ? 'background:' + v.groups[s.group].color : ''}" title="${esc(s.name)}"></i>`; }).join('')}</span>` : '';
       const keep = p.keeps ? ` · 🎟️${p.keeps}` : '';
-      return `<li data-vid="${esc(p.id)}" data-pid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most cash">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small></span><span class="pr-cash">${coins(p.cash)}</span></li>`;
+      return `<li data-vid="${esc(p.id)}" data-pid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most cash">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small>${holdings}</span><span class="pr-cash">${coins(p.cash)}</span></li>`;
     }).join('')}</ul>`;
   }
 
@@ -236,13 +251,5 @@
     }
   }
 
-  // The floating messages come from the shared feed (public/feed.js); the one describing a landing waits for the token to arrive.
-  if (window.CardTable.feed) {
-    window.CardTable.feed.register('propertyrivals', {
-      host: '.pr-center', pos: 'bottom',
-      skip: (e) => e.kind === 'info' || e.kind === 'auction' && /^(bid|passed)/.test(e.card),
-      delay: (e, i, all) => (e.kind === 'land' && !all.slice(0, i).some((x) => x.kind === 'land') ? walkLeft() : 0),
-    });
-  }
   window.CardTable.register('propertyrivals', { render });
 })();

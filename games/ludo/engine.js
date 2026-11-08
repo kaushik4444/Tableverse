@@ -8,6 +8,9 @@
 // square and travels 51 squares (positions 0..50); the 52nd ring square is never used by its own colour, because
 // it turns into its home column (5 squares, positions 51..55) and then the home triangle (position 56 = home).
 
+const pacing = require('../pacing');
+// Milliseconds the clients take to walk a token one square, to send a captured token home, and the pause after (public/games/ludo.js)
+const WALK = { step: 400, capture: 800, settle: 1300 };
 const TOKENS = 4;
 const TRACK = 52; // squares on the shared ring
 const LAP = 51; // squares a token walks on the ring (internal positions 0..50)
@@ -101,6 +104,7 @@ function applyMove(g, playerIdx, tokenIdx, np) {
   if (np === FINISHED) {
     g.log.push({ by: g.players[playerIdx].name, card: 'got a token home', kind: 'home' });
   }
+  pacing.hold(g, (old < 0 ? 1 : Math.abs(np - old)) * WALK.step + (captured.length ? WALK.capture : 0) + WALK.settle);
   g.lastMove = { player: playerIdx, token: tokenIdx, from: old, to: np, dice: g.dice, captured };
   g.log.push({ by: g.players[playerIdx].name, card: `moved token ${tokenIdx + 1} by ${g.dice}`, kind: 'move' });
   emit(g, { type: 'moved', by: playerIdx, token: tokenIdx, from: old, to: np, dice: g.dice, captured });

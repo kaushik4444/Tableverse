@@ -10,13 +10,11 @@ async function test(name, fn) { try { await fn(); passed++; console.log('  ok  '
 const names = ['Aarav', 'Bo', 'Charlotte', 'Dmitri'].map((name) => ({ name }));
 // [game id, seats, host selector, a kind that floats + its line, a kind that must stay out]
 const GAMES = [
-  ['poker', 3, '.pt', { by: 'Bo', card: 'raises to 40', kind: 'bet' }, { by: 'Bo', card: 'posts small blind 5', kind: 'blind' }],
   ['wizard', 3, '.pt', { by: 'System', card: 'Bo bids 2', kind: 'bid' }, { by: 'System', card: 'Bo plays 7 of Hearts', kind: 'play' }],
-  ['twentynine', 4, '.pt', { by: 'Bo', card: 'bids 17', kind: 'bid' }, { by: 'Bo', card: 'plays 9 of Spades', kind: 'play' }],
-  ['ludo', 4, '.ludo-board', { by: 'Bo', card: 'sent Aarav home', kind: 'capture' }, { by: 'Bo', card: 'rolled a 4', kind: 'roll' }],
   ['themind', 3, '.tm-pile', { by: 'Bo', card: 'played 12 too early', kind: 'mistake' }, { by: 'Bo', card: 'played 30', kind: 'play' }],
 ];
 
+const QUIET = ['poker', 'twentynine', 'ludo', 'propertyrivals', 'snakesladders']; // these show events some other way: nothing floats
 (async () => {
   const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk() });
   const browser = await chromium.launch();
@@ -44,6 +42,22 @@ const GAMES = [
       assert.equal(await page.locator(`${host} > .cf-feed`).count(), 1, 'it floats over the table itself');
       assert.equal(await page.getAttribute('.cf-feed', 'aria-hidden'), 'true');
       assert.deepEqual(errors, []);
+      await ctx.close();
+    });
+  }
+  for (const id of QUIET) {
+    await test(`${id}: no floating feed`, async () => {
+      const seats = id === 'poker' ? 3 : 4;
+      const m = tableMessages(id, names.slice(0, seats));
+      const { page, ctx } = await scriptedPage(browser, { messages: m });
+      await page.goto(url + '/');
+      await page.waitForSelector('.wz, .ludo, .tm, .pk, .sl', { timeout: 8000 });
+      const line = { by: 'Bo', card: 'raises to 40', kind: 'bet' };
+      for (const kind of ['bet', 'capture', 'bid', 'rent', 'land']) {
+        await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room: m[1].room, view: { ...m[1].view, log: (m[1].view.log || []).concat([{ ...line, kind, n: 900 + kind.length }]) } });
+      }
+      await page.waitForTimeout(300);
+      assert.equal(await page.locator('.cf-feed, .cf-msg').count(), 0);
       await ctx.close();
     });
   }

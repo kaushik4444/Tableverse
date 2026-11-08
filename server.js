@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const games = require('./games');
+const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
 const { buildMatchRecord } = require('./db/matchRecord');
@@ -648,7 +649,10 @@ function start(opts = {}) {
     const sameBatch = prev.length > 1 && now.length > 0 && now.every((id) => prev.includes(id));
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
     if (!limit || !humanWaiting) room.deadline = null;
-    else if (!sameBatch || !room.deadline) room.deadline = Date.now() + Math.max(0, (room.pauseUntil || 0) - Date.now()) + limit;
+    else if (!sameBatch || !room.deadline) {
+      const walkHold = typeof g.holdMs === 'function' ? g.holdMs() : 0;
+      room.deadline = Date.now() + Math.max(0, (room.pauseUntil || 0) - Date.now(), walkHold) + limit;
+    }
     room.waiting = now;
   }
 
@@ -698,7 +702,9 @@ function start(opts = {}) {
     if (!humans(room).some(isConnected)) return; // nobody watching: pause
 
     const waiting = awaitingOf(g);
-    const pause = Math.max(0, (room.pauseUntil || 0) - Date.now());
+    // a game that is still animating a move (a token walking square by square) holds its bots back until the walk is done
+    const walkHold = typeof g.holdMs === 'function' ? g.holdMs() : 0; // already scaled when it was recorded (games/pacing.js)
+    const pause = Math.max(0, (room.pauseUntil || 0) - Date.now(), walkHold);
     let delay;
     let run;
     let valid;
@@ -1315,6 +1321,8 @@ function start(opts = {}) {
         room.options,
         Math.random
       );
+      if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
+      else pacing.setScale(room.game, botScale);
       room.status = 'playing';
       room.matchKey = crypto.randomUUID(); // identifies this game in the match history
       room.startedAt = Date.now();

@@ -110,6 +110,14 @@ async function query(text, params) {
   return res;
 }
 
+function isTransientConnectionError(err) {
+  const code = err && err.code;
+  return typeof code === 'string' && (
+    code.startsWith('08') ||
+    ['57P01', '57P02', '57P03', '53300', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE', 'EAI_AGAIN'].includes(code)
+  );
+}
+
 /**
  * Execute a function within a database transaction.
  */
@@ -157,6 +165,7 @@ module.exports = {
   driverMissing,
   ping,
   query,
+  isTransientConnectionError,
   withTransaction,
   close,
   getPool: () => pool,

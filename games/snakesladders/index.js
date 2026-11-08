@@ -2,6 +2,7 @@
 /** Snakes and Ladders plugin: adapts the pure engine to the server's game interface. */
 const engine = require('./engine');
 const { scrubDeep } = require('../scrub');
+const pacing = require('../pacing');
 const { TIME_LIMIT_OPTION } = require('../common');
 
 module.exports = {
@@ -37,7 +38,9 @@ module.exports = {
       },
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId),
-      botDelayMs: () => 3400 + g.rng() * 600, // long enough for the token to walk square by square, plus a gap
+      botDelayMs: () => 1200 + g.rng() * 600, // a bot's thinking time; holdMs adds the walk, the slide and a reading pause
+      holdMs: () => pacing.remaining(g),
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // score is the placing (first = n, ... last = 1)

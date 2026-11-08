@@ -15,12 +15,10 @@
   const base = { host: '.pt', pos: 'upper', icon: (e) => ICONS[e.kind] || '•', text: textOf };
 
   // Which log kinds float, and over which element, per game. Kinds not listed stay in the log only (the cards or the dice already show them).
-  // Snakes and Ladders is not here: it already prints every move in a banner above its board.
+  // Not here, on purpose: Snakes and Ladders, Ludo (a status bar prints the last event), Property Rivals (one line in the middle of the board),
+  // Poker (bets, folds and the pot are on the seats and the table) and 29 (bids and the trick are on the table). A second stream of text only competes with them.
   const configs = {
     wizard: { ...base, show: ['bid', 'trump', 'roundEnd'] },
-    twentynine: { ...base, show: ['bid', 'marriage'] },
-    poker: { ...base, show: ['bet', 'fold', 'check', 'info'] },
-    ludo: { ...base, host: '.ludo-board', pos: 'mid', show: ['capture', 'home', 'miss'] },
     themind: { ...base, host: '.tm-pile', pos: 'mid', show: ['mistake', 'star'] },
   };
   /** A game can register its own config: { host, pos, show: [kinds] | skip(e), icon(e), text(e), delay(e, i, batch) }. */

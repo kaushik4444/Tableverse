@@ -3,6 +3,7 @@
 const E = require('./engine');
 const A = require('./actions');
 const { scrubDeep } = require('../scrub');
+const pacing = require('../pacing');
 const { TIME_LIMIT_OPTION } = require('../common');
 
 module.exports = {
@@ -55,7 +56,9 @@ module.exports = {
       awaiting: () => A.awaiting(g),
       botAction: (playerId) => A.botAction(g, playerId),
       forcedPlay: () => A.forcedPlay(g),
-      botDelayMs: () => 2600 + g.rng() * 1200, // unhurried: the token walks tile by tile and people can follow
+      botDelayMs: () => 2200 + g.rng() * 900, // unhurried; holdMs adds the time the token needs to walk and be read
+      holdMs: () => pacing.remaining(g),
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // the score is each player's net worth at the end; the winner is the last player standing (or the richest in a timed game)

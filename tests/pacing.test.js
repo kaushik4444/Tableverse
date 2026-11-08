@@ -1,0 +1,77 @@
+'use strict';
+// A game that animates a walking token tells the server how long the walk takes, so bots wait for it.
+const assert = require('node:assert/strict');
+const pacing = require('../games/pacing');
+const games = require('../games');
+
+let passed = 0;
+const test = (name, fn) => { try { fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; } };
+
+test('holds queue one after another and only run out with time', () => {
+  const g = {};
+  assert.equal(pacing.remaining(g), 0);
+  pacing.hold(g, 1000); pacing.hold(g, 500);
+  const r = pacing.remaining(g);
+  assert.ok(r > 1400 && r <= 1500, `remaining ${r}`);
+});
+
+const people = (n) => Array.from({ length: n }, (_, i) => ({ id: i ? 'p' + i : 'me', name: 'P' + i }));
+
+test('Property Rivals: a longer walk holds the bots for longer', () => {
+  const E = require('../games/propertyrivals/engine'); const A = require('../games/propertyrivals/actions');
+  const play = (d1, d2) => {
+    const g = E.createGame(people(3), {}, () => 0.5);
+    assert.equal(pacing.remaining(g), 0);
+    const q = [d1, d2].map((d) => (d - 0.5) / 6); g.rng = () => (q.length ? q.shift() : 0.5);
+    assert.ok(A.applyAction(g, 'me', { type: 'roll' }).ok);
+    return pacing.remaining(g);
+  };
+  const short = play(1, 2), long = play(5, 6);
+  assert.ok(short >= 3 * 480, `short walk holds ${short}`);
+  assert.ok(long > short + 7 * 480, `an 11-square walk holds much longer: ${long} vs ${short}`);
+});
+
+test('Property Rivals: long card advances reserve the full walk', () => {
+  const E = require('../games/propertyrivals/engine');
+  const g = E.createGame(people(2), {}, () => 0.5);
+  g.players[0].pos = 5;
+  E.pass(g, 0, 20);
+  const hold = pacing.remaining(g);
+  assert.ok(hold > 20 * 480 + 2200 - 50, `20-square walk holds ${hold}`);
+});
+
+test('Snakes and Ladders: the hold covers the walk and a snake or ladder slide', () => {
+  const g = games.get('snakesladders').create(people(2), {}, () => 0.5);
+  g.act('me', { type: 'roll' }); // a 4
+  assert.ok(g.holdMs() >= 4 * 480, `holds ${g.holdMs()}`);
+});
+
+test('Ludo: a move holds the bots for the walk', () => {
+  const g = games.get('ludo').create(people(2), {}, () => 0.999999);
+  g.act('me', { type: 'ready' });
+  g.act('p1', { type: 'ready' });
+  assert.ok(g.act('me', { type: 'roll' }).ok, 'a six gives a move');
+  assert.ok(g.act('me', { type: 'move', token: 0 }).ok, 'apply the move');
+  assert.ok(g.holdMs() >= 1650, `one step plus settle holds about 1700 ms, got ${g.holdMs()}`);
+});
+
+test('Ludo: the plugin scales the engine reservation for fast bots', () => {
+  const g = games.get('ludo').create(people(2), {}, () => 0.999999);
+  g.setPacingScale(0.5);
+  g.act('me', { type: 'ready' });
+  g.act('p1', { type: 'ready' });
+  g.act('me', { type: 'roll' });
+  g.act('me', { type: 'move', token: 0 });
+  assert.ok(g.holdMs() > 800 && g.holdMs() <= 850, `scaled one-step hold is about 850 ms, got ${g.holdMs()}`);
+});
+
+test('a scale shortens the reservation at the time it is made, so the bots wait exactly that long', () => {
+  const g = {};
+  pacing.setScale(g, 0.25);
+  pacing.hold(g, 4000); // 1000 ms reserved
+  pacing.hold(g, 4000); // queues another 1000 ms behind it
+  const r = pacing.remaining(g);
+  assert.ok(r > 1900 && r <= 2000, `two holds of 4000 at scale 0.25 give ~2000 ms: ${r}`);
+});
+
+console.log(`\n${passed} pacing tests passed`);
