@@ -86,6 +86,29 @@ const DAY = 24 * 60 * 60 * 1000;
       const none = await run([], { DATABASE_URL: '' });
       assert.equal(none.code, 2);
     });
+
+    await test('an old account whose only login is not e-mail is outside the cleanup', async () => {
+      const id = await account({ name: 'Local', ageDays: 60, email: false });
+      await q(
+        `INSERT INTO auth_identities (player_id, provider, provider_user_id, email, password_hash, email_verified_at) VALUES ($1, 'local', $2, $3, NULL, NULL)`,
+        [id, `local-${seq}`, `local${seq}@test.local`],
+      );
+      assert.equal(await cleanup.countUnverified({ days: 30 }), 0, 'a local login with no e-mail login is not a candidate');
+      const r = await cleanup.cleanUnverified({ days: 30, execute: true });
+      assert.equal(r.deleted, 0);
+      assert.equal((await q('SELECT 1 FROM players WHERE id = $1', [id])).length, 1, 'kept');
+    });
+
+    await test('a removed account keeps its match rows, with its name removed', async () => {
+      const id = await account({ name: 'Played', ageDays: 45 });
+      const [m] = await q(`INSERT INTO matches (room_code, game_id, seats) VALUES ('TST1', 'wizard', 2) RETURNING id`);
+      await q(`INSERT INTO match_participants (match_id, player_id, player_name, seat) VALUES ($1, $2, 'Played', 0)`, [m.id, id]);
+      const r = await cleanup.cleanUnverified({ days: 30, execute: true });
+      assert.equal(r.deleted, 1);
+      const [row] = await q('SELECT player_id, player_name FROM match_participants WHERE match_id = $1', [m.id]);
+      assert.equal(row.player_id, null, 'the link to the account is cleared');
+      assert.equal(row.player_name, require('../db/matches').DELETED_NAME, 'the name goes with the account');
+    });
   } finally {
     await t.drop();
   }
