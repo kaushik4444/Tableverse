@@ -109,6 +109,23 @@ const DAY = 24 * 60 * 60 * 1000;
       assert.equal(row.player_id, null, 'the link to the account is cleared');
       assert.equal(row.player_name, require('../db/matches').DELETED_NAME, 'the name goes with the account');
     });
+
+    await test('an unverified e-mail login does not expose an account that has a verified login of another provider', async () => {
+      const id = await account({ name: 'Mixed', ageDays: 60 });
+      await q(
+        `INSERT INTO auth_identities (player_id, provider, provider_user_id, email, password_hash, email_verified_at) VALUES ($1, 'local', $2, $3, NULL, NOW())`,
+        [id, `mixed-local-${seq}`, `mixed-local-${seq}@test.local`],
+      );
+      const [m] = await q(`INSERT INTO matches (room_code, game_id, seats) VALUES ('TST2', 'wizard', 2) RETURNING id`);
+      await q(`INSERT INTO match_participants (match_id, player_id, player_name, seat) VALUES ($1, $2, 'Mixed', 0)`, [m.id, id]);
+      assert.equal(await cleanup.countUnverified({ days: 30 }), 0, 'a verified login of any provider protects the account (dry run)');
+      const r = await cleanup.cleanUnverified({ days: 30, execute: true });
+      assert.equal(r.deleted, 0, 'and the execute run keeps it');
+      assert.equal((await q('SELECT 1 FROM players WHERE id = $1', [id])).length, 1, 'kept');
+      const [row] = await q('SELECT player_id, player_name FROM match_participants WHERE match_id = $1', [m.id]);
+      assert.equal(row.player_id, id, 'its match attribution is untouched');
+      assert.equal(row.player_name, 'Mixed');
+    });
   } finally {
     await t.drop();
   }
