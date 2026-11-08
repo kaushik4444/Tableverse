@@ -182,8 +182,10 @@
     }
     el.querySelector('b').textContent = label;
     busyKind = kind;
-    if (!inerted.length) {
-      // Nothing behind the spinner can be tapped, tabbed to or typed into: the app, open dialogs, the chat panel.
+    // Nothing behind the spinner can be tapped, tabbed to or typed into: the app, open dialogs, the chat panel.
+    // Chat block/report act in place on the open chat, which keeps keyboard focus on the button the person used, so they
+    // get the spinner (taps are blocked) but are not made inert.
+    if (!inerted.length && !BUSY_MOD.has(kind)) {
       busyFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
       for (const n of document.body.children) {
         if (n === el || n.id === 'toasts' || n.id === 'banner' || n.tagName === 'SCRIPT' || n.hasAttribute('inert')) continue;
