@@ -198,13 +198,13 @@
     busyTimer = setTimeout(() => {
       const wasSigningIn = S.signingIn;
       if (httpBusy) { httpBusy = 0; httpBusyEpoch++; }
+      S.signingIn = false;
       hideBusy();
       toast('That is taking longer than usual. Check your connection and try again.');
       if (wasSigningIn) render(); // back to Log in / Sign up if the sign-in never finished
     }, ms);
   }
   function hideBusy() {
-    S.signingIn = false;
     clearTimeout(busyTimer);
     busyKind = '';
     const el = document.getElementById('busyBlock');
@@ -575,7 +575,7 @@
         openAuthSheet('login', 'You signed in on another device, so this one was signed out. Log in again to play here.');
         return;
       }
-      if (e.code === 1008) { if (S.signingIn) { hideBusy(); loadSnapshot(); } return; } // refused (not logged in, not verified): the login sheet is already showing, do not loop
+      if (e.code === 1008) { if (S.signingIn) { S.signingIn = false; hideBusy(); loadSnapshot(); } return; } // refused (not logged in, not verified): the login sheet is already showing, do not loop
       $banner.textContent = 'Reconnecting…';
       $banner.hidden = false;
       reconnectTimer = setTimeout(connect, Math.min(5000, 500 * 2 ** retry++));
@@ -840,6 +840,7 @@
         break;
       }
       case 'authRequired':
+        S.signingIn = false;
         hideBusy();
         clearClientSession();
         S.ready = false;
@@ -1574,7 +1575,7 @@
     const brand = '<a class="tb-brand" href="/" aria-label="Tableverse home"><span class="tb-mark">🂡</span><span class="tb-name">Tableverse</span></a>';
     if (S.guest && S.signingIn) {
       const who = S.named && S.name ? S.name : 'Player';
-      return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><span class="tb-avatar-btn tb-signing" role="status" aria-label="Signing in as ${esc(who)}">${avatar({ name: who, avatar: S.avatar }, 'tb-av')}<span class="spinner" aria-hidden="true"></span></span></div></nav>`;
+      return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><span class="tb-avatar-btn tb-signing" role="status" aria-live="polite" aria-atomic="true"><span class="sr-only">Signing in as ${esc(who)}</span>${avatar({ name: who, avatar: S.avatar }, 'tb-av')}<span class="spinner" aria-hidden="true"></span></span></div></nav>`;
     }
     if (S.guest) {
       return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><button type="button" class="btn ghost small" data-act="showLogin">Log in</button><button type="button" class="btn small" data-act="showRegister">Sign up</button></div></nav>`;
