@@ -22,12 +22,13 @@ const DEFAULT_DAYS = 30;
 const DEFAULT_BATCH = 200;
 const DEFAULT_MAX_TOTAL = 20000;
 
-// Candidate rule, written once and used by the count, the batch select and the re-check inside the delete. Only e-mail
-// logins count: an account with, say, a local identity and no e-mail login is outside this cleanup's scope.
+// Candidate rule, written once and used by the count, the batch select and the re-checks inside the batch. It needs an
+// unverified e-mail login, and any verified login of any provider protects the account. So an account whose only login
+// is, say, a local one is outside this cleanup's scope.
 const CANDIDATE = `
   p.created_at < $1
   AND EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.provider = 'email' AND i.email_verified_at IS NULL)
-  AND NOT EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.provider = 'email' AND i.email_verified_at IS NOT NULL)`;
+  AND NOT EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL)`;
 
 function cutoffFor(now, days) {
   if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error('days must be a whole number from 1 to 365');
@@ -60,8 +61,13 @@ async function cleanUnverified({ days = DEFAULT_DAYS, execute = false, now = new
       if (!ids.rows.length) return 0;
       const idList = ids.rows.map((r) => r.id);
       // Same treatment as a self-service delete (db/account.js): match history keeps its rows and results, but the name goes.
-      // The rows are locked above, so they still qualify when the delete re-checks them below.
-      await client.query('UPDATE match_participants SET player_name = $2, player_id = NULL WHERE player_id = ANY($1::uuid[])', [idList, DELETED_NAME]);
+      // Only accounts that still qualify are touched: this is a new statement, so it sees anything verified before the
+      // locks were taken, and the rows are locked, so nothing can change between this and the delete below.
+      await client.query(
+        `UPDATE match_participants mp SET player_name = $3, player_id = NULL
+          WHERE mp.player_id IN (SELECT p.id FROM players p WHERE p.id = ANY($2::uuid[]) AND ${CANDIDATE})`,
+        [cutoff, idList, DELETED_NAME],
+      );
       const gone = await client.query(
         `DELETE FROM players p WHERE p.id = ANY($2::uuid[]) AND ${CANDIDATE} RETURNING p.id`,
         [cutoff, idList],
