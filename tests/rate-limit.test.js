@@ -33,12 +33,12 @@ async function test(name, fn) {
     assert.equal((await hitRateLimit({ scope: 's', key: 'never-used-0', limit: 1, windowMs: H })).allowed, true, 'refunding an empty counter does nothing');
     // a refund names the window the attempt was counted in: a refund for another window does not free a slot in this one
     const k2 = 'bucket-' + Math.random();
-    const first = await hitRateLimit({ scope: 's', key: k2, limit: 1, windowMs: H });
-    assert.equal(first.allowed, true);
-    await refundRateLimit({ scope: 's', key: k2, windowMs: H, bucket: (first.bucket || 0) + H });
-    assert.equal((await hitRateLimit({ scope: 's', key: k2, limit: 1, windowMs: H })).allowed, false, 'a refund for a different window changes nothing');
+    const first = await hitRateLimit({ scope: 's', key: k2, limit: 3, windowMs: H });
+    assert.equal(first.count, 1);
+    await refundRateLimit({ scope: 's', key: k2, windowMs: H, bucket: first.bucket + 1 });
+    assert.equal((await hitRateLimit({ scope: 's', key: k2, limit: 3, windowMs: H })).count, 2, 'a refund for another window changes nothing');
     await refundRateLimit({ scope: 's', key: k2, windowMs: H, bucket: first.bucket });
-    assert.equal((await hitRateLimit({ scope: 's', key: k2, limit: 1, windowMs: H })).allowed, true, 'the refund for the counted window frees it');
+    assert.equal((await hitRateLimit({ scope: 's', key: k2, limit: 3, windowMs: H })).count, 2, 'the refund for the counted window freed one slot');
   });
 
   await test('concurrent attempts cannot get past the limit together', async () => {
