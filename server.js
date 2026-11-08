@@ -1066,8 +1066,11 @@ function start(opts = {}) {
           const pending = (p.pendingBlocks.get(target) || 1) - 1;
           if (pending > 0) p.pendingBlocks.set(target, pending);
           else p.pendingBlocks.delete(target);
-          // A failed write lifts the filter again, so the voice lists are sent again either way.
+          // A failed write lifts the filter again, so the voice lists are sent again either way. The player may have moved
+          // to another table while the write was pending, so that table is refreshed too.
           if (room) broadcastVoice(room);
+          const current = rooms.get(p.room);
+          if (current && current !== room) broadcastVoice(current);
         }
         resyncChat(p);
         const roomNow = rooms.get(p.room);
