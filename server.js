@@ -613,15 +613,19 @@ function start(opts = {}) {
     }
   }
   const sys = (room, text) => pushChat(room, { sys: true, text });
-  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); send(p.ws, { t: 'voice', ids: voiceRelay.voiceList(room) }); };
+  // A block in either direction keeps the pair out of each other's voice: the blocker does not hear the blocked person,
+  // and the blocked person cannot reach the blocker through the table's voice chat. Nobody is told about the block.
+  const blocksPlayer = (p, id) => { const s = effectiveBlocked(p); return !!s && s.has(id); };
+  const pairBlocked = (a, b) => { const x = players.get(a); const y = players.get(b); return (!!x && blocksPlayer(x, b)) || (!!y && blocksPlayer(y, a)); };
+  const voiceFor = (room, viewerId) => voiceRelay.voiceList(room, (id) => pairBlocked(viewerId, id), viewerId);
+  const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); send(p.ws, { t: 'voice', ids: voiceFor(room, p.id) }); };
   /** Re-sends this viewer's chat history after a block or unblock, so the change shows at once. */
   const resyncChat = (p) => { const room = rooms.get(p.room); if (room) send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); };
-  /** Tell everyone at the table who is in voice (and who is muted). */
+  /** Tell everyone at the table who is in voice (and who is muted), leaving out anyone blocked with that viewer. */
   function broadcastVoice(room) {
-    const msg = { t: 'voice', ids: voiceRelay.voiceList(room) };
     for (const v of viewers(room)) {
       const q = players.get(v.id);
-      if (q && q.connected) send(q.ws, msg);
+      if (q && q.connected) send(q.ws, { t: 'voice', ids: voiceFor(room, v.id) });
     }
   }
   function notifyOthers(room, exceptId, text) {
@@ -971,6 +975,7 @@ function start(opts = {}) {
       if (now - (p.lastEmote || 0) < 700) return;
       p.lastEmote = now;
       for (const m of viewers(room)) {
+        if (m.id !== p.id && pairBlocked(p.id, m.id)) continue; // a blocked pair does not see each other's reactions
         const q = players.get(m.id);
         if (q && q.connected) send(q.ws, { t: 'emote', id: p.id, e: msg.e });
       }
@@ -989,6 +994,8 @@ function start(opts = {}) {
     rtc(p, msg) {
       const room = rooms.get(p.room);
       if (!room) return;
+      // refused with the same answer as "not in voice", so the sender cannot tell a block from an absent person
+      if (typeof msg.to === 'string' && pairBlocked(p.id, msg.to)) return sendError(p, 'Not in voice');
       const r = voiceRelay.relay(room, p.id, msg.to, msg.data, (toId, m) => {
         const q = players.get(toId);
         if (q && q.connected) send(q.ws, m);
@@ -1045,6 +1052,9 @@ function start(opts = {}) {
       // Reserve the filter before entering the serialized database turn. A second block queued behind a slow first
       // write must hide its own target immediately, including after a reconnect on another socket.
       p.pendingBlocks.set(target, (p.pendingBlocks.get(target) || 0) + 1);
+      // Voice follows the same filter, so a pending block stops the audio at once rather than after the write commits.
+      const room = rooms.get(p.room);
+      if (room) broadcastVoice(room);
       return inModerationTurn(p, async () => {
         try {
           await dbModeration.addBlock(p.id, target);
@@ -1056,9 +1066,16 @@ function start(opts = {}) {
           const pending = (p.pendingBlocks.get(target) || 1) - 1;
           if (pending > 0) p.pendingBlocks.set(target, pending);
           else p.pendingBlocks.delete(target);
+          // A failed write lifts the filter again, so the voice lists are sent again either way. The player may have moved
+          // to another table while the write was pending, so that table is refreshed too.
+          if (room) broadcastVoice(room);
+          const current = rooms.get(p.room);
+          if (current && current !== room) broadcastVoice(current);
         }
         resyncChat(p);
-        send(p.ws, { t: 'notice', text: 'Blocked. Their table chat is hidden from you. Nothing else changes, and they are not told.' });
+        const roomNow = rooms.get(p.room);
+        if (roomNow) broadcastVoice(roomNow); // a voice connection to them closes now, on both sides
+        send(p.ws, { t: 'notice', text: 'Blocked. They are hidden from your table chat and table voice. Nothing else changes, and they are not told.' });
       });
     },
 
@@ -1076,6 +1093,8 @@ function start(opts = {}) {
         await dbModeration.removeBlock(p.id, msg.id);
         p.blocked.delete(msg.id);
         resyncChat(p);
+        const roomNow = rooms.get(p.room);
+        if (roomNow) broadcastVoice(roomNow); // they may be offered voice again
         send(p.ws, { t: 'notice', text: 'Unblocked.' });
       });
     },

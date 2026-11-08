@@ -292,6 +292,14 @@ async function verifyEmailToken(rawToken) {
   const tokenHash = hashToken(rawToken);
 
   return db.withTransaction(async (client) => {
+    // Take the account's row lock before any token or identity changes. db/unverifiedCleanup.js takes the same lock (with
+    // SKIP LOCKED) before it deletes an unverified account, so verification and cleanup of one account cannot interleave:
+    // an account being verified is skipped by cleanup, and a verification that waits behind cleanup finds the account gone.
+    const owner = await client.query(`SELECT player_id FROM auth_email_tokens WHERE token_hash = $1 AND purpose = 'verify_email' LIMIT 1`, [tokenHash]);
+    if (!owner.rows.length) throw new AuthError('Invalid verification token.');
+    const locked = await client.query(`SELECT id FROM players WHERE id = $1 FOR UPDATE`, [owner.rows[0].player_id]);
+    if (!locked.rows.length) throw new AuthError('Invalid verification token.'); // the account was removed while this link waited
+
     const use = await client.query(
       `UPDATE auth_email_tokens
          SET used_at = NOW()

@@ -99,3 +99,22 @@ TEST_DATABASE_URL=postgres://postgres:secret@127.0.0.1:5432/postgres npm run tes
 * Rolling back is only possible until `COMMIT`. After that the backup from the checklist is the only way back.
 * In-memory state of a running server (tables, rooms, cached players) is not in the database. Restart the Render service after the cleanup so it starts empty; browsers holding old cookies simply land on the login page.
 * A future migration that adds a table makes `tests/cleanup.test.js` fail until the table is classified in `db/cleanup.js` (emptied or preserved) and the docs are updated. That is intended.
+
+## Unverified accounts (30 days)
+
+Accounts that registered, never verified their e-mail, and are more than 30 days old can be removed with:
+
+```
+DATABASE_URL='…' node scripts/cleanup-unverified.js            # dry run: prints a count, deletes nothing
+DATABASE_URL='…' node scripts/cleanup-unverified.js --execute  # deletes, in batches of 200 (at most 20,000 per run)
+node scripts/cleanup-unverified.js --days 45                   # another period, 1–365 days
+```
+
+- The clock starts when the account was created. A verification link is valid for 24 hours and can be re-sent, so
+  this allows about a month to verify.
+- Guests and accounts with any verified login are never removed. Registration stays open and does not change.
+- Each batch re-checks the rule inside its own transaction, so an account verified a moment earlier is kept.
+- The account's own rows (logins, tokens, sessions, friendships, invitations, reports, blocks) are removed with it.
+  Match history is kept; the link to the removed player is cleared.
+- Nothing runs automatically. Run the dry run first, record the count, then run `--execute` once.
+- Tests: `tests/unverified-cleanup.pg.test.js` (PostgreSQL, part of `npm run test:pg`).

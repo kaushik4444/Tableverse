@@ -19,6 +19,17 @@ test('seated humans can join voice, leave it and change mute; bots and outsiders
   assert.deepEqual(V.voiceList(r), []);
 });
 
+test('a viewer is not offered a voice partner they are blocked with; the viewer is always listed to self', () => {
+  const r = room();
+  for (const id of ['p0', 'p1', 'p2']) V.setVoice(r, id, true);
+  const blockedPairs = new Set(['p0|p1', 'p1|p0']); // p0 and p1 block each other (either direction hides both ways)
+  const hiddenFor = (viewer) => (id) => blockedPairs.has(viewer + '|' + id);
+  assert.deepEqual(V.voiceList(r, hiddenFor('p0'), 'p0').map((v) => v.id).sort(), ['p0', 'p2'], 'p0 does not see p1');
+  assert.deepEqual(V.voiceList(r, hiddenFor('p1'), 'p1').map((v) => v.id).sort(), ['p1', 'p2'], 'p1 does not see p0');
+  assert.deepEqual(V.voiceList(r, hiddenFor('p2'), 'p2').map((v) => v.id).sort(), ['p0', 'p1', 'p2'], 'p2 sees everyone');
+  assert.deepEqual(V.voiceList(r).map((v) => v.id).sort(), ['p0', 'p1', 'p2'], 'with no filter the list is the whole table');
+});
+
 test('the table is capped so the pairwise connections stay manageable', () => {
   const r = { members: Array.from({ length: 10 }, (_, i) => ({ id: 'p' + i, bot: false })) };
   for (let i = 0; i < V.MAX_VOICE; i++) assert.equal(V.setVoice(r, 'p' + i, true).ok, true);

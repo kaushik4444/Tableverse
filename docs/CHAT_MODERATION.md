@@ -17,8 +17,12 @@ the server. It does not replace human review, and it does not take automatic act
 - **Blocks are applied on the server.** When a socket joins, the server loads the account's blocked ids and keeps them on
   the player. Live chat (`pushChat`) and the history sent on join or reconnect both pass through
   `lib/moderation.js` `shouldDeliver` / `visibleChat`, so a blocked message is never sent to the blocker's socket. A pending block is filtered immediately while its database write is queued or in flight.
-- **Blocks are one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages, and
+- **Chat blocks are one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages, and
   B is not told about the block.
+- **Voice and reactions are blocked in both directions.** A block in either direction keeps the pair out of each other's
+  table voice: each browser is offered only the people it may hear, so an existing connection to the other person closes.
+  A signal between them is refused with the same answer as "not in voice", and reactions are not delivered either way.
+  Friend requests and private-table invitations are also refused across a block (`db/friends.js`).
 - **System lines always show** (the game and table events), even to a blocker.
 - **Report text comes from the server.** Each table message has a random id (`mid`). The report carries only the id, a
   reason and optional details. The server finds the message in the table's own copy of recent chat and stores that text
@@ -69,9 +73,8 @@ A decision to remove a player's access is a manual action taken outside this fea
 
 ## Known gaps
 
-- **Voice is not blocked.** A blocked player's voice still reaches the blocker at the same table. Voice is out of scope for
-  this change.
-- **Blocks do not affect friend requests, private-table invitations, or lobby views.** Only table chat is filtered.
+- **Lobby and table listings still show a blocked player's name.** Blocking hides them from chat, voice, reactions,
+  friend requests and invitations; it does not remove them from the public table list.
 - **There is no screen to unblock.** The `unblock` action exists and is tested; a settings screen is a follow-up.
 - **There is no review queue or admin tool.** Reports are stored for manual review only.
 - **Reports are kept until the account is deleted.** No retention period is enforced yet.
