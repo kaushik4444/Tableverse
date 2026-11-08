@@ -9,10 +9,11 @@
  * - Registers N authenticated accounts and opens one WebSocket per account.
  * - Groups players into tables of 4 and starts a real game on each table
  *   (cycling through Go Fish, Wizard, 29 and Poker).
- * - Human clients stay passively connected; the server's absent-player bot
- *   handles all in-game moves. This models N concurrent idle-to-spectator
- *   connections under moderate bot-driven message traffic, NOT N fully
- *   interactive humans each making moves every second.
+ * - Human clients stay connected and passive. The server plays a human's turn
+ *   only after they disconnect (absentMs), so these games wait on their
+ *   humans: this run measures connection, broadcast and event-loop load, NOT
+ *   game completion. Finished-game counts are therefore expected to be zero
+ *   here. Game completion under bot play is covered by tests/simulation.test.js.
  * - After `seconds` the script closes every socket and reports.
  *
  * WHAT IT MEASURES
@@ -23,7 +24,7 @@
  *   p99 above ~50 ms suggests the server is becoming CPU-bound.
  * - rssMB / heapMB (start → end) — rough memory growth indicator;
  *   large growth over 20 s may indicate a leak path worth investigating.
- * - playersInFinishedGames — how many games completed during the window.
+ * - playersInFinishedGames — games finished at the end of the window (zero in this setup, see above).
  *
  * CAVEATS
  * -------
@@ -40,13 +41,24 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 // (see lib/debugTokens.js). It is refused on a hosted deployment by the server itself.
 process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS = process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS || '1';
 delete process.env.DATABASE_URL;
+// Registration is limited per address (8 per 10 min in production, 500 in test mode). Every simulated player registers from
+// this one loopback address, so lift that limit for the run to cover the player count (server defaults are unchanged).
+// Arguments are whole numbers: a typo must stop the run, not turn into NaN and a run with no players.
+const wholeArg = (v, fallback, label) => {
+  if (v === undefined) return fallback;
+  if (!/^\d+$/.test(v)) throw new Error(`${label} must be a whole number (got "${String(v).slice(0, 20)}")`);
+  if (Number(v) < 1) throw new Error(`${label} must be at least 1 (got ${v})`);
+  return Number(v);
+};
+const PLAYERS = wholeArg(process.argv[2], 200, 'players');
+process.env.RL_REGISTER_IP_LIMIT = process.env.RL_REGISTER_IP_LIMIT || String(PLAYERS * 2 + 10);
+const SECONDS = wholeArg(process.argv[3], 20, 'seconds');
+
 const WebSocket = require('ws');
 const { monitorEventLoopDelay } = require('node:perf_hooks');
 const { registerAndVerify, sessionSocket } = require('../tests/helpers/auth');
 const { start } = require('../server');
 
-const PLAYERS = Number(process.argv[2] || 200);
-const SECONDS = Number(process.argv[3] || 20);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mb = (n) => Math.round(n / 1048576);
 

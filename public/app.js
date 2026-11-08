@@ -727,6 +727,21 @@
   }
 
 
+  // TURN logins expire (see lib/voiceRelay.js). Ask for new ones ten minutes before the current ones stop working.
+  const ICE_REFRESH_LEAD_MS = 10 * 60 * 1000;
+  const ICE_ASK_GAP_MS = 21000; // the server answers at most once per 20 s (ICE_REFRESH_MIN_MS); a closer request is ignored
+  let iceTimer = null;
+  let lastIceAsk = 0;
+  function scheduleIceRefresh() {
+    clearTimeout(iceTimer); iceTimer = null;
+    if (!S.iceExpiresAt) return; // no time-limited logins: nothing to refresh
+    // Due when the lead time is reached. If that is already past (for example after a sleep, or a late reply), ask now,
+    // but no sooner than the gap after the last request, so the request is not ignored by the server.
+    const due = S.iceExpiresAt - ICE_REFRESH_LEAD_MS - Date.now();
+    const wait = Math.max(0, due, lastIceAsk + ICE_ASK_GAP_MS - Date.now());
+    iceTimer = setTimeout(() => { iceTimer = null; lastIceAsk = Date.now(); send({ t: 'ice' }); }, wait);
+  }
+
   function onMessage(m) {
     if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') hideBusy();
     switch (m.t) {
@@ -741,6 +756,8 @@
         S.avatars = m.avatars || [];
         S.emotes = m.emotes || [];
         S.ice = Array.isArray(m.ice) ? m.ice : [];
+        S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        scheduleIceRefresh();
         if (!S.name) S.name = m.name;
         if (!S.avatar) S.avatar = m.avatar;
         S.ready = true;
@@ -765,6 +782,17 @@
         S.ready = false;
         loadSnapshot();
         openAuthSheet('login', m.message || 'Log in to play.');
+        break;
+      case 'blocks':
+        S.blocked = Array.isArray(m.blocks) ? m.blocks : [];
+        if (S.page === 'profile') render();
+        break;
+      case 'ice':
+        // fresh TURN logins: used by new connections, and applied to the ones already open
+        S.ice = Array.isArray(m.ice) ? m.ice : [];
+        S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        scheduleIceRefresh();
+        if (voice) voice.refreshIce();
         break;
       case 'tables': {
         const key = JSON.stringify([m.tables, m.rejoin]);
@@ -1363,6 +1391,16 @@
     return `<ul class="hist-list">${rows}</ul>${pager}<p class="hint" style="text-align:left">Games you left early are listed but not counted in your statistics.</p>`;
   }
 
+  /** Accounts this person has blocked, with a button to unblock each. Names are shown only here, to the blocker. */
+  function blockedHTML() {
+    const list = S.blocked;
+    const head = `<div class="setting-row"><div><b>Blocked players</b><small>They cannot see your table chat, and you and they cannot hear each other at a table. They are not told. Unblocking restores both.</small></div></div>`;
+    if (!list) return `${head}<p class="hint" style="text-align:left">Loading…</p>`;
+    if (!list.length) return `${head}<p class="hint" style="text-align:left">You have not blocked anyone.</p>`;
+    const rows = list.map((b) => `<div class="setting-row"><div><b>${esc(b.name || 'Player')}</b></div><button type="button" class="btn ghost small" data-act="unblock" data-id="${esc(b.id)}" aria-label="Unblock ${esc(b.name || 'player')}">Unblock</button></div>`).join('');
+    return `${head}${rows}`;
+  }
+
   function renderProfilePage() {
     const P = S.profile || { loading: true };
     let inner;
@@ -1375,6 +1413,7 @@
       const tabBtn = (id, label) => `<button type="button" role="tab" class="tab ${tab === id ? 'on' : ''}" aria-selected="${tab === id}" data-act="profileTab" data-tab="${id}">${label}</button>`;
       const panel = tab === 'history' ? historyHTML(P.history)
         : tab === 'account' ? `<div class="account-list">
+            ${blockedHTML()}
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
             <div class="setting-row"><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
             <div class="setting-row"><div><b>Sessions</b><small>Sign out of this device, or of every device you are logged in on.</small></div><span class="row" style="gap:6px"><button type="button" class="btn ghost small" data-act="logout">Log out</button><button type="button" class="btn ghost small" data-act="logoutAll">Everywhere</button></span></div>
@@ -2011,7 +2050,13 @@
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
     reloadProfile: () => loadProfile(),
-    profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; render(); } },
+    profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
+    unblock: (el) => {
+      const id = el.dataset.id;
+      S.blocked = (S.blocked || []).filter((b) => b.id !== id); // the server confirms with the full list straight after
+      render();
+      send({ t: 'unblock', id });
+    },
     historyPage: (el) => loadProfile(Number(el.dataset.page) || 1),
     editProfile: () => openEditProfileDialog(),
     openDeleteAccount: () => openDeleteAccountDialog(),

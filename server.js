@@ -80,7 +80,12 @@ function start(opts = {}) {
   const botScale = opts.botDelay ? Math.min(1, opts.botDelay[1] / 1600) : 1; // tests run with fast bots; plugin-timed bots follow
   const trickPauseMs = opts.trickPauseMs ?? 1700; // time everybody gets to see a finished trick being collected
   const env = opts.env || process.env;
-  const iceServers = opts.iceServers ?? voiceRelay.iceServers(env); // sent to browsers for table voice chat
+  // ICE servers for table voice, sent in each welcome. TURN may get a login made for that player (see lib/voiceRelay.js).
+  const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId });
+  /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
+  // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
+  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, iceExpiresAt: opts.iceServers ? null : voiceRelay.iceExpiresAt(ice, env) }; };
+  const ICE_REFRESH_MIN_MS = 20000; // a browser may ask for fresh logins at most this often (see the 'ice' handler)
   assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';
   const trustProxy = opts.trustProxy ?? parseTrustProxy(env.TRUST_PROXY, production); // behind Render's proxy the client address is in X-Forwarded-For
@@ -510,7 +515,8 @@ function start(opts = {}) {
     };
   }
 
-  function publicTables() {
+  /** The table directory. With a viewer, a host the viewer is blocked with (either way) is shown under a generic name. */
+  function publicTables(viewerId = null) {
     return [...rooms.values()]
       .filter((room) => room.visibility === 'public' && (room.status === 'lobby' || room.status === 'playing'))
       .map((room) => ({
@@ -522,7 +528,7 @@ function start(opts = {}) {
         // always reflects the live table population rather than only humans.
         members: room.members.length,
         humans: room.members.filter((m) => !m.bot).length,
-        host: room.members.find((m) => m.id === room.hostId)?.name || 'Host',
+        host: moderation.listedHostName(room.members.find((m) => m.id === room.hostId)?.name, viewerId !== null && room.hostId !== viewerId && pairBlocked(viewerId, room.hostId)),
         spectators: room.spectators.length,
       }));
   }
@@ -538,7 +544,7 @@ function start(opts = {}) {
     return out;
   }
 
-  const tablesMsg = (p) => ({ t: 'tables', tables: publicTables(), rejoin: rejoinFor(p) });
+  const tablesMsg = (p) => ({ t: 'tables', tables: publicTables(p.id), rejoin: rejoinFor(p) });
 
   /** Who can take a seat back: playerId -> [{code, gameId, paused}], built in one pass over the rooms (not once per player). */
   function rejoinIndex() {
@@ -571,14 +577,22 @@ function start(opts = {}) {
   }
   function flushTables() {
     tablesTimer = null;
-    const tables = publicTables();
-    const tablesKey = JSON.stringify(tables);
     const rejoin = rejoinIndex();
+    // Only people who block someone, or are blocked, can see a generic host name, so everyone else shares one listing.
+    const involved = new Set();
+    for (const q of players.values()) {
+      const s = effectiveBlocked(q);
+      if (s && s.size) { involved.add(q.id); for (const id of s) involved.add(id); }
+    }
+    const shared = publicTables();
+    const sharedKey = JSON.stringify(shared);
     for (const p of players.values()) {
       if (!p.connected) continue;
       if (p.room) { p.tablesKey = null; continue; } // inside a table: it gets a fresh directory when it leaves
+      const own = involved.has(p.id);
+      const tables = own ? publicTables(p.id) : shared; // per viewer only where a block can apply
       const mine = rejoin.get(p.id) || [];
-      const key = tablesKey + '|' + JSON.stringify(mine);
+      const key = (own ? JSON.stringify(tables) : sharedKey) + '|' + JSON.stringify(mine);
       if (p.tablesKey === key) continue;
       p.tablesKey = key;
       send(p.ws, { t: 'tables', tables, rejoin: mine });
@@ -618,6 +632,11 @@ function start(opts = {}) {
   const blocksPlayer = (p, id) => { const s = effectiveBlocked(p); return !!s && s.has(id); };
   const pairBlocked = (a, b) => { const x = players.get(a); const y = players.get(b); return (!!x && blocksPlayer(x, b)) || (!!y && blocksPlayer(y, a)); };
   const voiceFor = (room, viewerId) => voiceRelay.voiceList(room, (id) => pairBlocked(viewerId, id), viewerId);
+  /** Sends this player their list of blocked accounts (names come from the database; none without one). */
+  async function sendBlocks(p) {
+    const blocks = dbPool.hasDatabase() ? await dbModeration.listBlocked(p.id) : [];
+    send(p.ws, { t: 'blocks', blocks });
+  }
   const sendChatLog = (p, room) => { send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); send(p.ws, { t: 'voice', ids: voiceFor(room, p.id) }); };
   /** Re-sends this viewer's chat history after a block or unblock, so the change shows at once. */
   const resyncChat = (p) => { const room = rooms.get(p.room); if (room) send(p.ws, { t: 'chatlog', messages: moderation.visibleChat(room.chat, effectiveBlocked(p)) }); };
@@ -990,6 +1009,14 @@ function start(opts = {}) {
       if (r.changed) broadcastVoice(room);
     },
 
+    /** The browser asks for fresh TURN logins before its current ones run out. Answered at most once per ICE_REFRESH_MIN_MS. */
+    ice(p) {
+      const now = Date.now();
+      if (p.lastIceRefresh && now - p.lastIceRefresh < ICE_REFRESH_MIN_MS) return;
+      p.lastIceRefresh = now;
+      send(p.ws, { t: 'ice', ...iceMsg(p.id) });
+    },
+
     /** One setup message (offer, answer, ICE) for another person in voice at the same table. */
     rtc(p, msg) {
       const room = rooms.get(p.room);
@@ -1073,11 +1100,15 @@ function start(opts = {}) {
           if (current && current !== room) broadcastVoice(current);
         }
         resyncChat(p);
+        await sendBlocks(p);
         const roomNow = rooms.get(p.room);
         if (roomNow) broadcastVoice(roomNow); // a voice connection to them closes now, on both sides
         send(p.ws, { t: 'notice', text: 'Blocked. They are hidden from your table chat and table voice. Nothing else changes, and they are not told.' });
       });
     },
+
+    /** The accounts this player has blocked, with names, for the Account tab. Answered after every block or unblock too. */
+    blocks(p) { return sendBlocks(p); },
 
     async unblock(p, msg) {
       if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
@@ -1093,6 +1124,7 @@ function start(opts = {}) {
         await dbModeration.removeBlock(p.id, msg.id);
         p.blocked.delete(msg.id);
         resyncChat(p);
+        await sendBlocks(p);
         const roomNow = rooms.get(p.room);
         if (roomNow) broadcastVoice(roomNow); // they may be offered voice again
         send(p.ws, { t: 'notice', text: 'Unblocked.' });
@@ -1555,7 +1587,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(), rejoin: rejoinFor(p), announcement, ice: iceServers });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...iceMsg(p.id) });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
     const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;
