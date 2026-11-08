@@ -64,6 +64,21 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
       assert.equal(s.welcomed(), false);
     });
 
+    // Regression: the token was cached in memory by an earlier connection, so a reconnect after revocation used to skip the check.
+    await test('a reconnect with a token cached before its session was revoked is refused at hello', async () => {
+      const { rawToken } = await newPlayer('Cached');
+      const first = socketFor(srv.port, rawToken); open.push(first);
+      await until(() => first.welcomed(), 'first welcome');
+      first.ws.terminate();
+      await until(() => first.ws.readyState === WebSocket.CLOSED, 'first socket closed', 1000);
+      assert.equal(dbPlayers.revokeMemoryToken(rawToken), true);
+      const again = socketFor(srv.port, rawToken); open.push(again);
+      await until(() => again.closed !== null, 'the reconnect is refused', 2000);
+      assert.equal(again.closed, 1008);
+      assert.equal(again.welcomed(), false);
+      assert.ok(again.msgs.some((m) => m.t === 'authRequired'), 'the player is told to log in again');
+    });
+
     await test('sign-out ends the socket at once, and a message sent after sign-out is not acted on', async () => {
       const host = await newPlayer('Host');
       const guest = await newPlayer('Guest');

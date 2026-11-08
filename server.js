@@ -1496,7 +1496,7 @@ function start(opts = {}) {
     // A player may still be present in the in-memory token map after sign-out, password reset,
     // or session revocation from another request/server instance. Never let that cache bypass
     // the authoritative PostgreSQL session state.
-    if (dbPool.hasDatabase() && !auth.authenticated) {
+    if (!auth.authenticated) {
       tokens.delete(p.token);
       send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
