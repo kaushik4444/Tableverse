@@ -1052,6 +1052,9 @@ function start(opts = {}) {
       // Reserve the filter before entering the serialized database turn. A second block queued behind a slow first
       // write must hide its own target immediately, including after a reconnect on another socket.
       p.pendingBlocks.set(target, (p.pendingBlocks.get(target) || 0) + 1);
+      // Voice follows the same filter, so a pending block stops the audio at once rather than after the write commits.
+      const room = rooms.get(p.room);
+      if (room) broadcastVoice(room);
       return inModerationTurn(p, async () => {
         try {
           await dbModeration.addBlock(p.id, target);
@@ -1063,6 +1066,8 @@ function start(opts = {}) {
           const pending = (p.pendingBlocks.get(target) || 1) - 1;
           if (pending > 0) p.pendingBlocks.set(target, pending);
           else p.pendingBlocks.delete(target);
+          // A failed write lifts the filter again, so the voice lists are sent again either way.
+          if (room) broadcastVoice(room);
         }
         resyncChat(p);
         const roomNow = rooms.get(p.room);
