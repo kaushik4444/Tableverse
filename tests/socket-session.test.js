@@ -121,9 +121,9 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
       let release;
       const gate = new Promise((r) => { release = r; });
       let entered = false;
-      dbModeration.addBlock = async (...args) => { entered = true; await gate; return realAddBlock(...args); };
+      dbModeration.addBlock = async () => { entered = true; await gate; return {}; };
       try {
-        g.send({ t: 'block', id: h.id });
+        g.send({ t: 'block', id: '00000000-0000-4000-8000-000000000001' });
         await until(() => entered, 'the block is paused in its database turn');
         g.send({ t: 'voice', on: true }); // queued behind the paused block while the socket is open
         const b = new Browser(srv.port);

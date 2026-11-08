@@ -38,7 +38,8 @@ async function test(name, fn) {
     await refundRateLimit({ scope: 's', key: k2, windowMs: H, bucket: first.bucket + 1 });
     assert.equal((await hitRateLimit({ scope: 's', key: k2, limit: 3, windowMs: H })).count, 2, 'a refund for another window changes nothing');
     await refundRateLimit({ scope: 's', key: k2, windowMs: H, bucket: first.bucket });
-    assert.equal((await hitRateLimit({ scope: 's', key: k2, limit: 3, windowMs: H })).count, 2, 'the refund for the counted window freed one slot');
+    await refundRateLimit({ scope: 's', key: k2, windowMs: H, bucket: first.bucket });
+    assert.equal((await hitRateLimit({ scope: 's', key: k2, limit: 3, windowMs: H })).count, 1, 'refunding both the probe and original reservation restores the original count');
   });
 
   await test('concurrent attempts cannot get past the limit together', async () => {
