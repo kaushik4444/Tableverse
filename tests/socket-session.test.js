@@ -7,6 +7,7 @@ const WebSocket = require('ws');
 const db = require('../db/pool');
 const dbPlayers = require('../db/players');
 const dbAuth = require('../db/auth');
+const dbModeration = require('../db/moderation');
 const { start } = require('../server');
 const { Browser, sessionSocket } = require('./helpers/auth');
 
@@ -99,9 +100,45 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
       assert.equal(out.status, 200);
       // the revocation happened before the answer: the socket is already marked, so nothing sent after it is acted on
       await until(() => g.closed === 4001, 'the guest socket closes with 4001', 1000);
-      g.send({ t: 'voice', on: true });
-      await sleep(120);
-      assert.equal(h.inVoice().includes(g.id), false, 'the signed-out player did not rejoin voice');
+      assert.equal(h.inVoice().includes(g.id), false, 'the signed-out player is not in voice');
+    });
+
+    // The in-flight case: a command sent while the socket is still open waits behind a paused handler. Sign-out lands
+    // during that wait, and the command must be discarded when the handler is released, not run for the signed-out player.
+    await test('a command queued behind a paused handler is discarded when its session is signed out first', async () => {
+      const host = await newPlayer('Host3');
+      const guest = await newPlayer('Guest3');
+      const h = socketFor(srv.port, host.rawToken); open.push(h);
+      const g = socketFor(srv.port, guest.rawToken); open.push(g);
+      await until(() => h.welcomed() && g.welcomed(), 'welcomes');
+      h.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+      const code = await until(() => h.room && h.room.code, 'table');
+      g.send({ t: 'join', code, spectate: false });
+      await until(() => g.room && g.room.code === code, 'guest seated');
+
+      // Hold the guest's block inside its database turn: addBlock does not finish until the gate opens.
+      const realAddBlock = dbModeration.addBlock;
+      let release;
+      const gate = new Promise((r) => { release = r; });
+      let entered = false;
+      dbModeration.addBlock = async (...args) => { entered = true; await gate; return realAddBlock(...args); };
+      try {
+        g.send({ t: 'block', id: h.id });
+        await until(() => entered, 'the block is paused in its database turn');
+        g.send({ t: 'voice', on: true }); // queued behind the paused block while the socket is open
+        const b = new Browser(srv.port);
+        await b.csrf();
+        b.cookies.set('ct_session', guest.rawToken);
+        const out = await b.post('/api/auth/logout', {});
+        assert.equal(out.status, 200);
+        await until(() => g.closed === 4001, 'the guest socket closes with 4001', 1000);
+        release();
+        await sleep(120);
+        assert.equal(h.inVoice().includes(g.id), false, 'the queued voice command was discarded, not acted on');
+      } finally {
+        dbModeration.addBlock = realAddBlock;
+        release();
+      }
     });
 
     await test('a revoked player leaves voice at once and the table is told', async () => {
