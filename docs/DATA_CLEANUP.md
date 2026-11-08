@@ -26,6 +26,13 @@ finds a table or foreign key that is not in this list, a trigger, or a migration
 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** | referenced by the four tables above | 8 (last) |
 | `schema_migrations` | Which migration files were applied | **PRESERVE, never touched** | none | not in the plan |
 
+**Stage 20.5 (admin console, migration 013) adds seven tables, all emptied before `players`** (the first table above is no longer the
+only one; the counts in the sentence above are from before this stage): `announcement_dismissals` (→ `players`, `announcements`, CASCADE),
+`admin_audit_log` (→ `players`, SET NULL), `feedback` (→ `players`, SET NULL), `announcements` (→ `players`, SET NULL), `analytics_active`,
+`analytics_meta` and `analytics_daily` (no foreign keys). It also adds the column `players.role`, which needs no separate step. Details and
+retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js` and `tests/cleanup.test.js`; when Stage 20.3 is merged first,
+re-check the table count and the order list here and in that test.
+
 Player statistics are not stored anywhere: they are computed from `matches` / `match_participants`, so emptying those
 removes all stats. There are no other user-related tables, views, sequences (all keys are UUIDs) or triggers.
 

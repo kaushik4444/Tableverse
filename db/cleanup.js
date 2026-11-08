@@ -30,6 +30,7 @@ const PLAN = [
   { table: 'feedback', stores: 'Feedback sent by players: optional account id, category, message, status', references: ['players'] },
   { table: 'announcements', stores: 'Announcement banners (text, level, audience, schedule) and the admin who created them', references: ['players'] },
   { table: 'analytics_active', stores: 'Distinct active accounts per day as keyed hashes (no account ids)', references: [] },
+  { table: 'analytics_meta', stores: 'Server-side analytics settings (the hashing salt; a new one is created on demand)', references: [] },
   { table: 'analytics_daily', stores: 'Aggregate daily counters per metric and dimension (no personal data)', references: [] },
   { table: 'match_participants', stores: 'Per-player result rows of finished games (name, seat, score, winner/bot/left-early flags, optional account id)', references: ['matches', 'players'] },
   { table: 'private_table_invitations', stores: 'Private-table invitations and their lifecycle metadata', references: ['players'] },
@@ -46,7 +47,6 @@ const PLAN = [
   { table: 'players', stores: 'Accounts: registered players and legacy anonymous players (username, display name, avatar, timestamps)', references: [] },
 ];
 const PRESERVE = [
-  { table: 'analytics_meta', stores: 'Server-side analytics settings (the hashing salt); not user data' },
   { table: 'schema_migrations', stores: 'Migration history: which db/migrations files were applied (the application checks it on every start)' },
 ];
 const CLEAN_TABLES = PLAN.map((p) => p.table);
