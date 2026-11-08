@@ -167,7 +167,7 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
   3. Remove `TURN_USERNAME` and `TURN_CREDENTIAL`. Keep `TURN_URL`; add `TURN_SHARED_SECRET` (and optionally `TURN_TTL_SECONDS`).
   4. Redeploy, then check the welcome message of a test connection: the TURN entry must carry a `username` of the form `<expiry>:<player id>` and no static login.
   5. Re-run the two-phone test below, then rotate the static credential at the provider so the old pair stops working.
-- Limit: a per-player login lasts one hour by default. A player whose session outlasts it keeps the audio they already have, but a new connection attempt (for example after a network change) needs a fresh welcome, which means reconnecting. Raise `TURN_TTL_SECONDS` if that is a problem; the maximum is 24 hours.
+- Refresh: a per-player login lasts one hour by default. The browser asks for a new one ten minutes before it ends (`ice` request, answered at most once per 20 seconds) and applies it to open connections, so no re-login is needed. Check after a deploy: a table that stays open for more than an hour keeps its audio. Raise `TURN_TTL_SECONDS` only if the provider or a reconnect cost makes that necessary; the maximum is 24 hours.
 - Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: **passed** (2026-11-06).
 - If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
 

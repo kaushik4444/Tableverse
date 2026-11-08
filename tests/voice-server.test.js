@@ -19,7 +19,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 function client(port, token) {
-  const c = { room: null, errors: [], voice: [], rtc: [], ice: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
+  const c = { room: null, errors: [], voice: [], rtc: [], ice: null, iceReplies: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
   c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
@@ -29,6 +29,7 @@ function client(port, token) {
     if (m.t === 'error') c.errors.push(m.message);
     if (m.t === 'voice') c.voice = m.ids;
     if (m.t === 'rtc') c.rtc.push(m);
+    if (m.t === 'ice') c.iceReplies.push(m);
     if (m.t === 'left') c.room = null;
   });
   c.inVoice = () => c.voice.map((v) => v.id).sort();
@@ -53,6 +54,17 @@ function client(port, token) {
 
     await test('the browser is told which ICE servers to use', async () => {
       assert.ok(Array.isArray(host.ice) && host.ice.length >= 1 && host.ice[0].urls, 'welcome carries ice servers');
+    });
+
+    await test('a browser can ask again for ICE servers, and is answered at most once per 20 seconds', async () => {
+      const before = ann.iceReplies.length;
+      ann.send({ t: 'ice' });
+      await until(() => ann.iceReplies.length > before, 'ice reply');
+      assert.deepEqual(ann.iceReplies[before].ice, ann.ice, 'the same list as the welcome (no expiry in this test setup)');
+      assert.equal(ann.iceReplies[before].iceExpiresAt, null);
+      ann.send({ t: 'ice' });
+      await sleep(150);
+      assert.equal(ann.iceReplies.length, before + 1, 'a second request straight away gets no answer');
     });
 
     await test('joining voice tells everyone at the table, spectators included', async () => {

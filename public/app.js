@@ -727,6 +727,16 @@
   }
 
 
+  // TURN logins expire (see lib/voiceRelay.js). Ask for new ones ten minutes before the current ones stop working.
+  const ICE_REFRESH_LEAD_MS = 10 * 60 * 1000;
+  let iceTimer = null;
+  function scheduleIceRefresh() {
+    clearTimeout(iceTimer); iceTimer = null;
+    if (!S.iceExpiresAt) return; // no time-limited logins: nothing to refresh
+    const delay = Math.max(15000, S.iceExpiresAt - Date.now() - ICE_REFRESH_LEAD_MS);
+    iceTimer = setTimeout(() => { iceTimer = null; send({ t: 'ice' }); }, delay);
+  }
+
   function onMessage(m) {
     if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') hideBusy();
     switch (m.t) {
@@ -741,6 +751,8 @@
         S.avatars = m.avatars || [];
         S.emotes = m.emotes || [];
         S.ice = Array.isArray(m.ice) ? m.ice : [];
+        S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        scheduleIceRefresh();
         if (!S.name) S.name = m.name;
         if (!S.avatar) S.avatar = m.avatar;
         S.ready = true;
@@ -765,6 +777,13 @@
         S.ready = false;
         loadSnapshot();
         openAuthSheet('login', m.message || 'Log in to play.');
+        break;
+      case 'ice':
+        // fresh TURN logins: used by new connections, and applied to the ones already open
+        S.ice = Array.isArray(m.ice) ? m.ice : [];
+        S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        scheduleIceRefresh();
+        if (voice) voice.refreshIce();
         break;
       case 'tables': {
         const key = JSON.stringify([m.tables, m.rejoin]);

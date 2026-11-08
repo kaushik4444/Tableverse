@@ -257,5 +257,11 @@ window.TVVoice = function TVVoice(o) {
     if (state.blocked) { state.blocked = false; if (state.error.startsWith('Tap anywhere')) state.error = ''; changed(); }
   }
 
-  return { state, join, toggleMic, toggleSpeaker, leave, reset, updateList, handleRtc, resumeAudio, _peers: peers };
+  /** New TURN logins: open connections take them at once (browsers allow the change on a live connection). */
+  function refreshIce() {
+    const list = (o.getIce && o.getIce()) || [];
+    for (const p of peers.values()) { try { p.pc.setConfiguration({ iceServers: list }); } catch { /* connection already closed */ } }
+  }
+
+  return { state, join, toggleMic, toggleSpeaker, leave, reset, updateList, handleRtc, resumeAudio, refreshIce, _peers: peers };
 };

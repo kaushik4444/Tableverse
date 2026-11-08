@@ -82,6 +82,8 @@ function start(opts = {}) {
   const env = opts.env || process.env;
   // ICE servers for table voice, sent in each welcome. TURN may get a login made for that player (see lib/voiceRelay.js).
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId });
+  /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
+  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, iceExpiresAt: voiceRelay.iceExpiresAt(ice) }; };
   assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';
   const trustProxy = opts.trustProxy ?? parseTrustProxy(env.TRUST_PROXY, production); // behind Render's proxy the client address is in X-Forwarded-For
@@ -991,6 +993,14 @@ function start(opts = {}) {
       if (r.changed) broadcastVoice(room);
     },
 
+    /** The browser asks for fresh TURN logins before its current ones run out. Answered at most once per 20 seconds. */
+    ice(p) {
+      const now = Date.now();
+      if (p.lastIceRefresh && now - p.lastIceRefresh < 20000) return;
+      p.lastIceRefresh = now;
+      send(p.ws, { t: 'ice', ...iceMsg(p.id) });
+    },
+
     /** One setup message (offer, answer, ICE) for another person in voice at the same table. */
     rtc(p, msg) {
       const room = rooms.get(p.room);
@@ -1556,7 +1566,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ice: iceFor(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...iceMsg(p.id) });
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
     const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;
