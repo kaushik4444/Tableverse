@@ -83,7 +83,8 @@ function start(opts = {}) {
   // ICE servers for table voice, sent in each welcome. TURN may get a login made for that player (see lib/voiceRelay.js).
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
-  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, iceExpiresAt: voiceRelay.iceExpiresAt(ice, env) }; };
+  // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
+  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, iceExpiresAt: opts.iceServers ? null : voiceRelay.iceExpiresAt(ice, env) }; };
   const ICE_REFRESH_MIN_MS = 20000; // a browser may ask for fresh logins at most this often (see the 'ice' handler)
   assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';

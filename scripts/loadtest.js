@@ -51,7 +51,8 @@ const { start } = require('../server');
 // Arguments are whole numbers: a typo must stop the run, not turn into NaN and a run with no players.
 const wholeArg = (v, fallback, label) => {
   if (v === undefined) return fallback;
-  if (!/^\d+$/.test(v) || Number(v) < 1) throw new Error(`${label} must be a whole number of at least 1 (got a non-number argument)`);
+  if (!/^\d+$/.test(v)) throw new Error(`${label} must be a whole number (got "${String(v).slice(0, 20)}")`);
+  if (Number(v) < 1) throw new Error(`${label} must be at least 1 (got ${v})`);
   return Number(v);
 };
 const PLAYERS = wholeArg(process.argv[2], 200, 'players');

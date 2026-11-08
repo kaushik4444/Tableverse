@@ -12,6 +12,10 @@ set -euo pipefail
 
 PORT="${PG_TEST_PORT:-55432}"
 DIR="${PG_TEST_DIR:-$HOME/.cache/tableverse-pg-test}"
+# The directory goes into pg_ctl's option string, so only plain path characters are allowed.
+case "$DIR" in
+  *[!A-Za-z0-9_./~-]*) echo "PG_TEST_DIR may contain only letters, digits and _ . / ~ -" >&2; exit 2 ;;
+esac
 KEEP=0
 CHECK=0
 case "${1:-}" in

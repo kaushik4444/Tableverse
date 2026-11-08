@@ -57,7 +57,7 @@ function client(port, token) {
       assert.ok(Array.isArray(host.ice) && host.ice.length >= 1 && host.ice[0].urls, 'welcome carries ice servers');
     });
 
-    await test('a browser can ask again for ICE servers, and is answered at most once per 20 seconds', async () => {
+    await test('a browser can ask again for ICE servers, and an immediate second ask is ignored', async () => {
       const before = ann.iceReplies.length;
       ann.send({ t: 'ice' });
       await until(() => ann.iceReplies.length > before, 'ice reply');
