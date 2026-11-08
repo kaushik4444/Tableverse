@@ -13,11 +13,11 @@ function hitMemory(scope, key, limit, windowMs) {
   const entry = mem.get(k);
   if (!entry || now >= entry.resetAt) {
     mem.set(k, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, remaining: limit - 1, resetMs: windowMs, count: 1 };
+    return { allowed: true, remaining: limit - 1, resetMs: windowMs, count: 1, bucket: now + windowMs };
   }
   entry.count += 1;
   const allowed = entry.count <= limit;
-  return { allowed, remaining: Math.max(0, limit - entry.count), resetMs: Math.max(0, entry.resetAt - now), count: entry.count };
+  return { allowed, remaining: Math.max(0, limit - entry.count), resetMs: Math.max(0, entry.resetAt - now), count: entry.count, bucket: entry.resetAt };
 }
 
 async function hitDb(scope, key, limit, windowMs) {
@@ -34,25 +34,41 @@ async function hitDb(scope, key, limit, windowMs) {
       RETURNING count, window_start
     )
     SELECT count,
-           GREATEST(0, ($3::int - extract(epoch FROM (NOW() - window_start)))::int) AS reset_seconds
+           GREATEST(0, ($3::int - extract(epoch FROM (NOW() - window_start)))::int) AS reset_seconds,
+           extract(epoch FROM window_start)::bigint AS bucket_seconds
     FROM up`;
 
   const r = await db.query(sql, [scope, key, windowSeconds]); // every parameter must be used by the SQL, or PostgreSQL cannot type it
   const row = r.rows[0] || { count: 1, reset_seconds: windowSeconds };
   const count = Number(row.count) || 1;
   const allowed = count <= limit;
-  return { allowed, remaining: Math.max(0, limit - count), resetMs: (Number(row.reset_seconds) || windowSeconds) * 1000, count };
+  return {
+    allowed,
+    remaining: Math.max(0, limit - count),
+    resetMs: (Number(row.reset_seconds) || windowSeconds) * 1000,
+    count,
+    bucket: row.bucket_seconds == null ? null : Number(row.bucket_seconds), // the window this hit was counted in
+  };
 }
 
-/** Gives back one attempt that was reserved but did not count (a successful login, or a server fault). Never goes below zero. */
-function refundMemory(scope, key) {
+/** Gives back one attempt that was reserved but did not count (a successful login, or a server fault). Never goes below zero.
+ *  `bucket` is the window the hit was counted in (from hitRateLimit); a refund never touches a later window. */
+function refundMemory(scope, key, bucket) {
   const entry = mem.get(`${scope}:${key}`);
-  if (entry && nowMs() < entry.resetAt && entry.count > 0) entry.count -= 1;
+  if (entry && nowMs() < entry.resetAt && entry.count > 0 && (bucket == null || entry.resetAt === bucket)) entry.count -= 1;
 }
 
-async function refundDb(scope, key, windowMs) {
+async function refundDb(scope, key, windowMs, bucket) {
   const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
-  // the same bucket the hit used; if the window rolled over in between, the refund finds nothing and the limit is slightly stricter
+  if (bucket != null) {
+    await db.query(
+      `UPDATE auth_rate_limits SET count = count - 1
+         WHERE scope = $1 AND key = $2 AND count > 0 AND window_start = to_timestamp($3)`,
+      [scope, key, bucket]
+    );
+    return;
+  }
+  // no bucket was recorded: fall back to the current window (the window may have rolled over since the hit)
   await db.query(
     `UPDATE auth_rate_limits SET count = count - 1
        WHERE scope = $1 AND key = $2 AND count > 0
@@ -61,10 +77,10 @@ async function refundDb(scope, key, windowMs) {
   );
 }
 
-async function refundRateLimit({ scope, key, windowMs }) {
+async function refundRateLimit({ scope, key, windowMs, bucket }) {
   if (!scope || !key || !Number.isFinite(windowMs)) throw new Error('rate limit refund config invalid');
-  if (db.hasDatabase()) return refundDb(scope, key, windowMs);
-  return refundMemory(scope, key);
+  if (db.hasDatabase()) return refundDb(scope, key, windowMs, bucket);
+  return refundMemory(scope, key, bucket);
 }
 
 async function hitRateLimit({ scope, key, limit, windowMs }) {
