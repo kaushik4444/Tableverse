@@ -19,7 +19,7 @@ async function listBlocked(blockerId) {
     `SELECT b.blocked_id AS id, COALESCE(p.display_name, 'Player') AS name
        FROM player_blocks b LEFT JOIN players p ON p.id = b.blocked_id
       WHERE b.blocker_id = $1
-      ORDER BY p.display_name, b.blocked_id
+      ORDER BY COALESCE(p.display_name, 'Player'), b.blocked_id
       LIMIT $2`,
     [blockerId, MAX_BLOCKS]
   );

@@ -33,7 +33,11 @@ done
 as_pg() { if [ "$(id -u)" = 0 ]; then runuser -u postgres -- "$@"; else "$@"; fi; }
 
 mkdir -p "$DIR"
-if [ "$(id -u)" = 0 ]; then chown -R postgres "$DIR"; fi # a rerun may find files a root run left behind
+# A rerun may find files a root run left behind: fix the ownership of the cluster's own files only, never of a path given by the caller.
+if [ "$(id -u)" = 0 ]; then
+  case "$DIR" in /|"$HOME"|/home|/root|/tmp|/var|/usr) echo "PG_TEST_DIR must be a dedicated directory, not '$DIR'." >&2; exit 2 ;; esac
+  mkdir -p "$DIR/data"; chown postgres "$DIR"; [ -e "$DIR/data" ] && chown -R postgres "$DIR/data"; [ -e "$DIR/server.log" ] && chown postgres "$DIR/server.log"
+fi
 if [ ! -f "$DIR/data/PG_VERSION" ]; then
   as_pg initdb -D "$DIR/data" -U postgres --auth=trust --encoding=UTF8 >/dev/null
 fi

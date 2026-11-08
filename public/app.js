@@ -733,7 +733,8 @@
   function scheduleIceRefresh() {
     clearTimeout(iceTimer); iceTimer = null;
     if (!S.iceExpiresAt) return; // no time-limited logins: nothing to refresh
-    const delay = Math.max(15000, S.iceExpiresAt - Date.now() - ICE_REFRESH_LEAD_MS);
+    // Never closer together than the server's answer interval (ICE_REFRESH_MIN_MS in server.js, 20 s): a closer request is ignored.
+    const delay = Math.max(21000, S.iceExpiresAt - Date.now() - ICE_REFRESH_LEAD_MS);
     iceTimer = setTimeout(() => { iceTimer = null; send({ t: 'ice' }); }, delay);
   }
 

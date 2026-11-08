@@ -83,7 +83,7 @@ function start(opts = {}) {
   // ICE servers for table voice, sent in each welcome. TURN may get a login made for that player (see lib/voiceRelay.js).
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
-  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, iceExpiresAt: voiceRelay.iceExpiresAt(ice) }; };
+  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, iceExpiresAt: voiceRelay.iceExpiresAt(ice, env) }; };
   const ICE_REFRESH_MIN_MS = 20000; // a browser may ask for fresh logins at most this often (see the 'ice' handler)
   assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';
@@ -577,12 +577,21 @@ function start(opts = {}) {
   function flushTables() {
     tablesTimer = null;
     const rejoin = rejoinIndex();
+    // Only people who block someone, or are blocked, can see a generic host name, so everyone else shares one listing.
+    const involved = new Set();
+    for (const q of players.values()) {
+      const s = effectiveBlocked(q);
+      if (s && s.size) { involved.add(q.id); for (const id of s) involved.add(id); }
+    }
+    const shared = publicTables();
+    const sharedKey = JSON.stringify(shared);
     for (const p of players.values()) {
       if (!p.connected) continue;
       if (p.room) { p.tablesKey = null; continue; } // inside a table: it gets a fresh directory when it leaves
-      const tables = publicTables(p.id); // per viewer: blocked hosts are shown under a generic name
+      const own = involved.has(p.id);
+      const tables = own ? publicTables(p.id) : shared; // per viewer only where a block can apply
       const mine = rejoin.get(p.id) || [];
-      const key = JSON.stringify(tables) + '|' + JSON.stringify(mine);
+      const key = (own ? JSON.stringify(tables) : sharedKey) + '|' + JSON.stringify(mine);
       if (p.tablesKey === key) continue;
       p.tablesKey = key;
       send(p.ws, { t: 'tables', tables, rejoin: mine });

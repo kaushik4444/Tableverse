@@ -134,10 +134,12 @@ test('the TURN login lifetime is clamped to 5 minutes .. 24 hours', () => {
 test('the expiry of a shared-secret TURN login is read from its username, and absent for static or STUN-only lists', () => {
   const now = 1_700_000_000_000;
   const env = { TURN_URL: 'turn:t.example:3478', TURN_SHARED_SECRET: 's' };
-  assert.equal(V.iceExpiresAt(V.iceServers(env, { playerId: 'p', now })), now + 3600 * 1000);
-  assert.equal(V.iceExpiresAt(V.iceServers({ TURN_URL: 'turn:t', TURN_USERNAME: 'u', TURN_CREDENTIAL: 'c' })), null, 'a static login does not expire');
-  assert.equal(V.iceExpiresAt([{ urls: V.DEFAULT_STUN }]), null);
-  assert.equal(V.iceExpiresAt(null), null);
+  assert.equal(V.iceExpiresAt(V.iceServers(env, { playerId: 'p', now }), env), now + 3600 * 1000);
+  const staticEnv = { TURN_URL: 'turn:t', TURN_USERNAME: '1700000000:u', TURN_CREDENTIAL: 'c' };
+  assert.equal(V.iceExpiresAt(V.iceServers(staticEnv), staticEnv), null, 'a static login does not expire, even if its username looks like one');
+  assert.equal(V.iceExpiresAt([{ urls: 'turn:x', username: '1700000000:p', credential: 'c' }], { TURN_SHARED_SECRET: 's', ICE_SERVERS: '[]' }), null, 'a JSON ICE list is static: nothing expires');
+  assert.equal(V.iceExpiresAt([{ urls: V.DEFAULT_STUN }], env), null);
+  assert.equal(V.iceExpiresAt(null, env), null);
 });
 
 console.log(`\n${passed} voice tests passed`);
