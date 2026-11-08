@@ -9,10 +9,11 @@
  * - Registers N authenticated accounts and opens one WebSocket per account.
  * - Groups players into tables of 4 and starts a real game on each table
  *   (cycling through Go Fish, Wizard, 29 and Poker).
- * - Human clients stay passively connected; the server's absent-player bot
- *   handles all in-game moves. This models N concurrent idle-to-spectator
- *   connections under moderate bot-driven message traffic, NOT N fully
- *   interactive humans each making moves every second.
+ * - Human clients stay connected and passive. The server plays a human's turn
+ *   only after they disconnect (absentMs), so these games wait on their
+ *   humans: this run measures connection, broadcast and event-loop load, NOT
+ *   game completion. Finished-game counts are therefore expected to be zero
+ *   here. Game completion under bot play is covered by tests/simulation.test.js.
  * - After `seconds` the script closes every socket and reports.
  *
  * WHAT IT MEASURES
@@ -23,7 +24,7 @@
  *   p99 above ~50 ms suggests the server is becoming CPU-bound.
  * - rssMB / heapMB (start → end) — rough memory growth indicator;
  *   large growth over 20 s may indicate a leak path worth investigating.
- * - playersInFinishedGames — how many games completed during the window.
+ * - playersInFinishedGames — games finished at the end of the window (zero in this setup, see above).
  *
  * CAVEATS
  * -------
