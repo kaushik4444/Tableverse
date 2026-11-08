@@ -729,13 +729,17 @@
 
   // TURN logins expire (see lib/voiceRelay.js). Ask for new ones ten minutes before the current ones stop working.
   const ICE_REFRESH_LEAD_MS = 10 * 60 * 1000;
+  const ICE_ASK_GAP_MS = 21000; // the server answers at most once per 20 s (ICE_REFRESH_MIN_MS); a closer request is ignored
   let iceTimer = null;
+  let lastIceAsk = 0;
   function scheduleIceRefresh() {
     clearTimeout(iceTimer); iceTimer = null;
     if (!S.iceExpiresAt) return; // no time-limited logins: nothing to refresh
-    // Never closer together than the server's answer interval (ICE_REFRESH_MIN_MS in server.js, 20 s): a closer request is ignored.
-    const delay = Math.max(21000, S.iceExpiresAt - Date.now() - ICE_REFRESH_LEAD_MS);
-    iceTimer = setTimeout(() => { iceTimer = null; send({ t: 'ice' }); }, delay);
+    // Due when the lead time is reached. If that is already past (for example after a sleep, or a late reply), ask now,
+    // but no sooner than the gap after the last request, so the request is not ignored by the server.
+    const due = S.iceExpiresAt - ICE_REFRESH_LEAD_MS - Date.now();
+    const wait = Math.max(0, due, lastIceAsk + ICE_ASK_GAP_MS - Date.now());
+    iceTimer = setTimeout(() => { iceTimer = null; lastIceAsk = Date.now(); send({ t: 'ice' }); }, wait);
   }
 
   function onMessage(m) {

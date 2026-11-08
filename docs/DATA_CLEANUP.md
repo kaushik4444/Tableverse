@@ -106,7 +106,7 @@ Accounts that registered, never verified their e-mail, and are more than 30 days
 
 ```
 DATABASE_URL='…' node scripts/cleanup-unverified.js            # dry run: prints a count, deletes nothing
-DATABASE_URL='…' node scripts/cleanup-unverified.js --execute  # deletes, in batches of 200 (at most 20,000 per run)
+DATABASE_URL='…' node scripts/cleanup-unverified.js --execute  # deletes, in batches of 200; refuses above --max (default 1000, exit 3)
 node scripts/cleanup-unverified.js --days 45                   # another period, 1–365 days
 
 ### Scheduled job (.github/workflows/cleanup-unverified.yml)

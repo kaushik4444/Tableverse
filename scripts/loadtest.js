@@ -48,9 +48,15 @@ const { monitorEventLoopDelay } = require('node:perf_hooks');
 const { registerAndVerify, sessionSocket } = require('../tests/helpers/auth');
 const { start } = require('../server');
 
-const PLAYERS = Number(process.argv[2] || 200);
+// Arguments are whole numbers: a typo must stop the run, not turn into NaN and a run with no players.
+const wholeArg = (v, fallback, label) => {
+  if (v === undefined) return fallback;
+  if (!/^\d+$/.test(v) || Number(v) < 1) throw new Error(`${label} must be a whole number of at least 1 (got a non-number argument)`);
+  return Number(v);
+};
+const PLAYERS = wholeArg(process.argv[2], 200, 'players');
 process.env.RL_REGISTER_IP_LIMIT = process.env.RL_REGISTER_IP_LIMIT || String(PLAYERS * 2 + 10);
-const SECONDS = Number(process.argv[3] || 20);
+const SECONDS = wholeArg(process.argv[3], 20, 'seconds');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mb = (n) => Math.round(n / 1048576);
 
