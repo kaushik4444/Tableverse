@@ -8,6 +8,3 @@ CREATE INDEX IF NOT EXISTS idx_players_created_at ON players (created_at);
 -- Expiry sweeps (db/cleanup.js): sessions and e-mail tokens that have passed their expiry.
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions (expires_at) WHERE expires_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_auth_email_tokens_expires ON auth_email_tokens (expires_at);
-
--- Duplicate of idx_auth_sessions_hash (same columns and predicate): every session write maintained it twice.
-DROP INDEX IF EXISTS idx_auth_sessions_valid;
