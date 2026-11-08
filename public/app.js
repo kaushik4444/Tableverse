@@ -65,6 +65,7 @@
     createVisibility: 'private',
     sessionListOpen: store.get('ct_sessions_open') !== '0',
     guest: false, // true when the home screen is the public snapshot (no socket, no session)
+    signingIn: false, // logged in on the server, waiting for the socket's welcome: the top bar shows the profile and taps are blocked
     auth: null, // the open auth sheet: 'login' or 'register'
     requireEmailVerification: true, // current server policy; secure default until the server says otherwise
     pending: [], // play actions that wait for a successful login, then run once the lobby opens
@@ -170,13 +171,25 @@
     el.querySelector('b').textContent = label;
     if ($app) $app.setAttribute('inert', '');
     clearTimeout(busyTimer);
-    busyTimer = setTimeout(() => { hideBusy(); toast('That is taking longer than usual. Check your connection and try again.'); }, 20000);
+    busyTimer = setTimeout(() => {
+      const wasSigningIn = S.signingIn;
+      hideBusy();
+      toast('That is taking longer than usual. Check your connection and try again.');
+      if (wasSigningIn) render(); // back to Log in / Sign up if the sign-in never finished
+    }, 20000);
   }
   function hideBusy() {
+    S.signingIn = false;
     clearTimeout(busyTimer);
     const el = document.getElementById('busyBlock');
     if (el) el.remove();
     if ($app) $app.removeAttribute('inert');
+  }
+  /** Right after a successful login the socket still has to say welcome. Until then show the profile, spin, and block taps. */
+  function beginSignIn() {
+    S.signingIn = true;
+    showBusy('Signing you in…');
+    render();
   }
   const send = (msg) => {
     if (!(ws && ws.readyState === 1)) return;
@@ -435,6 +448,7 @@
       return;
     }
     closeOverlay();
+    beginSignIn();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
@@ -503,6 +517,7 @@
         return;
       }
       if (e.code === 4001) { // signed out elsewhere, or the password was reset
+        hideBusy();
         clearClientSession();
         $banner.hidden = true;
         loadSnapshot();
@@ -511,13 +526,14 @@
         return;
       }
       if (e.code === 4002) { // a newer login (another device) took over the single active session
+        hideBusy();
         clearClientSession();
         $banner.hidden = true;
         loadSnapshot();
         openAuthSheet('login', 'You signed in on another device, so this one was signed out. Log in again to play here.');
         return;
       }
-      if (e.code === 1008) return; // refused (not logged in, not verified): the login sheet is already showing, do not loop
+      if (e.code === 1008) { if (S.signingIn) { hideBusy(); loadSnapshot(); } return; } // refused (not logged in, not verified): the login sheet is already showing, do not loop
       $banner.textContent = 'Reconnecting…';
       $banner.hidden = false;
       reconnectTimer = setTimeout(connect, Math.min(5000, 500 * 2 ** retry++));
@@ -659,6 +675,7 @@
       return;
     }
     S.pending = [fn];
+    if (S.signingIn) return; // the login already succeeded: run the action when the table connection is ready, do not ask again
     if (!S.guest) {
       // logged in with a valid session, the socket is just down: keep the action for the reconnect instead of nagging
       if (!ws || ws.readyState >= 2) connect();
@@ -778,6 +795,7 @@
         break;
       }
       case 'authRequired':
+        hideBusy();
         clearClientSession();
         S.ready = false;
         loadSnapshot();
@@ -1506,6 +1524,10 @@
 
   function topbarHTML() {
     const brand = '<a class="tb-brand" href="/" aria-label="Tableverse home"><span class="tb-mark">🂡</span><span class="tb-name">Tableverse</span></a>';
+    if (S.guest && S.signingIn) {
+      const who = S.named && S.name ? S.name : 'Player';
+      return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><span class="tb-avatar-btn tb-signing" role="status" aria-label="Signing in as ${esc(who)}">${avatar({ name: who, avatar: S.avatar }, 'tb-av')}<span class="spinner" aria-hidden="true"></span></span></div></nav>`;
+    }
     if (S.guest) {
       return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><button type="button" class="btn ghost small" data-act="showLogin">Log in</button><button type="button" class="btn small" data-act="showRegister">Sign up</button></div></nav>`;
     }

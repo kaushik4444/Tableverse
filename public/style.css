@@ -607,3 +607,6 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
   .fs-head { align-items: flex-start; }
   .fs-head .linklike { padding-top: 2px; }
 }
+
+/* Profile placeholder in the top bar while the login finishes connecting */
+.tb-signing { display: inline-flex; align-items: center; gap: 8px; cursor: progress; }
