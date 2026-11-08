@@ -590,12 +590,11 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 @media (prefers-reduced-motion: reduce) { .end-pop, .end-pop-card, .end-pop-ico { animation: none; } }
 
 /* Blocks every other tap while a slow step (joining, creating, starting) is in flight */
-.busy-block { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(8, 10, 20, .6); cursor: progress; animation: busyFade .2s .3s backwards; }
+.busy-block { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(8, 10, 20, .6); cursor: progress; }
 .busy-card { display: grid; justify-items: center; gap: 14px; padding: 24px 30px; border-radius: 18px; background: #1d1740; color: #fff; box-shadow: 0 16px 50px rgba(0, 0, 0, .5); }
 .busy-spin { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(255, 255, 255, .25); border-top-color: #ffd76e; animation: busySpin .8s linear infinite; }
 @keyframes busySpin { to { transform: rotate(360deg) } }
-@keyframes busyFade { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .busy-spin { animation-duration: 2s; } .busy-block { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .busy-spin { animation-duration: 2s; } }
 
 /* Touch targets: 44px tall on phones and tablets (Apple HIG 44pt; WCAG 2.5.5). Last in the file so it overrides the
    card and form rules above; desktop keeps the compact size. */

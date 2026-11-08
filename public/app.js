@@ -170,6 +170,7 @@
   let busyTimer = null;
   let busyKind = '';
   let httpBusy = 0; // HTTP actions in flight: socket messages must not take their spinner away
+  let httpBusyEpoch = 0;
   let busyFocus = null;
   const inerted = [];
   function showBusy(label, ms = 20000, kind = '') {
@@ -196,6 +197,7 @@
     clearTimeout(busyTimer);
     busyTimer = setTimeout(() => {
       const wasSigningIn = S.signingIn;
+      if (httpBusy) { httpBusy = 0; httpBusyEpoch++; }
       hideBusy();
       toast('That is taking longer than usual. Check your connection and try again.');
       if (wasSigningIn) render(); // back to Log in / Sign up if the sign-in never finished
@@ -214,9 +216,12 @@
   }
   /** Run an HTTP action behind the spinner. Always clears it, whether the action worked or threw. */
   async function withBusy(label, fn) {
+    const epoch = httpBusyEpoch;
     httpBusy++;
     showBusy(label);
-    try { return await fn(); } finally { httpBusy--; if (!httpBusy) hideBusy(); }
+    try { return await fn(); } finally {
+      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy) hideBusy(); }
+    }
   }
   /** Right after a successful login the socket still has to say welcome. Until then show the profile, spin, and block taps. */
   function beginSignIn() {
