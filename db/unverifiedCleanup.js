@@ -7,8 +7,9 @@
  *
  * Safety:
  *  - Nothing runs by itself. scripts/cleanup-unverified.js is a dry run unless --execute is given.
- *  - Each batch re-checks the rule inside its own transaction and locks the rows it deletes (SKIP LOCKED), so an account
- *    verified a moment earlier is not removed.
+ *  - Each batch locks the account rows it deletes (FOR UPDATE, SKIP LOCKED) and re-checks the rule in a new statement under
+ *    that lock. verifyEmailToken takes the same row lock before it changes a token or identity, so an account being verified
+ *    is skipped here, and one verified a moment earlier is not removed.
  *  - Deletes are per batch, bounded by maxTotal, and cascade to the account's own rows (logins, tokens, sessions,
  *    friendships, invitations, reports, blocks). Match history keeps its rows; the link to the player is cleared.
  *  - Only counts are logged. No e-mail address, name or id is written anywhere.
