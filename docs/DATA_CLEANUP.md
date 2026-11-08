@@ -113,8 +113,17 @@ Accounts that registered, never verified their e-mail, and are more than 30 days
 
 ```
 DATABASE_URL='…' node scripts/cleanup-unverified.js            # dry run: prints a count, deletes nothing
-DATABASE_URL='…' node scripts/cleanup-unverified.js --execute  # deletes, in batches of 200 (at most 20,000 per run)
+DATABASE_URL='…' node scripts/cleanup-unverified.js --execute  # deletes, in batches of 200; refuses above --max (default 1000, exit 3)
 node scripts/cleanup-unverified.js --days 45                   # another period, 1–365 days
+
+### Scheduled job (.github/workflows/cleanup-unverified.yml)
+
+- Runs daily at 03:17 UTC. Each run is a dry run; it deletes only when the repository variable `CLEANUP_EXECUTE` is `true`.
+- Needs the secret `CLEANUP_DATABASE_URL` (the production database URL). It is not created by this repository: the owner adds it.
+- The `production-cleanup` environment should have a required reviewer, so every deletion is approved (repository settings).
+- `--execute` refuses to delete more than 1000 accounts in a run (exit 3, nothing deleted). Review the dry run before raising `--max`.
+- The job summary lists counts only. A failed run is reported by GitHub's notifications.
+- Status: **not enabled**. Enabling it (adding the secret, the reviewer and the variable) needs the owner's approval.
 ```
 
 - The clock starts when the account was created. A verification link is valid for 24 hours and can be re-sent, so

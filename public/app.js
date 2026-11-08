@@ -67,6 +67,7 @@
     createVisibility: 'private',
     sessionListOpen: store.get('ct_sessions_open') !== '0',
     guest: false, // true when the home screen is the public snapshot (no socket, no session)
+    signingIn: false, // logged in on the server, waiting for the socket's welcome: the top bar shows the profile and taps are blocked
     auth: null, // the open auth sheet: 'login' or 'register'
     requireEmailVerification: true, // current server policy; secure default until the server says otherwise
     pending: [], // play actions that wait for a successful login, then run once the lobby opens
@@ -158,10 +159,23 @@
   window.CardTable.showRules = showRules;
 
   // ------------------------------------------------------------ auth + connection
-  // Slow steps (joining, creating, starting a table) put up a spinner that blocks every other tap until the server answers.
-  const BUSY_LABELS = { join: 'Joining table…', create: 'Creating your table…', start: 'Starting the game…', rematch: 'Setting up another game…', sit: 'Taking your seat…', leave: 'Leaving…' };
+  // Every click that waits on the server puts up a spinner that blocks all other taps until the answer arrives.
+  // Socket messages (table actions) clear it when the server answers; HTTP actions use withBusy().
+  const BUSY_LABELS = {
+    join: 'Joining table…', create: 'Creating your table…', start: 'Starting the game…', rematch: 'Setting up another game…', sit: 'Taking your seat…', leave: 'Leaving…',
+    addBot: 'Adding a bot…', removeBot: 'Removing the bot…', setSeats: 'Updating seats…', setOptions: 'Saving table options…', setVisibility: 'Updating the table…',
+    makeHost: 'Making them the host…', kick: 'Removing the player…', block: 'Blocking…', unblock: 'Unblocking…', report: 'Sending your report…',
+  };
+  // Quick table tweaks: if the server somehow stays silent, give up sooner than for joining or starting a game.
+  const BUSY_FAST = new Set(['addBot', 'removeBot', 'setSeats', 'setOptions', 'setVisibility', 'makeHost', 'kick', 'block', 'unblock', 'report']);
+  const BUSY_MOD = new Set(['block', 'unblock', 'report']); // answered with a 'notice' or 'blocks' message instead of a new table state
   let busyTimer = null;
-  function showBusy(label) {
+  let busyKind = '';
+  let httpBusy = 0; // HTTP actions in flight: socket messages must not take their spinner away
+  let httpBusyEpoch = 0;
+  let busyFocus = null;
+  const inerted = [];
+  function showBusy(label, ms = 20000, kind = '') {
     let el = document.getElementById('busyBlock');
     if (!el) {
       el = document.createElement('div');
@@ -170,20 +184,57 @@
       document.body.appendChild(el);
     }
     el.querySelector('b').textContent = label;
-    if ($app) $app.setAttribute('inert', '');
+    busyKind = kind;
+    // Nothing behind the spinner can be tapped, tabbed to or typed into: the app, open dialogs, the chat panel.
+    // Chat block/report act in place on the open chat, which keeps keyboard focus on the button the person used, so they
+    // get the spinner (taps are blocked) but are not made inert.
+    if (!inerted.length && !BUSY_MOD.has(kind)) {
+      busyFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+      for (const n of document.body.children) {
+        if (n === el || n.id === 'toasts' || n.id === 'banner' || n.tagName === 'SCRIPT' || n.hasAttribute('inert')) continue;
+        n.setAttribute('inert', '');
+        inerted.push(n);
+      }
+    }
     clearTimeout(busyTimer);
-    busyTimer = setTimeout(() => { hideBusy(); toast('That is taking longer than usual. Check your connection and try again.'); }, 20000);
+    busyTimer = setTimeout(() => {
+      const wasSigningIn = S.signingIn;
+      if (httpBusy) { httpBusy = 0; httpBusyEpoch++; }
+      S.signingIn = false;
+      hideBusy();
+      toast('That is taking longer than usual. Check your connection and try again.');
+      if (wasSigningIn) render(); // back to Log in / Sign up if the sign-in never finished
+    }, ms);
   }
   function hideBusy() {
     clearTimeout(busyTimer);
+    busyKind = '';
     const el = document.getElementById('busyBlock');
     if (el) el.remove();
-    if ($app) $app.removeAttribute('inert');
+    for (const n of inerted.splice(0)) n.removeAttribute('inert');
+    // an inert subtree drops keyboard focus: give it back before the next redraw reads it
+    if (busyFocus && busyFocus.isConnected) { try { busyFocus.focus({ preventScroll: true }); } catch { /* ignore */ } }
+    busyFocus = null;
+  }
+  /** Run an HTTP action behind the spinner. Always clears it, whether the action worked or threw. */
+  async function withBusy(label, fn) {
+    const epoch = httpBusyEpoch;
+    httpBusy++;
+    showBusy(label);
+    try { return await fn(); } finally {
+      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy) hideBusy(); }
+    }
+  }
+  /** Right after a successful login the socket still has to say welcome. Until then show the profile, spin, and block taps. */
+  function beginSignIn() {
+    S.signingIn = true;
+    showBusy('Signing you in…');
+    render();
   }
   const send = (msg) => {
     if (!(ws && ws.readyState === 1)) return;
     ws.send(JSON.stringify(msg));
-    if (BUSY_LABELS[msg.t]) showBusy(BUSY_LABELS[msg.t]);
+    if (BUSY_LABELS[msg.t]) showBusy(BUSY_LABELS[msg.t], BUSY_FAST.has(msg.t) ? 8000 : 20000, msg.t);
   };
 
   // ------------------------------------------------------------ table voice chat (public/voice.js)
@@ -310,32 +361,36 @@
   }
 
   async function doLogoutAll() {
-    try {
-      await postJson('/api/auth/logout-all', {});
-    } catch {
-      // ignore network failures; clear local state regardless
-    }
-    S.signedOutIntentionally = true;
-    clearClientSession();
-    S.ready = false;
-    S.room = null;
-    S.view = null;
-    loadSnapshot();
+    await withBusy('Logging out everywhere…', async () => {
+      try {
+        await postJson('/api/auth/logout-all', {});
+      } catch {
+        // ignore network failures; clear local state regardless
+      }
+      S.signedOutIntentionally = true;
+      clearClientSession();
+      S.ready = false;
+      S.room = null;
+      S.view = null;
+      await loadSnapshot();
+    });
     toast('Logged out everywhere.');
   }
 
   async function doLogout() {
-    try {
-      await postJson('/api/auth/logout', {});
-    } catch {
-      // ignore network failures; clear local state regardless
-    }
-    S.signedOutIntentionally = true;
-    clearClientSession();
-    S.ready = false;
-    S.room = null;
-    S.view = null;
-    loadSnapshot();
+    await withBusy('Logging out…', async () => {
+      try {
+        await postJson('/api/auth/logout', {});
+      } catch {
+        // ignore network failures; clear local state regardless
+      }
+      S.signedOutIntentionally = true;
+      clearClientSession();
+      S.ready = false;
+      S.room = null;
+      S.view = null;
+      await loadSnapshot();
+    });
     toast('Logged out.');
   }
 
@@ -427,7 +482,7 @@
   }
 
   async function doLogin(email, password) {
-    const out = await postLogin(email, password);
+    const out = await withBusy('Logging in…', () => postLogin(email, password));
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     adoptPlayer(out.player);
@@ -439,12 +494,13 @@
       return;
     }
     closeOverlay();
+    beginSignIn();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
 
   async function doRegister(name, username, email, password) {
-    const out = await postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined });
+    const out = await withBusy('Creating your account…', () => postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined }));
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     S.requireEmailVerification = policyRequiresVerification(out);
@@ -458,7 +514,7 @@
     const email = window.prompt('Enter the email you registered with:');
     if (!email) return;
     try {
-      await postJson('/api/auth/resend-verification', { email });
+      await withBusy('Sending the email…', () => postJson('/api/auth/resend-verification', { email }));
       toast('If this account needs verifying, a new link has been sent.');
     } catch (e) {
       toast(e.message || 'Could not send the email');
@@ -469,7 +525,7 @@
     const email = window.prompt('Enter your account email:');
     if (!email) return;
     try {
-      await postJson('/api/auth/forgot-password', { email });
+      await withBusy('Sending the email…', () => postJson('/api/auth/forgot-password', { email }));
       toast('If this account exists, a reset link has been sent.');
     } catch (e) {
       toast(e.message || 'Could not send reset link');
@@ -507,6 +563,8 @@
         return;
       }
       if (e.code === 4001) { // signed out elsewhere, or the password was reset
+        S.signingIn = false;
+        hideBusy();
         clearClientSession();
         $banner.hidden = true;
         loadSnapshot();
@@ -515,13 +573,15 @@
         return;
       }
       if (e.code === 4002) { // a newer login (another device) took over the single active session
+        S.signingIn = false;
+        hideBusy();
         clearClientSession();
         $banner.hidden = true;
         loadSnapshot();
         openAuthSheet('login', 'You signed in on another device, so this one was signed out. Log in again to play here.');
         return;
       }
-      if (e.code === 1008) return; // refused (not logged in, not verified): the login sheet is already showing, do not loop
+      if (e.code === 1008) { if (S.signingIn) { S.signingIn = false; hideBusy(); loadSnapshot(); } return; } // refused (not logged in, not verified): the login sheet is already showing, do not loop
       $banner.textContent = 'Reconnecting…';
       $banner.hidden = false;
       reconnectTimer = setTimeout(connect, Math.min(5000, 500 * 2 ** retry++));
@@ -595,16 +655,18 @@
     finally { S.friendSearchBusy = false; if (!S.room) render(); }
   }
 
-  async function socialPost(path, body, success) {
-    try {
-      await postJson(path, body);
-      S.socialError = '';
-      if (success) toast(success);
-      await loadSocial({ quiet: true });
-    } catch (error) {
-      S.socialError = error.message || 'Could not update friends.';
-      if (!S.room) render();
-    }
+  async function socialPost(path, body, success, label = 'Updating…') {
+    await withBusy(label, async () => {
+      try {
+        await postJson(path, body);
+        S.socialError = '';
+        if (success) toast(success);
+        await loadSocial({ quiet: true });
+      } catch (error) {
+        S.socialError = error.message || 'Could not update friends.';
+        if (!S.room) render();
+      }
+    });
   }
 
   function joinAcceptedInvitation(invitation) {
@@ -721,6 +783,7 @@
       return;
     }
     S.pending = [fn];
+    if (S.signingIn) return; // the login already succeeded: run the action when the table connection is ready, do not ask again
     if (!S.guest) {
       // logged in with a valid session, the socket is just down: keep the action for the reconnect instead of nagging
       if (!ws || ws.readyState >= 2) connect();
@@ -789,8 +852,24 @@
   }
 
 
+  // TURN logins expire (see lib/voiceRelay.js). Ask for new ones ten minutes before the current ones stop working.
+  const ICE_REFRESH_LEAD_MS = 10 * 60 * 1000;
+  const ICE_ASK_GAP_MS = 21000; // the server answers at most once per 20 s (ICE_REFRESH_MIN_MS); a closer request is ignored
+  let iceTimer = null;
+  let lastIceAsk = 0;
+  function scheduleIceRefresh() {
+    clearTimeout(iceTimer); iceTimer = null;
+    if (!S.iceExpiresAt) return; // no time-limited logins: nothing to refresh
+    // Due when the lead time is reached. If that is already past (for example after a sleep, or a late reply), ask now,
+    // but no sooner than the gap after the last request, so the request is not ignored by the server.
+    const due = S.iceExpiresAt - ICE_REFRESH_LEAD_MS - Date.now();
+    const wait = Math.max(0, due, lastIceAsk + ICE_ASK_GAP_MS - Date.now());
+    iceTimer = setTimeout(() => { iceTimer = null; lastIceAsk = Date.now(); send({ t: 'ice' }); }, wait);
+  }
+
   function onMessage(m) {
-    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') hideBusy();
+    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
+    else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
       case 'welcome': {
         S.id = m.id;
@@ -805,6 +884,8 @@
         S.avatars = m.avatars || [];
         S.emotes = m.emotes || [];
         S.ice = Array.isArray(m.ice) ? m.ice : [];
+        S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        scheduleIceRefresh();
         if (!S.name) S.name = m.name;
         if (!S.avatar) S.avatar = m.avatar;
         S.ready = true;
@@ -825,10 +906,23 @@
         break;
       }
       case 'authRequired':
+        S.signingIn = false;
+        hideBusy();
         clearClientSession();
         S.ready = false;
         loadSnapshot();
         openAuthSheet('login', m.message || 'Log in to play.');
+        break;
+      case 'blocks':
+        S.blocked = Array.isArray(m.blocks) ? m.blocks : [];
+        if (S.page === 'profile') render();
+        break;
+      case 'ice':
+        // fresh TURN logins: used by new connections, and applied to the ones already open
+        S.ice = Array.isArray(m.ice) ? m.ice : [];
+        S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        scheduleIceRefresh();
+        if (voice) voice.refreshIce();
         break;
       case 'tables': {
         const key = JSON.stringify([m.tables, m.rejoin]);
@@ -988,7 +1082,7 @@
 
   const verifyToken = new URLSearchParams(location.search).get('token');
   if (location.pathname.endsWith('/verify-email.html') && verifyToken) {
-    postJson('/api/auth/verify-email', { token: verifyToken })
+    withBusy('Verifying your email…', () => postJson('/api/auth/verify-email', { token: verifyToken }))
       .then(() => { loadSnapshot(); openAuthSheet('login', 'Email verified. You can log in now.'); })
       .catch((e) => { loadSnapshot(); openAuthSheet('login', e.message || 'Verification failed.'); });
   }
@@ -1003,7 +1097,7 @@
         const pw = o.querySelector('#resetPw').value;
         if (pw !== o.querySelector('#resetPw2').value) return show('The two passwords do not match.');
         try {
-          await postJson('/api/auth/reset-password', { token: verifyToken, newPassword: pw });
+          await withBusy('Updating your password…', () => postJson('/api/auth/reset-password', { token: verifyToken, newPassword: pw }));
           closeModal();
           history.replaceState(null, '', '/');
           openAuthSheet('login', 'Password updated. Log in with the new one.');
@@ -1182,14 +1276,16 @@
         .catch(() => { /* the card works without the numbers */ });
     }
   }
-  async function cardAction(path, body, success) {
+  async function cardAction(path, body, success, label = 'Updating…') {
     const C = S.card; if (!C || C.busy) return;
     C.busy = true; C.error = ''; drawCard();
-    try {
-      await postJson(path, body);
-      if (success) toast(success);
-      await loadSocial({ quiet: true });
-    } catch (e) { C.error = e.message || 'That did not work. Try again.'; }
+    await withBusy(label, async () => {
+      try {
+        await postJson(path, body);
+        if (success) toast(success);
+        await loadSocial({ quiet: true });
+      } catch (e) { C.error = e.message || 'That did not work. Try again.'; }
+    });
     C.busy = false;
     drawCard();
   }
@@ -1427,6 +1523,16 @@
     return `<ul class="hist-list">${rows}</ul>${pager}<p class="hint" style="text-align:left">Games you left early are listed but not counted in your statistics.</p>`;
   }
 
+  /** Accounts this person has blocked, with a button to unblock each. Names are shown only here, to the blocker. */
+  function blockedHTML() {
+    const list = S.blocked;
+    const head = `<div class="setting-row"><div><b>Blocked players</b><small>They cannot see your table chat, and you and they cannot hear each other at a table. They are not told. Unblocking restores both.</small></div></div>`;
+    if (!list) return `${head}<p class="hint" style="text-align:left">Loading…</p>`;
+    if (!list.length) return `${head}<p class="hint" style="text-align:left">You have not blocked anyone.</p>`;
+    const rows = list.map((b) => `<div class="setting-row"><div><b>${esc(b.name || 'Player')}</b></div><button type="button" class="btn ghost small" data-act="unblock" data-id="${esc(b.id)}" aria-label="Unblock ${esc(b.name || 'player')}">Unblock</button></div>`).join('');
+    return `${head}${rows}`;
+  }
+
   function renderProfilePage() {
     const P = S.profile || { loading: true };
     let inner;
@@ -1439,6 +1545,7 @@
       const tabBtn = (id, label) => `<button type="button" role="tab" class="tab ${tab === id ? 'on' : ''}" aria-selected="${tab === id}" data-act="profileTab" data-tab="${id}">${label}</button>`;
       const panel = tab === 'history' ? historyHTML(P.history)
         : tab === 'account' ? `<div class="account-list">
+            ${blockedHTML()}
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
             <div class="setting-row"><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
             <div class="setting-row"><div><b>Sessions</b><small>Sign out of this device, or of every device you are logged in on.</small></div><span class="row" style="gap:6px"><button type="button" class="btn ghost small" data-act="logout">Log out</button><button type="button" class="btn ghost small" data-act="logoutAll">Everywhere</button></span></div>
@@ -1497,7 +1604,8 @@
         const btn = e.target.querySelector('button[type=submit]');
         btn.disabled = true;
         try {
-          await postJson('/api/me/delete-account', { password: o.querySelector('#deletePw').value });
+          const pw = o.querySelector('#deletePw').value;
+          await withBusy('Deleting your account…', () => postJson('/api/me/delete-account', { password: pw }));
           closeModal();
           S.signedOutIntentionally = true;
           clearClientSession();
@@ -1531,6 +1639,10 @@
 
   function topbarHTML() {
     const brand = '<a class="tb-brand" href="/" aria-label="Tableverse home"><span class="tb-mark">🂡</span><span class="tb-name">Tableverse</span></a>';
+    if (S.guest && S.signingIn) {
+      const who = S.named && S.name ? S.name : 'Player';
+      return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><span class="tb-avatar-btn tb-signing" role="status" aria-live="polite" aria-atomic="true"><span class="sr-only">Signing in as ${esc(who)}</span>${avatar({ name: who, avatar: S.avatar }, 'tb-av')}<span class="spinner" aria-hidden="true"></span></span></div></nav>`;
+    }
     if (S.guest) {
       return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><button type="button" class="btn ghost small" data-act="showLogin">Log in</button><button type="button" class="btn small" data-act="showRegister">Sign up</button></div></nav>`;
     }
@@ -1594,13 +1706,13 @@
   }
 
   const modalActions = {
-    cardAdd: () => { const p = S.card && S.card.last; if (p && p.username) cardAction('/api/me/friend-requests', { username: p.username }, 'Friend request sent.'); },
-    cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }); },
-    cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.'); },
-    cardDecline: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/decline', { requestId: r.request.id }); },
+    cardAdd: () => { const p = S.card && S.card.last; if (p && p.username) cardAction('/api/me/friend-requests', { username: p.username }, 'Friend request sent.', 'Sending request…'); },
+    cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }, undefined, 'Cancelling…'); },
+    cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.', 'Accepting…'); },
+    cardDecline: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/decline', { requestId: r.request.id }, undefined, 'Declining…'); },
     cardRemove: () => { const r = relationTo(S.card && S.card.last); if (!r.friend) return; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="cardRemoveConfirm">Remove friend</button></div>'); },
-    cardRemoveConfirm: () => { const r = relationTo(S.card && S.card.last); closeModal(); if (r.friend) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.'); },
-    removeFriendConfirm: () => { const id = S.pendingFriendRemovalId; S.pendingFriendRemovalId = null; closeModal(); if (id) socialPost('/api/me/friends/remove', { friendId: id }, 'Friend removed.'); },
+    cardRemoveConfirm: () => { const r = relationTo(S.card && S.card.last); closeModal(); if (r.friend) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.', 'Removing friend…'); },
+    removeFriendConfirm: () => { const id = S.pendingFriendRemovalId; S.pendingFriendRemovalId = null; closeModal(); if (id) socialPost('/api/me/friends/remove', { friendId: id }, 'Friend removed.', 'Removing friend…'); },
     leaveGameConfirm: () => { closeModal(); send({ t: 'leave' }); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
@@ -1642,7 +1754,7 @@
     render();
     if (S.guest) { send({ t: 'setName', name: S.name || undefined, avatar: next }); return; }
     try {
-      const out = await postJson('/api/me/avatar', { avatar: next });
+      const out = await withBusy('Saving your picture…', () => postJson('/api/me/avatar', { avatar: next }));
       S.avatar = out.avatar;
       store.set('ct_avatar', out.avatar);
       if (S.profile && S.profile.data) S.profile.data.profile.avatar = out.avatar;
@@ -1683,7 +1795,8 @@
         const btn = e.target.querySelector('button[type=submit]');
         btn.disabled = true;
         try {
-          const out = await postJson('/api/me/display-name', { displayName: o.querySelector('#profileName').value });
+          const newName = o.querySelector('#profileName').value;
+          const out = await withBusy('Saving your name…', () => postJson('/api/me/display-name', { displayName: newName }));
           S.name = out.displayName; S.named = true;
           store.set('ct_name', S.name);
           if (S.profile && S.profile.data) S.profile.data.profile.displayName = S.name;
@@ -1707,7 +1820,7 @@
       const redraw = () => { o.querySelector('.modal-body').innerHTML = body(); };
       modalActions.toggleSound = () => { CardTable.sound.toggle(); redraw(); };
       modalActions.clearRecent = async () => {
-        try { await postJson('/api/me/recent/clear', {}); S.recentTables = []; redraw(); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
+        try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
       };
       modalActions.openProfileFromSettings = () => { closeModal(); openPage('profile'); };
     });
@@ -2078,7 +2191,13 @@
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
     reloadProfile: () => loadProfile(),
-    profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; render(); } },
+    profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
+    unblock: (el) => {
+      const id = el.dataset.id;
+      S.blocked = (S.blocked || []).filter((b) => b.id !== id); // the server confirms with the full list straight after
+      render();
+      send({ t: 'unblock', id });
+    },
     historyPage: (el) => loadProfile(Number(el.dataset.page) || 1),
     editProfile: () => openEditProfileDialog(),
     openDeleteAccount: () => openDeleteAccountDialog(),
@@ -2137,10 +2256,10 @@
     },
     refreshSocial: () => loadSocial(),
     openProfile: (el) => openPage('player', el.dataset.username),
-    sendFriend: (el) => socialPost('/api/me/friend-requests', { username: el.dataset.username }, 'Friend request sent.'),
-    acceptFriend: (el) => socialPost('/api/me/friend-requests/accept', { requestId: el.dataset.id }, 'Friend request accepted.'),
-    declineFriend: (el) => socialPost('/api/me/friend-requests/decline', { requestId: el.dataset.id }),
-    cancelFriend: (el) => socialPost('/api/me/friend-requests/cancel', { requestId: el.dataset.id }),
+    sendFriend: (el) => socialPost('/api/me/friend-requests', { username: el.dataset.username }, 'Friend request sent.', 'Sending request…'),
+    acceptFriend: (el) => socialPost('/api/me/friend-requests/accept', { requestId: el.dataset.id }, 'Friend request accepted.', 'Accepting…'),
+    declineFriend: (el) => socialPost('/api/me/friend-requests/decline', { requestId: el.dataset.id }, undefined, 'Declining…'),
+    cancelFriend: (el) => socialPost('/api/me/friend-requests/cancel', { requestId: el.dataset.id }, undefined, 'Cancelling…'),
     removeFriend: (el) => { S.pendingFriendRemovalId = el.dataset.id; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="removeFriendConfirm">Remove friend</button></div>'); },
     acceptInvitation: async (el) => {
       try {
@@ -2151,8 +2270,8 @@
         joinAcceptedInvitation({ ...(known || {}), ...(out.invitation || {}), status: (out.invitation && out.invitation.status) || 'accepted' });
       } catch (error) { hideBusy(); S.socialError = error.message || 'Could not accept invitation.'; render(); }
     },
-    declineInvitation: (el) => socialPost('/api/me/table-invitations/decline', { invitationId: el.dataset.id }),
-    revokeInvitation: (el) => socialPost('/api/me/table-invitations/revoke', { invitationId: el.dataset.id }),
+    declineInvitation: (el) => socialPost('/api/me/table-invitations/decline', { invitationId: el.dataset.id }, undefined, 'Declining…'),
+    revokeInvitation: (el) => socialPost('/api/me/table-invitations/revoke', { invitationId: el.dataset.id }, undefined, 'Revoking…'),
     logout: () => { S.menuOpen = false; doLogout(); },
     logoutAll: () => { S.menuOpen = false; doLogoutAll(); },
     copyLink: async () => {
@@ -2217,9 +2336,11 @@
       if (!username || !S.room || S.room.visibility !== 'private') return;
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       try {
-        await postJson('/api/me/table-invitations', { username, gameId: S.room.gameId, roomCode: S.room.code, expiresAt });
+        await withBusy('Sending invitation…', async () => {
+          await postJson('/api/me/table-invitations', { username, gameId: S.room.gameId, roomCode: S.room.code, expiresAt });
+          await loadSocial({ quiet: true });
+        });
         toast('Invitation sent.');
-        await loadSocial({ quiet: true });
         render();
       } catch (error) {
         S.socialError = error.message || 'Could not send invitation.';

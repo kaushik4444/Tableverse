@@ -1,0 +1,72 @@
+name: Cleanup unverified accounts
+
+# Daily: a dry run that counts unverified accounts older than 30 days. It deletes only when the repository
+# variable CLEANUP_EXECUTE is 'true' (or when run by hand with execute = true). The script also refuses to delete more
+# than its --max limit (default 1000), so a wrong rule cannot remove a large number of accounts unnoticed.
+# Needs the secret CLEANUP_DATABASE_URL (a database URL, never printed). A failed run is reported by GitHub to the
+# repository's notification settings, and the summary below shows the counts only (no e-mail, name or id).
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: 'Delete the candidates (false = dry run only)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cleanup-unverified
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production-cleanup
+    env:
+      DATABASE_URL: ${{ secrets.CLEANUP_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check the database secret is set
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::CLEANUP_DATABASE_URL is not set. Nothing was run."
+            exit 1
+          fi
+
+      - name: Dry run (counts only)
+        run: |
+          set -o pipefail
+          node scripts/cleanup-unverified.js | tee dry-run.txt
+
+      - name: Delete candidates (only when enabled)
+        if: ${{ vars.CLEANUP_EXECUTE == 'true' || (github.event_name == 'workflow_dispatch' && inputs.execute) }}
+        run: |
+          set -o pipefail
+          node scripts/cleanup-unverified.js --execute | tee execute.txt
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Unverified account cleanup"
+            echo '```'
+            cat dry-run.txt 2>/dev/null || true
+            cat execute.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
