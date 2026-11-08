@@ -11,21 +11,23 @@
  *    that lock. verifyEmailToken takes the same row lock before it changes a token or identity, so an account being verified
  *    is skipped here, and one verified a moment earlier is not removed.
  *  - Deletes are per batch, bounded by maxTotal, and cascade to the account's own rows (logins, tokens, sessions,
- *    friendships, invitations, reports, blocks). Match history keeps its rows; the link to the player is cleared.
+ *     friendships, invitations, reports, blocks). Match history keeps its rows and results; the name and the link are cleared.
  *  - Only counts are logged. No e-mail address, name or id is written anywhere.
  *  - A signed-in socket of a deleted account ends at its next session check (see docs/SESSION_POLICY.md).
  */
 const db = require('./pool');
+const { DELETED_NAME } = require('./matches');
 
 const DEFAULT_DAYS = 30;
 const DEFAULT_BATCH = 200;
 const DEFAULT_MAX_TOTAL = 20000;
 
-// Candidate rule, written once and used by the count, the batch select and the re-check inside the delete.
+// Candidate rule, written once and used by the count, the batch select and the re-check inside the delete. Only e-mail
+// logins count: an account with, say, a local identity and no e-mail login is outside this cleanup's scope.
 const CANDIDATE = `
   p.created_at < $1
-  AND EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NULL)
-  AND NOT EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL)`;
+  AND EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.provider = 'email' AND i.email_verified_at IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.provider = 'email' AND i.email_verified_at IS NOT NULL)`;
 
 function cutoffFor(now, days) {
   if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error('days must be a whole number from 1 to 365');
@@ -56,9 +58,13 @@ async function cleanUnverified({ days = DEFAULT_DAYS, execute = false, now = new
         [cutoff, Math.min(batch, maxTotal - deleted)],
       );
       if (!ids.rows.length) return 0;
+      const idList = ids.rows.map((r) => r.id);
+      // Same treatment as a self-service delete (db/account.js): match history keeps its rows and results, but the name goes.
+      // The rows are locked above, so they still qualify when the delete re-checks them below.
+      await client.query('UPDATE match_participants SET player_name = $2, player_id = NULL WHERE player_id = ANY($1::uuid[])', [idList, DELETED_NAME]);
       const gone = await client.query(
         `DELETE FROM players p WHERE p.id = ANY($2::uuid[]) AND ${CANDIDATE} RETURNING p.id`,
-        [cutoff, ids.rows.map((r) => r.id)],
+        [cutoff, idList],
       );
       return gone.rowCount;
     });
