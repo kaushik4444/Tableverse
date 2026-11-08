@@ -33,7 +33,7 @@ done
 as_pg() { if [ "$(id -u)" = 0 ]; then runuser -u postgres -- "$@"; else "$@"; fi; }
 
 mkdir -p "$DIR"
-if [ "$(id -u)" = 0 ]; then chown postgres "$DIR"; fi
+if [ "$(id -u)" = 0 ]; then chown -R postgres "$DIR"; fi # a rerun may find files a root run left behind
 if [ ! -f "$DIR/data/PG_VERSION" ]; then
   as_pg initdb -D "$DIR/data" -U postgres --auth=trust --encoding=UTF8 >/dev/null
 fi

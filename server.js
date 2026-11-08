@@ -84,6 +84,7 @@ function start(opts = {}) {
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, iceExpiresAt: voiceRelay.iceExpiresAt(ice) }; };
+  const ICE_REFRESH_MIN_MS = 20000; // a browser may ask for fresh logins at most this often (see the 'ice' handler)
   assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';
   const trustProxy = opts.trustProxy ?? parseTrustProxy(env.TRUST_PROXY, production); // behind Render's proxy the client address is in X-Forwarded-For
@@ -998,10 +999,10 @@ function start(opts = {}) {
       if (r.changed) broadcastVoice(room);
     },
 
-    /** The browser asks for fresh TURN logins before its current ones run out. Answered at most once per 20 seconds. */
+    /** The browser asks for fresh TURN logins before its current ones run out. Answered at most once per ICE_REFRESH_MIN_MS. */
     ice(p) {
       const now = Date.now();
-      if (p.lastIceRefresh && now - p.lastIceRefresh < 20000) return;
+      if (p.lastIceRefresh && now - p.lastIceRefresh < ICE_REFRESH_MIN_MS) return;
       p.lastIceRefresh = now;
       send(p.ws, { t: 'ice', ...iceMsg(p.id) });
     },

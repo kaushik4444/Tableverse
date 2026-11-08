@@ -16,8 +16,8 @@ async function loadBlockedIds(blockerId) {
 /** The accounts this one has blocked, with their display names, for the settings list. Newest first is not needed: sorted by name. */
 async function listBlocked(blockerId) {
   const r = await db.query(
-    `SELECT b.blocked_id AS id, p.display_name AS name
-       FROM player_blocks b JOIN players p ON p.id = b.blocked_id
+    `SELECT b.blocked_id AS id, COALESCE(p.display_name, 'Player') AS name
+       FROM player_blocks b LEFT JOIN players p ON p.id = b.blocked_id
       WHERE b.blocker_id = $1
       ORDER BY p.display_name, b.blocked_id
       LIMIT $2`,

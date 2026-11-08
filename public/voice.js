@@ -257,10 +257,12 @@ window.TVVoice = function TVVoice(o) {
     if (state.blocked) { state.blocked = false; if (state.error.startsWith('Tap anywhere')) state.error = ''; changed(); }
   }
 
-  /** New TURN logins: open connections take them at once (browsers allow the change on a live connection). */
+  /** New TURN logins: open connections take them at once. Only iceServers changes; the rest of the configuration is kept. */
   function refreshIce() {
     const list = (o.getIce && o.getIce()) || [];
-    for (const p of peers.values()) { try { p.pc.setConfiguration({ iceServers: list }); } catch { /* connection already closed */ } }
+    for (const p of peers.values()) {
+      try { p.pc.setConfiguration({ ...p.pc.getConfiguration(), iceServers: list }); } catch { /* connection already closed */ }
+    }
   }
 
   return { state, join, toggleMic, toggleSpeaker, leave, reset, updateList, handleRtc, resumeAudio, refreshIce, _peers: peers };
