@@ -362,7 +362,29 @@ async function resetPassword({ token, newPassword }) {
   const tokenHash = hashToken(token);
   const pwHash = await hashPassword(newPassword);
 
+  const reasonFor = async (client) => {
+    const reason = await client.query(
+      `SELECT used_at, expires_at
+       FROM auth_email_tokens
+       WHERE token_hash = $1 AND purpose = 'password_reset'
+       LIMIT 1`,
+      [tokenHash]
+    );
+    if (!reason.rows.length) throw new AuthError('Invalid reset token.');
+    if (reason.rows[0].used_at) throw new AuthError('This reset link has already been used.');
+    throw new AuthError('This reset link has expired.');
+  };
+
   return db.withTransaction(async (client) => {
+    // Lock order matches loginEmail: the account row first, then the token. Find the account without locking the token.
+    const peek = await client.query(
+      `SELECT player_id FROM auth_email_tokens
+       WHERE token_hash = $1 AND purpose = 'password_reset' AND used_at IS NULL AND expires_at > NOW()
+       LIMIT 1`,
+      [tokenHash]
+    );
+    if (!peek.rows.length) await reasonFor(client);
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [peek.rows[0].player_id]);
     const use = await client.query(
       `UPDATE auth_email_tokens
          SET used_at = NOW()
@@ -373,22 +395,9 @@ async function resetPassword({ token, newPassword }) {
        RETURNING player_id, email`,
       [tokenHash]
     );
-    if (!use.rows.length) {
-      const reason = await client.query(
-        `SELECT used_at, expires_at
-         FROM auth_email_tokens
-         WHERE token_hash = $1 AND purpose = 'password_reset'
-         LIMIT 1`,
-        [tokenHash]
-      );
-      if (!reason.rows.length) throw new AuthError('Invalid reset token.');
-      if (reason.rows[0].used_at) throw new AuthError('This reset link has already been used.');
-      throw new AuthError('This reset link has expired.');
-    }
+    if (!use.rows.length) await reasonFor(client); // spent or expired while the account lock was waiting
 
     const t = use.rows[0];
-    // Lock the account before changing the password, the same lock a login takes before it issues a session (see loginEmail).
-    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [t.player_id]);
     const identity = await client.query(
       `UPDATE auth_identities
        SET password_hash = $1
