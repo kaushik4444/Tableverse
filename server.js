@@ -1742,8 +1742,14 @@ function start(opts = {}) {
             leaveRoom(p); // a blocked player cannot resume this seat; a bot takes over if a game is running
             send(ws, { t: 'left' });
             send(ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
+            send(ws, tablesMsg(p));
+          } else {
+            // Not committed yet: this socket is treated as dropped. The session stays valid, and the seat follows the
+            // normal drop rules, so the player can come back once the block has settled.
+            ws.player = null;
+            if (p.ws === ws) detachSocket(p);
+            ws.close(4003, 'try again shortly');
           }
-          send(ws, tablesMsg(p));
         } else {
           (room.denied || (room.denied = new Set())).add(p.id);
           leaveRoom(p); // frees the seat (a bot takes over a running game) instead of leaving a ghost player behind
