@@ -1181,7 +1181,7 @@ function start(opts = {}) {
         await sendBlocks(p);
         const roomNow = rooms.get(p.room);
         if (roomNow) broadcastVoice(roomNow); // a voice connection to them closes now, on both sides
-        send(p.ws, { t: 'notice', text: 'Blocked. They are hidden from your table chat and voice, and you will not share another table. An active game can finish.' });
+        send(p.ws, { t: 'notice', text: 'Blocked. They are hidden from your table chat and table voice, and you will not share another table. An active game can finish.' });
       });
     },
 
