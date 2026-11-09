@@ -241,6 +241,13 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       await dbAdmin.addActive(row, key); // the same batch again after a timeout
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = '2026-01-04'"))[0].n, 0);
     });
+    await test('an account id in upper case is stored under the same hash, counted once, and forgotten by its lowercase form', async () => {
+      const p = await newUser('Upa');
+      await dbAdmin.addActive([{ day: '2026-01-07', playerId: p.id.toUpperCase() }, { day: '2026-01-07', playerId: p.id }]);
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = '2026-01-07'"))[0].n, 1);
+      await dbAdmin.forgetActor(p.id);
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = '2026-01-07'"))[0].n, 0);
+    });
     await test('a batch sent again with the same key is applied once, and a different key is applied', async () => {
       const key = '11111111-2222-4333-8444-555555555555';
       const row = [{ day: '2026-03-01', metric: 'session', dim: 'retry', count: 5 }];

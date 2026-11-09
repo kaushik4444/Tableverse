@@ -178,7 +178,8 @@ async function analyticsSalt() {
   salt = (await db.query("SELECT value FROM analytics_meta WHERE key = 'salt'")).rows[0].value;
   return salt;
 }
-const actorHash = (s, playerId) => crypto.createHmac('sha256', s).update(String(playerId)).digest('hex').slice(0, 32);
+// Lowercased: the same account hashes the same whatever the case of the id it arrives with (pg returns UUIDs in lowercase).
+const actorHash = (s, playerId) => crypto.createHmac('sha256', s).update(String(playerId).toLowerCase()).digest('hex').slice(0, 32);
 
 /**
  * Stores hashed activity for accounts that still exist. The account rows are share-locked (FOR SHARE) in the same transaction
@@ -191,7 +192,8 @@ async function addActive(rows, batchId = null) {
   const s = await analyticsSalt();
   await applyOnce(batchId && `${batchId}:a`, async (q) => {
     const ids = [...new Set(rows.map((r) => String(r.playerId).toLowerCase()))];
-    const live = await q.query('SELECT id FROM players WHERE id = ANY($1::uuid[]) FOR SHARE', [ids]);
+    // ORDER BY id, as lockAccounts() does: two transactions that lock the same accounts cannot wait on each other in opposite order
+    const live = await q.query('SELECT id FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR SHARE', [ids]);
     const alive = new Set(live.rows.map((r) => r.id));
     const keep = rows.filter((r) => alive.has(String(r.playerId).toLowerCase()));
     if (!keep.length) return;
