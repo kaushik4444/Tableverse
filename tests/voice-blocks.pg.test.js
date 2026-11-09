@@ -128,42 +128,34 @@ function socket(port, cookie) {
     await until(() => D.s.room && D.s.room.members.some((m) => m.id === E.id), 'E joins second table');
 
     D.s.send({ t: 'block', id: E.id });
-    await until(() => D.s.room && !D.s.room.members.some((m) => m.id === E.id), 'blocked lobby member is removed');
-    await test('blocking someone in a lobby removes them and prevents rejoining the same table', async () => {
-      const before = E.s.errors().length;
-      E.s.send({ t: 'join', code: secondCode, spectate: false });
-      await until(() => E.s.errors().length > before, 'blocked lobby rejoin refused');
-      assert.ok(!D.s.room.members.some((m) => m.id === E.id));
-      const listing = E.s.msgs.filter((m) => m.t === 'tables').pop();
-      assert.ok(listing && !listing.tables.some((table) => table.code === secondCode), 'the blocked table is hidden from the directory');
+    await until(() => D.s.notices().some((n) => /You can still share a table/.test(n)), 'lobby block confirmed');
+    await test('blocking someone in a lobby keeps them at the table: a block hides chat and voice only', async () => {
+      assert.ok(D.s.room.members.some((m) => m.id === E.id), 'E stays seated');
+      await until(() => {
+        const listing = E.s.msgs.filter((m) => m.t === 'tables').pop();
+        return listing && listing.tables.some((table) => table.code === secondCode);
+      }, 'the blocked pair still sees the table in the directory');
     });
 
     D.s.send({ t: 'unblock', id: E.id });
     await until(() => D.s.notices().includes('Unblocked.'), 'unblock completed');
-    await until(() => {
-      const listing = E.s.msgs.filter((m) => m.t === 'tables').pop();
-      return listing && listing.tables.some((table) => table.code === secondCode);
-    }, 'table appears in directory after unblock');
-    E.s.send({ t: 'join', code: secondCode, spectate: false });
-    await until(() => D.s.room && D.s.room.members.some((m) => m.id === E.id), 'E rejoins after unblock');
 
     D.s.send({ t: 'start' });
     await until(() => D.s.room && D.s.room.status === 'playing', 'second game starts');
     E.s.send({ t: 'block', id: D.id });
-    await until(() => D.s.notices().some((x) => /finish this game/.test(x)), 'active-game block notice');
-    await test('a blocked seated player can finish the running game but cannot rejoin after disconnecting', async () => {
-      assert.ok(E.s.room.members.some((m) => m.id === D.id), 'the current game keeps the blocked player seated');
+    await until(() => E.s.notices().some((n) => /You can still share a table/.test(n)), 'active-game block confirmed');
+    await test('a blocked seated player keeps the seat through a reconnect, and the pair can still share the table', async () => {
+      assert.ok(E.s.room.members.some((m) => m.id === D.id), 'the blocked player is still seated');
       D.s.ws.close();
-      await until(() => D.s.ws.readyState === WebSocket.CLOSED, 'old blocked socket closes');
+      await until(() => D.s.ws.readyState === WebSocket.CLOSED, 'old socket closes');
       const D2 = socket(srv.port, D.cookie);
       sockets.push(D2);
-      await until(() => D2.msgs.some((m) => m.t === 'welcome'), 'blocked player reconnects');
-      await until(() => E.s.room.members.some((m) => m.id === D.id && m.bot), 'bot takes over the blocked seat on reconnect');
-      await until(() => D2.notices().some((x) => /no longer share that table/.test(x)), 'blocked reconnect notice');
+      await until(() => D2.msgs.some((m) => m.t === 'welcome'), 'player reconnects');
+      await until(() => E.s.room.members.some((m) => m.id === D.id && !m.bot), 'the seat is still held by the player, not a bot');
       const before = D2.errors().length;
       D2.send({ t: 'join', code: secondCode, spectate: false });
-      await until(() => D2.errors().length > before, 'blocked rejoin refused');
-      assert.ok(E.s.room.members.some((m) => m.id === D.id && m.bot), 'the blocked player cannot take the seat back');
+      await until(() => D2.msgs.some((m) => m.t === 'state' && m.room && m.room.code === secondCode), 'the blocked player is at the table');
+      assert.equal(D2.errors().length, before, 'no refusal');
     });
   } finally {
     for (const s of sockets) { try { s.ws.close(); } catch { /* closed */ } }
