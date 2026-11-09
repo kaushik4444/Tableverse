@@ -141,10 +141,11 @@ the wrong URL is used.
 
 - The account's logins, tokens, sessions, recent tables, dismissals, friendships, friend requests, private-table
   invitations and chat blocks are removed, in both directions where a relationship has two sides.
-- Chat reports are removed in both directions too: a report is deleted when either the reporter or the reported account
-  is deleted (`chat_reports` cascades on both keys, migration 010). **Open question for the owner:** deleting an unverified
-  account can therefore erase moderation reports made against it. Changing this needs a migration (for example keeping
-  reports with the reported account set to NULL) and is not part of this change.
+- Chat reports follow an intentional split policy (migrations 010 and 015): reports **made by** a deleted account
+  are removed with that reporter (`reporter_id ON DELETE CASCADE`); reports **made against** a deleted account are retained
+  (`reported_id ON DELETE SET NULL`). The retained row keeps `reported_display_name`, a display-name snapshot captured
+  when the report is created, plus the reported message, reason, details, room and timestamp. The deleted account's UUID
+  is not retained in the report.
 - Match history is kept; `match_participants.player_id` is cleared and the name becomes the deleted-player name.
 - `tests/unverified-cleanup.pg.test.js` checks every foreign key to `players`: each must cascade or set NULL. A new
   reference that does neither fails the test until it is classified here.
