@@ -16,7 +16,10 @@
     return state.csrf;
   }
   let view = null; // AbortController of the tab on screen: switching tabs cancels the requests of the one before
+  let generation = 0; // counts tab switches: an answer that arrives for an earlier tab is dropped, even without AbortController
+  const cancelled = () => { const e = new Error('cancelled'); e.name = 'AbortError'; return e; };
   async function api(path, body, retried) {
+    const mine = generation;
     const opts = { credentials: 'same-origin', headers: {}, signal: view ? view.signal : undefined };
     if (body !== undefined) {
       opts.method = 'POST';
@@ -24,7 +27,9 @@
       opts.body = JSON.stringify(body);
     }
     const r = await fetch(path, opts);
-    const out = await r.json().catch(() => ({}));
+    // an abort while the body is read must reach the cancellation guard, not look like an empty answer
+    const out = await r.json().catch((e) => { if (e && e.name === 'AbortError') throw e; return {}; });
+    if (mine !== generation) throw cancelled(); // the tab changed while this request was in flight
     if (r.status === 403 && /CSRF/i.test(out.error || '') && !retried && body !== undefined) { await csrf(true); return api(path, body, true); }
     if (!r.ok || out.ok === false) { const e = new Error(out.error || `Request failed (${r.status})`); e.status = r.status; throw e; }
     return out;
@@ -112,7 +117,7 @@
       <p class="ad-muted">Signed-in players dismiss a banner once for all their devices; guests dismiss it in their own browser. Changing the text shows it again to everyone.</p>`;
     const f = document.getElementById('aForm');
     const prev = () => { const d = new FormData(f); document.getElementById('aPrev').textContent = (d.get('message') || 'Your message appears here.'); };
-    const custom = () => { const c = f.preset.value === 'custom'; f.startsAt.disabled = f.endsAt.disabled = !c; if (c && !f.startsAt.value) { const n = new Date(); f.startsAt.value = localInput(n); f.endsAt.value = localInput(new Date(n.getTime() + 86400000)); } };
+    const custom = () => { const c = f.preset.value === 'custom'; f.startsAt.disabled = f.endsAt.disabled = !c; f.startsAt.required = f.endsAt.required = c; /* required only when enabled */ if (c && !f.startsAt.value) { const n = new Date(); f.startsAt.value = localInput(n); f.endsAt.value = localInput(new Date(n.getTime() + 86400000)); } };
     f.preset.onchange = custom; f.message.oninput = prev; prev();
     f.onsubmit = async (e) => {
       e.preventDefault();
@@ -160,7 +165,8 @@
   const views = { overview, users: () => users(), feedback: () => feedback(), announcements, health, audit: () => audit() };
   function show(tab) {
     state.tab = tab;
-    if (view) view.abort(); // a slower answer for the previous tab must not paint over this one
+    generation++; // answers still on their way for the previous tab are dropped when they arrive
+    if (view) view.abort(); // and their requests are cancelled, where the browser supports it
     view = typeof AbortController === 'function' ? new AbortController() : null;
     tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     main.innerHTML = '<p class="ad-muted">Loading…</p>';

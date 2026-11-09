@@ -704,13 +704,15 @@
   // ---- managed announcements (Stage 20.5). Legacy ANNOUNCEMENT text above keeps working; these are added next to it.
   const LEVEL_ICON = { info: 'ℹ️', warning: '⚠️', success: '✅' };
   const guestDismissed = () => { try { return JSON.parse(store.get('ct_ann_ids') || '[]'); } catch { return []; } };
+  // A guest's dismissal is kept per text: when the admin changes the text, the banner shows again (as it does for signed-in players).
+  const bannerKey = (b) => `${b.id}:${b.message}`;
   async function loadBanners() {
     try {
       const r = await fetch('/api/announcements', { credentials: 'same-origin' });
       const out = await r.json();
       if (!out || !out.ok) return;
       const hidden = out.signedIn ? [] : guestDismissed(); // signed-in dismissals live on the account; guests remember them in this browser
-      const next = (out.announcements || []).filter((a) => !hidden.includes(a.id));
+      const next = (out.announcements || []).filter((a) => !hidden.includes(bannerKey(a)));
       if (JSON.stringify(next) !== JSON.stringify(S.banners)) { S.banners = next; render(); }
     } catch { /* offline: keep what is shown */ }
   }
@@ -724,9 +726,10 @@
   }
   const bannersHTML = () => S.banners.map((b) => `<div class="notice-bar notice-${esc(b.level)}" role="status"><span><span aria-hidden="true">${LEVEL_ICON[b.level] || ''}</span> ${esc(b.message)}</span><button type="button" class="wn-close" data-act="dismissBanner" data-id="${esc(b.id)}" aria-label="Dismiss announcement">✕</button></div>`).join('');
   async function dismissBanner(id) {
+    const dismissed = S.banners.find((b) => b.id === id);
     S.banners = S.banners.filter((b) => b.id !== id);
     render();
-    if (S.guest) { store.set('ct_ann_ids', JSON.stringify([...guestDismissed(), id].slice(-50))); return; }
+    if (S.guest) { if (dismissed) store.set('ct_ann_ids', JSON.stringify([...guestDismissed(), bannerKey(dismissed)].slice(-50))); return; }
     try { await postJson('/api/announcements/dismiss', { id }); } catch { /* it comes back on the next refresh if the server did not record it */ }
   }
   // the schedule is decided on the server, so a banner can appear, expire or be ended while the page is open: look again now and then
@@ -1644,7 +1647,7 @@
       return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><span class="tb-avatar-btn tb-signing" role="status" aria-live="polite" aria-atomic="true"><span class="sr-only">Signing in as ${esc(who)}</span>${avatar({ name: who, avatar: S.avatar }, 'tb-av')}<span class="spinner" aria-hidden="true"></span></span></div></nav>`;
     }
     if (S.guest) {
-      return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><button type="button" class="btn ghost small" data-act="showLogin">Log in</button><button type="button" class="btn small" data-act="showRegister">Sign up</button></div></nav>`;
+      return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><button type="button" class="btn ghost small" data-act="openFeedback">Feedback</button><button type="button" class="btn ghost small" data-act="showLogin">Log in</button><button type="button" class="btn small" data-act="showRegister">Sign up</button></div></nav>`;
     }
     const name = S.named ? S.name : 'Player';
     const av = avatar({ name, avatar: S.avatar }, 'tb-av');
