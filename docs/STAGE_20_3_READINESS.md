@@ -1,6 +1,6 @@
 # Stage 20.3 readiness
 
-Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Not done: relay-candidate verification and the final focused security review. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
+Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Owner-provided WebRTC diagnostics now confirm a nominated, succeeded candidate pair using a local `relay` candidate over UDP; dynamic Metered credential source, network recovery, in-place credential-rotation ICE restart, and the final focused security review remain unverified. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
 
 ## 1. Completed work and merged PRs
 
@@ -23,6 +23,8 @@ Other merged work relevant to Stage 20.3: `#69` (announcement stale-cache fix).
 ## 2. Production verification evidence
 
 - Health: production health verification complete (per owner).
+- Voice relay evidence (owner-provided WebRTC-Internals dump, 2026-11-09): ICE and DTLS reached `connected`; the selected/nominated candidate pair `CPrBAH9UFb_VDR1Vs2V` is `succeeded`; its local candidate `IrBAH9UFb` is `candidateType=relay` with `relayProtocol=udp`; remote candidate is peer-reflexive. The pair recorded 311,875 bytes sent, 202,044 received, 2,887 packets sent and 2,794 received. This confirms actual TURN relay use for this call. The ICE server URL was `turn:global.relay.metered.ca:80`, but the dump supplied no `turnStatus`, `iceExpiresAt`, or credential-source evidence, so dynamic Metered REST credential use is not confirmed. Network recovery and in-place credential-rotation ICE restart were not tested in the supplied evidence.
+
 - Scheduled run history: the scheduled run at 11:36 UTC on 2026-11-09 failed at the step "Check the database secret is set", because `CLEANUP_DATABASE_URL` was not yet configured. Nothing ran against the database. The owner has since set the secret and variable; Claude has not triggered or inspected any run.
 - Cleanup dry run (owner's report, 2026-11-09; not re-run by Claude): 0 unverified accounts older than 30 days; 0 records deleted; read-only transaction confirmed; read-only role has no write privileges; dry-run job contains no deletion SQL and no deletion secret. `CLEANUP_EXECUTE=false`. Recorded in `docs/DATA_CLEANUP.md`.
 
