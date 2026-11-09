@@ -672,6 +672,8 @@ function start(opts = {}) {
   // and the blocked person cannot reach the blocker through the table's voice chat. Nobody is told about the block.
   const blocksPlayer = (p, id) => { const s = effectiveBlocked(p); return !!s && s.has(id); };
   const pairBlocked = (a, b) => { const x = players.get(a); const y = players.get(b); return (!!x && blocksPlayer(x, b)) || (!!y && blocksPlayer(y, a)); };
+  // Committed blocks only (no pending writes): the only basis for a destructive removal.
+  const committedPairBlocked = (a, b) => { const x = players.get(a); const y = players.get(b); return (!!x && !!x.blocked && x.blocked.has(b)) || (!!y && !!y.blocked && y.blocked.has(a)); };
   const voiceFor = (room, viewerId) => voiceRelay.voiceList(room, (id) => pairBlocked(viewerId, id), viewerId);
   /** A player is a blocked target if an occupant of this table has blocked them. */
   function blockedByRoom(room, playerId, committedOnly = false) {
@@ -684,25 +686,14 @@ function start(opts = {}) {
     });
   }
   /** A player cannot enter or remain at a table with anyone they have blocked, or who has blocked them. */
-  function blockedWithRoom(room, playerId) {
-    return [...room.members, ...room.spectators].some((m) => m.id !== playerId && pairBlocked(playerId, m.id));
-  }
-  /**
-   * A committed block in EITHER direction between this player and someone at the table. Used before a destructive removal:
-   * a player who blocked someone at the table (rather than being blocked) is removed too, and a pending block never is.
-   */
-  function blockedWithRoomCommitted(room, playerId) {
-    const me = players.get(playerId);
-    return [...room.members, ...room.spectators].some((m) => {
-      if (m.id === playerId) return false;
-      const other = players.get(m.id);
-      return (!!me && !!me.blocked && me.blocked.has(m.id)) || (!!other && !!other.blocked && other.blocked.has(playerId));
-    });
+  function blockedWithRoom(room, playerId, committedOnly = false) {
+    const pair = committedOnly ? committedPairBlocked : pairBlocked;
+    return [...room.members, ...room.spectators].some((m) => m.id !== playerId && pair(playerId, m.id));
   }
   /** A seated player may reconnect to finish a running game only when they are the blocker, not the blocked target. */
-  function blockedEntryDenied(room, playerId, allowCurrentGameSeat = false) {
-    if (blockedByRoom(room, playerId)) return true;
-    if (!blockedWithRoom(room, playerId)) return false;
+  function blockedEntryDenied(room, playerId, allowCurrentGameSeat = false, committedOnly = false) {
+    if (blockedByRoom(room, playerId, committedOnly)) return true;
+    if (!blockedWithRoom(room, playerId, committedOnly)) return false;
     // A disconnected player keeps their claim on the seat while a bot plays it. A player who LEFT the game is different:
     // a bot took the seat when they left, and they must not come back through the rejoin path while the pair would share.
     const leftGame = room.leftEarly && room.leftEarly.has(playerId);
@@ -1736,6 +1727,9 @@ function start(opts = {}) {
       return;
     }
     const blocked = room ? blockedEntryDenied(room, p.id, true) : false;
+    // Removal needs the SAME decision made from committed blocks only. A denial that rests on a pending write (or on a
+    // pending block that would cancel the running-game exception) must not remove a seat when that write may fail.
+    const blockedCommitted = blocked && room ? blockedEntryDenied(room, p.id, true, true) : false;
     if (room && allowed && !blocked) {
       if (p.dropAnnounced) {
         p.dropAnnounced = false;
@@ -1750,7 +1744,7 @@ function start(opts = {}) {
         if (blocked) {
           // Only a committed block removes the seat. A block still being written keeps the socket out of this seat
           // until it settles, and a failed write then leaves the player where they were.
-          if (blockedWithRoomCommitted(room, p.id)) {
+          if (blockedCommitted) {
             // A player who already LEFT the running game has a bot in their seat: leaving again would write a second
             // "left the game" line and mark them as having left a second time. Only their link to the table is cleared.
             const alreadyLeft = room.status === 'playing' && room.members.some((m) => m.id === p.id && m.bot) && room.leftEarly && room.leftEarly.has(p.id);
