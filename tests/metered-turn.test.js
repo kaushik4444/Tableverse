@@ -128,6 +128,16 @@ const flush = () => new Promise((r) => setImmediate(r));
     h.m.stop();
   });
 
+  await test('a shorter lifetime from Metered is trusted as given, never rounded up to the minimum', async () => {
+    const h = harness({ ttl: 900, answers: [{ status: 200, body: { username: 'short', password: 's', expiryInSeconds: 600 } }, new Error('down')] });
+    h.m.start(); await flush();
+    h.advance(PROPAGATION_MS);
+    assert.equal(h.m.snapshot().username, 'short');
+    h.advance(600 * 1000 - PROPAGATION_MS); // 600 s after issue: past the expiry margin
+    assert.equal(h.m.snapshot(), null, 'not handed out at 600 s, though the minimum would have kept it to 900 s');
+    h.m.stop();
+  });
+
   await test('a short lifetime hands over without a gap: the replacement is usable before the old credential stops', async () => {
     // Simulated second by second over three lifetimes. The server's minute tick is simulated by status() every 60 s; the
     // propagation timer runs when due, as setTimeout would. The check is what the server can hand out, every second.
