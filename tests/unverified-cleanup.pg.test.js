@@ -200,7 +200,7 @@ const DAY = 24 * 60 * 60 * 1000;
       await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, expires_at) VALUES ($1, $2, 'wizard', 'ABCDEF', NOW() + INTERVAL '1 day')", [gone, keep]);
       await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, expires_at) VALUES ($1, $2, 'wizard', 'BCDEFG', NOW() + INTERVAL '1 day')", [keep, gone]);
       await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($2, $1)', [gone, keep]);
-      await q("INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason) VALUES ($1, $2, 'ABCDEF', gen_random_uuid(), 'x', 'spam'), ($2, $1, 'ABCDEF', gen_random_uuid(), 'y', 'spam')", [keep, gone]);
+      await q("INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason) VALUES ($1, $2, 'Gone', 'ABCDEF', gen_random_uuid(), 'x', 'spam'), ($2, $1, 'Keep', 'ABCDEF', gen_random_uuid(), 'y', 'spam')", [keep, gone]);
       const [ann] = await q("INSERT INTO announcements (message, ends_at) VALUES ('Dismissed', NOW() + INTERVAL '1 day') RETURNING id");
       await q('INSERT INTO announcement_dismissals (player_id, announcement_id, dismissed_revision) VALUES ($1, $2, 1)', [gone, ann.id]);
       await q("INSERT INTO auth_sessions (player_id, token_hash) VALUES ($1, repeat('a', 64))", [gone]);
