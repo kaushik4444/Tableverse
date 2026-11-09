@@ -53,7 +53,7 @@ function socket(port, cookie) {
       const s = socket(srv.port, u.browser.cookieHeader);
       sockets.push(s);
       await until(() => s.msgs.some((m) => m.t === 'welcome'), tag + ' welcome');
-      return { id: me.id, s };
+      return { id: me.id, s, cookie: u.browser.cookieHeader };
     };
     const A = await newUser('Ava'); const B = await newUser('Ben'); const C = await newUser('Cy');
 
@@ -145,11 +145,16 @@ function socket(port, cookie) {
     await until(() => E.s.notices().some((x) => /finish this game/.test(x)), 'active-game block notice');
     await test('a blocked seated player can finish the running game but cannot rejoin after leaving', async () => {
       assert.ok(D.s.room.members.some((m) => m.id === E.id), 'the current game keeps the blocked player seated');
-      E.s.send({ t: 'leave' });
-      await until(() => D.s.room.members.some((m) => m.id === E.id && m.bot), 'bot takes over the blocked seat');
-      const before = E.s.errors().length;
-      E.s.send({ t: 'join', code: secondCode, spectate: false });
-      await until(() => E.s.errors().length > before, 'blocked rejoin refused');
+      E.s.ws.close();
+      await until(() => E.s.ws.readyState === WebSocket.CLOSED, 'old blocked socket closes');
+      const E2 = socket(srv.port, E.cookie);
+      sockets.push(E2);
+      await until(() => E2.msgs.some((m) => m.t === 'welcome'), 'blocked player reconnects');
+      await until(() => D.s.room.members.some((m) => m.id === E.id && m.bot), 'bot takes over the blocked seat on reconnect');
+      await until(() => E2.notices().some((x) => /no longer share that table/.test(x)), 'blocked reconnect notice');
+      const before = E2.errors().length;
+      E2.send({ t: 'join', code: secondCode, spectate: false });
+      await until(() => E2.errors().length > before, 'blocked rejoin refused');
       assert.ok(D.s.room.members.some((m) => m.id === E.id && m.bot), 'the blocked player cannot take the seat back');
     });
   } finally {
