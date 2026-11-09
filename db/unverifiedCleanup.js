@@ -25,8 +25,10 @@ const DEFAULT_MAX_TOTAL = 20000;
 // Candidate rule, written once and used by the count, the batch select and the re-checks inside the batch. It needs an
 // unverified e-mail login, and any verified login of any provider protects the account. So an account whose only login
 // is, say, a local one is outside this cleanup's scope.
+// Administrators and owners are never candidates, whatever their login state (roles: db/migrations/013).
 const CANDIDATE = `
   p.created_at < $1
+  AND p.role NOT IN ('admin', 'owner')
   AND EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.provider = 'email' AND i.email_verified_at IS NULL)
   AND NOT EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL)`;
 
@@ -35,10 +37,39 @@ function cutoffFor(now, days) {
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
-/** How many accounts would be removed now. Read-only. */
+const COUNT_SQL = `SELECT COUNT(*)::int AS n FROM players p WHERE ${CANDIDATE}`;
+
+// Privileges that could change data. A role with any of them on any table in the public schema is refused by the dry run:
+// the dry run is meant to run with the SELECT-only role (CLEANUP_DRYRUN_DATABASE_URL), and a superuser bypasses grants.
+const WRITE_PRIVILEGES = ['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'];
+
+/**
+ * Throws (code READONLY_ROLE_REQUIRED, no connection details in the message) unless the connected role cannot write:
+ * not a superuser, and no write privilege on any public table. Run it inside the dry run's READ ONLY transaction.
+ */
+async function assertCannotWrite(client) {
+  const su = await client.query('SELECT rolsuper FROM pg_roles WHERE rolname = current_user');
+  if (su.rows[0] && su.rows[0].rolsuper) throw readOnlyRefusal('the database role is a superuser');
+  const privs = WRITE_PRIVILEGES.map((p) => `has_table_privilege(current_user, c.oid, '${p}')`).join(' OR ');
+  const writable = await client.query(
+    `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind = 'r' AND (${privs}) LIMIT 5`,
+  );
+  if (writable.rows.length) throw readOnlyRefusal(`the database role can change data (for example ${writable.rows.map((r) => r.relname).join(', ')})`);
+}
+
+function readOnlyRefusal(reason) {
+  return Object.assign(new Error(`The dry run needs a SELECT-only database role: ${reason}. Nothing was run.`), { code: 'READONLY_ROLE_REQUIRED' });
+}
+
+/** The candidate count on an open client. Read-only statement. */
+async function countCandidates(client, cutoff) {
+  return (await client.query(COUNT_SQL, [cutoff])).rows[0].n;
+}
+
+/** How many accounts would be removed now. Read-only. Used before --execute, which has its own role. */
 async function countUnverified({ days = DEFAULT_DAYS, now = new Date() } = {}) {
-  const r = await db.query(`SELECT COUNT(*)::int AS n FROM players p WHERE ${CANDIDATE}`, [cutoffFor(now, days)]);
-  return r.rows[0].n;
+  return db.withTransaction(async (client) => countCandidates(client, cutoffFor(now, days)));
 }
 
 /**
@@ -47,7 +78,12 @@ async function countUnverified({ days = DEFAULT_DAYS, now = new Date() } = {}) {
 async function cleanUnverified({ days = DEFAULT_DAYS, execute = false, now = new Date(), batch = DEFAULT_BATCH, maxTotal = DEFAULT_MAX_TOTAL, log = null } = {}) {
   const cutoff = cutoffFor(now, days);
   if (!execute) {
-    const candidates = await countUnverified({ days, now });
+    // The dry run: a READ ONLY transaction (the server refuses any write in it) and a role check before the count.
+    const candidates = await db.withTransaction(async (client) => {
+      await client.query('SET TRANSACTION READ ONLY');
+      await assertCannotWrite(client);
+      return countCandidates(client, cutoff);
+    });
     return { dryRun: true, candidates, deleted: 0, batches: 0 };
   }
   let deleted = 0;
@@ -82,4 +118,7 @@ async function cleanUnverified({ days = DEFAULT_DAYS, execute = false, now = new
   return { dryRun: false, candidates: null, deleted, batches };
 }
 
-module.exports = { cleanUnverified, countUnverified, cutoffFor, DEFAULT_DAYS, DEFAULT_BATCH, DEFAULT_MAX_TOTAL };
+module.exports = {
+  cleanUnverified, countUnverified, countCandidates, assertCannotWrite, cutoffFor, CANDIDATE,
+  DEFAULT_DAYS, DEFAULT_BATCH, DEFAULT_MAX_TOTAL,
+};
