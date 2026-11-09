@@ -2019,7 +2019,7 @@
     chip.innerHTML = `<span aria-hidden="true">⚙</span> <span class="gs-sum">${esc(summary)}</span>`;
     // In the title row, at its right end: the shared toolbar keeps exactly its own buttons, and no extra row is added.
     const title = $app.querySelector('.wz-top > .wz-round');
-    if (title) { title.classList.add('gs-host'); title.appendChild(chip); }
+    if (title) { title.classList.add('gs-host'); title.after(chip); }
     else { chip.classList.add('gs-float'); $app.prepend(chip); }
   }
 
