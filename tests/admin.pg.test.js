@@ -207,9 +207,9 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       const row = [{ day: '2026-03-01', metric: 'session', dim: 'retry', count: 5 }];
       await dbAdmin.addCounters(row, key);
       await dbAdmin.addCounters(row, key); // the same batch, retried after a timeout whose outcome was unknown
-      assert.equal((await q("SELECT total FROM analytics_daily WHERE day = '2026-03-01' AND dim = 'retry'"))[0].total, 5, 'counted once');
+      assert.equal(Number((await q("SELECT total FROM analytics_daily WHERE day = '2026-03-01' AND dim = 'retry'"))[0].total), 5, 'counted once');
       await dbAdmin.addCounters(row, '11111111-2222-4333-8444-666666666666');
-      assert.equal((await q("SELECT total FROM analytics_daily WHERE day = '2026-03-01' AND dim = 'retry'"))[0].total, 10, 'a new batch is counted');
+      assert.equal(Number((await q("SELECT total FROM analytics_daily WHERE day = '2026-03-01' AND dim = 'retry'"))[0].total), 10, 'a new batch is counted');
       await assert.rejects(dbAdmin.addCounters(row, 'not-a-key'), /not valid/);
     });
     await test('retention: old rows are purged by the documented periods, recent rows stay', async () => {
