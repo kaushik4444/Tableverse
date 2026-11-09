@@ -73,6 +73,7 @@ async function run() {
   process.env.MATCH_SPOOL_DIR = spool;
   process.env.DATABASE_URL = t.url; // before server.js is loaded: db/pool.js reads it once
   const { start } = require('../server');
+  const dbFriends = require('../db/friends');
   const app = await start({ port: 0, trustProxy: false, maxMsgsPerSec: Infinity, maxSocketsPerIp: 1000, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, matchLog: { log() {}, warn() {}, error() {} } });
   const clients = []; const playerIds = [];
   const expiresAt = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -258,6 +259,73 @@ async function run() {
       await reconnect(early);
       assert.ok(seated(early.client, early.id), 'already here: stays');
       assert.equal(await tryJoin(late, code), false, 'a newcomer is refused');
+    });
+
+    await test('a block arriving while a private-table join awaits authorization is rechecked before admission', async () => {
+      const { host, guests: [g1], code } = await lobby(1);
+      const late = await account('LateJoin'); await befriend(host, late);
+      await invite(host, late, code, { join: false });
+      const original = dbFriends.canJoinPrivateRoom;
+      let releaseAuth;
+      let startedAuth;
+      const authStarted = new Promise((resolve) => { startedAuth = resolve; });
+      dbFriends.canJoinPrivateRoom = async (playerId, roomCode, ...args) => {
+        if (playerId === late.id && roomCode === code) {
+          startedAuth();
+          await new Promise((resolve) => { releaseAuth = resolve; });
+          return true;
+        }
+        return original(playerId, roomCode, ...args);
+      };
+      try {
+        late.client.send({ t: 'join', code });
+        await authStarted;
+        host.client.send({ t: 'block', id: late.id });
+        await until(() => host.client.notices.some((x) => /Blocked/.test(x)), 'host block saved');
+        releaseAuth();
+        await until(() => late.client.errors.some((x) => /cannot join a table/.test(x)), 'post-authorization block recheck');
+        assert.ok(!seated(host.client, late.id), 'the in-flight join never enters the table');
+        assert.ok(seated(host.client, g1.id), 'the existing guest remains seated');
+      } finally {
+        dbFriends.canJoinPrivateRoom = original;
+        if (releaseAuth) releaseAuth();
+      }
+    });
+
+    await test('a spectator blocked while sit authorization is pending is not re-seated or allowed to remove another spectator', async () => {
+      const { host, guests: [g1], code } = await lobby(1);
+      const late = await account('LateSit'); await befriend(host, late);
+      const fan = await account('FanSit'); await befriend(host, fan);
+      await invite(host, late, code, { spectate: true });
+      await invite(host, fan, code, { spectate: true });
+      assert.ok(watching(host.client, late.id) && watching(host.client, fan.id));
+      const original = dbFriends.canJoinPrivateRoom;
+      let releaseAuth;
+      let startedAuth;
+      const authStarted = new Promise((resolve) => { startedAuth = resolve; });
+      dbFriends.canJoinPrivateRoom = async (playerId, roomCode, ...args) => {
+        if (playerId === late.id && roomCode === code) {
+          startedAuth();
+          await new Promise((resolve) => { releaseAuth = resolve; });
+          return true;
+        }
+        return original(playerId, roomCode, ...args);
+      };
+      try {
+        late.client.send({ t: 'sit' });
+        await authStarted;
+        host.client.send({ t: 'block', id: late.id });
+        await until(() => host.client.notices.some((x) => /Blocked/.test(x)), 'host block saved');
+        await until(() => late.client.room === null, 'blocked spectator removed');
+        releaseAuth();
+        await until(() => late.client.errors.some((x) => /Not possible right now/.test(x)), 'post-authorization sit recheck');
+        assert.ok(!seated(host.client, late.id) && !watching(host.client, late.id), 'the blocked spectator stays out');
+        assert.ok(watching(host.client, fan.id), 'the unrelated spectator was not removed by a stale splice index');
+        assert.ok(seated(host.client, g1.id), 'the existing guest remains seated');
+      } finally {
+        dbFriends.canJoinPrivateRoom = original;
+        if (releaseAuth) releaseAuth();
+      }
     });
 
     // ------------------------------------------------------------------------------------------------ running game
