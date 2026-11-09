@@ -41,6 +41,65 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     await rejects(prepareDatabase({ env: { DATABASE_URL: 'postgres://x' }, db, migrate: async () => { migrated = true; }, log: quiet }), /Cannot reach the database: ECONNREFUSED/);
     assert.equal(migrated, false, 'no migration is attempted on a dead database');
   });
+  // ---- a slow first connection (Neon waking from scale-to-zero): retried, but only for connection errors and only for a bounded time
+  const POOL_TIMEOUT = 'Connection terminated due to connection timeout'; // what pg reports when the 5 s connect timeout fires (no error code)
+  /** A fake clock: sleeping moves time forward, so these tests take no real time. */
+  const slept = [];
+  const clock = () => { slept.length = 0; let t = 0; return { now: () => t, sleep: async (ms) => { slept.push(ms); t += ms; } }; };
+  const startup = (extra) => ({ env: { NODE_ENV: 'production', DATABASE_URL: 'postgres://x' }, log: quiet, ...extra });
+  await test('production: a connect timeout is retried with a growing delay and the server then starts', async () => {
+    const c = clock(); let pings = 0; const order = [];
+    const db = fakeDb({ ping: async () => { pings++; if (pings < 3) throw new Error(POOL_TIMEOUT); } });
+    const r = await prepareDatabase(startup({ db, now: c.now, sleep: c.sleep, migrate: async () => { order.push('migrate'); return { applied: [] }; } }));
+    assert.deepEqual(r, { mode: 'postgres' });
+    assert.equal(pings, 3);
+    assert.deepEqual(slept, [1000, 2000]);
+    assert.deepEqual(order, ['migrate'], 'migrations run once, after the database answered');
+  });
+  await test('production: a database that never answers fails after a bounded time, migrations are never attempted, and there is no memory fallback', async () => {
+    const c = clock(); let pings = 0; let migrated = false;
+    const db = fakeDb({ ping: async () => { pings++; throw new Error(POOL_TIMEOUT); } });
+    await rejects(prepareDatabase(startup({ db, now: c.now, sleep: c.sleep, migrate: async () => { migrated = true; } })), /Cannot reach the database: Connection terminated due to connection timeout \(after 8 attempts\)/);
+    assert.equal(pings, 8, '1+2+4+8+8+8+8 s of waiting, then the next 8 s would pass the 45 s limit');
+    assert.ok(slept.reduce((a, b) => a + b, 0) <= 45000, 'the total wait stays inside the limit');
+    assert.equal(migrated, false);
+  });
+  await test('production: an error that retrying cannot fix fails at once (wrong password, unknown database, bad host)', async () => {
+    for (const err of [Object.assign(new Error('password authentication failed for user "u"'), { code: '28P01' }), Object.assign(new Error('getaddrinfo ENOTFOUND h'), { code: 'ENOTFOUND' }), new Error('database "x" does not exist')]) {
+      const c = clock(); let pings = 0;
+      const db = fakeDb({ ping: async () => { pings++; throw err; } });
+      await rejects(prepareDatabase(startup({ db, now: c.now, sleep: c.sleep })), /Cannot reach the database: /);
+      assert.equal(pings, 1, err.message);
+      assert.deepEqual(slept, []);
+    }
+  });
+  await test('production: connection errors that carry a code are retried too (the pool classifier is used when the pool provides it)', async () => {
+    const c = clock(); let pings = 0;
+    const db = fakeDb({ isTransientConnectionError: (e) => e.code === 'ECONNRESET', ping: async () => { pings++; if (pings === 1) throw Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }); } });
+    assert.deepEqual(await prepareDatabase(startup({ db, now: c.now, sleep: c.sleep, migrate: async () => ({ applied: [] }) })), { mode: 'postgres' });
+    assert.equal(pings, 2);
+  });
+  await test('outside production nothing is retried by default (a developer without a database gets the answer at once); DB_STARTUP_WAIT_MS can opt in or switch it off', async () => {
+    const attempts = async (env) => { const c = clock(); let pings = 0; const db = fakeDb({ ping: async () => { pings++; throw new Error(POOL_TIMEOUT); } });
+      await rejects(prepareDatabase({ env: { DATABASE_URL: 'postgres://x', ...env }, db, log: quiet, now: c.now, sleep: c.sleep }), /Cannot reach the database/); return pings; };
+    assert.equal(await attempts({ NODE_ENV: 'development' }), 1);
+    assert.equal(await attempts({ NODE_ENV: 'production', DB_STARTUP_WAIT_MS: '0' }), 1, '0 switches the wait off in production');
+    assert.equal(await attempts({ NODE_ENV: 'development', DB_STARTUP_WAIT_MS: '3000' }), 3, '1 s + 2 s fit in 3 s; the next 4 s do not');
+  });
+  await test('DB_STARTUP_WAIT_MS is capped at two minutes and an invalid value falls back to the default', () => {
+    const { startupWaitMs } = require('../db/startup');
+    assert.equal(startupWaitMs({ NODE_ENV: 'production', DB_STARTUP_WAIT_MS: '9999999' }), 120000);
+    assert.equal(startupWaitMs({ NODE_ENV: 'production', DB_STARTUP_WAIT_MS: 'abc' }), 45000);
+    assert.equal(startupWaitMs({ NODE_ENV: 'production', DB_STARTUP_WAIT_MS: '-5' }), 45000);
+    assert.equal(startupWaitMs({ NODE_ENV: 'production' }), 45000);
+    assert.equal(startupWaitMs({ NODE_ENV: 'test' }), 0);
+  });
+  await test('a retry never logs the connection string (only the driver message and the attempt number)', async () => {
+    const c = clock(); const lines = []; let pings = 0;
+    const db = fakeDb({ ping: async () => { pings++; if (pings === 1) throw new Error(POOL_TIMEOUT); } });
+    await prepareDatabase(startup({ db, now: c.now, sleep: c.sleep, migrate: async () => ({ applied: [] }), env: { NODE_ENV: 'production', DATABASE_URL: 'postgres://user:SECRET@host/db' }, log: { log: (m) => lines.push(m), warn: (m) => lines.push(m) } }));
+    assert.ok(lines.length >= 2 && lines.every((l) => !/SECRET|postgres:\/\//.test(l)), lines.join(' | '));
+  });
   await test('a failing migration is fatal, in production and in development', async () => {
     const migrate = async () => { throw new Error('syntax error at or near "CREAT"'); };
     for (const NODE_ENV of ['production', 'development']) {
