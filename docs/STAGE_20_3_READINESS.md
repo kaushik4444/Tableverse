@@ -1,6 +1,6 @@
 # Stage 20.3 readiness
 
-Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Owner-provided WebRTC diagnostics now confirm a nominated, succeeded candidate pair using a local `relay` candidate over UDP; dynamic Metered credential source, network recovery, in-place credential-rotation ICE restart, and the final focused security review remain unverified. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
+Status: **Stage 20.3 is FAIL pending PR #81 and the focused security review.** Code for the items in section 1 is merged and passed CI; PR #81 contains the approved all-surface blocking fix and is awaiting CI/review/owner merge approval. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Owner-provided WebRTC diagnostics confirm a nominated, succeeded candidate pair using a local `relay` candidate over UDP. Dynamic Metered credential authentication currently returns HTTP 401 and is explicitly deferred to the Stage 20.6 voice-enabled beta gate; network recovery and in-place credential-rotation ICE restart are also Stage 20.6 voice checks, not prerequisites for closing the earlier stages. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
 
 ## 1. Completed work and merged PRs
 
@@ -24,6 +24,7 @@ Other merged work relevant to Stage 20.3: `#69` (announcement stale-cache fix).
 
 - Health: production health verification complete (per owner).
 - Voice relay evidence (owner-provided WebRTC-Internals dump, 2026-11-09): ICE and DTLS reached `connected`; the selected/nominated candidate pair `CPrBAH9UFb_VDR1Vs2V` is `succeeded`; its local candidate `IrBAH9UFb` is `candidateType=relay` with `relayProtocol=udp`; remote candidate is peer-reflexive. The pair recorded 311,875 bytes sent, 202,044 received, 2,887 packets sent and 2,794 received. This confirms actual TURN relay use for this call. The ICE server URL was `turn:global.relay.metered.ca:80`, but the dump supplied no `turnStatus`, `iceExpiresAt`, or credential-source evidence, so dynamic Metered REST credential use is not confirmed. Network recovery and in-place credential-rotation ICE restart were not tested in the supplied evidence.
+- Dynamic Metered credential status (owner-provided WebSocket `welcome` payload and Render log excerpts, 2026-11-09): `turnStatus: unavailable`, `iceExpiresAt: null`; Render logged `[turn] Metered credential request failed (HTTP 401)`. The app is not currently obtaining a usable dynamic Metered credential; the existing static fallback remains configured. This is explicitly carried forward as a Stage 20.6 voice-enabled beta gate. Do not remove or rotate the static fallback during this work.
 
 - Scheduled run history: the scheduled run at 11:36 UTC on 2026-11-09 failed at the step "Check the database secret is set", because `CLEANUP_DATABASE_URL` was not yet configured. Nothing ran against the database. The owner has since set the secret and variable; Claude has not triggered or inspected any run.
 - Cleanup dry run (owner's report, 2026-11-09; not re-run by Claude): 0 unverified accounts older than 30 days; 0 records deleted; read-only transaction confirmed; read-only role has no write privileges; dry-run job contains no deletion SQL and no deletion secret. `CLEANUP_EXECUTE=false`. Recorded in `docs/DATA_CLEANUP.md`.
@@ -225,7 +226,7 @@ Notes:
 ## 10. Remaining manual tests (NOT RUN)
 
 1. Cross-network phone voice connectivity: **owner-tested successfully between two people, one on Wi-Fi and one on mobile data**. Audio connectivity and TURN relay use passed; the supplied WebRTC stats confirm a selected `relay` candidate.
-2. Browser WebRTC diagnostics confirmed that the successful call selected a `relay` candidate. Dynamic Metered credential use was not established.
+2. Browser WebRTC diagnostics confirmed that the successful call selected a `relay` candidate. The latest `welcome` payload reports `turnStatus: unavailable` and `iceExpiresAt: null`; Render logs report Metered HTTP 401. Dynamic credential authentication is deferred to Stage 20.6.
 3. Windows and WSL2 runs are **deferred** for the limited beta; do not treat them as release blockers.
 4. Render: confirm `TURN_TTL_SECONDS` is unset (default 48 hours). Any value is limited to 15 minutes to 48 hours. **Not verified.**
 5. Neon: confirm the production pooled endpoint is in use and `sslmode=require` is set. **Not verified by Claude.**
@@ -241,7 +242,7 @@ Notes:
 | Two-minute TURN gap after each restart once static is removed | Calls starting in that window can only connect directly | Owner: accept or change |
 | Credential count across restarts | Could exceed 10 with frequent restarts | Monitor; no approval needed |
 | Re-key on rotation restarts relayed calls | Brief audio interruption about once a day per call | Accept or change |
-| Blocked players may share a table (seating) | Block currently hides chat/voice and profiles but does not prevent shared seating | Owner approved all-surface blocking; implementation remains open |
+| Blocked players may share a table (seating) | Chat/voice/profile filtering did not cover table entry or seating | Owner approved all-surface blocking; PR #81 implements the fix and awaits CI/review/merge |
 | `pg-connection-string` not declared | Test may break if transitive layout changes | Maintenance change when a lockfile update is possible |
 | Windows and WSL2 suites not run | Native Windows/WSL2 support is unverified | Deferred for limited beta |
 | Cleanup execution | Deletes accounts | Separate approval; `CLEANUP_EXECUTE` stays `false` |
@@ -267,18 +268,18 @@ Notes:
 | 11 | SSL warning removed; secure TLS kept | merged (#75) | CI log confirmation pending | CODE PASS |
 | 12 | Actions off Node.js 20 notices | merged (#75) | next run not checked | CODE PASS, CONFIRMATION PENDING |
 | 13 | Blocked-user privacy in profiles | merged (#73) | not verified | CODE PASS (public profile only) |
-| 14 | Blocked-user privacy in seating and other surfaces | not implemented for seating | n/a | OPEN (owner approved all-surface scope) |
+| 14 | Blocked-user privacy in seating and other surfaces | PR #81 open; CI/review pending | not production verified | OPEN (owner-approved fix awaiting merge) |
 | 15 | Windows and WSL2 PostgreSQL and migration runs | deferred | not run | DEFERRED (not a limited-beta blocker) |
 | 16 | Neon load-test plan | deferred for limited beta | not executed | DEFERRED |
 | 17 | Focused security review of main | in progress | n/a | NOT COMPLETE (section 13) |
 
-**Stage 20.3 overall: FAIL.** Mandatory items still open: 14 (blocked-user seating), 17 (focused security review), and required live production checks. Relay verification, Metered credential recovery, and in-place ICE-restart checks are required for a voice-enabled limited beta; if voice is withheld, record that state. The 48-hour Metered observation and static TURN cutover operation are conditional on choosing the separately owner-approved cutover; retaining the fallback is not a blocker. Windows/WSL2 and Neon load testing are deferred.
+**Stage 20.3 overall: FAIL pending PR #81 merge and the focused security review.** The Metered HTTP 401, dynamic credential readiness, network recovery and in-place ICE-restart checks are carried into Stage 20.6 and do not prevent closing 20.1–20.5. Static TURN cutover remains optional; retaining the fallback is not a Stage 20.3 blocker. Windows/WSL2 and Neon load testing are deferred.
 
 ## 13. Focused security review: status
 
 Not complete. Completion of this focused review and resolution of all critical/high-severity findings are required for limited-beta release. Record the review and finding dispositions here. Findings to date:
 - Guest players with a session receive Metered logins; owner approved this policy for the initial beta. Monitor bandwidth and credential count.
-- Blocked-user privacy: the public profile is hidden in both directions (#73), and chat/voice are filtered. Seating is not yet filtered; owner approved all-surface blocking, so this remains an implementation item.
+- Blocked-user privacy: the public profile is hidden in both directions (#73), and chat/voice are filtered. PR #81 implements table-entry, seating, lobby-removal and active-game rejoin rules for the owner's all-surface policy; awaiting CI/review/merge.
 - Credential count across restarts is not tracked.
 
 The focused beta review must cover the authorization/privacy areas listed in Stage 20.6, including socket authorization, session revocation, TURN secret handling and cleanup permissions. The broader audit of authentication, email verification, rate limiting, WebSocket reconnects, database permissions and pooling is still to be done; it is not represented as complete by this focused review.
