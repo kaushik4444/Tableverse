@@ -559,7 +559,7 @@ function start(opts = {}) {
   /** The table directory. With a viewer, a host the viewer is blocked with (either way) is shown under a generic name. */
   function publicTables(viewerId = null) {
     return [...rooms.values()]
-      .filter((room) => room.visibility === 'public' && (room.status === 'lobby' || room.status === 'playing'))
+      .filter((room) => room.visibility === 'public' && (room.status === 'lobby' || room.status === 'playing') && (viewerId === null || !blockedWithRoom(room, viewerId)))
       .map((room) => ({
         code: room.code,
         gameId: room.gameId,
