@@ -73,6 +73,16 @@ const at = (ms) => new Date(T0 + ms);
     assert.equal(ann.forViewer([row], {}, at(0))[0].revision, 2);
   });
 
+  await test('a dismissal of revision N hides N and any older (cached) revision; a newer revision shows', () => {
+    const base = { id: 'x', message: 'm', level: 'info', audience: 'all', starts_at: at(-H), ends_at: at(H), ended_at: null };
+    const stale = { ...base, revision: 1 }; const current = { ...base, revision: 2 }; const newer = { ...base, revision: 3 };
+    const seen2 = new Map([['x', 2]]);
+    assert.equal(ann.forViewer([stale], {}, at(0), seen2).length, 0, 'an older cached copy stays hidden');
+    assert.equal(ann.forViewer([current], {}, at(0), seen2).length, 0, 'the dismissed revision stays hidden');
+    assert.equal(ann.forViewer([newer], {}, at(0), seen2).length, 1, 'a newer revision shows');
+    assert.equal(ann.forViewer([stale], {}, at(0), new Map([['x', 1]])).length, 0);
+  });
+
   console.log('over HTTP');
   const clock = { t: T0 };
   const s = await start({ clock });
