@@ -11,7 +11,7 @@ This checklist deliberately separates release-critical verification from optiona
 - Static TURN credentials remain configured until the owner explicitly approves cutover.
 - Cleanup remains disabled: `CLEANUP_EXECUTE=false`. The production dry-run reported zero eligible accounts and zero deletions.
 - No Windows or WSL2 test run has been performed.
-- No real-device Metered test has been performed.
+- Owner tested a two-person call across Wi-Fi and mobile data; two-way voice connectivity worked. The selected ICE candidate pair was not recorded, so Metered relay use is not yet proven.
 - No Neon load test has been performed; it is deferred for the initial friend/limited beta.
 
 ## Minimum Stage 20.3 closure
@@ -20,10 +20,10 @@ This checklist deliberately separates release-critical verification from optiona
 
 1. Confirm the current Render deployment contains PRs #72 and #76.
 2. Confirm `METERED_APP_NAME`, `METERED_SECRET_KEY`, and `TURN_URL` are configured; confirm `ICE_SERVERS` is unset and `TURN_TTL_SECONDS` is unset (48-hour default).
-3. Run one phone-to-phone call on different networks, with at least one device on mobile data.
-4. Confirm audio works in both directions and the selected WebRTC candidate pair uses a `relay` candidate. A TURN server being offered is not proof that relay was selected.
-5. Keep the call active for 10–15 minutes and reconnect one device once.
-6. Inspect Render logs for `[turn]` failures and check Metered usage afterwards.
+3. Owner has completed a two-person phone call across Wi-Fi and mobile data; two-way audio worked.
+4. If practical, inspect the selected WebRTC candidate pair to determine whether a `relay` candidate was used. The current connectivity pass does not by itself prove Metered relay usage.
+5. Keep static fallback configured. Do not repeat broad device/browser tests for this limited beta.
+6. Inspect Render logs for `[turn]` failures and Metered usage as part of the normal observation before any static cutover.
 
 Do not attempt to force relay by merely enabling a VPN. If the network does not force relay, use browser WebRTC diagnostics to verify the selected candidate pair; record a direct connection as inconclusive for relay verification.
 
@@ -42,7 +42,7 @@ The cutover is a separate owner-authorized production operation. Until then, ret
 Review only the remaining known high-impact areas on current `main`:
 
 - Guest and signed-in socket authorization; guest Metered access follows the owner decision above.
-- Blocked-user privacy in chat, voice, friend/invite flows and table seating. Existing PR #73 only confirms public-profile hiding; seating remains an explicitly recorded gap.
+- Blocked-user privacy in chat, voice, friend/invite flows and table seating. Chat/voice filtering and public-profile hiding are implemented; table seating remains open. Owner has approved all-surface blocking.
 - Admin/owner authorization and session revocation.
 - TURN secret handling and cleanup workflow permissions.
 
@@ -64,7 +64,7 @@ Before inviting the initial beta cohort, verify and record:
 - [ ] `/healthz` and `/readyz` return healthy responses.
 - [ ] Production signup, email verification, login, logout and password reset work on the live domain.
 - [ ] A guest can join a table and use voice under the approved guest policy.
-- [ ] The cross-network voice test above passes; if it does not, disable/withhold voice for the beta rather than claiming it is verified.
+- [x] Cross-network two-person voice connectivity works (owner-tested Wi-Fi ↔ mobile). Selected relay candidate remains unverified; static TURN fallback stays enabled.
 - [ ] Cleanup remains disabled and the protected deletion environment remains in place.
 - [ ] One-instance operating model is retained; do not scale horizontally.
 - [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable.
@@ -73,6 +73,6 @@ Before inviting the initial beta cohort, verify and record:
 
 ## Release decision
 
-Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until the required live deployment, signup/email, voice and privacy/support checks above are recorded. A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
+Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until the blocked-user seating gap is resolved, required live deployment and signup/email checks are recorded, and privacy/support checks above are complete. Cross-network voice connectivity is owner-tested; relay selection is not yet proven. A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
 
 No production changes, credential deletion/rotation, cleanup execution, paid upgrades, or load tests are authorized by this document.
