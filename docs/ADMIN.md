@@ -69,7 +69,9 @@ How it behaves (covered by `tests/announcements.test.js`, `tests/admin.pg.test.j
 
 - **Expiry and start are decided on the server** on every request, so a banner disappears exactly at its end even though the live list is cached for up to 15 s. A scheduled banner appears at most 15 s after its start. Open pages look again every minute and when the tab becomes visible.
 - **Targeting** is decided from the session on the server; nothing the browser sends can change the audience.
-- **Dismissal across devices**: a signed-in player's dismissal is stored on the account (`announcement_dismissals`), so it holds on every device. Guests have no account, so a guest dismissal is remembered in that browser only. Changing a banner's text counts as a new message and shows it again.
+- **Dismissal across devices**: a signed-in player's dismissal is stored on the account (`announcement_dismissals`), so it holds on every device. Guests have no account, so a guest dismissal is remembered in that browser only.
+- **Revisions**: every banner has a revision. An edit that changes what players see (text, style, audience or schedule) makes a new revision, and a dismissed banner shows again. Saving the same values again is not a change, so dismissals stay. Restoring an earlier text is a change too.
+- A signed-in dismissal records the revision the player saw, so a dismissal that arrives after an edit hides only the text that was read, and a newer dismissal is never lowered by an older one. Guests use the same key in their browser; guest entries from before revisions (`id:text`) keep hiding the banner until its revision changes, and are rewritten on the next visit.
 - At most three banners show at once (warnings first).
 - **`ANNOUNCEMENT` environment variable still works**: the existing single banner (and its `ct_ann` dismissal) is unchanged and shows alongside the managed ones.
 
