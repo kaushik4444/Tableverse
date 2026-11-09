@@ -49,7 +49,10 @@ Player statistics are not stored anywhere: they are computed from `matches` / `m
 removes all stats. There are no other user-related tables, views, sequences (all keys are UUIDs) or triggers.
 
 Why this order: every table is deleted **before** the tables it references, so no row is ever left pointing at a
-deleted parent and nothing depends on `ON DELETE CASCADE` / `SET NULL` doing deletions behind the script's back. The
+deleted parent and nothing depends on `ON DELETE CASCADE` / `SET NULL` doing deletions behind the script's back.
+This is a full-database wipe: it intentionally empties `chat_reports` and removes all moderation reports. The separate
+individual-account deletion policy in `docs/CHAT_MODERATION.md` retains reports against a deleted target, but does not
+change this full-wipe behavior. The
 script checks that each `DELETE` removed exactly the rows it counted and that the tables still to come are unchanged.
 It never uses `TRUNCATE`, `DROP`, `ALTER`, `CREATE` or `CASCADE`.
 
