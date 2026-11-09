@@ -158,6 +158,19 @@ const flush = () => new Promise((r) => setImmediate(r));
     m.stop();
   });
 
+  await test('a credential promoted by a poll before its timer still tells the server (exactly once)', async () => {
+    let ready = 0;
+    const h = harness();
+    const m = createMeteredTurn({ appName: 'tableverse', secretKey: SECRET, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ username: 'z', password: 'y', expiryInSeconds: 3600 }) }), now: () => h.now(), log: null, onReady: () => { ready++; }, setTimer: (fn) => { h.timerFn = fn; return { unref() {} }; } });
+    void m.refresh(); await flush();
+    h.advance(PROPAGATION_MS + 100);
+    assert.equal(m.snapshot().username, 'z', 'the poll promotes it first');
+    assert.equal(ready, 1, 'and the server is told');
+    h.timerFn(); // the timer fires afterwards: must not tell again
+    assert.equal(ready, 1, 'not twice');
+    m.stop();
+  });
+
   await test('a failed refresh does not stop voice: the fallback keeps being offered and a later success is still pushed', async () => {
     const env = { TURN_URL: 'turn:x:3478', TURN_USERNAME: 'static', TURN_CREDENTIAL: 'static-pass' };
     const h = harness({ answers: [new Error('down'), { status: 200, body: { username: 'later', password: 'l', expiryInSeconds: 3600 } }] });

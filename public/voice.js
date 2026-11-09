@@ -171,6 +171,19 @@ window.TVVoice = function TVVoice(o) {
 
   async function handleRtc(from, data) {
     if (!state.joined || !data) return;
+    if (data.kind === 'offer' && data.restart && peers.has(from)) {
+      // ICE restart on a live call (new TURN logins): renegotiate in place, the audio stays up
+      const p = peers.get(from);
+      try {
+        if (p.pc.signalingState !== 'stable' && p.pc.signalingState !== 'have-remote-offer') return;
+        await p.pc.setRemoteDescription({ type: 'offer', sdp: data.sdp });
+        const answer = await p.pc.createAnswer();
+        await p.pc.setLocalDescription(answer);
+        o.send({ t: 'rtc', to: from, data: { kind: 'answer', sdp: p.pc.localDescription.sdp } });
+        for (const c of p.pending.splice(0)) await p.pc.addIceCandidate(c).catch(() => {});
+      } catch { /* the restart failed: the connection's own failure handling takes over */ }
+      return;
+    }
     if (data.kind === 'offer') {
       closePeer(from); // a fresh offer starts a fresh connection
       const p = makePeer(from, true);
@@ -257,11 +270,33 @@ window.TVVoice = function TVVoice(o) {
     if (state.blocked) { state.blocked = false; if (state.error.startsWith('Tap anywhere')) state.error = ''; changed(); }
   }
 
-  /** New TURN logins: open connections take them at once. Only iceServers changes; the rest of the configuration is kept. */
-  function refreshIce() {
+  /** True when the connection's selected path goes through the TURN relay (its allocation depends on the login). */
+  async function onRelay(pc) {
+    const stats = await pc.getStats();
+    const kind = new Map();
+    stats.forEach((r) => { if (r.type === 'local-candidate') kind.set(r.id, r.candidateType); });
+    let relay = false;
+    stats.forEach((r) => { if (r.type === 'candidate-pair' && (r.selected || (r.nominated && r.state === 'succeeded'))) relay = kind.get(r.localCandidateId) === 'relay'; });
+    return relay;
+  }
+
+  /**
+   * New TURN logins: open connections take them. Only iceServers changes for the new allocation; a call that is already
+   * relayed through TURN is then restarted (ICE restart, renegotiated in place) so its path moves to the new login before
+   * the old one expires. Direct calls are left alone, so nothing is interrupted that does not need it. Only the person with
+   * the smaller id sends the restart offer, the same rule as for a first offer, so two people never restart at once.
+   */
+  async function refreshIce() {
     const list = (o.getIce && o.getIce()) || [];
-    for (const p of peers.values()) {
-      try { p.pc.setConfiguration({ ...p.pc.getConfiguration(), iceServers: list }); } catch { /* connection already closed */ }
+    for (const [id, p] of [...peers]) {
+      try {
+        p.pc.setConfiguration({ ...p.pc.getConfiguration(), iceServers: list });
+        if (me() >= id || p.pc.connectionState !== 'connected' || p.pc.signalingState !== 'stable') continue;
+        if (!(await onRelay(p.pc))) continue;
+        const offer = await p.pc.createOffer({ iceRestart: true });
+        await p.pc.setLocalDescription(offer);
+        o.send({ t: 'rtc', to: id, data: { kind: 'offer', sdp: p.pc.localDescription.sdp, restart: true } });
+      } catch { /* connection already closed or the restart failed: the failure handling takes over */ }
     }
   }
 
