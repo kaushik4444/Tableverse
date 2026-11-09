@@ -19,6 +19,19 @@ test('seated humans can join voice, leave it and change mute; bots and outsiders
   assert.deepEqual(V.voiceList(r), []);
 });
 
+test('a restart offer passes through the relay with its flag, and a flag on any other message is dropped', () => {
+  const r = room();
+  V.setVoice(r, 'p0', true); V.setVoice(r, 'p1', true);
+  const got = [];
+  const deliver = (to, msg) => got.push({ to, msg });
+  assert.equal(V.relay(r, 'p0', 'p1', { kind: 'offer', sdp: 'o', restart: true }, deliver).ok, true);
+  assert.deepEqual(got.at(-1).msg.data, { kind: 'offer', sdp: 'o', restart: true }, 'the restart flag reaches the other person');
+  V.relay(r, 'p0', 'p1', { kind: 'answer', sdp: 'a', restart: true }, deliver);
+  assert.deepEqual(got.at(-1).msg.data, { kind: 'answer', sdp: 'a' }, 'answers carry no flag');
+  V.relay(r, 'p0', 'p1', { kind: 'offer', sdp: 'o2' }, deliver);
+  assert.deepEqual(got.at(-1).msg.data, { kind: 'offer', sdp: 'o2' }, 'an ordinary offer has no flag');
+});
+
 test('a viewer is not offered a voice partner they are blocked with; the viewer is always listed to self', () => {
   const r = room();
   for (const id of ['p0', 'p1', 'p2']) V.setVoice(r, id, true);
