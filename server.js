@@ -691,8 +691,10 @@ function start(opts = {}) {
   function blockedEntryDenied(room, playerId, allowCurrentGameSeat = false) {
     if (blockedByRoom(room, playerId)) return true;
     if (!blockedWithRoom(room, playerId)) return false;
-    // A disconnected seat is held by a bot, but the seat still belongs to this player, so the bot flag does not matter here.
-    const alreadyPlaying = room.status === 'playing' && room.members.some((m) => m.id === playerId);
+    // A disconnected player keeps their claim on the seat while a bot plays it. A player who LEFT the game is different:
+    // a bot took the seat when they left, and they must not come back through the rejoin path while the pair would share.
+    const leftGame = room.leftEarly && room.leftEarly.has(playerId);
+    const alreadyPlaying = room.status === 'playing' && !leftGame && room.members.some((m) => m.id === playerId);
     return !(allowCurrentGameSeat && alreadyPlaying);
   }
   /**
