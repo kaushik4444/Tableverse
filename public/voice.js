@@ -23,6 +23,7 @@ window.TVVoice = function TVVoice(o) {
   let meter = null;
   const changed = () => { try { o.onChange && o.onChange(state); } catch { /* a UI error must not break the call */ } };
   const me = () => o.myId();
+  const iceKeyNow = () => JSON.stringify((o.getIce && o.getIce()) || []); // which logins a connection was set up with
 
   // ---- who is talking: a level meter on every stream
   function audioCtx() {
@@ -104,7 +105,9 @@ window.TVVoice = function TVVoice(o) {
   }
   function makePeer(id, answering) {
     const pc = new rtc({ iceServers: (o.getIce && o.getIce()) || [] });
-    const p = { pc, audio: null, pending: [], analyser: null };
+    // iceKey: the logins this connection is configured with now; restartedKey: the logins its last restart (or first set-up) used
+    const p = { pc, audio: null, pending: [], analyser: null, iceKey: iceKeyNow(), restartedKey: null, restartChain: null };
+    p.restartedKey = p.iceKey;
     peers.set(id, p);
     // the caller adds the audio line; the person answering gets theirs from the offer (see handleRtc)
     if (!answering) {
@@ -135,6 +138,7 @@ window.TVVoice = function TVVoice(o) {
       if (s === 'connected') {
         failures.delete(id);
         if (state.error === LINK_ERROR) { state.error = ''; changed(); }
+        if (p.iceKey !== p.restartedKey) restartSoon(id, p); // fresh logins arrived while this link was still setting up
       } else if (s === 'disconnected') {
         // usually a short network blip that heals by itself; if it does not, start over with this person
         p.dropTimer = setTimeout(() => { if (peers.get(id) === p && pc.connectionState !== 'connected') { closePeer(id); reconcile(); } }, 5000);
@@ -171,6 +175,19 @@ window.TVVoice = function TVVoice(o) {
 
   async function handleRtc(from, data) {
     if (!state.joined || !data) return;
+    if (data.kind === 'offer' && data.restart && peers.has(from)) {
+      // ICE restart on a live call (new TURN logins): renegotiate in place, the audio stays up
+      const p = peers.get(from);
+      try {
+        if (p.pc.signalingState !== 'stable' && p.pc.signalingState !== 'have-remote-offer') return;
+        await p.pc.setRemoteDescription({ type: 'offer', sdp: data.sdp });
+        const answer = await p.pc.createAnswer();
+        await p.pc.setLocalDescription(answer);
+        o.send({ t: 'rtc', to: from, data: { kind: 'answer', sdp: p.pc.localDescription.sdp } });
+        for (const c of p.pending.splice(0)) await p.pc.addIceCandidate(c).catch(() => {});
+      } catch { /* the restart failed: the connection's own failure handling takes over */ }
+      return;
+    }
     if (data.kind === 'offer') {
       closePeer(from); // a fresh offer starts a fresh connection
       const p = makePeer(from, true);
@@ -191,6 +208,7 @@ window.TVVoice = function TVVoice(o) {
       if (data.kind === 'answer') {
         await p.pc.setRemoteDescription({ type: 'answer', sdp: data.sdp });
         for (const c of p.pending.splice(0)) await p.pc.addIceCandidate(c).catch(() => {});
+        if (p.iceKey !== p.restartedKey) restartSoon(from, p); // logins that arrived during the last negotiation
       } else if (data.kind === 'ice') {
         if (!data.candidate) return;
         if (p.pc.remoteDescription) await p.pc.addIceCandidate(data.candidate).catch(() => {});
@@ -257,12 +275,54 @@ window.TVVoice = function TVVoice(o) {
     if (state.blocked) { state.blocked = false; if (state.error.startsWith('Tap anywhere')) state.error = ''; changed(); }
   }
 
-  /** New TURN logins: open connections take them at once. Only iceServers changes; the rest of the configuration is kept. */
+  /** True when the selected path uses the TURN relay on either side (a relayed call depends on its login, on either end). */
+  async function onRelay(pc) {
+    const stats = await pc.getStats();
+    const kind = new Map();
+    stats.forEach((r) => { if (r.type === 'local-candidate' || r.type === 'remote-candidate') kind.set(r.id, r.candidateType); });
+    let relay = false;
+    stats.forEach((r) => {
+      if (r.type === 'candidate-pair' && (r.selected || (r.nominated && r.state === 'succeeded'))) {
+        relay = kind.get(r.localCandidateId) === 'relay' || kind.get(r.remoteCandidateId) === 'relay';
+      }
+    });
+    return relay;
+  }
+
+  /**
+   * New TURN logins: open connections take them. The connection's configuration is updated at once; a call that is relayed
+   * is then restarted (ICE restart, renegotiated in place) so its path moves to the new login before the old one expires.
+   * Only the person with the smaller id sends the restart offer, so two people never restart at once. Connections that
+   * already have these logins are not touched (the browser asks for logins every so often; most replies change nothing).
+   */
   function refreshIce() {
     const list = (o.getIce && o.getIce()) || [];
-    for (const p of peers.values()) {
-      try { p.pc.setConfiguration({ ...p.pc.getConfiguration(), iceServers: list }); } catch { /* connection already closed */ }
+    const key = JSON.stringify(list);
+    for (const [id, p] of [...peers]) {
+      if (p.iceKey === key) continue;
+      p.iceKey = key;
+      try { p.pc.setConfiguration({ ...p.pc.getConfiguration(), iceServers: list }); } catch { continue; /* connection already closed */ }
+      restartSoon(id, p);
     }
+  }
+
+  /** Restarts run one after another for each connection, never overlapping. */
+  function restartSoon(id, p) {
+    p.restartChain = (p.restartChain || Promise.resolve()).then(() => restartIfRelayed(id, p)).catch(() => {});
+  }
+
+  async function restartIfRelayed(id, p) {
+    if (peers.get(id) !== p || me() >= id) return; // not ours to send; the other side restarts
+    if (p.pc.connectionState !== 'connected' || p.pc.signalingState !== 'stable') return; // retried when connected or answered
+    const keyAtOffer = p.iceKey;
+    if (!(await onRelay(p.pc))) { p.restartedKey = keyAtOffer; return; } // a direct call needs no new allocation
+    if (peers.get(id) !== p || p.pc.signalingState !== 'stable') return;
+    try {
+      const offer = await p.pc.createOffer({ iceRestart: true });
+      await p.pc.setLocalDescription(offer);
+      p.restartedKey = keyAtOffer;
+      o.send({ t: 'rtc', to: id, data: { kind: 'offer', sdp: p.pc.localDescription.sdp, restart: true } });
+    } catch { /* the next update or the connection's own failure handling tries again */ }
   }
 
   return { state, join, toggleMic, toggleSpeaker, leave, reset, updateList, handleRtc, resumeAudio, refreshIce, _peers: peers };

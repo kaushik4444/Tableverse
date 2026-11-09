@@ -903,6 +903,24 @@
     iceTimer = setTimeout(() => { iceTimer = null; lastIceAsk = Date.now(); send({ t: 'ice' }); }, wait);
   }
 
+  // Voice relay (TURN) status from the server. Tells the player once when it stops working, and when it works again.
+  const TURN_NOTICE = {
+    unavailable: 'The voice relay cannot be reached right now. Players on strict networks may not hear each other; it is retried automatically.',
+    quota: 'The voice relay refused new logins, so some players may not be able to connect through it. It is retried automatically.',
+  };
+  // one notice when the relay stops working; the "back" notice only after that one. Pending or other states change nothing.
+  function noteTurnStatus(s) {
+    if (!s || s === S.turnStatus) return;
+    S.turnStatus = s;
+    if (TURN_NOTICE[s]) {
+      if (!S.turnNoticeOpen) toast(TURN_NOTICE[s]);
+      S.turnNoticeOpen = true;
+    } else if (s === 'ready' && S.turnNoticeOpen) {
+      S.turnNoticeOpen = false;
+      toast('The voice relay is back.');
+    }
+  }
+
   function onMessage(m) {
     if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
@@ -921,6 +939,7 @@
         S.emotes = m.emotes || [];
         S.ice = Array.isArray(m.ice) ? m.ice : [];
         S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        noteTurnStatus(m.turnStatus);
         scheduleIceRefresh();
         if (!S.name) S.name = m.name;
         if (!S.avatar) S.avatar = m.avatar;
@@ -957,6 +976,7 @@
         // fresh TURN logins: used by new connections, and applied to the ones already open
         S.ice = Array.isArray(m.ice) ? m.ice : [];
         S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        noteTurnStatus(m.turnStatus);
         scheduleIceRefresh();
         if (voice) voice.refreshIce();
         break;
