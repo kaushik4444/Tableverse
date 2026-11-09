@@ -52,7 +52,7 @@ Migration `010_chat_moderation.sql` adds two tables. It is additive, and it is a
 other migrations.
 
 - `player_blocks(blocker_id, blocked_id)`: who blocked whom.
-- `chat_reports(reporter_id, reported_id, room_code, message_id, message_text, reason, details, created_at)`.
+- `chat_reports(reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason, details, created_at)`.
 
 Blocks reference `players` with `ON DELETE CASCADE`. Chat reports use separate deletion rules:
 `reporter_id ON DELETE CASCADE` removes reports made by an account that is deleted, while
@@ -66,7 +66,7 @@ There is no review screen. Reports are read directly from the database, by an op
 Example query (review the most recent reports, nothing else):
 
 ```sql
-SELECT created_at, reason, details, message_text, reporter_id, reported_id, room_code
+SELECT created_at, reason, details, message_text, reporter_id, reported_id, reported_display_name, room_code
 FROM chat_reports
 ORDER BY created_at DESC
 LIMIT 50;
