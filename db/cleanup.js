@@ -65,8 +65,8 @@ const EXPECTED_FKS = [
   { child: 'friend_requests', parent: 'players', onDelete: 'CASCADE' },
   { child: 'private_table_invitations', parent: 'players', onDelete: 'CASCADE' },
   { child: 'private_table_invitations', parent: 'players', onDelete: 'CASCADE' },
-  { child: 'chat_reports', parent: 'players', onDelete: 'CASCADE' },
-  { child: 'chat_reports', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'chat_reports', parent: 'players', onDelete: 'CASCADE' }, // reports made by a deleted reporter are removed
+  { child: 'chat_reports', parent: 'players', onDelete: 'SET NULL' }, // reports about a deleted account are retained
   { child: 'player_blocks', parent: 'players', onDelete: 'CASCADE' },
   { child: 'player_blocks', parent: 'players', onDelete: 'CASCADE' },
   { child: 'announcement_dismissals', parent: 'players', onDelete: 'CASCADE' },
