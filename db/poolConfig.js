@@ -9,7 +9,7 @@
 // today, so the connection is the same and the warning goes away.
 //
 // Everything else is left exactly as given, so pg decides as it always did:
-//   - sslmode=disable, and any unknown value
+//   - sslmode=disable, any unknown value, and a repeated sslmode
 //   - a URL with other TLS parameters (ssl, sslrootcert, sslcert, sslkey, sslca, sslcrl, ...): pg lets those override
 //     an explicit option, so rewriting could change the TLS setting
 //   - uselibpqcompat: it changes what require and verify-ca mean
@@ -44,9 +44,10 @@ function poolConnectionOptions(connectionString, env = process.env) {
   } catch {
     return { connectionString }; // not a URL we can edit: keep it exactly as given
   }
-  const mode = url.searchParams.get('sslmode');
+  const modes = url.searchParams.getAll('sslmode');
   const otherTlsControls = [...url.searchParams.keys()].some((k) => k !== 'sslmode' && TLS_PARAMS.test(k));
-  if (!REWRITABLE_MODES.has(mode) || otherTlsControls) return { connectionString };
+  // a repeated sslmode is ambiguous (pg and this file may pick different values): leave such a URL alone
+  if (modes.length !== 1 || !REWRITABLE_MODES.has(modes[0]) || otherTlsControls) return { connectionString };
 
   url.searchParams.set('sslmode', 'verify-full');
   return { connectionString: url.toString() };

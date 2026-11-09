@@ -52,6 +52,15 @@ test('other TLS parameters (ssl, sslrootcert) mean the URL is left alone, so the
   }
 });
 
+test('a repeated sslmode is left alone (the two readers could disagree on which one counts)', () => {
+  for (const url of [
+    'postgresql://u:p@db.example.com/x?sslmode=require&sslmode=disable',
+    'postgresql://u:p@db.example.com/x?sslmode=disable&sslmode=require',
+  ]) {
+    assert.equal(poolConnectionOptions(url, PROD).connectionString, url, url);
+  }
+});
+
 test('uselibpqcompat is left alone: it changes what require and verify-ca mean', () => {
   const url = 'postgresql://u:p@db.example.com/x?sslmode=require&uselibpqcompat=true';
   assert.equal(poolConnectionOptions(url, PROD).connectionString, url);
