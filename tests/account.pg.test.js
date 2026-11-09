@@ -88,6 +88,19 @@ function socket(port, cookie) {
       assert.equal((await anon.get('/api/players/%E0%A4%A')).status, 404, 'a malformed escape is a 404, not a crash');
     });
 
+    await test('a block hides the profile both ways: the blocker and the blocked see the same answer as for an unknown name', async () => {
+      const a = await newUser('BlkA', 'Blocker Bea');
+      const b = await newUser('BlkB', 'Blocked Bo');
+      await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)', [a.id, b.id]);
+      assert.equal((await a.browser.get(`/api/players/${b.username}`)).status, 404, 'the blocker does not see the blocked profile');
+      assert.equal((await b.browser.get(`/api/players/${a.username}`)).status, 404, 'the blocked person does not see the blocker');
+      assert.equal((await a.browser.get(`/api/players/${a.username}`)).status, 200, 'own public page unaffected');
+      const c = await newUser('BlkC', 'Bystander Cy');
+      assert.equal((await c.browser.get(`/api/players/${b.username}`)).status, 200, 'others are unaffected');
+      await q('DELETE FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2', [a.id, b.id]);
+      assert.equal((await a.browser.get(`/api/players/${b.username}`)).status, 200, 'unblocking restores the profile');
+    });
+
     await test('a legacy anonymous player has no profile and no public page', async () => {
       const id = (await q("INSERT INTO players (display_name, is_anonymous) VALUES ('Guesty', TRUE) RETURNING id"))[0].id;
       assert.equal(await dbAccount.getPublicProfile('guesty'), null);
