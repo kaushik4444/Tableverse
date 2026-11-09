@@ -97,7 +97,7 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 
 **C. ICE recovery**
 1. With a relayed call up, switch the test device's network: Wi-Fi off for 5 seconds, then back on (or toggle airplane mode for 5 seconds).
-2. In `webrtc-internals`, the connection state should go to `disconnected` and return to `connected` within about 30 seconds. An ICE restart shows as a new negotiation (new `local-offer` in the stats timeline).
+2. In `webrtc-internals`, the connection state should go to `disconnected` and return to `connected` within about 30 seconds. A real in-place ICE restart keeps the same peer connection (same id in the list) and changes the local `a=ice-ufrag` value in the SDP. A new peer connection after network recovery is a recreation, not an ICE restart: record it as such. It does not prove the restart path.
 3. If it stays `failed`, record the time, the network type and a copy of the `webrtc-internals` dump (Download the dump, check it contains no credential before sharing).
 
 **D. Credential rotation**
@@ -109,7 +109,7 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 1. iPhone Safari on mobile data, relayed call with a second device on Wi-Fi.
 2. Android Chrome on mobile data, same.
 3. Desktop Chrome and Firefox on a restrictive network (a corporate or hotel Wi-Fi if available).
-4. A call that stays open across one ICE restart (section 6 C) with audio continuing.
+4. A call that stays open across one ICE restart (section 6 C, same peer connection with a changed `a=ice-ufrag`) with audio continuing.
 5. A call older than one rotation (24 h) is impractical to wait for: instead, confirm the scheduled push in staging or by setting `TURN_TTL_SECONDS` to 900 (the shortest allowed) in a non-production service, which is test-only and needs owner approval.
 
 ## 8. Neon load-test plan (NOT created, NOT run)
