@@ -1202,7 +1202,10 @@ function start(opts = {}) {
         await dbModeration.removeBlock(p.id, msg.id);
         p.blocked.delete(msg.id);
         for (const room of rooms.values()) {
-          if (room.blockedDenied && room.blockedDenied.has(msg.id) && !blockedWithRoom(room, msg.id)) room.blockedDenied.delete(msg.id);
+          if (!room.blockedDenied) continue;
+          for (const blockedId of [...room.blockedDenied]) {
+            if (!blockedWithRoom(room, blockedId)) room.blockedDenied.delete(blockedId);
+          }
         }
         resyncChat(p);
         await sendBlocks(p);
