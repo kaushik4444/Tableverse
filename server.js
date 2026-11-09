@@ -1148,7 +1148,7 @@ function start(opts = {}) {
         await sendBlocks(p);
         const roomNow = rooms.get(p.room);
         if (roomNow) broadcastVoice(roomNow); // a voice connection to them closes now, on both sides
-        send(p.ws, { t: 'notice', text: 'Blocked. You will not see each other\'s table chat or hear each other in table voice. You can still share a table.' });
+        send(p.ws, { t: 'notice', text: 'Blocked. You will not see their table chat, and you will not hear each other in table voice. You can still share a table.' });
       });
     },
 
