@@ -163,6 +163,25 @@ const api = (role) => ({
     const TWO = [{ id: 'b1', revision: 2, message: '2', level: 'warning', endsAt: '2026-11-09T00:00:00Z' }, { id: 'b2', revision: 1, message: 'Other notice', level: 'info', endsAt: '2026-11-09T00:00:00Z' }];
     await guestWithOldKey(TWO, ['b1:2'], '.notice-warning', '2');
   });
+  // A guest's dismissal of revision 2 must hide revision 2 and any older copy a stale server instance still sends; a newer revision shows.
+  async function guestWithStoredRevision(banner, storedEntry) {
+    // a second, always-shown info banner marks the moment the list has loaded
+    const marker = { id: 'b9', revision: 1, message: 'List loaded', level: 'info', endsAt: '2026-11-09T00:00:00Z' };
+    const { server, url } = await serve(homeApi([banner, marker], false));
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+    await page.addInitScript((entry) => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('ct_ann_rev', JSON.stringify([entry])); sessionStorage.setItem('seeded', '1'); } } catch { /* no storage */ } }, storedEntry);
+    await page.goto(url + '/');
+    await page.waitForSelector('.notice-info');
+    const shown = await page.locator('.notice-warning').count();
+    await ctx.close(); server.close();
+    return shown;
+  }
+  await test('a guest dismissal of revision 2 hides a stale revision 1 from a cache; a newer revision 3 still shows', async () => {
+    const endsAt = '2026-11-09T00:00:00Z';
+    assert.equal(await guestWithStoredRevision({ id: 'b1', revision: 1, message: 'Stale copy', level: 'warning', endsAt }, 'b1:2'), 0, 'stale copy hidden');
+    assert.equal(await guestWithStoredRevision({ id: 'b1', revision: 3, message: 'Newer copy', level: 'warning', endsAt }, 'b1:2'), 1, 'newer revision shown');
+  });
   await test('a signed-in player dismisses on the server (so every device agrees) and gets the feedback form; staff get the Admin entry', async () => {
     const { server, url, calls } = await serve({ ...homeApi(BANNERS, true), 'POST /api/feedback': () => ({ ok: true, message: 'Thank you!' }) });
     const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: [] })] });
