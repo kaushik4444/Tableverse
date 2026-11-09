@@ -288,7 +288,7 @@ async function run() {
       }
     });
 
-    await test('a spectator blocked while sit authorization is pending is not re-seated or allowed to remove another spectator', async () => {
+    await test('a spectator blocked while sit authorization is pending keeps the spectator seat, may then sit, and removes nobody else', async () => {
       const { host, guests: [g1], code } = await lobby(1);
       const late = await account('LateSit'); await befriend(host, late);
       const fan = await account('FanSit'); await befriend(host, fan);
@@ -309,10 +309,9 @@ async function run() {
         await until(() => releaseAuth, 'private invitation authorization is held');
         host.client.send({ t: 'block', id: late.id });
         await until(() => host.client.notices.some((x) => /Blocked/.test(x)), 'host block saved');
-        await until(() => late.client.room === null, 'blocked spectator removed');
+        assert.ok(watching(host.client, late.id), 'a block never removes anyone from a table: the spectator is still watching');
         releaseAuth();
-        await until(() => late.client.errors.some((x) => /Not possible right now/.test(x)), 'post-authorization sit recheck');
-        assert.ok(!seated(host.client, late.id) && !watching(host.client, late.id), 'the blocked spectator stays out');
+        await until(() => seated(host.client, late.id), 'blocked spectator sits (a block never changes table access)');
         assert.ok(watching(host.client, fan.id), 'the unrelated spectator was not removed by a stale splice index');
         assert.ok(seated(host.client, g1.id), 'the existing guest remains seated');
       } finally {
