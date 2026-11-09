@@ -1134,7 +1134,7 @@ function start(opts = {}) {
       }
     },
 
-    // Blocking hides that account's table chat from this player only. It does not sign anyone out or change the table.
+    // Blocking applies to table access, seating, chat, reactions and voice in both directions; it never signs either account out.
     async block(p, msg) {
       const checked = moderation.validateBlockTarget(p.id, msg && msg.id);
       if (!checked.ok) return sendError(p, checked.error);
