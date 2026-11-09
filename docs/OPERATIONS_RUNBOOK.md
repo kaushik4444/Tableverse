@@ -187,3 +187,9 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 
 ## Abuse / rate limits
 Auth endpoints are rate limited per address and account in `auth_rate_limits`; WebSockets are limited per IP, per socket message rate, payload (8 KiB) and buffered bytes. Check logs for `slow down` closes and `too many connections` spikes.
+
+## Neon connection: TLS setting (`sslmode`)
+
+- Keep `?sslmode=require` (or `verify-full`) in the Neon URL. `db/poolConfig.js` rewrites `require`, `prefer` and `verify-ca` to `verify-full` at start-up, which is what they already mean: TLS with the certificate and host name checked. The connection is the same; only the library's deprecation warning goes away.
+- Do not change it to `disable`. In production a remote host whose URL has no `sslmode` at all is still forced to verified TLS.
+- A URL that also sets `ssl`, `sslrootcert` or similar, or `uselibpqcompat`, is passed on unchanged, so the warning can still appear for those. That is expected.

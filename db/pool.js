@@ -47,23 +47,22 @@ try {
   pg = null;
 }
 
+const { poolConnectionOptions } = require('./poolConfig');
+
 const connectionString = process.env.DATABASE_URL || '';
 let pool = null;
 
 if (connectionString && pg) {
-  // Neon DATABASE_URL already includes sslmode=require.
-  // Let the pg library parse the connection string and handle SSL automatically.
-  // For local connections without SSL in the URL, ssl will be undefined (no SSL).
-  const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(connectionString) || /[?&]host=\//.test(connectionString);
-  const hasSslMode = /[?&]sslmode=/.test(connectionString);
+  // The TLS choice is made in db/poolConfig.js: sslmode is read from the URL and handed to pg as an explicit `ssl`
+  // option, which avoids pg-connection-string's deprecation warning on every start. Neon URLs keep ?sslmode=require.
+  const opts = poolConnectionOptions(connectionString, process.env);
   pool = new pg.Pool({
-    connectionString,
+    connectionString: opts.connectionString,
+    ...(opts.ssl !== undefined ? { ssl: opts.ssl } : {}),
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
     statement_timeout: 10000, // a stuck query must not hang a player's connection forever
-    // In production never talk to a remote database in plaintext, even if the URL forgot ?sslmode=require
-    ...(process.env.NODE_ENV === 'production' && !isLocal && !hasSslMode ? { ssl: { rejectUnauthorized: true } } : {}),
   });
 
   pool.on('error', (err) => {

@@ -208,3 +208,18 @@ you approve the `production-cleanup` deployment.
 - `--execute` refuses to delete more than 1000 accounts in a run (exit 3, nothing deleted). Review the dry run before raising `--max`.
 - Tests: `tests/unverified-cleanup.pg.test.js` (PostgreSQL, part of `npm run test:pg`), `tests/cleanup-workflow.test.js`
   (the workflow's structure, in `npm test`).
+
+## Production dry run: evidence (Stage 20.3, 2026-11-09)
+
+Recorded from the owner's report of the first production dry run. Counts only; no account data, e-mail address or credential is in this record.
+
+| Check | Result |
+|---|---|
+| Unverified accounts older than 30 days | 0 |
+| Records deleted | 0 (dry run) |
+| Transaction | read-only, confirmed |
+| Database role used by the dry run | read-only role, no write privileges |
+| Dry-run job | no deletion secret and no deletion statement |
+| `CLEANUP_EXECUTE` | `false` (unchanged; deletion is not enabled) |
+
+Consequence: nothing was deleted and no production data was changed. Any later `--execute` run needs its own dry-run evidence, reviewed before the repository variable is changed.
