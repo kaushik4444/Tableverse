@@ -59,7 +59,8 @@ Preconditions (all must hold):
 1. PR #76 merged and deployed; Render logs show `[turn]` lines with no `quota` or repeated `HTTP 4xx` for at least 48 hours.
 2. `turnStatus` is `ready` in welcome messages for at least 95% of the observation window (check via browser diagnostics, section 6).
 3. Real-device tests passed (section 7), including a relayed call on mobile data.
-4. Owner has chosen a maintenance window (low player count).
+4. `ICE_SERVERS` is unset on Render. It overrides Metered when set, and then `iceExpiresAt` is null and the list is static.
+5. Owner has chosen a maintenance window (low player count).
 
 Steps (for the approved window):
 1. Record the current Render environment variable names (not values) and export nothing to the repository.
@@ -87,7 +88,7 @@ Explicitly not part of the cutover: rotating `METERED_SECRET_KEY`, changing `TUR
 Use two browsers or devices, both signed in, both at the same table with voice on. Do not paste credentials anywhere; redact them in any screenshot.
 
 **A. Confirm the relay is offered**
-1. Open the page's DevTools → Network → WS. Find the `ice` message after the welcome. Check: `turnStatus` is `ready` (or `pending` in the first 2 minutes); the list has a TURN entry whose `urls` starts with `turn:` or `turns:`; after the cutover the list has no second TURN entry with a static username.
+1. Open the page's DevTools → Network → WS. Read the initial ICE settings from the `welcome` message (a healthy connection does not get an `ice` message right after it; later `ice` messages come only on a credential or status change). Check: `turnStatus` is `ready` (or `pending` in the first 2 minutes); the list has a TURN entry whose `urls` starts with `turn:` or `turns:`; `iceExpiresAt` is a time, not null (null means a static list). After the cutover the list has no second TURN entry with a static username.
 2. Chrome: open `chrome://webrtc-internals` before joining voice. After the call connects, expand the peer connection and find **Candidate pairs** with state `succeeded`/`selected`. For the forced-relay test below, at least one of the **local** and **remote** candidates of the selected pair must be `relay`. The other side may be `host` or `srflx`, and that is still a relayed call.
 
 **B. Force a relayed call (test only)**
@@ -97,8 +98,9 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 
 **C. ICE recovery**
 1. With a relayed call up, switch the test device's network: Wi-Fi off for 5 seconds, then back on (or toggle airplane mode for 5 seconds).
-2. In `webrtc-internals`, the connection state should go to `disconnected` and return to `connected` within about 30 seconds. A real in-place ICE restart keeps the same peer connection (same id in the list) and changes the local `a=ice-ufrag` value in the SDP. A new peer connection after network recovery is a recreation, not an ICE restart: record it as such. It does not prove the restart path.
-3. If it stays `failed`, record the time, the network type and a copy of the `webrtc-internals` dump (Download the dump, check it contains no credential before sharing).
+2. In `webrtc-internals`, the connection state should go to `disconnected` and return to `connected` within about 30 seconds. This tests network recovery only. A network drop closes and recreates the peer connection, so it does not exercise the in-place ICE restart. Record a new peer connection as a recreation.
+3. The in-place ICE restart path (`createOffer({ iceRestart: true })`) runs when a connected relayed call receives changed ICE credentials. Test it with the credential push in section D: the same peer connection stays, and the local `a=ice-ufrag` changes.
+4. If it stays `failed`, record the time, the network type and a copy of the `webrtc-internals` dump (Download the dump, check it contains no credential before sharing).
 
 **D. Credential rotation**
 1. Each Metered login lasts 48 hours. A replacement is requested 24 hours after the login was issued, and it is pushed to connected players when it becomes usable (about two minutes later). Note the `iceExpiresAt` value in the `ice` message. A new `ice` message with a later `iceExpiresAt` should arrive about 24 hours after the first one.
@@ -109,7 +111,7 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 1. iPhone Safari on mobile data, relayed call with a second device on Wi-Fi.
 2. Android Chrome on mobile data, same.
 3. Desktop Chrome and Firefox on a restrictive network (a corporate or hotel Wi-Fi if available).
-4. A call that stays open across one ICE restart (section 6 C, same peer connection with a changed `a=ice-ufrag`) with audio continuing.
+4. A relayed call that stays open across a credential push (section 6 D), which runs an in-place ICE restart (same peer connection, changed `a=ice-ufrag`), with audio continuing. Waiting 24 hours is impractical, so use a non-production service with `TURN_TTL_SECONDS=900`, where a push happens about every 10 minutes. This needs owner approval.
 5. A call older than one rotation (24 h) is impractical to wait for: instead, confirm the scheduled push in staging or by setting `TURN_TTL_SECONDS` to 900 (the shortest allowed) in a non-production service, which is test-only and needs owner approval.
 
 ## 8. Neon load-test plan (NOT created, NOT run)
