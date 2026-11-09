@@ -69,8 +69,10 @@ Steps (for the approved window):
 5. Only after 24 hours of clean operation, the owner may disable the static credential at Metered.
 
 Rollback (at any step):
-1. Restore `TURN_USERNAME` and `TURN_CREDENTIAL` on Render from the owner's secret store.
-2. Restart. Players reconnect and get the static pair again. No code change is needed.
+1. Turn Metered off on Render: remove `METERED_APP_NAME` and `METERED_SECRET_KEY`. The server uses Metered only when both are set (`fromEnv` in `lib/meteredTurn.js`). Keep `TURN_URL`.
+2. Restore `TURN_USERNAME` and `TURN_CREDENTIAL` from the owner's secret store. `lib/voiceRelay.js` prefers a usable Metered login, so the static pair is offered only once Metered is off.
+3. If the static credential was already disabled at Metered (step 5), create a new static credential at Metered first (owner action) and use it in step 2. A disabled credential cannot be restored.
+4. Restart. Players reconnect and get the static pair again. No code change is needed. Welcome messages should show `turnStatus` `static`.
 
 Explicitly not part of the cutover: rotating `METERED_SECRET_KEY`, changing `TURN_URL`, changing `TURN_TTL_SECONDS`.
 
@@ -86,7 +88,7 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 
 **A. Confirm the relay is offered**
 1. Open the page's DevTools → Network → WS. Find the `ice` message after the welcome. Check: `turnStatus` is `ready` (or `pending` in the first 2 minutes); the list has a TURN entry whose `urls` starts with `turn:` or `turns:`; after the cutover the list has no second TURN entry with a static username.
-2. Chrome: open `chrome://webrtc-internals` before joining voice. After the call connects, expand the peer connection and find **Candidate pairs** with state `succeeded`/`selected`. The **local** and **remote** candidate types should be shown as `relay` for the forced-relay test below.
+2. Chrome: open `chrome://webrtc-internals` before joining voice. After the call connects, expand the peer connection and find **Candidate pairs** with state `succeeded`/`selected`. For the forced-relay test below, at least one of the **local** and **remote** candidates of the selected pair must be `relay`. The other side may be `host` or `srflx`, and that is still a relayed call.
 
 **B. Force a relayed call (test only)**
 1. On one device, turn on a strict network: mobile data with a VPN or a restrictive Wi-Fi, or block UDP on the router for that device. This makes direct paths fail and forces the relay.
@@ -99,7 +101,8 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 3. If it stays `failed`, record the time, the network type and a copy of the `webrtc-internals` dump (Download the dump, check it contains no credential before sharing).
 
 **D. Credential rotation**
-1. Note the `iceExpiresAt` value from the `ice` message. Around the time it is reached minus 10 minutes, the server pushes a new `ice` message; audio should not drop.
+1. Each Metered login lasts 48 hours. A replacement is requested 24 hours after the login was issued, and it is pushed to connected players when it becomes usable (about two minutes later). Note the `iceExpiresAt` value in the `ice` message. A new `ice` message with a later `iceExpiresAt` should arrive about 24 hours after the first one.
+2. Audio should not drop at the push. A relayed call re-keys in place (see C). A short interruption once a day per call is an accepted risk (section 11); record any drop with its time.
 
 ## 7. Real-device tests required before the cutover
 
@@ -107,7 +110,7 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 2. Android Chrome on mobile data, same.
 3. Desktop Chrome and Firefox on a restrictive network (a corporate or hotel Wi-Fi if available).
 4. A call that stays open across one ICE restart (section 6 C) with audio continuing.
-5. A call older than one rotation (24 h) is impractical to wait for: instead, confirm the scheduled push in staging or by setting `TURN_TTL_SECONDS` to 300 in a non-production service, which is test-only and needs owner approval.
+5. A call older than one rotation (24 h) is impractical to wait for: instead, confirm the scheduled push in staging or by setting `TURN_TTL_SECONDS` to 900 (the shortest allowed) in a non-production service, which is test-only and needs owner approval.
 
 ## 8. Neon load-test plan (NOT created, NOT run)
 
@@ -115,7 +118,7 @@ Owner approval required before any step.
 
 **Isolation proof**
 - The test uses a new Neon branch, created from a parent branch that has no user data (schema migrations only). Record the branch ID before and after creation.
-- The test connection string is supplied only to the load generator, not to Render or any `.env` file. The script aborts if the host equals the production host (the host name is compared, the value is never printed).
+- The test connection string is supplied only to the load generator, not to Render or any `.env` file. The script aborts unless the host it connects to is one of the endpoints returned by Neon for the new test branch (recorded when the branch is created). It also aborts if the host matches any production endpoint, pooled or direct. Only the branch ID is printed; no host or connection string is printed.
 - Before the run: `SELECT current_database(), inet_server_addr()` and a check that `pg_stat_activity` shows only the test client.
 
 **Synthetic data only**
@@ -151,7 +154,9 @@ Owner approval required before any step.
 
 ## 9. Local PostgreSQL and migration tests on Windows (PowerShell)
 
-Requirements: Node 22, a local PostgreSQL server (version 14 or later) you can create databases on, and no production URL anywhere in these commands.
+Requirements: Node 22, a local PostgreSQL server (version 14 or later), and `psql` on the PATH (it ships with PostgreSQL, usually in `C:\Program Files\PostgreSQL\16\bin`). No production URL anywhere in these commands.
+
+**Important:** the full `npm test` and `npm run test:pg` suites include `tests/db-backup.test.js`, which runs POSIX shell fixtures (`#!/bin/sh`, `stat -c`). Those fixtures do not run under native Windows Node. Run the full suites in WSL2 (section 9b). The PowerShell steps below run everything else, and the migration check.
 
 ```powershell
 # 1. From the repository folder
@@ -159,34 +164,54 @@ cd C:\path\to\tableverse
 npm ci
 
 # 2. Point the tests at your LOCAL server only (never a Neon or Render URL).
-#    Replace user, password and port. The test creates and drops its own databases.
+#    Replace the password and port. The tests create and drop their own databases.
 $env:TEST_DATABASE_URL = "postgres://postgres:YOUR_LOCAL_PASSWORD@localhost:5432/postgres"
 
 # 3. Make sure DATABASE_URL is NOT set in this window (the tests never use it)
 Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
 
-# 4. Run the in-memory suite first (no database needed)
-npm test
+# 4. The PostgreSQL-free tests (no database needed). On native Windows this stops at tests/db-backup.test.js:
+#    run the individual files listed in package.json, skipping db-backup.test.js, or use WSL2 (section 9b).
 
-# 5. Run the PostgreSQL suites; they fail instead of skipping when TEST_DATABASE_URL is missing
+# 5. The PostgreSQL suites, same caveat about db-backup.test.js, which is part of test:pg.
 npm run test:pg
 
-# 6. Migration check against a local, throw-away database only
+# 6. Migration check against a throw-away local database only.
+#    The migration does not create the database, so create it first.
+$env:PGPASSWORD = "YOUR_LOCAL_PASSWORD"
+psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE tableverse_migrate_check"
 $env:DATABASE_URL = "postgres://postgres:YOUR_LOCAL_PASSWORD@localhost:5432/tableverse_migrate_check"
 npm run migrate
 npm run migrate   # second run must report nothing to apply
 Remove-Item Env:DATABASE_URL
+
+# 7. Remove the throw-away database and the password variable
+psql -h localhost -p 5432 -U postgres -c "DROP DATABASE tableverse_migrate_check"
+Remove-Item Env:PGPASSWORD
+```
+
+**9b. Full suites under WSL2 (Ubuntu)**
+```bash
+# In an Ubuntu terminal (WSL2), from the repository folder (a copy inside the Linux file system is faster)
+sudo apt-get install -y postgresql nodejs npm   # or use nvm for Node 22
+sudo service postgresql start
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'YOUR_LOCAL_PASSWORD'"
+npm ci
+export TEST_DATABASE_URL="postgres://postgres:YOUR_LOCAL_PASSWORD@localhost:5432/postgres"
+unset DATABASE_URL
+npm test && npm run test:pg
 ```
 
 Notes:
-- The local-server helper `scripts/pg-local-test.sh` is for macOS or Linux; on Windows use the commands above.
-- If `npm run test:pg` reports a connection error, check the port, the password and that the PostgreSQL service is running (`Get-Service postgresql*`).
+- The local-server helper `scripts/pg-local-test.sh` is for macOS or Linux (and WSL2).
+- If `npm run test:pg` reports a connection error, check the port, the password and that the PostgreSQL service is running (`Get-Service postgresql*` on Windows, `sudo service postgresql status` in WSL2).
+- These steps are documented but not yet run on a Windows machine. Record the result of the first run in this document.
 
 ## 10. Remaining manual tests
 
 1. Real-device relay tests (section 7), including iPhone and Android on mobile data.
 2. Browser diagnostics A–D (section 6) on two devices.
-3. Render: confirm `TURN_TTL_SECONDS` is unset or set to a value no lower than 172800 after #76 (a value of 3600 keeps the old hourly rotation).
+3. Render: confirm `TURN_TTL_SECONDS` is unset (the default, 48 hours). Any value is limited to 15 minutes to 48 hours.
 4. Neon: confirm the production pooled endpoint is in use (the URL contains `-pooler`) and `sslmode=require` is still set (no change needed).
 5. Render: one restart of the production service after #76 is merged; check `[turn]` log lines show no failures.
 6. Actions: confirm the next CI run shows no Node.js 20 deprecation notice.
