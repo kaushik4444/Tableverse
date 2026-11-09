@@ -1181,13 +1181,15 @@ function start(opts = {}) {
           await dbModeration.addBlock(p.id, target);
           p.blocked.add(target); // committed blocks live here; pending ones are included by effectiveBlocked()
           const targetPlayer = players.get(target);
-          const sharedRoom = targetPlayer && targetPlayer.room && rooms.get(targetPlayer.room);
-          if (sharedRoom && sharedRoom.members.concat(sharedRoom.spectators).some((m) => m.id === p.id)) {
-            enforceBlockedRoom(sharedRoom);
-            const targetIsSeated = sharedRoom.members.some((m) => m.id === target && !m.bot);
-            if (sharedRoom.status === 'playing' && targetIsSeated && targetPlayer.connected) {
-              send(targetPlayer.ws, { t: 'notice', text: 'You can finish this game, but you cannot rejoin this table after leaving.' });
-            }
+          let activeTargetRoom = null;
+          for (const candidate of [...rooms.values()]) {
+            const occupants = candidate.members.concat(candidate.spectators);
+            if (!occupants.some((m) => m.id === p.id) || !occupants.some((m) => m.id === target)) continue;
+            enforceBlockedRoom(candidate);
+            if (candidate.status === 'playing' && candidate.members.some((m) => m.id === target && !m.bot)) activeTargetRoom = candidate;
+          }
+          if (activeTargetRoom && targetPlayer && targetPlayer.connected) {
+            send(targetPlayer.ws, { t: 'notice', text: 'You can finish this game, but you cannot rejoin this table after leaving.' });
           }
         } catch (e) {
           if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
