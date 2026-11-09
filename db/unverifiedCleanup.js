@@ -50,10 +50,14 @@ const WRITE_PRIVILEGES = ['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'];
 async function assertCannotWrite(client) {
   const su = await client.query('SELECT rolsuper FROM pg_roles WHERE rolname = current_user');
   if (su.rows[0] && su.rows[0].rolsuper) throw readOnlyRefusal('the database role is a superuser');
-  const privs = WRITE_PRIVILEGES.map((p) => `has_table_privilege(current_user, c.oid, '${p}')`).join(' OR ');
+  // Include partitioned parents as well as ordinary tables. Column-level INSERT/UPDATE grants do not
+  // appear in has_table_privilege(), so check those separately.
+  const tablePrivs = WRITE_PRIVILEGES.map((p) => `has_table_privilege(current_user, c.oid, '${p}')`);
+  const columnPrivs = ['INSERT', 'UPDATE'].map((p) => `has_any_column_privilege(current_user, c.oid, '${p}')`);
   const writable = await client.query(
     `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public' AND c.relkind = 'r' AND (${privs}) LIMIT 5`,
+      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+        AND (${[...tablePrivs, ...columnPrivs].join(' OR ')}) LIMIT 5`,
   );
   if (writable.rows.length) throw readOnlyRefusal(`the database role can change data (for example ${writable.rows.map((r) => r.relname).join(', ')})`);
 }
