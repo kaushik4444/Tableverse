@@ -1189,7 +1189,7 @@ function start(opts = {}) {
             if (candidate.status === 'playing' && candidate.members.some((m) => m.id === target && !m.bot)) activeTargetRoom = candidate;
           }
           if (activeTargetRoom && targetPlayer && targetPlayer.connected) {
-            send(targetPlayer.ws, { t: 'notice', text: 'You can finish this game, but you cannot rejoin this table after leaving.' });
+            send(targetPlayer.ws, { t: 'notice', text: 'You can finish this game, but you cannot rejoin while the other player remains at this table.' });
           }
         } catch (e) {
           if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
