@@ -79,11 +79,11 @@ async function countUnverified({ days = DEFAULT_DAYS, now = new Date() } = {}) {
 /**
  * Deletes candidates in batches. Returns { dryRun, candidates, deleted, batches }. With execute false it only counts.
  */
-async function cleanUnverified({ days = DEFAULT_DAYS, execute = false, now = new Date(), batch = DEFAULT_BATCH, maxTotal = DEFAULT_MAX_TOTAL, log = null } = {}) {
+async function cleanUnverified({ days = DEFAULT_DAYS, execute = false, now = new Date(), batch = DEFAULT_BATCH, maxTotal = DEFAULT_MAX_TOTAL, log = null, database = db } = {}) {
   const cutoff = cutoffFor(now, days);
   if (!execute) {
     // The dry run: a READ ONLY transaction (the server refuses any write in it) and a role check before the count.
-    const candidates = await db.withTransaction(async (client) => {
+    const candidates = await database.withTransaction(async (client) => {
       await client.query('SET TRANSACTION READ ONLY');
       await assertCannotWrite(client);
       return countCandidates(client, cutoff);
@@ -93,7 +93,7 @@ async function cleanUnverified({ days = DEFAULT_DAYS, execute = false, now = new
   let deleted = 0;
   let batches = 0;
   while (deleted < maxTotal) {
-    const n = await db.withTransaction(async (client) => {
+    const n = await database.withTransaction(async (client) => {
       const ids = await client.query(
         `SELECT p.id FROM players p WHERE ${CANDIDATE} ORDER BY p.created_at LIMIT $2 FOR UPDATE OF p SKIP LOCKED`,
         [cutoff, Math.min(batch, maxTotal - deleted)],
