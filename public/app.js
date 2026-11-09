@@ -39,6 +39,8 @@
     unread: 0,
     skew: 0, // server clock minus this device's clock, for the turn countdown
     announcement: '',
+    banners: [], // managed announcements from /api/announcements (server decides schedule, audience and dismissals)
+    isStaff: false, // a hint for showing the menu entry only; the server checks the role on every admin request
     dismissedAnnouncement: store.get('ct_ann'), // the text that was dismissed, so a changed announcement shows again
     recentTables: [], // the signed-in player's recent tables, from the server (follow the account across devices)
     friends: [],
@@ -346,6 +348,8 @@
   }
 
   function clearClientSession() {
+    S.isStaff = false;
+    S.banners = [];
     S.token = '';
     S.csrf = '';
     S.emailVerified = false;
@@ -697,6 +701,66 @@
     return S.publicTables.find((t) => t.code === code) || null;
   }
 
+  // ---- managed announcements (Stage 20.5). Legacy ANNOUNCEMENT text above keeps working; these are added next to it.
+  const LEVEL_ICON = { info: 'ℹ️', warning: '⚠️', success: '✅' };
+  const guestDismissed = () => { try { return JSON.parse(store.get('ct_ann_ids') || '[]'); } catch { return []; } };
+  // A guest's dismissal is kept per text: when the admin changes the text, the banner shows again (as it does for signed-in players).
+  const bannerKey = (b) => `${b.id}:${b.message}`;
+  async function loadBanners() {
+    try {
+      const r = await fetch('/api/announcements', { credentials: 'same-origin' });
+      const out = await r.json();
+      if (!out || !out.ok) return;
+      const hidden = out.signedIn ? [] : guestDismissed(); // signed-in dismissals live on the account; guests remember them in this browser
+      const next = (out.announcements || []).filter((a) => !hidden.includes(bannerKey(a)));
+      if (JSON.stringify(next) !== JSON.stringify(S.banners)) { S.banners = next; render(); }
+    } catch { /* offline: keep what is shown */ }
+  }
+  async function loadStaffHint() {
+    try {
+      const r = await fetch('/api/admin/me', { credentials: 'same-origin' });
+      const out = await r.json();
+      const staff = !!(out && out.ok && out.isAdmin);
+      if (staff !== S.isStaff) { S.isStaff = staff; render(); }
+    } catch { /* ignore */ }
+  }
+  const bannersHTML = () => S.banners.map((b) => `<div class="notice-bar notice-${esc(b.level)}" role="status"><span><span aria-hidden="true">${LEVEL_ICON[b.level] || ''}</span> ${esc(b.message)}</span><button type="button" class="wn-close" data-act="dismissBanner" data-id="${esc(b.id)}" aria-label="Dismiss announcement">✕</button></div>`).join('');
+  async function dismissBanner(id) {
+    const dismissed = S.banners.find((b) => b.id === id);
+    S.banners = S.banners.filter((b) => b.id !== id);
+    render();
+    if (S.guest) { if (dismissed) store.set('ct_ann_ids', JSON.stringify([...guestDismissed(), bannerKey(dismissed)].slice(-50))); return; }
+    try { await postJson('/api/announcements/dismiss', { id }); } catch { /* it comes back on the next refresh if the server did not record it */ }
+  }
+  // the schedule is decided on the server, so a banner can appear, expire or be ended while the page is open: look again now and then
+  setInterval(() => { if (document.visibilityState === 'visible') loadBanners(); }, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadBanners(); });
+
+  function openFeedbackModal() {
+    openModal('Send feedback', `<form id="fbForm" class="fb-form">
+        <label class="label" for="fbCat">What is it about?</label>
+        <select id="fbCat"><option value="idea">An idea</option><option value="bug">A problem</option><option value="other">Something else</option></select>
+        <label class="label" for="fbMsg">Your message</label>
+        <textarea id="fbMsg" rows="5" maxlength="1000" required placeholder="Tell us what happened or what you would like."></textarea>
+        <small class="hint">We read every message. Please do not include passwords or personal details.</small>
+        <p id="fbOut" role="status"></p>
+        <button class="btn" type="submit">Send</button>
+      </form>`, (o) => {
+      const form = o.querySelector('#fbForm');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const out = o.querySelector('#fbOut');
+        const btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        try {
+          const r = await postJson('/api/feedback', { category: form.querySelector('#fbCat').value, message: form.querySelector('#fbMsg').value });
+          closeModal();
+          toast(r.message || 'Thank you!');
+        } catch (err) { out.textContent = err.message; btn.disabled = false; }
+      });
+    });
+  }
+
   /** Home data for visitors (no socket): the public games list, the live table directory and the site announcement. */
   async function loadSnapshot() {
     S.guest = true;
@@ -711,6 +775,7 @@
       }
     } catch { /* offline: the home screen still renders, just without live data */ }
     render();
+    loadBanners();
   }
 
   /** Play actions need a live lobby session: guests are asked to log in, and the action they tapped runs right after. */
@@ -817,6 +882,8 @@
         S.publicTables = m.tables || [];
         S.rejoin = m.rejoin || [];
         S.announcement = typeof m.announcement === 'string' ? m.announcement : '';
+        loadBanners();
+        loadStaffHint();
         S.avatars = m.avatars || [];
         S.emotes = m.emotes || [];
         S.ice = Array.isArray(m.ice) ? m.ice : [];
@@ -1580,7 +1647,7 @@
       return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><span class="tb-avatar-btn tb-signing" role="status" aria-live="polite" aria-atomic="true"><span class="sr-only">Signing in as ${esc(who)}</span>${avatar({ name: who, avatar: S.avatar }, 'tb-av')}<span class="spinner" aria-hidden="true"></span></span></div></nav>`;
     }
     if (S.guest) {
-      return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><button type="button" class="btn ghost small" data-act="showLogin">Log in</button><button type="button" class="btn small" data-act="showRegister">Sign up</button></div></nav>`;
+      return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right"><button type="button" class="btn ghost small" data-act="openFeedback">Feedback</button><button type="button" class="btn ghost small" data-act="showLogin">Log in</button><button type="button" class="btn small" data-act="showRegister">Sign up</button></div></nav>`;
     }
     const name = S.named ? S.name : 'Player';
     const av = avatar({ name, avatar: S.avatar }, 'tb-av');
@@ -1591,6 +1658,8 @@
         ${item('openFriendsPage', '👥', 'Friends')}
         ${item('openSettings', '⚙️', 'Settings')}
         ${item('openWhatsNew', '🎉', 'What’s new', hasNewNews() ? '<span class="mi-new">New</span>' : '')}
+        ${item('openFeedback', '💬', 'Send feedback')}
+        ${S.isStaff ? item('openAdmin', '🛠️', 'Admin console') : ''}
         <div class="menu-sep" role="separator"></div>
         ${item('logout', '🚪', 'Log out')}
         ${item('logoutAll', '🔒', 'Log out everywhere', '', 'dim')}
@@ -1838,6 +1907,7 @@
         </form>
       </section>
       ${rejoinBannerHTML()}
+      ${bannersHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
       ${friendsStripHTML()}
       <section class="home-section" id="games">
@@ -2179,6 +2249,9 @@
     kickPlayer: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Remove player', `<p class="hint">Remove ${esc(el.dataset.name || 'this player')} from this table? They will not be able to come back.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="kickPlayerConfirm">Remove</button></div>`); },
     seats: (el) => send({ t: 'setSeats', seats: Number(el.dataset.n) }),
     start: () => send({ t: 'start' }),
+    dismissBanner: (el) => dismissBanner(el.dataset.id),
+    openAdmin: () => { S.menuOpen = false; location.href = '/admin.html'; },
+    openFeedback: () => { S.menuOpen = false; openFeedbackModal(); },
     dismissAnnouncement: () => {
       S.dismissedAnnouncement = S.announcement;
       store.set('ct_ann', S.announcement);

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin console · Tableverse</title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <header class="ad-top">
+    <a class="ad-brand" href="/" aria-label="Back to Tableverse">🂡 Tableverse <span>Admin</span></a>
+    <span id="adWho" class="ad-who"></span>
+  </header>
+  <nav class="ad-tabs" id="adTabs" role="tablist" aria-label="Admin sections" hidden>
+    <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button role="tab" data-tab="users" aria-selected="false">Users</button>
+    <button role="tab" data-tab="feedback" aria-selected="false">Feedback</button>
+    <button role="tab" data-tab="announcements" aria-selected="false">Announcements</button>
+    <button role="tab" data-tab="health" aria-selected="false">Health</button>
+    <button role="tab" data-tab="audit" aria-selected="false">Audit log</button>
+  </nav>
+  <main id="adMain" class="ad-main" aria-live="polite"><p class="ad-muted">Checking your access…</p></main>
+  <script src="/admin.js" defer></script>
+</body>
+</html>

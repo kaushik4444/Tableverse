@@ -609,5 +609,12 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
   .fs-head .linklike { padding-top: 2px; }
 }
 
+/* Stage 20.5: managed announcement banners and the feedback form */
+.notice-bar.notice-warning { border-color: rgba(255, 140, 77, .5); background: rgba(255, 140, 77, .12); color: #ffb27a; }
+.notice-bar.notice-success { border-color: rgba(86, 211, 140, .4); background: rgba(86, 211, 140, .1); color: #7ee0a8; }
+.notice-bar.notice-info { border-color: rgba(120, 170, 255, .4); background: rgba(120, 170, 255, .1); color: #a9c8ff; }
+.notice-bar + .notice-bar { margin-top: 8px; }
+.fb-form { display: grid; gap: 8px; }
+.fb-form select, .fb-form textarea { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .2); background: transparent; color: inherit; font: inherit; }
 /* Profile placeholder in the top bar while the login finishes connecting */
 .tb-signing { display: inline-flex; align-items: center; gap: 8px; cursor: progress; }

@@ -155,8 +155,10 @@ async function deleteAccount(playerId, password) {
   // Argon2 outside the transaction: no connection is held while it runs
   if (!(await dbAuth.verifyPassword(r.rows[0].password_hash, password))) throw new AuthError('That password is not correct.', 403);
   return db.withTransaction(async (c) => {
-    const locked = await c.query('SELECT id FROM players WHERE id = $1 FOR UPDATE', [playerId]);
+    const locked = await c.query('SELECT id, role FROM players WHERE id = $1 FOR UPDATE', [playerId]);
     if (!locked.rows.length) throw new AuthError('Account not found.', 404);
+    // Stage 20.5: the owner account is protected from accidental removal. Ownership is handed over by the operator first (docs/ADMIN.md).
+    if (locked.rows[0].role === 'owner') throw new AuthError('This is the owner account of the admin console, so it cannot be deleted here. See docs/ADMIN.md.', 409);
     const anon = await c.query('UPDATE match_participants SET player_name = $2, player_id = NULL WHERE player_id = $1', [playerId, DELETED_NAME]);
     const del = await c.query('DELETE FROM players WHERE id = $1', [playerId]);
     if (del.rowCount !== 1) throw new Error('account row was not deleted');

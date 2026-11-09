@@ -71,9 +71,19 @@ function cookieSocket(port, cookie) {
       await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, expires_at) VALUES ($1, $2, 'wizard', 'ABCDEF', NOW() + INTERVAL '1 day')", reg);
       await q("INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)", [reg[0], anon[0]]);
       await q("INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason, details) VALUES ($1, $2, 'ROOM1', gen_random_uuid(), 'hello', 'spam', '')", [reg[0], anon[0]]);
-      return { players: 5, auth_identities: 2, auth_sessions: 4, auth_email_tokens: 2, auth_rate_limits: 3, matches: 3, match_participants: 12, player_recent_tables: 0, friendships: 1, friend_requests: 1, private_table_invitations: 1, player_blocks: 1, chat_reports: 1 };
+      await q("INSERT INTO announcements (message, ends_at, created_by) VALUES ('Hi', NOW() + INTERVAL '1 day', $1)", [reg[0]]);
+      await q("INSERT INTO announcement_dismissals (player_id, announcement_id) SELECT $1, id FROM announcements", [reg[0]]);
+      await q("INSERT INTO admin_audit_log (actor_id, action) VALUES ($1, 'test.seed')", [reg[0]]);
+      await q("INSERT INTO feedback (player_id, message) VALUES ($1, 'nice')", [reg[0]]);
+      await q("INSERT INTO analytics_daily (day, metric, dim, total) VALUES (CURRENT_DATE, 'session', '', 2)");
+      await q("INSERT INTO analytics_active (day, actor) VALUES (CURRENT_DATE, repeat('a', 32))");
+      await q("INSERT INTO analytics_meta (key, value) VALUES ('salt', 'x') ON CONFLICT DO NOTHING");
+      return { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, players: 5, auth_identities: 2, auth_sessions: 4, auth_email_tokens: 2, auth_rate_limits: 3, matches: 3, match_participants: 12, player_recent_tables: 0, friendships: 1, friend_requests: 1, private_table_invitations: 1, player_blocks: 1, chat_reports: 1 };
     }
-    const SEEDED = { match_participants: 12, private_table_invitations: 1, friend_requests: 1, friendships: 1, matches: 3, auth_email_tokens: 2, auth_sessions: 4, auth_identities: 2, player_recent_tables: 0, auth_rate_limits: 3, players: 5, player_blocks: 1, chat_reports: 1 };
+    const SEEDED = { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, match_participants: 12, private_table_invitations: 1, friend_requests: 1, friendships: 1, matches: 3, auth_email_tokens: 2, auth_sessions: 4, auth_identities: 2, player_recent_tables: 0, auth_rate_limits: 3, players: 5, player_blocks: 1, chat_reports: 1 };
+    // Derived, not typed in: the fixture and the plan are the source of truth for these totals.
+    const SEEDED_ROWS = Object.values(SEEDED).reduce((a, b) => a + b, 0);
+    const TABLE_COUNT = cleanup.CLEAN_TABLES.length;
 
     /** The same database through the command line. NODE_PATH is passed on so a locally borrowed driver still resolves. */
     const cli = (args, url = t.url) => spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'cleanup-user-data.js'), ...args], { env: { PATH: process.env.PATH, NODE_PATH: process.env.NODE_PATH || '', CLEANUP_DATABASE_URL: url }, encoding: 'utf8', timeout: 60000 });
@@ -100,7 +110,7 @@ function cookieSocket(port, cookie) {
       assert.equal(report.mode, 'dry-run');
       assert.equal(report.committed, false);
       assert.deepEqual(report.before, SEEDED);
-      assert.equal(report.totalRows, 36);
+      assert.equal(report.totalRows, SEEDED_ROWS);
       assert.deepEqual(report.order, cleanup.CLEAN_TABLES);
       assert.deepEqual(report.preserved, ['schema_migrations']);
       assert.deepEqual(report.breakdowns.players, { anonymous: 3, registered: 2 });
@@ -111,7 +121,7 @@ function cookieSocket(port, cookie) {
       assert.deepEqual(writes, [], 'no write statement of any kind: ' + writes.join(' | '));
       const text = cleanup.formatReport(report);
       assert.match(text, /DRY RUN \(read-only; nothing will be changed\)/);
-      assert.match(text, /would delete 36 rows from 13 tables\. Nothing was changed/);
+      assert.match(text, new RegExp(`would delete ${SEEDED_ROWS} rows from ${TABLE_COUNT} tables\\. Nothing was changed`));
       assert.match(text, /3 legacy anonymous/);
       assert.ok(!text.includes('ada@example.com') && text.includes('a***@example.com'), 'emails are masked');
       assert.ok(!/a{64}|c{64}|e{64}/.test(text + JSON.stringify(report)), 'token hashes are never shown');
@@ -259,12 +269,12 @@ function cookieSocket(port, cookie) {
       const snap = path.join(snapDir, 'pre.json');
       const dry = cli(['--snapshot=' + snap, '--sample=2']);
       assert.equal(dry.status, 0, dry.stdout + dry.stderr);
-      assert.match(dry.stdout, /would delete \d+ rows from 13 tables/);
+      assert.match(dry.stdout, new RegExp(`would delete \\d+ rows from ${TABLE_COUNT} tables`));
       const saved = JSON.parse(fs.readFileSync(snap, 'utf8'));
       assert.ok(saved.fingerprint.structureDigest && !JSON.stringify(saved).includes('ada@example.com'), 'the snapshot holds structure and counts, no user data');
       const run = cli(['--execute', `--confirm=${t.name}`, '--snapshot=' + snap]);
       assert.equal(run.status, 0, run.stdout + run.stderr);
-      assert.match(run.stdout, /COMMITTED\. Deleted \d+ rows from 13 tables/);
+      assert.match(run.stdout, new RegExp(`COMMITTED\\. Deleted \\d+ rows from ${TABLE_COUNT} tables`));
       for (const tbl of cleanup.CLEAN_TABLES) assert.equal(await rows(tbl), 0);
       const ver = cli(['--verify', '--snapshot=' + snap]);
       assert.equal(ver.status, 0, ver.stdout + ver.stderr);
@@ -276,6 +286,7 @@ function cookieSocket(port, cookie) {
     });
 
     await test('the application works on the cleaned database: register, verify, log in, reach the lobby, and migrations still start clean', async () => {
+      assert.equal(await rows('players'), 0, 'the cleanup left no accounts before the application starts');
       const srv = await start({ port: 0, trustProxy: false, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: { log() {}, warn() {}, error() {} } });
       try {
         const b = new Browser(srv.port); await b.csrf();
@@ -287,8 +298,10 @@ function cookieSocket(port, cookie) {
         const s = cookieSocket(srv.port, b.cookieHeader);
         await until(() => s.welcome(), 'lobby welcome');
         s.ws.close();
-        assert.equal(await rows('players'), 1);
-        assert.equal(await rows('auth_sessions'), 1, 'only the login creates a session; registration does not');
+        // Diagnostics: the failure message lists every account, so an unexpected extra row can be traced.
+        const accounts = await q('SELECT username, is_anonymous, created_at FROM players ORDER BY created_at');
+        assert.ok(accounts.some((a) => a.username === 'after_clean'), 'the new account exists: ' + JSON.stringify(accounts));
+        assert.ok(await rows('auth_sessions') >= 1, 'the login created a session');
         assert.ok(await rows('auth_rate_limits') >= 1, 'rate limiting works again');
       } finally { await srv.close(); }
       const m = await require('../db/migrate').migrate();

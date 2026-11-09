@@ -25,6 +25,14 @@ const path = require('path');
 
 /** Tables to empty, in the order they are deleted: every table appears before the tables it references. */
 const PLAN = [
+  { table: 'announcement_dismissals', stores: 'Which signed-in account dismissed which announcement banner', references: ['announcements', 'players'] },
+  { table: 'admin_audit_log', stores: 'Admin console audit log: who (account id) did what to which target, with small detail', references: ['players'] },
+  { table: 'feedback', stores: 'Feedback sent by players: optional account id, category, message, status', references: ['players'] },
+  { table: 'announcements', stores: 'Announcement banners (text, level, audience, schedule) and the admin who created them', references: ['players'] },
+  { table: 'analytics_active', stores: 'Distinct active accounts per day as keyed hashes (no account ids)', references: [] },
+  { table: 'analytics_batches', stores: 'Keys of applied analytics writes (random ids; no account or personal data)', references: [] },
+  { table: 'analytics_meta', stores: 'Server-side analytics settings (the hashing salt; a new one is created on demand)', references: [] },
+  { table: 'analytics_daily', stores: 'Aggregate daily counters per metric and dimension (no personal data)', references: [] },
   { table: 'match_participants', stores: 'Per-player result rows of finished games (name, seat, score, winner/bot/left-early flags, optional account id)', references: ['matches', 'players'] },
   { table: 'private_table_invitations', stores: 'Private-table invitations and their lifecycle metadata', references: ['players'] },
   { table: 'chat_reports', stores: 'Chat reports: reporter, reported account, table code, message id, a copy of the reported text, reason and details', references: ['players'] },
@@ -61,6 +69,11 @@ const EXPECTED_FKS = [
   { child: 'chat_reports', parent: 'players', onDelete: 'CASCADE' },
   { child: 'player_blocks', parent: 'players', onDelete: 'CASCADE' },
   { child: 'player_blocks', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'announcement_dismissals', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'announcement_dismissals', parent: 'announcements', onDelete: 'CASCADE' },
+  { child: 'feedback', parent: 'players', onDelete: 'SET NULL' },
+  { child: 'announcements', parent: 'players', onDelete: 'SET NULL' },
+  { child: 'admin_audit_log', parent: 'players', onDelete: 'SET NULL' },
   { child: 'match_participants', parent: 'matches', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'players', onDelete: 'SET NULL' },
 ];
