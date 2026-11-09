@@ -48,14 +48,16 @@ the server. It does not replace human review, and it does not take automatic act
 
 ## Data
 
-Migration `010_chat_moderation.sql` adds two tables. It is additive, and it is applied when the server starts, like the
-other migrations.
+Migration `010_chat_moderation.sql` adds two tables. Migration `015_chat_report_retention.sql` adds the reported-name
+snapshot and changes the reported-account reference; both are additive and applied when the server starts.
 
 - `player_blocks(blocker_id, blocked_id)`: who blocked whom.
-- `chat_reports(reporter_id, reported_id, room_code, message_id, message_text, reason, details, created_at)`.
+- `chat_reports(reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason, details, created_at)`.
 
-Both reference `players` with `ON DELETE CASCADE`. Deleting an account removes its blocks, the reports it made, and the
-reports about it. The cleanup plan (`db/cleanup.js`) lists both tables, so the one-off cleanup script also removes them.
+The reporter reference uses `ON DELETE CASCADE`: reports made by a deleted reporter are removed. The reported-account
+reference uses `ON DELETE SET NULL`: reports against a deleted account remain with the server-captured display-name
+snapshot and report content, but without the deleted account UUID. The cleanup plan (`db/cleanup.js`) classifies both
+foreign keys and preserves this policy.
 
 ## Reviewing reports
 
@@ -63,7 +65,7 @@ There is no review screen. Reports are read directly from the database, by an op
 Example query (review the most recent reports, nothing else):
 
 ```sql
-SELECT created_at, reason, details, message_text, reporter_id, reported_id, room_code
+SELECT created_at, reason, details, message_text, reporter_id, reported_id, reported_display_name, room_code
 FROM chat_reports
 ORDER BY created_at DESC
 LIMIT 50;
@@ -77,7 +79,7 @@ A decision to remove a player's access is a manual action taken outside this fea
   friend requests and invitations; it does not remove them from the public table list.
 - **There is no screen to unblock.** The `unblock` action exists and is tested; a settings screen is a follow-up.
 - **There is no review queue or admin tool.** Reports are stored for manual review only.
-- **Reports are kept until the account is deleted.** No retention period is enforced yet.
+- **Reports are retained when the reported account is deleted**, but reports made by a deleted reporter are removed. No independent retention period is enforced yet.
 - **The block list is cached in memory per server.** The server runs as a single instance, so this matches the rest of the
   table state. A future multi-instance setup would need the cache moved or invalidated.
 - **Cooldowns are per account on each server, not per socket.** Opening more sockets does not give more cooldowns. The
