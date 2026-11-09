@@ -76,7 +76,7 @@
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:12px">${rangeButtons}</div>
       <div class="ad-grid">${tile(o.active.dau, 'active today')}${tile(o.active.wau, 'active, 7 days')}${tile(o.active.mau, 'active, 30 days')}${tile(o.accounts.registered, 'registered accounts')}${tile(o.accounts.registered_24h, 'new in 24 hours')}${tile(t('registration'), 'registrations')}${tile(t('session'), 'sessions')}${tile(t('game_finished'), 'games finished')}${tile(t('error'), 'errors')}</div>
       <h3>Active players per day</h3>${lineChart(o.activeDaily || [], o.labels || [], 'Active players')}
-      <h3>Registrations per day</h3>${lineChart(o.series.registration || [], o.labels || [], 'Registrations')}
+      <h3>Registrations per day</h3>${lineChart(o.series.registration || (o.labels || []).map(() => 0), o.labels || [], 'Registrations')}
       <h3>Sessions per day</h3>${spark(o.series.session || [], 'Sessions per day')}
       <h3>Games finished per day</h3>${spark(o.series.game_finished || [], 'Games finished per day')}
       <h3>Popular games</h3>${bars(o.popularGames, 'No finished games yet.')}
