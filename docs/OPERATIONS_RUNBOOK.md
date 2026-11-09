@@ -167,17 +167,15 @@ Only with owner approval. Recovery replaces what players see; decide first, then
 ## Voice chat connectivity (TURN) — verify in production
 Voice is peer to peer. With only STUN (the default), players on some mobile carriers or office networks cannot hear each other.
 - Check: Render > service > Environment has `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (or `ICE_SERVERS`). Status: **configured** (Metered.ca free tier, set on Render, 2026-11-06).
-- Security: the current static pair is sent to every visitor in the welcome message. To stop that, set `TURN_SHARED_SECRET` (per-player, one-hour logins) only after confirming the TURN provider accepts REST-scheme credentials; then rotate the static credential. Status: **open, needs your decision** (depends on provider support and whether the static pair is rotated).
-- Switch-over (do these in order, in one redeploy; do not run a half-switched state):
-  1. Confirm the provider accepts REST-scheme credentials (coturn `use-auth-secret`, or the provider's documented equivalent).
-     Metered does NOT, as checked on 2026-11-08 (https://www.metered.ca/docs/turnserver-guides/expiring-turn-credentials): its expiring
-     credentials are created by a server-side API call (`POST https://mla2.metered.live/api/v1/turn/credential` with the account secret
-     key, `expiryInSeconds`), and the lobby fetches them with a `GET`. `TURN_SHARED_SECRET` as implemented here will not authenticate
-     against Metered. Using Metered with per-player logins needs a separate server-side integration, which is not built yet.
-  2. Remove `ICE_SERVERS` from the environment if it is set. It overrides every other TURN setting, including the per-player login, and any static pair inside it would still be sent to visitors.
-  3. Remove `TURN_USERNAME` and `TURN_CREDENTIAL`. Keep `TURN_URL`; add `TURN_SHARED_SECRET` (and optionally `TURN_TTL_SECONDS`).
-  4. Redeploy, then check the welcome message of a test connection: the TURN entry must carry a `username` of the form `<expiry>:<player id>` and no static login.
-  5. Re-run the two-phone test below, then rotate the static credential at the provider so the old pair stops working.
+- Security: the current static pair is sent to every visitor in the welcome message. Status: **code ready, not switched on (needs your approval)**.
+- Preferred: Metered's official REST API (`lib/meteredTurn.js`). Per Metered's docs (https://metered.ca/docs/turn-rest-api/post-create-credential) the call is `POST https://<app>.metered.live/api/v1/turn/credential?secretKey=…` with optional JSON `expiryInSeconds` and `label`, returning `username` and `password`. The server fetches credentials ahead of use and keeps them valid; a new credential takes up to 2 minutes to propagate, so it is only handed out after that. An earlier note in this file named `mla2.metered.live`; confirm the host in the Metered dashboard before switching on.
+- Switch-over (needs your approval; do these in one redeploy, never a half-switched state):
+  1. Set on Render (secret values only in Render's secret environment, never in the repository or logs): `METERED_APP_NAME` (the app name, not a URL), `METERED_SECRET_KEY`, keep `TURN_URL`.
+  2. Remove `ICE_SERVERS` if it is set; it overrides every other TURN setting.
+  3. After one successful, approved test (below), remove `TURN_USERNAME` and `TURN_CREDENTIAL` and rotate the static credential at Metered so the old pair stops working. Until then the static pair still reaches visitors.
+  4. Check the welcome message of a test connection: the TURN entry must carry a fresh Metered `username` and no static login. Logs show only the kind of failure (`HTTP 401`, `timeout`, `network error`), never the key.
+  5. Run the two-phone test below, and a table open for over an hour, before calling it done.
+- Fallback: `TURN_SHARED_SECRET` (HMAC `<expiry>:<player id>` logins) remains for a provider that documents the coturn `use-auth-secret` scheme. Metered does not use that scheme.
 - Refresh: a per-player login lasts one hour by default. The browser asks for a new one ten minutes before it ends (`ice` request, answered at most once per 20 seconds) and applies it to open connections, so no re-login is needed. Check after a deploy: a table that stays open for more than an hour keeps its audio. Raise `TURN_TTL_SECONDS` only if the provider or a reconnect cost makes that necessary; the maximum is 24 hours.
 - Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: **passed** (2026-11-06).
 - If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
