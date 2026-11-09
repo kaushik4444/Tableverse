@@ -310,6 +310,9 @@ const DAY = 24 * 60 * 60 * 1000;
         await x.query('BEGIN');
         await x.query('SET TRANSACTION READ ONLY');
         await assert.rejects(x.query('DELETE FROM players WHERE false'), (e) => e.code === '25006', 'a read-only transaction refuses a DELETE');
+        await x.query('ROLLBACK');
+        await x.query('BEGIN');
+        await x.query('SET TRANSACTION READ ONLY');
         await assert.rejects(x.query('UPDATE players SET display_name = display_name WHERE false'), (e) => e.code === '25006', 'a read-only transaction refuses an UPDATE');
         await x.query('ROLLBACK');
       } finally {
