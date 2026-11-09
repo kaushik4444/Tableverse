@@ -687,6 +687,18 @@ function start(opts = {}) {
   function blockedWithRoom(room, playerId) {
     return [...room.members, ...room.spectators].some((m) => m.id !== playerId && pairBlocked(playerId, m.id));
   }
+  /**
+   * A committed block in EITHER direction between this player and someone at the table. Used before a destructive removal:
+   * a player who blocked someone at the table (rather than being blocked) is removed too, and a pending block never is.
+   */
+  function blockedWithRoomCommitted(room, playerId) {
+    const me = players.get(playerId);
+    return [...room.members, ...room.spectators].some((m) => {
+      if (m.id === playerId) return false;
+      const other = players.get(m.id);
+      return (!!me && !!me.blocked && me.blocked.has(m.id)) || (!!other && !!other.blocked && other.blocked.has(playerId));
+    });
+  }
   /** A seated player may reconnect to finish a running game only when they are the blocker, not the blocked target. */
   function blockedEntryDenied(room, playerId, allowCurrentGameSeat = false) {
     if (blockedByRoom(room, playerId)) return true;
@@ -1738,7 +1750,7 @@ function start(opts = {}) {
         if (blocked) {
           // Only a committed block removes the seat. A block still being written keeps the socket out of this seat
           // until it settles, and a failed write then leaves the player where they were.
-          if (blockedByRoom(room, p.id, true)) {
+          if (blockedWithRoomCommitted(room, p.id)) {
             leaveRoom(p); // a blocked player cannot resume this seat; a bot takes over if a game is running
             send(ws, { t: 'left' });
             send(ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
