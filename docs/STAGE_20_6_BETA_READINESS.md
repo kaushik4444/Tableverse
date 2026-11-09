@@ -11,7 +11,7 @@ This checklist deliberately separates release-critical verification from optiona
 - Static TURN credentials remain configured until the owner explicitly approves cutover.
 - Cleanup remains disabled: `CLEANUP_EXECUTE=false`. The production dry-run reported zero eligible accounts and zero deletions.
 - No Windows or WSL2 test run has been performed.
-- Owner tested a two-person call across Wi-Fi and mobile data; two-way voice connectivity worked. The selected ICE candidate pair was not recorded, so Metered relay use is not yet proven.
+- Owner tested a two-person call across Wi-Fi and mobile data; two-way audio worked. The supplied `webrtc-internals` stats show a nominated, succeeded candidate pair with local candidate `relay` (`relayProtocol=udp`), 311,875 bytes sent and 202,044 received. **TURN relay use is confirmed for this call.** The supplied ICE-server list shows `turn:global.relay.metered.ca:80`, but `turnStatus`, `iceExpiresAt`, and the credential source were not captured; dynamic Metered REST credential use is therefore not yet proven.
 - No Neon load test has been performed; it is deferred for the initial friend/limited beta.
 
 ## Voice-enabled beta verification
@@ -20,9 +20,10 @@ Guest table access is required for the beta. Guest voice access is required only
 
 Before creating fresh voice connections for the voice-enabled beta checks, confirm that both devices receive `turnStatus: ready` and a non-null `iceExpiresAt`. This verifies the propagated Metered login rather than the retained static fallback.
 
-- Verify a two-person call uses a selected `relay` candidate and has two-way audio.
-- Verify network recovery on the relayed call.
-- Verify a propagated Metered credential update triggers an in-place ICE restart: the same peer connection remains, its local `a=ice-ufrag` changes, and audio continues.
+- [x] Verify a two-person call uses a selected `relay` candidate and has two-way audio (owner-provided dump: nominated/succeeded pair, local relay candidate over UDP).
+- [ ] Verify network recovery on the relayed call.
+- [ ] Verify a propagated Metered credential update triggers an in-place ICE restart: the same peer connection remains, its local `a=ice-ufrag` changes, and audio continues.
+- [ ] Confirm `turnStatus: ready` and non-null `iceExpiresAt` on both devices before a fresh call, to distinguish a dynamic Metered login from the retained static fallback.
 - Keep static fallback configured for the beta unless the separate cutover gate below is completed. Do not repeat broad device/browser tests for this limited beta.
 
 Do not attempt to force relay by merely enabling a VPN. If the network does not force relay, use browser WebRTC diagnostics to verify the selected candidate pair; record a direct connection as inconclusive for relay verification.
@@ -66,7 +67,8 @@ Before inviting the initial beta cohort, verify and record:
 - [ ] `/healthz` and `/readyz` return healthy responses.
 - [ ] Production signup, email verification, login, logout and password reset work on the live domain.
 - [ ] A guest can join a table. If voice is included, both devices receive Metered `turnStatus: ready` with non-null `iceExpiresAt` before fresh connections, and relay, network recovery, and in-place credential-push ICE-restart checks pass. If voice is withheld, record the voice-disabled decision and keep voice unavailable to the beta cohort.
-- [ ] For voice-enabled beta, record a two-way relayed call using propagated Metered credentials. The owner-tested Wi-Fi ↔ mobile call confirms connectivity only; its relay candidate and credential source were not recorded.
+- [x] For voice-enabled beta, record a two-way relayed call. The owner-provided dump confirms a nominated, succeeded pair using a local UDP relay candidate.
+- [ ] Confirm that the relayed call used a propagated dynamic Metered credential (`turnStatus: ready` and non-null `iceExpiresAt`); the supplied dump does not establish credential source.
 - [ ] Cleanup remains disabled and the protected deletion environment remains in place.
 - [ ] One-instance operating model is retained; do not scale horizontally.
 - [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable.
@@ -76,6 +78,6 @@ Before inviting the initial beta cohort, verify and record:
 
 ## Release decision
 
-Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until the blocked-user seating gap is resolved, required live deployment and signup/email checks are recorded, the focused security review is complete with critical/high findings resolved, and privacy/support checks above are complete. If voice is included, its Metered credential, relay, recovery, and ICE-restart gates must also pass; a recorded voice-disabled state satisfies the voice portion of the gate. Cross-network voice connectivity is owner-tested; relay selection and Metered credential use are not yet proven. A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
+Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until the blocked-user seating gap is resolved, required live deployment and signup/email checks are recorded, the focused security review is complete with critical/high findings resolved, and privacy/support checks above are complete. If voice is included, its Metered credential, relay, recovery, and ICE-restart gates must also pass; a recorded voice-disabled state satisfies the voice portion of the gate. Cross-network voice connectivity and TURN relay selection are owner-tested and confirmed by the supplied WebRTC stats. Dynamic Metered credential use, network recovery, and in-place credential-rotation ICE restart are not yet proven. A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
 
 No production changes, credential deletion/rotation, cleanup execution, paid upgrades, or load tests are authorized by this document.
