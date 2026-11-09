@@ -96,6 +96,27 @@ const api = (role) => ({
     assert.match(b.startsAt, /Z$/); assert.match(b.endsAt, /Z$/); assert.ok(!('durationHours' in b));
     await s.close();
   });
+  await test('the date fields are selectable at once; picking one chooses custom dates and sends it as such', async () => {
+    const s = await open('admin'); await tab(s.page, 'announcements'); await s.page.waitForSelector('#aForm');
+    await s.page.fill('#aForm textarea', 'Picked a date');
+    assert.equal(await s.page.$eval('[name="startsAt"]', (el) => el.disabled), false, 'start is not disabled');
+    assert.equal(await s.page.$eval('[name="endsAt"]', (el) => el.disabled), false, 'end is not disabled');
+    await s.page.fill('[name="startsAt"]', '2030-01-02T10:00');
+    await s.page.dispatchEvent('[name="startsAt"]', 'change');
+    assert.equal(await s.page.$eval('[name="preset"]', (el) => el.value), 'custom', 'a picked date switches to custom');
+    await s.page.fill('[name="endsAt"]', '2030-01-03T10:00');
+    await s.page.dispatchEvent('[name="endsAt"]', 'change');
+    await s.page.click('#aGo');
+    const post = await until(() => s.calls.find((c) => c.method === 'POST' && c.path === '/api/admin/announcements'), 'POST');
+    const body = JSON.parse(post.body);
+    // the selected wall-clock times, converted to UTC by the browser itself (its own time zone), must be exactly what is sent
+    const expectStart = await s.page.evaluate(() => new Date('2030-01-02T10:00').toISOString());
+    const expectEnd = await s.page.evaluate(() => new Date('2030-01-03T10:00').toISOString());
+    assert.equal(body.startsAt, expectStart, 'start is the selected instant');
+    assert.equal(body.endsAt, expectEnd, 'end is the selected instant');
+    assert.ok(!('durationHours' in body), 'no preset duration is sent');
+    await s.close();
+  });
   await test('on a 360px phone no tab scrolls sideways and tap targets are at least 40px', async () => {
     const s = await open('owner', { width: 360, height: 740 });
     await s.page.waitForSelector('.ad-grid');
