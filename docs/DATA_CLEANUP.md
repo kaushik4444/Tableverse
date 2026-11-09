@@ -185,11 +185,16 @@ Check that the new role cannot delete (in a session as that role, `DELETE FROM p
 **2. Add the GitHub secret for the dry run.** Repository Settings, Secrets and variables, Actions, New repository secret:
 name `CLEANUP_DRYRUN_DATABASE_URL`, value the read-only connection string. Do not paste it anywhere else.
 
-**3. Move the deletion secret into the environment.** Settings, Environments, `production-cleanup`:
-- add the secret `CLEANUP_DATABASE_URL` there (it may stay as a repository secret, but the environment one is what the
-  deletion job uses, and the dry run never does);
-- Required reviewers: add yourself; tick "Prevent self-review" if another person should approve;
-- Deployment branches and tags: "Selected branches", only `main`.
+**3. Create and protect the deletion environment before any execute run.** Settings, Environments, create
+`production-cleanup` (do not rely on the workflow creating it automatically). GitHub creates a missing environment
+referenced by a workflow without protection rules, so the name alone is not an approval gate. Configure:
+- Required reviewers: add the person who must approve each deletion; tick "Prevent self-review" if another person should approve;
+- Deployment branches and tags: "Selected branches", only `main`;
+- add the secret `CLEANUP_DATABASE_URL` to this environment. After confirming it is present there, remove the
+  repository-level secret with the same name so the deletion credential is scoped to the protected job. The dry-run job
+  never reads either deletion-secret location.
+- Before any manual execute request, verify the environment page visibly lists the required reviewer and the branch rule.
+  A manual input cannot bypass a configured environment gate, but workflow YAML cannot create the reviewer rule itself.
 
 **4. Keep the kill switch.** Repository variable `CLEANUP_EXECUTE` stays `false` until you approve a deletion.
 
