@@ -58,9 +58,9 @@ Checked against Metered's public docs (`metered.ca/docs/turn-rest-api/post-creat
 3. **Credential count is not tracked** across restarts. Low risk at one instance; monitor `turnStatus` and Metered's dashboard.
 4. **Test dependency:** `tests/pool-config.test.js` (added on `main` in `e0b3f65`) requires `pg-connection-string`, which is not declared in `package.json`. It works in CI through npm hoisting. Recommend declaring it as a devDependency when a lockfile update is possible.
 
-## 4. Static TURN credential cutover plan (NOT executed)
+## 4. Optional static TURN credential cutover plan (NOT executed)
 
-Do not start until the owner approves after real-device tests (section 7).
+Static TURN cutover is optional for the limited beta. Retaining the approved static fallback does not block beta readiness. Do not start a cutover until the owner approves after real-device tests (section 7).
 
 Preconditions (all must hold):
 1. PR #76 is merged (done, `f7ba6fc`) and deployed (not verified); Render logs show no `[turn]` failure lines (`quota`, `HTTP 4xx`, `network error`, `timeout`, `bad answer`) for at least 48 hours. Healthy requests write no `[turn]` line, so the absence of failure lines is the signal, and precondition 2 confirms that logins are being issued.
@@ -116,11 +116,14 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 
 ## 7. Real-device tests required before the cutover
 
+Before creating fresh voice connections for these tests, confirm both devices receive `turnStatus: ready` and a non-null `iceExpiresAt`, so the test uses propagated Metered credentials rather than the static fallback.
+
 1. iPhone Safari on mobile data, relayed call with a second device on Wi-Fi.
 2. Android Chrome on mobile data, same.
 3. Desktop Chrome and Firefox on a restrictive network (a corporate or hotel Wi-Fi if available).
 4. A relayed call that stays open across a credential push (section 6 D), which runs an in-place ICE restart (same peer connection, changed `a=ice-ufrag`), with audio continuing. Waiting 24 hours is impractical, so use a non-production service with `TURN_TTL_SECONDS=900`, where a push happens about every 10 minutes. This needs owner approval.
 5. A call older than one rotation (24 h) is impractical to wait for: instead, confirm the scheduled push in staging or by setting `TURN_TTL_SECONDS` to 900 (the shortest allowed) in a non-production service, which is test-only and needs owner approval.
+6. On the relayed call, verify network recovery as described in section 6 C.
 
 ## 8. Neon load-test plan (NOT created, NOT run)
 
@@ -256,7 +259,7 @@ Notes:
 | 5 | Metered secret never logged or sent to clients | tests and review | log check not done | CODE PASS, PRODUCTION NOT VERIFIED |
 | 6 | Metered logins for session-authenticated players, including guests | implemented | owner policy approved; production issuance not yet observed | POLICY PASS, PRODUCTION NOT VERIFIED |
 | 7 | 10-credential limit handled across restarts | not tracked | n/a | PARTIAL |
-| 8 | Static TURN credentials removed | not done (by design) | n/a | NOT DONE (cutover unapproved) |
+| 8 | Optional static TURN cutover | not done (by design) | n/a | DEFERRED (not a limited-beta blocker) |
 | 9 | Cross-network voice connectivity | n/a | owner-tested Wi-Fi ↔ mobile; audio worked; relay candidate not recorded | CONNECTIVITY PASS, RELAY UNVERIFIED |
 | 10 | Cleanup dry run recorded; execute disabled | merged (#74, #75) | owner-reported dry run; `CLEANUP_EXECUTE=false` | PASS (owner-reported) |
 | 11 | SSL warning removed; secure TLS kept | merged (#75) | CI log confirmation pending | CODE PASS |
@@ -265,15 +268,15 @@ Notes:
 | 14 | Blocked-user privacy in seating and other surfaces | not implemented for seating | n/a | OPEN (owner approved all-surface scope) |
 | 15 | Windows and WSL2 PostgreSQL and migration runs | deferred | not run | DEFERRED (not a limited-beta blocker) |
 | 16 | Neon load-test plan | deferred for limited beta | not executed | DEFERRED |
-| 17 | Final security audit of main | in progress | n/a | NOT COMPLETE (section 13) |
+| 17 | Focused security review of main | in progress | n/a | NOT COMPLETE (section 13) |
 
-**Stage 20.3 overall: FAIL.** Mandatory items still open: relay verification / Metered observation before cutover, 8 (static TURN cutover remains optional and owner-approved only), 14 (blocked-user seating), 17 (focused security review), and required live production checks. Windows/WSL2 and Neon load testing are deferred.
+**Stage 20.3 overall: FAIL.** Mandatory items still open: 14 (blocked-user seating), 17 (focused security review), and required live production checks. Relay, Metered credential recovery, and in-place ICE-restart checks are required for a voice-enabled limited beta; if voice is withheld, record that state. Relay verification and Metered observation before cutover, as well as item 8 (static TURN cutover), are conditional on choosing the separately owner-approved cutover; retaining the fallback is not a blocker. Windows/WSL2 and Neon load testing are deferred.
 
-## 13. Security audit: status
+## 13. Focused security review: status
 
-Not complete. Findings to date, recorded in this document only:
+Not complete. Completion of this focused review and resolution of all critical/high-severity findings are required for limited-beta release. Record the review and finding dispositions here. Findings to date:
 - Guest players with a session receive Metered logins; owner approved this policy for the initial beta. Monitor bandwidth and credential count.
 - Blocked-user privacy: the public profile is hidden in both directions (#73), and chat/voice are filtered. Seating is not yet filtered; owner approved all-surface blocking, so this remains an implementation item.
 - Credential count across restarts is not tracked.
 
-The full audit of authentication, sessions, email verification, blocked-user privacy in all surfaces, admin and owner authorization, rate limiting, WebSocket reconnects, voice access and TURN credentials, database permissions and pooling, and the cleanup workflow is still to be done.
+The focused beta review must cover the authorization/privacy areas listed in Stage 20.6, including socket authorization, session revocation, TURN secret handling and cleanup permissions. The broader audit of authentication, email verification, rate limiting, WebSocket reconnects, database permissions and pooling is still to be done; it is not represented as complete by this focused review.

@@ -14,26 +14,28 @@ This checklist deliberately separates release-critical verification from optiona
 - Owner tested a two-person call across Wi-Fi and mobile data; two-way voice connectivity worked. The selected ICE candidate pair was not recorded, so Metered relay use is not yet proven.
 - No Neon load test has been performed; it is deferred for the initial friend/limited beta.
 
-## Minimum Stage 20.3 closure
+## Voice-enabled beta verification
 
-### Required before declaring voice verification complete
+Guest table access is required for the beta. Guest voice access is required only if voice is included; if voice is withheld, record that decision and keep voice unavailable to the beta cohort.
 
-1. Confirm the current Render deployment contains PRs #72 and #76.
-2. Confirm `METERED_APP_NAME`, `METERED_SECRET_KEY`, and `TURN_URL` are configured; confirm `ICE_SERVERS` is unset and `TURN_TTL_SECONDS` is unset (48-hour default).
-3. Owner has completed a two-person phone call across Wi-Fi and mobile data; two-way audio worked.
-4. If practical, inspect the selected WebRTC candidate pair to determine whether a `relay` candidate was used. The current connectivity pass does not by itself prove Metered relay usage.
-5. Keep static fallback configured. Do not repeat broad device/browser tests for this limited beta.
-6. Inspect Render logs for `[turn]` failures and Metered usage as part of the normal observation before any static cutover.
+Before creating fresh voice connections for the voice-enabled beta checks, confirm that both devices receive `turnStatus: ready` and a non-null `iceExpiresAt`. This verifies the propagated Metered login rather than the retained static fallback.
+
+- Verify a two-person call uses a selected `relay` candidate and has two-way audio.
+- Verify network recovery on the relayed call.
+- Verify a propagated Metered credential update triggers an in-place ICE restart: the same peer connection remains, its local `a=ice-ufrag` changes, and audio continues.
+- Keep static fallback configured for the beta unless the separate cutover gate below is completed. Do not repeat broad device/browser tests for this limited beta.
 
 Do not attempt to force relay by merely enabling a VPN. If the network does not force relay, use browser WebRTC diagnostics to verify the selected candidate pair; record a direct connection as inconclusive for relay verification.
 
-### Required before static TURN cutover
+### Optional: additional prerequisites for static TURN cutover
 
-- The real-device relay and reconnect test passes.
+- Confirm the current Render deployment contains PRs #72 and #76, and `METERED_APP_NAME`, `METERED_SECRET_KEY`, and `TURN_URL` are configured.
 - Render shows no Metered credential failures during at least 48 hours of observation.
-- `turnStatus: ready` is observed after credential propagation.
+- The voice-enabled verification above passes using propagated Metered credentials on both devices.
 - `ICE_SERVERS` is unset.
 - The owner chooses a low-traffic maintenance window and explicitly approves the cutover.
+
+Retaining the approved static fallback does not block a limited beta. These additional prerequisites apply only if static TURN cutover is chosen.
 
 The cutover is a separate owner-authorized production operation. Until then, retain the static fallback. Do not delete the old Metered static credential as part of this documentation or test work.
 
@@ -63,16 +65,17 @@ Before inviting the initial beta cohort, verify and record:
 - [ ] Latest `main` commit is deployed on Render and deployment is healthy.
 - [ ] `/healthz` and `/readyz` return healthy responses.
 - [ ] Production signup, email verification, login, logout and password reset work on the live domain.
-- [ ] A guest can join a table and use voice under the approved guest policy.
-- [x] Cross-network two-person voice connectivity works (owner-tested Wi-Fi ↔ mobile). Selected relay candidate remains unverified; static TURN fallback stays enabled.
+- [ ] A guest can join a table. If voice is included, both devices receive Metered `turnStatus: ready` with non-null `iceExpiresAt` before fresh connections, and relay, network recovery, and in-place credential-push ICE-restart checks pass. If voice is withheld, record the voice-disabled decision and keep voice unavailable to the beta cohort.
+- [ ] For voice-enabled beta, record a two-way relayed call using propagated Metered credentials. The owner-tested Wi-Fi ↔ mobile call confirms connectivity only; its relay candidate and credential source were not recorded.
 - [ ] Cleanup remains disabled and the protected deletion environment remains in place.
 - [ ] One-instance operating model is retained; do not scale horizontally.
 - [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable.
 - [ ] Privacy notice, terms/rules, support contact and account/data deletion explanation are available and reviewed.
+- [ ] The focused security review in Stage 20.3 section 13 is complete and recorded; all critical/high-severity findings are resolved.
 - [ ] A rollback path and person responsible for responding to beta reports are identified.
 
 ## Release decision
 
-Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until the blocked-user seating gap is resolved, required live deployment and signup/email checks are recorded, and privacy/support checks above are complete. Cross-network voice connectivity is owner-tested; relay selection is not yet proven. A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
+Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until the blocked-user seating gap is resolved, required live deployment and signup/email checks are recorded, the focused security review is complete with critical/high findings resolved, and privacy/support checks above are complete. If voice is included, its Metered credential, relay, recovery, and ICE-restart gates must also pass; a recorded voice-disabled state satisfies the voice portion of the gate. Cross-network voice connectivity is owner-tested; relay selection and Metered credential use are not yet proven. A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
 
 No production changes, credential deletion/rotation, cleanup execution, paid upgrades, or load tests are authorized by this document.
