@@ -85,7 +85,14 @@ function start(opts = {}) {
   const env = opts.env || process.env;
   // ICE servers for table voice, sent in each welcome. TURN may get a login made for that player (see lib/voiceRelay.js).
   // Metered REST credentials are created ahead of use (lib/meteredTurn.js); null unless METERED_APP_NAME, METERED_SECRET_KEY and TURN_URL are set
-  const metered = opts.metered !== undefined ? opts.metered : meteredTurn.fromEnv(env, { log: opts.log || console });
+  // a new Metered credential is pushed to every connected signed-in player the moment it becomes usable (no reconnect needed)
+  const pushIceToAll = () => {
+    for (const ws of wss.clients) {
+      const p = ws.player;
+      if (p && ws.authToken && !ws.revoked && ws.readyState === 1) send(ws, { t: 'ice', ...iceMsg(p.id) });
+    }
+  };
+  const metered = opts.metered !== undefined ? opts.metered : meteredTurn.fromEnv(env, { log: opts.log || console, onReady: pushIceToAll });
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId, metered });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
@@ -1919,12 +1926,12 @@ function start(opts = {}) {
       const purgeAdmin = () => dbAdmin.purge().catch((e) => (opts.log || console).error('[admin] retention housekeeping failed: ' + e.message));
       dbAdmin.bootstrapOwner(env).then((r) => { if (r.claimed) (opts.log || console).log('[admin] owner account set from server configuration'); }, (e) => (opts.log || console).error('[admin] owner bootstrap failed: ' + e.message));
       analytics.start();
-      if (metered) metered.start();
       purge();
       purgeAdmin();
       purgeTimer = setInterval(() => { purge(); purgeAdmin(); }, 6 * 60 * 60 * 1000);
       purgeTimer.unref();
     }
+    if (metered) metered.start(); // both modes: the credential is fetched ahead of the first welcome, and refreshed in the background
     return new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine })));
   });
 }

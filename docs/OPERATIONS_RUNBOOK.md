@@ -172,7 +172,7 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 - Switch-over (needs your approval; do these in one redeploy, never a half-switched state):
   1. Set on Render (secret values only in Render's secret environment, never in the repository or logs): `METERED_APP_NAME` (the app name, not a URL), `METERED_SECRET_KEY`, keep `TURN_URL`.
   2. Remove `ICE_SERVERS` if it is set; it overrides every other TURN setting.
-  3. After one successful, approved test (below), remove `TURN_USERNAME` and `TURN_CREDENTIAL` and rotate the static credential at Metered so the old pair stops working. Until then the static pair still reaches visitors.
+  3. Keep `TURN_USERNAME` and `TURN_CREDENTIAL` set during validation. While no Metered login is ready (startup, or after failures) the server offers the static pair as a fallback, so voice keeps working; once a Metered login is ready the static pair is no longer sent. After one successful, approved test (below), remove both variables and rotate the static credential at Metered so the old pair stops working. Do not remove them before that approval: without them, voice falls back to STUN only whenever Metered is not ready.
   4. Check the welcome message of a test connection: the TURN entry must carry a fresh Metered `username` and no static login. Logs show only the kind of failure (`HTTP 401`, `timeout`, `network error`), never the key.
   5. Run the two-phone test below, and a table open for over an hour, before calling it done.
 - Fallback: `TURN_SHARED_SECRET` (HMAC `<expiry>:<player id>` logins) remains for a provider that documents the coturn `use-auth-secret` scheme. Metered does not use that scheme.

@@ -125,19 +125,47 @@ const flush = () => new Promise((r) => setImmediate(r));
     assert.ok(fromEnv({ METERED_APP_NAME: 'a', METERED_SECRET_KEY: 'b', TURN_URL: 'turn:x:3478' }));
   });
 
-  await test('a player is offered the Metered login only once it is ready; the static pair is not sent alongside it', async () => {
+  await test('the static pair is the fallback until a Metered login is ready, and is not sent once it is', async () => {
     const h = harness();
     const env = { TURN_URL: 'turn:global.relay.metered.ca:80', TURN_USERNAME: 'static', TURN_CREDENTIAL: 'static-pass' };
     h.m.start(); await flush();
     const early = voiceRelay.iceServers(env, { playerId: 'p1', metered: h.m });
-    assert.ok(!early.some((s) => s.username === 'static'), 'static pair not used when Metered is configured');
-    assert.ok(!early.some((s) => s.urls === env.TURN_URL), 'no TURN entry before the credential is ready');
+    assert.ok(early.some((s) => s.username === 'static'), 'fallback while propagating: voice keeps working');
+    assert.ok(!early.some((s) => s.username === 'u1'), 'no Metered login before it is ready');
     h.advance(PROPAGATION_MS);
     const ready = voiceRelay.iceServers(env, { playerId: 'p1', metered: h.m });
-    const turn = ready.find((s) => s.urls === env.TURN_URL);
-    assert.deepEqual([turn.username, turn.credential], ['u1', 'p1']);
-    assert.equal(voiceRelay.iceServers(env, { metered: h.m }).some((s) => s.urls === env.TURN_URL), false, 'not without a named player');
+    const turn = ready.filter((s) => s.urls === env.TURN_URL);
+    assert.equal(turn.length, 1);
+    assert.deepEqual([turn[0].username, turn[0].credential], ['u1', 'p1']);
+    assert.ok(!JSON.stringify(ready).includes('static'), 'the static pair is not sent once Metered is ready');
+    assert.equal(voiceRelay.iceServers(env, { metered: h.m }).some((s) => s.urls === env.TURN_URL && s.username === 'u1'), false, 'not without a named player');
     assert.equal(voiceRelay.iceExpiresAt(ready, env, h.m), h.m.snapshot().expiresAt);
+    h.m.stop();
+  });
+
+  await test('a waiting player is told the moment a Metered login becomes usable (no poll needed)', async () => {
+    const timers = [];
+    let ready = 0;
+    const h = harness();
+    const m = createMeteredTurn({ appName: 'tableverse', secretKey: SECRET, fetchImpl: h.m && (async () => ({ ok: true, status: 200, json: async () => ({ username: 'r', password: 'q', expiryInSeconds: 3600 }) })), now: () => h.now(), log: null, onReady: () => { ready++; }, setTimer: (fn, ms) => { timers.push({ fn, ms }); return { unref() {} }; } });
+    void m.refresh(); await flush();
+    assert.equal(timers.length, 1);
+    assert.ok(timers[0].ms >= PROPAGATION_MS, 'the timer waits out the propagation time');
+    h.advance(PROPAGATION_MS + 100);
+    timers[0].fn();
+    assert.equal(ready, 1, 'onReady fired once the credential is usable');
+    assert.equal(m.snapshot().username, 'r');
+    m.stop();
+  });
+
+  await test('a failed refresh does not stop voice: the fallback keeps being offered and a later success is still pushed', async () => {
+    const env = { TURN_URL: 'turn:x:3478', TURN_USERNAME: 'static', TURN_CREDENTIAL: 'static-pass' };
+    const h = harness({ answers: [new Error('down'), { status: 200, body: { username: 'later', password: 'l', expiryInSeconds: 3600 } }] });
+    h.m.start(); await flush();
+    assert.ok(voiceRelay.iceServers(env, { playerId: 'p', metered: h.m }).some((s) => s.username === 'static'));
+    h.advance(31_000); h.m.refresh(); await flush();
+    h.advance(PROPAGATION_MS);
+    assert.equal(h.m.snapshot().username, 'later');
     h.m.stop();
   });
 
