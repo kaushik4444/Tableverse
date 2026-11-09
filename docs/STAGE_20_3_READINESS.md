@@ -88,7 +88,7 @@ Explicitly not part of the cutover: rotating `METERED_SECRET_KEY`, changing `TUR
 Use two browsers or devices, both signed in, both at the same table with voice on. Do not paste credentials anywhere; redact them in any screenshot.
 
 **A. Confirm the relay is offered**
-1. Open the page's DevTools → Network → WS. Read the initial ICE settings from the `welcome` message (a healthy connection does not get an `ice` message right after it; later `ice` messages come only on a credential or status change). Check: `turnStatus` is `ready` (or `pending` in the first 2 minutes); the list has a TURN entry whose `urls` starts with `turn:` or `turns:`; `iceExpiresAt` is a time, not null (null means a static list). After the cutover the list has no second TURN entry with a static username.
+1. Open the page's DevTools → Network → WS. Read the initial ICE settings from the `welcome` message (a healthy connection does not get an `ice` message right after it; later `ice` messages come only on a credential or status change). Expected during the first two minutes after a start: `turnStatus` is `pending`, the list has the static fallback, and `iceExpiresAt` is null. That is not a failure. Wait for the next `ice` message (sent when the new login becomes usable) or reconnect after two minutes. Then check: `turnStatus` is `ready`; the list has a TURN entry whose `urls` starts with `turn:` or `turns:`; `iceExpiresAt` is a time, not null (null means a static list). After the cutover the list has no second TURN entry with a static username.
 2. Chrome: open `chrome://webrtc-internals` before joining voice. After the call connects, expand the peer connection and find **Candidate pairs** with state `succeeded`/`selected`. For the forced-relay test below, at least one of the **local** and **remote** candidates of the selected pair must be `relay`. The other side may be `host` or `srflx`, and that is still a relayed call.
 
 **B. Force a relayed call (test only)**
@@ -175,8 +175,8 @@ Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
 # 4. The PostgreSQL-free tests (no database needed). On native Windows this stops at tests/db-backup.test.js:
 #    run the individual files listed in package.json, skipping db-backup.test.js, or use WSL2 (section 9b).
 
-# 5. The PostgreSQL suites, same caveat about db-backup.test.js, which is part of test:pg.
-npm run test:pg
+# 5. Do not run `npm run test:pg` on native Windows. It chains every suite with &&, so it stops at the
+#    db-backup fixtures and nothing after them runs. Use WSL2 (section 9b) for the PostgreSQL suites.
 
 # 6. Migration check against a throw-away local database only.
 #    The migration does not create the database, so create it first.
