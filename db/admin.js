@@ -149,11 +149,13 @@ async function isOwner(playerId) { return (await getRole(playerId)) === 'owner';
  * (after a timeout or an error whose outcome is unknown) that already landed is ignored. Without a key, it just writes.
  */
 async function applyOnce(key, write) {
-  if (!key) return write(db);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[ca]$/i.test(key)) throw new Error('analytics write key is not valid');
+  if (key && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[ca]$/i.test(key)) throw new Error('analytics write key is not valid');
+  // Always a transaction: the share locks taken by a write must be held until its rows commit (see addActive).
   return db.withTransaction(async (c) => {
-    const fresh = await c.query('INSERT INTO analytics_batches (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id', [key]);
-    if (!fresh.rows.length) return false;
+    if (key) {
+      const fresh = await c.query('INSERT INTO analytics_batches (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id', [key]);
+      if (!fresh.rows.length) return false;
+    }
     await write(c);
     return true;
   });
@@ -178,13 +180,26 @@ async function analyticsSalt() {
 }
 const actorHash = (s, playerId) => crypto.createHmac('sha256', s).update(String(playerId)).digest('hex').slice(0, 32);
 
+/**
+ * Stores hashed activity for accounts that still exist. The account rows are share-locked (FOR SHARE) in the same transaction
+ * as the insert. Account deletion takes a row lock on the same row (FOR UPDATE, then DELETE) and commits before
+ * forgetActor runs, so either this write sees the account gone and stores nothing, or it commits first and forgetActor
+ * removes what it stored. A timed-out write whose transaction is still open cannot land after the purge.
+ */
 async function addActive(rows, batchId = null) {
   if (!rows.length) return;
   const s = await analyticsSalt();
-  await applyOnce(batchId && `${batchId}:a`, (q) => q.query(
-    'INSERT INTO analytics_active (day, actor) SELECT * FROM unnest($1::date[], $2::text[]) ON CONFLICT DO NOTHING',
-    [rows.map((r) => r.day), rows.map((r) => actorHash(s, r.playerId))]
-  ));
+  await applyOnce(batchId && `${batchId}:a`, async (q) => {
+    const ids = [...new Set(rows.map((r) => String(r.playerId).toLowerCase()))];
+    const live = await q.query('SELECT id FROM players WHERE id = ANY($1::uuid[]) FOR SHARE', [ids]);
+    const alive = new Set(live.rows.map((r) => r.id));
+    const keep = rows.filter((r) => alive.has(String(r.playerId).toLowerCase()));
+    if (!keep.length) return;
+    await q.query(
+      'INSERT INTO analytics_active (day, actor) SELECT * FROM unnest($1::date[], $2::text[]) ON CONFLICT DO NOTHING',
+      [keep.map((r) => r.day), keep.map((r) => actorHash(s, r.playerId))]
+    );
+  });
 }
 
 /** Removes an account's pseudonymous activity rows (called when the account is deleted). */
