@@ -3,7 +3,7 @@
 /**
  * Remove accounts that were never verified, after 30 days (db/unverifiedCleanup.js).
  *
- *   DATABASE_URL='postgres://…' node scripts/cleanup-unverified.js            # dry run: counts only, deletes nothing
+ *   DATABASE_URL='postgres://…' node scripts/cleanup-unverified.js            # dry run: counts only; the role must be SELECT-only
  *   DATABASE_URL='postgres://…' node scripts/cleanup-unverified.js --execute  # deletes, in batches
  *   node scripts/cleanup-unverified.js --days 45                              # a different retention period (1–365)
  *   node scripts/cleanup-unverified.js --execute --max 250                    # refuses to delete more than 250 accounts
@@ -61,6 +61,7 @@ async function main(argv = process.argv.slice(2)) {
     const r = await cleanUnverified({ days: args.days, execute: args.execute, log });
     if (r.dryRun) {
       console.log(`Dry run. ${r.candidates} unverified account(s) older than ${args.days} days would be removed. Nothing was deleted.`);
+      console.log('Read-only: the count ran in a READ ONLY transaction, and the role was checked to have no write privilege.');
       console.log('Run again with --execute to delete them.');
     } else {
       console.log(`Removed ${r.deleted} unverified account(s) older than ${args.days} days, in ${r.batches} batch(es).`);
@@ -74,6 +75,7 @@ async function main(argv = process.argv.slice(2)) {
 if (require.main === module) {
   main().then((code) => { process.exitCode = code; }, (e) => {
     if (e && e.usage) { console.error(e.message); process.exitCode = 2; return; }
+    if (e && e.code === 'READONLY_ROLE_REQUIRED') { console.error(e.message); process.exitCode = 2; return; } // written by us: no connection details
     console.error(`cleanup failed: ${e && e.code ? e.code : 'error'}`); // driver text can carry the database URL; only the code is printed
     process.exitCode = 1;
   });
