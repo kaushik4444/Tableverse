@@ -349,6 +349,20 @@ async function run() {
       assert.ok(seated(g2.client, g2.id), 'the other guest plays on');
     });
 
+    await test('a blocked player may leave a running game, but their bot seat is removed when the game finishes', async () => {
+      const { host, guests: [g1, g2] } = await lobby(2);
+      await startGame(host);
+      host.client.send({ t: 'block', id: g1.id });
+      await until(() => g1.client.notices.some((x) => /finish this game/.test(x)), 'blocked player told they can finish');
+      assert.ok(seated(host.client, g1.id), 'the running game is not interrupted');
+      g1.client.send({ t: 'leave' });
+      await until(() => g1.client.room === null, 'blocked player leaves');
+      await until(() => host.client.room.members.some((m) => m.id === g1.id && m.bot), 'bot takes over the seat');
+      await playToEnd([host, g2], host);
+      await until(() => !host.client.room.members.some((m) => m.id === g1.id), 'blocked bot seat removed after game result');
+      assert.ok(seated(host.client, g2.id), 'the unrelated player remains at the table');
+    });
+
     await test('SPECTATING a running game: removing the friendship takes the spectator out immediately', async () => {
       const { host, guests: [g1], code } = await lobby(1);
       const fan = await account('Fan'); await befriend(host, fan);
