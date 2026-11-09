@@ -246,9 +246,10 @@ function socket(port, cookie) {
       assert.ok(message, 'the message is in memory');
       sc.send({ t: 'report', messageId: message.mid, reason: 'spam', details: 'keeps\u0000 repeating ads', text: 'forged text', id: B.id });
       await until(() => sc.notices().some((n) => /Thanks/.test(n)), 'report confirmation');
-      const rows = await q('SELECT reporter_id, reported_id, room_code, message_id::text AS mid, message_text, reason, details FROM chat_reports WHERE reporter_id = $1', [C.id]);
+      const rows = await q('SELECT reporter_id, reported_id, reported_display_name, room_code, message_id::text AS mid, message_text, reason, details FROM chat_reports WHERE reporter_id = $1', [C.id]);
       assert.equal(rows.length, 1);
       assert.equal(rows[0].reported_id, A.id, 'the author comes from the server, not from the client');
+      assert.equal(rows[0].reported_display_name, 'Alpha', 'the reported-name snapshot comes from the database, not the client');
       assert.equal(rows[0].message_text, 'hello from alpha', 'the text comes from the server copy');
       assert.equal(rows[0].room_code, code);
       assert.equal(rows[0].mid, message.mid);
