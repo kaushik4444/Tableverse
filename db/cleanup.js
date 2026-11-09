@@ -35,7 +35,7 @@ const PLAN = [
   { table: 'analytics_daily', stores: 'Aggregate daily counters per metric and dimension (no personal data)', references: [] },
   { table: 'match_participants', stores: 'Per-player result rows of finished games (name, seat, score, winner/bot/left-early flags, optional account id)', references: ['matches', 'players'] },
   { table: 'private_table_invitations', stores: 'Private-table invitations and their lifecycle metadata', references: ['players'] },
-  { table: 'chat_reports', stores: 'Chat reports: reporter, reported account, table code, message id, a copy of the reported text, reason and details', references: ['players'] },
+  { table: 'chat_reports', stores: 'Chat reports: reporter, optional reported account, reported-name snapshot, table code, message id, a copy of the reported text, reason and details', references: ['players'] },
   { table: 'player_blocks', stores: 'Chat blocks: which account hid which other account\'s table chat', references: ['players'] },
   { table: 'friend_requests', stores: 'Friend request participants and lifecycle status', references: ['players'] },
   { table: 'friendships', stores: 'Accepted player relationships', references: ['players'] },
