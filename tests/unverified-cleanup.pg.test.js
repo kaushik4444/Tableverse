@@ -38,9 +38,15 @@ const DAY = 24 * 60 * 60 * 1000;
     suiteUrl.username = suiteRole;
     suiteUrl.password = suitePassword;
     suitePool = new Pool({ connectionString: suiteUrl.toString() });
+    const dryRunStatements = [];
     const readOnlyDb = {
       async withTransaction(fn) {
         const client = await suitePool.connect();
+        const originalQuery = client.query.bind(client);
+        client.query = (sql, ...args) => {
+          dryRunStatements.push(String(sql));
+          return originalQuery(sql, ...args);
+        };
         try {
           await client.query('BEGIN');
           const result = await fn(client);
@@ -82,6 +88,10 @@ const DAY = 24 * 60 * 60 * 1000;
     await test('a dry run counts the unverified accounts older than 30 days and deletes nothing', async () => {
       const r = await cleanup.cleanUnverified({ days: 30, execute: false, database: readOnlyDb });
       assert.deepEqual(r, { dryRun: true, candidates: 1, deleted: 0, batches: 0 });
+      assert.ok(dryRunStatements.length > 0, 'the read-only database connection was used');
+      for (const sql of dryRunStatements) {
+        assert.doesNotMatch(sql, /^\\s*(UPDATE|DELETE|INSERT|TRUNCATE|ALTER|DROP|CREATE)\\b/i, sql);
+      }
       assert.equal(await count(), before);
     });
 
