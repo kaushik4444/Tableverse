@@ -96,6 +96,21 @@ const api = (role) => ({
     assert.match(b.startsAt, /Z$/); assert.match(b.endsAt, /Z$/); assert.ok(!('durationHours' in b));
     await s.close();
   });
+  await test('the date fields are selectable at once; picking one chooses custom dates and sends it as such', async () => {
+    const s = await open('admin'); await tab(s.page, 'announcements'); await s.page.waitForSelector('#aForm');
+    await s.page.fill('#aForm textarea', 'Picked a date');
+    assert.equal(await s.page.$eval('[name="startsAt"]', (el) => el.disabled), false, 'start is not disabled');
+    assert.equal(await s.page.$eval('[name="endsAt"]', (el) => el.disabled), false, 'end is not disabled');
+    await s.page.fill('[name="startsAt"]', '2030-01-02T10:00');
+    await s.page.dispatchEvent('[name="startsAt"]', 'change');
+    assert.equal(await s.page.$eval('[name="preset"]', (el) => el.value), 'custom', 'a picked date switches to custom');
+    await s.page.fill('[name="endsAt"]', '2030-01-03T10:00');
+    await s.page.dispatchEvent('[name="endsAt"]', 'change');
+    await s.page.click('#aGo');
+    const post = await until(() => s.calls.find((c) => c.method === 'POST' && c.path === '/api/admin/announcements'), 'POST');
+    assert.ok(!('durationHours' in JSON.parse(post.body)));
+    await s.close();
+  });
   await test('on a 360px phone no tab scrolls sideways and tap targets are at least 40px', async () => {
     const s = await open('owner', { width: 360, height: 740 });
     await s.page.waitForSelector('.ad-grid');

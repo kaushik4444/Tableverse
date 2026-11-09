@@ -5,7 +5,7 @@
   const main = document.getElementById('adMain');
   const tabs = document.getElementById('adTabs');
   const who = document.getElementById('adWho');
-  const state = { me: null, tab: 'overview', csrf: '' };
+  const state = { me: null, tab: 'overview', csrf: '', gen: 0 }; // gen: which view is current; answers for an older view are dropped
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const when = (v) => (v ? new Date(v).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
@@ -43,7 +43,9 @@
     : `<p class="ad-muted">${esc(empty)}</p>`;
   const spark = (values, label) => { const max = Math.max(...values, 1); return `<div class="ad-spark" role="img" aria-label="${esc(label)}">${values.map((v) => `<i style="height:${Math.round((v / max) * 100)}%" title="${v}"></i>`).join('')}</div>`; };
   async function overview() {
+    const gen = state.gen;
     const o = await api('/api/admin/overview?days=30');
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const t = (m) => o.totals[m] || 0;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
     main.innerHTML = `<h2>Overview <small class="ad-muted">last ${o.days} days</small></h2>
@@ -57,7 +59,9 @@
 
   // ---------------------------------------------------------------- users
   async function users(q = '', page = 1) {
+    const gen = state.gen;
     const o = await api(`/api/admin/users?q=${encodeURIComponent(q)}&page=${page}`);
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const owner = state.me.isOwner;
     const rows = o.users.map((u) => {
       const staff = u.role !== 'user';
@@ -83,7 +87,9 @@
 
   // ---------------------------------------------------------------- feedback
   async function feedback(status = '', page = 1) {
+    const gen = state.gen;
     const o = await api(`/api/admin/feedback?status=${encodeURIComponent(status)}&page=${page}`);
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const items = o.items.map((f) => `<div class="ad-card"><div class="ad-row"><span class="ad-pill">${esc(f.category)}</span><span class="ad-pill ${f.status === 'new' ? 'warn' : ''}">${esc(f.status)}</span><small class="ad-muted">${esc(when(f.created_at))} · ${f.username ? '@' + esc(f.username) : 'guest'}</small></div><p style="white-space:pre-wrap;margin:8px 0">${esc(f.message)}</p><div class="ad-row">${['new', 'read', 'resolved'].filter((s) => s !== f.status).map((s) => `<button class="ad-btn" data-fid="${esc(f.id)}" data-st="${s}">Mark ${s}</button>`).join('')}</div></div>`).join('');
     main.innerHTML = `<h2>Feedback <small class="ad-muted">${o.total}</small></h2>
       <div class="ad-row" style="margin-bottom:12px">${['', 'new', 'read', 'resolved'].map((s) => `<button class="ad-btn ${s === status ? 'primary' : ''}" data-f="${s}">${s || 'All'}</button>`).join('')}</div>
@@ -98,7 +104,9 @@
   // ---------------------------------------------------------------- announcements
   const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
   async function announcements() {
+    const gen = state.gen;
     const o = await api('/api/admin/announcements');
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const rows = o.items.map((a) => `<tr><td data-l="Message">${esc(a.message)}</td><td data-l="Status"><span class="ad-pill ${esc(a.status)}">${esc(a.status)}</span></td><td data-l="Who">${esc(a.audience.replace('_', ' '))}</td><td data-l="Starts">${esc(when(a.starts_at))}</td><td data-l="Ends">${esc(when(a.ended_at && new Date(a.ended_at) < new Date(a.ends_at) ? a.ended_at : a.ends_at))}</td><td data-l="">${a.status === 'live' || a.status === 'scheduled' ? `<button class="ad-btn danger" data-end="${esc(a.id)}">End now</button>` : ''}</td></tr>`).join('');
     main.innerHTML = `<h2>Announcements</h2>
       <form class="ad-form two" id="aForm">
@@ -106,8 +114,8 @@
         <label>Style <select name="level"><option value="info">Info</option><option value="warning">Warning</option><option value="success">Good news</option></select></label>
         <label>Who sees it <select name="audience"><option value="all">Everyone</option><option value="signed_in">Signed-in players</option><option value="guests">Guests (not signed in)</option><option value="admins">Admins only</option></select></label>
         <label>Runs for <select name="preset"><option value="24">1 day</option><option value="1">1 hour</option><option value="168">1 week</option><option value="custom">Custom dates…</option></select></label>
-        <label>Starts <input type="datetime-local" name="startsAt" disabled></label>
-        <label>Ends <input type="datetime-local" name="endsAt" disabled></label>
+        <label>Starts <input type="datetime-local" name="startsAt"></label>
+        <label>Ends <input type="datetime-local" name="endsAt"></label>
         <div class="span2"><small class="ad-muted">Preview</small><div class="ad-preview" id="aPrev"></div></div>
         <div class="span2 ad-row"><button class="ad-btn primary" id="aGo">Publish</button><small class="ad-muted">The start is now unless you choose custom dates. Times are in your time zone. Every banner expires (at most ${o.limits.maxDays} days).</small></div>
       </form>
@@ -117,8 +125,19 @@
       <p class="ad-muted">Signed-in players dismiss a banner once for all their devices; guests dismiss it in their own browser. Changing the text shows it again to everyone.</p>`;
     const f = document.getElementById('aForm');
     const prev = () => { const d = new FormData(f); document.getElementById('aPrev').textContent = (d.get('message') || 'Your message appears here.'); };
-    const custom = () => { const c = f.preset.value === 'custom'; f.startsAt.disabled = f.endsAt.disabled = !c; f.startsAt.required = f.endsAt.required = c; /* required only when enabled */ if (c && !f.startsAt.value) { const n = new Date(); f.startsAt.value = localInput(n); f.endsAt.value = localInput(new Date(n.getTime() + 86400000)); } };
-    f.preset.onchange = custom; f.message.oninput = prev; prev();
+    // The date fields are always selectable. Choosing a date picks "Custom dates" for the admin; the fields are required only then.
+    const isCustom = () => f.preset.value === 'custom';
+    const custom = () => {
+      if (isCustom()) {
+        if (!f.startsAt.value) f.startsAt.value = localInput(new Date());
+        if (!f.endsAt.value) f.endsAt.value = localInput(new Date(new Date(f.startsAt.value).getTime() + 86400000));
+      }
+      f.startsAt.required = f.endsAt.required = isCustom();
+    };
+    const pickedDate = () => { f.preset.value = 'custom'; custom(); };
+    f.preset.onchange = custom;
+    f.startsAt.onchange = f.endsAt.onchange = pickedDate;
+    f.message.oninput = prev; prev(); custom();
     f.onsubmit = async (e) => {
       e.preventDefault();
       const go = document.getElementById('aGo'); go.disabled = true;
@@ -142,7 +161,9 @@
 
   // ---------------------------------------------------------------- health and audit
   async function health() {
+    const gen = state.gen;
     const h = await api('/api/admin/health');
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const p = h.platform || {};
     const tile = (n, l, cls) => `<div class="ad-card"><b class="${cls || ''}">${esc(n)}</b><small>${esc(l)}</small></div>`;
     const up = p.uptimeSec != null ? `${Math.floor(p.uptimeSec / 3600)}h ${Math.floor((p.uptimeSec % 3600) / 60)}m` : '—';
@@ -152,7 +173,9 @@
       <p class="ad-muted">${esc(p.mode === 'postgres' ? 'Running on PostgreSQL.' : 'Running in memory mode.')} Node ${esc(p.node || '')}. ${p.shuttingDown ? 'The server is shutting down.' : ''} ${h.analytics.lastErrorCode ? 'Last analytics error code: ' + esc(h.analytics.lastErrorCode) : ''}</p>`;
   }
   async function audit(page = 1) {
+    const gen = state.gen;
     const o = await api(`/api/admin/audit?page=${page}`);
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const rows = o.items.map((a) => `<tr><td data-l="When">${esc(when(a.at))}</td><td data-l="Who">${a.actor ? '@' + esc(a.actor) : '<span class="ad-muted">(removed account)</span>'}</td><td data-l="Action"><code>${esc(a.action)}</code></td><td data-l="Target">${esc(a.target_type || '')} <small class="ad-muted">${esc((a.target_id || '').slice(0, 8))}</small></td><td data-l="Detail"><small class="ad-muted">${esc(a.detail && Object.keys(a.detail).length ? JSON.stringify(a.detail) : '')}</small></td></tr>`).join('');
     main.innerHTML = `<h2>Audit log <small class="ad-muted">${o.total}</small></h2>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="ad-muted">Nothing recorded yet.</td></tr>'}</tbody></table></div>
@@ -169,8 +192,10 @@
     if (view) view.abort(); // and their requests are cancelled, where the browser supports it
     view = typeof AbortController === 'function' ? new AbortController() : null;
     tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+    state.gen++;
+    const gen = state.gen;
     main.innerHTML = '<p class="ad-muted">Loading…</p>';
-    views[tab]().catch(fail);
+    views[tab]().catch((e) => { if (gen === state.gen) fail(e); });
   }
   tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) show(b.dataset.tab); });
 
