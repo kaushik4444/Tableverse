@@ -1116,6 +1116,7 @@
     if (a.dataset.act === 'showAuth') return openAuthSheet(S.auth || 'login');
     if (a.dataset.act === 'forgotPassword') return doForgotPassword();
     if (a.dataset.act === 'resendVerification') return doResendVerification();
+    if (a.dataset.act === 'gameSettings') return openGameSettings();
   });
 
   window.addEventListener('popstate', () => { if (!S.room) applyRoute(); });
@@ -1994,6 +1995,34 @@
     }).filter(Boolean).join(' · ') || 'Standard rules';
   }
 
+  /** The game's settings, as the host set them in the lobby, with each choice's explanation. Read only during a game. */
+  function openGameSettings() {
+    const r = S.room; const g = r && gameMeta(r.gameId);
+    if (!g) return;
+    const rows = (g.options || []).map((o) => {
+      if (o.type === 'boolean') return `<li><b>${esc(o.label)}</b>: ${r.options[o.key] ? 'on' : 'off'}${o.desc ? `<br><small class="hint">${esc(o.desc)}</small>` : ''}</li>`;
+      const cur = o.choices.find((c) => c.value === r.options[o.key]) || o.choices[0];
+      return cur ? `<li><b>${esc(o.label)}</b>: ${esc(cur.label)}${cur.desc ? `<br><small class="hint">${esc(cur.desc)}</small>` : ''}</li>` : '';
+    }).join('');
+    openModal('Game settings', `<p class="hint">Set by the host in the lobby. They cannot be changed during a game.</p><ul class="gs-list">${rows || '<li>Standard rules</li>'}</ul>`);
+  }
+
+  /** A chip in the top-right of every game showing the current settings in one line; tapping it opens the full list. */
+  function addSettingsChip() {
+    const r = S.room; const g = r && gameMeta(r.gameId);
+    if (!g || !r.options) return;
+    const summary = optionsSummary(g, r);
+    const chip = document.createElement('button');
+    chip.type = 'button'; chip.className = 'btn ghost small gs-chip'; chip.dataset.act = 'gameSettings';
+    chip.title = `Game settings: ${summary}`;
+    chip.setAttribute('aria-label', `Game settings: ${summary}. Open for details.`);
+    chip.innerHTML = `<span aria-hidden="true">⚙</span> <span class="gs-sum">${esc(summary)}</span>`;
+    // In the title row, at its right end: the shared toolbar keeps exactly its own buttons, and no extra row is added.
+    const title = $app.querySelector('.wz-top > .wz-round');
+    if (title) { title.classList.add('gs-host'); title.appendChild(chip); }
+    else { chip.classList.add('gs-float'); $app.prepend(chip); }
+  }
+
   function renderLobby() {
     const r = S.room;
     const g = gameMeta(r.gameId) || { name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
@@ -2176,6 +2205,7 @@
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();
+    addSettingsChip();
     refreshVoiceUI();
     endFlow();
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);

@@ -20,6 +20,24 @@ function dice(g, ...pairs) { const q = pairs.flat().map((d) => (d - 0.5) / 6); g
 const own = (g, who, ...ks) => ks.forEach((k) => { g.land[k].owner = who; });
 const idx = (name) => B.SQUARES.findIndex((s) => s.name === name);
 
+test('the card figures: mortgage value, unmortgage cost, house cost and the rent right now come from the rules', () => {
+  const g = game(3);
+  const k = idx('Lagos'); // brown, price 60, rents [2, 10, 30, 90, 160, 250]
+  const c = A.viewFor(g, 'p0').info[k];
+  assert.equal(c.mortgage, 30);
+  assert.equal(c.unmortgage, 33); // mortgage plus 10%, rounded up
+  assert.equal(c.house, B.GROUPS.brown.house);
+  assert.equal(c.rentNow, 0, 'unowned: nothing to collect');
+  own(g, 1, k);
+  assert.equal(A.viewFor(g, 'p0').info[k].rentNow, 2, 'bare rent for one city');
+  own(g, 1, idx('Nairobi'));
+  assert.equal(A.viewFor(g, 'p0').info[k].rentNow, 4, 'bare rent doubles with the whole colour group');
+  g.land[k].houses = 3;
+  assert.equal(A.viewFor(g, 'p0').info[k].rentNow, 90, 'rent with three houses');
+  g.land[k].mortgaged = true;
+  assert.equal(A.viewFor(g, 'p0').info[k].rentNow, 0, 'no rent while mortgaged');
+});
+
 test('the board: 40 squares, 22 cities in 8 colour groups, 4 ports, 2 utilities, original names', () => {
   assert.equal(B.SQUARES.length, 40);
   assert.equal(B.SQUARES.filter((s) => s.type === 'city').length, 22);

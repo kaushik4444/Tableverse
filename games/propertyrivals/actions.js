@@ -294,6 +294,13 @@ function viewFor(g, playerId) {
   return {
     game: 'propertyrivals',
     squares: B.SQUARES, groups: B.GROUPS, // static board data, so the client needs no copy of it
+    // Figures the client shows on a card, computed here so the rules live in one place: mortgage value, unmortgage cost,
+    // the cost of each house or hotel, and the rent a city charges right now (0 while mortgaged).
+    info: B.SQUARES.map((s, k) => ({
+      mortgage: B.mortgageValue(k), unmortgage: B.unmortgageCost(k),
+      house: s.type === 'city' ? B.GROUPS[s.group].house : null,
+      rentNow: s.type === 'city' ? E.rentOf(g, k, 1) : null,
+    })),
     me, n: g.n, options: { ...g.options },
     phase: g.phase, turn, round: g.round, jackpot: g.jackpot,
     dice: g.dice, doubles: g.doubles, again: g.again,

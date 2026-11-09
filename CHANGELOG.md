@@ -2,6 +2,12 @@
 
 User-facing changes are listed first. Operational and internal implementation details belong in the project documentation, not in these release notes.
 
+## Unreleased
+
+- Property Rivals: tap a city in the player list to see its owner, buildings, rent now, the full rent table, and the mortgage, unmortgage and house costs.
+- Property Rivals: each player shows cash and net worth separately. The crown marks the player with the highest net worth, not the most cash.
+- Every game shows its current settings at the top right. Tap them for the full list with each choice explained.
+
 ## 0.14.0 — Voice chat
 
 - Talk with people at your table using in-browser voice chat, in the lobby and during games.

@@ -143,6 +143,54 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('the rivals list shows cash and net worth separately; the crown follows net worth, not cash', async () => {
+    const { page, ctx } = await open(mutate((v) => {
+      v.players[0].cash = 500; v.players[0].netWorth = 3200; // rich in property, short of cash
+      v.players[1].cash = 1400; v.players[1].netWorth = 1450;
+    }));
+    const first = page.locator('.pr-players li').nth(0);
+    const second = page.locator('.pr-players li').nth(1);
+    assert.match(await first.textContent(), /net worth.*3,?200/);
+    assert.match(await first.textContent(), /500/);
+    assert.equal(await first.locator('.crown').count(), 1, 'the crown goes to the highest net worth');
+    assert.equal(await second.locator('.crown').count(), 0);
+    await ctx.close();
+  });
+
+  await test('tapping a holding opens the city card with rent, mortgage and build figures; close dismisses it', async () => {
+    const m = mutate((v) => {
+      v.land[1] = { owner: 0, houses: 0, mortgaged: false }; // Lagos, owned by you
+      v.info[1] = { mortgage: 30, unmortgage: 33, house: 50, rentNow: 2 };
+    });
+    const { page, ctx } = await open(m);
+    assert.equal(await page.locator('#pr-card-title').count(), 0);
+    await page.click('[data-pr="card"][data-sq="1"]');
+    assert.match(await page.textContent('#pr-card-title'), /Lagos/);
+    const card = await page.textContent('.pr-card');
+    assert.match(card, /Mortgage value[\s\S]*🪙30/);
+    assert.match(card, /Unmortgage cost[\s\S]*🪙33/);
+    assert.match(card, /Each house or hotel costs[\s\S]*🪙50/);
+    assert.match(card, /Rent right now[\s\S]*🪙2/);
+    assert.match(card, /No buildings[\s\S]*🪙2/);
+    assert.match(card, /Hotel[\s\S]*🪙250/);
+    await page.click('[data-pr="closeCard"]');
+    assert.equal(await page.locator('#pr-card-title').count(), 0);
+    await ctx.close();
+  });
+
+  await test('the current game settings show at the top right of a game; tapping them lists each setting', async () => {
+    const { page, ctx } = await open(tableMessages('propertyrivals', four, { roomExtra: { options: { rounds: '30', startCash: '1500', auction: true, jackpot: false } } }));
+    const chip = page.locator('.gs-chip');
+    assert.equal(await chip.count(), 1);
+    assert.match(await chip.getAttribute('aria-label'), /Game settings: .*Short: 30 rounds.*1,500 coins/);
+    await chip.click();
+    const list = await page.textContent('.gs-list');
+    assert.match(list, /Game length/);
+    assert.match(list, /Starting cash/);
+    assert.match(list, /Auction unbought properties/);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

@@ -4,7 +4,7 @@
   'use strict';
   const { esc } = window.CardTable;
   const ui = { ctx: null, v: null, root: null, seq: null, mgr: false, trade: null, bid: 0, scores: false,
-    disp: {}, plans: {}, stepTimer: null };
+    disp: {}, plans: {}, stepTimer: null, card: null };
   const STEP_MS = 480; // one square per step: slow enough to follow every tile (the server waits for the same time: games/propertyrivals/board.js)
   const FAST_MS = 320; // very long advances (over 14 squares) a little quicker
   const DWELL_MS = 800; // the token rests on the square it lands on before the text and buttons follow
@@ -105,15 +105,48 @@
     }
   }
 
+  /** The card for one square: owner, buildings, rents and costs. Opened by tapping a city in the rivals list. */
+  function cardHTML(v) {
+    const k = ui.card; const s = k == null ? null : v.squares[k];
+    if (!s) return '';
+    const l = v.land[k]; const info = v.info[k] || {};
+    const owner = !l || l.owner < 0 ? 'Unowned (the bank)' : `${esc(v.players[l.owner].name)}${l.owner === v.me ? ' (you)' : ''}`;
+    const swatch = s.group ? `<span class="pr-swatch" style="background:${v.groups[s.group].color}"></span>` : '';
+    const kind = s.type === 'city' ? `${esc(v.groups[s.group].name)} colour group` : s.type === 'port' ? 'Port' : s.type === 'utility' ? 'Utility' : 'Square';
+    const rows = [
+      ['Owner', owner],
+      ['Price to buy', coins(s.price)],
+      ['Mortgage value (received when mortgaged)', coins(info.mortgage)],
+      ['Unmortgage cost (mortgage plus 10%)', coins(info.unmortgage)],
+    ];
+    if (s.type === 'city') {
+      const built = !l ? 'none' : l.houses === 0 ? 'none' : l.houses >= 5 ? '🏨 hotel' : `🏠 ${l.houses} house${l.houses === 1 ? '' : 's'}`;
+      rows.splice(1, 0, ['Buildings', built], ['Mortgaged', l && l.mortgaged ? 'yes (no rent)' : 'no']);
+      rows.push(['Rent right now', coins(info.rentNow)], ['Each house or hotel costs', coins(info.house)]);
+    }
+    const table = s.type === 'city' ? `<h3>Rent</h3><table class="pr-rent"><tbody>
+        ${[['No buildings', s.rents[0]], ['1 house', s.rents[1]], ['2 houses', s.rents[2]], ['3 houses', s.rents[3]], ['4 houses', s.rents[4]], ['Hotel', s.rents[5]]]
+          .map(([a, b]) => `<tr><th scope="row">${a}</th><td>${coins(b)}</td></tr>`).join('')}
+      </tbody></table>
+      <p class="hint">With no buildings the rent doubles when the owner holds the whole colour group. Building needs the whole group, an even spread of houses, and no mortgages in the group.</p>` : '';
+    return `<div class="overlay pr-card-ov"><div class="sheet pr-card" role="dialog" aria-modal="true" aria-labelledby="pr-card-title">
+      <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px"><h2 id="pr-card-title">${swatch}${esc(s.name)}</h2>
+      <button type="button" class="btn ghost small" data-pr="closeCard" aria-label="Close card">✕</button></div>
+      <p class="hint" style="text-align:left;margin-top:0">${kind}</p>
+      <dl class="pr-kv">${rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl>
+      ${table}
+    </div></div>`;
+  }
+
   function playersHTML(v, ctx) {
-    const lead = v.phase !== 'gameOver' ? window.CardTable.pt.leaderOf(v.players.length, (k) => (v.players[k].bankrupt ? -Infinity : v.players[k].cash), 1) : -1; // most cash
+    const lead = v.phase !== 'gameOver' ? window.CardTable.pt.leaderOf(v.players.length, (k) => (v.players[k].bankrupt ? -Infinity : v.players[k].netWorth), 1) : -1; // most net worth
     return `<ul class="pr-players">${v.players.map((p, i) => {
       const owned = v.land.reduce((n, l) => n + (l && l.owner === i ? 1 : 0), 0);
       const st = p.bankrupt ? '💀 bankrupt' : p.inLockup ? '🔒 lockup' : '';
       const mine = v.land.map((l, k) => (l && l.owner === i ? k : -1)).filter((k) => k >= 0);
-      const holdings = mine.length ? `<span class="pr-hold" aria-hidden="true">${mine.map((k) => { const s = v.squares[k]; const m = v.land[k].mortgaged ? ' mort' : ''; return `<i class="${s.group ? '' : 'plain'}${m}" style="${s.group ? 'background:' + v.groups[s.group].color : ''}" title="${esc(s.name)}"></i>`; }).join('')}</span>` : '';
+      const holdings = mine.length ? `<span class="pr-hold" aria-hidden="true">${mine.map((k) => { const s = v.squares[k]; const m = v.land[k].mortgaged ? ' mort' : ''; return `<button type="button" class="pr-hold-b" data-pr="card" data-sq="${k}" aria-label="${esc(s.name)}: open card" title="${esc(s.name)}"><i class="${s.group ? '' : 'plain'}${m}" style="${s.group ? 'background:' + v.groups[s.group].color : ''}"></i></button>`; }).join('')}</span>` : '';
       const keep = p.keeps ? ` · 🎟️${p.keeps}` : '';
-      return `<li data-vid="${esc(p.id)}" data-pid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most cash">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small>${holdings}</span><span class="pr-cash">${coins(p.cash)}</span></li>`;
+      return `<li data-vid="${esc(p.id)}" data-pid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most net worth">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>net worth ${coins(p.netWorth)} · ${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small>${holdings}</span><span class="pr-cash" title="Cash: coins in hand">${coins(p.cash)}</span></li>`;
     }).join('')}</ul>`;
   }
 
@@ -201,7 +234,7 @@
 
   function render(root, v, ctx) {
     const key = (ctx.room && ctx.room.code) + ':' + v.players.map((p) => p.id).join();
-    if (ui.key !== key) { ui.key = key; ui.disp = {}; ui.plans = {}; ui.seq = null; } // another table: start clean
+    if (ui.key !== key) { ui.key = key; ui.disp = {}; ui.plans = {}; ui.seq = null; ui.card = null; } // another table: start clean
     ui.ctx = ctx; ui.v = v; ui.root = root; react(v); planMoves(v);
     if (!v.can.propose) ui.trade = null;
     if (v.phase !== 'auction') ui.bid = 0;
@@ -212,7 +245,7 @@
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-pr="rules">Rules</button>', 'pr')}</div>
       ${board}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
-      ${actionsHTML(v)}${auctionHTML(v)}${tradeOfferHTML(v)}${tradeComposerHTML(v)}${playersHTML(v, ctx)}${overlayHTML(v)}</div>`;
+      ${actionsHTML(v)}${auctionHTML(v)}${tradeOfferHTML(v)}${tradeComposerHTML(v)}${playersHTML(v, ctx)}${overlayHTML(v)}${cardHTML(v)}</div>`;
     if (focus === 'bidv') { const el = root.querySelector('[data-pr="bidv"]'); if (el) el.focus(); }
     root.onclick = onClick; root.onchange = onChange;
   }
@@ -245,6 +278,8 @@
       case 'tGive': toggle(ui.trade.give); break;
       case 'tGet': toggle(ui.trade.get); break;
       case 'tSend': { const t = ui.trade; ui.trade = null; act({ type: 'propose', target: v.players[t.target].id, give: [...t.give], get: [...t.get], giveCash: t.giveCash, getCash: t.getCash }); break; }
+      case 'card': ui.card = sqi; ctx.rerender(); break;
+      case 'closeCard': ui.card = null; ctx.rerender(); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
