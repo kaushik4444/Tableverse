@@ -66,7 +66,7 @@ const EXPECTED_FKS = [
   { child: 'private_table_invitations', parent: 'players', onDelete: 'CASCADE' },
   { child: 'private_table_invitations', parent: 'players', onDelete: 'CASCADE' },
   { child: 'chat_reports', parent: 'players', onDelete: 'CASCADE' },
-  { child: 'chat_reports', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'chat_reports', parent: 'players', onDelete: 'SET NULL' },
   { child: 'player_blocks', parent: 'players', onDelete: 'CASCADE' },
   { child: 'player_blocks', parent: 'players', onDelete: 'CASCADE' },
   { child: 'announcement_dismissals', parent: 'players', onDelete: 'CASCADE' },
