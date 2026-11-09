@@ -128,6 +128,8 @@ function socket(port, cookie) {
     await test('a blocker who leaves cannot rejoin while the blocked account remains at the table', async () => {
       sb.send({ t: 'leave' });
       await until(() => sa.room && sa.room.members.some((m) => m.id === B.id && m.bot), 'B leaves and a bot takes over');
+      const listing = sb.msgs.filter((m) => m.t === 'tables').pop();
+      assert.ok(listing && !listing.tables.some((table) => table.code === code), 'the blocked table is hidden from the directory');
       const before = sb.errors().length;
       sb.send({ t: 'join', code });
       await until(() => sb.errors().length > before, 'blocked-pair table re-entry refused');
@@ -137,6 +139,10 @@ function socket(port, cookie) {
     await test('an unblock lets the player rejoin and see the account again', async () => {
       sb.send({ t: 'unblock', id: A.id });
       await until(() => sb.notices().some((n) => /Unblocked/.test(n)), 'unblock confirmation');
+      await until(() => {
+        const listing = sb.msgs.filter((m) => m.t === 'tables').pop();
+        return listing && listing.tables.some((table) => table.code === code);
+      }, 'table returns to directory after unblock');
       sb.send({ t: 'join', code });
       await until(() => sa.room && sa.room.members.some((m) => m.id === B.id && !m.bot), 'B rejoins after unblock');
       await say(sa, 'alpha is back');
