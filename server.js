@@ -1751,7 +1751,11 @@ function start(opts = {}) {
           // Only a committed block removes the seat. A block still being written keeps the socket out of this seat
           // until it settles, and a failed write then leaves the player where they were.
           if (blockedWithRoomCommitted(room, p.id)) {
-            leaveRoom(p); // a blocked player cannot resume this seat; a bot takes over if a game is running
+            // A player who already LEFT the running game has a bot in their seat: leaving again would write a second
+            // "left the game" line and mark them as having left a second time. Only their link to the table is cleared.
+            const alreadyLeft = room.status === 'playing' && room.members.some((m) => m.id === p.id && m.bot) && room.leftEarly && room.leftEarly.has(p.id);
+            if (alreadyLeft) p.room = null;
+            else leaveRoom(p); // a blocked player cannot resume this seat; a bot takes over if a game is running
             send(ws, { t: 'left' });
             send(ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
             send(ws, tablesMsg(p));
