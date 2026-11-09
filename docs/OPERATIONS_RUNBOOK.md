@@ -66,6 +66,17 @@ Tables, games in progress, chat and presence live in memory and are **lost** on 
 - Do **not** restart the service while the database is down if matches are pending: the local spool survives a process restart but not a replaced instance. Wait for Neon, then check `/readyz` shows no pending matches.
 - Neon free scales to zero: the first request after idle can be slow; this is not an outage. A probe that takes longer than 3 s returns 503 `database unavailable`; repeat it before escalating.
 
+## Startup fails with "Cannot reach the database"
+`FATAL: refusing to start: Cannot reach the database: ...` means the very first `SELECT 1` failed, **before any migration ran**. A failed migration reads `Database migration failed: ...` instead. The server never falls back to the in-memory store in production.
+- `Connection terminated due to connection timeout` (or `timeout exceeded when trying to connect`) is the 5 s connect timeout of `db/pool.js`. It usually means Neon's compute was asleep or briefly unavailable, or the network path is blocked.
+- In production the first check is retried for up to 45 s (waits of 1, 2, 4, 8, 8 ... s) for connection-level errors only. The log shows `[db] Not reachable yet (...); attempt N` and then either `Reachable after N attempts` or the FATAL line with `(after N attempts)`. A wrong password, unknown database or bad host name is not retried and fails at once. `DB_STARTUP_WAIT_MS` changes the limit (`0` = single attempt, capped at 120000); nothing needs to be set.
+- If it still fails after the retries, the previous Render instance keeps serving. Check, in this order:
+  1. **Neon status page**, and the project's **Operations** list at the failure time (a `start_compute` that failed or took long).
+  2. **Neon usage**: compute hours used against the plan's limit. An exhausted free quota suspends the compute.
+  3. **Connection string host**: the runtime `DATABASE_URL` should be the **pooled** string (the host contains `-pooler`); use the direct string only for scripts such as the cleanup tool. Compare the host with the one the Neon console shows now (a deleted or reset branch has a new endpoint). Never paste the full URL anywhere.
+  4. **Neon IP Allow** (if enabled) must include Render's outbound addresses.
+  5. **Render**: Events and Logs for that deploy, the Environment value of `DATABASE_URL` (no stray spaces), the service region against the Neon region, and [Render's status page](https://status.render.com). A manual redeploy that works points to a cold start rather than a configuration fault.
+
 ## Migration failure
 Startup log `db.migration_failed` (or `Database migration failed: ...`) and the deploy does not become live. Fix forward with a new migration or roll the deploy back; never edit an applied migration.
 
