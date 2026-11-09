@@ -611,9 +611,18 @@ function cookieSocket(port, cookie) {
     console.log('startup and deployment');
     await test('start() refuses to run when the database cannot be reached', async () => {
       const dead = new URL(t.url); dead.port = '1'; // nothing listens there
-      const child = await runServer({ NODE_ENV: 'production', DATABASE_URL: dead.toString() });
+      const child = await runServer({ NODE_ENV: 'production', DATABASE_URL: dead.toString(), DB_STARTUP_WAIT_MS: '0' });
       assert.equal(child.code, 1);
       assert.match(child.stderr, /FATAL: refusing to start: Cannot reach the database/);
+      assert.doesNotMatch(child.stderr, /after \d+ attempts/, 'a zero wait is a single attempt');
+      assert.doesNotMatch(child.stdout, /running on/);
+    });
+    await test('start() retries a refused connection for a bounded time, then still refuses to run', async () => {
+      const dead = new URL(t.url); dead.port = '1';
+      const child = await runServer({ NODE_ENV: 'production', DATABASE_URL: dead.toString(), DB_STARTUP_WAIT_MS: '2500' });
+      assert.equal(child.code, 1);
+      assert.match(child.stderr, /FATAL: refusing to start: Cannot reach the database.*\(after 2 attempts\)/);
+      assert.match(child.stdout + child.stderr, /Not reachable yet/);
       assert.doesNotMatch(child.stdout, /running on/);
     });
     await test('production refuses to start without the email settings', async () => {
