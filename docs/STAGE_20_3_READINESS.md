@@ -247,7 +247,7 @@ Notes:
 | Windows and WSL2 suites not run | Native Windows/WSL2 support is unverified | Deferred for limited beta |
 | Cleanup execution | Deletes accounts | Separate approval; `CLEANUP_EXECUTE` stays `false` |
 | Neon load test | Scale limits not measured | Deferred until usage justifies it |
-| Stage 20.6 | Not started | Owner decision |
+| Stage 20.6 | Preparation underway in PR #79 | Owner approved proceeding with limited-beta preparation |
 
 ## 12. Stage 20.3 PASS/FAIL checklist
 
@@ -277,9 +277,13 @@ Notes:
 
 ## 13. Focused security review: status
 
-Not complete. Completion of this focused review and resolution of all critical/high-severity findings are required for limited-beta release. Record the review and finding dispositions here. Findings to date:
-- Guest players with a session receive Metered logins; owner approved this policy for the initial beta. Monitor bandwidth and credential count.
-- Blocked-user privacy: the public profile is hidden in both directions (#73), and chat/voice are filtered. PR #81 implements table-entry, seating, lobby-removal and active-game rejoin rules for the owner's all-surface policy; awaiting CI/review/merge.
-- Credential count across restarts is not tracked.
+**Partially complete; no additional critical/high-severity finding was identified in the reviewed areas.** The following code paths were reviewed on current `main`:
 
-The focused beta review must cover the authorization/privacy areas listed in Stage 20.6, including socket authorization, session revocation, TURN secret handling and cleanup permissions. The broader audit of authentication, email verification, rate limiting, WebSocket reconnects, database permissions and pooling is still to be done; it is not represented as complete by this focused review.
+- **Admin/owner authorization:** `lib/adminRoutes.js` requires a current session and reads the role from PostgreSQL on every admin request. State-changing store methods re-check staff authority under transaction locks and write the audit row in the same transaction. Role changes lock actor and target and pass through `adminPolicy`.
+- **Sessions and WebSockets:** `db/auth.js` stores SHA-256 token hashes, checks expiry and revocation on reads, and revokes prior sessions when issuing a new single-active session. `server.js` re-checks open socket sessions every 60 seconds and refuses an invalid/revoked session.
+- **Cleanup permissions:** the daily workflow uses a separate read-only database role for its dry run. Deletion requires a manual workflow dispatch, the explicit `execute` input, `CLEANUP_EXECUTE=true`, and approval in the protected `production-cleanup` environment. The owner reports the current dry run found zero candidates and deleted zero rows; `CLEANUP_EXECUTE=false` remains in force.
+- **TURN secret handling:** `lib/meteredTurn.js` sends the secret only to Metered, never logs the request URL or secret, and logs only a failure category. Dynamic API authentication currently fails with HTTP 401; this is explicitly deferred to Stage 20.6, and static fallback remains configured.
+- **Blocked-user privacy:** public profile hiding (#73) and chat/voice filtering are implemented. The table-entry/seating gap was found in this review; PR #81 implements the owner's all-surface rule and is awaiting CI/review/merge.
+- **Credential count:** active Metered credentials are not tracked across restarts; monitor the provider dashboard and usage. This is a known low-risk operational limitation for a single instance.
+
+The focused review cannot be marked complete until PR #81 passes CI, is merged, and its behaviour is covered by the PostgreSQL integration suite. After that, record the final review disposition here. The broader audit of email verification, rate limiting, WebSocket reconnect edge cases, database permissions and pooling remains outside this limited-beta review and is not represented as complete.
