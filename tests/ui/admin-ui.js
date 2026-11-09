@@ -136,15 +136,19 @@ const api = (role) => ({
     assert.equal(await page.locator('.notice-warning').count(), 0, 'remembered by this browser');
     await ctx.close(); server.close();
   });
-  await test('a guest dismissal from before revisions still hides its banner, and is rewritten to the current revision', async () => {
+  await test('a guest entry from before revisions (id and text) is not honoured: the banner shows once more, and a new dismissal is kept by revision', async () => {
     const { server, url } = await serve(homeApi(BANNERS, false));
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await ctx.newPage();
     await page.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('ct_ann_ids', JSON.stringify(['b1:Server restart at noon'])); sessionStorage.setItem('seeded', '1'); } } catch { /* no storage */ } });
     await page.goto(url + '/');
-    await page.waitForFunction(() => localStorage.getItem('ct_ann_ids') === '["b1:1"]', null, { timeout: 10000 });
-    assert.equal(await page.locator('.notice-warning').count(), 0, 'the old text-keyed dismissal still hides the banner');
-    assert.ok(await page.locator('.notice-bar').count() >= 1, 'other banners are still shown');
+    await page.waitForSelector('.notice-warning');
+    assert.equal(await page.locator('.notice-warning').count(), 1, 'the old text-keyed entry is not honoured');
+    await page.click('[data-act="dismissBanner"][data-id="b1"]');
+    assert.equal(await page.evaluate(() => localStorage.getItem('ct_ann_ids')), '["b1:1"]', 'a new dismissal is stored with its revision');
+    await page.reload();
+    await page.waitForSelector('.notice-bar.notice-info');
+    assert.equal(await page.locator('.notice-warning').count(), 0, 'and stays dismissed for that revision');
     await ctx.close(); server.close();
   });
   await test('a signed-in player dismisses on the server (so every device agrees) and gets the feedback form; staff get the Admin entry', async () => {

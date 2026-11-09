@@ -703,23 +703,16 @@
 
   // ---- managed announcements (Stage 20.5). Legacy ANNOUNCEMENT text above keeps working; these are added next to it.
   const LEVEL_ICON = { info: 'ℹ️', warning: '⚠️', success: '✅' };
-  const guestDismissed = () => { try { return JSON.parse(store.get('ct_ann_ids') || '[]'); } catch { return []; } };
+  // only `id:revision` entries are read; entries from before revisions (`id:text`) are dropped the next time the list is written
+  const guestDismissed = () => { try { return JSON.parse(store.get('ct_ann_ids') || '[]').filter((e) => /:\d+$/.test(String(e))); } catch { return []; } };
   // A dismissal is kept per revision: an edit of a banner (text, level, audience or schedule) makes a new revision, and the banner
   // shows again. Signed-in dismissals are stored on the account with the revision the player saw; guests keep the same key here.
   const bannerKey = (b) => `${b.id}:${b.revision}`;
-  // Guest entries written before revisions were kept were `id:text`. Such an entry hides the banner while its text is unchanged
-  // and is then rewritten to the current revision (the same rule the server migration applies).
-  const legacyKey = (b) => `${b.id}:${b.message}`;
+  // Guest entries written before revisions (`id:text`) are not honoured: an edit made after such an entry was written cannot be
+  // told from an unedited banner, so the safe choice is to show it once more rather than hide a changed banner.
   function guestHidden(list) {
-    let entries = guestDismissed();
-    const hidden = new Set();
-    let rewritten = false;
-    for (const a of list) {
-      if (entries.includes(bannerKey(a))) hidden.add(a.id);
-      else if (entries.includes(legacyKey(a))) { hidden.add(a.id); entries = entries.map((e) => (e === legacyKey(a) ? bannerKey(a) : e)); rewritten = true; }
-    }
-    if (rewritten) { try { store.set('ct_ann_ids', JSON.stringify(entries)); } catch { /* the entry is rewritten on the next visit */ } }
-    return hidden;
+    const entries = guestDismissed();
+    return new Set(list.filter((a) => entries.includes(bannerKey(a))).map((a) => a.id));
   }
   async function loadBanners() {
     try {

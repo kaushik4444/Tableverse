@@ -173,7 +173,7 @@ const at = (ms) => new Date(T0 + ms);
     await test('a revision that is not a positive whole number is refused', async () => {
       await clearLive();
       const a = await create({ message: 'Bad revision', audience: 'signed_in', durationHours: 5 });
-      for (const revision of [0, -1, 1.5, 'x']) assert.equal((await user.b.post('/api/announcements/dismiss', { id: a.id, revision })).status, 400, String(revision));
+      for (const revision of [0, -1, 1.5, 'x', 2147483648, 1e30]) assert.equal((await user.b.post('/api/announcements/dismiss', { id: a.id, revision })).status, 400, String(revision));
     });
     await test('guests cannot dismiss on the server (their browser remembers it); unknown ids are harmless', async () => {
       assert.equal((await guest.post('/api/announcements/dismiss', { id: 'p_00000000-0000-4000-8000-000000000009' })).status, 401);
