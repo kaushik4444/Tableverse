@@ -7,7 +7,7 @@ the server. It does not replace human review, and it does not take automatic act
 
 | Action | Where | Effect |
 | --- | --- | --- |
-| **Block** an account | Block action on another player's chat message | Their table chat is hidden from you. You cannot share a new table with each other; a blocked player is removed from a lobby/spectator seat, while a seated player may finish an already-running game but cannot rejoin after leaving. |
+| **Block** an account | Block action on another player's chat message | Their table chat is hidden from you. You cannot share a table while the blocked counterpart is present; a blocked target is removed from a lobby/spectator seat, while a seated player may finish an already-running game. |
 | **Report** a message | Report button, then a reason | Records the report in the database. There is no review queue yet. Nothing is hidden or sanctioned automatically. |
 | **Unblock** | WebSocket action `unblock` (no button yet) | Restores their chat. |
 | **Mute** (local) | Existing mute in the chat list | Hides that player's messages in this browser only. Not enforced on the server. |
@@ -18,7 +18,7 @@ the server. It does not replace human review, and it does not take automatic act
   the player. Live chat (`pushChat`) and the history sent on join or reconnect both pass through
   `lib/moderation.js` `shouldDeliver` / `visibleChat`, so a blocked message is never sent to the blocker's socket. A pending block is filtered immediately while its database write is queued or in flight.
 - **Chat filtering is one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages during an already-running game, and B is not told about the block.
-- **Table access is bilateral.** A blocked pair cannot enter the same table or take a seat together, regardless of which side created the block. If they are already seated when the block is made during a running game, the game is allowed to finish; the blocked player is removed when it ends or if they leave, and cannot rejoin. Lobby members and spectators are removed immediately.
+- **Table access is bilateral.** A blocked pair cannot enter the same table or take a seat together, regardless of which side created the block. If they are already seated when the block is made during a running game, both may finish the current game; the blocked target cannot reconnect, and is removed when the result is recorded. Lobby members and spectators who are blocked targets are removed immediately. Once the counterpart leaves the table, the pair no longer blocks unrelated table access.
 - **Voice and reactions are blocked in both directions.** A block in either direction keeps the pair out of each other's
   table voice: each browser is offered only the people it may hear, so an existing connection to the other person closes.
   A signal between them is refused with the same answer as "not in voice", and reactions are not delivered either way.
