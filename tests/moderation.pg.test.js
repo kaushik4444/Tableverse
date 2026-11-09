@@ -84,6 +84,8 @@ function socket(port, cookie) {
     sb.send({ t: 'join', code });
     sc.send({ t: 'join', code });
     await until(() => sb.room && sc.room, 'others at the table');
+    sa.send({ t: 'start' });
+    await until(() => sa.room && sa.room.status === 'playing', 'game running before chat block checks');
 
     console.log('chat moderation');
 
@@ -123,23 +125,20 @@ function socket(port, cookie) {
       sb = again; // the rest of the tests use the reconnected socket
     });
 
-    await test('a fresh join to the table (not a reconnect) gets a history without the blocked account', async () => {
-      const before = sb.lastChatlog();
+    await test('a blocker who leaves cannot rejoin while the blocked account remains at the table', async () => {
       sb.send({ t: 'leave' });
-      await sleep(300);
+      await until(() => sa.room && sa.room.members.some((m) => m.id === B.id && m.bot), 'B leaves and a bot takes over');
+      const before = sb.errors().length;
       sb.send({ t: 'join', code });
-      const history = await until(() => { const h = sb.lastChatlog(); return h && h !== before ? h : null; }, 'history after joining');
-      assert.ok(history.messages.some((m) => !m.sys && m.id === B.id), 'the history is real: it still holds the blocker’s own earlier messages');
-      assert.equal(history.messages.some((m) => !m.sys && m.id === A.id), false, 'the joining blocker does not see the blocked account');
-      await say(sa, 'alpha after rejoin');
-      await until(() => sc.texts().includes('alpha after rejoin'), 'other viewer gets it');
-      await sleep(100);
-      assert.equal(sb.texts().includes('alpha after rejoin'), false, 'live chat after a fresh join is filtered too');
+      await until(() => sb.errors().length > before, 'blocked-pair table re-entry refused');
+      assert.ok(sa.room.members.some((m) => m.id === B.id && m.bot), 'the blocker cannot retake the seat while the pair would share the table');
     });
 
-    await test('an unblock shows the account again', async () => {
+    await test('an unblock lets the player rejoin and see the account again', async () => {
       sb.send({ t: 'unblock', id: A.id });
       await until(() => sb.notices().some((n) => /Unblocked/.test(n)), 'unblock confirmation');
+      sb.send({ t: 'join', code });
+      await until(() => sa.room && sa.room.members.some((m) => m.id === B.id && !m.bot), 'B rejoins after unblock');
       await say(sa, 'alpha is back');
       await until(() => sb.texts().includes('alpha is back'), 'chat returns after unblock');
       assert.equal((await q('SELECT 1 FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2', [B.id, A.id])).length, 0, 'the block row is removed');
