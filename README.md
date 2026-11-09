@@ -115,7 +115,7 @@ Tableverse uses PostgreSQL (Neon, Supabase, or self-hosted) for accounts, sessio
 
 - `DATABASE_URL` configures persistent storage.
 - If `DATABASE_URL` is omitted and `NODE_ENV` is not `production`, the app uses in-memory storage.
-- In production, startup is strict: missing/unreachable DB or failed migration aborts boot.
+- In production, startup is strict: missing/unreachable DB or failed migration aborts boot. A slow first connection (for example Neon waking from scale-to-zero) is retried for up to 45 s, connection errors only; `DB_STARTUP_WAIT_MS` changes that limit (`0` = one attempt). See the operations runbook.
 - Migrations live in `db/migrations/` and run transactionally under an advisory lock.
 - `/healthz` = process liveness; `/readyz` includes database readiness.
 
