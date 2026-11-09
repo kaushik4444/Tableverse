@@ -18,6 +18,7 @@ const OWNER_EMAIL = 'boss.admin@test.local';
 (async () => {
   const t = await testdb.create(); // exits (SKIPPED) when PostgreSQL tests are not configured
   let srv = null;
+  let srvB = null; // a second server instance with a 60 s announcement cache, sharing the database (the production case)
   try {
     process.env.DATABASE_URL = t.url;
     process.env.ANNOUNCEMENT_CACHE_MS = '0'; // the live-banner list is cached 15 s in production; these tests change rows directly and expect them to apply at once
@@ -170,6 +171,92 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await q('SELECT dismissed_revision FROM announcement_dismissals WHERE player_id = $1 AND announcement_id = $2', [u.id, id]))[0].dismissed_revision, 2);
       assert.equal((await u.browser.post('/api/announcements/dismiss', { id, revision: 0 })).status, 400, 'a revision must be a positive whole number');
     });
+    // ---- announcement revisions against real PostgreSQL
+    const clearLiveBanners = async () => { for (const x of (await boss().browser.get('/api/admin/announcements')).json.items) if (x.status === 'live') await boss().browser.post('/api/admin/announcements/end', { id: x.id }); };
+    const createBanner = async (fields) => (await boss().browser.post('/api/admin/announcements', fields)).json.announcement;
+    const revisionOf = async (id) => (await q('SELECT revision FROM announcements WHERE id = $1', [id]))[0].revision;
+    const dismissedRevisionOf = async (uid, id) => { const r = await q('SELECT dismissed_revision FROM announcement_dismissals WHERE player_id = $1 AND announcement_id = $2', [uid, id]); return r.length ? r[0].dismissed_revision : null; };
+    const shownTo = async (browser, id) => (await browser.get('/api/announcements')).json.announcements.find((a) => a.id === id) || null;
+    const storedWindow = async (id) => { const r = (await q('SELECT starts_at, ends_at FROM announcements WHERE id = $1', [id]))[0]; return { startsAt: new Date(r.starts_at).toISOString(), endsAt: new Date(r.ends_at).toISOString() }; };
+
+    await test('PostgreSQL: a stale cached copy and a stale dismissal cannot bring back a seen revision; a future revision is capped; a newer revision shows', async () => {
+      await clearLiveBanners();
+      const { start: startServer } = require('../server');
+      if (!srvB) srvB = await startServer({ ...fast, env: { ...process.env, ANNOUNCEMENT_CACHE_MS: '60000' } });
+      const u = await newUser('Stale');
+      const a = await createBanner({ message: 'Stale v1', audience: 'signed_in', durationHours: 5 });
+      const instanceB = new Browser(srvB.port); instanceB.cookies = new Map(u.browser.cookies);
+      assert.ok(await shownTo(instanceB, a.id), 'instance B caches revision 1 while it is current');
+      // the change and the dismissal happen on instance A, which does not cache
+      await boss().browser.post('/api/admin/announcements/update', { id: a.id, message: 'Stale v2' });
+      assert.equal(await revisionOf(a.id), 2);
+      assert.equal((await u.browser.post('/api/announcements/dismiss', { id: a.id, revision: 2 })).status, 200);
+      assert.equal(await dismissedRevisionOf(u.id, a.id), 2);
+      assert.equal(await shownTo(instanceB, a.id), null, 'instance B still holds revision 1 in its cache, and the dismissed revision hides it');
+      // a late dismissal of revision 1 (sent to B) does not move the record back
+      assert.equal((await instanceB.post('/api/announcements/dismiss', { id: a.id, revision: 1 })).status, 200);
+      assert.equal(await dismissedRevisionOf(u.id, a.id), 2, 'dismissed_revision stays 2');
+      assert.equal(await shownTo(u.browser, a.id), null, 'still hidden on instance A');
+      // a revision far above the current one is capped to the current revision
+      assert.equal((await u.browser.post('/api/announcements/dismiss', { id: a.id, revision: 2147483647 })).status, 200);
+      assert.equal(await dismissedRevisionOf(u.id, a.id), 2, 'capped to the current revision');
+      // a genuinely newer revision is shown on A at once, and on B once its cache expires
+      await boss().browser.post('/api/admin/announcements/update', { id: a.id, message: 'Stale v3' });
+      assert.equal(await revisionOf(a.id), 3);
+      const seen = await shownTo(u.browser, a.id);
+      assert.ok(seen, 'revision 3 is shown on A');
+      assert.equal(seen.revision, 3);
+      assert.equal(seen.message, 'Stale v3');
+    });
+
+    await test('PostgreSQL: changing the audience after a dismissal shows the banner again; saving the same audience does not', async () => {
+      await clearLiveBanners();
+      const u = await newUser('Aud');
+      const a = await createBanner({ message: 'Audience test', audience: 'signed_in', durationHours: 5 });
+      await u.browser.post('/api/announcements/dismiss', { id: a.id });
+      assert.equal(await shownTo(u.browser, a.id), null);
+      await boss().browser.post('/api/admin/announcements/update', { id: a.id, audience: 'signed_in' });
+      assert.equal(await revisionOf(a.id), 1, 'the same audience is not a change');
+      assert.equal(await shownTo(u.browser, a.id), null, 'still dismissed');
+      await boss().browser.post('/api/admin/announcements/update', { id: a.id, audience: 'all' });
+      assert.equal(await revisionOf(a.id), 2);
+      assert.ok(await shownTo(u.browser, a.id), 'the audience change shows it again');
+    });
+
+    await test('PostgreSQL: moving the start time after a dismissal shows the banner again', async () => {
+      await clearLiveBanners();
+      const u = await newUser('Start');
+      const a = await createBanner({ message: 'Start test', audience: 'signed_in', durationHours: 5 });
+      await u.browser.post('/api/announcements/dismiss', { id: a.id });
+      assert.equal(await shownTo(u.browser, a.id), null);
+      await boss().browser.post('/api/admin/announcements/update', { id: a.id, startsAt: new Date(Date.now() - 30 * 60e3).toISOString() });
+      assert.equal(await revisionOf(a.id), 2, 'a new start time is a change');
+      assert.ok(await shownTo(u.browser, a.id), 'shown again');
+    });
+
+    await test('PostgreSQL: moving the end time after a dismissal shows the banner again', async () => {
+      await clearLiveBanners();
+      const u = await newUser('End');
+      const a = await createBanner({ message: 'End test', audience: 'signed_in', durationHours: 5 });
+      await u.browser.post('/api/announcements/dismiss', { id: a.id });
+      assert.equal(await shownTo(u.browser, a.id), null);
+      await boss().browser.post('/api/admin/announcements/update', { id: a.id, endsAt: new Date(Date.now() + 8 * 3600e3).toISOString() });
+      assert.equal(await revisionOf(a.id), 2, 'a new end time is a change');
+      assert.ok(await shownTo(u.browser, a.id), 'shown again');
+    });
+
+    await test('PostgreSQL: saving the same schedule (and text, level, audience) does not change the revision or un-hide a dismissal', async () => {
+      await clearLiveBanners();
+      const u = await newUser('Same');
+      const a = await createBanner({ message: 'Same test', audience: 'signed_in', durationHours: 5 });
+      await u.browser.post('/api/announcements/dismiss', { id: a.id });
+      const w = await storedWindow(a.id);
+      await boss().browser.post('/api/admin/announcements/update', { id: a.id, message: 'Same test', level: 'info', audience: 'signed_in', startsAt: w.startsAt, endsAt: w.endsAt });
+      assert.equal(await revisionOf(a.id), 1, 'unchanged values keep revision 1');
+      assert.equal(await dismissedRevisionOf(u.id, a.id), 1);
+      assert.equal(await shownTo(u.browser, a.id), null, 'still hidden');
+    });
+
     await test('targeting and dismissal hold across logins (another device): the dismissal is stored on the account', async () => {
       const u = await newUser('Jo');
       const c = await boss().browser.post('/api/admin/announcements', { message: 'Members only', audience: 'signed_in', durationHours: 5 });
@@ -314,6 +401,7 @@ const OWNER_EMAIL = 'boss.admin@test.local';
 
     console.log(`${passed} admin PostgreSQL checks passed`);
   } finally {
+    if (srvB) await srvB.close();
     if (srv) await srv.close();
     await t.drop();
   }

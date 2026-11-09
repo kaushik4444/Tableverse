@@ -710,12 +710,21 @@
   const guestDismissed = () => { try { return JSON.parse(store.get(GUEST_DISMISS_KEY) || '[]').filter((e) => typeof e === 'string'); } catch { return []; } };
   // A dismissal is kept per revision: an edit of a banner (text, level, audience or schedule) makes a new revision, and the banner
   // shows again. Signed-in dismissals are stored on the account with the revision the player saw; guests keep the same key here.
-  const bannerKey = (b) => `${b.id}:${b.revision}`;
+  // The highest revision this guest dismissed, per announcement. A dismissal of revision N hides N and any older revision (a
+  // server instance may still send an older cached copy); a newer revision is shown.
+  const dismissedMax = () => {
+    const max = new Map();
+    for (const e of guestDismissed()) {
+      const i = e.lastIndexOf(':'); const id = e.slice(0, i); const rev = Number(e.slice(i + 1));
+      if (id && Number.isSafeInteger(rev) && rev >= 1 && rev > (max.get(id) || 0)) max.set(id, rev);
+    }
+    return max;
+  };
   // Guest entries written before revisions (`id:text`) are not honoured: an edit made after such an entry was written cannot be
   // told from an unedited banner, so the safe choice is to show it once more rather than hide a changed banner.
   function guestHidden(list) {
-    const entries = guestDismissed();
-    return new Set(list.filter((a) => entries.includes(bannerKey(a))).map((a) => a.id));
+    const max = dismissedMax();
+    return new Set(list.filter((a) => (max.get(a.id) || 0) >= a.revision).map((a) => a.id));
   }
   async function loadBanners() {
     try {
@@ -741,7 +750,18 @@
     const dismissed = S.banners.find((b) => b.id === id);
     S.banners = S.banners.filter((b) => b.id !== id);
     render();
-    if (S.guest) { if (dismissed) store.set(GUEST_DISMISS_KEY, JSON.stringify([...guestDismissed(), bannerKey(dismissed)].slice(-50))); return; }
+    if (S.guest) {
+      if (dismissed) {
+        const max = dismissedMax();
+        // keep the highest revision, and re-insert the id so it counts as the most recent one: Map.set on an existing key keeps its old
+        // position, and the oldest entries are the ones trimmed below
+        const highest = Math.max(max.get(dismissed.id) || 0, dismissed.revision);
+        max.delete(dismissed.id);
+        max.set(dismissed.id, highest);
+        store.set(GUEST_DISMISS_KEY, JSON.stringify([...max].map(([id, rev]) => `${id}:${rev}`).slice(-50)));
+      }
+      return;
+    }
     // the revision on screen is sent, so an edit that lands meanwhile is not hidden by this dismissal
     try { await postJson('/api/announcements/dismiss', { id, revision: dismissed ? dismissed.revision : undefined }); } catch { /* it comes back on the next refresh if the server did not record it */ }
   }
