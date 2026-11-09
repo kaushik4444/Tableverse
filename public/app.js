@@ -903,6 +903,19 @@
     iceTimer = setTimeout(() => { iceTimer = null; lastIceAsk = Date.now(); send({ t: 'ice' }); }, wait);
   }
 
+  // Voice relay (TURN) status from the server. Tells the player once when it stops working, and when it works again.
+  const TURN_NOTICE = {
+    unavailable: 'The voice relay is unavailable right now. Players on strict networks may not hear each other; it is retried automatically.',
+    quota: 'The voice relay has used its monthly allowance, so voice works only on networks that connect directly. It resumes when the allowance renews.',
+  };
+  function noteTurnStatus(s) {
+    if (!s || s === S.turnStatus) return;
+    const was = S.turnStatus;
+    S.turnStatus = s;
+    if (TURN_NOTICE[s]) toast(TURN_NOTICE[s]);
+    else if (s === 'ready' && (was === 'unavailable' || was === 'quota')) toast('The voice relay is back.');
+  }
+
   function onMessage(m) {
     if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
@@ -921,6 +934,7 @@
         S.emotes = m.emotes || [];
         S.ice = Array.isArray(m.ice) ? m.ice : [];
         S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        noteTurnStatus(m.turnStatus);
         scheduleIceRefresh();
         if (!S.name) S.name = m.name;
         if (!S.avatar) S.avatar = m.avatar;
@@ -957,6 +971,7 @@
         // fresh TURN logins: used by new connections, and applied to the ones already open
         S.ice = Array.isArray(m.ice) ? m.ice : [];
         S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        noteTurnStatus(m.turnStatus);
         scheduleIceRefresh();
         if (voice) voice.refreshIce();
         break;

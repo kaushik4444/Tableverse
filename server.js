@@ -92,11 +92,13 @@ function start(opts = {}) {
       if (p && ws.authToken && !ws.revoked && ws.readyState === 1) send(ws, { t: 'ice', ...iceMsg(p.id) });
     }
   };
-  const metered = opts.metered !== undefined ? opts.metered : meteredTurn.fromEnv(env, { log: opts.log || console, onReady: pushIceToAll });
+  const metered = opts.metered !== undefined ? opts.metered : meteredTurn.fromEnv(env, { log: opts.log || console, onReady: pushIceToAll, onChange: pushIceToAll });
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId, metered });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
-  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, iceExpiresAt: opts.iceServers ? null : voiceRelay.iceExpiresAt(ice, env, metered) }; };
+  // turnStatus tells the browser what voice can rely on: ready | pending | unavailable | quota (Metered), static, or none
+  const turnStatus = () => (metered ? metered.status() : (env.TURN_URL ? 'static' : 'none'));
+  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, turnStatus: turnStatus(), iceExpiresAt: opts.iceServers ? null : voiceRelay.iceExpiresAt(ice, env, metered) }; };
   const ICE_REFRESH_MIN_MS = 20000; // a browser may ask for fresh logins at most this often (see the 'ice' handler)
   assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';

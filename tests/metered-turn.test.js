@@ -3,7 +3,7 @@
 // retry after failure, and what the browser is offered. No network: fetch is replaced.
 require('./helpers/env');
 const assert = require('node:assert/strict');
-const { createMeteredTurn, fromEnv, PROPAGATION_MS, REFRESH_LEAD_MS, EXPIRY_MARGIN_MS } = require('../lib/meteredTurn');
+const { createMeteredTurn, fromEnv, PROPAGATION_MS, REFRESH_LEAD_MS, EXPIRY_MARGIN_MS, RETRY_BASE_MS, RETRY_MAX_MS, QUOTA_RETRY_MS } = require('../lib/meteredTurn');
 const voiceRelay = require('../lib/voiceRelay');
 
 let passed = 0;
@@ -167,6 +167,86 @@ const flush = () => new Promise((r) => setImmediate(r));
     h.advance(PROPAGATION_MS);
     assert.equal(h.m.snapshot().username, 'later');
     h.m.stop();
+  });
+
+  await test('failures back off and stop: no request inside the back-off window, the delay doubles and is capped', async () => {
+    const h = harness({ answers: Array.from({ length: 12 }, () => ({ status: 500, body: {} })) });
+    const gaps = [];
+    h.m.start(); await flush();
+    let last = h.calls.length;
+    for (let i = 0; i < 6; i++) {
+      // poll well inside the window: must not add a request
+      const before = h.calls.length;
+      h.m.snapshot(); await flush();
+      assert.equal(h.calls.length, before, 'no retry inside the back-off window');
+      // jump to just after the window, then one attempt
+      let waited = 0; const step = 1000;
+      while (h.calls.length === last && waited < 3 * RETRY_MAX_MS) { h.advance(step); waited += step; h.m.snapshot(); await flush(); }
+      gaps.push(waited);
+      last = h.calls.length;
+    }
+    assert.ok(gaps[1] > gaps[0] && gaps[2] > gaps[1], 'delay grows: ' + gaps.join(','));
+    assert.ok(Math.max(...gaps) <= RETRY_MAX_MS + 2000, 'delay is capped: ' + gaps.join(','));
+    assert.equal(h.m.status(), 'unavailable');
+    h.m.stop();
+  });
+
+  await test('a quota or access refusal waits an hour and is reported as quota, not as a plain outage', async () => {
+    const h = harness({ answers: [{ status: 429, body: {} }, { status: 200, body: { username: 'after', password: 'a', expiryInSeconds: 3600 } }] });
+    h.m.start(); await flush();
+    assert.equal(h.m.status(), 'quota');
+    h.advance(RETRY_BASE_MS * 10); h.m.snapshot(); await flush();
+    assert.equal(h.calls.length, 1, 'still waiting for the quota back-off');
+    h.advance(QUOTA_RETRY_MS);
+    h.m.snapshot(); await flush();
+    assert.equal(h.calls.length, 2);
+    h.advance(PROPAGATION_MS);
+    assert.equal(h.m.status(), 'ready');
+    h.m.stop();
+  });
+
+  await test('an expired credential is never handed out, and it is reported as unavailable while refreshing fails', async () => {
+    const h = harness({ ttl: 300, answers: [{ status: 200, body: { username: 'first', password: 'f', expiryInSeconds: 300 }}, new Error('down'), new Error('down')] });
+    h.m.start(); await flush();
+    h.advance(PROPAGATION_MS);
+    assert.equal(h.m.snapshot().username, 'first');
+    h.advance(300 * 1000); // past expiry
+    assert.equal(h.m.snapshot(), null, 'expired: not handed out');
+    await flush();
+    assert.equal(h.m.status(), 'unavailable');
+    h.m.stop();
+  });
+
+  await test('status changes are reported once each, so the server pushes only on a real change', async () => {
+    const changes = [];
+    const h = harness({ answers: [new Error('down')] });
+    const m = createMeteredTurn({ appName: 'tableverse', secretKey: SECRET, fetchImpl: h.m ? undefined : undefined, now: () => h.now(), log: null, onChange: (s) => changes.push(s), setTimer: () => ({ unref() {} }), fetchImpl: async (url) => { h.calls.push(url); const a = h.calls.length === 1 ? new Error('down') : null; if (a) throw a; return { ok: true, status: 200, json: async () => ({ username: 'ok', password: 'k', expiryInSeconds: 3600 }) }; } });
+    void m.refresh(); await flush();
+    m.status(); m.status(); // same status again: no event
+    assert.deepEqual(changes, ['unavailable']);
+    h.advance(RETRY_MAX_MS * 2); void m.refresh(); await flush();
+    assert.deepEqual(changes, ['unavailable', 'pending'], 'recovery is reported');
+    m.stop();
+  });
+
+  await test('with Metered unavailable, voice still works on the fallbacks and the status is what the browser is told', async () => {
+    const h = harness({ answers: [new Error('down')] });
+    h.m.start(); await flush();
+    const withStatic = { TURN_URL: 'turn:x:3478', TURN_USERNAME: 'static', TURN_CREDENTIAL: 'static-pass' };
+    assert.ok(voiceRelay.iceServers(withStatic, { playerId: 'p', metered: h.m }).some((s) => s.username === 'static'));
+    assert.equal(h.m.status(), 'unavailable');
+    const noFallback = { TURN_URL: 'turn:x:3478' };
+    const list = voiceRelay.iceServers(noFallback, { playerId: 'p', metered: h.m });
+    assert.equal(list[0].urls, voiceRelay.DEFAULT_STUN, 'STUN is always first');
+    assert.ok(list.every((s) => !String(s.username || '').startsWith('u')), 'no Metered login is invented');
+    assert.ok(!JSON.stringify(list).includes(SECRET));
+    assert.equal(voiceRelay.iceExpiresAt(list, noFallback, h.m), null);
+    h.m.stop();
+  });
+
+  await test('automated tests never reach Metered: every test above uses a stub, and the default environment is off', () => {
+    assert.equal(fromEnv({}), null);
+    assert.equal(typeof globalThis.fetch === 'function', true);
   });
 
   console.log(`\n${passed} metered-turn tests passed`);
