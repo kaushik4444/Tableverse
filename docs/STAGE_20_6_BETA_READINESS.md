@@ -10,6 +10,7 @@ This checklist deliberately separates release-critical verification from optiona
 - Metered's recommended policy is implemented in merged PR #76: 48-hour credential lifetime, replacement every 24 hours, allow up to two minutes for propagation, and let old credentials expire naturally.
 - Static TURN credentials remain configured until the owner explicitly approves cutover.
 - Cleanup remains disabled: `CLEANUP_EXECUTE=false`. The production dry-run reported zero eligible accounts and zero deletions.
+- The current repository has no public privacy-notice or terms page. These, plus a support contact and account/data-deletion explanation, must be prepared before inviting the limited-beta cohort.
 - No Windows or WSL2 test run has been performed.
 - Owner tested a two-person call across Wi-Fi and mobile data; two-way audio worked. The supplied `webrtc-internals` stats show a nominated, succeeded candidate pair with local candidate `relay` (`relayProtocol=udp`), 311,875 bytes sent and 202,044 received. **TURN relay use is confirmed for this call.** The supplied ICE-server list shows `turn:global.relay.metered.ca:80`, but `turnStatus`, `iceExpiresAt`, and the credential source were not captured; dynamic Metered REST credential use is therefore not yet proven.
 - The latest owner-provided WebSocket `welcome` payload reports `turnStatus: unavailable` and `iceExpiresAt: null`; Render logs report `[turn] Metered credential request failed (HTTP 401)`. Dynamic Metered credential authentication is currently failing. This is the one explicitly deferred voice issue carried into Stage 20.6. Keep the static TURN fallback in place; do not rotate or remove credentials without separate approval.
@@ -72,8 +73,8 @@ Before inviting the initial beta cohort, verify and record:
 - [ ] If voice is included, resolve the known Metered HTTP 401 and confirm that the relayed call used a propagated dynamic Metered credential (`turnStatus: ready` and non-null `iceExpiresAt`); record N/A if voice is withheld. Current `turnStatus: unavailable` and `iceExpiresAt: null` mean this gate is not yet passed.
 - [ ] Cleanup remains disabled and the protected deletion environment remains in place.
 - [ ] One-instance operating model is retained; do not scale horizontally.
-- [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable.
-- [ ] Privacy notice, terms/rules, support contact and account/data deletion explanation are available and reviewed.
+- [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable. The default spool uses `os.tmpdir()`; it can cover a process restart on the same machine but does not survive a Render redeploy onto a fresh instance.
+- [ ] Privacy notice, terms/rules, support contact and account/data deletion explanation are available and reviewed. None of these public-facing legal/support pages currently exists in the repository.
 - [ ] The focused security review in Stage 20.3 section 13 is complete and recorded; all critical/high-severity findings are resolved.
 - [ ] A rollback path and person responsible for responding to beta reports are identified.
 
