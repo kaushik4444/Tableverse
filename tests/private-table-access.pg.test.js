@@ -267,11 +267,8 @@ async function run() {
       await invite(host, late, code, { join: false });
       const original = dbFriends.canJoinPrivateRoom;
       let releaseAuth;
-      let startedAuth;
-      const authStarted = new Promise((resolve) => { startedAuth = resolve; });
       dbFriends.canJoinPrivateRoom = async (playerId, roomCode, ...args) => {
         if (playerId === late.id && roomCode === code) {
-          startedAuth();
           await new Promise((resolve) => { releaseAuth = resolve; });
           return true;
         }
@@ -279,7 +276,7 @@ async function run() {
       };
       try {
         late.client.send({ t: 'join', code });
-        await authStarted;
+        await until(() => releaseAuth, 'private invitation authorization is held');
         host.client.send({ t: 'block', id: late.id });
         await until(() => host.client.notices.some((x) => /Blocked/.test(x)), 'host block saved');
         releaseAuth();
