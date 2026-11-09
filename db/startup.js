@@ -25,8 +25,34 @@ function startupWaitMs(env) {
  * connect timeouts without an error code, so those are recognised by message as well as by code.
  */
 function isTransientStartupError(db, err) {
-  if (db && typeof db.isTransientConnectionError === 'function' && db.isTransientConnectionError(err)) return true;
+  // A PostgreSQL/driver error code is authoritative. Never let a coincidental phrase in an auth or
+  // database-name error turn it into a retryable connection failure.
+  if (err && err.code) {
+    return Boolean(db && typeof db.isTransientConnectionError === 'function' && db.isTransientConnectionError(err));
+  }
+  // pg's connect-timeout error has no code, so its known messages are the narrow fallback.
   return /connection timeout|timeout exceeded when trying to connect|connection terminated/i.test(String((err && err.message) || ''));
+}
+
+/** Race an in-flight ping against the remaining startup budget. The losing query is not cancelled, but
+ * the startup path itself cannot wait beyond its deadline; pg's configured query timeout bounds normal
+ * server-side query stalls, while the pool's connection timeout bounds connection acquisition. */
+async function pingBeforeDeadline(db, remainingMs) {
+  let timer;
+  try {
+    await Promise.race([
+      Promise.resolve().then(() => db.ping()),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const err = new Error(`database ping exceeded the startup retry window (${remainingMs} ms)`);
+          err.code = 'ETIMEDOUT';
+          reject(err);
+        }, remainingMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** Pings the database, retrying transient connection errors with a doubling delay (1, 2, 4, 8, 8 ... s) until `waitMs` is used up. */
@@ -34,7 +60,19 @@ async function pingWithRetry({ db, waitMs, log, sleep, now }) {
   const started = now();
   for (let attempt = 1; ; attempt++) {
     try {
-      await db.ping();
+      const elapsed = now() - started;
+      if (waitMs > 0) {
+        const remaining = waitMs - elapsed;
+        if (remaining <= 0) {
+          const err = new Error('database startup retry window expired before ping');
+          err.code = 'ETIMEDOUT';
+          err.startupAttempts = attempt;
+          throw err;
+        }
+        await pingBeforeDeadline(db, remaining);
+      } else {
+        await db.ping();
+      }
       if (attempt > 1) log.log(`[db] Reachable after ${attempt} attempts (${now() - started} ms).`);
       return;
     } catch (err) {
