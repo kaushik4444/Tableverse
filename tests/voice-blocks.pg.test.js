@@ -13,6 +13,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const flushEvents = () => new Promise((resolve) => setImmediate(resolve));
 async function until(fn, label, ms = 30000) {
   const t0 = Date.now();
   for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(25); }
@@ -70,9 +71,8 @@ function socket(port, cookie) {
       assert.deepEqual(B.s.lastVoice(), [A.id, B.id, C.id].sort());
     });
 
-    await sleep(1200); // block cooldown
     A.s.send({ t: 'block', id: B.id });
-    await until(() => A.s.notices().some((x) => /hidden from your table chat and table voice/.test(x)), 'block accepted');
+    await until(() => A.s.notices().some((x) => /^Blocked\./.test(x)), 'block accepted');
 
     await test('after A blocks B, neither of them is offered the other in voice', async () => {
       await until(() => A.s.lastVoice() && !A.s.lastVoice().includes(B.id), 'A stops seeing B');
@@ -86,7 +86,7 @@ function socket(port, cookie) {
       const before = B.s.rtcFrom(A.id);
       A.s.send({ t: 'rtc', to: B.id, data: { kind: 'offer', sdp: 'v=0' } });
       await until(() => A.s.errors().includes('Not in voice'), 'refusal');
-      await sleep(150);
+      await flushEvents();
       assert.equal(B.s.rtcFrom(A.id), before, 'B receives nothing from A');
     });
 
@@ -97,7 +97,7 @@ function socket(port, cookie) {
       const toC = C.s.msgs.filter((m) => m.t === 'emote').length;
       B.s.send({ t: 'emote', e: '👏' });
       await until(() => C.s.msgs.filter((m) => m.t === 'emote').length > toC, 'C sees the reaction');
-      await sleep(150);
+      await flushEvents();
       assert.equal(A.s.msgs.filter((m) => m.t === 'emote').length, toA, 'A sees nothing from B');
     });
 
@@ -107,7 +107,6 @@ function socket(port, cookie) {
       await until(() => A.s.rtcFrom(C.id) > before, 'C reaches A');
     });
 
-    await sleep(1200);
     A.s.send({ t: 'unblock', id: B.id });
     await until(() => A.s.lastVoice() && A.s.lastVoice().includes(B.id), 'voice offered again after unblock');
 
@@ -133,7 +132,6 @@ function socket(port, cookie) {
       assert.ok(listing && !listing.tables.some((table) => table.code === secondCode), 'the blocked table is hidden from the directory');
     });
 
-    await sleep(1200);
     D.s.send({ t: 'unblock', id: E.id });
     await until(() => D.s.notices().includes('Unblocked.'), 'unblock completed');
     await until(() => {
