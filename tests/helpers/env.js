@@ -14,3 +14,6 @@ process.env.NODE_ENV = 'test';
 process.env.TABLEVERSE_ALLOW_DEBUG_TOKENS = '1';
 process.env.TABLEVERSE_SKIP_DOTENV = '1';
 delete process.env.DATABASE_URL;
+// Metered TURN credentials cost quota and must never be requested by a test: tests inject a stub when they need one.
+delete process.env.METERED_APP_NAME;
+delete process.env.METERED_SECRET_KEY;

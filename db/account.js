@@ -86,14 +86,24 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
   };
 }
 
-/** What anybody may see: no id, no email, no sessions, no per-match detail. */
-async function getPublicProfile(username) {
+/**
+ * What anybody may see: no id, no email, no sessions, no per-match detail. With a viewer, a profile is hidden (the same answer as
+ * an unknown name) when either account has blocked the other: a block hides each side from the other everywhere.
+ */
+async function getPublicProfile(username, { viewerId = null } = {}) {
   need();
   const u = String(username || '').trim().toLowerCase();
   if (!/^[a-z0-9_]{3,24}$/.test(u)) return null;
   const r = await db.query('SELECT id, username, display_name, avatar, created_at FROM players WHERE username = $1 AND is_anonymous = FALSE LIMIT 1', [u]);
   const row = r.rows[0];
   if (!row) return null;
+  if (viewerId && isUuid(viewerId) && viewerId !== row.id) {
+    const blocked = await db.query(
+      'SELECT 1 FROM player_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1',
+      [viewerId, row.id]
+    );
+    if (blocked.rows.length) return null;
+  }
   const s = await getPlayerProfile(row.id, { memberSince: row.created_at });
   return { username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate };
 }

@@ -246,9 +246,10 @@ function socket(port, cookie) {
       assert.ok(message, 'the message is in memory');
       sc.send({ t: 'report', messageId: message.mid, reason: 'spam', details: 'keeps\u0000 repeating ads', text: 'forged text', id: B.id });
       await until(() => sc.notices().some((n) => /Thanks/.test(n)), 'report confirmation');
-      const rows = await q('SELECT reporter_id, reported_id, room_code, message_id::text AS mid, message_text, reason, details FROM chat_reports WHERE reporter_id = $1', [C.id]);
+      const rows = await q('SELECT reporter_id, reported_id, reported_display_name, room_code, message_id::text AS mid, message_text, reason, details FROM chat_reports WHERE reporter_id = $1', [C.id]);
       assert.equal(rows.length, 1);
       assert.equal(rows[0].reported_id, A.id, 'the author comes from the server, not from the client');
+      assert.equal(rows[0].reported_display_name, 'Alpha', 'the reported-name snapshot comes from the database, not the client');
       assert.equal(rows[0].message_text, 'hello from alpha', 'the text comes from the server copy');
       assert.equal(rows[0].room_code, code);
       assert.equal(rows[0].mid, message.mid);
@@ -281,8 +282,8 @@ function socket(port, cookie) {
       const existing = (await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [C.id]))[0].n;
       for (let i = existing; i < 20; i++) {
         await q(
-          'INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason) VALUES ($1, $2, $3, $4, $5, $6)',
-          [C.id, A.id, code, crypto.randomUUID(), `filler ${i}`, 'spam']
+          'INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [C.id, A.id, 'Alpha', code, crypto.randomUUID(), 'filler ' + i, 'spam']
         );
       }
       const fresh = sa.messageOf('alpha is back');
@@ -292,9 +293,14 @@ function socket(port, cookie) {
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [C.id]))[0].n, 20, 'no report beyond the cap');
     });
 
-    await test('deleting an account removes the blocks it made and the reports that name it', async () => {
+    await test('deleting an account retains reports about it with a display-name snapshot, but removes reports it made', async () => {
       await dbAccount.deleteAccount(A.id, PW);
-      assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reported_id = $1', [A.id]))[0].n, 0, 'reports about the deleted account are gone');
+      const retained = await q('SELECT reported_id, reported_display_name, message_text FROM chat_reports WHERE reporter_id = $1 ORDER BY created_at', [C.id]);
+      assert.equal(retained.length, 20, 'all reports by the surviving reporter remain');
+      assert.ok(retained.every((r) => r.reported_id === null), 'the deleted account UUID is cleared');
+      assert.ok(retained.every((r) => r.reported_display_name === 'Alpha'), 'the display-name snapshot remains');
+      assert.ok(retained.some((r) => r.message_text === 'hello from alpha'), 'the original report text remains');
+      assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [A.id]))[0].n, 0, 'reports made by the deleted reporter cascade away');
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocked_id = $1 OR blocker_id = $1', [A.id]))[0].n, 0);
     });
 

@@ -66,6 +66,17 @@ Tables, games in progress, chat and presence live in memory and are **lost** on 
 - Do **not** restart the service while the database is down if matches are pending: the local spool survives a process restart but not a replaced instance. Wait for Neon, then check `/readyz` shows no pending matches.
 - Neon free scales to zero: the first request after idle can be slow; this is not an outage. A probe that takes longer than 3 s returns 503 `database unavailable`; repeat it before escalating.
 
+## Startup fails with "Cannot reach the database"
+`FATAL: refusing to start: Cannot reach the database: ...` means the very first `SELECT 1` failed, **before any migration ran**. A failed migration reads `Database migration failed: ...` instead. The server never falls back to the in-memory store in production.
+- `Connection terminated due to connection timeout` (or `timeout exceeded when trying to connect`) is the 5 s connect timeout of `db/pool.js`. It usually means Neon's compute was asleep or briefly unavailable, or the network path is blocked.
+- In production the first check is retried for up to 45 s (waits of 1, 2, 4, 8, 8 ... s) for connection-level errors only. The log shows `[db] Not reachable yet (...); attempt N` and then either `Reachable after N attempts` or the FATAL line with `(after N attempts)`. A wrong password, unknown database or bad host name is not retried and fails at once. `DB_STARTUP_WAIT_MS` changes the limit (`0` = single attempt, capped at 120000); nothing needs to be set.
+- If it still fails after the retries, the previous Render instance keeps serving. Check, in this order:
+  1. **Neon status page**, and the project's **Operations** list at the failure time (a `start_compute` that failed or took long).
+  2. **Neon usage**: compute hours used against the plan's limit. An exhausted free quota suspends the compute.
+  3. **Connection string host**: the runtime `DATABASE_URL` should be the **pooled** string (the host contains `-pooler`); use the direct string only for scripts such as the cleanup tool. Compare the host with the one the Neon console shows now (a deleted or reset branch has a new endpoint). Never paste the full URL anywhere.
+  4. **Neon IP Allow** (if enabled) must include Render's outbound addresses.
+  5. **Render**: Events and Logs for that deploy, the Environment value of `DATABASE_URL` (no stray spaces), the service region against the Neon region, and [Render's status page](https://status.render.com). A manual redeploy that works points to a cold start rather than a configuration fault.
+
 ## Migration failure
 Startup log `db.migration_failed` (or `Database migration failed: ...`) and the deploy does not become live. Fix forward with a new migration or roll the deploy back; never edit an applied migration.
 
@@ -156,17 +167,17 @@ Only with owner approval. Recovery replaces what players see; decide first, then
 ## Voice chat connectivity (TURN) — verify in production
 Voice is peer to peer. With only STUN (the default), players on some mobile carriers or office networks cannot hear each other.
 - Check: Render > service > Environment has `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (or `ICE_SERVERS`). Status: **configured** (Metered.ca free tier, set on Render, 2026-11-06).
-- Security: the current static pair is sent to every visitor in the welcome message. To stop that, set `TURN_SHARED_SECRET` (per-player, one-hour logins) only after confirming the TURN provider accepts REST-scheme credentials; then rotate the static credential. Status: **open, needs your decision** (depends on provider support and whether the static pair is rotated).
-- Switch-over (do these in order, in one redeploy; do not run a half-switched state):
-  1. Confirm the provider accepts REST-scheme credentials (coturn `use-auth-secret`, or the provider's documented equivalent).
-     Metered does NOT, as checked on 2026-11-08 (https://www.metered.ca/docs/turnserver-guides/expiring-turn-credentials): its expiring
-     credentials are created by a server-side API call (`POST https://mla2.metered.live/api/v1/turn/credential` with the account secret
-     key, `expiryInSeconds`), and the lobby fetches them with a `GET`. `TURN_SHARED_SECRET` as implemented here will not authenticate
-     against Metered. Using Metered with per-player logins needs a separate server-side integration, which is not built yet.
-  2. Remove `ICE_SERVERS` from the environment if it is set. It overrides every other TURN setting, including the per-player login, and any static pair inside it would still be sent to visitors.
-  3. Remove `TURN_USERNAME` and `TURN_CREDENTIAL`. Keep `TURN_URL`; add `TURN_SHARED_SECRET` (and optionally `TURN_TTL_SECONDS`).
-  4. Redeploy, then check the welcome message of a test connection: the TURN entry must carry a `username` of the form `<expiry>:<player id>` and no static login.
-  5. Re-run the two-phone test below, then rotate the static credential at the provider so the old pair stops working.
+- Security: the current static pair is sent to every visitor in the welcome message. Status: **code ready, not switched on (needs your approval)**.
+- Preferred: Metered's official REST API (`lib/meteredTurn.js`). Per Metered's docs (https://metered.ca/docs/turn-rest-api/post-create-credential) the call is `POST https://<app>.metered.live/api/v1/turn/credential?secretKey=…` with optional JSON `expiryInSeconds` and `label`, returning `username` and `password`. The server fetches credentials ahead of use and keeps them valid; a new credential takes up to 2 minutes to propagate, so it is only handed out after that. An earlier note in this file named `mla2.metered.live`; confirm the host in the Metered dashboard before switching on.
+- Switch-over (needs your approval; do these in one redeploy, never a half-switched state):
+  1. Set on Render (secret values only in Render's secret environment, never in the repository or logs): `METERED_APP_NAME` (the app name, not a URL), `METERED_SECRET_KEY`, keep `TURN_URL`.
+  2. Remove `ICE_SERVERS` if it is set; it overrides every other TURN setting.
+  3. Keep `TURN_USERNAME` and `TURN_CREDENTIAL` set during validation. While no Metered login is ready (startup, or after failures) the server offers the static pair as a fallback, so voice keeps working; once a Metered login is ready the static pair is no longer sent. After one successful, approved test (below), remove both variables and rotate the static credential at Metered so the old pair stops working. Do not remove them before that approval: without them, voice falls back to STUN only whenever Metered is not ready.
+  4. Check the welcome message of a test connection: the TURN entry must carry a fresh Metered `username` and no static login. Logs show only the kind of failure (`HTTP 401`, `timeout`, `network error`), never the key.
+  5. Run the two-phone test below, and a table open for over an hour, before calling it done.
+- Quota (Metered free tier, checked on the dashboard by the owner on 2026-11-09): 500 MB of relay traffic per month; 309 MB used (62%), 191 MB left; renews 2026-12-06. When the quota is used up the relay stops until the next cycle, and there are no overage charges at $0/GB. The app cannot read relay usage itself: watch the dashboard. Players see a notice when the relay is unavailable (`turnStatus` `unavailable`) or out of quota (`quota`); voice then works only where a direct connection is possible.
+- Retries are bounded: failures back off from 30 s up to 15 min, and a 402, 403 or 429 waits one hour. Credential requests never run in a loop. Tests use stubs only and never call Metered, so they do not use quota.
+- Fallback: `TURN_SHARED_SECRET` (HMAC `<expiry>:<player id>` logins) remains for a provider that documents the coturn `use-auth-secret` scheme. Metered does not use that scheme.
 - Refresh: a per-player login lasts one hour by default. The browser asks for a new one ten minutes before it ends (`ice` request, answered at most once per 20 seconds) and applies it to open connections, so no re-login is needed. Check after a deploy: a table that stays open for more than an hour keeps its audio. Raise `TURN_TTL_SECONDS` only if the provider or a reconnect cost makes that necessary; the maximum is 24 hours.
 - Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: **passed** (2026-11-06).
 - If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).

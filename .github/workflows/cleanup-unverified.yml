@@ -1,10 +1,17 @@
 name: Cleanup unverified accounts
 
-# Daily: a dry run that counts unverified accounts older than 30 days. It deletes only when the repository
-# variable CLEANUP_EXECUTE is 'true' (or when run by hand with execute = true). The script also refuses to delete more
-# than its --max limit (default 1000), so a wrong rule cannot remove a large number of accounts unnoticed.
-# Needs the secret CLEANUP_DATABASE_URL (a database URL, never printed). A failed run is reported by GitHub to the
-# repository's notification settings, and the summary below shows the counts only (no e-mail, name or id).
+# Two jobs, two database roles.
+#
+#  cleanup-dry-run (daily, and by hand): counts the candidates with CLEANUP_DRYRUN_DATABASE_URL, a SELECT-only role.
+#    It has no environment and does not read the deletion secret. The script refuses any role that can write, and the
+#    count runs in a READ ONLY transaction, so this job cannot delete anything.
+#
+#  cleanup-delete: deletes, and only when someone starts the workflow by hand with `execute` set AND the repository
+#    variable CLEANUP_EXECUTE is 'true'. It runs in the production-cleanup environment, so a required reviewer must
+#    approve it before the job starts; no input can skip that. It never runs on the schedule. It uses CLEANUP_DATABASE_URL.
+#
+# The script removes only accounts that are unverified, older than 30 days, not guests, and not admins or owners
+# (db/unverifiedCleanup.js). It refuses to delete more than --max accounts in one run (default 1000).
 
 on:
   schedule:
@@ -12,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       execute:
-        description: 'Delete the candidates (false = dry run only)'
+        description: 'Request the deletion job (it still waits for approval in the production-cleanup environment)'
         type: boolean
         default: false
 
@@ -24,7 +31,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  cleanup:
+  cleanup-dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.CLEANUP_DRYRUN_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check the read-only database secret is set
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::CLEANUP_DRYRUN_DATABASE_URL is not set. Nothing was run."
+            exit 1
+          fi
+
+      - name: Dry run (SELECT only, counts only)
+        run: |
+          set -o pipefail
+          node scripts/cleanup-unverified.js | tee dry-run.txt
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Unverified account cleanup: dry run"
+            echo ''
+            echo 'Read-only role (CLEANUP_DRYRUN_DATABASE_URL). The count ran in a READ ONLY transaction, and the script refuses a role that can write.'
+            echo ''
+            echo '**Records deleted by this run: 0.** This job has no deletion statement and no deletion secret.'
+            echo ''
+            echo '```'
+            cat dry-run.txt 2>/dev/null || echo 'The dry run did not finish. See the job log.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup-delete:
+    # Only after the dry run passed, so the reviewer sees its summary before approving.
+    needs: cleanup-dry-run
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.execute == true && vars.CLEANUP_EXECUTE == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production-cleanup
@@ -42,20 +96,14 @@ jobs:
 
       - run: npm ci
 
-      - name: Check the database secret is set
+      - name: Check the deletion secret is set
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::error::CLEANUP_DATABASE_URL is not set. Nothing was run."
+            echo "::error::CLEANUP_DATABASE_URL is not set. Nothing was deleted."
             exit 1
           fi
 
-      - name: Dry run (counts only)
-        run: |
-          set -o pipefail
-          node scripts/cleanup-unverified.js | tee dry-run.txt
-
-      - name: Delete candidates (only when enabled)
-        if: ${{ vars.CLEANUP_EXECUTE == 'true' || (github.event_name == 'workflow_dispatch' && inputs.execute) }}
+      - name: Delete candidates (after approval)
         run: |
           set -o pipefail
           node scripts/cleanup-unverified.js --execute | tee execute.txt
@@ -64,9 +112,11 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Unverified account cleanup"
+            echo "## Unverified account cleanup: deletion"
+            echo ''
+            echo 'Ran in the production-cleanup environment after reviewer approval.'
+            echo ''
             echo '```'
-            cat dry-run.txt 2>/dev/null || true
-            cat execute.txt 2>/dev/null || true
+            cat execute.txt 2>/dev/null || echo 'The deletion did not finish. See the job log.'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

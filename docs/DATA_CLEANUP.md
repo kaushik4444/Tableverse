@@ -7,7 +7,7 @@ migration history**, and leave the application working. This document is the pla
 **Nothing in this repository runs the cleanup by itself.** It only happens when a person runs the command in section 4
 with `--execute` and the confirmation. The script was developed and tested only on throw-away local databases.
 
-## 1. Every table in the database (from `db/migrations/001` to `014`)
+## 1. Every table in the database (from `db/migrations/001` to `015`)
 
 There are 22 tables and 21 foreign keys: 21 tables are emptied and `schema_migrations` is preserved. The list below is the
 plan in `db/cleanup.js` (`PLAN`, `PRESERVE`, `EXPECTED_FKS`). The script re-discovers the live schema on every run and
@@ -26,7 +26,7 @@ this code version.
 | 8 | `analytics_daily` | Aggregate daily counters per metric and dimension, no personal data (migration 013) | **Empty** | none |
 | 9 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
 | 10 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
-| 11 | `chat_reports` | Chat reports (migration 010): reporter, reported account, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (CASCADE, 2 keys) |
+| 11 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, optional reported account, reported-name snapshot, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
 | 12 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
 | 13 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
 | 14 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
@@ -42,14 +42,17 @@ this code version.
 **Migration 013 (admin console, Stage 20.5) adds eight tables**, all of them emptied in the plan above:
 `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, `feedback`, `announcements`,
 `announcement_dismissals` and `admin_audit_log`. It also adds the column `players.role`, which needs no separate step.
-Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
+Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Migration 015 adds the reported-name snapshot and changes the moderation report foreign-key action. Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
 until every table in the migrations is classified there, and this section must be updated with it.
 
 Player statistics are not stored anywhere: they are computed from `matches` / `match_participants`, so emptying those
 removes all stats. There are no other user-related tables, views, sequences (all keys are UUIDs) or triggers.
 
 Why this order: every table is deleted **before** the tables it references, so no row is ever left pointing at a
-deleted parent and nothing depends on `ON DELETE CASCADE` / `SET NULL` doing deletions behind the script's back. The
+deleted parent and nothing depends on `ON DELETE CASCADE` / `SET NULL` doing deletions behind the script's back.
+This is a full-database wipe: it intentionally empties `chat_reports` and removes all moderation reports. The separate
+individual-account deletion policy in `docs/CHAT_MODERATION.md` retains reports against a deleted target, but does not
+change this full-wipe behavior. The
 script checks that each `DELETE` removed exactly the rows it counted and that the tables still to come are unchanged.
 It never uses `TRUNCATE`, `DROP`, `ALTER`, `CREATE` or `CASCADE`.
 
@@ -121,31 +124,90 @@ TEST_DATABASE_URL=postgres://postgres:secret@127.0.0.1:5432/postgres npm run tes
 
 ## Unverified accounts (30 days)
 
-Accounts that registered, never verified their e-mail, and are more than 30 days old can be removed with:
+Accounts that registered, never verified their e-mail, are more than 30 days old, are not guests, and are not admins or
+owners can be removed. The rule is in `db/unverifiedCleanup.js` (`CANDIDATE`). Each batch re-checks the rule inside its own
+transaction, so an account verified a moment earlier is kept.
+
+Commands (the script reads `DATABASE_URL`; the workflow sets it from a secret):
 
 ```
-DATABASE_URL='…' node scripts/cleanup-unverified.js            # dry run: prints a count, deletes nothing
-DATABASE_URL='…' node scripts/cleanup-unverified.js --execute  # deletes, in batches of 200; refuses above --max (default 1000, exit 3)
-node scripts/cleanup-unverified.js --days 45                   # another period, 1–365 days
+node scripts/cleanup-unverified.js                  # dry run: prints the count, deletes nothing
+node scripts/cleanup-unverified.js --execute        # deletes, in batches of 200; refuses above --max (default 1000, exit 3)
+node scripts/cleanup-unverified.js --days 45        # another period, 1-365 days
 ```
 
-### Scheduled job (.github/workflows/cleanup-unverified.yml)
+A dry run runs its count in a `READ ONLY` transaction and refuses (exit 2, nothing run) any database role that is a
+superuser or that has INSERT, UPDATE, DELETE or TRUNCATE on a table in `public`. So a dry run cannot change data even if
+the wrong URL is used.
 
-- Runs daily at 03:17 UTC. Each run is a dry run; it deletes only when the repository variable `CLEANUP_EXECUTE` is `true`.
-- Needs the secret `CLEANUP_DATABASE_URL` (the production database URL). It is not created by this repository: the owner adds it.
-- The `production-cleanup` environment should have a required reviewer, so every deletion is approved (repository settings).
+### What is deleted with an account
+
+- The account's logins, tokens, sessions, recent tables, dismissals, friendships, friend requests, private-table
+  invitations and chat blocks are removed, in both directions where a relationship has two sides.
+- Reports made by a deleted reporter are removed (`reporter_id` cascades). Reports **against** a deleted account remain:
+  migration 015 clears `reported_id` with `ON DELETE SET NULL` and preserves the server-captured
+  `reported_display_name`, message, reason, details, room and timestamp. This retains moderation evidence without
+  retaining the deleted account UUID.
+- Match history is kept; `match_participants.player_id` is cleared and the name becomes the deleted-player name.
+- `tests/unverified-cleanup.pg.test.js` checks every foreign key to `players`: each must cascade or set NULL. A new
+  reference that does neither fails the test until it is classified here.
+
+### The workflow (.github/workflows/cleanup-unverified.yml)
+
+Two jobs, two database roles:
+
+| Job | When | Database secret | Environment |
+|---|---|---|---|
+| `cleanup-dry-run` | every day at 03:17 UTC, and by hand | `CLEANUP_DRYRUN_DATABASE_URL` (SELECT only) | none |
+| `cleanup-delete` | only by hand, with `execute` ticked **and** the variable `CLEANUP_EXECUTE` = `true`; runs after the dry run | `CLEANUP_DATABASE_URL` (can delete) | `production-cleanup` (required reviewer) |
+
+- The dry run never reads the deletion secret, and the schedule never reaches the deletion job.
+- The `production-cleanup` environment's required reviewer approves the deletion job whatever the inputs say. The input
+  only requests it; it cannot skip the approval.
+- `CLEANUP_EXECUTE` is a second switch. Keep it `false` until a deletion has been approved on purpose.
+- Both job summaries say how many accounts were counted. The dry run states "Records deleted by this run: 0."
+
+### Setup the owner does (not done by this repository)
+
+**1. Create the read-only Neon role** (Neon console, project, branch of production). Run this SQL in the SQL
+editor as the database owner; it creates the role and grants read-only access. Replace the placeholders; generate the
+password yourself and store it only in GitHub:
+
+```sql
+CREATE ROLE cleanup_readonly LOGIN PASSWORD '<generated password>';
+GRANT CONNECT ON DATABASE <database name> TO cleanup_readonly;
+GRANT USAGE ON SCHEMA public TO cleanup_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO cleanup_readonly;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO cleanup_readonly;
+```
+
+`ALTER DEFAULT PRIVILEGES` covers tables later created by the role that runs it (the owner, which runs the migrations).
+Check that the new role cannot delete (in a session as that role, `DELETE FROM players WHERE false;` must fail with
+"permission denied"). Build its connection string from the same host and database, with the new user and password.
+
+**2. Add the GitHub secret for the dry run.** Repository Settings, Secrets and variables, Actions, New repository secret:
+name `CLEANUP_DRYRUN_DATABASE_URL`, value the read-only connection string. Do not paste it anywhere else.
+
+**3. Create and protect the deletion environment before any execute run.** Settings, Environments, create
+`production-cleanup` (do not rely on the workflow creating it automatically). GitHub creates a missing environment
+referenced by a workflow without protection rules, so the name alone is not an approval gate. Configure:
+- Required reviewers: add the person who must approve each deletion; tick "Prevent self-review" if another person should approve;
+- Deployment branches and tags: "Selected branches", only `main`;
+- add the secret `CLEANUP_DATABASE_URL` to this environment. After confirming it is present there, remove the
+  repository-level secret with the same name so the deletion credential is scoped to the protected job. The dry-run job
+  never reads either deletion-secret location.
+- Before any manual execute request, verify the environment page visibly lists the required reviewer and the branch rule.
+  A manual input cannot bypass a configured environment gate, but workflow YAML cannot create the reviewer rule itself.
+
+**4. Keep the kill switch.** Repository variable `CLEANUP_EXECUTE` stays `false` until you approve a deletion.
+
+**5. Check the first scheduled run** in the Actions tab: the dry run should show a count and "Records deleted by this
+run: 0." Nothing is deleted until you start the workflow by hand with `execute` ticked, the variable set to `true`, and
+you approve the `production-cleanup` deployment.
+
 - `--execute` refuses to delete more than 1000 accounts in a run (exit 3, nothing deleted). Review the dry run before raising `--max`.
-- The job summary lists counts only. A failed run is reported by GitHub's notifications.
-- Status: **not enabled**. Enabling it (adding the secret, the reviewer and the variable) needs the owner's approval.
-
-- The clock starts when the account was created. A verification link is valid for 24 hours and can be re-sent, so
-  this allows about a month to verify.
-- Guests and accounts with any verified login are never removed. Registration stays open and does not change.
-- Each batch re-checks the rule inside its own transaction, so an account verified a moment earlier is kept.
-- The account's own rows (logins, tokens, sessions, friendships, invitations, reports, blocks) are removed with it.
-  Match history is kept; the link to the removed player is cleared.
-- Nothing runs automatically. Run the dry run first, record the count, then run `--execute` once.
-- Tests: `tests/unverified-cleanup.pg.test.js` (PostgreSQL, part of `npm run test:pg`).
+- Tests: `tests/unverified-cleanup.pg.test.js` (PostgreSQL, part of `npm run test:pg`), `tests/cleanup-workflow.test.js`
+  (the workflow's structure, in `npm test`).
 
 ## Production dry run: evidence (Stage 20.3, 2026-11-09)
 
