@@ -1892,7 +1892,7 @@ function start(opts = {}) {
       clearTimeout(timer);
       await Promise.all([matchDrain, authRoutes.drainDeliveries(Math.max(0, deadline - Date.now()))]);
     }
-    await analytics.close(Math.max(0, Math.min(2000, deadline - Date.now()))); // last counters; gives up quickly, never delays shutdown
+    await analytics.close(2000); // last counters: always attempted, and shutdown waits at most 2 s for them
     matchQueue.close();
     for (const room of rooms.values()) clearTimeout(room.timer);
     await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
