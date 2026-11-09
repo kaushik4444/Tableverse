@@ -79,7 +79,8 @@ function socket(port, cookie) {
       assert.ok(own.profile.joinedAt);
       const pub = await anon.get(`/api/players/${u.username}`);
       assert.equal(pub.status, 200);
-      assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'displayName', 'joinedAt', 'played', 'username', 'winRate', 'wins']);
+      assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'blockedByViewer', 'displayName', 'joinedAt', 'played', 'username', 'winRate', 'wins']);
+      assert.equal(pub.json.profile.blockedByViewer, false, 'an anonymous viewer is never shown as blocked');
       const raw = JSON.stringify(pub.json);
       for (const secret of [u.email, u.id, 'password', 'token', 'session', 'hash']) assert.ok(!raw.toLowerCase().includes(String(secret).toLowerCase()), 'public profile leaks ' + secret);
       assert.equal(pub.headers.get('cache-control'), 'no-store');
@@ -92,8 +93,12 @@ function socket(port, cookie) {
       const a = await newUser('BlkA', 'Blocker Bea');
       const b = await newUser('BlkB', 'Blocked Bo');
       await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)', [a.id, b.id]);
-      assert.equal((await a.browser.get(`/api/players/${b.username}`)).status, 404, 'the blocker does not see the blocked profile');
-      assert.equal((await b.browser.get(`/api/players/${a.username}`)).status, 404, 'the blocked person does not see the blocker');
+      const seenByBlocker = await a.browser.get(`/api/players/${b.username}`);
+      assert.equal(seenByBlocker.status, 200, 'the blocker still sees the profile');
+      assert.equal(seenByBlocker.json.profile.blockedByViewer, true, 'and it is shown as blocked');
+      const seenByBlocked = await b.browser.get(`/api/players/${a.username}`);
+      assert.equal(seenByBlocked.status, 200, 'the blocked person still sees the profile');
+      assert.equal(seenByBlocked.json.profile.blockedByViewer, true, 'and it is shown as blocked');
       assert.equal((await a.browser.get(`/api/players/${a.username}`)).status, 200, 'own public page unaffected');
       const c = await newUser('BlkC', 'Bystander Cy');
       assert.equal((await c.browser.get(`/api/players/${b.username}`)).status, 200, 'others are unaffected');

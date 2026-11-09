@@ -97,15 +97,17 @@ async function getPublicProfile(username, { viewerId = null } = {}) {
   const r = await db.query('SELECT id, username, display_name, avatar, created_at FROM players WHERE username = $1 AND is_anonymous = FALSE LIMIT 1', [u]);
   const row = r.rows[0];
   if (!row) return null;
+  // A block shows the profile as blocked; nothing else about the profile is hidden.
+  let blockedByViewer = false;
   if (viewerId && isUuid(viewerId) && viewerId !== row.id) {
     const blocked = await db.query(
       'SELECT 1 FROM player_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1',
       [viewerId, row.id]
     );
-    if (blocked.rows.length) return null;
+    blockedByViewer = blocked.rows.length > 0;
   }
   const s = await getPlayerProfile(row.id, { memberSince: row.created_at });
-  return { username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate };
+  return { username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate, blockedByViewer };
 }
 
 // ---------------------------------------------------------------------------------------------- recent tables

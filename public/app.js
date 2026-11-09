@@ -1371,7 +1371,7 @@
     if (m.sys) return `<div class="msg sys">${esc(m.text)}</div>`;
     const mine = m.id === S.id;
     // Block and report are enforced by the server; these buttons only send the request.
-    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}" data-mid="${esc(m.mid || '')}" title="Hide this player from your table chat and voice, stop sharing tables with them, and remove them from a table you share (a running game finishes first). They are not told." aria-label="Block ${esc(m.name)}">Block</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}">Report</button>` : ''}</span>`;
+    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}" data-mid="${esc(m.mid || '')}" title="Hide this player's table chat and voice from you, and stop invitations between you. You can still share a table. They are not told." aria-label="Block ${esc(m.name)}">Block</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}">Report</button>` : ''}</span>`;
     const menu = !mine && m.mid && S.reportMenuFor === m.mid ? reportMenuHTML(m.mid) : '';
     return `<div class="msg ${mine ? 'mine' : ''}"><span class="mav" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span><div class="mb"><b>${esc(m.name)}${m.spec ? ' <i title="Spectator">👁</i>' : ''}</b><p>${esc(m.text)}</p>${actions}${menu}</div></div>`;
   }
@@ -1582,7 +1582,7 @@
   /** Accounts this person has blocked, with a button to unblock each. Names are shown only here, to the blocker. */
   function blockedHTML() {
     const list = S.blocked;
-    const head = `<div class="setting-row"><div><b>Blocked players</b><small>They cannot see your table chat or hear your table voice, and you will not share a table. A player who shares your table is removed when a running game ends, or straight away in the lobby. They are not told. Unblocking restores chat and voice, but not a removed seat.</small></div></div>`;
+    const head = `<div class="setting-row"><div><b>Blocked players</b><small>You will not see their table chat, and you will not hear each other in table voice. You cannot invite each other. You can still share a table. They are not told. Unblocking restores chat and voice.</small></div></div>`;
     if (!list) return `${head}<p class="hint" style="text-align:left">Loading…</p>`;
     if (!list.length) return `${head}<p class="hint" style="text-align:left">You have not blocked anyone.</p>`;
     const rows = list.map((b) => `<div class="setting-row"><div><b>${esc(b.name || 'Player')}</b></div><button type="button" class="btn ghost small" data-act="unblock" data-id="${esc(b.id)}" aria-label="Unblock ${esc(b.name || 'player')}">Unblock</button></div>`).join('');
@@ -1634,7 +1634,7 @@
     else if (P.error) inner = errorBlock(P.error);
     else {
       const d = P.data;
-      inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${friendLine(d.username)}</div></header>
+      inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${d.blockedByViewer ? '<p class="pp-blocked"><b>Blocked</b></p>' : friendLine(d.username)}</div></header>
         <div class="stat-grid"><div class="stat-tile"><span class="stat-v">${d.played}</span><span class="stat-l">Games played</span></div><div class="stat-tile good"><span class="stat-v">${d.wins}</span><span class="stat-l">Wins</span></div><div class="stat-tile"><span class="stat-v">${d.winRate === null ? '–' : d.winRate + '%'}</span><span class="stat-l">Win rate</span></div></div>`;
     }
     $app.innerHTML = `${topbarHTML()}<main class="page profile-page"><a class="back-link" href="/" data-act="goHome">← Back to games</a>${inner}</main>`;
