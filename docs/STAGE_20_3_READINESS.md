@@ -1,23 +1,30 @@
 # Stage 20.3 readiness
 
-Status: **technical work complete except the items under "Remaining manual tests" and the approvals under "Outstanding risks and approvals"**. Nothing in this document has been executed against production: no branch created, no load test run, no static TURN credential removed, no cleanup enabled, no data changed.
+Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Not done: real-device tests, Windows/WSL2 test runs, the guest TURN policy decision, the security audit, and the Neon load test (planned, not executed). Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
 
 ## 1. Completed work and merged PRs
 
-| PR | What | State |
-|---|---|---|
-| #72 | Metered TURN logins via Metered's REST API (server side, bounded retries, activation delay, ICE restart on a new login) | merged |
-| #69 | Announcement stale-cache fix | merged |
-| #72, #73, #74 | Stage 20.3 items (per owner's brief) | merged |
-| #75 | Explicit TLS for Neon (`sslmode` handling in `db/poolConfig.js`), Actions `@v5`, dry-run record | merged (`ede0672`) |
-| #70 | Bounded retry for the first database connectivity check at startup (Render "Cannot reach the database") | merged |
-| #76 | Metered logins: 48-hour lifetime, replaced every 24 hours | open, for review |
-| this PR | Stage 20.3 readiness record | open, for review |
+"Code merged" means merged to `main` with CI passing. "Production verified" means someone observed the behaviour in production; only the owner's own reports count, and they are marked as such.
+
+| PR | What | Code merged | Production verified |
+|---|---|---|---|
+| #66 | Stage 20.5 admin console, analytics, announcements, roles, audit log | yes | not separately recorded |
+| #70 | Bounded retry for the first database connectivity check at startup (Neon wake-up) | yes (`10:35 UTC`) | owner health check reported; this behaviour not separately verified |
+| #71 | Announcement date fields are selectable | yes (`11:25 UTC`) | not separately verified |
+| #72 | Metered REST logins: server side, bounded retries, activation delay, ICE restart on a new login | yes (`12:20 UTC`) | not verified (no Metered login observed by this review) |
+| #73 | A block hides the public profile in both directions | yes (`12:28 UTC`) | not verified |
+| #74 | Cleanup: read-only dry run, approval-gated deletion, admins and owners excluded | yes (`14:54 UTC`) | dry run reported by the owner (section 2) |
+| #75 | Explicit TLS for Neon (`db/poolConfig.js`), Actions `@v5`, dry-run record | yes (`ede0672`) | Actions notice removal: confirm in the next run |
+| #76 | Metered logins: 48-hour lifetime, replaced every 24 hours; 15-minute minimum requested lifetime; rotation handover fix | yes (`f7ba6fc`) | not verified (no deployed login observed) |
+| #77 | This readiness record | yes (`0306f7c`) | not applicable |
+
+Other merged work relevant to Stage 20.3: `#69` (announcement stale-cache fix).
 
 ## 2. Production verification evidence
 
 - Health: production health verification complete (per owner).
-- Cleanup dry run (owner's report, 2026-11-09): 0 unverified accounts older than 30 days; 0 records deleted; read-only transaction confirmed; read-only role has no write privileges; dry-run job contains no deletion SQL and no deletion secret. `CLEANUP_EXECUTE=false`. Recorded in `docs/DATA_CLEANUP.md`.
+- Scheduled run history: the scheduled run at 11:36 UTC on 2026-11-09 failed at the step "Check the database secret is set", because `CLEANUP_DATABASE_URL` was not yet configured. Nothing ran against the database. The owner has since set the secret and variable; Claude has not triggered or inspected any run.
+- Cleanup dry run (owner's report, 2026-11-09; not re-run by Claude): 0 unverified accounts older than 30 days; 0 records deleted; read-only transaction confirmed; read-only role has no write privileges; dry-run job contains no deletion SQL and no deletion secret. `CLEANUP_EXECUTE=false`. Recorded in `docs/DATA_CLEANUP.md`.
 
 ## 3. Metered support confirmation
 
@@ -36,7 +43,7 @@ Checked against Metered's public docs (`metered.ca/docs/turn-rest-api/post-creat
 | Credentials created server-side | Yes. Only the server calls Metered (`lib/meteredTurn.js`). |
 | Secret never in clients or logs | Yes for logs and errors (only the failure kind is logged; tests check this). The secret travels in the request URL, as Metered's docs require. |
 | Creation and refresh reliable | Bounded retries with back-off; 402/403/429 wait one hour; a failed refresh keeps the current login. |
-| 48 h lifetime, 24 h rotation | **Was not implemented** (TTL capped at 24 h, default 1 h, rotation 10 min before expiry). Fixed in #76. |
+| 48 h lifetime, 24 h rotation | **Was not implemented** (TTL capped at 24 h, default 1 h, rotation 10 min before expiry). Implemented in #76 (merged `f7ba6fc`); production verification pending. |
 | Old credential usable during overlap | Yes: the old login is not deleted; it expires naturally. |
 | API failures do not issue expired or invalid credentials | Yes: a credential is never handed out before propagation or in its last minute. |
 | New credentials not distributed before activation | Yes: `readyAt = issued + 2 min`; a timer and a poll both promote it. |
@@ -56,7 +63,7 @@ Checked against Metered's public docs (`metered.ca/docs/turn-rest-api/post-creat
 Do not start until the owner approves after real-device tests (section 7).
 
 Preconditions (all must hold):
-1. PR #76 merged and deployed; Render logs show no `[turn]` failure lines (`quota`, `HTTP 4xx`, `network error`, `timeout`, `bad answer`) for at least 48 hours. Healthy requests write no `[turn]` line, so the absence of failure lines is the signal, and precondition 2 confirms that logins are being issued.
+1. PR #76 is merged (done, `f7ba6fc`) and deployed (not verified); Render logs show no `[turn]` failure lines (`quota`, `HTTP 4xx`, `network error`, `timeout`, `bad answer`) for at least 48 hours. Healthy requests write no `[turn]` line, so the absence of failure lines is the signal, and precondition 2 confirms that logins are being issued.
 2. `turnStatus` is `ready` in welcome messages for at least 95% of the observation window (check via browser diagnostics, section 6).
 3. Real-device tests passed (section 7), including a relayed call on mobile data.
 4. `ICE_SERVERS` is unset on Render. It overrides Metered when set, and then `iceExpiresAt` is null and the list is static.
@@ -210,47 +217,63 @@ Notes:
 - If `npm run test:pg` reports a connection error, check the port, the password and that the PostgreSQL service is running (`Get-Service postgresql*` on Windows, `sudo service postgresql status` in WSL2).
 - These steps are documented but not yet run on a Windows machine. Record the result of the first run in this document.
 
-## 10. Remaining manual tests
+## 10. Remaining manual tests (NOT RUN)
 
-1. Real-device relay tests (section 7), including iPhone and Android on mobile data.
-2. Browser diagnostics A–D (section 6) on two devices.
-3. Render: confirm `TURN_TTL_SECONDS` is unset (the default, 48 hours). Any value is limited to 15 minutes to 48 hours.
-4. Neon: confirm the production pooled endpoint is in use (the URL contains `-pooler`) and `sslmode=require` is still set (no change needed).
-5. Render: one restart of the production service after #76 is merged; check that no `[turn]` failure lines appear (healthy requests write none).
-6. Actions: confirm the next CI run shows no Node.js 20 deprecation notice.
+1. Real-device relay tests (section 7): iPhone and Android on mobile data, desktop on a restrictive network. **Not run.**
+2. Browser diagnostics A–D (section 6) on two devices. **Not run.**
+3. Windows PowerShell and WSL2 test runs (section 9). **Not run.** Nothing in section 9 has been executed.
+4. Render: confirm `TURN_TTL_SECONDS` is unset (default 48 hours). Any value is limited to 15 minutes to 48 hours. **Not verified.**
+5. Neon: confirm the production pooled endpoint is in use and `sslmode=require` is set. **Not verified by Claude.**
+6. Render: after #76 is deployed, check that no `[turn]` failure lines appear over at least 48 hours. **Not done.**
+7. Actions: confirm the next CI run shows no Node.js 20 deprecation notice. **Not confirmed.**
 
 ## 11. Outstanding risks and approvals
 
 | Item | Risk | Approval needed |
 |---|---|---|
-| Guest players get Metered logins | Relay bandwidth use by anonymous players with a session | Owner decision: restrict or accept |
-| Static TURN fallback still present | Static credential is sent to every session that is admitted (players with a session cookie), until cutover | Cutover approval after section 7 |
+| Guest players get Metered logins | Relay bandwidth used by anonymous players with a session. Policy options in the separate analysis. | Owner decision (pending) |
+| Static TURN fallback present | Static credential is sent to every admitted session until cutover | Cutover approval after section 7 |
+| Two-minute TURN gap after each restart once static is removed | Calls starting in that window can only connect directly | Owner: accept or change |
 | Credential count across restarts | Could exceed 10 with frequent restarts | Monitor; no approval needed |
-| Re-key on rotation restarts relayed calls | Brief audio interruption once a day per call | Accept or change |
-| `pg-connection-string` not declared | Test may break if transitive layout changes | Maintenance change when registry access is available |
+| Re-key on rotation restarts relayed calls | Brief audio interruption about once a day per call | Accept or change |
+| Blocked players may share a table (seating) | Block hides chat and voice but not seating | Owner decision |
+| `pg-connection-string` not declared | Test may break if transitive layout changes | Maintenance change when a lockfile update is possible |
+| Windows and WSL2 suites not run | Support claims are unverified | Run before relying on them |
 | Cleanup execution | Deletes accounts | Separate approval; `CLEANUP_EXECUTE` stays `false` |
-| Load test on Neon branch | Cost and compute use | Owner approves plan in section 8 |
+| Neon load test | Cost and compute use; isolation not yet created | Owner approves the plan (section 8) |
 | Stage 20.6 | Not started | Owner decision |
 
 ## 12. Stage 20.3 PASS/FAIL checklist
 
-| # | Check | Status |
-|---|---|---|
-| 1 | Admin console, analytics, announcements, audit log merged | PASS (per merged PRs) |
-| 2 | Production health verification | PASS (owner) |
-| 3 | Startup no longer fails on a first-connection timeout | PASS (#70 merged; deployment check pending) |
-| 4 | Metered TURN follows the 48 h / 24 h guidance | PASS once #76 is merged (pending review) |
-| 5 | Metered secret never logged or sent to clients | PASS (code review and tests) |
-| 6 | Authenticated-only Metered logins | FAIL (open: anonymous guest players with a session receive logins) |
-| 7 | 10-credential limit handled across restarts | PARTIAL (monitor) |
-| 8 | Static TURN credentials removed | NOT DONE (by design; awaiting approval) |
-| 9 | Real-device relay and ICE recovery tests | PENDING (manual) |
-| 10 | Cleanup dry run recorded; execute disabled | PASS |
-| 11 | SSL warning removed; secure TLS kept | PASS (#75; confirm in CI logs) |
-| 12 | Actions off Node.js 20 notices | PASS in code (#75); confirm in next run |
-| 13 | Neon load test plan | DRAFTED (not run; approval needed) |
-| 14 | Final security audit of main | NOT COMPLETE (see section 13) |
+"Code" is what CI and review show on `main`. "Production" is only what someone observed in production.
+
+| # | Check | Code | Production | Result |
+|---|---|---|---|---|
+| 1 | Admin console, analytics, announcements, audit log | merged, CI green | not separately recorded | CODE PASS |
+| 2 | Production health verification | n/a | owner report | PASS (owner-reported) |
+| 3 | Startup survives a slow first database connection | merged (#70) | not separately verified | CODE PASS |
+| 4 | Metered TURN follows 48 h / 24 h guidance | merged (#72, #76), CI green | not verified | CODE PASS, PRODUCTION NOT VERIFIED |
+| 5 | Metered secret never logged or sent to clients | tests and review | log check not done | CODE PASS, PRODUCTION NOT VERIFIED |
+| 6 | Authenticated-only Metered logins | not implemented | n/a | FAIL (owner decision pending) |
+| 7 | 10-credential limit handled across restarts | not tracked | n/a | PARTIAL |
+| 8 | Static TURN credentials removed | not done (by design) | n/a | NOT DONE (cutover unapproved) |
+| 9 | Real-device relay and ICE recovery tests | not run | not run | NOT RUN |
+| 10 | Cleanup dry run recorded; execute disabled | merged (#74, #75) | owner-reported dry run; `CLEANUP_EXECUTE=false` | PASS (owner-reported) |
+| 11 | SSL warning removed; secure TLS kept | merged (#75) | CI log confirmation pending | CODE PASS |
+| 12 | Actions off Node.js 20 notices | merged (#75) | next run not checked | CODE PASS, CONFIRMATION PENDING |
+| 13 | Blocked-user privacy in profiles | merged (#73) | not verified | CODE PASS (public profile only) |
+| 14 | Blocked-user privacy in seating and other surfaces | not implemented for seating | n/a | OPEN (owner decision) |
+| 15 | Windows and WSL2 PostgreSQL and migration runs | documented | not run | NOT RUN |
+| 16 | Neon load-test plan | drafted | not executed | PLANNED, NOT EXECUTED |
+| 17 | Final security audit of main | in progress | n/a | NOT COMPLETE (section 13) |
+
+**Stage 20.3 overall: FAIL.** Mandatory items still open: 6, 8, 9, 14, 15, 17, and production verification for 4 and 5.
 
 ## 13. Security audit: status
 
-Not completed in this pass. Findings so far: item 1 and item 3 in section 3 (guest TURN logins, credential counting). The full audit (authentication, sessions, blocked-user privacy across directory, chat, voice, friends, invitations and seats, admin authorization, rate limits, database access, WebSocket reconnect handling, voice authorization, cleanup workflow permissions) remains to be done as a separate task, with findings reported by severity and fixed in small PRs.
+Not complete. Findings to date, recorded in this document only:
+- Guest players with a session receive Metered logins (section 3, item 1). Owner decision pending.
+- Blocked-user privacy: the public profile is hidden in both directions (#73). Seating is not filtered.
+- Credential count across restarts is not tracked.
+
+The full audit of authentication, sessions, email verification, blocked-user privacy in all surfaces, admin and owner authorization, rate limiting, WebSocket reconnects, voice access and TURN credentials, database permissions and pooling, and the cleanup workflow is still to be done.
