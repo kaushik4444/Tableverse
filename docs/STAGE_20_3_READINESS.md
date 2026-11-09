@@ -1,6 +1,6 @@
 # Stage 20.3 readiness
 
-Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Not done: real-device tests, Windows/WSL2 test runs, the guest TURN policy decision, the security audit, and the Neon load test (planned, not executed). Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
+Status: **Stage 20.3 is FAIL pending PR #81 and the focused security review.** Code for the items in section 1 is merged and passed CI; PR #81 contains the approved all-surface blocking fix and is awaiting CI/review/owner merge approval. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Owner-provided WebRTC diagnostics confirm a nominated, succeeded candidate pair using a local `relay` candidate over UDP. Dynamic Metered credential authentication currently returns HTTP 401 and is explicitly deferred to the Stage 20.6 voice-enabled beta gate; network recovery and in-place credential-rotation ICE restart are also Stage 20.6 voice checks, not prerequisites for closing the earlier stages. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
 
 ## 1. Completed work and merged PRs
 
@@ -23,6 +23,9 @@ Other merged work relevant to Stage 20.3: `#69` (announcement stale-cache fix).
 ## 2. Production verification evidence
 
 - Health: production health verification complete (per owner).
+- Voice relay evidence (owner-provided WebRTC-Internals dump, 2026-11-09): ICE and DTLS reached `connected`; the selected/nominated candidate pair `CPrBAH9UFb_VDR1Vs2V` is `succeeded`; its local candidate `IrBAH9UFb` is `candidateType=relay` with `relayProtocol=udp`; remote candidate is peer-reflexive. The pair recorded 311,875 bytes sent, 202,044 received, 2,887 packets sent and 2,794 received. This confirms actual TURN relay use for this call. The ICE server URL was `turn:global.relay.metered.ca:80`, but the dump supplied no `turnStatus`, `iceExpiresAt`, or credential-source evidence, so dynamic Metered REST credential use is not confirmed. Network recovery and in-place credential-rotation ICE restart were not tested in the supplied evidence.
+- Dynamic Metered credential status (owner-provided WebSocket `welcome` payload and Render log excerpts, 2026-11-09): `turnStatus: unavailable`, `iceExpiresAt: null`; Render logged `[turn] Metered credential request failed (HTTP 401)`. The app is not currently obtaining a usable dynamic Metered credential; the existing static fallback remains configured. This is explicitly carried forward as a Stage 20.6 voice-enabled beta gate. Do not remove or rotate the static fallback during this work.
+
 - Scheduled run history: the scheduled run at 11:36 UTC on 2026-11-09 failed at the step "Check the database secret is set", because `CLEANUP_DATABASE_URL` was not yet configured. Nothing ran against the database. The owner has since set the secret and variable; Claude has not triggered or inspected any run.
 - Cleanup dry run (owner's report, 2026-11-09; not re-run by Claude): 0 unverified accounts older than 30 days; 0 records deleted; read-only transaction confirmed; read-only role has no write privileges; dry-run job contains no deletion SQL and no deletion secret. `CLEANUP_EXECUTE=false`. Recorded in `docs/DATA_CLEANUP.md`.
 
@@ -53,14 +56,14 @@ Checked against Metered's public docs (`metered.ca/docs/turn-rest-api/post-creat
 
 ### Open findings (not fixed in this pass)
 
-1. **Guest players receive Metered logins.** Players with a session cookie, including anonymous guests, get logins in `welcome` / `iceMsg` (`server.js`). Logged-out sockets are refused before `welcome`. Decide: restrict Metered logins to non-anonymous accounts, or accept that guests use relay bandwidth. Needs owner decision.
+1. **Guest players receive Metered logins — accepted.** The owner approved this for the initial beta. Monitor Metered's 500 MB monthly allowance and active-credential count. Logged-out sockets are still refused before `welcome`.
 2. **Static TURN pair is the fallback** when no Metered login is usable (`lib/voiceRelay.js` `iceServers`). This is intended until the cutover, and it must be removed in the cutover (below).
 3. **Credential count is not tracked** across restarts. Low risk at one instance; monitor `turnStatus` and Metered's dashboard.
 4. **Test dependency:** `tests/pool-config.test.js` (added on `main` in `e0b3f65`) requires `pg-connection-string`, which is not declared in `package.json`. It works in CI through npm hoisting. Recommend declaring it as a devDependency when a lockfile update is possible.
 
-## 4. Static TURN credential cutover plan (NOT executed)
+## 4. Optional static TURN credential cutover plan (NOT executed)
 
-Do not start until the owner approves after real-device tests (section 7).
+Static TURN cutover is optional for the limited beta. Retaining the approved static fallback does not block beta readiness. Do not start a cutover until the owner approves after real-device tests (section 7).
 
 Preconditions (all must hold):
 1. PR #76 is merged (done, `f7ba6fc`) and deployed (not verified); Render logs show no `[turn]` failure lines (`quota`, `HTTP 4xx`, `network error`, `timeout`, `bad answer`) for at least 48 hours. Healthy requests write no `[turn]` line, so the absence of failure lines is the signal, and precondition 2 confirms that logins are being issued.
@@ -116,11 +119,14 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 
 ## 7. Real-device tests required before the cutover
 
+Before creating fresh voice connections for these tests, confirm both devices receive `turnStatus: ready` and a non-null `iceExpiresAt`, so the test uses propagated Metered credentials rather than the static fallback.
+
 1. iPhone Safari on mobile data, relayed call with a second device on Wi-Fi.
 2. Android Chrome on mobile data, same.
 3. Desktop Chrome and Firefox on a restrictive network (a corporate or hotel Wi-Fi if available).
 4. A relayed call that stays open across a credential push (section 6 D), which runs an in-place ICE restart (same peer connection, changed `a=ice-ufrag`), with audio continuing. Waiting 24 hours is impractical, so use a non-production service with `TURN_TTL_SECONDS=900`, where a push happens about every 10 minutes. This needs owner approval.
 5. A call older than one rotation (24 h) is impractical to wait for: instead, confirm the scheduled push in staging or by setting `TURN_TTL_SECONDS` to 900 (the shortest allowed) in a non-production service, which is test-only and needs owner approval.
+6. On the relayed call, verify network recovery as described in section 6 C.
 
 ## 8. Neon load-test plan (NOT created, NOT run)
 
@@ -219,29 +225,29 @@ Notes:
 
 ## 10. Remaining manual tests (NOT RUN)
 
-1. Real-device relay tests (section 7): iPhone and Android on mobile data, desktop on a restrictive network. **Not run.**
-2. Browser diagnostics A–D (section 6) on two devices. **Not run.**
-3. Windows PowerShell and WSL2 test runs (section 9). **Not run.** Nothing in section 9 has been executed.
+1. Cross-network phone voice connectivity: **owner-tested successfully between two people, one on Wi-Fi and one on mobile data**. Audio connectivity and TURN relay use passed; the supplied WebRTC stats confirm a selected `relay` candidate.
+2. Browser WebRTC diagnostics confirmed that the successful call selected a `relay` candidate. The latest `welcome` payload reports `turnStatus: unavailable` and `iceExpiresAt: null`; Render logs report Metered HTTP 401. Dynamic credential authentication is deferred to Stage 20.6.
+3. Windows and WSL2 runs are **deferred** for the limited beta; do not treat them as release blockers.
 4. Render: confirm `TURN_TTL_SECONDS` is unset (default 48 hours). Any value is limited to 15 minutes to 48 hours. **Not verified.**
 5. Neon: confirm the production pooled endpoint is in use and `sslmode=require` is set. **Not verified by Claude.**
-6. Render: after #76 is deployed, check that no `[turn]` failure lines appear over at least 48 hours. **Not done.**
+6. Render: observe Metered credential status and `[turn]` failures over at least 48 hours before any static TURN cutover. **Not yet recorded.**
 7. Actions: confirm the next CI run shows no Node.js 20 deprecation notice. **Not confirmed.**
 
 ## 11. Outstanding risks and approvals
 
 | Item | Risk | Approval needed |
 |---|---|---|
-| Guest players get Metered logins | Relay bandwidth used by anonymous players with a session. Policy options in the separate analysis. | Owner decision (pending) |
+| Guest players get Metered logins | Relay bandwidth used by anonymous players with a session. | Owner approved for initial beta; monitor usage |
 | Static TURN fallback present | Static credential is sent to every admitted session until cutover | Cutover approval after section 7 |
 | Two-minute TURN gap after each restart once static is removed | Calls starting in that window can only connect directly | Owner: accept or change |
 | Credential count across restarts | Could exceed 10 with frequent restarts | Monitor; no approval needed |
 | Re-key on rotation restarts relayed calls | Brief audio interruption about once a day per call | Accept or change |
-| Blocked players may share a table (seating) | Block hides chat and voice but not seating | Owner decision |
+| Blocked players may share a table (seating) | Chat/voice/profile filtering did not cover table entry or seating | Owner approved all-surface blocking; PR #81 implements the fix and awaits CI/review/merge |
 | `pg-connection-string` not declared | Test may break if transitive layout changes | Maintenance change when a lockfile update is possible |
-| Windows and WSL2 suites not run | Support claims are unverified | Run before relying on them |
+| Windows and WSL2 suites not run | Native Windows/WSL2 support is unverified | Deferred for limited beta |
 | Cleanup execution | Deletes accounts | Separate approval; `CLEANUP_EXECUTE` stays `false` |
-| Neon load test | Cost and compute use; isolation not yet created | Owner approves the plan (section 8) |
-| Stage 20.6 | Not started | Owner decision |
+| Neon load test | Scale limits not measured | Deferred until usage justifies it |
+| Stage 20.6 | Preparation underway in PR #79 | Owner approved proceeding with limited-beta preparation |
 
 ## 12. Stage 20.3 PASS/FAIL checklist
 
@@ -254,26 +260,30 @@ Notes:
 | 3 | Startup survives a slow first database connection | merged (#70) | not separately verified | CODE PASS |
 | 4 | Metered TURN follows 48 h / 24 h guidance | merged (#72, #76), CI green | not verified | CODE PASS, PRODUCTION NOT VERIFIED |
 | 5 | Metered secret never logged or sent to clients | tests and review | log check not done | CODE PASS, PRODUCTION NOT VERIFIED |
-| 6 | Authenticated-only Metered logins | not implemented | n/a | FAIL (owner decision pending) |
+| 6 | Metered logins for session-authenticated players, including guests | implemented | owner policy approved; production issuance not yet observed | POLICY PASS, PRODUCTION NOT VERIFIED |
 | 7 | 10-credential limit handled across restarts | not tracked | n/a | PARTIAL |
-| 8 | Static TURN credentials removed | not done (by design) | n/a | NOT DONE (cutover unapproved) |
-| 9 | Real-device relay and ICE recovery tests | not run | not run | NOT RUN |
+| 8 | Optional static TURN cutover | not done (by design) | n/a | DEFERRED (not a limited-beta blocker) |
+| 9 | Cross-network voice connectivity | n/a | owner-tested Wi-Fi ↔ mobile; audio worked; selected relay candidate confirmed | CONNECTIVITY PASS, RELAY PASS |
 | 10 | Cleanup dry run recorded; execute disabled | merged (#74, #75) | owner-reported dry run; `CLEANUP_EXECUTE=false` | PASS (owner-reported) |
 | 11 | SSL warning removed; secure TLS kept | merged (#75) | CI log confirmation pending | CODE PASS |
 | 12 | Actions off Node.js 20 notices | merged (#75) | next run not checked | CODE PASS, CONFIRMATION PENDING |
 | 13 | Blocked-user privacy in profiles | merged (#73) | not verified | CODE PASS (public profile only) |
-| 14 | Blocked-user privacy in seating and other surfaces | not implemented for seating | n/a | OPEN (owner decision) |
-| 15 | Windows and WSL2 PostgreSQL and migration runs | documented | not run | NOT RUN |
-| 16 | Neon load-test plan | drafted | not executed | PLANNED, NOT EXECUTED |
-| 17 | Final security audit of main | in progress | n/a | NOT COMPLETE (section 13) |
+| 14 | Blocked-user privacy in seating and other surfaces | PR #81 open; CI/review pending | not production verified | OPEN (owner-approved fix awaiting merge) |
+| 15 | Windows and WSL2 PostgreSQL and migration runs | deferred | not run | DEFERRED (not a limited-beta blocker) |
+| 16 | Neon load-test plan | deferred for limited beta | not executed | DEFERRED |
+| 17 | Focused security review of main | in progress | n/a | NOT COMPLETE (section 13) |
 
-**Stage 20.3 overall: FAIL.** Mandatory items still open: 6, 8, 9, 14, 15, 17, and production verification for 4 and 5.
+**Stage 20.3 overall: FAIL pending PR #81 merge and the focused security review.** The Metered HTTP 401, dynamic credential readiness, network recovery and in-place ICE-restart checks are carried into Stage 20.6 and do not prevent closing 20.1–20.5. Static TURN cutover remains optional; retaining the fallback is not a Stage 20.3 blocker. Windows/WSL2 and Neon load testing are deferred.
 
-## 13. Security audit: status
+## 13. Focused security review: status
 
-Not complete. Findings to date, recorded in this document only:
-- Guest players with a session receive Metered logins (section 3, item 1). Owner decision pending.
-- Blocked-user privacy: the public profile is hidden in both directions (#73). Seating is not filtered.
-- Credential count across restarts is not tracked.
+**Partially complete; no additional critical/high-severity finding was identified in the reviewed areas.** The following code paths were reviewed on current `main`:
 
-The full audit of authentication, sessions, email verification, blocked-user privacy in all surfaces, admin and owner authorization, rate limiting, WebSocket reconnects, voice access and TURN credentials, database permissions and pooling, and the cleanup workflow is still to be done.
+- **Admin/owner authorization:** `lib/adminRoutes.js` requires a current session and reads the role from PostgreSQL on every admin request. State-changing store methods re-check staff authority under transaction locks and write the audit row in the same transaction. Role changes lock actor and target and pass through `adminPolicy`.
+- **Sessions and WebSockets:** `db/auth.js` stores SHA-256 token hashes, checks expiry and revocation on reads, and revokes prior sessions when issuing a new single-active session. `server.js` re-checks open socket sessions every 60 seconds and refuses an invalid/revoked session.
+- **Cleanup permissions:** the daily workflow uses a separate read-only database role for its dry run. Deletion requires a manual workflow dispatch, the explicit `execute` input, `CLEANUP_EXECUTE=true`, and approval in the protected `production-cleanup` environment. The owner reports the current dry run found zero candidates and deleted zero rows; `CLEANUP_EXECUTE=false` remains in force.
+- **TURN secret handling:** `lib/meteredTurn.js` sends the secret only to Metered, never logs the request URL or secret, and logs only a failure category. Dynamic API authentication currently fails with HTTP 401; this is explicitly deferred to Stage 20.6, and static fallback remains configured.
+- **Blocked-user privacy:** public profile hiding (#73) and chat/voice filtering are implemented. The table-entry/seating gap was found in this review; PR #81 implements the owner's all-surface rule and is awaiting CI/review/merge.
+- **Credential count:** active Metered credentials are not tracked across restarts; monitor the provider dashboard and usage. This is a known low-risk operational limitation for a single instance.
+
+The focused review cannot be marked complete until PR #81 passes CI, is merged, and its behaviour is covered by the PostgreSQL integration suite. After that, record the final review disposition here. The broader audit of email verification, rate limiting, WebSocket reconnect edge cases, database permissions and pooling remains outside this limited-beta review and is not represented as complete.
