@@ -13,6 +13,13 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function quietFor(unexpected, label, ms = 250) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (unexpected()) throw new Error(label + ' unexpectedly arrived during the quiet window');
+    await sleep(25);
+  }
+}
 async function until(fn, label, ms = 30000) {
   const t0 = Date.now();
   for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(25); }
@@ -53,7 +60,7 @@ function socket(port, cookie) {
       const s = socket(srv.port, u.browser.cookieHeader);
       sockets.push(s);
       await until(() => s.msgs.some((m) => m.t === 'welcome'), tag + ' welcome');
-      return { id: me.id, s };
+      return { id: me.id, s, cookie: u.browser.cookieHeader };
     };
     const A = await newUser('Ava'); const B = await newUser('Ben'); const C = await newUser('Cy');
 
@@ -62,15 +69,16 @@ function socket(port, cookie) {
     for (const u of [B, C]) { u.s.send({ t: 'join', code, spectate: false }); await until(() => u.s.room && u.s.room.code === code, 'joined'); }
     for (const u of [A, B, C]) { u.s.send({ t: 'voice', on: true }); }
     await until(() => A.s.lastVoice() && A.s.lastVoice().length === 3 && B.s.lastVoice() && B.s.lastVoice().length === 3, 'everyone in voice');
+    A.s.send({ t: 'start' });
+    await until(() => A.s.room && A.s.room.status === 'playing', 'the game is running');
 
     await test('before any block, everyone at the table is in voice for everyone', async () => {
       assert.deepEqual(A.s.lastVoice(), [A.id, B.id, C.id].sort());
       assert.deepEqual(B.s.lastVoice(), [A.id, B.id, C.id].sort());
     });
 
-    await sleep(1200); // block cooldown
     A.s.send({ t: 'block', id: B.id });
-    await until(() => A.s.notices().some((x) => /hidden from your table chat and table voice/.test(x)), 'block accepted');
+    await until(() => A.s.notices().some((x) => /^Blocked\./.test(x)), 'block accepted');
 
     await test('after A blocks B, neither of them is offered the other in voice', async () => {
       await until(() => A.s.lastVoice() && !A.s.lastVoice().includes(B.id), 'A stops seeing B');
@@ -84,20 +92,18 @@ function socket(port, cookie) {
       const before = B.s.rtcFrom(A.id);
       A.s.send({ t: 'rtc', to: B.id, data: { kind: 'offer', sdp: 'v=0' } });
       await until(() => A.s.errors().includes('Not in voice'), 'refusal');
-      await sleep(150);
+      await quietFor(() => B.s.rtcFrom(A.id) > before, 'B RTC signal');
       assert.equal(B.s.rtcFrom(A.id), before, 'B receives nothing from A');
     });
 
-    // The server ignores reactions in the lobby, so the table starts its game before anyone reacts.
-    A.s.send({ t: 'start' });
-    await until(() => A.s.room && A.s.room.status === 'playing', 'the game is running');
+    // Reactions are only accepted after the game starts.
 
     await test('a reaction from B does not reach A; C still sees it', async () => {
       const toA = A.s.msgs.filter((m) => m.t === 'emote').length;
       const toC = C.s.msgs.filter((m) => m.t === 'emote').length;
       B.s.send({ t: 'emote', e: '👏' });
       await until(() => C.s.msgs.filter((m) => m.t === 'emote').length > toC, 'C sees the reaction');
-      await sleep(150);
+      await quietFor(() => A.s.msgs.filter((m) => m.t === 'emote').length > toA, 'A reaction');
       assert.equal(A.s.msgs.filter((m) => m.t === 'emote').length, toA, 'A sees nothing from B');
     });
 
@@ -107,13 +113,57 @@ function socket(port, cookie) {
       await until(() => A.s.rtcFrom(C.id) > before, 'C reaches A');
     });
 
-    await sleep(1200);
     A.s.send({ t: 'unblock', id: B.id });
     await until(() => A.s.lastVoice() && A.s.lastVoice().includes(B.id), 'voice offered again after unblock');
 
     await test('unblocking offers the pair voice again', async () => {
       await until(() => B.s.lastVoice() && B.s.lastVoice().includes(A.id), 'B sees A again');
       assert.ok(A.s.lastVoice().includes(B.id));
+    });
+
+    const D = await newUser('Dee'); const E = await newUser('Eli');
+    D.s.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+    const secondCode = await until(() => D.s.room && D.s.room.code, 'second table');
+    E.s.send({ t: 'join', code: secondCode, spectate: false });
+    await until(() => D.s.room && D.s.room.members.some((m) => m.id === E.id), 'E joins second table');
+
+    D.s.send({ t: 'block', id: E.id });
+    await until(() => D.s.room && !D.s.room.members.some((m) => m.id === E.id), 'blocked lobby member is removed');
+    await test('blocking someone in a lobby removes them and prevents rejoining the same table', async () => {
+      const before = E.s.errors().length;
+      E.s.send({ t: 'join', code: secondCode, spectate: false });
+      await until(() => E.s.errors().length > before, 'blocked lobby rejoin refused');
+      assert.ok(!D.s.room.members.some((m) => m.id === E.id));
+      const listing = E.s.msgs.filter((m) => m.t === 'tables').pop();
+      assert.ok(listing && !listing.tables.some((table) => table.code === secondCode), 'the blocked table is hidden from the directory');
+    });
+
+    D.s.send({ t: 'unblock', id: E.id });
+    await until(() => D.s.notices().includes('Unblocked.'), 'unblock completed');
+    await until(() => {
+      const listing = E.s.msgs.filter((m) => m.t === 'tables').pop();
+      return listing && listing.tables.some((table) => table.code === secondCode);
+    }, 'table appears in directory after unblock');
+    E.s.send({ t: 'join', code: secondCode, spectate: false });
+    await until(() => D.s.room && D.s.room.members.some((m) => m.id === E.id), 'E rejoins after unblock');
+
+    D.s.send({ t: 'start' });
+    await until(() => D.s.room && D.s.room.status === 'playing', 'second game starts');
+    E.s.send({ t: 'block', id: D.id });
+    await until(() => D.s.notices().some((x) => /finish this game/.test(x)), 'active-game block notice');
+    await test('a blocked seated player can finish the running game but cannot rejoin after disconnecting', async () => {
+      assert.ok(E.s.room.members.some((m) => m.id === D.id), 'the current game keeps the blocked player seated');
+      D.s.ws.close();
+      await until(() => D.s.ws.readyState === WebSocket.CLOSED, 'old blocked socket closes');
+      const D2 = socket(srv.port, D.cookie);
+      sockets.push(D2);
+      await until(() => D2.msgs.some((m) => m.t === 'welcome'), 'blocked player reconnects');
+      await until(() => E.s.room.members.some((m) => m.id === D.id && m.bot), 'bot takes over the blocked seat on reconnect');
+      await until(() => D2.notices().some((x) => /no longer share that table/.test(x)), 'blocked reconnect notice');
+      const before = D2.errors().length;
+      D2.send({ t: 'join', code: secondCode, spectate: false });
+      await until(() => D2.errors().length > before, 'blocked rejoin refused');
+      assert.ok(E.s.room.members.some((m) => m.id === D.id && m.bot), 'the blocked player cannot take the seat back');
     });
   } finally {
     for (const s of sockets) { try { s.ws.close(); } catch { /* closed */ } }

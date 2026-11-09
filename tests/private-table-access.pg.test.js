@@ -73,6 +73,7 @@ async function run() {
   process.env.MATCH_SPOOL_DIR = spool;
   process.env.DATABASE_URL = t.url; // before server.js is loaded: db/pool.js reads it once
   const { start } = require('../server');
+  const dbFriends = require('../db/friends');
   const app = await start({ port: 0, trustProxy: false, maxMsgsPerSec: Infinity, maxSocketsPerIp: 1000, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, matchLog: { log() {}, warn() {}, error() {} } });
   const clients = []; const playerIds = [];
   const expiresAt = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -260,6 +261,67 @@ async function run() {
       assert.equal(await tryJoin(late, code), false, 'a newcomer is refused');
     });
 
+    await test('a block arriving while a private-table join awaits authorization is rechecked before admission', async () => {
+      const { host, guests: [g1], code } = await lobby(1);
+      const late = await account('LateJoin'); await befriend(host, late);
+      await invite(host, late, code, { join: false });
+      const original = dbFriends.canJoinPrivateRoom;
+      let releaseAuth;
+      dbFriends.canJoinPrivateRoom = async (playerId, roomCode, ...args) => {
+        if (playerId === late.id && roomCode === code) {
+          await new Promise((resolve) => { releaseAuth = resolve; });
+          return true;
+        }
+        return original(playerId, roomCode, ...args);
+      };
+      try {
+        late.client.send({ t: 'join', code });
+        await until(() => releaseAuth, 'private invitation authorization is held');
+        host.client.send({ t: 'block', id: late.id });
+        await until(() => host.client.notices.some((x) => /Blocked/.test(x)), 'host block saved');
+        releaseAuth();
+        await until(() => late.client.errors.some((x) => /cannot join a table/.test(x)), 'post-authorization block recheck');
+        assert.ok(!seated(host.client, late.id), 'the in-flight join never enters the table');
+        assert.ok(seated(host.client, g1.id), 'the existing guest remains seated');
+      } finally {
+        dbFriends.canJoinPrivateRoom = original;
+        if (releaseAuth) releaseAuth();
+      }
+    });
+
+    await test('a spectator blocked while sit authorization is pending is not re-seated or allowed to remove another spectator', async () => {
+      const { host, guests: [g1], code } = await lobby(1);
+      const late = await account('LateSit'); await befriend(host, late);
+      const fan = await account('FanSit'); await befriend(host, fan);
+      await invite(host, late, code, { spectate: true });
+      await invite(host, fan, code, { spectate: true });
+      assert.ok(watching(host.client, late.id) && watching(host.client, fan.id));
+      const original = dbFriends.canJoinPrivateRoom;
+      let releaseAuth;
+      dbFriends.canJoinPrivateRoom = async (playerId, roomCode, ...args) => {
+        if (playerId === late.id && roomCode === code) {
+          await new Promise((resolve) => { releaseAuth = resolve; });
+          return true;
+        }
+        return original(playerId, roomCode, ...args);
+      };
+      try {
+        late.client.send({ t: 'sit' });
+        await until(() => releaseAuth, 'private invitation authorization is held');
+        host.client.send({ t: 'block', id: late.id });
+        await until(() => host.client.notices.some((x) => /Blocked/.test(x)), 'host block saved');
+        await until(() => late.client.room === null, 'blocked spectator removed');
+        releaseAuth();
+        await until(() => late.client.errors.some((x) => /Not possible right now/.test(x)), 'post-authorization sit recheck');
+        assert.ok(!seated(host.client, late.id) && !watching(host.client, late.id), 'the blocked spectator stays out');
+        assert.ok(watching(host.client, fan.id), 'the unrelated spectator was not removed by a stale splice index');
+        assert.ok(seated(host.client, g1.id), 'the existing guest remains seated');
+      } finally {
+        dbFriends.canJoinPrivateRoom = original;
+        if (releaseAuth) releaseAuth();
+      }
+    });
+
     // ------------------------------------------------------------------------------------------------ running game
     console.log('running game');
     const startGame = async (host) => { host.client.send({ t: 'start' }); await until(() => host.client.room && host.client.room.status === 'playing', 'game running'); };
@@ -279,6 +341,26 @@ async function run() {
       assert.ok(!g1.client.rejoin.some((r) => r.code === code), 'the home screen does not offer to rejoin');
       assert.equal(await tryJoin(g1, code), false, 'and rejoining by code is refused too');
       assert.ok(seated(g2.client, g2.id), 'the other guest plays on');
+    });
+
+    // Plays a running game to its result: every listed account is auto-played until the host sees it finish.
+    const playToEnd = async (everyone, hostAcct) => {
+      for (const a of everyone) { a.client.auto = true; a.client.step(); }
+      await until(() => hostAcct.client.room && hostAcct.client.room.status === 'finished', 'game finished', 120000);
+      for (const a of everyone) a.client.auto = false;
+    };
+
+    await test('a blocked player may leave a running game, but their bot seat is removed when the game finishes', async () => {
+      const { host, guests: [g1, g2] } = await lobby(2);
+      await startGame(host);
+      g1.client.send({ t: 'leave' });
+      await until(() => g1.client.room === null, 'player leaves the running game');
+      await until(() => host.client.room.members.some((m) => m.id === g1.id && m.bot), 'bot takes over the seat');
+      host.client.send({ t: 'block', id: g1.id });
+      await until(() => host.client.notices.some((x) => /Blocked/.test(x)), 'block saved after the target left');
+      await playToEnd([host, g2], host);
+      await until(() => !host.client.room.members.some((m) => m.id === g1.id), 'blocked bot seat removed after game result');
+      assert.ok(seated(host.client, g2.id), 'the unrelated player remains at the table');
     });
 
     await test('SPECTATING a running game: removing the friendship takes the spectator out immediately', async () => {
@@ -311,11 +393,6 @@ async function run() {
 
     // ------------------------------------------------------------------------------------------------ finished game, rematch
     console.log('finished game and rematch');
-    const playToEnd = async (everyone, hostAcct) => {
-      for (const a of everyone) { a.client.auto = true; a.client.step(); }
-      await until(() => hostAcct.client.room && hostAcct.client.room.status === 'finished', 'game finished', 120000);
-      for (const a of everyone) a.client.auto = false;
-    };
 
     await test('a player who lost access during the game is removed when the host starts the rematch', async () => {
       const { host, guests: [g1, g2] } = await lobby(2);

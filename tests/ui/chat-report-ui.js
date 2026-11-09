@@ -95,9 +95,9 @@ const newer = () => ({ id: 'b', name: 'Bo', text: 'a newer message arrives', mid
   await test('the Block control says it hides table chat only, in its label and its tooltip', async () => {
     const { page, ctx } = await openTableChat();
     const block = page.locator('[data-mod="block"]').first();
-    assert.equal((await block.textContent()).trim(), 'Block chat');
+    assert.equal((await block.textContent()).trim(), 'Block');
     assert.match(await block.getAttribute('title'), /table chat/i);
-    assert.match(await block.getAttribute('aria-label'), /Block chat from Bo/);
+    assert.match(await block.getAttribute('aria-label'), /^Block Bo/);
     await ctx.close();
   });
 

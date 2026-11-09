@@ -1,5 +1,5 @@
 'use strict';
-// Persistence for chat moderation: blocks and reports. Rules live in lib/moderation.js; this module stores them.
+// Persistence for player moderation: table blocks and chat reports. Rules live in lib/moderation.js; this module stores them.
 const db = require('./pool');
 const { MAX_BLOCKS, MAX_REPORTS_PER_DAY, REPORT_REASONS } = require('../lib/moderation');
 
