@@ -1,6 +1,6 @@
 # Stage 20.3 readiness
 
-Status: **Stage 20.3 is FAIL pending PR #82.** PR #81 (all-surface blocking) is merged to `main` as `d7da199`, and all five CI checks passed on that commit. The focused security review of #81 (section 13.1) found one high-severity defect: a reconnect could remove a seated player from a running game because of a block write that might still fail. The fix is in PR #82, which is open and not merged. Stage 20.3 cannot be marked PASS until #82 is merged with CI green. Code for the other items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Owner-provided WebRTC diagnostics confirm a nominated, succeeded candidate pair using a local `relay` candidate over UDP. Dynamic Metered credential authentication currently returns HTTP 401 and is explicitly deferred to the Stage 20.6 voice-enabled beta gate; network recovery and in-place credential-rotation ICE restart are also Stage 20.6 voice checks, not prerequisites for closing the earlier stages. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
+Status: **Stage 20.3 is PASS once PR #85 is merged** (owner's block rule; CI green on `cd16d6d`; not yet merged). PR #81 (`d7da199`, five CI checks green) introduced the rule that blocked players may not share a table. The focused review of #81 (section 13.1) found H1, a reconnect defect fixed in PR #82, and M1, a spectator-blocking gap. On 2026-11-09 the owner decided the rule: blocked players may share a table, but may not invite, chat, voice or friend each other. PR #85 implements that rule and removes the block-time removals that caused H1 and M1, so PR #82 is superseded and should be closed unmerged. Code for the other items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Owner-provided WebRTC diagnostics confirm a nominated, succeeded candidate pair using a local `relay` candidate over UDP. Dynamic Metered credential authentication currently returns HTTP 401 and is explicitly deferred to the Stage 20.6 voice-enabled beta gate; network recovery and in-place credential-rotation ICE restart are also Stage 20.6 voice checks, not prerequisites for closing the earlier stages. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured (the static fallback is retained). Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
 
 ## 1. Completed work and merged PRs
 
@@ -268,16 +268,16 @@ Notes:
 | 11 | SSL warning removed; secure TLS kept | merged (#75) | CI log confirmation pending | CODE PASS |
 | 12 | Actions off Node.js 20 notices | merged (#75) | next run not checked | CODE PASS, CONFIRMATION PENDING |
 | 13 | Blocked-user privacy in profiles | merged (#73) | not verified | CODE PASS (public profile only) |
-| 14 | Blocked-user privacy in seating and other surfaces | PR #81 merged (`d7da199`, five CI checks green); reconnect defect fixed in PR #82 (open, CI pending) | not production verified | FAIL until PR #82 is merged with CI green |
+| 14 | Blocked-user rule on seating and other surfaces | PR #85 open (owner's rule; CI green on `cd16d6d`); PR #81 merged (`d7da199`) with the opposite rule; PR #82 superseded | not production verified | PASS once #85 is merged |
 | 15 | Windows and WSL2 PostgreSQL and migration runs | deferred | not run | DEFERRED (not a limited-beta blocker) |
 | 16 | Neon load-test plan | deferred for limited beta | not executed | DEFERRED |
-| 17 | Focused security review of #81 and main | review of #81 done; one high defect found (fixed in #82, not yet merged); medium gap open | n/a | NOT COMPLETE (section 13); completes when #82 merges and the medium gap is accepted or fixed |
+| 17 | Focused security review of #81 and main | review of #81 recorded; H1 and M1 void under #85; M2 open; #85 itself reviewed only through its test and CI changes | n/a | PARTIAL: complete when #85 is merged and M2 is accepted |
 
-**Stage 20.3 overall: FAIL pending PR #82 merge.** Stage 20.3 also needs the owner's decision on the open medium finding in section 13.1 (M1). The Metered HTTP 401, dynamic credential readiness, network recovery and in-place ICE-restart checks are carried into Stage 20.6 and do not prevent closing 20.1–20.5. Static TURN cutover remains optional; retaining the fallback is not a Stage 20.3 blocker. Windows/WSL2 and Neon load testing are deferred.
+**Stage 20.3 overall: PASS once PR #85 is merged** (CI green on `cd16d6d`). It is not marked PASS before that merge, because the owner's rule is not yet on `main`. Before the merge the owner also decides the open block-rule questions (M3 in section 13.1) and accepts M2.
 
 ## 13. Focused security review: status
 
-**Partially complete.** The focused review of PR #81 (section 13.1) found one high-severity defect, fixed in open PR #82, and one medium gap, still open. The areas below were reviewed earlier on `main`:
+**Reviewed.** The focused review of PR #81
 
 - **Admin/owner authorization:** `lib/adminRoutes.js` requires a current session and reads the role from PostgreSQL on every admin request. State-changing store methods re-check staff authority under transaction locks and write the audit row in the same transaction. Role changes lock actor and target and pass through `adminPolicy`.
 - **Sessions and WebSockets:** `db/auth.js` stores SHA-256 token hashes, checks expiry and revocation on reads, and revokes prior sessions when issuing a new single-active session. `server.js` re-checks open socket sessions every 60 seconds and refuses an invalid/revoked session.
@@ -290,14 +290,16 @@ The review of #81 is recorded in 13.1. The broader audit of email verification, 
 
 ### 13.1 Focused review of PR #81 (merged to `main` as `d7da199`)
 
-**Result: not PASS.** One high-severity defect was found and is fixed in PR #82 (open). One medium gap is open. The review was done from the code and tests, not from Copilot's comments. Copilot's review reports "no open issues" on the final commit; that was not treated as completion.
+**Result: PASS pending PR #85 merge.** H1 and M1 came from the rule #81 enforced, and the owner's rule in #85 removes them. M2 (fixed sleeps in PostgreSQL tests) is open and not changed. The three questions in M3 need the owner's decision. Copilot's review reports no open issues on the final commit; that was not treated as completion.
 
 Reviewed: the reconnect (hello) guard; pending and committed block writes; the block command's failure path; the removal of blocked seats when a game finishes and when a block is committed; rejoin rules for players who left a running game; the running-game exception; reciprocal blocks; spectator removal; and the table directory.
 
 | ID | Severity | Finding | Status and evidence |
 |---|---|---|---|
-| H1 | High | Reconnect decided denial with pending blocks but removal with committed blocks in both directions. A seated blocker in a running game whose counterpart had a pending block was removed from the game, and the removal stayed if the pending write failed. | Fixed in PR #82 (open). Regression test `tests/block-reconnect.pg.test.js` added to `test:pg`. Not yet run in CI at the time of writing. |
-| M1 | Medium | A spectator who blocks a seated player is not removed while that game runs. The rule in code is that a player cannot remain at a table with someone they have blocked, and the running-game exception only covers the seated player. No seat or game result is affected; the blocker can watch the blocked player's running game until it ends. | Open. Not changed in this review. Owner decision: accept for limited beta, or fix in a separate reviewed PR. |
+| H1 | High (void under #85) | A reconnect decided denial with pending blocks but removal with committed blocks. Under the owner's rule (PR #85) a block never removes anyone, and the reconnect block branch is removed, so the defect does not exist on #85. PR #82 is superseded; close it unmerged. |
+| M1 | Medium (void under #85) | A spectator who blocks a seated player stayed until the game ended. Under #85 a block never removes anyone from a table (`docs/CHAT_MODERATION.md`). The spectator test is rewritten to match (`tests/private-table-access.pg.test.js`). |
+| M2 | Medium | PostgreSQL moderation and voice-block tests wait with fixed sleeps, which can be slow or flaky under load. | Open. Not changed. Watch CI for intermittent failures. |
+| M3 | Owner decision | Three open questions. (a) Chat direction: the code filters the blocked player's messages from the blocker only (`docs/CHAT_MODERATION.md` line 20), the block notice now says so, but the Settings text in `public/app.js` describes it as two-way. (b) Whether a host who blocks a guest may keep them seated at that host's table: #85 allows it. (c) The profile of a blocked player shows a 'Blocked' label to the other side too (the lookup is symmetric). | Owner decision needed before the merge of #85. |
 | M2 | Medium | PostgreSQL moderation and voice-block tests wait with fixed sleeps, which can be slow or flaky under load. | Open. Not changed. Watch CI for intermittent failures. |
 
 Checked by reading the code (not observed in production):
@@ -309,6 +311,6 @@ Checked by reading the code (not observed in production):
 
 Test evidence:
 - CI on `d7da199`: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Production dependency audit and Build production Docker image all passed.
-- Locally, on the fix branch (main plus PR #82): the offline `static` and `moderation` tests passed. The PostgreSQL suites cannot run in the review sandbox, so reconnect behaviour is covered by CI only.
+- On the #85 branch (no PostgreSQL in the review sandbox): the offline `npm test` chain passed except `tests/pool-config.test.js`, which needs `pg-connection-string` (not installed in the sandbox); PostgreSQL suites are covered by CI on `cd16d6d` (all green). Earlier, on the superseded #82 branch:
 
-Stage 20.3 can be marked PASS for this review item only when PR #82 is merged with CI green and the owner has accepted M1 or it has been fixed.
+Stage 20.3 can be marked PASS for this review item once PR #85 is merged with CI green, M2 is accepted and the M3 questions are decided.
