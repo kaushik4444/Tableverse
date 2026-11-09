@@ -1,13 +1,13 @@
 # Chat moderation and abuse protection
 
-This is the minimum needed to report abusive table chat and to hide an account's chat from one player. It is enforced on
+This is the minimum needed to report abusive table chat and block another account across table access and social surfaces. It is enforced on
 the server. It does not replace human review, and it does not take automatic action against anyone.
 
 ## What a player can do
 
 | Action | Where | Effect |
 | --- | --- | --- |
-| **Block** a player's chat | "Block chat" button on another player's chat message | Their table chat is never sent to you, on any table, until you unblock. Chat history already on your screen is re-sent without them. |
+| **Block** an account | Block action on another player's chat message | Their table chat is hidden from you. You cannot share a new table with each other; a blocked player is removed from a lobby/spectator seat, while a seated player may finish an already-running game but cannot rejoin after leaving. |
 | **Report** a message | Report button, then a reason | Records the report in the database. There is no review queue yet. Nothing is hidden or sanctioned automatically. |
 | **Unblock** | WebSocket action `unblock` (no button yet) | Restores their chat. |
 | **Mute** (local) | Existing mute in the chat list | Hides that player's messages in this browser only. Not enforced on the server. |
@@ -17,8 +17,8 @@ the server. It does not replace human review, and it does not take automatic act
 - **Blocks are applied on the server.** When a socket joins, the server loads the account's blocked ids and keeps them on
   the player. Live chat (`pushChat`) and the history sent on join or reconnect both pass through
   `lib/moderation.js` `shouldDeliver` / `visibleChat`, so a blocked message is never sent to the blocker's socket. A pending block is filtered immediately while its database write is queued or in flight.
-- **Chat blocks are one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages, and
-  B is not told about the block.
+- **Chat filtering is one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages during an already-running game, and B is not told about the block.
+- **Table access is bilateral.** A blocked pair cannot enter the same table or take a seat together, regardless of which side created the block. If they are already seated when the block is made during a running game, the game is allowed to finish; the blocked player is removed when it ends or if they leave, and cannot rejoin. Lobby members and spectators are removed immediately.
 - **Voice and reactions are blocked in both directions.** A block in either direction keeps the pair out of each other's
   table voice: each browser is offered only the people it may hear, so an existing connection to the other person closes.
   A signal between them is refused with the same answer as "not in voice", and reactions are not delivered either way.
@@ -77,9 +77,7 @@ A decision to remove a player's access is a manual action taken outside this fea
 
 ## Known gaps
 
-- **Lobby and table listings still show a blocked player's name.** Blocking hides them from chat, voice, reactions,
-  friend requests and invitations; it does not remove them from the public table list.
-- **There is no screen to unblock.** The `unblock` action exists and is tested; a settings screen is a follow-up.
+- **There is no unblock screen yet.** The unblock action exists and is tested; a settings screen is a follow-up.
 - **There is no review queue or admin tool.** Reports are stored for manual review only.
 - **Reports are retained when the reported account is deleted**, but reports made by a deleted reporter are removed. No independent retention period is enforced yet.
 - **The block list is cached in memory per server.** The server runs as a single instance, so this matches the rest of the
