@@ -13,7 +13,13 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const flushEvents = () => new Promise((resolve) => setImmediate(resolve));
+async function quietFor(unexpected, label, ms = 250) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (unexpected()) throw new Error(label + ' unexpectedly arrived during the quiet window');
+    await sleep(25);
+  }
+}
 async function until(fn, label, ms = 30000) {
   const t0 = Date.now();
   for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(25); }
@@ -86,7 +92,7 @@ function socket(port, cookie) {
       const before = B.s.rtcFrom(A.id);
       A.s.send({ t: 'rtc', to: B.id, data: { kind: 'offer', sdp: 'v=0' } });
       await until(() => A.s.errors().includes('Not in voice'), 'refusal');
-      await flushEvents();
+      await quietFor(() => B.s.rtcFrom(A.id) > before, 'B RTC signal');
       assert.equal(B.s.rtcFrom(A.id), before, 'B receives nothing from A');
     });
 
@@ -97,7 +103,7 @@ function socket(port, cookie) {
       const toC = C.s.msgs.filter((m) => m.t === 'emote').length;
       B.s.send({ t: 'emote', e: '👏' });
       await until(() => C.s.msgs.filter((m) => m.t === 'emote').length > toC, 'C sees the reaction');
-      await flushEvents();
+      await quietFor(() => A.s.msgs.filter((m) => m.t === 'emote').length > toA, 'A reaction');
       assert.equal(A.s.msgs.filter((m) => m.t === 'emote').length, toA, 'A sees nothing from B');
     });
 
