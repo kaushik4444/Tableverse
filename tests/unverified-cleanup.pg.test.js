@@ -16,11 +16,44 @@ const DAY = 24 * 60 * 60 * 1000;
 (async () => {
   const t = await testdb.create(); // exits (SKIPPED) when PostgreSQL tests are not configured
   process.env.DATABASE_URL = t.url; // only now: db/pool reads it when it is first required, and env.js removed it
+  let x = null;
+  let suitePool = null;
+  let suiteRole = null;
+  let suiteDbName = null;
   try {
     await require('../db/migrate').migrate();
-    const x = await t.client();
+    x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
     const cleanup = require('../db/unverifiedCleanup');
+    const { Pool } = require('pg');
+    suiteRole = `cleanup_ro_suite_${Date.now().toString(36)}`;
+    const suitePassword = `pw_${Math.random().toString(36).slice(2)}`;
+    const identSuite = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    suiteDbName = (await q('SELECT current_database() AS d'))[0].d;
+    await x.query(`CREATE ROLE ${identSuite(suiteRole)} LOGIN PASSWORD '${suitePassword}'`);
+    await x.query(`GRANT CONNECT ON DATABASE ${identSuite(suiteDbName)} TO ${identSuite(suiteRole)}`);
+    await x.query(`GRANT USAGE ON SCHEMA public TO ${identSuite(suiteRole)}`);
+    await x.query(`GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${identSuite(suiteRole)}`);
+    const suiteUrl = new URL(t.url);
+    suiteUrl.username = suiteRole;
+    suiteUrl.password = suitePassword;
+    suitePool = new Pool({ connectionString: suiteUrl.toString() });
+    const readOnlyDb = {
+      async withTransaction(fn) {
+        const client = await suitePool.connect();
+        try {
+          await client.query('BEGIN');
+          const result = await fn(client);
+          await client.query('COMMIT');
+          return result;
+        } catch (e) {
+          await client.query('ROLLBACK').catch(() => {});
+          throw e;
+        } finally {
+          client.release();
+        }
+      },
+    };
 
     // Account fixtures are written directly: the cleanup is about the rows, not the registration route.
     let seq = 0;
@@ -47,7 +80,7 @@ const DAY = 24 * 60 * 60 * 1000;
     const before = await count();
 
     await test('a dry run counts the unverified accounts older than 30 days and deletes nothing', async () => {
-      const r = await cleanup.cleanUnverified({ days: 30, execute: false });
+      const r = await cleanup.cleanUnverified({ days: 30, execute: false, database: readOnlyDb });
       assert.deepEqual(r, { dryRun: true, candidates: 1, deleted: 0, batches: 0 });
       assert.equal(await count(), before);
     });
@@ -79,7 +112,7 @@ const DAY = 24 * 60 * 60 * 1000;
       const run = (args, env) => new Promise((resolve) => {
         execFile(process.execPath, [script, ...args], { env: { ...process.env, ...env }, timeout: 20000 }, (err, stdout, stderr) => resolve({ code: err ? err.code : 0, stdout, stderr }));
       });
-      const r = await run([], { DATABASE_URL: t.url });
+      const r = await run([], { DATABASE_URL: suiteUrl.toString() });
       assert.equal(r.code, 0, r.stderr);
       assert.match(r.stdout, /Dry run\. 0 unverified account\(s\) older than 30 days would be removed/);
       assert.equal(await count(), before - 1, 'still nothing deleted');
@@ -169,7 +202,7 @@ const DAY = 24 * 60 * 60 * 1000;
       assert.ok(r.deleted >= 1);
       assert.equal((await q('SELECT 1 FROM players WHERE id = $1', [gone])).length, 0, 'the account is removed');
       assert.equal((await q('SELECT 1 FROM players WHERE id = $1', [keep])).length, 1, 'the other account stays');
-      const count = async (sql) => (await q(sql, [gone, keep]))[0].n;
+      const count = async (sql) => (await q(sql, [[gone, keep]]))[0].n;
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM friendships WHERE player_a_id = ANY($1::uuid[]) OR player_b_id = ANY($1::uuid[])'), 0, 'friendships gone');
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM friend_requests WHERE requester_id = ANY($1::uuid[]) OR recipient_id = ANY($1::uuid[])'), 0, 'friend requests gone');
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM private_table_invitations WHERE inviter_id = ANY($1::uuid[]) OR invitee_id = ANY($1::uuid[])'), 0, 'invitations gone in both directions');
@@ -250,13 +283,28 @@ const DAY = 24 * 60 * 60 * 1000;
         assert.equal(n, (await q(`SELECT COUNT(*)::int AS n FROM players p WHERE ${cleanup.CANDIDATE}`, [cutoff]))[0].n, 'the same count as the owner sees');
         await assert.rejects(ro.query('DELETE FROM players WHERE false'), (e) => e.code === '42501', 'the role cannot delete');
         await assert.rejects(ro.query("UPDATE players SET display_name = display_name WHERE false"), (e) => e.code === '42501', 'the role cannot update');
+
+        // A column-level UPDATE grant must not pass the SELECT-only guard.
+        await x.query(`GRANT UPDATE (display_name) ON players TO ${ident(name)}`);
+        await assert.rejects(cleanup.assertCannotWrite(ro), (e) => e.code === 'READONLY_ROLE_REQUIRED', 'column-level UPDATE is refused');
+        await x.query(`REVOKE UPDATE (display_name) ON players FROM ${ident(name)}`);
+
+        // A DELETE grant on a partitioned parent is writable even without direct grants on its child partitions.
+        await x.query('CREATE TABLE public.cleanup_partitioned_probe (id integer, bucket integer) PARTITION BY RANGE (bucket)');
+        await x.query('CREATE TABLE public.cleanup_partitioned_probe_0 PARTITION OF public.cleanup_partitioned_probe FOR VALUES FROM (0) TO (10)');
+        await x.query(`GRANT DELETE ON public.cleanup_partitioned_probe TO ${ident(name)}`);
+        await assert.rejects(cleanup.assertCannotWrite(ro), (e) => e.code === 'READONLY_ROLE_REQUIRED', 'DELETE on a partitioned parent is refused');
+        await x.query('DROP TABLE public.cleanup_partitioned_probe');
+
         // the server-side backstop: even the owner cannot write inside a READ ONLY transaction
         await x.query('BEGIN');
         await x.query('SET TRANSACTION READ ONLY');
         await assert.rejects(x.query('DELETE FROM players WHERE false'), (e) => e.code === '25006', 'a read-only transaction refuses a DELETE');
+        await assert.rejects(x.query('UPDATE players SET display_name = display_name WHERE false'), (e) => e.code === '25006', 'a read-only transaction refuses an UPDATE');
         await x.query('ROLLBACK');
       } finally {
         await ro.end().catch(() => {});
+        await x.query('DROP TABLE IF EXISTS public.cleanup_partitioned_probe CASCADE');
         await x.query(`REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ${ident(name)}`);
         await x.query(`REVOKE USAGE ON SCHEMA public FROM ${ident(name)}`);
         await x.query(`REVOKE CONNECT ON DATABASE ${ident(dbName)} FROM ${ident(name)}`);
@@ -264,6 +312,14 @@ const DAY = 24 * 60 * 60 * 1000;
       }
     });
   } finally {
+    if (suitePool) await suitePool.end().catch(() => {});
+    if (x && suiteRole) {
+      const identSuite = (v) => `"${String(v).replace(/"/g, '""')}"`;
+      await x.query(`REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ${identSuite(suiteRole)}`).catch(() => {});
+      await x.query(`REVOKE USAGE ON SCHEMA public FROM ${identSuite(suiteRole)}`).catch(() => {});
+      await x.query(`REVOKE CONNECT ON DATABASE ${identSuite(suiteDbName)} FROM ${identSuite(suiteRole)}`).catch(() => {});
+      await x.query(`DROP ROLE IF EXISTS ${identSuite(suiteRole)}`).catch(() => {});
+    }
     await t.drop();
   }
   console.log(`\n${passed} unverified-cleanup PostgreSQL tests passed`);
