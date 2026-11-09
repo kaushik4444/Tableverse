@@ -24,6 +24,15 @@ async function audit(client, { actorId, action, targetType = null, targetId = nu
   );
 }
 
+/**
+ * Locks the acting account and checks that it is still staff, inside the same transaction as the change. A request whose
+ * body arrived after the account was demoted is refused here, not by the route's earlier check.
+ */
+async function lockStaff(client, actorId) {
+  const r = await client.query('SELECT role FROM players WHERE id = $1 FOR UPDATE', [actorId]);
+  if (!r.rows[0] || (r.rows[0].role !== 'admin' && r.rows[0].role !== 'owner')) throw new policy.PolicyError('Admin access is required.', 403);
+}
+
 /** Locks the given accounts (always in id order, so two admins cannot deadlock) and returns them by id. */
 async function lockAccounts(client, ids) {
   const r = await client.query('SELECT id, role FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[...new Set(ids)]]);
@@ -43,22 +52,24 @@ async function getRole(playerId) {
 async function claimOwnerIfConfigured(playerId, env = process.env) {
   if (ownerKnown) return false;
   if (!String(env.ADMIN_OWNER_ID || '').trim() && !String(env.ADMIN_OWNER_EMAIL || '').trim()) return false;
-  return db.withTransaction(async (c) => {
+  const outcome = await db.withTransaction(async (c) => {
     await c.query('SELECT pg_advisory_xact_lock(727275)');
     const has = (await c.query("SELECT 1 FROM players WHERE role = 'owner' LIMIT 1")).rows.length > 0;
-    if (has) { ownerKnown = true; return false; }
+    if (has) return 'known';
     const idRow = await c.query(
       'SELECT email FROM auth_identities WHERE player_id = $1 AND email IS NOT NULL AND email_verified_at IS NOT NULL ORDER BY created_at ASC LIMIT 1',
       [playerId]
     );
     const verifiedEmail = idRow.rows[0] ? idRow.rows[0].email : null;
-    if (!policy.shouldClaimOwner({ env, hasOwner: false, playerId, verifiedEmail })) return false;
+    if (!policy.shouldClaimOwner({ env, hasOwner: false, playerId, verifiedEmail })) return 'no';
     const upd = await c.query("UPDATE players SET role = 'owner' WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM players WHERE role = 'owner')", [playerId]);
-    if (upd.rowCount !== 1) return false;
-    ownerKnown = true;
+    if (upd.rowCount !== 1) return 'no';
     await audit(c, { actorId: playerId, action: 'owner.claimed', targetType: 'player', targetId: playerId, detail: { via: String(env.ADMIN_OWNER_ID || '').trim() ? 'id' : 'email' } });
-    return true;
+    return 'claimed';
   });
+  // Remembered only after the transaction committed: a rolled-back claim is tried again on the next call.
+  if (outcome === 'known' || outcome === 'claimed') ownerKnown = true;
+  return outcome === 'claimed';
 }
 
 /**
@@ -133,14 +144,29 @@ async function signOutUser({ actorId, targetId }) {
 async function isOwner(playerId) { return (await getRole(playerId)) === 'owner'; }
 
 // ---------------------------------------------------------------- analytics
-async function addCounters(rows) {
+/**
+ * Applies one write at most once per key. The key is recorded in the same transaction as the write, so a retried batch
+ * (after a timeout or an error whose outcome is unknown) that already landed is ignored. Without a key, it just writes.
+ */
+async function applyOnce(key, write) {
+  if (!key) return write(db);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[ca]$/i.test(key)) throw new Error('analytics write key is not valid');
+  return db.withTransaction(async (c) => {
+    const fresh = await c.query('INSERT INTO analytics_batches (id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id', [key]);
+    if (!fresh.rows.length) return false;
+    await write(c);
+    return true;
+  });
+}
+
+async function addCounters(rows, batchId = null) {
   if (!rows.length) return;
-  await db.query(
+  await applyOnce(batchId && `${batchId}:c`, (q) => q.query(
     `INSERT INTO analytics_daily (day, metric, dim, total)
      SELECT * FROM unnest($1::date[], $2::text[], $3::text[], $4::bigint[])
      ON CONFLICT (day, metric, dim) DO UPDATE SET total = analytics_daily.total + EXCLUDED.total`,
     [rows.map((r) => r.day), rows.map((r) => r.metric), rows.map((r) => r.dim), rows.map((r) => r.count)]
-  );
+  ));
 }
 
 let salt = null;
@@ -152,13 +178,13 @@ async function analyticsSalt() {
 }
 const actorHash = (s, playerId) => crypto.createHmac('sha256', s).update(String(playerId)).digest('hex').slice(0, 32);
 
-async function addActive(rows) {
+async function addActive(rows, batchId = null) {
   if (!rows.length) return;
   const s = await analyticsSalt();
-  await db.query(
+  await applyOnce(batchId && `${batchId}:a`, (q) => q.query(
     'INSERT INTO analytics_active (day, actor) SELECT * FROM unnest($1::date[], $2::text[]) ON CONFLICT DO NOTHING',
     [rows.map((r) => r.day), rows.map((r) => actorHash(s, r.playerId))]
-  );
+  ));
 }
 
 /** Removes an account's pseudonymous activity rows (called when the account is deleted). */
@@ -215,6 +241,7 @@ async function listFeedback({ status = '', page: p = 1 } = {}) {
 async function setFeedbackStatus({ actorId, id, status }) {
   if (!['new', 'read', 'resolved'].includes(status)) throw new policy.PolicyError('Unknown status.', 400);
   return db.withTransaction(async (c) => {
+    await lockStaff(c, actorId);
     const r = await c.query('UPDATE feedback SET status = $2 WHERE id = $1 RETURNING id', [id, status]);
     if (!r.rows.length) throw new policy.PolicyError('No such feedback.', 404);
     await audit(c, { actorId, action: 'feedback.status', targetType: 'feedback', targetId: id, detail: { status } });
@@ -227,6 +254,7 @@ const A_COLS = 'id, message, level, audience, starts_at, ends_at, ended_at, crea
 
 async function createAnnouncement({ actorId, fields }) {
   return db.withTransaction(async (c) => {
+    await lockStaff(c, actorId);
     const r = await c.query(
       `INSERT INTO announcements (message, level, audience, starts_at, ends_at, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${A_COLS}`,
       [fields.message, fields.level, fields.audience, fields.startsAt, fields.endsAt, actorId]
@@ -237,11 +265,12 @@ async function createAnnouncement({ actorId, fields }) {
 }
 
 async function listAnnouncements() {
-  return (await db.query(`SELECT ${A_COLS} FROM announcements WHERE ends_at > NOW() - INTERVAL '30 days' ORDER BY starts_at DESC, id LIMIT 100`)).rows;
+  return (await db.query(`SELECT ${A_COLS} FROM announcements WHERE COALESCE(ended_at, ends_at) > NOW() - INTERVAL '30 days' ORDER BY starts_at DESC, id LIMIT 100`)).rows;
 }
 
 async function updateAnnouncement({ actorId, id, fields }) {
   return db.withTransaction(async (c) => {
+    await lockStaff(c, actorId);
     const cur = (await c.query(`SELECT ${A_COLS} FROM announcements WHERE id = $1 FOR UPDATE`, [id])).rows[0];
     if (!cur) throw new announcements.AnnouncementError('No such announcement.', 404);
     const st = announcements.statusOf(cur);
@@ -266,6 +295,7 @@ async function updateAnnouncement({ actorId, id, fields }) {
 
 async function endAnnouncement({ actorId, id }) {
   return db.withTransaction(async (c) => {
+    await lockStaff(c, actorId);
     const r = await c.query('UPDATE announcements SET ended_at = NOW(), updated_at = NOW() WHERE id = $1 AND ended_at IS NULL AND ends_at > NOW() RETURNING id', [id]);
     if (!r.rows.length) throw new announcements.AnnouncementError('That announcement is not running or scheduled.', 404);
     await audit(c, { actorId, action: 'announcement.end', targetType: 'announcement', targetId: id });
@@ -312,7 +342,9 @@ async function purge() {
     daily: await run(`DELETE FROM analytics_daily WHERE day < CURRENT_DATE - ${RETENTION.dailyDays}`),
     audit: await run(`DELETE FROM admin_audit_log WHERE at < NOW() - INTERVAL '${RETENTION.auditDays} days'`),
     feedback: await run(`DELETE FROM feedback WHERE created_at < NOW() - INTERVAL '${RETENTION.feedbackDays} days'`),
-    announcements: await run(`DELETE FROM announcements WHERE ends_at < NOW() - INTERVAL '${RETENTION.announcementDays} days'`),
+    // retention runs from the real end: an announcement ended early today is kept 90 days from today, not from its scheduled end
+    announcements: await run(`DELETE FROM announcements WHERE COALESCE(ended_at, ends_at) < NOW() - INTERVAL '${RETENTION.announcementDays} days'`),
+    analyticsWrites: await run("DELETE FROM analytics_batches WHERE created_at < NOW() - INTERVAL '3 days'"),
   };
 }
 

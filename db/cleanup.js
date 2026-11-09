@@ -30,6 +30,7 @@ const PLAN = [
   { table: 'feedback', stores: 'Feedback sent by players: optional account id, category, message, status', references: ['players'] },
   { table: 'announcements', stores: 'Announcement banners (text, level, audience, schedule) and the admin who created them', references: ['players'] },
   { table: 'analytics_active', stores: 'Distinct active accounts per day as keyed hashes (no account ids)', references: [] },
+  { table: 'analytics_batches', stores: 'Keys of applied analytics writes (random ids; no account or personal data)', references: [] },
   { table: 'analytics_meta', stores: 'Server-side analytics settings (the hashing salt; a new one is created on demand)', references: [] },
   { table: 'analytics_daily', stores: 'Aggregate daily counters per metric and dimension (no personal data)', references: [] },
   { table: 'match_participants', stores: 'Per-player result rows of finished games (name, seat, score, winner/bot/left-early flags, optional account id)', references: ['matches', 'players'] },

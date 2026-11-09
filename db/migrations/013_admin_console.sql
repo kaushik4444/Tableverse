@@ -28,6 +28,12 @@ CREATE TABLE IF NOT EXISTS analytics_active (
   PRIMARY KEY (day, actor)
 );
 CREATE INDEX IF NOT EXISTS idx_analytics_active_actor ON analytics_active (actor);
+-- Keys of analytics writes that were applied (a random batch id plus ':c' or ':a'). A retried write with a known key is
+-- ignored, so a write that landed after a timeout is never counted twice. Holds no personal data; purged after 3 days.
+CREATE TABLE IF NOT EXISTS analytics_batches (
+  id TEXT PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 -- Server-side settings for analytics (the hashing salt). Deleting the salt row makes every stored hash unlinkable.
 CREATE TABLE IF NOT EXISTS analytics_meta (
   key VARCHAR(32) PRIMARY KEY,

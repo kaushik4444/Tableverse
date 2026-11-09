@@ -20,6 +20,7 @@ const OWNER_EMAIL = 'boss.admin@test.local';
   let srv = null;
   try {
     process.env.DATABASE_URL = t.url;
+    process.env.ANNOUNCEMENT_CACHE_MS = '0'; // the live-banner list is cached 15 s in production; these tests change rows directly and expect them to apply at once
     const dbAdmin = require('../db/admin');
     const policy = require('../lib/adminPolicy');
     const { start } = require('../server');
@@ -201,6 +202,16 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = '2026-01-02'"))[0].n, 0);
       assert.ok((await q("SELECT COUNT(*)::int AS n FROM analytics_daily"))[0].n >= 2);
     });
+    await test('a batch sent again with the same key is applied once, and a different key is applied', async () => {
+      const key = '11111111-2222-4333-8444-555555555555';
+      const row = [{ day: '2026-03-01', metric: 'session', dim: 'retry', count: 5 }];
+      await dbAdmin.addCounters(row, key);
+      await dbAdmin.addCounters(row, key); // the same batch, retried after a timeout whose outcome was unknown
+      assert.equal((await q("SELECT total FROM analytics_daily WHERE day = '2026-03-01' AND dim = 'retry'"))[0].total, 5, 'counted once');
+      await dbAdmin.addCounters(row, '11111111-2222-4333-8444-666666666666');
+      assert.equal((await q("SELECT total FROM analytics_daily WHERE day = '2026-03-01' AND dim = 'retry'"))[0].total, 10, 'a new batch is counted');
+      await assert.rejects(dbAdmin.addCounters(row, 'not-a-key'), /not valid/);
+    });
     await test('retention: old rows are purged by the documented periods, recent rows stay', async () => {
       await q("INSERT INTO analytics_daily (day, metric, dim, total) VALUES (CURRENT_DATE - 500, 'session', 'old', 1), (CURRENT_DATE - 5, 'session', 'recent', 1)");
       await q("INSERT INTO analytics_active (day, actor) VALUES (CURRENT_DATE - 40, repeat('b', 32)), (CURRENT_DATE - 2, repeat('c', 32))");
@@ -213,6 +224,12 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_daily WHERE dim = 'recent'"))[0].n, 1);
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'recent.one'"))[0].n, 1);
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM feedback WHERE message = 'fresh'"))[0].n, 1);
+      // retention runs from the real end: an early end counts, not the scheduled one
+      await q("INSERT INTO announcements (message, starts_at, ends_at, ended_at) VALUES ('ended long ago', NOW() - INTERVAL '150 days', NOW() + INTERVAL '200 days', NOW() - INTERVAL '120 days')");
+      await q("INSERT INTO announcements (message, starts_at, ends_at, ended_at) VALUES ('ended today', NOW() - INTERVAL '1 day', NOW() + INTERVAL '200 days', NOW())");
+      await dbAdmin.purge();
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM announcements WHERE message = 'ended long ago'"))[0].n, 0, 'removed 90 days after the early end');
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM announcements WHERE message = 'ended today'"))[0].n, 1, 'kept: ended today');
     });
     await test('the overview reads the counters and active hashes', async () => {
       const r = await boss().browser.get('/api/admin/overview?days=30');
