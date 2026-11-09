@@ -1,6 +1,6 @@
 # Stage 20.3 readiness
 
-Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Not done: real-device tests and the final focused security review. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
+Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Not done: relay-candidate verification and the final focused security review. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
 
 ## 1. Completed work and merged PRs
 
@@ -219,12 +219,12 @@ Notes:
 
 ## 10. Remaining manual tests (NOT RUN)
 
-1. Real-device relay tests (section 7): iPhone and Android on mobile data, desktop on a restrictive network. **Not run.**
-2. Browser diagnostics A–D (section 6) on two devices. **Not run.**
-3. Windows PowerShell and WSL2 test runs (section 9). **Not run.** Nothing in section 9 has been executed.
+1. Cross-network phone voice connectivity: **owner-tested successfully between two people, one on Wi-Fi and one on mobile data**. Audio connectivity passed; selected ICE candidate pair / Metered relay usage was not recorded, so relay verification remains open.
+2. Browser WebRTC diagnostics to confirm whether the successful call selected a `relay` candidate. **Not recorded.**
+3. Windows and WSL2 runs are **deferred** for the limited beta; do not treat them as release blockers.
 4. Render: confirm `TURN_TTL_SECONDS` is unset (default 48 hours). Any value is limited to 15 minutes to 48 hours. **Not verified.**
 5. Neon: confirm the production pooled endpoint is in use and `sslmode=require` is set. **Not verified by Claude.**
-6. Render: after #76 is deployed, check that no `[turn]` failure lines appear over at least 48 hours. **Not done.**
+6. Render: observe Metered credential status and `[turn]` failures over at least 48 hours before any static TURN cutover. **Not yet recorded.**
 7. Actions: confirm the next CI run shows no Node.js 20 deprecation notice. **Not confirmed.**
 
 ## 11. Outstanding risks and approvals
@@ -236,11 +236,11 @@ Notes:
 | Two-minute TURN gap after each restart once static is removed | Calls starting in that window can only connect directly | Owner: accept or change |
 | Credential count across restarts | Could exceed 10 with frequent restarts | Monitor; no approval needed |
 | Re-key on rotation restarts relayed calls | Brief audio interruption about once a day per call | Accept or change |
-| Blocked players may share a table (seating) | Block hides chat and voice but not seating | Owner decision |
+| Blocked players may share a table (seating) | Block currently hides chat/voice and profiles but does not prevent shared seating | Owner approved all-surface blocking; implementation remains open |
 | `pg-connection-string` not declared | Test may break if transitive layout changes | Maintenance change when a lockfile update is possible |
-| Windows and WSL2 suites not run | Support claims are unverified | Run before relying on them |
+| Windows and WSL2 suites not run | Native Windows/WSL2 support is unverified | Deferred for limited beta |
 | Cleanup execution | Deletes accounts | Separate approval; `CLEANUP_EXECUTE` stays `false` |
-| Neon load test | Cost and compute use; isolation not yet created | Owner approves the plan (section 8) |
+| Neon load test | Scale limits not measured | Deferred until usage justifies it |
 | Stage 20.6 | Not started | Owner decision |
 
 ## 12. Stage 20.3 PASS/FAIL checklist
@@ -257,23 +257,23 @@ Notes:
 | 6 | Metered logins for session-authenticated players, including guests | implemented | owner policy approved; production issuance not yet observed | POLICY PASS, PRODUCTION NOT VERIFIED |
 | 7 | 10-credential limit handled across restarts | not tracked | n/a | PARTIAL |
 | 8 | Static TURN credentials removed | not done (by design) | n/a | NOT DONE (cutover unapproved) |
-| 9 | Real-device relay and ICE recovery tests | not run | not run | NOT RUN |
+| 9 | Cross-network voice connectivity | n/a | owner-tested Wi-Fi ↔ mobile; audio worked; relay candidate not recorded | CONNECTIVITY PASS, RELAY UNVERIFIED |
 | 10 | Cleanup dry run recorded; execute disabled | merged (#74, #75) | owner-reported dry run; `CLEANUP_EXECUTE=false` | PASS (owner-reported) |
 | 11 | SSL warning removed; secure TLS kept | merged (#75) | CI log confirmation pending | CODE PASS |
 | 12 | Actions off Node.js 20 notices | merged (#75) | next run not checked | CODE PASS, CONFIRMATION PENDING |
 | 13 | Blocked-user privacy in profiles | merged (#73) | not verified | CODE PASS (public profile only) |
-| 14 | Blocked-user privacy in seating and other surfaces | not implemented for seating | n/a | OPEN (owner decision) |
-| 15 | Windows and WSL2 PostgreSQL and migration runs | documented | not run | NOT RUN |
+| 14 | Blocked-user privacy in seating and other surfaces | not implemented for seating | n/a | OPEN (owner approved all-surface scope) |
+| 15 | Windows and WSL2 PostgreSQL and migration runs | deferred | not run | DEFERRED (not a limited-beta blocker) |
 | 16 | Neon load-test plan | deferred for limited beta | not executed | DEFERRED |
 | 17 | Final security audit of main | in progress | n/a | NOT COMPLETE (section 13) |
 
-**Stage 20.3 overall: FAIL.** Mandatory items still open: 6, 8, 9, 14, 15, 17, and production verification for 4 and 5.
+**Stage 20.3 overall: FAIL.** Mandatory items still open: relay verification / Metered observation before cutover, 8 (static TURN cutover remains optional and owner-approved only), 14 (blocked-user seating), 17 (focused security review), and required live production checks. Windows/WSL2 and Neon load testing are deferred.
 
 ## 13. Security audit: status
 
 Not complete. Findings to date, recorded in this document only:
 - Guest players with a session receive Metered logins; owner approved this policy for the initial beta. Monitor bandwidth and credential count.
-- Blocked-user privacy: the public profile is hidden in both directions (#73). Seating is not filtered.
+- Blocked-user privacy: the public profile is hidden in both directions (#73), and chat/voice are filtered. Seating is not yet filtered; owner approved all-surface blocking, so this remains an implementation item.
 - Credential count across restarts is not tracked.
 
 The full audit of authentication, sessions, email verification, blocked-user privacy in all surfaces, admin and owner authorization, rate limiting, WebSocket reconnects, voice access and TURN credentials, database permissions and pooling, and the cleanup workflow is still to be done.
