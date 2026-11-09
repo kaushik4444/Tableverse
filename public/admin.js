@@ -44,9 +44,11 @@
   const spark = (values, label) => { const max = Math.max(...values, 1); return `<div class="ad-spark" role="img" aria-label="${esc(label)}">${values.map((v) => `<i style="height:${Math.round((v / max) * 100)}%" title="${v}"></i>`).join('')}</div>`; };
   /** A line chart as SVG with a data table under it (the chart is for sight, the table for screen readers and copying). */
   const lineChart = (values, labels, label) => {
-    const nums = values.map((v) => Number(v) || 0);
+    // null = not kept (outside the retention window): drawn as a gap, never as zero
+    const nums = values.map((v) => (v == null ? null : Number(v) || 0));
+    const known = nums.filter((v) => v !== null);
     const w = 600; const h = 170; const pad = 30;
-    const max = Math.max(...nums, 1);
+    const max = Math.max(...known, 1);
     const n = nums.length;
     const x = (i) => (n <= 1 ? pad : pad + (i * (w - 2 * pad)) / (n - 1));
     const y = (v) => h - pad - (v / max) * (h - 2 * pad);
@@ -54,10 +56,10 @@
       const yy = (h - pad - f * (h - 2 * pad)).toFixed(1);
       return `<line x1="${pad}" x2="${w - pad}" y1="${yy}" y2="${yy}" class="ad-grid-line"/><text x="${pad - 6}" y="${yy}" class="ad-axis" text-anchor="end" dominant-baseline="middle">${Math.round(f * max)}</text>`;
     }).join('');
-    const pts = nums.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-    const dots = nums.map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" class="ad-dot"><title>${esc(labels[i] || '')}: ${v}</title></circle>`).join('');
+    const pts = nums.map((v, i) => (v === null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean).join(' ');
+    const dots = nums.map((v, i) => (v === null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" class="ad-dot"><title>${esc(labels[i] || '')}: ${v}</title></circle>`)).join('');
     const first = esc(labels[0] || ''); const last = esc(labels[n - 1] || '');
-    const rows = nums.map((v, i) => `<tr><td>${esc(labels[i] || '')}</td><td>${v}</td></tr>`).join('');
+    const rows = nums.map((v, i) => `<tr><td>${esc(labels[i] || '')}</td><td>${v === null ? 'not kept' : v}</td></tr>`).join('');
     return `<figure class="ad-chart"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${grid}<polyline points="${pts}" class="ad-line" fill="none"/>${dots}<text x="${pad}" y="${h - 6}" class="ad-axis">${first}</text><text x="${w - pad}" y="${h - 6}" class="ad-axis" text-anchor="end">${last}</text></svg><details><summary>${esc(label)}: data table</summary><table class="ad-t"><thead><tr><th>Day</th><th>${esc(label)}</th></tr></thead><tbody>${rows}</tbody></table></details></figure>`;
   };
   const RANGES = [7, 30, 90];
@@ -80,7 +82,8 @@
       <h3>Popular games</h3>${bars(o.popularGames, 'No finished games yet.')}
       <h3>Errors by kind</h3>${bars(o.errors, 'No errors recorded.')}
       <p class="ad-muted">Counters only: no addresses, names or messages are recorded. Active users are counted from a keyed hash, never an account id. Detail rows are kept ${o.retention ? esc(o.retention.activeDays) : '35'} days, daily totals ${o.retention ? esc(o.retention.dailyDays) : '400'} days.</p>`;
-    main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => overview(Number(b.dataset.days)).catch(fail); });
+    // a new range makes every answer still on its way out of date: bump the view generation so only the latest one is drawn
+    main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => { state.gen += 1; overview(Number(b.dataset.days)).catch(fail); }; });
   }
 
   // ---------------------------------------------------------------- users
