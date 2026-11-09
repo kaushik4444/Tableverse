@@ -1736,9 +1736,13 @@ function start(opts = {}) {
     } else {
       if (room) {
         if (blocked) {
-          leaveRoom(p); // a blocked player cannot resume this seat; a bot takes over if a game is running
-          send(ws, { t: 'left' });
-          send(ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
+          // Only a committed block removes the seat. A block still being written keeps the socket out of this seat
+          // until it settles, and a failed write then leaves the player where they were.
+          if (blockedByRoom(room, p.id, true)) {
+            leaveRoom(p); // a blocked player cannot resume this seat; a bot takes over if a game is running
+            send(ws, { t: 'left' });
+            send(ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
+          }
           send(ws, tablesMsg(p));
         } else {
           (room.denied || (room.denied = new Set())).add(p.id);
