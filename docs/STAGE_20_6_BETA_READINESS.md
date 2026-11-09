@@ -12,6 +12,7 @@ This checklist deliberately separates release-critical verification from optiona
 - Cleanup remains disabled: `CLEANUP_EXECUTE=false`. The production dry-run reported zero eligible accounts and zero deletions.
 - No Windows or WSL2 test run has been performed.
 - Owner tested a two-person call across Wi-Fi and mobile data; two-way audio worked. The supplied `webrtc-internals` stats show a nominated, succeeded candidate pair with local candidate `relay` (`relayProtocol=udp`), 311,875 bytes sent and 202,044 received. **TURN relay use is confirmed for this call.** The supplied ICE-server list shows `turn:global.relay.metered.ca:80`, but `turnStatus`, `iceExpiresAt`, and the credential source were not captured; dynamic Metered REST credential use is therefore not yet proven.
+- The latest owner-provided WebSocket `welcome` payload reports `turnStatus: unavailable` and `iceExpiresAt: null`; Render logs report `[turn] Metered credential request failed (HTTP 401)`. Dynamic Metered credential authentication is currently failing. This is the one explicitly deferred voice issue carried into Stage 20.6. Keep the static TURN fallback in place; do not rotate or remove credentials without separate approval.
 - No Neon load test has been performed; it is deferred for the initial friend/limited beta.
 
 ## Voice-enabled beta verification
@@ -23,7 +24,7 @@ Before creating fresh voice connections for the voice-enabled beta checks, confi
 - [x] Verify a two-person call uses a selected `relay` candidate and has two-way audio (owner-provided dump: nominated/succeeded pair, local relay candidate over UDP).
 - [ ] Verify network recovery on the relayed call.
 - [ ] Verify a propagated Metered credential update triggers an in-place ICE restart: the same peer connection remains, its local `a=ice-ufrag` changes, and audio continues.
-- [ ] Confirm `turnStatus: ready` and non-null `iceExpiresAt` on both devices before a fresh call, to distinguish a dynamic Metered login from the retained static fallback.
+- [ ] Resolve the Metered HTTP 401 and confirm `turnStatus: ready` and non-null `iceExpiresAt` on both devices before a fresh call, to distinguish a dynamic Metered login from the retained static fallback. Current status is `unavailable` / `null`; static fallback remains active.
 - Keep static fallback configured for the beta unless the separate cutover gate below is completed. Do not repeat broad device/browser tests for this limited beta.
 
 Do not attempt to force relay by merely enabling a VPN. If the network does not force relay, use browser WebRTC diagnostics to verify the selected candidate pair; record a direct connection as inconclusive for relay verification.
@@ -45,7 +46,7 @@ The cutover is a separate owner-authorized production operation. Until then, ret
 Review only the remaining known high-impact areas on current `main`:
 
 - Guest and signed-in socket authorization; guest Metered access follows the owner decision above.
-- Blocked-user privacy in chat, voice, friend/invite flows and table seating. Chat/voice filtering and public-profile hiding are implemented; table seating remains open. Owner has approved all-surface blocking.
+- Blocked-user privacy in chat, voice, friend/invite flows and table seating. Chat/voice filtering and public-profile hiding are implemented; PR #81 adds table-entry, seating, lobby-removal and active-game rejoin enforcement and is awaiting CI/review/merge.
 - Admin/owner authorization and session revocation.
 - TURN secret handling and cleanup workflow permissions.
 
@@ -68,7 +69,7 @@ Before inviting the initial beta cohort, verify and record:
 - [ ] Production signup, email verification, login, logout and password reset work on the live domain.
 - [ ] A guest can join a table. If voice is included, both devices receive Metered `turnStatus: ready` with non-null `iceExpiresAt` before fresh connections, and relay, network recovery, and in-place credential-push ICE-restart checks pass. If voice is withheld, record the voice-disabled decision and keep voice unavailable to the beta cohort.
 - [x] For voice-enabled beta, record a two-way relayed call. The owner-provided dump confirms a nominated, succeeded pair using a local UDP relay candidate.
-- [ ] If voice is included, confirm that the relayed call used a propagated dynamic Metered credential (`turnStatus: ready` and non-null `iceExpiresAt`); record N/A if voice is withheld. The supplied dump does not establish credential source.
+- [ ] If voice is included, resolve the known Metered HTTP 401 and confirm that the relayed call used a propagated dynamic Metered credential (`turnStatus: ready` and non-null `iceExpiresAt`); record N/A if voice is withheld. Current `turnStatus: unavailable` and `iceExpiresAt: null` mean this gate is not yet passed.
 - [ ] Cleanup remains disabled and the protected deletion environment remains in place.
 - [ ] One-instance operating model is retained; do not scale horizontally.
 - [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable.
@@ -78,6 +79,6 @@ Before inviting the initial beta cohort, verify and record:
 
 ## Release decision
 
-Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until the blocked-user seating gap is resolved, required live deployment and signup/email checks are recorded, the focused security review is complete with critical/high findings resolved, and privacy/support checks above are complete. If voice is included, its Metered credential, relay, recovery, and ICE-restart gates must also pass; a recorded voice-disabled state satisfies the voice portion of the gate. Cross-network voice connectivity and TURN relay selection are owner-tested and confirmed by the supplied WebRTC stats. Dynamic Metered credential use, network recovery, and in-place credential-rotation ICE restart are not yet proven. A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
+Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until PR #81 is merged with CI green, the focused security review is complete with critical/high findings resolved, required live deployment and signup/email checks are recorded, and privacy/support checks above are complete. If voice is included, its Metered HTTP 401 must be resolved and the dynamic credential, relay, network recovery, and ICE-restart gates must pass; a recorded voice-disabled state satisfies the voice portion of the gate. Cross-network voice connectivity and TURN relay selection are owner-tested and confirmed by the supplied WebRTC stats, but the current welcome payload/logs show dynamic Metered credential authentication is unavailable (HTTP 401). A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
 
 No production changes, credential deletion/rotation, cleanup execution, paid upgrades, or load tests are authorized by this document.
