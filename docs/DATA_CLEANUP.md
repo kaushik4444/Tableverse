@@ -7,7 +7,7 @@ migration history**, and leave the application working. This document is the pla
 **Nothing in this repository runs the cleanup by itself.** It only happens when a person runs the command in section 4
 with `--execute` and the confirmation. The script was developed and tested only on throw-away local databases.
 
-## 1. Every table in the database (from `db/migrations/001` to `014`)
+## 1. Every table in the database (from `db/migrations/001` to `015`)
 
 There are 22 tables and 21 foreign keys: 21 tables are emptied and `schema_migrations` is preserved. The list below is the
 plan in `db/cleanup.js` (`PLAN`, `PRESERVE`, `EXPECTED_FKS`). The script re-discovers the live schema on every run and
@@ -26,7 +26,7 @@ this code version.
 | 8 | `analytics_daily` | Aggregate daily counters per metric and dimension, no personal data (migration 013) | **Empty** | none |
 | 9 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
 | 10 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
-| 11 | `chat_reports` | Chat reports (migration 010): reporter, reported account, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (CASCADE, 2 keys) |
+| 11 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, reported-name snapshot, optional reported account, table code, message id, reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
 | 12 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
 | 13 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
 | 14 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
@@ -42,7 +42,7 @@ this code version.
 **Migration 013 (admin console, Stage 20.5) adds eight tables**, all of them emptied in the plan above:
 `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, `feedback`, `announcements`,
 `announcement_dismissals` and `admin_audit_log`. It also adds the column `players.role`, which needs no separate step.
-Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
+Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Migration 015 changes only the `chat_reports` foreign-key deletion policy and adds the reported-name snapshot; it adds no table. Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
 until every table in the migrations is classified there, and this section must be updated with it.
 
 Player statistics are not stored anywhere: they are computed from `matches` / `match_participants`, so emptying those
