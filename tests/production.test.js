@@ -111,7 +111,7 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
       await rejects(prepareDatabase({ env: { DATABASE_URL: 'postgres://x', ...env }, db, log: quiet, now: c.now, sleep: c.sleep }), /Cannot reach the database/); return pings; };
     assert.equal(await attempts({ NODE_ENV: 'development' }), 1);
     assert.equal(await attempts({ NODE_ENV: 'production', DB_STARTUP_WAIT_MS: '0' }), 1, '0 switches the wait off in production');
-    assert.equal(await attempts({ NODE_ENV: 'development', DB_STARTUP_WAIT_MS: '3000' }), 3, '1 s + 2 s fit in 3 s; the next 4 s do not');
+    assert.equal(await attempts({ NODE_ENV: 'development', DB_STARTUP_WAIT_MS: '3000' }), 2, 'the 1 s + 2 s backoffs consume the full 3 s budget; no third ping starts');
   });
   await test('DB_STARTUP_WAIT_MS is capped at two minutes and an invalid value falls back to the default', () => {
     const { startupWaitMs } = require('../db/startup');
