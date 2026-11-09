@@ -54,10 +54,13 @@ check('the deletion job runs only by hand with execute = true and the variable, 
   const del = J['cleanup-delete'];
   const cond = /^\s+if:\s*\$\{\{(.*)\}\}\s*$/m.exec(del);
   assert.ok(cond, 'the deletion job has an if condition');
-  assert.match(cond[1], /github\.event_name == 'workflow_dispatch'/);
-  assert.match(cond[1], /inputs\.execute == true/);
-  assert.match(cond[1], /vars\.CLEANUP_EXECUTE == 'true'/);
-  assert.doesNotMatch(cond[1], /schedule/);
+  // Exact equality is intentional: a weaker condition (for example adding an OR branch for schedule)
+  // must fail this regression test rather than merely containing the three expected fragments.
+  assert.equal(
+    cond[1].trim().replace(/\s+/g, ' '),
+    "github.event_name == 'workflow_dispatch' && inputs.execute == true && vars.CLEANUP_EXECUTE == 'true'",
+    'no alternate trigger or bypass is allowed'
+  );
   assert.match(del, /^\s+needs: cleanup-dry-run\s*$/m);
 });
 
