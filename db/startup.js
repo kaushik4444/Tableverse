@@ -77,7 +77,7 @@ async function pingWithRetry({ db, waitMs, log, sleep, now }) {
       return;
     } catch (err) {
       const delay = Math.min(FIRST_DELAY_MS * 2 ** (attempt - 1), MAX_DELAY_MS);
-      if (!isTransientStartupError(db, err) || now() - started + delay > waitMs) {
+      if (!isTransientStartupError(db, err) || now() - started + delay >= waitMs) {
         err.startupAttempts = attempt;
         throw err;
       }
