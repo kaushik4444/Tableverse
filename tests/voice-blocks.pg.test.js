@@ -62,6 +62,8 @@ function socket(port, cookie) {
     for (const u of [B, C]) { u.s.send({ t: 'join', code, spectate: false }); await until(() => u.s.room && u.s.room.code === code, 'joined'); }
     for (const u of [A, B, C]) { u.s.send({ t: 'voice', on: true }); }
     await until(() => A.s.lastVoice() && A.s.lastVoice().length === 3 && B.s.lastVoice() && B.s.lastVoice().length === 3, 'everyone in voice');
+    A.s.send({ t: 'start' });
+    await until(() => A.s.room && A.s.room.status === 'playing', 'the game is running');
 
     await test('before any block, everyone at the table is in voice for everyone', async () => {
       assert.deepEqual(A.s.lastVoice(), [A.id, B.id, C.id].sort());
@@ -88,11 +90,7 @@ function socket(port, cookie) {
       assert.equal(B.s.rtcFrom(A.id), before, 'B receives nothing from A');
     });
 
-    // The server ignores reactions in the lobby, so the table starts its game before anyone reacts.
-    A.s.send({ t: 'start' });
-    await until(() => A.s.room && A.s.room.status === 'playing', 'the game is running');
-
-    await test('a reaction from B does not reach A; C still sees it', async () => {
+    // Reactions are only accepted after the game starts.\n\n    await test('a reaction from B does not reach A; C still sees it', async () => {
       const toA = A.s.msgs.filter((m) => m.t === 'emote').length;
       const toC = C.s.msgs.filter((m) => m.t === 'emote').length;
       B.s.send({ t: 'emote', e: '👏' });
@@ -114,6 +112,43 @@ function socket(port, cookie) {
     await test('unblocking offers the pair voice again', async () => {
       await until(() => B.s.lastVoice() && B.s.lastVoice().includes(A.id), 'B sees A again');
       assert.ok(A.s.lastVoice().includes(B.id));
+    });
+
+    const D = await newUser('Dee'); const E = await newUser('Eli');
+    D.s.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+    const secondCode = await until(() => D.s.room && D.s.room.code, 'second table');
+    E.s.send({ t: 'join', code: secondCode, spectate: false });
+    await until(() => D.s.room && D.s.room.members.some((m) => m.id === E.id), 'E joins second table');
+
+    await sleep(1200);
+    D.s.send({ t: 'block', id: E.id });
+    await until(() => D.s.room && !D.s.room.members.some((m) => m.id === E.id), 'blocked lobby member is removed');
+    await test('blocking someone in a lobby removes them and prevents rejoining the same table', async () => {
+      const before = E.s.errors().length;
+      E.s.send({ t: 'join', code: secondCode, spectate: false });
+      await until(() => E.s.errors().length > before, 'blocked lobby rejoin refused');
+      assert.ok(!D.s.room.members.some((m) => m.id === E.id));
+    });
+
+    await sleep(1200);
+    D.s.send({ t: 'unblock', id: E.id });
+    await until(() => D.s.notices().includes('Unblocked.'), 'unblock completed');
+    E.s.send({ t: 'join', code: secondCode, spectate: false });
+    await until(() => D.s.room && D.s.room.members.some((m) => m.id === E.id), 'E rejoins after unblock');
+
+    D.s.send({ t: 'start' });
+    await until(() => D.s.room && D.s.room.status === 'playing', 'second game starts');
+    await sleep(1200);
+    D.s.send({ t: 'block', id: E.id });
+    await until(() => E.s.notices().some((x) => /finish this game/.test(x)), 'active-game block notice');
+    await test('a blocked seated player can finish the running game but cannot rejoin after leaving', async () => {
+      assert.ok(D.s.room.members.some((m) => m.id === E.id), 'the current game keeps the blocked player seated');
+      E.s.send({ t: 'leave' });
+      await until(() => D.s.room.members.some((m) => m.id === E.id && m.bot), 'bot takes over the blocked seat');
+      const before = E.s.errors().length;
+      E.s.send({ t: 'join', code: secondCode, spectate: false });
+      await until(() => E.s.errors().length > before, 'blocked rejoin refused');
+      assert.ok(D.s.room.members.some((m) => m.id === E.id && m.bot), 'the blocked player cannot take the seat back');
     });
   } finally {
     for (const s of sockets) { try { s.ws.close(); } catch { /* closed */ } }
