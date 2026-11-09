@@ -699,8 +699,8 @@ function start(opts = {}) {
   function enforceBlockedRoom(room) {
     if (!room) return;
     const occupants = [...room.members, ...room.spectators];
-    for (const m of occupants) {
-      if (!blockedByRoom(room, m.id)) continue;
+    const blockedTargets = occupants.filter((m) => blockedByRoom(room, m.id));
+    for (const m of blockedTargets) {
       const q = players.get(m.id);
       const seated = room.members.some((member) => member.id === m.id);
       if (room.status === 'playing' && seated) continue;
