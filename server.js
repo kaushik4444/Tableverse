@@ -213,6 +213,15 @@ function start(opts = {}) {
     }
   };
   const analytics = createAnalytics({ store: dbAdmin, enabled: env.ANALYTICS_ENABLED !== '0', log: opts.log || console });
+  // A registered account counts as active once per UTC day: at its first authenticated message of that day, not only at login,
+  // so a session that stays open across midnight is counted for the new day too.
+  const markActive = (p, ws) => {
+    if (!ws || !ws.authToken) return; // registered accounts only
+    const day = new Date().toISOString().slice(0, 10);
+    if (p.activeDay === day) return;
+    p.activeDay = day;
+    analytics.active(p.id); // the store keeps a keyed hash, not the id
+  };
   const trackError = (code) => analytics.track('error', code);
   const adminPlatform = () => ({
     uptimeSec: Math.round(process.uptime()), node: process.version, memoryMb: Math.round(process.memoryUsage().rss / 1048576),
@@ -269,7 +278,8 @@ function start(opts = {}) {
     },
     // the account no longer exists: leave the table, close the socket, forget the player on this server
     onAccountDeleted: ({ playerId }) => {
-      if (dbAdmin) dbAdmin.forgetActor(playerId).catch(() => {}); // drop this account's pseudonymous activity rows (best effort)
+      // drop this account's pseudonymous activity: pending in memory first (so no later write recreates it), then the stored rows
+      if (dbAdmin) analytics.forget(playerId, () => dbAdmin.forgetActor(playerId)).catch(() => {}); // best effort
       const p = players.get(playerId);
       if (!p) return;
       // The real name must not outlive the account anywhere: not in the table, its log or chat, and not in the match
@@ -1610,7 +1620,7 @@ function start(opts = {}) {
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
     send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...iceMsg(p.id) });
-    if (ws.authToken) analytics.active(p.id); // registered accounts only; the store keeps a keyed hash, not the id
+    markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
     const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;
@@ -1750,6 +1760,7 @@ function start(opts = {}) {
       const run = async () => {
         // queued behind an earlier message: the session may have ended while it waited
         if (ws.revoked || ws.readyState !== 1 || ws.player !== p) return;
+        markActive(p, ws); // at most one analytics mark per account per day
         try {
           const before = p.room;
           await handlers[msg.t](p, msg);

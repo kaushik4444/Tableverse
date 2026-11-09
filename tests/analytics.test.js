@@ -10,8 +10,15 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 const quiet = { warn() {}, error() {}, log() {} };
+/** Like the database: a write that carries a key is applied once per key (the key is recorded when the write starts). */
 const memStore = () => {
-  const s = { counters: [], active: [], addCounters: async (rows) => { s.counters.push(...rows); }, addActive: async (rows) => { s.active.push(...rows); } };
+  const applied = new Set();
+  const once = (key) => { if (key) { if (applied.has(key)) return false; applied.add(key); } return true; };
+  const s = {
+    counters: [], active: [],
+    addCounters: async (rows, id) => { if (once(id && id + ':c')) s.counters.push(...rows); },
+    addActive: async (rows, id) => { if (once(id && id + ':a')) s.active.push(...rows); },
+  };
   return s;
 };
 const total = (rows, metric, dim = '') => rows.filter((r) => r.metric === metric && r.dim === dim).reduce((a, r) => a + r.count, 0);
@@ -127,7 +134,7 @@ const total = (rows, metric, dim = '') => rows.filter((r) => r.metric === metric
     assert.ok(Date.now() - t0 < 1000);
     assert.equal(a.stats().failures, 1);
     assert.equal(a.stats().lastErrorCode, 'TIMEOUT');
-    const b = createAnalytics({ store, log: quiet, writeTimeoutMs: 60000 });
+    const b = createAnalytics({ store, log: quiet, writeTimeoutMs: 200 }); // short: a stuck write must not keep the test process alive
     b.track('session');
     const t1 = Date.now();
     await b.close(50);
@@ -186,21 +193,49 @@ const total = (rows, metric, dim = '') => rows.filter((r) => r.metric === metric
     } finally { await s.close(); }
   });
 
+  await test('close() writes the counts added while a flush was running, not only the ones before it', async () => {
+    const st = memStore(); let slow = true;
+    const store = { addCounters: async (rows, id) => { if (slow) { slow = false; await new Promise((r) => setTimeout(r, 30)); } return st.addCounters(rows, id); }, addActive: st.addActive };
+    const a = createAnalytics({ store, log: quiet });
+    a.track('session');
+    const inFlight = a.flush();
+    a.track('session'); // added while the first write runs
+    await a.close(2000);
+    await inFlight;
+    assert.equal(total(st.counters, 'session'), 2);
+  });
+  await test('forgetting an account removes its pending activity first, so no later write recreates it', async () => {
+    const st = memStore(); const a = createAnalytics({ store: st, log: quiet });
+    a.active('p1'); a.active('p2');
+    let deleted = false;
+    await a.forget('p1', async () => { deleted = true; });
+    await a.flush();
+    assert.ok(deleted, 'the stored rows are deleted');
+    assert.deepEqual(st.active.map((r) => r.playerId), ['p2'], 'only the other account is written');
+  });
   console.log('timeouts');
-  await test('a write that times out is never saved twice: its counts are dropped and counted, not put back', async () => {
+  await test('a write that times out is sent again with the same key, so the counts land exactly once', async () => {
+    const applied = new Set();
     const landed = [];
     let calls = 0;
     const store = {
-      addCounters: async (rows) => { calls++; if (calls === 1) await new Promise((r) => setTimeout(r, 60)); landed.push(...rows); }, // the slow write still lands
+      addCounters: async (rows, id) => {
+        calls++;
+        if (applied.has(id)) return; // the database ignores a key it has already applied
+        applied.add(id);
+        if (calls === 1) await new Promise((r) => setTimeout(r, 60)); // the first write is slow, and still lands
+        landed.push(...rows);
+      },
       addActive: async () => {},
     };
     const a = createAnalytics({ store, log: quiet, writeTimeoutMs: 10 });
     a.track('session');
-    await a.flush(); // gives up after 10 ms
+    await a.flush(); // gives up after 10 ms; the batch is kept
     await new Promise((r) => setTimeout(r, 90));
-    await a.flush(); // nothing left to send: the first counts must not come back
+    await a.flush(); // sends the same batch again: ignored, because its first write already landed
     assert.equal(total(landed, 'session'), 1, 'counted exactly once');
-    assert.equal(a.stats().dropped, 1, 'the uncertain count is reported as dropped');
+    assert.equal(a.stats().dropped, 0, 'nothing was thrown away');
+    assert.equal(a.stats().failures, 1);
   });
   await test('a failed (not timed-out) write is put back and saved on the next flush', async () => {
     const landed = [];
