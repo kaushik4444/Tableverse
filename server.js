@@ -579,7 +579,7 @@ function start(opts = {}) {
     const out = [];
     for (const room of rooms.values()) {
       if (room.status !== 'playing' || p.room === room.code) continue;
-      if (room.denied && room.denied.has(p.id)) continue; // lost access to this private table
+      if ((room.denied && room.denied.has(p.id)) || (room.blockedDenied && room.blockedDenied.has(p.id))) continue; // access revoked or blocked pair
       if (room.members.some((m) => m.id === p.id && m.bot)) out.push({ code: room.code, gameId: room.gameId, paused: !humans(room).some(isConnected) });
     }
     return out;
@@ -594,7 +594,7 @@ function start(opts = {}) {
       if (room.status !== 'playing') continue;
       let paused;
       for (const m of room.members) {
-        if (!m.bot || (room.denied && room.denied.has(m.id))) continue; // denied: lost access to this private table
+        if (!m.bot || (room.denied && room.denied.has(m.id)) || (room.blockedDenied && room.blockedDenied.has(m.id))) continue; // access revoked or blocked pair
         const q = players.get(m.id);
         if (q && q.room === room.code) continue;
         if (paused === undefined) paused = !humans(room).some(isConnected);
@@ -673,6 +673,29 @@ function start(opts = {}) {
   const blocksPlayer = (p, id) => { const s = effectiveBlocked(p); return !!s && s.has(id); };
   const pairBlocked = (a, b) => { const x = players.get(a); const y = players.get(b); return (!!x && blocksPlayer(x, b)) || (!!y && blocksPlayer(y, a)); };
   const voiceFor = (room, viewerId) => voiceRelay.voiceList(room, (id) => pairBlocked(viewerId, id), viewerId);
+  /** A player cannot enter or remain at a table with anyone they have blocked, or who has blocked them. */
+  function blockedWithRoom(room, playerId) {
+    return [...room.members, ...room.spectators].some((m) => m.id !== playerId && pairBlocked(playerId, m.id));
+  }
+  /**
+   * Apply an accepted block to the shared table. Lobby members and spectators leave immediately. A seated player in a
+   * running game keeps their seat until that game ends, but cannot rejoin after leaving or after the result is recorded.
+   */
+  function enforceBlockedRoom(room) {
+    if (!room || !room.blockedDenied || !room.blockedDenied.size) return;
+    for (const id of [...room.blockedDenied]) {
+      const q = players.get(id);
+      if (!q || q.room !== room.code) continue;
+      const seated = room.members.some((m) => m.id === id && !m.bot);
+      if (room.status === 'playing' && seated) continue;
+      leaveRoom(q);
+      if (q.connected) {
+        send(q.ws, { t: 'left' });
+        send(q.ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
+        send(q.ws, tablesMsg(q));
+      }
+    }
+  }
   /** Sends this player their list of blocked accounts (names come from the database; none without one). */
   async function sendBlocks(p) {
     const blocks = dbPool.hasDatabase() ? await dbModeration.listBlocked(p.id) : [];
@@ -748,6 +771,8 @@ function start(opts = {}) {
         } catch (e) {
           console.error('[server] Error preparing match record:', e.message);
         }
+        // A blocked player may finish this game, but must leave before the table can be used again.
+        enforceBlockedRoom(room);
       }
       // a trick just finished: give everyone a moment to see it being collected before the next card
       const lt = g.stamp ? g.stamp() : null;
@@ -1129,6 +1154,16 @@ function start(opts = {}) {
         try {
           await dbModeration.addBlock(p.id, target);
           p.blocked.add(target); // committed blocks live here; pending ones are included by effectiveBlocked()
+          const targetPlayer = players.get(target);
+          const sharedRoom = targetPlayer && targetPlayer.room && rooms.get(targetPlayer.room);
+          if (sharedRoom && sharedRoom.members.concat(sharedRoom.spectators).some((m) => m.id === p.id)) {
+            (sharedRoom.blockedDenied || (sharedRoom.blockedDenied = new Set())).add(target);
+            enforceBlockedRoom(sharedRoom);
+            const targetIsSeated = sharedRoom.members.some((m) => m.id === target && !m.bot);
+            if (sharedRoom.status === 'playing' && targetIsSeated && targetPlayer.connected) {
+              send(targetPlayer.ws, { t: 'notice', text: 'You can finish this game, but you cannot rejoin this table after leaving.' });
+            }
+          }
         } catch (e) {
           if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
           throw e;
@@ -1146,7 +1181,7 @@ function start(opts = {}) {
         await sendBlocks(p);
         const roomNow = rooms.get(p.room);
         if (roomNow) broadcastVoice(roomNow); // a voice connection to them closes now, on both sides
-        send(p.ws, { t: 'notice', text: 'Blocked. They are hidden from your table chat and table voice. Nothing else changes, and they are not told.' });
+        send(p.ws, { t: 'notice', text: 'Blocked. They are hidden from your table chat and voice, and you will not share another table. An active game can finish.' });
       });
     },
 
@@ -1166,6 +1201,9 @@ function start(opts = {}) {
         // failed unblock could not be taken back.
         await dbModeration.removeBlock(p.id, msg.id);
         p.blocked.delete(msg.id);
+        for (const room of rooms.values()) {
+          if (room.blockedDenied && room.blockedDenied.has(msg.id) && !blockedWithRoom(room, msg.id)) room.blockedDenied.delete(msg.id);
+        }
         resyncChat(p);
         await sendBlocks(p);
         const roomNow = rooms.get(p.room);
@@ -1192,7 +1230,8 @@ function start(opts = {}) {
         creatorId: p.id, // the person who opened the table: never loses access to it
         hosts: new Set([p.id]), // everyone who has hosted this table: their accepted invitations stay valid after a host change
         admitted: new Set(), // people already here when a public table was made private (docs/PRIVATE_TABLES.md)
-        denied: new Set(), // people who lost access while a game was running: they may finish it but not come back
+        denied: new Set(), // people who lost private-table access while a game was running
+        blockedDenied: new Set(), // blocked players may finish an active game but cannot rejoin or share the next table
         status: 'lobby',
         seats: def.seats.default,
         options: sanitizeOptions(def, {}),
@@ -1218,6 +1257,7 @@ function start(opts = {}) {
       applyProfile(p, msg);
       if (!room) return sendError(p, `No table with code ${code || '?'}`);
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
+      if ((room.blockedDenied && room.blockedDenied.has(p.id)) || blockedWithRoom(room, p.id)) return sendError(p, 'You cannot join a table with someone you have blocked or who has blocked you.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
       const seat = room.members.find((m) => m.id === p.id);
@@ -1284,6 +1324,7 @@ function start(opts = {}) {
     async sit(p) {
       const room = rooms.get(p.room);
       if (!room || room.status !== 'lobby' || !isSpec(room, p.id)) return sendError(p, 'Not possible right now');
+      if ((room.blockedDenied && room.blockedDenied.has(p.id)) || blockedWithRoom(room, p.id)) return sendError(p, 'You cannot take a seat at a table with someone you have blocked or who has blocked you.');
       if (!await canEnterRoom(p, room, { present: true })) return sendError(p, 'This private table requires an accepted invitation.');
 
       if (room.members.length >= room.seats) return sendError(p, 'There is no open seat');
