@@ -56,8 +56,10 @@ snapshot and changes the reported-account reference; both are additive and appli
 
 The reporter reference uses `ON DELETE CASCADE`: reports made by a deleted reporter are removed. The reported-account
 reference uses `ON DELETE SET NULL`: reports against a deleted account remain with the server-captured display-name
-snapshot and report content, but without the deleted account UUID. The cleanup plan (`db/cleanup.js`) classifies both
-foreign keys and preserves this policy.
+snapshot and report content, but without the deleted account UUID. This applies to individual account deletion paths.
+The separate full-database cleanup command intentionally empties the entire `chat_reports` table, as shown in
+`docs/DATA_CLEANUP.md`; it does not preserve moderation evidence. The cleanup schema guard (`db/cleanup.js`) classifies
+both foreign keys so either account-deletion behavior is explicit.
 
 ## Reviewing reports
 
