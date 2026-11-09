@@ -7,7 +7,7 @@ migration history**, and leave the application working. This document is the pla
 **Nothing in this repository runs the cleanup by itself.** It only happens when a person runs the command in section 4
 with `--execute` and the confirmation. The script was developed and tested only on throw-away local databases.
 
-## 1. Every table in the database (from `db/migrations/001` to `015`)
+## 1. Every table in the database (from `db/migrations/001` to `014`)
 
 There are 22 tables and 21 foreign keys: 21 tables are emptied and `schema_migrations` is preserved. The list below is the
 plan in `db/cleanup.js` (`PLAN`, `PRESERVE`, `EXPECTED_FKS`). The script re-discovers the live schema on every run and
@@ -26,7 +26,7 @@ this code version.
 | 8 | `analytics_daily` | Aggregate daily counters per metric and dimension, no personal data (migration 013) | **Empty** | none |
 | 9 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
 | 10 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
-| 11 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, reported-name snapshot, optional reported account, table code, message id, reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
+| 11 | `chat_reports` | Chat reports (migration 010): reporter, reported account, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (CASCADE, 2 keys) |
 | 12 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
 | 13 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
 | 14 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
@@ -42,7 +42,7 @@ this code version.
 **Migration 013 (admin console, Stage 20.5) adds eight tables**, all of them emptied in the plan above:
 `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, `feedback`, `announcements`,
 `announcement_dismissals` and `admin_audit_log`. It also adds the column `players.role`, which needs no separate step.
-Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Migration 015 changes only the `chat_reports` foreign-key deletion policy and adds the reported-name snapshot; it adds no table. Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
+Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
 until every table in the migrations is classified there, and this section must be updated with it.
 
 Player statistics are not stored anywhere: they are computed from `matches` / `match_participants`, so emptying those
@@ -141,11 +141,10 @@ the wrong URL is used.
 
 - The account's logins, tokens, sessions, recent tables, dismissals, friendships, friend requests, private-table
   invitations and chat blocks are removed, in both directions where a relationship has two sides.
-- Chat reports follow an intentional split policy (migrations 010 and 015): reports **made by** a deleted account
-  are removed with that reporter (`reporter_id ON DELETE CASCADE`); reports **made against** a deleted account are retained
-  (`reported_id ON DELETE SET NULL`). The retained row keeps `reported_display_name`, a display-name snapshot captured
-  when the report is created, plus the reported message, reason, details, room and timestamp. The deleted account's UUID
-  is not retained in the report.
+- Chat reports are removed in both directions too: a report is deleted when either the reporter or the reported account
+  is deleted (`chat_reports` cascades on both keys, migration 010). **Open question for the owner:** deleting an unverified
+  account can therefore erase moderation reports made against it. Changing this needs a migration (for example keeping
+  reports with the reported account set to NULL) and is not part of this change.
 - Match history is kept; `match_participants.player_id` is cleared and the name becomes the deleted-player name.
 - `tests/unverified-cleanup.pg.test.js` checks every foreign key to `players`: each must cascade or set NULL. A new
   reference that does neither fails the test until it is classified here.

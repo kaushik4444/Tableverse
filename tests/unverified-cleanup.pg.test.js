@@ -200,7 +200,7 @@ const DAY = 24 * 60 * 60 * 1000;
       await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, expires_at) VALUES ($1, $2, 'wizard', 'ABCDEF', NOW() + INTERVAL '1 day')", [gone, keep]);
       await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, expires_at) VALUES ($1, $2, 'wizard', 'BCDEFG', NOW() + INTERVAL '1 day')", [keep, gone]);
       await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($2, $1)', [gone, keep]);
-      await q("INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason) VALUES ($1, $2, 'Gone', 'ABCDEF', gen_random_uuid(), 'x', 'spam'), ($2, $1, 'Keep', 'ABCDEF', gen_random_uuid(), 'y', 'spam')", [keep, gone]);
+      await q("INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason) VALUES ($1, $2, 'ABCDEF', gen_random_uuid(), 'x', 'spam'), ($2, $1, 'ABCDEF', gen_random_uuid(), 'y', 'spam')", [keep, gone]);
       const [ann] = await q("INSERT INTO announcements (message, ends_at) VALUES ('Dismissed', NOW() + INTERVAL '1 day') RETURNING id");
       await q('INSERT INTO announcement_dismissals (player_id, announcement_id, dismissed_revision) VALUES ($1, $2, 1)', [gone, ann.id]);
       await q("INSERT INTO auth_sessions (player_id, token_hash) VALUES ($1, repeat('a', 64))", [gone]);
@@ -217,13 +217,8 @@ const DAY = 24 * 60 * 60 * 1000;
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM friend_requests WHERE requester_id = ANY($1::uuid[]) OR recipient_id = ANY($1::uuid[])'), 0, 'friend requests gone');
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM private_table_invitations WHERE inviter_id = ANY($1::uuid[]) OR invitee_id = ANY($1::uuid[])'), 0, 'invitations gone in both directions');
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocker_id = ANY($1::uuid[]) OR blocked_id = ANY($1::uuid[])'), 0, 'blocks gone in both directions');
-      // Reports made by the deleted account are personal data and cascade away; reports about it remain for moderation.
-      const retained = await q("SELECT reporter_id, reported_id, reported_display_name, message_text FROM chat_reports WHERE room_code = 'ABCDEF'");
-      assert.equal(retained.length, 1, 'only the report submitted by the surviving reporter remains');
-      assert.equal(retained[0].reporter_id, keep, 'the surviving reporter remains linked');
-      assert.equal(retained[0].reported_id, null, 'the deleted account link is cleared');
-      assert.equal(retained[0].reported_display_name, 'Gone', 'the reported display name is retained as a snapshot');
-      assert.equal(retained[0].message_text, 'x', 'the reported message remains available for review');
+      // Documented behaviour: a report is deleted with either account it names (migration 010, ON DELETE CASCADE on both keys).
+      assert.equal(await count('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = ANY($1::uuid[]) OR reported_id = ANY($1::uuid[])'), 0, 'reports in both directions gone (cascade)');
       assert.equal((await q('SELECT 1 FROM announcement_dismissals WHERE player_id = $1', [gone])).length, 0, 'dismissals gone');
       assert.equal((await q('SELECT 1 FROM auth_sessions WHERE player_id = $1', [gone])).length, 0, 'sessions gone');
       assert.equal((await q('SELECT 1 FROM player_recent_tables WHERE player_id = $1', [gone])).length, 0, 'recent tables gone');
@@ -244,7 +239,7 @@ const DAY = 24 * 60 * 60 * 1000;
         auth_email_tokens: ['c'],
         auth_identities: ['c'],
         auth_sessions: ['c'],
-        chat_reports: ['c', 'n'],
+        chat_reports: ['c'],
         feedback: ['n'],
         friend_requests: ['c'],
         friendships: ['c'],
