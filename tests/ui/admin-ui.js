@@ -136,20 +136,32 @@ const api = (role) => ({
     assert.equal(await page.locator('.notice-warning').count(), 0, 'remembered by this browser');
     await ctx.close(); server.close();
   });
-  await test('a guest entry from before revisions (id and text) is not honoured: the banner shows once more, and a new dismissal is kept by revision', async () => {
-    const { server, url } = await serve(homeApi(BANNERS, false));
+  // A guest who dismissed under the earlier format (`id:text`) keeps no hidden banner: the old key is never read.
+  async function guestWithOldKey(banners, oldEntries, selector, message) {
+    const { server, url } = await serve(homeApi(banners, false));
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await ctx.newPage();
-    await page.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('ct_ann_ids', JSON.stringify(['b1:Server restart at noon'])); sessionStorage.setItem('seeded', '1'); } } catch { /* no storage */ } });
+    await page.addInitScript((entries) => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('ct_ann_ids', JSON.stringify(entries)); sessionStorage.setItem('seeded', '1'); } } catch { /* no storage */ } }, oldEntries);
     await page.goto(url + '/');
-    await page.waitForSelector('.notice-warning');
-    assert.equal(await page.locator('.notice-warning').count(), 1, 'the old text-keyed entry is not honoured');
-    await page.click('[data-act="dismissBanner"][data-id="b1"]');
-    assert.equal(await page.evaluate(() => localStorage.getItem('ct_ann_ids')), '["b1:1"]', 'a new dismissal is stored with its revision');
+    await page.waitForSelector(selector);
+    assert.equal(await page.locator(selector).count(), 1, 'the banner shows: the old entry is not read');
+    // the text is "<level icon> <message>": the message must be the whole trailing text ("12" is not "2")
+    const shown = (await page.textContent(`${selector} > span`)).trim();
+    assert.ok(shown === message || shown.endsWith(' ' + message), `shows "${message}", got "${shown}"`);
+    await page.click(`[data-act="dismissBanner"][data-id="b1"]`);
+    assert.equal(await page.evaluate(() => localStorage.getItem('ct_ann_ids')), null, 'the old key is removed');
+    assert.equal(await page.evaluate(() => localStorage.getItem('ct_ann_rev')), '["b1:' + banners[0].revision + '"]', 'the new dismissal is stored with its revision');
     await page.reload();
     await page.waitForSelector('.notice-bar.notice-info');
-    assert.equal(await page.locator('.notice-warning').count(), 0, 'and stays dismissed for that revision');
+    assert.equal(await page.locator(selector).count(), 0, 'the new dismissal survives a reload');
     await ctx.close(); server.close();
+  }
+  await test('a guest entry from before revisions (id and text) does not hide the banner; a new revision dismissal survives reload', async () => {
+    await guestWithOldKey(BANNERS, ['b1:Server restart at noon'], '.notice-warning', 'Server restart at noon');
+  });
+  await test('an old guest entry whose text is exactly "2" cannot hide revision 2 of a banner', async () => {
+    const TWO = [{ id: 'b1', revision: 2, message: '2', level: 'warning', endsAt: '2026-11-09T00:00:00Z' }, { id: 'b2', revision: 1, message: 'Other notice', level: 'info', endsAt: '2026-11-09T00:00:00Z' }];
+    await guestWithOldKey(TWO, ['b1:2'], '.notice-warning', '2');
   });
   await test('a signed-in player dismisses on the server (so every device agrees) and gets the feedback form; staff get the Admin entry', async () => {
     const { server, url, calls } = await serve({ ...homeApi(BANNERS, true), 'POST /api/feedback': () => ({ ok: true, message: 'Thank you!' }) });
