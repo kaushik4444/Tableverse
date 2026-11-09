@@ -130,11 +130,17 @@ function socket(port, cookie) {
       E.s.send({ t: 'join', code: secondCode, spectate: false });
       await until(() => E.s.errors().length > before, 'blocked lobby rejoin refused');
       assert.ok(!D.s.room.members.some((m) => m.id === E.id));
+      const listing = E.s.msgs.filter((m) => m.t === 'tables').pop();
+      assert.ok(listing && !listing.tables.some((table) => table.code === secondCode), 'the blocked table is hidden from the directory');
     });
 
     await sleep(1200);
     D.s.send({ t: 'unblock', id: E.id });
     await until(() => D.s.notices().includes('Unblocked.'), 'unblock completed');
+    await until(() => {
+      const listing = E.s.msgs.filter((m) => m.t === 'tables').pop();
+      return listing && listing.tables.some((table) => table.code === secondCode);
+    }, 'table appears in directory after unblock');
     E.s.send({ t: 'join', code: secondCode, spectate: false });
     await until(() => D.s.room && D.s.room.members.some((m) => m.id === E.id), 'E rejoins after unblock');
 
