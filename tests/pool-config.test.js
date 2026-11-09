@@ -2,6 +2,7 @@
 // DATABASE_URL -> pg.Pool options. No database needed: the rewrite and the production TLS default are checked directly.
 const assert = require('node:assert/strict');
 const { poolConnectionOptions, isLocalConnectionString } = require('../db/poolConfig');
+const { parse: parseConnectionString } = require('pg-connection-string');
 
 let passed = 0;
 function test(name, fn) {
@@ -49,6 +50,29 @@ test('other TLS parameters (ssl, sslrootcert) mean the URL is left alone, so the
     'postgresql://u:p@db.example.com/x?sslmode=require&sslrootcert=/etc/ca.pem',
   ]) {
     assert.equal(poolConnectionOptions(url, PROD).connectionString, url, url);
+  }
+});
+
+test('pg parser preserves TLS precedence for conflicting sslmode and ssl URL parameters', () => {
+  for (const [url, expectedSsl] of [
+    ['postgresql://db.example.com/x?sslmode=require&ssl=0', {}],
+    ['postgresql://db.example.com/x?sslmode=disable&ssl=1', false],
+  ]) {
+    const options = poolConnectionOptions(url, DEV);
+    assert.equal(options.connectionString, url);
+    assert.deepEqual(parseConnectionString(options.connectionString).ssl, expectedSsl);
+  }
+});
+
+test('rewriting a verified sslmode alias preserves pg parser TLS options', () => {
+  for (const mode of ['require', 'prefer', 'verify-ca']) {
+    const url = `postgresql://db.example.com/x?sslmode=${mode}`;
+    const rewritten = poolConnectionOptions(url, DEV).connectionString;
+    assert.deepEqual(
+      parseConnectionString(rewritten).ssl,
+      parseConnectionString(url).ssl,
+      `${mode} and verify-full must have the same TLS options`,
+    );
   }
 });
 
