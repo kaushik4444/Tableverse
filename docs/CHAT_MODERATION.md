@@ -18,6 +18,9 @@ the server. It does not replace human review, and it does not take automatic act
   the player. Live chat (`pushChat`) and the history sent on join or reconnect both pass through
   `lib/moderation.js` `shouldDeliver` / `visibleChat`, so a blocked message is never sent to the blocker's socket. A pending block is filtered immediately while its database write is queued or in flight.
 - **Chat filtering is one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages during an already-running game, and B is not told about the block.
+- **Chat is one way; voice is two ways.** The blocker stops receiving the blocked player's table chat. The blocked player still receives the blocker's chat. Voice is blocked in both directions. (Decided by the owner, 2026-11-10.)
+- **A host may keep a blocked guest at the host's own table.** The block does not remove the guest, and the guest is not told. The host decides who stays at a table they host, and the block is not a reason to remove anyone. (Decided by the owner, 2026-11-10.)
+- **The profile of a blocked player shows a 'Blocked' label to both sides.** The lookup is symmetric, so the blocked player can see that a block exists on the profile. This is kept as it is (owner decision, 2026-11-10).
 - **A block never changes table access.** A blocked pair may join, sit, spectate and reconnect at any table, including a table hosted by a third person, and an invitation from that host can reach both. A block never removes anyone from a table, and the host of a table can be blocked by a player at it. Only the chat and voice rules below apply at a shared table.
 - **Voice and reactions are blocked in both directions.** A block in either direction keeps the pair out of each other's
   table voice: each browser is offered only the people it may hear, so an existing connection to the other person closes.

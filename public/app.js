@@ -1582,7 +1582,7 @@
   /** Accounts this person has blocked, with a button to unblock each. Names are shown only here, to the blocker. */
   function blockedHTML() {
     const list = S.blocked;
-    const head = `<div class="setting-row"><div><b>Blocked players</b><small>They cannot see your table chat or hear your table voice, and you cannot invite each other. You can still share a table. They are not told. Unblocking restores chat and voice.</small></div></div>`;
+    const head = `<div class="setting-row"><div><b>Blocked players</b><small>You will not see their table chat, and you will not hear each other in table voice. You cannot invite each other. You can still share a table. They are not told. Unblocking restores chat and voice.</small></div></div>`;
     if (!list) return `${head}<p class="hint" style="text-align:left">Loading…</p>`;
     if (!list.length) return `${head}<p class="hint" style="text-align:left">You have not blocked anyone.</p>`;
     const rows = list.map((b) => `<div class="setting-row"><div><b>${esc(b.name || 'Player')}</b></div><button type="button" class="btn ghost small" data-act="unblock" data-id="${esc(b.id)}" aria-label="Unblock ${esc(b.name || 'player')}">Unblock</button></div>`).join('');
