@@ -63,6 +63,7 @@ Record findings with file/test references. Fix any critical or high-severity iss
 
 ## Stage 20.6 — final limited-beta release gate
 
+- [ ] Latest PR commit has all five required `main` status checks green: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Production dependency audit, and Build production Docker image. A skipped or expected check is not a pass.
 Before inviting the initial beta cohort, verify and record:
 
 - [ ] Latest `main` commit is deployed on Render and deployment is healthy.
