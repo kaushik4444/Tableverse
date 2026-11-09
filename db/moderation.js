@@ -82,10 +82,10 @@ async function createChatReport({ reporterId, reportedId, roomCode, messageId, m
     try {
       r = await client.query(
         `INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason, details)
-         VALUES ($1, $2, $8, $3, $4, $5, $6, $7)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (reporter_id, message_id) DO NOTHING
          RETURNING id`,
-        [reporterId, reportedId, roomCode, messageId, String(messageText).slice(0, 200), reason, details || '', reportedDisplayName]
+        [reporterId, reportedId, reportedDisplayName, roomCode, messageId, String(messageText).slice(0, 200), reason, details || '']
       );
     } catch (err) {
       if (err && err.code === '23503') throw new ModerationError('That player could not be found.', 404);
