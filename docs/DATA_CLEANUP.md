@@ -42,7 +42,7 @@ this code version.
 **Migration 013 (admin console, Stage 20.5) adds eight tables**, all of them emptied in the plan above:
 `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, `feedback`, `announcements`,
 `announcement_dismissals` and `admin_audit_log`. It also adds the column `players.role`, which needs no separate step.
-Migration 014 adds two columns and no tables; migration 015 adds the reported-name snapshot and changes the moderation report foreign-key action: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
+Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Migration 015 adds the reported-name snapshot and changes the moderation report foreign-key action. Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
 until every table in the migrations is classified there, and this section must be updated with it.
 
 Player statistics are not stored anywhere: they are computed from `matches` / `match_participants`, so emptying those
