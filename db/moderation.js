@@ -74,14 +74,21 @@ async function createChatReport({ reporterId, reportedId, roomCode, messageId, m
     if (today.rows[0].n >= MAX_REPORTS_PER_DAY) {
       throw new ModerationError('You have sent many reports today. Please try again tomorrow.', 429);
     }
+    // Lock the reported account while taking its display-name snapshot. If account deletion wins first,
+    // no report is created against a row that no longer exists; if this transaction wins, the snapshot and report
+    // commit before ON DELETE SET NULL can detach the account reference.
+    const target = await client.query('SELECT display_name FROM players WHERE id = $1 FOR KEY SHARE', [reportedId]);
+    if (!target.rows.length) throw new ModerationError('That player could not be found.', 404);
+    const reportedDisplayName = target.rows[0].display_name;
+
     let r;
     try {
       r = await client.query(
-        `INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason, details)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (reporter_id, message_id) DO NOTHING
          RETURNING id`,
-        [reporterId, reportedId, roomCode, messageId, String(messageText).slice(0, 200), reason, details || '']
+        [reporterId, reportedId, reportedDisplayName, roomCode, messageId, String(messageText).slice(0, 200), reason, details || '']
       );
     } catch (err) {
       if (err && err.code === '23503') throw new ModerationError('That player could not be found.', 404);
