@@ -134,7 +134,8 @@
       }
       f.startsAt.required = f.endsAt.required = isCustom();
     };
-    const pickedDate = () => { f.preset.value = 'custom'; custom(); };
+    // picking (or clearing) a date only chooses custom dates: it must not refill a field the admin just emptied
+    const pickedDate = () => { f.preset.value = 'custom'; f.startsAt.required = f.endsAt.required = true; };
     f.preset.onchange = custom;
     f.startsAt.onchange = f.endsAt.onchange = pickedDate;
     f.message.oninput = prev; prev(); custom();
