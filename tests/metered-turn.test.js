@@ -242,6 +242,15 @@ const flush = () => new Promise((r) => setImmediate(r));
     m.stop();
   });
 
+  await test('a quota refusal does not colour a later outage: the status describes the latest failure', async () => {
+    const h = harness({ answers: [{ status: 429, body: {} }, new Error('network down')] });
+    h.m.start(); await flush();
+    assert.equal(h.m.status(), 'quota');
+    h.advance(QUOTA_RETRY_MS + 1); h.m.snapshot(); await flush();
+    assert.equal(h.m.status(), 'unavailable', 'an ordinary outage is reported as one');
+    h.m.stop();
+  });
+
   await test('with Metered unavailable, voice still works on the fallbacks and the status is what the browser is told', async () => {
     const h = harness({ answers: [new Error('down')] });
     h.m.start(); await flush();

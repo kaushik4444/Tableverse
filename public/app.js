@@ -905,15 +905,20 @@
 
   // Voice relay (TURN) status from the server. Tells the player once when it stops working, and when it works again.
   const TURN_NOTICE = {
-    unavailable: 'The voice relay is unavailable right now. Players on strict networks may not hear each other; it is retried automatically.',
-    quota: 'The voice relay has used its monthly allowance, so voice works only on networks that connect directly. It resumes when the allowance renews.',
+    unavailable: 'The voice relay cannot be reached right now. Players on strict networks may not hear each other; it is retried automatically.',
+    quota: 'The voice relay refused new logins, so some players may not be able to connect through it. It is retried automatically.',
   };
+  // one notice when the relay stops working; the "back" notice only after that one. Pending or other states change nothing.
   function noteTurnStatus(s) {
     if (!s || s === S.turnStatus) return;
-    const was = S.turnStatus;
     S.turnStatus = s;
-    if (TURN_NOTICE[s]) toast(TURN_NOTICE[s]);
-    else if (s === 'ready' && (was === 'unavailable' || was === 'quota')) toast('The voice relay is back.');
+    if (TURN_NOTICE[s]) {
+      if (!S.turnNoticeOpen) toast(TURN_NOTICE[s]);
+      S.turnNoticeOpen = true;
+    } else if (s === 'ready' && S.turnNoticeOpen) {
+      S.turnNoticeOpen = false;
+      toast('The voice relay is back.');
+    }
   }
 
   function onMessage(m) {
