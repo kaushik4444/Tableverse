@@ -1679,7 +1679,8 @@ function start(opts = {}) {
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
-    const allowed = room ? await canEnterRoom(p, room, { present: true }) : false;
+    const blocked = room && ((room.blockedDenied && room.blockedDenied.has(p.id)) || blockedWithRoom(room, p.id));
+    const allowed = room ? (!blocked && await canEnterRoom(p, room, { present: true })) : false;
     if (!stillOwner()) return; // closed while the room was checked: the drop its close handler scheduled stays in charge
     if (room && allowed) {
       if (p.dropAnnounced) {
@@ -1692,10 +1693,18 @@ function start(opts = {}) {
       schedule(room);
     } else {
       if (room) {
-        (room.denied || (room.denied = new Set())).add(p.id);
-        leaveRoom(p); // frees the seat (a bot takes over a running game) instead of leaving a ghost player behind
-        send(ws, { t: 'left' });
-        send(ws, { t: 'error', message: 'This private table requires an accepted invitation.' });
+        if (blocked) {
+          (room.blockedDenied || (room.blockedDenied = new Set())).add(p.id);
+          leaveRoom(p); // a blocked player cannot resume the old seat; a bot takes over if a game is running
+          send(ws, { t: 'left' });
+          send(ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
+          send(ws, tablesMsg(p));
+        } else {
+          (room.denied || (room.denied = new Set())).add(p.id);
+          leaveRoom(p); // frees the seat (a bot takes over a running game) instead of leaving a ghost player behind
+          send(ws, { t: 'left' });
+          send(ws, { t: 'error', message: 'This private table requires an accepted invitation.' });
+        }
       } else p.room = null;
     }
     presence.set(p.id, { online: true, lastSeen: presence.get(p.id)?.lastSeen || null });
