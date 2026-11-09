@@ -102,6 +102,8 @@ function socket(port, cookie) {
       await until(() => sb.notices().some((n) => /Blocked/.test(n)), 'block confirmation');
       const history = await until(() => sb.lastChatlog(), 'history after block');
       assert.equal(history.messages.some((m) => !m.sys && m.id === A.id), false, 'history after a block has no messages from the blocked account');
+      // A block during a running game does not remove the seated player: they keep the seat until the game ends.
+      assert.ok(sa.room.members.some((m) => m.id === A.id && !m.bot), 'the blocked player keeps their seat in the running game');
       await say(sa, 'after block from alpha');
       await until(() => sc.texts().includes('after block from alpha'), 'other viewer gets it');
       assert.equal(sb.texts().includes('after block from alpha'), false, 'the blocker never receives it');
@@ -128,8 +130,11 @@ function socket(port, cookie) {
     await test('a blocker who leaves cannot rejoin while the blocked account remains at the table', async () => {
       sb.send({ t: 'leave' });
       await until(() => sa.room && sa.room.members.some((m) => m.id === B.id && m.bot), 'B leaves and a bot takes over');
-      const listing = sb.msgs.filter((m) => m.t === 'tables').pop();
-      assert.ok(listing && !listing.tables.some((table) => table.code === code), 'the blocked table is hidden from the directory');
+      // The directory update is broadcast asynchronously, so wait for it rather than reading the last message at once.
+      await until(() => {
+        const l = sb.msgs.filter((m) => m.t === 'tables').pop();
+        return l && !l.tables.some((table) => table.code === code);
+      }, 'the blocked table is hidden from the directory');
       const before = sb.errors().length;
       sb.send({ t: 'join', code });
       await until(() => sb.errors().length > before, 'blocked-pair table re-entry refused');

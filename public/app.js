@@ -1371,7 +1371,7 @@
     if (m.sys) return `<div class="msg sys">${esc(m.text)}</div>`;
     const mine = m.id === S.id;
     // Block and report are enforced by the server; these buttons only send the request.
-    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}" data-mid="${esc(m.mid || '')}" title="Hide this player's table chat from you. Nothing else changes, and they are not told." aria-label="Block chat from ${esc(m.name)}">Block chat</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}">Report</button>` : ''}</span>`;
+    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}" data-mid="${esc(m.mid || '')}" title="Hide this player from your table chat and voice, stop sharing tables with them, and remove them from a table you share (a running game finishes first). They are not told." aria-label="Block ${esc(m.name)}">Block</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}">Report</button>` : ''}</span>`;
     const menu = !mine && m.mid && S.reportMenuFor === m.mid ? reportMenuHTML(m.mid) : '';
     return `<div class="msg ${mine ? 'mine' : ''}"><span class="mav" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span><div class="mb"><b>${esc(m.name)}${m.spec ? ' <i title="Spectator">👁</i>' : ''}</b><p>${esc(m.text)}</p>${actions}${menu}</div></div>`;
   }
@@ -1582,7 +1582,7 @@
   /** Accounts this person has blocked, with a button to unblock each. Names are shown only here, to the blocker. */
   function blockedHTML() {
     const list = S.blocked;
-    const head = `<div class="setting-row"><div><b>Blocked players</b><small>They cannot see your table chat, and you and they cannot hear each other at a table. They are not told. Unblocking restores both.</small></div></div>`;
+    const head = `<div class="setting-row"><div><b>Blocked players</b><small>They cannot see your table chat or hear your table voice, and you will not share a table. A player who shares your table is removed when a running game ends, or straight away in the lobby. They are not told. Unblocking restores chat and voice, but not a removed seat.</small></div></div>`;
     if (!list) return `${head}<p class="hint" style="text-align:left">Loading…</p>`;
     if (!list.length) return `${head}<p class="hint" style="text-align:left">You have not blocked anyone.</p>`;
     const rows = list.map((b) => `<div class="setting-row"><div><b>${esc(b.name || 'Player')}</b></div><button type="button" class="btn ghost small" data-act="unblock" data-id="${esc(b.id)}" aria-label="Unblock ${esc(b.name || 'player')}">Unblock</button></div>`).join('');

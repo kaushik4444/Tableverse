@@ -556,7 +556,7 @@ function start(opts = {}) {
     };
   }
 
-  /** The table directory. With a viewer, a host the viewer is blocked with (either way) is shown under a generic name. */
+  /** The table directory. With a viewer, tables the viewer shares with a blocked player (either way) are left out of their list. */
   function publicTables(viewerId = null) {
     return [...rooms.values()]
       .filter((room) => room.visibility === 'public' && (room.status === 'lobby' || room.status === 'playing') && (viewerId === null || !blockedWithRoom(room, viewerId)))
@@ -674,11 +674,13 @@ function start(opts = {}) {
   const pairBlocked = (a, b) => { const x = players.get(a); const y = players.get(b); return (!!x && blocksPlayer(x, b)) || (!!y && blocksPlayer(y, a)); };
   const voiceFor = (room, viewerId) => voiceRelay.voiceList(room, (id) => pairBlocked(viewerId, id), viewerId);
   /** A player is a blocked target if an occupant of this table has blocked them. */
-  function blockedByRoom(room, playerId) {
+  function blockedByRoom(room, playerId, committedOnly = false) {
     return [...room.members, ...room.spectators].some((m) => {
       if (m.id === playerId) return false;
       const blocker = players.get(m.id);
-      return !!blocker && blocksPlayer(blocker, playerId);
+      if (!blocker) return false;
+      // Destructive removals use only committed blocks: a block whose write later fails must not remove a seat.
+      return committedOnly ? !!blocker.blocked && blocker.blocked.has(playerId) : blocksPlayer(blocker, playerId);
     });
   }
   /** A player cannot enter or remain at a table with anyone they have blocked, or who has blocked them. */
@@ -689,7 +691,8 @@ function start(opts = {}) {
   function blockedEntryDenied(room, playerId, allowCurrentGameSeat = false) {
     if (blockedByRoom(room, playerId)) return true;
     if (!blockedWithRoom(room, playerId)) return false;
-    const alreadyPlaying = room.status === 'playing' && room.members.some((m) => m.id === playerId && !m.bot);
+    // A disconnected seat is held by a bot, but the seat still belongs to this player, so the bot flag does not matter here.
+    const alreadyPlaying = room.status === 'playing' && room.members.some((m) => m.id === playerId);
     return !(allowCurrentGameSeat && alreadyPlaying);
   }
   /**
@@ -699,7 +702,7 @@ function start(opts = {}) {
   function enforceBlockedRoom(room) {
     if (!room) return;
     const occupants = [...room.members, ...room.spectators];
-    const blockedTargets = occupants.filter((m) => blockedByRoom(room, m.id));
+    const blockedTargets = occupants.filter((m) => blockedByRoom(room, m.id, true));
     for (const m of blockedTargets) {
       const q = players.get(m.id);
       const seated = room.members.some((member) => member.id === m.id);
@@ -1708,10 +1711,18 @@ function start(opts = {}) {
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
-    const blocked = room && blockedEntryDenied(room, p.id, true);
-    const allowed = room ? (!blocked && await canEnterRoom(p, room, { present: true })) : false;
+    const preliminary = room ? !blockedEntryDenied(room, p.id, true) : false;
+    const allowed = room && preliminary ? await canEnterRoom(p, room, { present: true }) : false;
     if (!stillOwner()) return; // closed while the room was checked: the drop its close handler scheduled stays in charge
-    if (room && allowed) {
+    // Checked again after the await: a block may have landed meanwhile, and the player may have moved to another table.
+    // A move already placed them there, so this stale hello changes nothing about their seat.
+    if (rooms.get(p.room) !== room) {
+      presence.set(p.id, { online: true, lastSeen: presence.get(p.id)?.lastSeen || null });
+      publishPresence(p.id);
+      return;
+    }
+    const blocked = room ? blockedEntryDenied(room, p.id, true) : false;
+    if (room && allowed && !blocked) {
       if (p.dropAnnounced) {
         p.dropAnnounced = false;
         sys(room, `📶 ${p.name} reconnected`);

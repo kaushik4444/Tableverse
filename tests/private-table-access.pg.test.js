@@ -343,6 +343,13 @@ async function run() {
       assert.ok(seated(g2.client, g2.id), 'the other guest plays on');
     });
 
+    // Plays a running game to its result: every listed account is auto-played until the host sees it finish.
+    const playToEnd = async (everyone, hostAcct) => {
+      for (const a of everyone) { a.client.auto = true; a.client.step(); }
+      await until(() => hostAcct.client.room && hostAcct.client.room.status === 'finished', 'game finished', 120000);
+      for (const a of everyone) a.client.auto = false;
+    };
+
     await test('a blocked player may leave a running game, but their bot seat is removed when the game finishes', async () => {
       const { host, guests: [g1, g2] } = await lobby(2);
       await startGame(host);
@@ -386,11 +393,6 @@ async function run() {
 
     // ------------------------------------------------------------------------------------------------ finished game, rematch
     console.log('finished game and rematch');
-    const playToEnd = async (everyone, hostAcct) => {
-      for (const a of everyone) { a.client.auto = true; a.client.step(); }
-      await until(() => hostAcct.client.room && hostAcct.client.room.status === 'finished', 'game finished', 120000);
-      for (const a of everyone) a.client.auto = false;
-    };
 
     await test('a player who lost access during the game is removed when the host starts the rematch', async () => {
       const { host, guests: [g1, g2] } = await lobby(2);
