@@ -7,7 +7,7 @@ the server. It does not replace human review, and it does not take automatic act
 
 | Action | Where | Effect |
 | --- | --- | --- |
-| **Block** an account | Block action on another player's chat message | Their table chat is hidden from you. You cannot share a table while the blocked counterpart is present; a blocked target is removed from a lobby/spectator seat, while a seated player may finish an already-running game. |
+| **Block** an account | Block action on another player's chat message | Their table chat and table voice are hidden between you. You cannot invite each other, and their profile shows as blocked. You can still share a table, including one hosted by someone else. |
 | **Report** a message | Report button, then a reason | Records the report in the database. There is no review queue yet. Nothing is hidden or sanctioned automatically. |
 | **Unblock** | WebSocket action `unblock` (no button yet) | Restores their chat. |
 | **Mute** (local) | Existing mute in the chat list | Hides that player's messages in this browser only. Not enforced on the server. |
@@ -18,11 +18,15 @@ the server. It does not replace human review, and it does not take automatic act
   the player. Live chat (`pushChat`) and the history sent on join or reconnect both pass through
   `lib/moderation.js` `shouldDeliver` / `visibleChat`, so a blocked message is never sent to the blocker's socket. A pending block is filtered immediately while its database write is queued or in flight.
 - **Chat filtering is one way.** When A blocks B, B's messages are not delivered to A. B can still receive A's messages during an already-running game, and B is not told about the block.
-- **Table access is bilateral.** A blocked pair cannot enter the same table or take a seat together, regardless of which side created the block. If they are already seated when the block is made during a running game, both may finish the current game; the blocked target cannot reconnect while the blocker remains at the table, and is removed when the result is recorded. Lobby members and spectators who are blocked targets are removed immediately. Once the counterpart leaves the table, the pair no longer blocks unrelated table access.
+- **Chat is one way; voice is two ways.** The blocker stops receiving the blocked player's table chat. The blocked player still receives the blocker's chat. Voice is blocked in both directions. (Decided by the owner, 2026-11-10.)
+- **A host may keep a blocked guest at the host's own table.** The block does not remove the guest, and the guest is not told. The host decides who stays at a table they host, and the block is not a reason to remove anyone. (Decided by the owner, 2026-11-10.)
+- **The profile of a blocked player shows a 'Blocked' label to both sides.** The lookup is symmetric, so the blocked player can see that a block exists on the profile. This is kept as it is (owner decision, 2026-11-10).
+- **A block never changes table access.** A blocked pair may join, sit, spectate and reconnect at any table, including a table hosted by a third person, and an invitation from that host can reach both. A block never removes anyone from a table, and the host of a table can be blocked by a player at it. Only the chat and voice rules below apply at a shared table.
 - **Voice and reactions are blocked in both directions.** A block in either direction keeps the pair out of each other's
   table voice: each browser is offered only the people it may hear, so an existing connection to the other person closes.
   A signal between them is refused with the same answer as "not in voice", and reactions are not delivered either way.
-  Friend requests and private-table invitations are also refused across a block (`db/friends.js`).
+  Friend requests and private-table invitations between the two are refused across a block (`db/friends.js`).
+- **Profiles show as blocked.** A blocked viewer still gets the profile, with a "Blocked" label and no friend action. Nothing else about the profile is hidden. Friend search still does not list a blocked account (`db/friends.js`).
 - **System lines always show** (the game and table events), even to a blocker.
 - **Report text comes from the server.** Each table message has a random id (`mid`). The report carries only the id, a
   reason and optional details. The server finds the message in the table's own copy of recent chat and stores that text

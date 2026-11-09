@@ -127,18 +127,18 @@ function socket(port, cookie) {
       sb = again; // the rest of the tests use the reconnected socket
     });
 
-    await test('a blocker who leaves cannot rejoin while the blocked account remains at the table', async () => {
+    await test('a blocked pair can share a table: a player who left can take the seat back, and the table stays listed', async () => {
       sb.send({ t: 'leave' });
       await until(() => sa.room && sa.room.members.some((m) => m.id === B.id && m.bot), 'B leaves and a bot takes over');
       // The directory update is broadcast asynchronously, so wait for it rather than reading the last message at once.
       await until(() => {
         const l = sb.msgs.filter((m) => m.t === 'tables').pop();
-        return l && !l.tables.some((table) => table.code === code);
-      }, 'the blocked table is hidden from the directory');
+        return l && l.tables.some((table) => table.code === code);
+      }, 'the table stays in the directory for the blocker');
       const before = sb.errors().length;
       sb.send({ t: 'join', code });
-      await until(() => sb.errors().length > before, 'blocked-pair table re-entry refused');
-      assert.ok(sa.room.members.some((m) => m.id === B.id && m.bot), 'the blocker cannot retake the seat while the pair would share the table');
+      await until(() => sa.room && sa.room.members.some((m) => m.id === B.id && !m.bot), 'B takes the seat back');
+      assert.equal(sb.errors().length, before, 'the blocker is not refused');
     });
 
     await test('an unblock lets the player rejoin and see the account again', async () => {
