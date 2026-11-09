@@ -94,6 +94,52 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
         assert.equal((await c.query('SELECT dismissed_revision FROM announcement_dismissals WHERE player_id = $1', [p])).rows[0].dismissed_revision, 1);
       } finally { await c.end(); }
     });
+    await test('upgrade to 015: existing chat reports keep their target-name snapshots and retention behavior', async () => {
+      const old = await t.another(); extra.push(old.name);
+      const fs = require('node:fs');
+      const pg = require('pg');
+      const c = new pg.Client({ connectionString: old.url });
+      await c.connect();
+      try {
+        const dir = path.join(__dirname, '..', 'db', 'migrations');
+        const before = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort().filter((f) => f < '015');
+        assert.equal(before.length, 14, 'the state before this migration: 001 to 014');
+        for (const f of before) await c.query(fs.readFileSync(path.join(dir, f), 'utf8'));
+        await c.query('INSERT INTO schema_migrations (version) SELECT unnest($1::text[])', [before]);
+
+        const reporter = (await c.query("INSERT INTO players (display_name) VALUES ('Report author') RETURNING id")).rows[0].id;
+        const target = (await c.query("INSERT INTO players (display_name) VALUES ('Reported player') RETURNING id")).rows[0].id;
+        await c.query(
+          "INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason, details) VALUES ($1, $2, 'ROOM01', $3, 'existing report against target', 'spam', 'first details'), ($2, $1, 'ROOM01', $4, 'report authored by target', 'other', 'second details')",
+          [reporter, target, uuid(), uuid()]
+        );
+
+        const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'db', 'migrate.js')], { env: { ...process.env, DATABASE_URL: old.url }, encoding: 'utf8', timeout: 30000 });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.match(r.stdout, /Applied: 015_chat_report_retention\.sql/);
+
+        const backfilled = await c.query('SELECT reported_display_name, message_text, details FROM chat_reports WHERE reporter_id = $1', [reporter]);
+        assert.deepEqual(backfilled.rows, [{
+          reported_display_name: 'Reported player',
+          message_text: 'existing report against target',
+          details: 'first details',
+        }], 'migration backfills the original target name without changing report content');
+
+        await c.query('DELETE FROM players WHERE id = $1', [target]);
+        const retained = await c.query('SELECT reported_id, reported_display_name, message_text, reason, details FROM chat_reports WHERE reporter_id = $1', [reporter]);
+        assert.deepEqual(retained.rows, [{
+          reported_id: null,
+          reported_display_name: 'Reported player',
+          message_text: 'existing report against target',
+          reason: 'spam',
+          details: 'first details',
+        }], 'the existing report survives deletion of its reported account');
+        assert.equal((await c.query('SELECT count(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [target])).rows[0].n, 0, 'reports authored by the deleted target cascade away');
+
+        await c.query('DELETE FROM players WHERE id = $1', [reporter]);
+        assert.equal((await c.query('SELECT count(*)::int AS n FROM chat_reports')).rows[0].n, 0, 'reports authored by a deleted reporter are removed');
+      } finally { await c.end(); }
+    });
     await test('upgrade from main schema to 003 succeeds (auth migration has no volatile index predicate)', async () => {
       const old = await t.another(); extra.push(old.name);
       const fs = require('node:fs');
