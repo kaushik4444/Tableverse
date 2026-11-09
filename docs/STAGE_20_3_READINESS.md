@@ -242,7 +242,7 @@ Notes:
 | Two-minute TURN gap after each restart once static is removed | Calls starting in that window can only connect directly | Owner: accept or change |
 | Credential count across restarts | Could exceed 10 with frequent restarts | Monitor; no approval needed |
 | Re-key on rotation restarts relayed calls | Brief audio interruption about once a day per call | Accept or change |
-| Blocked players may share a table (seating) | Chat/voice/profile filtering did not cover table entry or seating | Owner approved all-surface blocking; PR #81 merged (`d7da199`, CI green). Review found a high-severity reconnect defect, fixed in open PR #82 |
+| Blocked players may share a table (seating) | Owner's rule: blocked players may share a table; chat, voice, invitations and friendship stay blocked | PR #85 merged (`0207b31`). PR #81 (`d7da199`) had excluded them from a table and is superseded; PR #82 is superseded and not merged |
 | `pg-connection-string` not declared | Test may break if transitive layout changes | Maintenance change when a lockfile update is possible |
 | Windows and WSL2 suites not run | Native Windows/WSL2 support is unverified | Deferred for limited beta |
 | Cleanup execution | Deletes accounts | Separate approval; `CLEANUP_EXECUTE` stays `false` |
@@ -283,7 +283,7 @@ Notes:
 - **Sessions and WebSockets:** `db/auth.js` stores SHA-256 token hashes, checks expiry and revocation on reads, and revokes prior sessions when issuing a new single-active session. `server.js` re-checks open socket sessions every 60 seconds and refuses an invalid/revoked session.
 - **Cleanup permissions:** the daily workflow uses a separate read-only database role for its dry run. Deletion requires a manual workflow dispatch, the explicit `execute` input, `CLEANUP_EXECUTE=true`, and approval in the protected `production-cleanup` environment. The owner reports the current dry run found zero candidates and deleted zero rows; `CLEANUP_EXECUTE=false` remains in force.
 - **TURN secret handling:** `lib/meteredTurn.js` sends the secret only to Metered, never logs the request URL or secret, and logs only a failure category. Dynamic API authentication currently fails with HTTP 401; this is explicitly deferred to Stage 20.6, and static fallback remains configured.
-- **Blocked-user privacy:** public profile hiding (#73) and chat/voice filtering are implemented. The table-entry/seating gap was found in this review; PR #81 implements the owner's all-surface rule (merged, see 13.1).
+- **Blocked-user privacy:** the public profile shows a 'Blocked' label to both sides (owner decision, kept), and nothing else is hidden (#73, #85). Chat is one way; voice is two ways. Blocked players may share a table (PR #85, merged `0207b31`); PR #81's seating restriction is superseded. Earlier text: public profile hiding (#73)
 - **Credential count:** active Metered credentials are not tracked across restarts; monitor the provider dashboard and usage. This is a known low-risk operational limitation for a single instance.
 
 The review of #81 is recorded in 13.1. The broader audit of email verification, rate limiting, WebSocket reconnect edge cases, database permissions and pooling remains outside this limited-beta review and is not represented as complete.
@@ -303,11 +303,11 @@ Reviewed: the reconnect (hello) guard; pending and committed block writes; the b
 | M2 | Medium | PostgreSQL moderation and voice-block tests wait with fixed sleeps, which can be slow or flaky under load. | Open. Not changed. Watch CI for intermittent failures. |
 
 Checked by reading the code (not observed in production):
-- A pending block never removes a seat. The block command's failure path releases the reservation; removals use committed blocks only.
+- A block never removes anyone from a table, and a pending block never removes a seat (PR #85). The reconnect and finish-time removals that #81 added are gone on `main`.
 - Finishing a game removes a blocked seat only on a committed block.
 - A player who explicitly left a running game cannot rejoin while the pair would share the table.
-- A seated player in a running game keeps the seat when a blocker or blocked player is involved, until the game ends (the running-game exception).
-- The table directory hides tables shared with a blocked player.
+- A blocked pair may stay seated and may spectate together at any table, including one hosted by a third person (PR #85). The running-game exception of #81 no longer applies because no block removes a seat.
+- The table directory is not filtered by blocks (PR #85).
 
 Test evidence:
 - CI on `d7da199`: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Production dependency audit and Build production Docker image all passed.
