@@ -753,7 +753,11 @@
     if (S.guest) {
       if (dismissed) {
         const max = dismissedMax();
-        max.set(dismissed.id, Math.max(max.get(dismissed.id) || 0, dismissed.revision));
+        // keep the highest revision, and re-insert the id so it counts as the most recent one: Map.set on an existing key keeps its old
+        // position, and the oldest entries are the ones trimmed below
+        const highest = Math.max(max.get(dismissed.id) || 0, dismissed.revision);
+        max.delete(dismissed.id);
+        max.set(dismissed.id, highest);
         store.set(GUEST_DISMISS_KEY, JSON.stringify([...max].map(([id, rev]) => `${id}:${rev}`).slice(-50)));
       }
       return;
