@@ -151,6 +151,25 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.deepEqual((await g.get('/api/announcements')).json.announcements.map((a) => a.message), ['Later (now live)']);
       await boss().browser.post('/api/admin/announcements/end', { id: c.json.announcement.id });
     });
+    await test('PostgreSQL: a revision changes only with a real change; a dismissal records the revision seen and survives an unchanged save', async () => {
+      // the home page shows three banners: end what earlier tests left running so this one is visible
+      for (const x of (await boss().browser.get('/api/admin/announcements')).json.items) if (x.status === 'live') await boss().browser.post('/api/admin/announcements/end', { id: x.id });
+      const u = await newUser('Rev');
+      const c = await boss().browser.post('/api/admin/announcements', { message: 'Rev test', audience: 'signed_in', durationHours: 5 });
+      const id = c.json.announcement.id;
+      const rev = async () => (await q('SELECT revision FROM announcements WHERE id = $1', [id]))[0].revision;
+      assert.equal(await rev(), 1);
+      await boss().browser.post('/api/admin/announcements/update', { id, message: 'Rev test' });
+      assert.equal(await rev(), 1, 'the same values are not a change');
+      assert.equal((await u.browser.post('/api/announcements/dismiss', { id, revision: 1 })).status, 200);
+      assert.ok(!(await u.browser.get('/api/announcements')).json.announcements.some((a) => a.id === id), 'hidden at revision 1');
+      await boss().browser.post('/api/admin/announcements/update', { id, message: 'Rev test', level: 'warning' });
+      assert.equal(await rev(), 2);
+      assert.ok((await u.browser.get('/api/announcements')).json.announcements.some((a) => a.id === id), 'a level change shows it again');
+      assert.equal((await u.browser.post('/api/announcements/dismiss', { id, revision: 2 })).status, 200);
+      assert.equal((await q('SELECT dismissed_revision FROM announcement_dismissals WHERE player_id = $1 AND announcement_id = $2', [u.id, id]))[0].dismissed_revision, 2);
+      assert.equal((await u.browser.post('/api/announcements/dismiss', { id, revision: 0 })).status, 400, 'a revision must be a positive whole number');
+    });
     await test('targeting and dismissal hold across logins (another device): the dismissal is stored on the account', async () => {
       const u = await newUser('Jo');
       const c = await boss().browser.post('/api/admin/announcements', { message: 'Members only', audience: 'signed_in', durationHours: 5 });

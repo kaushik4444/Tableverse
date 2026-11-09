@@ -66,6 +66,13 @@ const at = (ms) => new Date(T0 + ms);
     assert.deepEqual(out.map((a) => a.level), ['warning', 'warning', 'info']);
   });
 
+  await test('a banner dismissed at its current revision is hidden; a later revision shows again', () => {
+    const row = { id: 'x', message: 'm', level: 'info', audience: 'all', starts_at: at(-H), ends_at: at(H), ended_at: null, revision: 2 };
+    assert.equal(ann.forViewer([row], {}, at(0), new Map([['x', 2]])).length, 0);
+    assert.equal(ann.forViewer([row], {}, at(0), new Map([['x', 1]])).length, 1, 'dismissed an older revision');
+    assert.equal(ann.forViewer([row], {}, at(0))[0].revision, 2);
+  });
+
   console.log('over HTTP');
   const clock = { t: T0 };
   const s = await start({ clock });
@@ -129,6 +136,44 @@ const at = (ms) => new Date(T0 + ms);
       assert.ok((await ids(other.b)).includes('Dismiss me'), 'other accounts still see it');
       assert.equal((await admin.b.post('/api/admin/announcements/update', { id: a.id, message: 'Dismiss me (updated)' })).status, 200);
       assert.ok((await ids(laptop)).includes('Dismiss me (updated)'), 'a new text is a new message');
+    });
+    // the home page shows at most three banners: end what earlier tests left running, so each case sees only its own banner
+    const clearLive = async () => { for (const x of (await admin.b.get('/api/admin/announcements')).json.items) if (x.status === 'live') await admin.b.post('/api/admin/announcements/end', { id: x.id }); };
+    await test('an edit of level, audience or schedule shows a dismissed banner again; saving the same values does not', async () => {
+      await clearLive();
+      const a = await create({ message: 'Revision me', audience: 'signed_in', durationHours: 5 });
+      assert.equal((await user.b.post('/api/announcements/dismiss', { id: a.id })).status, 200);
+      assert.ok(!(await ids(user.b)).includes('Revision me'));
+      assert.equal((await admin.b.post('/api/admin/announcements/update', { id: a.id, message: 'Revision me', level: 'info', audience: 'signed_in' })).status, 200);
+      assert.ok(!(await ids(user.b)).includes('Revision me'), 'the same values are not a change');
+      assert.equal((await admin.b.post('/api/admin/announcements/update', { id: a.id, level: 'warning' })).status, 200);
+      assert.ok((await ids(user.b)).includes('Revision me'), 'a level change is a new revision');
+    });
+    await test('restoring an old text is a change too: it shows again', async () => {
+      await clearLive();
+      const a = await create({ message: 'Text A', audience: 'signed_in', durationHours: 5 });
+      await user.b.post('/api/announcements/dismiss', { id: a.id });
+      await admin.b.post('/api/admin/announcements/update', { id: a.id, message: 'Text B' });
+      assert.ok((await ids(user.b)).includes('Text B'));
+      await user.b.post('/api/announcements/dismiss', { id: a.id });
+      await admin.b.post('/api/admin/announcements/update', { id: a.id, message: 'Text A' });
+      assert.ok((await ids(user.b)).includes('Text A'), 'back to the old text is a new revision');
+    });
+    await test('a dismissal of an older revision that arrives after an edit does not hide the new text; a newer dismissal is never lowered', async () => {
+      await clearLive();
+      const a = await create({ message: 'Race A', audience: 'signed_in', durationHours: 5 });
+      await admin.b.post('/api/admin/announcements/update', { id: a.id, message: 'Race B' });
+      assert.equal((await user.b.post('/api/announcements/dismiss', { id: a.id, revision: 1 })).status, 200);
+      assert.ok((await ids(user.b)).includes('Race B'), 'the player dismissed revision 1, not the new text');
+      await user.b.post('/api/announcements/dismiss', { id: a.id, revision: 2 });
+      assert.ok(!(await ids(user.b)).includes('Race B'));
+      await user.b.post('/api/announcements/dismiss', { id: a.id, revision: 1 });
+      assert.ok(!(await ids(user.b)).includes('Race B'), 'an older dismissal does not reopen it');
+    });
+    await test('a revision that is not a positive whole number is refused', async () => {
+      await clearLive();
+      const a = await create({ message: 'Bad revision', audience: 'signed_in', durationHours: 5 });
+      for (const revision of [0, -1, 1.5, 'x']) assert.equal((await user.b.post('/api/announcements/dismiss', { id: a.id, revision })).status, 400, String(revision));
     });
     await test('guests cannot dismiss on the server (their browser remembers it); unknown ids are harmless', async () => {
       assert.equal((await guest.post('/api/announcements/dismiss', { id: 'p_00000000-0000-4000-8000-000000000009' })).status, 401);

@@ -12,7 +12,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
   const audit = [];
   const feedback = [];
   const anns = [];
-  const dismissals = new Set(); // `${playerId}:${annId}`
+  const dismissals = new Map(); // `${playerId}:${annId}` -> the revision dismissed
   const signedOut = [];
   let failNext = null;
   const log = (actorId, action, targetType, targetId, detail = {}) => audit.push({ id: crypto.randomUUID(), at: now(), actor: players.get(actorId)?.username || null, action, target_type: targetType, target_id: targetId, detail });
@@ -48,7 +48,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     async listFeedback() { return { total: feedback.length, pageSize: 25, items: feedback.slice() }; },
     async setFeedbackStatus({ actorId, id, status }) { const f = feedback.find((x) => x.id === id); if (!f) throw new policy.PolicyError('No such feedback.', 404); f.status = status; log(actorId, 'feedback.status', 'feedback', id, { status }); return { id, status }; },
     async createAnnouncement({ actorId, fields }) {
-      const row = { id: crypto.randomUUID(), message: fields.message, level: fields.level, audience: fields.audience, starts_at: fields.startsAt, ends_at: fields.endsAt, ended_at: null, created_by: actorId, created_at: now(), updated_at: now() };
+      const row = { id: crypto.randomUUID(), message: fields.message, level: fields.level, audience: fields.audience, starts_at: fields.startsAt, ends_at: fields.endsAt, ended_at: null, created_by: actorId, revision: 1, created_at: now(), updated_at: now() };
       anns.push(row); log(actorId, 'announcement.create', 'announcement', row.id); return row;
     },
     async listAnnouncements() { return anns.slice(); },
@@ -63,8 +63,9 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       const endsAt = fields.endsAt ?? (fields.durationHours !== undefined ? ann.endAfter(startsAt, fields.durationHours) : new Date(cur.ends_at));
       if (windowSent) ann.checkWindow(startsAt, endsAt, now());
       const next = { ...cur, message: fields.message ?? cur.message, level: fields.level ?? cur.level, audience: fields.audience ?? cur.audience, starts_at: startsAt, ends_at: endsAt };
-      if (fields.message !== undefined && fields.message !== cur.message) for (const k of [...dismissals]) if (k.endsWith(`:${id}`)) dismissals.delete(k);
-      Object.assign(cur, next, { updated_at: now() }); log(actorId, 'announcement.update', 'announcement', id); return cur;
+      const same = (x, y) => new Date(x).getTime() === new Date(y).getTime();
+      const changed = next.message !== cur.message || next.level !== cur.level || next.audience !== cur.audience || !same(next.starts_at, cur.starts_at) || !same(next.ends_at, cur.ends_at);
+      Object.assign(cur, next, { revision: cur.revision + (changed ? 1 : 0), updated_at: now() }); log(actorId, 'announcement.update', 'announcement', id); return cur;
     },
     async endAnnouncement({ actorId, id }) {
       const a = anns.find((x) => x.id === id);
@@ -72,8 +73,12 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       a.ended_at = now(); log(actorId, 'announcement.end', 'announcement', id); return { id };
     },
     async listLiveAnnouncements() { st.check(); return anns.filter((a) => !a.ended_at && new Date(a.starts_at) <= now() && new Date(a.ends_at) > now()); },
-    async dismissAnnouncement({ playerId, announcementId }) { if (!anns.some((a) => a.id === announcementId)) return { dismissed: false }; dismissals.add(`${playerId}:${announcementId}`); return { dismissed: true }; },
-    async listDismissedIds(playerId) { return new Set([...dismissals].filter((k) => k.startsWith(`${playerId}:`)).map((k) => k.split(':')[1])); },
+    async dismissAnnouncement({ playerId, announcementId, revision = null }) {
+      const a = anns.find((x) => x.id === announcementId); if (!a) return { dismissed: false };
+      const key = `${playerId}:${announcementId}`; const rev = Math.min(revision ?? a.revision, a.revision);
+      dismissals.set(key, Math.max(rev, dismissals.get(key) ?? 0)); return { dismissed: true };
+    },
+    async listDismissed(playerId) { return new Map([...dismissals].filter(([k]) => k.startsWith(`${playerId}:`)).map(([k, rev]) => [k.split(':')[1], rev])); },
     async listAudit() { return { total: audit.length, pageSize: 25, items: audit.slice().reverse() }; },
   };
   return st;
