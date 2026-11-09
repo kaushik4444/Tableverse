@@ -79,6 +79,33 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
     assert.deepEqual(await prepareDatabase(startup({ db, now: c.now, sleep: c.sleep, migrate: async () => ({ applied: [] }) })), { mode: 'postgres' });
     assert.equal(pings, 2);
   });
+  await test('production: coded authentication and unknown-database errors are never retried because of misleading messages', async () => {
+    for (const err of [
+      Object.assign(new Error('role rejected: connection terminated'), { code: '28P01' }),
+      Object.assign(new Error('database name contains connection timeout'), { code: '3D000' }),
+    ]) {
+      const c = clock(); let pings = 0;
+      const db = fakeDb({
+        isTransientConnectionError: () => false,
+        ping: async () => { pings++; throw err; },
+      });
+      await rejects(prepareDatabase(startup({ db, now: c.now, sleep: c.sleep })), /Cannot reach the database/);
+      assert.equal(pings, 1, err.message);
+      assert.deepEqual(slept, [], 'a coded non-transient error must not enter the retry delay');
+    }
+  });
+  await test('production: a ping that never settles is bounded by the remaining startup deadline', async () => {
+    let migrated = false;
+    const started = Date.now();
+    const db = fakeDb({ ping: () => new Promise(() => {}) });
+    await rejects(prepareDatabase(startup({
+      env: { NODE_ENV: 'production', DATABASE_URL: 'postgres://x', DB_STARTUP_WAIT_MS: '30' },
+      db,
+      migrate: async () => { migrated = true; },
+    })), /Cannot reach the database: database ping exceeded the startup retry window/);
+    assert.ok(Date.now() - started < 1000, 'startup must not wait indefinitely for an in-flight ping');
+    assert.equal(migrated, false, 'migrations must not run after a timed-out ping');
+  });
   await test('outside production nothing is retried by default (a developer without a database gets the answer at once); DB_STARTUP_WAIT_MS can opt in or switch it off', async () => {
     const attempts = async (env) => { const c = clock(); let pings = 0; const db = fakeDb({ ping: async () => { pings++; throw new Error(POOL_TIMEOUT); } });
       await rejects(prepareDatabase({ env: { DATABASE_URL: 'postgres://x', ...env }, db, log: quiet, now: c.now, sleep: c.sleep }), /Cannot reach the database/); return pings; };
