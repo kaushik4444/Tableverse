@@ -202,6 +202,52 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = '2026-01-02'"))[0].n, 0);
       assert.ok((await q("SELECT COUNT(*)::int AS n FROM analytics_daily"))[0].n >= 2);
     });
+    await test('an analytics write still in flight when its account is deleted: the deletion waits for it, and no hash survives', async () => {
+      const dbAccount = require('../db/account');
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const p = await newUser('Pia');
+      const day = '2026-01-03';
+      const hold = await t.client();
+      await hold.query('BEGIN');
+      // The write stalls at its INSERT (after it has read the account), like a write whose timeout fired while it was still open.
+      await hold.query('LOCK TABLE analytics_active IN ACCESS EXCLUSIVE MODE');
+      const write = dbAdmin.addActive([{ day, playerId: p.id }]);
+      for (let i = 0; i < 100; i++) { // wait until the write is actually stalled at the INSERT
+        if ((await q("SELECT COUNT(*)::int AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE 'INSERT INTO analytics_active%'"))[0].n > 0) break;
+        await sleep(50);
+      }
+      const deletion = dbAccount.deleteAccount(p.id, PW).then(() => 'deleted');
+      // deleteAccount hashes the password first, so wait until its row lock is actually queued behind the write
+      let waiting = false;
+      for (let i = 0; i < 100 && !waiting; i++) {
+        waiting = (await q("SELECT COUNT(*)::int AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%FROM players WHERE id = $1 FOR UPDATE%'"))[0].n > 0;
+        if (!waiting) await sleep(50);
+      }
+      await hold.query('COMMIT'); // release the write: it finishes, and only then can the deletion go ahead
+      await write;
+      await deletion;
+      await dbAdmin.forgetActor(p.id); // what the server runs right after the deletion returns
+      assert.ok(waiting, 'the deletion must queue behind the in-flight write, not run past it');
+      assert.equal((await q('SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = $1', [day]))[0].n, 0, 'no hash of the deleted account remains');
+      await hold.end();
+    });
+    await test('a keyed analytics batch that reaches an account already deleted stores nothing, also when it is retried', async () => {
+      const dbAccount = require('../db/account');
+      const p = await newUser('Roz');
+      await dbAccount.deleteAccount(p.id, PW);
+      const key = '66666666-7777-4888-8999-aaaaaaaaaaaa';
+      const row = [{ day: '2026-01-04', playerId: p.id }];
+      await dbAdmin.addActive(row, key);
+      await dbAdmin.addActive(row, key); // the same batch again after a timeout
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = '2026-01-04'"))[0].n, 0);
+    });
+    await test('an account id in upper case is stored under the same hash, counted once, and forgotten by its lowercase form', async () => {
+      const p = await newUser('Upa');
+      await dbAdmin.addActive([{ day: '2026-01-07', playerId: p.id.toUpperCase() }, { day: '2026-01-07', playerId: p.id }]);
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = '2026-01-07'"))[0].n, 1);
+      await dbAdmin.forgetActor(p.id);
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM analytics_active WHERE day = '2026-01-07'"))[0].n, 0);
+    });
     await test('a batch sent again with the same key is applied once, and a different key is applied', async () => {
       const key = '11111111-2222-4333-8444-555555555555';
       const row = [{ day: '2026-03-01', metric: 'session', dim: 'retry', count: 5 }];
