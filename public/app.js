@@ -1681,11 +1681,11 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-table-voice';
+  const WHATS_NEW_VERSION = '2026-11-voice-chat-v2';
   const WHATS_NEW = [
     ['✨', 'Smoother, tidier games', 'One toolbar in every game, tokens that walk square by square, Ludo plays your only possible move, a crown shows who is ahead in every game, and what just happened floats over the table.'],
     ['🏆', 'A proper ending', 'When a game ends you see the final table for a few seconds, then who won, then the result. The host starts another game; everyone else can vote for one and see the votes.'],
-    ['🎙️', 'Talk at the table', 'Tap the microphone to talk with everyone at your table, in the lobby and during the game. Tap the speaker to listen, or silence everyone. A green ring shows who is talking.'],
+    ['🎙️', 'Voice chat — talk, listen and mute', 'Tap the microphone to join voice and talk with everyone at your table, in the lobby or during a game. Tap it again to mute yourself. Use the speaker to listen without speaking or silence table audio. A mic marks people in voice and a green ring shows who is speaking. Voice supports up to 8 people. Allow microphone access when your browser asks; a headset helps prevent echo.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
