@@ -67,6 +67,10 @@ async function createChatReport({ reporterId, reportedId, roomCode, messageId, m
   if (!REPORT_REASONS.includes(reason)) throw new ModerationError('Choose a reason for the report.', 400);
   return db.withTransaction(async (client) => {
     await client.query('SELECT 1 FROM players WHERE id = $1 FOR NO KEY UPDATE', [reporterId]);
+    // Capture the target's display name while holding a key-share lock, so deletion cannot race the report insert.
+    const target = await client.query('SELECT display_name FROM players WHERE id = $1 FOR KEY SHARE', [reportedId]);
+    if (!target.rows.length) throw new ModerationError('That player could not be found.', 404);
+    const reportedDisplayName = target.rows[0].display_name || 'Player';
     const today = await client.query(
       "SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1 AND created_at > NOW() - INTERVAL '1 day'",
       [reporterId]
@@ -77,11 +81,11 @@ async function createChatReport({ reporterId, reportedId, roomCode, messageId, m
     let r;
     try {
       r = await client.query(
-        `INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason, details)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason, details)
+         VALUES ($1, $2, $8, $3, $4, $5, $6, $7)
          ON CONFLICT (reporter_id, message_id) DO NOTHING
          RETURNING id`,
-        [reporterId, reportedId, roomCode, messageId, String(messageText).slice(0, 200), reason, details || '']
+        [reporterId, reportedId, roomCode, messageId, String(messageText).slice(0, 200), reason, details || '', reportedDisplayName]
       );
     } catch (err) {
       if (err && err.code === '23503') throw new ModerationError('That player could not be found.', 404);
