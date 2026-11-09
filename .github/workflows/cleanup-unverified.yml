@@ -37,11 +37,11 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.CLEANUP_DRYRUN_DATABASE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm

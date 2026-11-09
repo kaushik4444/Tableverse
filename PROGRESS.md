@@ -226,5 +226,5 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 
 ## Stage 20.3 verification (branch `chore/stage-20-3-ssl-and-actions-node24`)
 - Production cleanup dry run (owner's report, 2026-11-09): 0 unverified accounts older than 30 days, 0 deleted, read-only transaction and read-only role confirmed, no deletion secret or statement in the dry-run job. Recorded in `docs/DATA_CLEANUP.md`. `CLEANUP_EXECUTE` stays `false`.
-- PostgreSQL SSL warning: TLS choice moved to `db/poolConfig.js` (`sslmode` taken out of the URL and handed to `pg` as an explicit `ssl` option). Same TLS behaviour as before. Unit tests in `tests/pool-config.test.js` (in `npm test`).
+- PostgreSQL SSL warning: `db/poolConfig.js` rewrites `sslmode=require|prefer|verify-ca` in `DATABASE_URL` to `sslmode=verify-full` (what those already mean). Other TLS settings, `uselibpqcompat`, `disable` and unknown values are left untouched. Unit tests in `tests/pool-config.test.js` (in `npm test`).
 - GitHub Actions: `actions/checkout` and `actions/setup-node` moved from `@v4` to `@v5` in `ci.yml` and `cleanup-unverified.yml`. Not verified against the runner notices from this sandbox (no GitHub or raw-file access to read the action metadata).

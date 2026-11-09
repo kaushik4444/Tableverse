@@ -190,6 +190,6 @@ Auth endpoints are rate limited per address and account in `auth_rate_limits`; W
 
 ## Neon connection: TLS setting (`sslmode`)
 
-- The app reads `sslmode` from `DATABASE_URL` and sets TLS in `db/poolConfig.js`. `require`, `prefer`, `verify-ca` and `verify-full` all mean TLS with the certificate and host name checked; `disable` turns TLS off.
-- Keep `?sslmode=require` in the Neon URL (or `verify-full`). Both work with this code. Do not change it to `disable`, and do not remove it: in production a remote host without `sslmode` is still forced to verified TLS.
-- The app no longer hands `sslmode` to the `pg` library, which is why the "SSL modes 'prefer', 'require' and 'verify-ca' are treated as aliases" warning should no longer appear at start-up. If it does appear, the URL being read is not the one this code reads, or the warning comes from another process.
+- Keep `?sslmode=require` (or `verify-full`) in the Neon URL. `db/poolConfig.js` rewrites `require`, `prefer` and `verify-ca` to `verify-full` at start-up, which is what they already mean: TLS with the certificate and host name checked. The connection is the same; only the library's deprecation warning goes away.
+- Do not change it to `disable`. In production a remote host whose URL has no `sslmode` at all is still forced to verified TLS.
+- A URL that also sets `ssl`, `sslrootcert` or similar, or `uselibpqcompat`, is passed on unchanged, so the warning can still appear for those. That is expected.
