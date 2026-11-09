@@ -40,7 +40,7 @@ Privacy-conscious by construction:
 - **Counters only**: per day, per metric (`registration`, `login`, `session`, `game_started`, `game_finished`, `error`, `feedback`) and a short dimension such as a game id or an error kind. There is no per-event log.
 - **No** IP address, user agent, name, e-mail, chat or table content is recorded. Dimensions are lowercased and limited to `a-z 0-9 _ . : -` and 48 characters.
 - **Active users** are distinct accounts per day stored as `HMAC-SHA256(salt, account id)` cut to 32 hex characters, never as an id. The salt is server-side (`analytics_meta`). Guests are not counted as active users.
-- **Non-blocking**: `track()` only adds to an in-memory buffer; a timer writes it in batches every 15 s. If the database is slow or down the buffer is kept (bounded: 2000 counters, 5000 active accounts), retried, and past the bound new counts are **dropped and counted**, never queued without limit. A write that hangs times out after 5 s; a timed-out write may still finish in the database, so its counts are **not** retried (that would count them twice) and are reported as dropped. A write that fails outright is retried. Shutdown waits at most 2 s for a final write. Analytics failures are visible on the Health tab and never affect a request.
+- **Non-blocking**: `track()` only adds to an in-memory buffer; a timer writes it in batches every 15 s. If the database is slow or down the buffer is kept (bounded: 2000 counters, 5000 active accounts), retried, and past the bound new counts are **dropped and counted**, never queued without limit. Every write carries a random batch key, recorded in `analytics_batches` in the same transaction as the write. A write that hangs times out after 5 s; a timed-out or failed batch is sent again **with the same key**, so a write that did land is ignored and nothing is counted twice. A flush that is called while another runs waits for it, so counts added in the meantime are written too. Shutdown waits at most 2 s for a final write, and a stuck write never holds the process open. Analytics failures are visible on the Health tab and never affect a request.
 - Turn it off with `ANALYTICS_ENABLED=0`.
 
 ### Retention and deletion
@@ -51,8 +51,10 @@ Privacy-conscious by construction:
 | `analytics_daily` (aggregate counters) | 400 days | same |
 | `admin_audit_log` | 365 days | same |
 | `feedback` | 180 days | same |
-| `announcements` (and their dismissals) | 90 days after they end | same |
-| An account's activity hashes | until the account is deleted | removed when the account is deleted (`forgetActor`) |
+| `announcements` (and their dismissals) | 90 days after they end (from the early end, if an admin ended it) | same |
+| `analytics_batches` (write keys) | 3 days | same |
+| An account's activity hashes | until the account is deleted | pending activity is dropped from memory first, then the stored hashes are removed (`analytics.forget`, `forgetActor`) |
+| Activity | once per UTC day | marked at the first authenticated message of each day, not only at login, so a session open across midnight counts for the new day |
 | Feedback text of a deleted account | until the retention period | the link to the account is cleared (`ON DELETE SET NULL`); the text stays, so do not put personal data in feedback (the form says so) |
 | Audit entries of a deleted admin | until the retention period | the actor shows as "removed account" |
 | Everything | on demand | `npm run cleanup:users` also empties all of these tables (see [DATA_CLEANUP.md](DATA_CLEANUP.md)) |
