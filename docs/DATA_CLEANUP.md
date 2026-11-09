@@ -146,3 +146,18 @@ node scripts/cleanup-unverified.js --days 45                   # another period,
   Match history is kept; the link to the removed player is cleared.
 - Nothing runs automatically. Run the dry run first, record the count, then run `--execute` once.
 - Tests: `tests/unverified-cleanup.pg.test.js` (PostgreSQL, part of `npm run test:pg`).
+
+## Production dry run: evidence (Stage 20.3, 2026-11-09)
+
+Recorded from the owner's report of the first production dry run. Counts only; no account data, e-mail address or credential is in this record.
+
+| Check | Result |
+|---|---|
+| Unverified accounts older than 30 days | 0 |
+| Records deleted | 0 (dry run) |
+| Transaction | read-only, confirmed |
+| Database role used by the dry run | read-only role, no write privileges |
+| Dry-run job | no deletion secret and no deletion statement |
+| `CLEANUP_EXECUTE` | `false` (unchanged; deletion is not enabled) |
+
+Consequence: nothing was deleted and no production data was changed. Any later `--execute` run needs its own dry-run evidence, reviewed before the repository variable is changed.

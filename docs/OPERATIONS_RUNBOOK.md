@@ -176,3 +176,9 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 
 ## Abuse / rate limits
 Auth endpoints are rate limited per address and account in `auth_rate_limits`; WebSockets are limited per IP, per socket message rate, payload (8 KiB) and buffered bytes. Check logs for `slow down` closes and `too many connections` spikes.
+
+## Neon connection: TLS setting (`sslmode`)
+
+- The app reads `sslmode` from `DATABASE_URL` and sets TLS in `db/poolConfig.js`. `require`, `prefer`, `verify-ca` and `verify-full` all mean TLS with the certificate and host name checked; `disable` turns TLS off.
+- Keep `?sslmode=require` in the Neon URL (or `verify-full`). Both work with this code. Do not change it to `disable`, and do not remove it: in production a remote host without `sslmode` is still forced to verified TLS.
+- The app no longer hands `sslmode` to the `pg` library, which is why the "SSL modes 'prefer', 'require' and 'verify-ca' are treated as aliases" warning should no longer appear at start-up. If it does appear, the URL being read is not the one this code reads, or the warning comes from another process.
