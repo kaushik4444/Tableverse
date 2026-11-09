@@ -138,36 +138,45 @@ const flush = () => new Promise((r) => setImmediate(r));
     h.m.stop();
   });
 
-  await test('a short lifetime hands over without a gap: the replacement is usable before the old credential stops', async () => {
-    // Simulated second by second over three lifetimes. The server's minute tick is simulated by status() every 60 s; the
-    // propagation timer runs when due, as setTimeout would. The check is what the server can hand out, every second.
-    const L = 900;
+  /** Simulates `lifetime` seconds per login over three lifetimes, second by second, and returns the seconds without a usable login after the first. */
+  async function simulateHandover(lifetime) {
     let t = 1_000_000;
     let timers = [];
     let calls = 0;
     const m = createMeteredTurn({
-      appName: 'tableverse', secretKey: SECRET, ttlSeconds: L, now: () => t, log: null, timeoutMs: 1000,
+      appName: 'tableverse', secretKey: SECRET, ttlSeconds: lifetime, now: () => t, log: null, timeoutMs: 1000,
       setTimer: (fn, ms) => { timers.push({ at: t + ms, fn }); return { unref() {} }; },
-      fetchImpl: async () => { calls++; const n = calls; return { ok: true, status: 200, json: async () => ({ username: 'u' + n, password: 'p' + n, expiryInSeconds: L }) }; },
+      fetchImpl: async () => { calls++; const n = calls; return { ok: true, status: 200, json: async () => ({ username: 'u' + n, password: 'p' + n, expiryInSeconds: lifetime }) }; },
     });
     m.start(); await flush();
     let seenReady = false;
     let gapSeconds = 0;
-    for (let s = 1; s <= 3 * L; s++) {
+    for (let s = 1; s <= 3 * lifetime; s++) {
       t += 1000;
       const due = timers.filter((x) => x.at <= t);
       timers = timers.filter((x) => x.at > t);
       for (const x of due) x.fn();
-      if (s % 60 === 0) m.status();
+      if (s % 60 === 0) m.status(); // the server's minute tick
       await flush();
-      const ready = m.stats().status === 'ready';
-      if (ready) seenReady = true;
+      if (m.stats().status === 'ready') seenReady = true;
       else if (seenReady) gapSeconds++;
     }
     m.stop();
-    assert.ok(seenReady);
-    assert.equal(gapSeconds, 0, 'no second without a usable credential after the first one');
-    assert.ok(calls >= 3, 'each lifetime was replaced');
+    return { seenReady, gapSeconds, calls };
+  }
+
+  await test('a short lifetime hands over without a gap: the replacement is usable before the old credential stops', async () => {
+    const r = await simulateHandover(900);
+    assert.ok(r.seenReady);
+    assert.equal(r.gapSeconds, 0, 'no second without a usable credential after the first one');
+    assert.ok(r.calls >= 3, 'each lifetime was replaced');
+  });
+
+  await test('a lifetime Metered grants as 5 minutes also hands over without a gap (rotation is moved earlier)', async () => {
+    const r = await simulateHandover(300);
+    assert.ok(r.seenReady);
+    assert.equal(r.gapSeconds, 0, 'no second without a usable credential after the first one');
+    assert.ok(r.calls >= 3, 'each lifetime was replaced');
   });
 
   await test('a credential is never handed out in its last minute', async () => {
