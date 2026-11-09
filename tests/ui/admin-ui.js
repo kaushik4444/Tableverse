@@ -118,7 +118,7 @@ const api = (role) => ({
     'GET /api/announcements': () => ({ ok: true, signedIn, announcements: banners }),
     'GET /api/admin/me': () => ({ ok: true, role: 'admin', isAdmin: true, isOwner: false }),
   });
-  const BANNERS = [{ id: 'b1', message: 'Server restart at noon', level: 'warning', endsAt: '2026-11-09T00:00:00Z' }, { id: 'b2', message: EVIL, level: 'info', endsAt: '2026-11-09T00:00:00Z' }];
+  const BANNERS = [{ id: 'b1', revision: 1, message: 'Server restart at noon', level: 'warning', endsAt: '2026-11-09T00:00:00Z' }, { id: 'b2', revision: 1, message: EVIL, level: 'info', endsAt: '2026-11-09T00:00:00Z' }];
   await test('a guest sees managed banners next to the legacy one, dismisses one, and it stays dismissed in this browser', async () => {
     const { server, url } = await serve(homeApi(BANNERS, false));
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -136,6 +136,17 @@ const api = (role) => ({
     assert.equal(await page.locator('.notice-warning').count(), 0, 'remembered by this browser');
     await ctx.close(); server.close();
   });
+  await test('a guest dismissal from before revisions still hides its banner, and is rewritten to the current revision', async () => {
+    const { server, url } = await serve(homeApi(BANNERS, false));
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+    await page.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('ct_ann_ids', JSON.stringify(['b1:Server restart at noon'])); sessionStorage.setItem('seeded', '1'); } } catch { /* no storage */ } });
+    await page.goto(url + '/');
+    await page.waitForFunction(() => localStorage.getItem('ct_ann_ids') === '["b1:1"]', null, { timeout: 10000 });
+    assert.equal(await page.locator('.notice-warning').count(), 0, 'the old text-keyed dismissal still hides the banner');
+    assert.ok(await page.locator('.notice-bar').count() >= 1, 'other banners are still shown');
+    await ctx.close(); server.close();
+  });
   await test('a signed-in player dismisses on the server (so every device agrees) and gets the feedback form; staff get the Admin entry', async () => {
     const { server, url, calls } = await serve({ ...homeApi(BANNERS, true), 'POST /api/feedback': () => ({ ok: true, message: 'Thank you!' }) });
     const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: [] })] });
@@ -143,7 +154,7 @@ const api = (role) => ({
     await page.waitForSelector('[data-act="dismissBanner"]');
     await page.click('[data-act="dismissBanner"][data-id="b1"]');
     const d = await until(() => calls.find((c) => c.path === '/api/announcements/dismiss'), 'dismiss call');
-    assert.deepEqual(JSON.parse(d.body), { id: 'b1' });
+    assert.deepEqual(JSON.parse(d.body), { id: 'b1', revision: 1 }, 'the revision on screen is sent');
     await page.click('[data-act="toggleMenu"]');
     await page.waitForSelector('[data-act="openAdmin"]');
     await page.click('[data-act="openFeedback"]');
