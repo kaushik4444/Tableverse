@@ -79,7 +79,8 @@ function socket(port, cookie) {
       assert.ok(own.profile.joinedAt);
       const pub = await anon.get(`/api/players/${u.username}`);
       assert.equal(pub.status, 200);
-      assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'displayName', 'joinedAt', 'played', 'username', 'winRate', 'wins']);
+      assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'blockedByViewer', 'displayName', 'joinedAt', 'played', 'username', 'winRate', 'wins']);
+      assert.equal(pub.json.profile.blockedByViewer, false, 'an anonymous viewer is never shown as blocked');
       const raw = JSON.stringify(pub.json);
       for (const secret of [u.email, u.id, 'password', 'token', 'session', 'hash']) assert.ok(!raw.toLowerCase().includes(String(secret).toLowerCase()), 'public profile leaks ' + secret);
       assert.equal(pub.headers.get('cache-control'), 'no-store');
