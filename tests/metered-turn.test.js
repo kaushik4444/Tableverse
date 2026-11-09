@@ -110,23 +110,62 @@ const flush = () => new Promise((r) => setImmediate(r));
   });
 
   await test('a short lifetime still rotates before it expires, and never in a tight loop', async () => {
-    const h = harness({ ttl: 300 });
+    const h = harness({ ttl: 900 });
     h.m.start(); await flush();
     h.advance(PROPAGATION_MS);
     h.m.snapshot(); await flush();
     assert.equal(h.calls.length, 1, 'not refreshed straight away');
-    h.advance(300 * 1000 / 2 - PROPAGATION_MS);
+    h.advance(900 * 1000 / 2 - PROPAGATION_MS);
     h.m.snapshot(); await flush();
-    assert.equal(h.calls.length, 2, 'half-way through a 5-minute lifetime it is replaced');
+    assert.equal(h.calls.length, 2, 'half-way through a 15-minute lifetime it is replaced');
     h.m.stop();
   });
 
-  await test('a credential is never handed out in its last minute', async () => {
+  await test('a requested lifetime below 15 minutes is raised to 15 minutes', async () => {
     const h = harness({ ttl: 300 });
+    h.m.start(); await flush();
+    assert.equal(JSON.parse(h.calls[0].init.body).expiryInSeconds, 900, 'the shortest lifetime Metered is asked for');
+    h.m.stop();
+  });
+
+  await test('a short lifetime hands over without a gap: the replacement is usable before the old credential stops', async () => {
+    // Simulated second by second over three lifetimes. The server's minute tick is simulated by status() every 60 s; the
+    // propagation timer runs when due, as setTimeout would. The check is what the server can hand out, every second.
+    const L = 900;
+    let t = 1_000_000;
+    let timers = [];
+    let calls = 0;
+    const m = createMeteredTurn({
+      appName: 'tableverse', secretKey: SECRET, ttlSeconds: L, now: () => t, log: null, timeoutMs: 1000,
+      setTimer: (fn, ms) => { timers.push({ at: t + ms, fn }); return { unref() {} }; },
+      fetchImpl: async () => { calls++; const n = calls; return { ok: true, status: 200, json: async () => ({ username: 'u' + n, password: 'p' + n, expiryInSeconds: L }) }; },
+    });
+    m.start(); await flush();
+    let seenReady = false;
+    let gapSeconds = 0;
+    for (let s = 1; s <= 3 * L; s++) {
+      t += 1000;
+      const due = timers.filter((x) => x.at <= t);
+      timers = timers.filter((x) => x.at > t);
+      for (const x of due) x.fn();
+      if (s % 60 === 0) m.status();
+      await flush();
+      const ready = m.stats().status === 'ready';
+      if (ready) seenReady = true;
+      else if (seenReady) gapSeconds++;
+    }
+    m.stop();
+    assert.ok(seenReady);
+    assert.equal(gapSeconds, 0, 'no second without a usable credential after the first one');
+    assert.ok(calls >= 3, 'each lifetime was replaced');
+  });
+
+  await test('a credential is never handed out in its last minute', async () => {
+    const h = harness({ ttl: 900 });
     h.m.start(); await flush();
     h.advance(PROPAGATION_MS);
     assert.ok(h.m.snapshot());
-    h.advance(300 * 1000 - EXPIRY_MARGIN_MS);
+    h.advance(900 * 1000 - EXPIRY_MARGIN_MS);
     assert.equal(h.m.snapshot(), null);
     h.m.stop();
   });
@@ -258,11 +297,11 @@ const flush = () => new Promise((r) => setImmediate(r));
   });
 
   await test('an expired credential is never handed out, and it is reported as unavailable while refreshing fails', async () => {
-    const h = harness({ ttl: 300, answers: [{ status: 200, body: { username: 'first', password: 'f', expiryInSeconds: 300 }}, new Error('down'), new Error('down')] });
+    const h = harness({ ttl: 900, answers: [{ status: 200, body: { username: 'first', password: 'f', expiryInSeconds: 900 }}, new Error('down'), new Error('down')] });
     h.m.start(); await flush();
     h.advance(PROPAGATION_MS);
     assert.equal(h.m.snapshot().username, 'first');
-    h.advance(300 * 1000); // past expiry
+    h.advance(900 * 1000); // past expiry
     assert.equal(h.m.snapshot(), null, 'expired: not handed out');
     await flush();
     assert.equal(h.m.status(), 'unavailable');
