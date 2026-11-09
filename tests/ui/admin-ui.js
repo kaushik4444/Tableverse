@@ -16,7 +16,8 @@ const U = (o) => ({ id: 'u1', username: 'ann', display_name: 'Ann', role: 'user'
 const api = (role) => ({
   'GET /api/auth/csrf': () => ({ ok: true, csrfToken: 'tok' }),
   'GET /api/admin/me': () => ({ ok: true, role, isAdmin: role !== 'user', isOwner: role === 'owner' }),
-  'GET /api/admin/overview?days=30': () => ({ ok: true, days: 30, labels: [], series: { session: [1, 5, 2], game_finished: [0, 2, 1] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
+  'GET /api/admin/overview?days=30': () => ({ ok: true, days: 30, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
+  'GET /api/admin/overview?days=7': () => ({ ok: true, days: 7, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
   'GET /api/admin/users?q=&page=1': () => ({ ok: true, total: 3, pageSize: 25, users: [U({ id: 'u1', display_name: EVIL }), U({ id: 'u2', username: 'bob', display_name: 'Bob', role: 'admin' }), U({ id: 'u3', username: 'own', display_name: 'Owner', role: 'owner' })] }),
   'GET /api/admin/feedback?status=&page=1': () => ({ ok: true, total: 1, pageSize: 25, items: [{ id: 'f1', category: 'bug', status: 'new', message: EVIL, created_at: '2026-11-08T08:00:00Z', username: null }] }),
   'GET /api/admin/announcements': () => ({ ok: true, limits: { maxMessage: 200, maxDays: 90 }, items: [{ id: 'a1', message: EVIL, level: 'info', audience: 'all', status: 'live', starts_at: '2026-11-08T08:00:00Z', ends_at: '2026-11-09T08:00:00Z', ended_at: null }] }),
@@ -58,6 +59,19 @@ const api = (role) => ({
     assert.deepEqual(s.errors, []);
     await s.close();
   });
+  await test('the overview draws two charts with data tables, and the range buttons ask for that range', async () => {
+    const s = await open('admin');
+    await s.page.waitForSelector('.ad-grid');
+    assert.equal(await s.page.locator('.ad-chart svg').count(), 2, 'active players and registrations');
+    assert.equal(await s.page.locator('.ad-chart table').count(), 2, 'each chart has its data table');
+    assert.equal(await s.page.locator('[data-days="30"][aria-pressed="true"]').count(), 1, '30 days is the default');
+    await s.page.click('[data-days="7"]');
+    await until(() => s.calls.some((c) => /overview\?days=7/.test(c.path)), 'the 7-day range is requested');
+    await s.page.waitForSelector('[data-days="7"][aria-pressed="true"]');
+    assert.deepEqual(s.errors, []);
+    await s.close();
+  });
+
   await test('stored text is shown as text: no markup runs from names, feedback or announcements', async () => {
     const s = await open('owner');
     for (const name of ['users', 'feedback', 'announcements']) { await tab(s.page, name); await s.page.waitForSelector('#adMain .ad-t, #adMain .ad-card'); }

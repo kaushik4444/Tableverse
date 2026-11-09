@@ -388,6 +388,7 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(r.status, 200);
       assert.ok(Array.isArray(r.json.labels) && r.json.labels.length === 30);
       assert.ok(r.json.accounts.registered >= 1);
+      assert.ok(Array.isArray(r.json.activeDaily) && r.json.activeDaily.length === 30 && r.json.activeDaily.every(Number.isInteger), 'one active count per day');
       assert.equal((await boss().browser.get('/api/admin/health')).json.db.ok, true);
     });
     await test('real traffic is counted: registrations and logins reach the table when the server shuts down (final flush)', async () => {
