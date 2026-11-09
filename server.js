@@ -579,7 +579,7 @@ function start(opts = {}) {
     const out = [];
     for (const room of rooms.values()) {
       if (room.status !== 'playing' || p.room === room.code) continue;
-      if ((room.denied && room.denied.has(p.id)) || (room.blockedDenied && room.blockedDenied.has(p.id))) continue; // access revoked or blocked pair
+      if ((room.denied && room.denied.has(p.id)) || (room.blockedDenied && room.blockedDenied.has(p.id)) || blockedWithRoom(room, p.id)) continue; // access revoked or blocked pair
       if (room.members.some((m) => m.id === p.id && m.bot)) out.push({ code: room.code, gameId: room.gameId, paused: !humans(room).some(isConnected) });
     }
     return out;
@@ -594,7 +594,7 @@ function start(opts = {}) {
       if (room.status !== 'playing') continue;
       let paused;
       for (const m of room.members) {
-        if (!m.bot || (room.denied && room.denied.has(m.id)) || (room.blockedDenied && room.blockedDenied.has(m.id))) continue; // access revoked or blocked pair
+        if (!m.bot || (room.denied && room.denied.has(m.id)) || (room.blockedDenied && room.blockedDenied.has(m.id)) || blockedWithRoom(room, m.id)) continue; // access revoked or blocked pair
         const q = players.get(m.id);
         if (q && q.room === room.code) continue;
         if (paused === undefined) paused = !humans(room).some(isConnected);
@@ -676,6 +676,13 @@ function start(opts = {}) {
   /** A player cannot enter or remain at a table with anyone they have blocked, or who has blocked them. */
   function blockedWithRoom(room, playerId) {
     return [...room.members, ...room.spectators].some((m) => m.id !== playerId && pairBlocked(playerId, m.id));
+  }
+  /** A seated player may reconnect to finish a running game unless that player is the blocked target. */
+  function blockedEntryDenied(room, playerId, allowCurrentGameSeat = false) {
+    if (room.blockedDenied && room.blockedDenied.has(playerId)) return true;
+    if (!blockedWithRoom(room, playerId)) return false;
+    const alreadyPlaying = room.status === 'playing' && room.members.some((m) => m.id === playerId && !m.bot);
+    return !(allowCurrentGameSeat && alreadyPlaying);
   }
   /**
    * Apply an accepted block to the shared table. Lobby members and spectators leave immediately. A seated player in a
@@ -1147,9 +1154,10 @@ function start(opts = {}) {
       // Reserve the filter before entering the serialized database turn. A second block queued behind a slow first
       // write must hide its own target immediately, including after a reconnect on another socket.
       p.pendingBlocks.set(target, (p.pendingBlocks.get(target) || 0) + 1);
-      // Voice follows the same filter, so a pending block stops the audio at once rather than after the write commits.
+      // Voice, public host labels and rejoin prompts follow the pending filter immediately.
       const room = rooms.get(p.room);
       if (room) broadcastVoice(room);
+      broadcastTables();
       return inModerationTurn(p, async () => {
         try {
           await dbModeration.addBlock(p.id, target);
@@ -1176,6 +1184,7 @@ function start(opts = {}) {
           if (room) broadcastVoice(room);
           const current = rooms.get(p.room);
           if (current && current !== room) broadcastVoice(current);
+          broadcastTables(); // refresh table labels and rejoin prompts whether the write succeeded or failed
         }
         resyncChat(p);
         await sendBlocks(p);
@@ -1207,6 +1216,7 @@ function start(opts = {}) {
             if (!blockedWithRoom(room, blockedId)) room.blockedDenied.delete(blockedId);
           }
         }
+        broadcastTables();
         resyncChat(p);
         await sendBlocks(p);
         const roomNow = rooms.get(p.room);
@@ -1260,9 +1270,12 @@ function start(opts = {}) {
       applyProfile(p, msg);
       if (!room) return sendError(p, `No table with code ${code || '?'}`);
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
-      if ((room.blockedDenied && room.blockedDenied.has(p.id)) || blockedWithRoom(room, p.id)) return sendError(p, 'You cannot join a table with someone you have blocked or who has blocked you.');
+      if (blockedEntryDenied(room, p.id, true)) return sendError(p, 'You cannot join a table with someone you have blocked or who has blocked you.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
+      if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
+      if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
+      if (blockedEntryDenied(room, p.id, true)) return sendError(p, 'You cannot join a table with someone you have blocked or who has blocked you.');
       const seat = room.members.find((m) => m.id === p.id);
       // Already at this table (seated, or watching): nothing to add. This is decided BEFORE any capacity check, so a full
       // table or a full spectator list never turns away someone who is already in it, and no second "joined/watching"
@@ -1327,11 +1340,15 @@ function start(opts = {}) {
     async sit(p) {
       const room = rooms.get(p.room);
       if (!room || room.status !== 'lobby' || !isSpec(room, p.id)) return sendError(p, 'Not possible right now');
-      if ((room.blockedDenied && room.blockedDenied.has(p.id)) || blockedWithRoom(room, p.id)) return sendError(p, 'You cannot take a seat at a table with someone you have blocked or who has blocked you.');
+      if (blockedEntryDenied(room, p.id)) return sendError(p, 'You cannot take a seat at a table with someone you have blocked or who has blocked you.');
       if (!await canEnterRoom(p, room, { present: true })) return sendError(p, 'This private table requires an accepted invitation.');
+      if (rooms.get(room.code) !== room || room.status !== 'lobby' || p.room !== room.code) return sendError(p, 'Not possible right now');
+      const spectatorIndex = room.spectators.findIndex((s) => s.id === p.id);
+      if (spectatorIndex < 0) return sendError(p, 'Not possible right now');
+      if (blockedEntryDenied(room, p.id)) return sendError(p, 'You cannot take a seat at a table with someone you have blocked or who has blocked you.');
 
       if (room.members.length >= room.seats) return sendError(p, 'There is no open seat');
-      room.spectators.splice(room.spectators.findIndex((s) => s.id === p.id), 1);
+      room.spectators.splice(spectatorIndex, 1);
       addMember(room, p);
       broadcast(room);
     },
@@ -1679,7 +1696,7 @@ function start(opts = {}) {
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
-    const blocked = room && ((room.blockedDenied && room.blockedDenied.has(p.id)) || blockedWithRoom(room, p.id));
+    const blocked = room && blockedEntryDenied(room, p.id, true);
     const allowed = room ? (!blocked && await canEnterRoom(p, room, { present: true })) : false;
     if (!stillOwner()) return; // closed while the room was checked: the drop its close handler scheduled stays in charge
     if (room && allowed) {
@@ -1694,8 +1711,7 @@ function start(opts = {}) {
     } else {
       if (room) {
         if (blocked) {
-          (room.blockedDenied || (room.blockedDenied = new Set())).add(p.id);
-          leaveRoom(p); // a blocked player cannot resume the old seat; a bot takes over if a game is running
+          leaveRoom(p); // a blocked player cannot resume this seat; a bot takes over if a game is running
           send(ws, { t: 'left' });
           send(ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
           send(ws, tablesMsg(p));
