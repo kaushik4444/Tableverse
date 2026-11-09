@@ -40,13 +40,13 @@ Checked against Metered's public docs (`metered.ca/docs/turn-rest-api/post-creat
 | Old credential usable during overlap | Yes: the old login is not deleted; it expires naturally. |
 | API failures do not issue expired or invalid credentials | Yes: a credential is never handed out before propagation or in its last minute. |
 | New credentials not distributed before activation | Yes: `readyAt = issued + 2 min`; a timer and a poll both promote it. |
-| Authenticated-user restrictions | **Not enforced.** The welcome message (`server.js`) sends ICE with Metered logins to any connected player, including guests. Push-on-change is limited to signed-in players. Open finding, see below. |
+| Authenticated-user restrictions | **Partly enforced.** A socket with no session cookie is refused before `welcome` (`handleHello` in `server.js`), so logged-out visitors get no TURN settings. Anonymous (guest) players who hold a session do get Metered logins, and so do signed-in players. Open finding, see below. |
 | 10-active-credential limit | Partly. With a 48 h lifetime and rotation every 24 h, about two credentials are active per running instance. Each restart or deploy adds one more until it expires, so repeated restarts within 48 h could approach the limit. Not tracked by the code. Open finding. |
 | Existing calls not unnecessarily interrupted | Partly. Each new login is pushed to every signed-in player and relayed calls apply it with an ICE restart. With 24 h rotation this is about once a day per call, which is acceptable but still a restart. Open finding (could push only to players without a live relayed call). |
 
 ### Open findings (not fixed in this pass)
 
-1. **Guests receive Metered logins** (`server.js`, `welcome` / `iceMsg`). Decide: restrict Metered logins to authenticated players, or accept that guests can use relay bandwidth. Needs owner decision.
+1. **Guest players receive Metered logins.** Players with a session cookie, including anonymous guests, get logins in `welcome` / `iceMsg` (`server.js`). Logged-out sockets are refused before `welcome`. Decide: restrict Metered logins to non-anonymous accounts, or accept that guests use relay bandwidth. Needs owner decision.
 2. **Static TURN pair is the fallback** when no Metered login is usable (`lib/voiceRelay.js` `iceServers`). This is intended until the cutover, and it must be removed in the cutover (below).
 3. **Credential count is not tracked** across restarts. Low risk at one instance; monitor `turnStatus` and Metered's dashboard.
 4. **Test dependency:** `tests/pool-config.test.js` (added on `main` in `e0b3f65`) requires `pg-connection-string`, which is not declared in `package.json`. It works in CI through npm hoisting. Recommend declaring it as a devDependency when a lockfile update is possible.
@@ -56,7 +56,7 @@ Checked against Metered's public docs (`metered.ca/docs/turn-rest-api/post-creat
 Do not start until the owner approves after real-device tests (section 7).
 
 Preconditions (all must hold):
-1. PR #76 merged and deployed; Render logs show `[turn]` lines with no `quota` or repeated `HTTP 4xx` for at least 48 hours.
+1. PR #76 merged and deployed; Render logs show no `[turn]` failure lines (`quota`, `HTTP 4xx`, `network error`, `timeout`, `bad answer`) for at least 48 hours. Healthy requests write no `[turn]` line, so the absence of failure lines is the signal, and precondition 2 confirms that logins are being issued.
 2. `turnStatus` is `ready` in welcome messages for at least 95% of the observation window (check via browser diagnostics, section 6).
 3. Real-device tests passed (section 7), including a relayed call on mobile data.
 4. `ICE_SERVERS` is unset on Render. It overrides Metered when set, and then `iceExpiresAt` is null and the list is static.
@@ -66,6 +66,7 @@ Steps (for the approved window):
 1. Record the current Render environment variable names (not values) and export nothing to the repository.
 2. Set `TURN_USERNAME` and `TURN_CREDENTIAL` to empty on Render (or remove them). **Do not delete the static credential at Metered yet.**
 3. Redeploy or restart; check welcome messages carry only Metered logins (`ice` list has one TURN entry with a login name and no static pair).
+   **Known gap:** after the static pair is removed, every restart leaves about two minutes (the Metered propagation time) with no TURN settings (`turnStatus` `pending`). Calls that start in that window can only connect directly. Expect it after each restart and record it. No `TURN_SHARED_SECRET` fallback is configured, so there is no other relay during that window.
 4. Watch for 60 minutes: call setup success, relayed candidate counts, `turnStatus` values, any `[turn]` failures.
 5. Only after 24 hours of clean operation, the owner may disable the static credential at Metered.
 
@@ -92,7 +93,7 @@ Use two browsers or devices, both signed in, both at the same table with voice o
 2. Chrome: open `chrome://webrtc-internals` before joining voice. After the call connects, expand the peer connection and find **Candidate pairs** with state `succeeded`/`selected`. For the forced-relay test below, at least one of the **local** and **remote** candidates of the selected pair must be `relay`. The other side may be `host` or `srflx`, and that is still a relayed call.
 
 **B. Force a relayed call (test only)**
-1. On one device, turn on a strict network: mobile data with a VPN or a restrictive Wi-Fi, or block UDP on the router for that device. This makes direct paths fail and forces the relay.
+1. Relay is not forced by a VPN or a restrictive network: direct candidates can still work. A network that blocks UDP forces relay only if TURN is reachable over TCP or TLS (for example `turns:` on port 443). Use such a network, or a test-only build with `iceTransportPolicy: 'relay'`, which is not in the code today. Whatever the network, confirm the result in `webrtc-internals` (step 2). A selected pair with only `host` or `srflx` candidates is not a relayed call; repeat the test.
 2. Join voice on both devices. In `webrtc-internals`, the selected pair should show a `relay` candidate on at least one side.
 3. Speak; confirm audio both ways.
 
@@ -215,15 +216,15 @@ Notes:
 2. Browser diagnostics A–D (section 6) on two devices.
 3. Render: confirm `TURN_TTL_SECONDS` is unset (the default, 48 hours). Any value is limited to 15 minutes to 48 hours.
 4. Neon: confirm the production pooled endpoint is in use (the URL contains `-pooler`) and `sslmode=require` is still set (no change needed).
-5. Render: one restart of the production service after #76 is merged; check `[turn]` log lines show no failures.
+5. Render: one restart of the production service after #76 is merged; check that no `[turn]` failure lines appear (healthy requests write none).
 6. Actions: confirm the next CI run shows no Node.js 20 deprecation notice.
 
 ## 11. Outstanding risks and approvals
 
 | Item | Risk | Approval needed |
 |---|---|---|
-| Guests get Metered logins | Relay bandwidth use by anonymous users | Owner decision: restrict or accept |
-| Static TURN fallback still present | Static credential visible to all visitors until cutover | Cutover approval after section 7 |
+| Guest players get Metered logins | Relay bandwidth use by anonymous players with a session | Owner decision: restrict or accept |
+| Static TURN fallback still present | Static credential is sent to every session that is admitted (players with a session cookie), until cutover | Cutover approval after section 7 |
 | Credential count across restarts | Could exceed 10 with frequent restarts | Monitor; no approval needed |
 | Re-key on rotation restarts relayed calls | Brief audio interruption once a day per call | Accept or change |
 | `pg-connection-string` not declared | Test may break if transitive layout changes | Maintenance change when registry access is available |
@@ -240,7 +241,7 @@ Notes:
 | 3 | Startup no longer fails on a first-connection timeout | PASS (#70 merged; deployment check pending) |
 | 4 | Metered TURN follows the 48 h / 24 h guidance | PASS once #76 is merged (pending review) |
 | 5 | Metered secret never logged or sent to clients | PASS (code review and tests) |
-| 6 | Authenticated-only Metered logins | FAIL (open: guests receive logins) |
+| 6 | Authenticated-only Metered logins | FAIL (open: anonymous guest players with a session receive logins) |
 | 7 | 10-credential limit handled across restarts | PARTIAL (monitor) |
 | 8 | Static TURN credentials removed | NOT DONE (by design; awaiting approval) |
 | 9 | Real-device relay and ICE recovery tests | PENDING (manual) |
