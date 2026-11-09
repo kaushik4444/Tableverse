@@ -217,8 +217,13 @@ const DAY = 24 * 60 * 60 * 1000;
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM friend_requests WHERE requester_id = ANY($1::uuid[]) OR recipient_id = ANY($1::uuid[])'), 0, 'friend requests gone');
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM private_table_invitations WHERE inviter_id = ANY($1::uuid[]) OR invitee_id = ANY($1::uuid[])'), 0, 'invitations gone in both directions');
       assert.equal(await count('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocker_id = ANY($1::uuid[]) OR blocked_id = ANY($1::uuid[])'), 0, 'blocks gone in both directions');
-      // Documented behaviour: a report is deleted with either account it names (migration 010, ON DELETE CASCADE on both keys).
-      assert.equal(await count('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = ANY($1::uuid[]) OR reported_id = ANY($1::uuid[])'), 0, 'reports in both directions gone (cascade)');
+      // Reports made by the deleted reporter cascade away; reports against the deleted account remain anonymous.
+      const retainedReports = await q('SELECT reported_id, reported_display_name, message_text FROM chat_reports WHERE reporter_id = $1', [keep]);
+      assert.equal(retainedReports.length, 1, 'the surviving reporter’s report remains');
+      assert.equal(retainedReports[0].reported_id, null, 'the deleted account UUID is cleared');
+      assert.equal(retainedReports[0].reported_display_name, 'Gone', 'the display-name snapshot remains');
+      assert.equal(retainedReports[0].message_text, 'x', 'the reported message remains');
+      assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [gone]))[0].n, 0, 'reports made by the deleted reporter cascade away');
       assert.equal((await q('SELECT 1 FROM announcement_dismissals WHERE player_id = $1', [gone])).length, 0, 'dismissals gone');
       assert.equal((await q('SELECT 1 FROM auth_sessions WHERE player_id = $1', [gone])).length, 0, 'sessions gone');
       assert.equal((await q('SELECT 1 FROM player_recent_tables WHERE player_id = $1', [gone])).length, 0, 'recent tables gone');
@@ -239,7 +244,7 @@ const DAY = 24 * 60 * 60 * 1000;
         auth_email_tokens: ['c'],
         auth_identities: ['c'],
         auth_sessions: ['c'],
-        chat_reports: ['c'],
+        chat_reports: ['c', 'n'],
         feedback: ['n'],
         friend_requests: ['c'],
         friendships: ['c'],
