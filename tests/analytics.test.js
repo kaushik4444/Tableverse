@@ -186,5 +186,35 @@ const total = (rows, metric, dim = '') => rows.filter((r) => r.metric === metric
     } finally { await s.close(); }
   });
 
+  console.log('timeouts');
+  await test('a write that times out is never saved twice: its counts are dropped and counted, not put back', async () => {
+    const landed = [];
+    let calls = 0;
+    const store = {
+      addCounters: async (rows) => { calls++; if (calls === 1) await new Promise((r) => setTimeout(r, 60)); landed.push(...rows); }, // the slow write still lands
+      addActive: async () => {},
+    };
+    const a = createAnalytics({ store, log: quiet, writeTimeoutMs: 10 });
+    a.track('session');
+    await a.flush(); // gives up after 10 ms
+    await new Promise((r) => setTimeout(r, 90));
+    await a.flush(); // nothing left to send: the first counts must not come back
+    assert.equal(total(landed, 'session'), 1, 'counted exactly once');
+    assert.equal(a.stats().dropped, 1, 'the uncertain count is reported as dropped');
+  });
+  await test('a failed (not timed-out) write is put back and saved on the next flush', async () => {
+    const landed = [];
+    let calls = 0;
+    const store = {
+      addCounters: async (rows) => { calls++; if (calls === 1) throw Object.assign(new Error('down'), { code: 'ECONNRESET' }); landed.push(...rows); },
+      addActive: async () => {},
+    };
+    const a = createAnalytics({ store, log: quiet });
+    a.track('session'); a.track('session');
+    await a.flush();
+    await a.flush();
+    assert.equal(total(landed, 'session'), 2);
+  });
+
   console.log(`\n${passed} analytics tests passed`);
 })();

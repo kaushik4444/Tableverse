@@ -15,8 +15,9 @@
     state.csrf = ((await r.json()) || {}).csrfToken || '';
     return state.csrf;
   }
+  let view = null; // AbortController of the tab on screen: switching tabs cancels the requests of the one before
   async function api(path, body, retried) {
-    const opts = { credentials: 'same-origin', headers: {} };
+    const opts = { credentials: 'same-origin', headers: {}, signal: view ? view.signal : undefined };
     if (body !== undefined) {
       opts.method = 'POST';
       opts.headers = { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrf() };
@@ -29,7 +30,7 @@
     return out;
   }
   const say = (id, text, kind) => { const el = document.getElementById(id); if (el) { el.textContent = text; el.className = 'ad-msg ' + (kind || ''); } };
-  const fail = (e) => { main.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; };
+  const fail = (e) => { if (e && e.name === 'AbortError') return; main.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; };
 
   // ---------------------------------------------------------------- overview
   const bars = (rows, empty) => rows.length
@@ -115,11 +116,21 @@
     f.preset.onchange = custom; f.message.oninput = prev; prev();
     f.onsubmit = async (e) => {
       e.preventDefault();
-      const d = new FormData(f);
-      const body = { message: d.get('message'), level: d.get('level'), audience: d.get('audience') };
-      if (d.get('preset') === 'custom') { body.startsAt = new Date(d.get('startsAt')).toISOString(); body.endsAt = new Date(d.get('endsAt')).toISOString(); } else body.durationHours = Number(d.get('preset'));
       const go = document.getElementById('aGo'); go.disabled = true;
-      try { await api('/api/admin/announcements', body); await announcements(); say('aMsg', 'Published.', 'ok'); } catch (err) { say('aMsg', err.message, 'err'); go.disabled = false; }
+      try {
+        const d = new FormData(f);
+        const body = { message: d.get('message'), level: d.get('level'), audience: d.get('audience') };
+        if (d.get('preset') === 'custom') {
+          const starts = new Date(d.get('startsAt'));
+          const ends = new Date(d.get('endsAt'));
+          if (Number.isNaN(starts.getTime()) || Number.isNaN(ends.getTime())) throw new Error('Choose a valid start and end time.');
+          body.startsAt = starts.toISOString();
+          body.endsAt = ends.toISOString();
+        } else body.durationHours = Number(d.get('preset'));
+        await api('/api/admin/announcements', body);
+        await announcements();
+        say('aMsg', 'Published.', 'ok');
+      } catch (err) { say('aMsg', err.message, 'err'); go.disabled = false; }
     };
     main.querySelectorAll('[data-end]').forEach((b) => { b.onclick = async () => { if (!confirm('End this announcement now?')) return; try { await api('/api/admin/announcements/end', { id: b.dataset.end }); await announcements(); } catch (e) { say('aMsg', e.message, 'err'); } }; });
   }
@@ -149,6 +160,8 @@
   const views = { overview, users: () => users(), feedback: () => feedback(), announcements, health, audit: () => audit() };
   function show(tab) {
     state.tab = tab;
+    if (view) view.abort(); // a slower answer for the previous tab must not paint over this one
+    view = typeof AbortController === 'function' ? new AbortController() : null;
     tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     main.innerHTML = '<p class="ad-muted">Loading…</p>';
     views[tab]().catch(fail);

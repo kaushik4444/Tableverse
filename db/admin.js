@@ -246,8 +246,13 @@ async function updateAnnouncement({ actorId, id, fields }) {
     if (!cur) throw new announcements.AnnouncementError('No such announcement.', 404);
     const st = announcements.statusOf(cur);
     if (st === 'expired' || st === 'ended') throw new announcements.AnnouncementError('This announcement has finished. Create a new one to run it again.', 409);
-    const next = { message: fields.message ?? cur.message, level: fields.level ?? cur.level, audience: fields.audience ?? cur.audience, starts_at: fields.startsAt ?? cur.starts_at, ends_at: fields.endsAt ?? cur.ends_at };
-    if (new Date(next.ends_at) <= new Date(next.starts_at)) throw new announcements.AnnouncementError('The end must be after the start.', 400);
+    // Only the fields that were sent change. The window is merged with the stored row and checked as a whole, so an edit of
+    // one date can never move the other one (and a duration re-computes the end from the merged start).
+    const startsAt = fields.startsAt ?? new Date(cur.starts_at);
+    const windowSent = fields.startsAt !== undefined || fields.endsAt !== undefined || fields.durationHours !== undefined;
+    const endsAt = fields.endsAt ?? (fields.durationHours !== undefined ? announcements.endAfter(startsAt, fields.durationHours) : new Date(cur.ends_at));
+    if (windowSent) announcements.checkWindow(startsAt, endsAt, new Date());
+    const next = { message: fields.message ?? cur.message, level: fields.level ?? cur.level, audience: fields.audience ?? cur.audience, starts_at: startsAt, ends_at: endsAt };
     const r = await c.query(
       `UPDATE announcements SET message = $2, level = $3, audience = $4, starts_at = $5, ends_at = $6, updated_at = NOW() WHERE id = $1 RETURNING ${A_COLS}`,
       [id, next.message, next.level, next.audience, next.starts_at, next.ends_at]

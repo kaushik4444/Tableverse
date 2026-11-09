@@ -200,7 +200,18 @@ function start(opts = {}) {
   const emailSender = opts.emailSender || makeAuthEmailSender({ env, logger: opts.log || console });
   // Stage 20.5: privacy-light analytics (buffered, never blocks) and the admin store. Both need PostgreSQL; without it they are off.
   const dbAdmin = dbPool.hasDatabase() ? require('./db/admin') : null;
-  let authRoutesSignedOut = () => {}; // set by the onSignedOut option below; the admin routes use it to close a signed-out player's sockets
+  // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
+  // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
+  // Used by the auth routes and by the admin console's sign-out.
+  const closeSignedOutSockets = ({ playerId, token, exceptToken }) => {
+    for (const ws of wss.clients) {
+      const owner = ws.player || ws.pendingPlayer; // a socket still being checked belongs to its session too
+      if (!owner || owner.id !== playerId) continue;
+      if (token && ws.authToken !== token) continue;
+      if (exceptToken && ws.authToken === exceptToken) continue;
+      revokeSocket(ws, exceptToken ? 4002 : 4001, exceptToken ? 'signed in elsewhere' : 'signed out');
+    }
+  };
   const analytics = createAnalytics({ store: dbAdmin, enabled: env.ANALYTICS_ENABLED !== '0', log: opts.log || console });
   const trackError = (code) => analytics.track('error', code);
   const adminPlatform = () => ({
@@ -212,7 +223,7 @@ function start(opts = {}) {
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: dbAdmin, analytics, platform: adminPlatform, ctx,
-      onSignedOut: (o) => authRoutesSignedOut(o),
+      onSignedOut: closeSignedOutSockets,
     }).routes,
     production,
     trustProxy,
@@ -235,17 +246,7 @@ function start(opts = {}) {
       },
       onEvent: (event) => (event.type === 'friend-removed' ? onFriendRemoved(event.playerId, event.friendId) : notifyAccount(event.playerId, event)),
     },
-    // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
-    // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
-    onSignedOut: (authRoutesSignedOut = ({ playerId, token, exceptToken }) => {
-      for (const ws of wss.clients) {
-        const owner = ws.player || ws.pendingPlayer; // a socket still being checked belongs to its session too
-        if (!owner || owner.id !== playerId) continue;
-        if (token && ws.authToken !== token) continue;
-        if (exceptToken && ws.authToken === exceptToken) continue;
-        revokeSocket(ws, exceptToken ? 4002 : 4001, exceptToken ? 'signed in elsewhere' : 'signed out');
-      }
-    }),
+    onSignedOut: closeSignedOutSockets,
     // the display name and/or avatar was changed over HTTP (profile page): same effect as the lobby's own change
     onProfileChanged: ({ playerId, displayName, avatar }) => {
       const p = players.get(playerId);

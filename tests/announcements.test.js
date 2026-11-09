@@ -167,5 +167,46 @@ const at = (ms) => new Date(T0 + ms);
       assert.deepEqual(sent[0], [200, { ok: true, announcements: [] }]);
     });
   } finally { await s.close(); }
+
+  console.log('edits and windows');
+  const NOW = new Date('2026-11-09T10:00:00Z');
+  await test('an edit that sends only the end time never moves the start (nothing is filled in for it)', async () => {
+    const edit = ann.parseInput({ endsAt: '2026-11-10T10:00:00Z' }, NOW, { partial: true });
+    assert.equal('startsAt' in edit, false);
+    assert.equal(edit.endsAt.toISOString(), '2026-11-10T10:00:00.000Z');
+  });
+  await test('an edit with a duration is applied by the store to the merged start, so the banner is not re-timed to now', async () => {
+    assert.deepEqual(Object.keys(ann.parseInput({ durationHours: 2 }, NOW, { partial: true })), ['durationHours']);
+  });
+  await test('a new banner with one day takes the end from its start, and a duration is refused when it is not a number', async () => {
+    const row = ann.parseInput({ message: 'Maintenance', durationHours: 24 }, NOW);
+    assert.equal(row.startsAt.toISOString(), NOW.toISOString());
+    assert.equal(row.endsAt.getTime() - row.startsAt.getTime(), 24 * H);
+    assert.throws(() => ann.parseInput({ message: 'x', durationHours: true }, NOW), ann.AnnouncementError);
+    assert.throws(() => ann.parseInput({ message: 'x', startsAt: {}, durationHours: 1 }, NOW), ann.AnnouncementError);
+  });
+  await test('checkWindow refuses an end that is not after the start, a past end, and a run longer than the limit', () => {
+    const s = new Date(NOW.getTime() + H);
+    assert.throws(() => ann.checkWindow(s, s, NOW), /after the start/);
+    assert.throws(() => ann.checkWindow(new Date(NOW.getTime() - 2 * H), new Date(NOW.getTime() - H), NOW), /already passed/);
+    assert.throws(() => ann.checkWindow(s, new Date(s.getTime() + (ann.MAX_DURATION_DAYS + 1) * 24 * H), NOW), /at most/);
+    assert.doesNotThrow(() => ann.checkWindow(s, new Date(s.getTime() + H), NOW));
+  });
+
+  await test('over HTTP, changing only the end keeps the start (the store merges the stored row first)', async () => {
+    const clock2 = { t: T0 };
+    const h = await start({ clock: clock2 });
+    try {
+      const admin = await h.login({ role: 'admin' });
+      const created = await admin.b.post('/api/admin/announcements', { message: 'Window', startsAt: new Date(T0 + H).toISOString(), durationHours: 2 });
+      assert.equal(created.status, 201, JSON.stringify(created.json));
+      const { id, starts_at: startsBefore } = created.json.announcement;
+      const r = await admin.b.post('/api/admin/announcements/update', { id, endsAt: new Date(T0 + 5 * H).toISOString() });
+      assert.equal(r.status, 200, JSON.stringify(r.json));
+      assert.equal(new Date(r.json.announcement.starts_at).getTime(), new Date(startsBefore).getTime(), 'the start is unchanged');
+      assert.equal(new Date(r.json.announcement.ends_at).getTime(), T0 + 5 * H);
+    } finally { await h.close(); }
+  });
+
   console.log(`\n${passed} announcement tests passed`);
 })();

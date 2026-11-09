@@ -57,8 +57,12 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       if (!cur) throw new ann.AnnouncementError('No such announcement.', 404);
       const s = ann.statusOf(cur, now());
       if (s === 'expired' || s === 'ended') throw new ann.AnnouncementError('This announcement has finished. Create a new one to run it again.', 409);
-      const next = { ...cur, message: fields.message ?? cur.message, level: fields.level ?? cur.level, audience: fields.audience ?? cur.audience, starts_at: fields.startsAt ?? cur.starts_at, ends_at: fields.endsAt ?? cur.ends_at };
-      if (new Date(next.ends_at) <= new Date(next.starts_at)) throw new ann.AnnouncementError('The end must be after the start.');
+      // same rule as db/admin.js: merge the stored window with what was sent, then check the whole window
+      const startsAt = fields.startsAt ?? new Date(cur.starts_at);
+      const windowSent = fields.startsAt !== undefined || fields.endsAt !== undefined || fields.durationHours !== undefined;
+      const endsAt = fields.endsAt ?? (fields.durationHours !== undefined ? ann.endAfter(startsAt, fields.durationHours) : new Date(cur.ends_at));
+      if (windowSent) ann.checkWindow(startsAt, endsAt, now());
+      const next = { ...cur, message: fields.message ?? cur.message, level: fields.level ?? cur.level, audience: fields.audience ?? cur.audience, starts_at: startsAt, ends_at: endsAt };
       if (fields.message !== undefined && fields.message !== cur.message) for (const k of [...dismissals]) if (k.endsWith(`:${id}`)) dismissals.delete(k);
       Object.assign(cur, next, { updated_at: now() }); log(actorId, 'announcement.update', 'announcement', id); return cur;
     },

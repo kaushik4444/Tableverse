@@ -40,7 +40,7 @@ Privacy-conscious by construction:
 - **Counters only**: per day, per metric (`registration`, `login`, `session`, `game_started`, `game_finished`, `error`, `feedback`) and a short dimension such as a game id or an error kind. There is no per-event log.
 - **No** IP address, user agent, name, e-mail, chat or table content is recorded. Dimensions are lowercased and limited to `a-z 0-9 _ . : -` and 48 characters.
 - **Active users** are distinct accounts per day stored as `HMAC-SHA256(salt, account id)` cut to 32 hex characters, never as an id. The salt is server-side (`analytics_meta`). Guests are not counted as active users.
-- **Non-blocking**: `track()` only adds to an in-memory buffer; a timer writes it in batches every 15 s. If the database is slow or down the buffer is kept (bounded: 2000 counters, 5000 active accounts), retried, and past the bound new counts are **dropped and counted**, never queued without limit. A write that hangs times out after 5 s. Shutdown waits at most 2 s for a final write. Analytics failures are visible on the Health tab and never affect a request.
+- **Non-blocking**: `track()` only adds to an in-memory buffer; a timer writes it in batches every 15 s. If the database is slow or down the buffer is kept (bounded: 2000 counters, 5000 active accounts), retried, and past the bound new counts are **dropped and counted**, never queued without limit. A write that hangs times out after 5 s; a timed-out write may still finish in the database, so its counts are **not** retried (that would count them twice) and are reported as dropped. A write that fails outright is retried. Shutdown waits at most 2 s for a final write. Analytics failures are visible on the Health tab and never affect a request.
 - Turn it off with `ANALYTICS_ENABLED=0`.
 
 ### Retention and deletion
@@ -61,7 +61,7 @@ Deleting `analytics_meta.salt` makes every stored hash unlinkable (a new salt is
 
 ## Announcements
 
-Admins publish banners from the **Announcements** tab: text (200 characters), style (info / warning / good news), audience (everyone, signed-in players, guests, admins) and a schedule. **Presets: 1 hour, 1 day, 1 week**, or custom start and end. Every banner has an end (at most 90 days) and a start at most 180 days ahead; a banner whose end has passed cannot be created. Admins can end a banner early or edit a running one; finished banners cannot be edited.
+Admins publish banners from the **Announcements** tab: text (200 characters), style (info / warning / good news), audience (everyone, signed-in players, guests, admins) and a schedule. **Presets: 1 hour, 1 day, 1 week**, or custom start and end. Every banner has an end (at most 90 days) and a start at most 180 days ahead; a banner whose end has passed cannot be created. Admins can end a banner early or edit a running one; finished banners cannot be edited. An edit changes only the fields it sends: sending just a new end time keeps the start, and the whole window (start, end, length) is checked against the stored banner before it is saved.
 
 How it behaves (covered by `tests/announcements.test.js`, `tests/admin.pg.test.js`, `tests/ui/admin-ui.js`):
 
@@ -94,7 +94,7 @@ All under the session cookie. `POST` needs the `X-CSRF-Token` header. Staff = ad
 
 ## Environment variables
 
-`ADMIN_OWNER_ID`, `ADMIN_OWNER_EMAIL` (owner bootstrap), `ANALYTICS_ENABLED` (`0` disables). Rate limits can be tuned with `RL_ADMIN_IP_LIMIT`, `RL_ADMIN_PLAYER_LIMIT`, `RL_ANNOUNCE_IP_LIMIT`, `RL_FEEDBACK_IP_LIMIT`, `RL_FEEDBACK_PLAYER_LIMIT`.
+`ADMIN_OWNER_ID`, `ADMIN_OWNER_EMAIL` (owner bootstrap), `ANALYTICS_ENABLED` (`0` disables). Rate limits can be tuned with `RL_ADMIN_IP_LIMIT`, `RL_ADMIN_PLAYER_LIMIT`, `RL_ANNOUNCE_IP_LIMIT`, `RL_FEEDBACK_IP_LIMIT`, `RL_FEEDBACK_PLAYER_LIMIT`. `ANNOUNCEMENT_CACHE_MS` changes the 15 s banner cache (tests use 0).
 
 ## Not included (limits of the free beta)
 
@@ -102,4 +102,4 @@ All under the session cookie. `POST` needs the `X-CSRF-Token` header. Staff = ad
 - No owner transfer in the UI, no two-factor step for admins, no e-mail alerts.
 - Multi-instance: the 15 s banner cache is per instance (fine for one Render instance; at most 15 s of delay across several).
 - Analytics counts a session per WebSocket connection, so a reconnecting player counts again.
-- The PostgreSQL parts were written without a local database in the build sandbox; see PROGRESS.md for what has and has not been run.
+- The PostgreSQL suites (`tests/admin.pg.test.js`, the `test:pg` run) are the authority for the database parts. They are wired into `npm run test:pg` and CI; see PROGRESS.md for what has been run locally and what has not.
