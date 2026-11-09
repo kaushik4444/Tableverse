@@ -64,6 +64,36 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       assert.doesNotMatch(idx.rows[0].indexdef, /NOW\(/i);
       assert.match(idx.rows[0].indexdef, /WHERE \(revoked_at IS NULL\)/i);
     });
+    await test('upgrade to 014: existing announcements and dismissals survive; a dismissal keeps hiding its banner (revision 1)', async () => {
+      const old = await t.another(); extra.push(old.name);
+      const fs = require('node:fs');
+      const pg = require('pg');
+      const c = new pg.Client({ connectionString: old.url });
+      await c.connect();
+      try {
+        const dir = path.join(__dirname, '..', 'db', 'migrations');
+        const before = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort().filter((f) => f < '014');
+        assert.equal(before.length, 13, 'the state before this migration: 001 to 013');
+        for (const f of before) await c.query(fs.readFileSync(path.join(dir, f), 'utf8'));
+        await c.query('INSERT INTO schema_migrations (version) SELECT unnest($1::text[])', [before]);
+        const p = (await c.query("INSERT INTO players (display_name) VALUES ('Dana') RETURNING id")).rows[0].id;
+        const dismissed = (await c.query("INSERT INTO announcements (message, level, audience, starts_at, ends_at) VALUES ('Dismissed before', 'info', 'all', NOW() - INTERVAL '1 hour', NOW() + INTERVAL '1 day') RETURNING id")).rows[0].id;
+        await c.query("INSERT INTO announcements (message, level, audience, starts_at, ends_at) VALUES ('Not dismissed', 'info', 'all', NOW() - INTERVAL '1 hour', NOW() + INTERVAL '1 day')");
+        await c.query('INSERT INTO announcement_dismissals (player_id, announcement_id) VALUES ($1, $2)', [p, dismissed]);
+        const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'db', 'migrate.js')], { env: { ...process.env, DATABASE_URL: old.url }, encoding: 'utf8', timeout: 30000 });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.match(r.stdout, /Applied: 014_announcement_revisions\.sql/);
+        const d = await c.query('SELECT announcement_id, dismissed_revision FROM announcement_dismissals WHERE player_id = $1', [p]);
+        assert.deepEqual(d.rows.map((x) => [x.announcement_id, x.dismissed_revision]), [[dismissed, 1]], 'the existing dismissal is kept, recorded at revision 1');
+        const anns = (await c.query('SELECT message, revision FROM announcements ORDER BY message')).rows;
+        assert.deepEqual(anns, [{ message: 'Dismissed before', revision: 1 }, { message: 'Not dismissed', revision: 1 }], 'every existing announcement starts at revision 1');
+        await c.query("UPDATE announcements SET level = 'warning' WHERE id = $1", [dismissed]);
+        const again = spawnSync(process.execPath, [path.join(__dirname, '..', 'db', 'migrate.js')], { env: { ...process.env, DATABASE_URL: old.url }, encoding: 'utf8', timeout: 30000 });
+        assert.equal(again.status, 0, again.stdout + again.stderr);
+        assert.doesNotMatch(again.stdout, /Applied:/, 'running again applies nothing');
+        assert.equal((await c.query('SELECT dismissed_revision FROM announcement_dismissals WHERE player_id = $1', [p])).rows[0].dismissed_revision, 1);
+      } finally { await c.end(); }
+    });
     await test('upgrade from main schema to 003 succeeds (auth migration has no volatile index predicate)', async () => {
       const old = await t.another(); extra.push(old.name);
       const fs = require('node:fs');

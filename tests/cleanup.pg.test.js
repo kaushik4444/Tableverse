@@ -72,7 +72,7 @@ function cookieSocket(port, cookie) {
       await q("INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)", [reg[0], anon[0]]);
       await q("INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason, details) VALUES ($1, $2, 'ROOM1', gen_random_uuid(), 'hello', 'spam', '')", [reg[0], anon[0]]);
       await q("INSERT INTO announcements (message, ends_at, created_by) VALUES ('Hi', NOW() + INTERVAL '1 day', $1)", [reg[0]]);
-      await q("INSERT INTO announcement_dismissals (player_id, announcement_id) SELECT $1, id FROM announcements", [reg[0]]);
+      await q("INSERT INTO announcement_dismissals (player_id, announcement_id, dismissed_revision) SELECT $1, id, 1 FROM announcements", [reg[0]]);
       await q("INSERT INTO admin_audit_log (actor_id, action) VALUES ($1, 'test.seed')", [reg[0]]);
       await q("INSERT INTO feedback (player_id, message) VALUES ($1, 'nice')", [reg[0]]);
       await q("INSERT INTO analytics_daily (day, metric, dim, total) VALUES (CURRENT_DATE, 'session', '', 2)");

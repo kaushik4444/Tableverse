@@ -11,6 +11,7 @@
   // Older versions kept a bearer token here. The session is now an HttpOnly cookie, so the old value is never used: delete it.
   store.remove('ct_token');
   store.remove('ct_recent'); // recent tables used to be kept per browser; they now live on the account
+  store.remove('ct_ann_ids'); // guest banner dismissals before revisions (id and text): never read again
 
   const $app = document.getElementById('app');
   const $banner = document.getElementById('banner');
@@ -703,16 +704,27 @@
 
   // ---- managed announcements (Stage 20.5). Legacy ANNOUNCEMENT text above keeps working; these are added next to it.
   const LEVEL_ICON = { info: 'ℹ️', warning: '⚠️', success: '✅' };
-  const guestDismissed = () => { try { return JSON.parse(store.get('ct_ann_ids') || '[]'); } catch { return []; } };
-  // A guest's dismissal is kept per text: when the admin changes the text, the banner shows again (as it does for signed-in players).
-  const bannerKey = (b) => `${b.id}:${b.message}`;
+  // Guest dismissals live under their own key, `ct_ann_rev`, as `id:revision` entries. The key the earlier format used is never
+  // read, so no old entry can hide a banner (whatever its text, even "2").
+  const GUEST_DISMISS_KEY = 'ct_ann_rev';
+  const guestDismissed = () => { try { return JSON.parse(store.get(GUEST_DISMISS_KEY) || '[]').filter((e) => typeof e === 'string'); } catch { return []; } };
+  // A dismissal is kept per revision: an edit of a banner (text, level, audience or schedule) makes a new revision, and the banner
+  // shows again. Signed-in dismissals are stored on the account with the revision the player saw; guests keep the same key here.
+  const bannerKey = (b) => `${b.id}:${b.revision}`;
+  // Guest entries written before revisions (`id:text`) are not honoured: an edit made after such an entry was written cannot be
+  // told from an unedited banner, so the safe choice is to show it once more rather than hide a changed banner.
+  function guestHidden(list) {
+    const entries = guestDismissed();
+    return new Set(list.filter((a) => entries.includes(bannerKey(a))).map((a) => a.id));
+  }
   async function loadBanners() {
     try {
       const r = await fetch('/api/announcements', { credentials: 'same-origin' });
       const out = await r.json();
       if (!out || !out.ok) return;
-      const hidden = out.signedIn ? [] : guestDismissed(); // signed-in dismissals live on the account; guests remember them in this browser
-      const next = (out.announcements || []).filter((a) => !hidden.includes(bannerKey(a)));
+      const all = out.announcements || [];
+      const hidden = out.signedIn ? new Set() : guestHidden(all); // signed-in dismissals are already applied by the server
+      const next = all.filter((a) => !hidden.has(a.id));
       if (JSON.stringify(next) !== JSON.stringify(S.banners)) { S.banners = next; render(); }
     } catch { /* offline: keep what is shown */ }
   }
@@ -729,8 +741,9 @@
     const dismissed = S.banners.find((b) => b.id === id);
     S.banners = S.banners.filter((b) => b.id !== id);
     render();
-    if (S.guest) { if (dismissed) store.set('ct_ann_ids', JSON.stringify([...guestDismissed(), bannerKey(dismissed)].slice(-50))); return; }
-    try { await postJson('/api/announcements/dismiss', { id }); } catch { /* it comes back on the next refresh if the server did not record it */ }
+    if (S.guest) { if (dismissed) store.set(GUEST_DISMISS_KEY, JSON.stringify([...guestDismissed(), bannerKey(dismissed)].slice(-50))); return; }
+    // the revision on screen is sent, so an edit that lands meanwhile is not hidden by this dismissal
+    try { await postJson('/api/announcements/dismiss', { id, revision: dismissed ? dismissed.revision : undefined }); } catch { /* it comes back on the next refresh if the server did not record it */ }
   }
   // the schedule is decided on the server, so a banner can appear, expire or be ended while the page is open: look again now and then
   setInterval(() => { if (document.visibilityState === 'visible') loadBanners(); }, 60 * 1000);

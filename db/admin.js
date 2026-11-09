@@ -267,7 +267,7 @@ async function setFeedbackStatus({ actorId, id, status }) {
 }
 
 // ---------------------------------------------------------------- announcements
-const A_COLS = 'id, message, level, audience, starts_at, ends_at, ended_at, created_at, updated_at';
+const A_COLS = 'id, message, level, audience, starts_at, ends_at, ended_at, created_at, updated_at, revision';
 
 async function createAnnouncement({ actorId, fields }) {
   return db.withTransaction(async (c) => {
@@ -299,12 +299,16 @@ async function updateAnnouncement({ actorId, id, fields }) {
     const endsAt = fields.endsAt ?? (fields.durationHours !== undefined ? announcements.endAfter(startsAt, fields.durationHours) : new Date(cur.ends_at));
     if (windowSent) announcements.checkWindow(startsAt, endsAt, new Date());
     const next = { message: fields.message ?? cur.message, level: fields.level ?? cur.level, audience: fields.audience ?? cur.audience, starts_at: startsAt, ends_at: endsAt };
+    // What players see changed: a new revision, so every dismissal of the old one stops matching (migration 014). Saving
+    // the same values again is not a change and keeps the revision, so dismissals stay.
+    const sameInstant = (a, b) => new Date(a).getTime() === new Date(b).getTime();
+    const changed = next.message !== cur.message || next.level !== cur.level || next.audience !== cur.audience
+      || !sameInstant(next.starts_at, cur.starts_at) || !sameInstant(next.ends_at, cur.ends_at);
+    const revision = cur.revision + (changed ? 1 : 0);
     const r = await c.query(
-      `UPDATE announcements SET message = $2, level = $3, audience = $4, starts_at = $5, ends_at = $6, updated_at = NOW() WHERE id = $1 RETURNING ${A_COLS}`,
-      [id, next.message, next.level, next.audience, next.starts_at, next.ends_at]
+      `UPDATE announcements SET message = $2, level = $3, audience = $4, starts_at = $5, ends_at = $6, revision = $7, updated_at = NOW() WHERE id = $1 RETURNING ${A_COLS}`,
+      [id, next.message, next.level, next.audience, next.starts_at, next.ends_at, revision]
     );
-    // a changed text is a new message: everyone who dismissed the old one sees it again
-    if (fields.message !== undefined && fields.message !== cur.message) await c.query('DELETE FROM announcement_dismissals WHERE announcement_id = $1', [id]);
     await audit(c, { actorId, action: 'announcement.update', targetType: 'announcement', targetId: id, detail: { fields: Object.keys(fields) } });
     return r.rows[0];
   });
@@ -325,9 +329,21 @@ async function listLiveAnnouncements() {
   return (await db.query(`SELECT ${A_COLS} FROM announcements WHERE ended_at IS NULL AND starts_at <= NOW() AND ends_at > NOW()`)).rows;
 }
 
-async function dismissAnnouncement({ playerId, announcementId }) {
+/**
+ * Records that the player dismissed the revision they saw (`revision`; the current one when it is not given). A dismissal
+ * that arrives after an edit therefore hides only the text the player read, and a later dismissal never lowers a newer one.
+ */
+async function dismissAnnouncement({ playerId, announcementId, revision = null }) {
   try {
-    await db.query('INSERT INTO announcement_dismissals (player_id, announcement_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [playerId, announcementId]);
+    const r = await db.query(
+      `INSERT INTO announcement_dismissals (player_id, announcement_id, dismissed_revision)
+       SELECT $1, a.id, LEAST(COALESCE($3::int, a.revision), a.revision) FROM announcements a WHERE a.id = $2
+       ON CONFLICT (player_id, announcement_id)
+       DO UPDATE SET dismissed_revision = GREATEST(EXCLUDED.dismissed_revision, announcement_dismissals.dismissed_revision)
+       RETURNING announcement_id`,
+      [playerId, announcementId, revision]
+    );
+    if (!r.rows.length) return { dismissed: false };
   } catch (err) {
     if (err && (err.code === '23503' || err.code === '22P02')) return { dismissed: false };
     throw err;
@@ -335,8 +351,10 @@ async function dismissAnnouncement({ playerId, announcementId }) {
   return { dismissed: true };
 }
 
-async function listDismissedIds(playerId) {
-  return new Set((await db.query('SELECT announcement_id FROM announcement_dismissals WHERE player_id = $1', [playerId])).rows.map((r) => r.announcement_id));
+/** announcement id -> the revision this player dismissed. */
+async function listDismissed(playerId) {
+  const r = await db.query('SELECT announcement_id, dismissed_revision FROM announcement_dismissals WHERE player_id = $1', [playerId]);
+  return new Map(r.rows.map((row) => [row.announcement_id, row.dismissed_revision]));
 }
 
 // ---------------------------------------------------------------- audit log and retention
@@ -370,7 +388,7 @@ module.exports = {
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, isOwner,
   addCounters, addActive, forgetActor, overview, health,
   createFeedback, listFeedback, setFeedbackStatus,
-  createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissedIds,
+  createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissed,
   listAudit, purge,
   _resetForTests: () => { ownerKnown = false; salt = null; },
 };
