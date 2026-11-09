@@ -675,7 +675,11 @@ function start(opts = {}) {
   const voiceFor = (room, viewerId) => voiceRelay.voiceList(room, (id) => pairBlocked(viewerId, id), viewerId);
   /** A player is a blocked target if an occupant of this table has blocked them. */
   function blockedByRoom(room, playerId) {
-    return [...room.members, ...room.spectators].some((m) => m.id !== playerId && blocksPlayer(players.get(m.id), playerId));
+    return [...room.members, ...room.spectators].some((m) => {
+      if (m.id === playerId) return false;
+      const blocker = players.get(m.id);
+      return !!blocker && blocksPlayer(blocker, playerId);
+    });
   }
   /** A player cannot enter or remain at a table with anyone they have blocked, or who has blocked them. */
   function blockedWithRoom(room, playerId) {
@@ -700,24 +704,21 @@ function start(opts = {}) {
       const q = players.get(m.id);
       const seated = room.members.some((member) => member.id === m.id);
       if (room.status === 'playing' && seated) continue;
-      if (q && q.room === room.code) {
-        leaveRoom(q);
-        if (q.connected) {
-          send(q.ws, { t: 'left' });
-          send(q.ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
-          send(q.ws, tablesMsg(q));
-        }
-      } else {
-        const botIndex = room.members.findIndex((member) => member.id === m.id && member.bot);
-        if (botIndex >= 0) {
-          const [botSeat] = room.members.splice(botIndex, 1);
-          if (room.hostId === m.id) ensureHost(room, { leaving: m.id });
-          sys(room, 'A blocked player left the table');
-          notifyOthers(room, m.id, 'A blocked player left the table');
-          if (!humans(room).length && !room.spectators.length) destroyRoom(room);
-          else broadcast(room);
-        }
+      const inThisRoom = q && q.room === room.code;
+      const actor = inThisRoom ? q : {
+        id: m.id, name: m.name, avatar: m.avatar, room: room.code,
+        connected: false, dropTimer: null, parkedRoom: null,
+      };
+      leaveRoom(actor);
+      if (inThisRoom && q.connected) {
+        send(q.ws, { t: 'left' });
+        send(q.ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
+        send(q.ws, tablesMsg(q));
+      } else if (q && q.connected && !q.room) {
+        send(q.ws, { t: 'notice', text: 'You can no longer share that table with someone here.' });
+        send(q.ws, tablesMsg(q));
       }
+      if (rooms.get(room.code) !== room) break;
     }
   }
   /** Sends this player their list of blocked accounts (names come from the database; none without one). */
