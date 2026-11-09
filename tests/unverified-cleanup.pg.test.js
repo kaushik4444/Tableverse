@@ -90,7 +90,7 @@ const DAY = 24 * 60 * 60 * 1000;
       assert.deepEqual(r, { dryRun: true, candidates: 1, deleted: 0, batches: 0 });
       assert.ok(dryRunStatements.length > 0, 'the read-only database connection was used');
       for (const sql of dryRunStatements) {
-        assert.doesNotMatch(sql, /^\\s*(UPDATE|DELETE|INSERT|TRUNCATE|ALTER|DROP|CREATE)\\b/i, sql);
+        assert.doesNotMatch(sql, /^\s*(UPDATE|DELETE|INSERT|TRUNCATE|ALTER|DROP|CREATE)\b/i, sql);
       }
       assert.equal(await count(), before);
     });
