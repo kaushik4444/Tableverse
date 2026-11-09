@@ -68,7 +68,7 @@ Before inviting the initial beta cohort, verify and record:
 - [ ] Production signup, email verification, login, logout and password reset work on the live domain.
 - [ ] A guest can join a table. If voice is included, both devices receive Metered `turnStatus: ready` with non-null `iceExpiresAt` before fresh connections, and relay, network recovery, and in-place credential-push ICE-restart checks pass. If voice is withheld, record the voice-disabled decision and keep voice unavailable to the beta cohort.
 - [x] For voice-enabled beta, record a two-way relayed call. The owner-provided dump confirms a nominated, succeeded pair using a local UDP relay candidate.
-- [ ] Confirm that the relayed call used a propagated dynamic Metered credential (`turnStatus: ready` and non-null `iceExpiresAt`); the supplied dump does not establish credential source.
+- [ ] If voice is included, confirm that the relayed call used a propagated dynamic Metered credential (`turnStatus: ready` and non-null `iceExpiresAt`); record N/A if voice is withheld. The supplied dump does not establish credential source.
 - [ ] Cleanup remains disabled and the protected deletion environment remains in place.
 - [ ] One-instance operating model is retained; do not scale horizontally.
 - [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable.

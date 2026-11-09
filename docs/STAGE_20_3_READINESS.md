@@ -224,8 +224,8 @@ Notes:
 
 ## 10. Remaining manual tests (NOT RUN)
 
-1. Cross-network phone voice connectivity: **owner-tested successfully between two people, one on Wi-Fi and one on mobile data**. Audio connectivity passed; selected ICE candidate pair / Metered relay usage was not recorded, so relay verification remains open.
-2. Browser WebRTC diagnostics to confirm whether the successful call selected a `relay` candidate. **Not recorded.**
+1. Cross-network phone voice connectivity: **owner-tested successfully between two people, one on Wi-Fi and one on mobile data**. Audio connectivity and TURN relay use passed; the supplied WebRTC stats confirm a selected `relay` candidate.
+2. Browser WebRTC diagnostics confirmed that the successful call selected a `relay` candidate. Dynamic Metered credential use was not established.
 3. Windows and WSL2 runs are **deferred** for the limited beta; do not treat them as release blockers.
 4. Render: confirm `TURN_TTL_SECONDS` is unset (default 48 hours). Any value is limited to 15 minutes to 48 hours. **Not verified.**
 5. Neon: confirm the production pooled endpoint is in use and `sslmode=require` is set. **Not verified by Claude.**
@@ -262,7 +262,7 @@ Notes:
 | 6 | Metered logins for session-authenticated players, including guests | implemented | owner policy approved; production issuance not yet observed | POLICY PASS, PRODUCTION NOT VERIFIED |
 | 7 | 10-credential limit handled across restarts | not tracked | n/a | PARTIAL |
 | 8 | Optional static TURN cutover | not done (by design) | n/a | DEFERRED (not a limited-beta blocker) |
-| 9 | Cross-network voice connectivity | n/a | owner-tested Wi-Fi ↔ mobile; audio worked; relay candidate not recorded | CONNECTIVITY PASS, RELAY UNVERIFIED |
+| 9 | Cross-network voice connectivity | n/a | owner-tested Wi-Fi ↔ mobile; audio worked; selected relay candidate confirmed | CONNECTIVITY PASS, RELAY PASS |
 | 10 | Cleanup dry run recorded; execute disabled | merged (#74, #75) | owner-reported dry run; `CLEANUP_EXECUTE=false` | PASS (owner-reported) |
 | 11 | SSL warning removed; secure TLS kept | merged (#75) | CI log confirmation pending | CODE PASS |
 | 12 | Actions off Node.js 20 notices | merged (#75) | next run not checked | CODE PASS, CONFIRMATION PENDING |
@@ -272,7 +272,7 @@ Notes:
 | 16 | Neon load-test plan | deferred for limited beta | not executed | DEFERRED |
 | 17 | Focused security review of main | in progress | n/a | NOT COMPLETE (section 13) |
 
-**Stage 20.3 overall: FAIL.** Mandatory items still open: 14 (blocked-user seating), 17 (focused security review), and required live production checks. Relay, Metered credential recovery, and in-place ICE-restart checks are required for a voice-enabled limited beta; if voice is withheld, record that state. Relay verification and Metered observation before cutover, as well as item 8 (static TURN cutover), are conditional on choosing the separately owner-approved cutover; retaining the fallback is not a blocker. Windows/WSL2 and Neon load testing are deferred.
+**Stage 20.3 overall: FAIL.** Mandatory items still open: 14 (blocked-user seating), 17 (focused security review), and required live production checks. Relay verification, Metered credential recovery, and in-place ICE-restart checks are required for a voice-enabled limited beta; if voice is withheld, record that state. The 48-hour Metered observation and static TURN cutover operation are conditional on choosing the separately owner-approved cutover; retaining the fallback is not a blocker. Windows/WSL2 and Neon load testing are deferred.
 
 ## 13. Focused security review: status
 
