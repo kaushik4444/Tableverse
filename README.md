@@ -42,11 +42,14 @@ Tableverse is currently open for friend testing.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
-## What's new in v0.14 — talk at the table
-- **Voice chat**: everyone at a table can talk to each other, in the lobby and during the game. Tap the microphone to join and talk (tap again to mute), tap the speaker to listen only or silence everyone. A little mic marks who is in voice and a green ring shows who is talking. Up to 8 people per table; spectators can watch but take a seat to talk.
-- It is peer to peer (WebRTC): the audio goes directly between players and never through the server, which only keeps the list of who is in voice and passes the connection setup messages (`lib/voiceRelay.js`). Needs https (or localhost) and microphone permission; without a microphone you can still listen.
-- Strict networks (some offices, mobile carriers) need a TURN relay. Preferred: set `TURN_URL` and `TURN_SHARED_SECRET` (unset `ICE_SERVERS` first: if it is set, its list is used as it is and the per-player login is not sent) (with a TURN server that accepts the REST credential scheme, for example coturn with `use-auth-secret`). Each player then gets a login that expires after an hour (`TURN_TTL_SECONDS`, 5 min to 24 h), and the secret never reaches a browser. The browser asks for a fresh login ten minutes before the current one ends, so a long session keeps working without a re-login. Fallback only: `TURN_URL`, `TURN_USERNAME` and `TURN_CREDENTIAL` (or `ICE_SERVERS` as JSON, or `STUN_URL`). The static pair is sent to every visitor, so do not use it for a production TURN server that cannot be rotated. Without any TURN setting only a public STUN server is used and some pairs of players will not hear each other. This is the most common reason the microphone ring lights up for the speaker while the others hear nothing: the two browsers cannot reach each other directly. Static-pair TURN services work with the fallback variables (set them on your host and redeploy). Metered's expiring credentials use its own API and are not compatible with `TURN_SHARED_SECRET` (see docs/OPERATIONS_RUNBOOK.md).
-- Privacy: peers in a WebRTC call can learn each other's network address. Voice is off until you tap the microphone or speaker.
+## What's new in v0.14 — voice chat
+
+- **Talk at the table.** Turn on your microphone to speak with other people at the same table, in the lobby or during a game. Turn it off to mute yourself; use the speaker control to listen without speaking or silence table audio.
+- **See who's talking.** A microphone indicator shows who has joined voice, and a green ring highlights the person currently speaking.
+- **Up to 8 people.** Voice supports up to eight people in a table. Spectators can watch; take a seat to join the conversation.
+- **No installation.** Voice runs in your browser. Open Tableverse over HTTPS, allow microphone access when asked, and use a headset where possible to reduce echo.
+- **How it works.** Audio is peer-to-peer using WebRTC. Tableverse's server helps browsers establish the connection but does not carry the audio itself. Some networks require a relay to connect; connection quality depends on the networks and devices involved.
+- **Your choice.** Voice is off until you choose to join. As with other peer-to-peer calls, the other participants' browsers may learn network connection information such as IP addresses.
 
 ## What's new in v0.13 — shared feed and crowns
 
