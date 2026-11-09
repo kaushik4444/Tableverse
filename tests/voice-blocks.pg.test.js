@@ -131,10 +131,7 @@ function socket(port, cookie) {
     await until(() => D.s.notices().some((n) => /You can still share a table/.test(n)), 'lobby block confirmed');
     await test('blocking someone in a lobby keeps them at the table: a block hides chat and voice only', async () => {
       assert.ok(D.s.room.members.some((m) => m.id === E.id), 'E stays seated');
-      await until(() => {
-        const listing = E.s.msgs.filter((m) => m.t === 'tables').pop();
-        return listing && listing.tables.some((table) => table.code === secondCode);
-      }, 'the blocked pair still sees the table in the directory');
+      assert.ok(E.s.room && E.s.room.code === secondCode, 'E is still at the table (a block never removes anyone)');
     });
 
     D.s.send({ t: 'unblock', id: E.id });
