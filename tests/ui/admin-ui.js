@@ -108,7 +108,13 @@ const api = (role) => ({
     await s.page.dispatchEvent('[name="endsAt"]', 'change');
     await s.page.click('#aGo');
     const post = await until(() => s.calls.find((c) => c.method === 'POST' && c.path === '/api/admin/announcements'), 'POST');
-    assert.ok(!('durationHours' in JSON.parse(post.body)));
+    const body = JSON.parse(post.body);
+    // the selected wall-clock times, converted to UTC by the browser itself (its own time zone), must be exactly what is sent
+    const expectStart = await s.page.evaluate(() => new Date('2030-01-02T10:00').toISOString());
+    const expectEnd = await s.page.evaluate(() => new Date('2030-01-03T10:00').toISOString());
+    assert.equal(body.startsAt, expectStart, 'start is the selected instant');
+    assert.equal(body.endsAt, expectEnd, 'end is the selected instant');
+    assert.ok(!('durationHours' in body), 'no preset duration is sent');
     await s.close();
   });
   await test('on a 360px phone no tab scrolls sideways and tap targets are at least 40px', async () => {
