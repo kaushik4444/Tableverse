@@ -26,7 +26,7 @@ this code version.
 | 8 | `analytics_daily` | Aggregate daily counters per metric and dimension, no personal data (migration 013) | **Empty** | none |
 | 9 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
 | 10 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
-| 11 | `chat_reports` | Chat reports (migration 010): reporter, reported account, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (CASCADE, 2 keys) |
+| 11 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, optional reported account, reported-name snapshot, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
 | 12 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
 | 13 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
 | 14 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
@@ -141,10 +141,10 @@ the wrong URL is used.
 
 - The account's logins, tokens, sessions, recent tables, dismissals, friendships, friend requests, private-table
   invitations and chat blocks are removed, in both directions where a relationship has two sides.
-- Chat reports are removed in both directions too: a report is deleted when either the reporter or the reported account
-  is deleted (`chat_reports` cascades on both keys, migration 010). **Open question for the owner:** deleting an unverified
-  account can therefore erase moderation reports made against it. Changing this needs a migration (for example keeping
-  reports with the reported account set to NULL) and is not part of this change.
+- Reports made by a deleted reporter are removed (`reporter_id` cascades). Reports **against** a deleted account remain:
+  migration 015 clears `reported_id` with `ON DELETE SET NULL` and preserves the server-captured
+  `reported_display_name`, message, reason, details, room and timestamp. This retains moderation evidence without
+  retaining the deleted account UUID.
 - Match history is kept; `match_participants.player_id` is cleared and the name becomes the deleted-player name.
 - `tests/unverified-cleanup.pg.test.js` checks every foreign key to `players`: each must cascade or set NULL. A new
   reference that does neither fails the test until it is classified here.
