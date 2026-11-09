@@ -304,8 +304,8 @@ Reviewed: the reconnect (hello) guard; pending and committed block writes; the b
 
 Checked by reading the code (not observed in production):
 - A block never removes anyone from a table, and a pending block never removes a seat (PR #85). The reconnect and finish-time removals that #81 added are gone on `main`.
-- Finishing a game removes a blocked seat only on a committed block.
-- A player who explicitly left a running game cannot rejoin while the pair would share the table.
+- Finishing a game does not remove anyone because of a block (PR #85).
+- Rejoin is not restricted by blocks (PR #85): a blocked pair may rejoin the same table like anyone else.
 - A blocked pair may stay seated and may spectate together at any table, including one hosted by a third person (PR #85). The running-game exception of #81 no longer applies because no block removes a seat.
 - The table directory is not filtered by blocks (PR #85).
 
