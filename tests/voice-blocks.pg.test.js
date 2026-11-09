@@ -90,7 +90,9 @@ function socket(port, cookie) {
       assert.equal(B.s.rtcFrom(A.id), before, 'B receives nothing from A');
     });
 
-    // Reactions are only accepted after the game starts.\n\n    await test('a reaction from B does not reach A; C still sees it', async () => {
+    // Reactions are only accepted after the game starts.
+
+    await test('a reaction from B does not reach A; C still sees it', async () => {
       const toA = A.s.msgs.filter((m) => m.t === 'emote').length;
       const toC = C.s.msgs.filter((m) => m.t === 'emote').length;
       B.s.send({ t: 'emote', e: '👏' });
