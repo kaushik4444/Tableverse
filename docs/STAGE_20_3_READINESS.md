@@ -1,6 +1,6 @@
 # Stage 20.3 readiness
 
-Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Not done: real-device tests, Windows/WSL2 test runs, the guest TURN policy decision, the security audit, and the Neon load test (planned, not executed). Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
+Status: **Stage 20.3 is FAIL.** Code for the items in section 1 is merged and passed CI. Merged code is not production verification: nothing below is verified in production unless its row in section 12 says so. Not done: real-device tests and the final focused security review. Windows/WSL2 runs and a Neon load test are deferred for the limited initial beta. The owner has approved Metered TURN logins for anonymous guests. Static TURN credentials remain configured. Cleanup remains disabled (`CLEANUP_EXECUTE=false`). Nothing in this document was executed against production by the author.
 
 ## 1. Completed work and merged PRs
 
@@ -53,7 +53,7 @@ Checked against Metered's public docs (`metered.ca/docs/turn-rest-api/post-creat
 
 ### Open findings (not fixed in this pass)
 
-1. **Guest players receive Metered logins.** Players with a session cookie, including anonymous guests, get logins in `welcome` / `iceMsg` (`server.js`). Logged-out sockets are refused before `welcome`. Decide: restrict Metered logins to non-anonymous accounts, or accept that guests use relay bandwidth. Needs owner decision.
+1. **Guest players receive Metered logins — accepted.** The owner approved this for the initial beta. Monitor Metered's 500 MB monthly allowance and active-credential count. Logged-out sockets are still refused before `welcome`.
 2. **Static TURN pair is the fallback** when no Metered login is usable (`lib/voiceRelay.js` `iceServers`). This is intended until the cutover, and it must be removed in the cutover (below).
 3. **Credential count is not tracked** across restarts. Low risk at one instance; monitor `turnStatus` and Metered's dashboard.
 4. **Test dependency:** `tests/pool-config.test.js` (added on `main` in `e0b3f65`) requires `pg-connection-string`, which is not declared in `package.json`. It works in CI through npm hoisting. Recommend declaring it as a devDependency when a lockfile update is possible.
@@ -231,7 +231,7 @@ Notes:
 
 | Item | Risk | Approval needed |
 |---|---|---|
-| Guest players get Metered logins | Relay bandwidth used by anonymous players with a session. Policy options in the separate analysis. | Owner decision (pending) |
+| Guest players get Metered logins | Relay bandwidth used by anonymous players with a session. | Owner approved for initial beta; monitor usage |
 | Static TURN fallback present | Static credential is sent to every admitted session until cutover | Cutover approval after section 7 |
 | Two-minute TURN gap after each restart once static is removed | Calls starting in that window can only connect directly | Owner: accept or change |
 | Credential count across restarts | Could exceed 10 with frequent restarts | Monitor; no approval needed |
@@ -254,7 +254,7 @@ Notes:
 | 3 | Startup survives a slow first database connection | merged (#70) | not separately verified | CODE PASS |
 | 4 | Metered TURN follows 48 h / 24 h guidance | merged (#72, #76), CI green | not verified | CODE PASS, PRODUCTION NOT VERIFIED |
 | 5 | Metered secret never logged or sent to clients | tests and review | log check not done | CODE PASS, PRODUCTION NOT VERIFIED |
-| 6 | Authenticated-only Metered logins | not implemented | n/a | FAIL (owner decision pending) |
+| 6 | Metered logins for session-authenticated players, including guests | implemented | owner policy approved; production issuance not yet observed | POLICY PASS, PRODUCTION NOT VERIFIED |
 | 7 | 10-credential limit handled across restarts | not tracked | n/a | PARTIAL |
 | 8 | Static TURN credentials removed | not done (by design) | n/a | NOT DONE (cutover unapproved) |
 | 9 | Real-device relay and ICE recovery tests | not run | not run | NOT RUN |
@@ -264,7 +264,7 @@ Notes:
 | 13 | Blocked-user privacy in profiles | merged (#73) | not verified | CODE PASS (public profile only) |
 | 14 | Blocked-user privacy in seating and other surfaces | not implemented for seating | n/a | OPEN (owner decision) |
 | 15 | Windows and WSL2 PostgreSQL and migration runs | documented | not run | NOT RUN |
-| 16 | Neon load-test plan | drafted | not executed | PLANNED, NOT EXECUTED |
+| 16 | Neon load-test plan | deferred for limited beta | not executed | DEFERRED |
 | 17 | Final security audit of main | in progress | n/a | NOT COMPLETE (section 13) |
 
 **Stage 20.3 overall: FAIL.** Mandatory items still open: 6, 8, 9, 14, 15, 17, and production verification for 4 and 5.
@@ -272,7 +272,7 @@ Notes:
 ## 13. Security audit: status
 
 Not complete. Findings to date, recorded in this document only:
-- Guest players with a session receive Metered logins (section 3, item 1). Owner decision pending.
+- Guest players with a session receive Metered logins; owner approved this policy for the initial beta. Monitor bandwidth and credential count.
 - Blocked-user privacy: the public profile is hidden in both directions (#73). Seating is not filtered.
 - Credential count across restarts is not tracked.
 
