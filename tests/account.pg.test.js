@@ -316,7 +316,7 @@ function socket(port, cookie) {
 
       // the username and email can be used again by a new account with no history
       const reborn = new Browser(srv.port); await reborn.csrf();
-      const reg = await reborn.post('/api/auth/register', { email: u.email, username: u.username, password: PW, displayName: 'Reborn' });
+      const reg = await reborn.post('/api/auth/register', { adultConfirmed: true, email: u.email, username: u.username, password: PW, displayName: 'Reborn' });
       assert.equal(reg.status < 300, true, 'the same email and username can register again: ' + JSON.stringify(reg.json));
       await reborn.must('/api/auth/verify-email', { token: reg.json.debug.verifyToken });
       await reborn.must('/api/auth/login', { email: u.email, password: PW });

@@ -60,7 +60,7 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await stranger.browser.get('/api/admin/me')).json.isOwner, false);
       // an unverified registration with the owner address does not qualify (register only, never verify)
       const b = new Browser(srv.port); await b.csrf();
-      const reg = await b.post('/api/auth/register', { email: OWNER_EMAIL, username: 'bossunverified', password: PW, displayName: 'Boss' });
+      const reg = await b.post('/api/auth/register', { adultConfirmed: true, email: OWNER_EMAIL, username: 'bossunverified', password: PW, displayName: 'Boss' });
       assert.ok(reg.ok);
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM players WHERE role = 'owner'"))[0].n, 0);
       const boss = await registerAndVerifyExisting(b, reg);

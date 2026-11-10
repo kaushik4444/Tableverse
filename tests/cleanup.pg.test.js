@@ -292,7 +292,7 @@ function cookieSocket(port, cookie) {
       try {
         const b = new Browser(srv.port); await b.csrf();
         const email = 'afterclean@test.local';
-        const reg = await b.post('/api/auth/register', { email, username: 'after_clean', password: 'TestPass123!', displayName: 'After' });
+        const reg = await b.post('/api/auth/register', { adultConfirmed: true, email, username: 'after_clean', password: 'TestPass123!', displayName: 'After' });
         assert.equal(reg.status, 201, JSON.stringify(reg.json));
         assert.equal((await b.post('/api/auth/verify-email', { token: reg.json.debug.verifyToken })).status, 200);
         assert.equal((await b.post('/api/auth/login', { email, password: 'TestPass123!' })).status, 200);

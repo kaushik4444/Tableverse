@@ -229,8 +229,25 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
     });
 
     console.log('authentication');
+    await test('registration needs an explicit 18+ confirmation, and stores only the time it was given', async () => {
+      const email = `adult.${Date.now()}@test.local`;
+      const base = { email, password: 'TestPass123!', displayName: 'Adult' };
+      let n = 0;
+      for (const adultConfirmed of [undefined, false, 'true', 1]) {
+        n++;
+        await assert.rejects(
+          dbAuth.registerEmail({ ...base, username: `adultno${n}${Date.now() % 10000}`, adultConfirmed }),
+          (err) => err.status === 400 && /18 or older/.test(err.message)
+        );
+      }
+      const none = (await x.query('SELECT COUNT(*)::int AS n FROM auth_identities WHERE provider_user_id = $1', [email])).rows[0].n;
+      assert.equal(none, 0, 'a refused registration creates no account');
+      const out = await dbAuth.registerEmail({ ...base, username: `adultyes${Date.now() % 100000}`, adultConfirmed: true });
+      const row = (await x.query('SELECT adult_confirmed_at FROM players WHERE id = $1', [out.player.id])).rows[0];
+      assert.ok(row.adult_confirmed_at instanceof Date, 'the confirmation time is stored');
+    });
     await test('registration stores permanent identity, argon2 hash and verify token hash, and issues no session', async () => {
-      const out = await dbAuth.registerEmail({ email: `auth.${Date.now()}@test.local`, username: 'wizardhero', password: 'TestPass123!', displayName: 'Wizard Hero', avatar: '🧙' });
+      const out = await dbAuth.registerEmail({ adultConfirmed: true, email: `auth.${Date.now()}@test.local`, username: 'wizardhero', password: 'TestPass123!', displayName: 'Wizard Hero', avatar: '🧙' });
       assert.equal(out.token, undefined, 'registration returns no session token');
       assert.ok(out.verifyToken);
       const p = (await x.query('SELECT id, username, is_anonymous FROM players WHERE id = $1', [out.player.id])).rows[0];
@@ -250,26 +267,26 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
     });
     await test('a taken email is a generic result that writes nothing; a taken username is still rejected', async () => {
       const email = `dupe.${Date.now()}@test.local`;
-      await dbAuth.registerEmail({ email, username: 'sameuser1', password: 'TestPass123!', displayName: 'A' });
-      const again = await dbAuth.registerEmail({ email, username: 'sameuser2', password: 'TestPass123!', displayName: 'B' });
+      await dbAuth.registerEmail({ adultConfirmed: true, email, username: 'sameuser1', password: 'TestPass123!', displayName: 'A' });
+      const again = await dbAuth.registerEmail({ adultConfirmed: true, email, username: 'sameuser2', password: 'TestPass123!', displayName: 'B' });
       assert.deepEqual(again, { alreadyRegistered: true, email: email.toLowerCase() });
       assert.equal((await dbAuth.checkUsernameAvailability({ username: 'sameuser2' })).available, true, 'the refused probe did not claim its username');
-      await assert.rejects(dbAuth.registerEmail({ email: `other.${Date.now()}@test.local`, username: 'SAMEUSER1', password: 'TestPass123!', displayName: 'C' }), /username is already taken/i);
+      await assert.rejects(dbAuth.registerEmail({ adultConfirmed: true, email: `other.${Date.now()}@test.local`, username: 'SAMEUSER1', password: 'TestPass123!', displayName: 'C' }), /username is already taken/i);
     });
     await test('concurrent registration for the same username allows only one success', async () => {
       const username = `raceuser${String(Date.now()).slice(-6)}`;
       const emailA = `race.a.${Date.now()}@test.local`;
       const emailB = `race.b.${Date.now()}@test.local`;
       const [a, b] = await Promise.allSettled([
-        dbAuth.registerEmail({ email: emailA, username, password: 'TestPass123!', displayName: 'A' }),
-        dbAuth.registerEmail({ email: emailB, username: username.toUpperCase(), password: 'TestPass123!', displayName: 'B' }),
+        dbAuth.registerEmail({ adultConfirmed: true, email: emailA, username, password: 'TestPass123!', displayName: 'A' }),
+        dbAuth.registerEmail({ adultConfirmed: true, email: emailB, username: username.toUpperCase(), password: 'TestPass123!', displayName: 'B' }),
       ]);
       const ok = [a, b].filter((r) => r.status === 'fulfilled').length;
       assert.equal(ok, 1);
     });
     await test('invalid login credentials are rejected and unverified sessions cannot enter websocket lobby', async () => {
       const email = `uv.${Date.now()}@test.local`;
-      const reg = await dbAuth.registerEmail({ email, username: `uv${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'UV' });
+      const reg = await dbAuth.registerEmail({ adultConfirmed: true, email, username: `uv${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'UV' });
       await assert.rejects(dbAuth.loginEmail({ email, password: 'bad-pass' }), /invalid email or password/i);
       const info = await dbAuth.sessionInfo((await loginToken(reg.email)));
       assert.equal(info.authenticated, true);
@@ -296,7 +313,7 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       process.env.REQUIRE_EMAIL_VERIFICATION = 'false';
       try {
         const email = `opt.${Date.now()}@test.local`;
-        const reg = await dbAuth.registerEmail({ email, username: `opt${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'Optional' });
+        const reg = await dbAuth.registerEmail({ adultConfirmed: true, email, username: `opt${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'Optional' });
         const info = await dbAuth.sessionInfo((await loginToken(reg.email)));
         assert.equal(info.authenticated, true);
         assert.equal(info.emailVerified, false, 'optional mode does not mark an identity as verified');
@@ -309,19 +326,19 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
     });
     await test('verification token is single-use and concurrency-safe', async () => {
       const email = `verify.${Date.now()}@test.local`;
-      const reg = await dbAuth.registerEmail({ email, username: `verify${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'V' });
+      const reg = await dbAuth.registerEmail({ adultConfirmed: true, email, username: `verify${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'V' });
       await dbAuth.verifyEmailToken(reg.verifyToken);
       await assert.rejects(dbAuth.verifyEmailToken(reg.verifyToken), /already been used/i);
       assert.equal((await dbAuth.sessionInfo((await loginToken(reg.email)))).emailVerified, true);
 
-      const reg2 = await dbAuth.registerEmail({ email: `verify2.${Date.now()}@test.local`, username: `verifyb${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'V2' });
+      const reg2 = await dbAuth.registerEmail({ adultConfirmed: true, email: `verify2.${Date.now()}@test.local`, username: `verifyb${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'V2' });
       const settled = await Promise.allSettled([dbAuth.verifyEmailToken(reg2.verifyToken), dbAuth.verifyEmailToken(reg2.verifyToken)]);
       assert.equal(settled.filter((r) => r.status === 'fulfilled').length, 1);
       assert.equal(settled.filter((r) => r.status === 'rejected').length, 1);
     });
     await test('verification with no matching identity is rejected and leaves the token unspent', async () => {
       const email = `nomatch.${Date.now()}@test.local`;
-      const reg = await dbAuth.registerEmail({ email, username: `nomatch${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'N' });
+      const reg = await dbAuth.registerEmail({ adultConfirmed: true, email, username: `nomatch${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'N' });
       await x.query('DELETE FROM auth_identities WHERE player_id = $1', [reg.player.id]); // the account's identity is gone
       await assert.rejects(dbAuth.verifyEmailToken(reg.verifyToken), /invalid verification token/i);
       const th = crypto.createHash('sha256').update(reg.verifyToken).digest('hex');
@@ -330,7 +347,7 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
     });
     await test('password-reset token is single-use, concurrency-safe, and revokes all existing sessions', async () => {
       const email = `reset.${Date.now()}@test.local`;
-      const reg = await dbAuth.registerEmail({ email, username: `reset${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'R' });
+      const reg = await dbAuth.registerEmail({ adultConfirmed: true, email, username: `reset${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'R' });
       await dbAuth.verifyEmailToken(reg.verifyToken);
       const login2 = await dbAuth.loginEmail({ email, password: 'TestPass123!' });
       const req = await dbAuth.requestPasswordReset({ email });
@@ -349,13 +366,13 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
     });
     await test('expired verification and reset tokens are rejected', async () => {
       const email = `exp.${Date.now()}@test.local`;
-      const reg = await dbAuth.registerEmail({ email, username: `exp${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'E' });
+      const reg = await dbAuth.registerEmail({ adultConfirmed: true, email, username: `exp${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'E' });
       const vh = crypto.createHash('sha256').update(reg.verifyToken).digest('hex');
       await x.query("UPDATE auth_email_tokens SET expires_at = NOW() - INTERVAL '1 minute' WHERE token_hash = $1", [vh]);
       await assert.rejects(dbAuth.verifyEmailToken(reg.verifyToken), /expired/i);
 
       const email2 = `exp2.${Date.now()}@test.local`;
-      const reg2 = await dbAuth.registerEmail({ email: email2, username: `expb${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'E2' });
+      const reg2 = await dbAuth.registerEmail({ adultConfirmed: true, email: email2, username: `expb${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'E2' });
       await dbAuth.verifyEmailToken(reg2.verifyToken);
       const req = await dbAuth.requestPasswordReset({ email: email2 });
       const rh = crypto.createHash('sha256').update(req.resetToken).digest('hex');
@@ -364,10 +381,10 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
     });
     await test('session expiry and revokeAll/revokeCurrent semantics are enforced', async () => {
       const email = `sess.${Date.now()}@test.local`;
-      const reg = await dbAuth.registerEmail({ email, username: `sess${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'S' });
+      const reg = await dbAuth.registerEmail({ adultConfirmed: true, email, username: `sess${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'S' });
       await dbAuth.verifyEmailToken(reg.verifyToken);
       const login2 = await dbAuth.loginEmail({ email, password: 'TestPass123!' });
-      const other = await dbAuth.registerEmail({ email: `sess.other.${Date.now()}@test.local`, username: `other${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'O' });
+      const other = await dbAuth.registerEmail({ adultConfirmed: true, email: `sess.other.${Date.now()}@test.local`, username: `other${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'O' });
       await dbAuth.verifyEmailToken(other.verifyToken);
 
       await dbAuth.revokeSession(login2.token);

@@ -442,6 +442,7 @@
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
           ${authPolicyHintHTML()}
           <input id="registerPassword" type="password" required minlength="8" placeholder="Password (8+ characters)" autocomplete="new-password">
+          <label class="auth-check"><input id="registerAdult" type="checkbox" required> I am 18 or older.</label>
           <button class="btn big" type="submit">Create account</button>
         </form>
       `}
@@ -501,8 +502,8 @@
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
 
-  async function doRegister(name, username, email, password) {
-    const out = await withBusy('Creating your account…', () => postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined }));
+  async function doRegister(name, username, email, password, adultConfirmed) {
+    const out = await withBusy('Creating your account…', () => postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined, adultConfirmed: adultConfirmed === true }));
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     S.requireEmailVerification = policyRequiresVerification(out);
@@ -1103,8 +1104,9 @@
       const username = String((document.getElementById('registerUsername') || {}).value || '').trim().toLowerCase();
       const email = (document.getElementById('registerEmail') || {}).value;
       const password = (document.getElementById('registerPassword') || {}).value;
+      const adultConfirmed = Boolean((document.getElementById('registerAdult') || {}).checked);
       try {
-        await doRegister(name, username, email, password);
+        await doRegister(name, username, email, password, adultConfirmed);
       } catch (err) {
         openAuthSheet('register', err.message || 'Registration failed', true);
       }
