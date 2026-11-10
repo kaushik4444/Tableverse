@@ -41,7 +41,28 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       return { changed: true, role };
     },
     async listUsers({ q = '' } = {}) { const u = [...players.values()].filter((p) => !q || p.username.includes(q)); return { total: u.length, pageSize: 25, users: u.map(({ email, ...rest }) => rest) }; },
-    async signOutUser({ actorId, targetId }) { policy.checkManageUser({ actor: players.get(actorId), target: players.get(targetId) }); signedOut.push(targetId); log(actorId, 'user.sign_out', 'player', targetId); return { revoked: 1 }; },
+    async suspendUser({ actorId, targetId, reason = '' }) {
+      policy.checkSuspend({ actor: players.get(actorId), target: players.get(targetId) });
+      const t = players.get(targetId);
+      const why = String(reason || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) || null;
+      Object.assign(t, { suspended_at: now(), suspended_reason: why });
+      signedOut.push(targetId);
+      log(actorId, 'user.suspend', 'player', targetId, { reason: why });
+      return { suspended: true, sessions: 1 };
+    },
+    async unsuspendUser({ actorId, targetId }) {
+      policy.checkSuspend({ actor: players.get(actorId), target: players.get(targetId) });
+      Object.assign(players.get(targetId), { suspended_at: null, suspended_reason: null });
+      log(actorId, 'user.unsuspend', 'player', targetId);
+      return { suspended: false };
+    },
+    async lookupUser({ username }) {
+      const u = String(username || '').trim().toLowerCase();
+      const p = [...players.values()].find((x) => x.username === u && !x.is_anonymous);
+      if (!p) return { user: null };
+      return { user: { id: p.id, username: p.username, display_name: p.display_name, role: p.role, verified: !!p.verified, suspended_at: p.suspended_at ?? null, suspended_reason: p.suspended_reason ?? null, active_sessions: 0 } };
+    },
+    async signOutUser({ actorId, targetId }) { policy.checkSignOut({ actor: players.get(actorId), target: players.get(targetId) }); signedOut.push(targetId); log(actorId, 'user.sign_out', 'player', targetId); return { revoked: 1 }; },
     async authorizeVerifyResend({ actorId, targetId }) {
       const t = players.get(targetId);
       policy.checkManageUser({ actor: players.get(actorId), target: t });

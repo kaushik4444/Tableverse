@@ -425,6 +425,21 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(n('registration') >= 1 && n('login') >= 1, JSON.stringify(rows));
     });
 
+    console.log('suspension and lookup (Stage 20.8)');
+    await test('a suspended account cannot sign in and its existing session stops working; lifting it allows sign-in again', async () => {
+      const v = await newUser('Susp');
+      const me = (await v.browser.get('/api/auth/session')).json.player;
+      const look = await boss().browser.get('/api/admin/users/lookup?username=' + me.username);
+      assert.equal(look.json.user.username, me.username);
+      assert.ok(!JSON.stringify(look.json).includes(v.email), 'the lookup never shows the address');
+      assert.equal((await boss().browser.post('/api/admin/users/suspend', { playerId: v.id, reason: 'test' })).status, 200);
+      assert.equal((await v.browser.get('/api/auth/session')).json.player ?? null, null, 'the old session no longer identifies the player');
+      const b = new Browser(srv.port); await b.csrf();
+      assert.equal((await b.post('/api/auth/login', { email: v.email, password: PW })).status, 403, 'sign-in is refused');
+      assert.equal((await boss().browser.post('/api/admin/users/unsuspend', { playerId: v.id })).status, 200);
+      const again = new Browser(srv.port); await again.csrf();
+      assert.equal((await again.post('/api/auth/login', { email: v.email, password: PW })).ok, true, 'sign-in works after the suspension is lifted');
+    });
     console.log(`${passed} admin PostgreSQL checks passed`);
   } finally {
     if (srvB) await srvB.close();
