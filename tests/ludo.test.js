@@ -25,8 +25,8 @@ const alwaysSix = () => 0.999999; // forces dice = 6
 
 console.log('engine');
 
-test('createGame: 2-4 players, 4 tokens each in the yard, phase ready', async () => {
-  for (const n of [2, 3, 4]) {
+test('createGame: 2-6 players, 4 tokens each in the yard, phase ready', async () => {
+  for (const n of [2, 3, 4, 5, 6]) {
     const g = E.createGame(people(n), {}, mulberry32(1));
     assert.equal(g.n, n);
     assert.equal(g.phase, 'ready');
@@ -38,7 +38,7 @@ test('createGame: 2-4 players, 4 tokens each in the yard, phase ready', async ()
     assert.equal(g.winner, null);
   }
   assert.throws(() => E.createGame(people(1), {}, mulberry32(1)));
-  assert.throws(() => E.createGame(people(5), {}, mulberry32(1)));
+  assert.throws(() => E.createGame(people(7), {}, mulberry32(1)));
 });
 
 test('roll gives 1-6, six earns another roll, non-six passes the turn', async () => {
@@ -406,8 +406,29 @@ test('plugin: create/view/act/awaiting/botAction/results wiring', async () => {
   assert.ok(res.every((r) => Number.isFinite(r.score) && typeof r.winner === 'boolean'));
 });
 
-test('playOut: full bot-only game finishes for 2, 3 and 4 players', async () => {
-  for (const n of [2, 3, 4]) {
+test('hexagon: 5-6 players share a 60-square ring with a seat at each corner', async () => {
+  for (const n of [5, 6]) {
+    const g = E.createGame(people(n), {}, mulberry32(7));
+    assert.equal(g.geo.track, 60); assert.equal(g.geo.lap, 59); assert.equal(g.geo.finished, 64);
+    assert.deepEqual(g.players.map((p) => p.seat), [0, 1, 2, 3, 4, 5].slice(0, n));
+    assert.equal(g.players[n - 1].color, E.SEAT_COLORS[n - 1]);
+    assert.equal(E.absPos(g, 1, 0), 10, 'the second seat enters at the second corner');
+    assert.equal(E.absPos(g, 0, 59 - 1), 58, 'the seat walks 59 squares, ending just before its own start');
+    assert.ok(g.geo.safe.has(5) && g.geo.safe.has(0) && !g.geo.safe.has(4), 'safe squares: corners and side middles');
+  }
+  const six = E.createGame(people(6), {}, mulberry32(3));
+  six.phase = 'moving'; six.turn = 0; six.dice = 6;
+  six.tokens[0][0] = 0; six.tokens[0][1] = 2;
+  six.tokens[1][0] = 2; // 2 squares past seat 0's start: capturable
+  const r = E.applyAction(six, six.players[0].id, { type: 'move', token: 0 });
+  assert.ok(r.ok, 'move ok');
+  assert.equal(E.newPosFor(six, 0, 58, 1), 59, 'the last ring square before home');
+  assert.equal(E.newPosFor(six, 0, 59, 5), 64, 'exactly home from the last ring square');
+  assert.equal(E.newPosFor(six, 0, 59, 6), null, 'overshoot is illegal');
+});
+
+test('playOut: full bot-only game finishes for 2 to 6 players', async () => {
+  for (const n of [2, 3, 4, 5, 6]) {
     const players = people(n);
     const g = plugin.create(players, {}, mulberry32(100 + n));
     let steps = 0;
@@ -429,7 +450,7 @@ test('playOut: full bot-only game finishes for 2, 3 and 4 players', async () => 
     assert.equal(winners.length, 1, 'exactly one winner');
     assert.equal(winners[0].score, n, 'winner scores n (first place)');
     const scores = res.map((r) => r.score).sort((a, b) => a - b);
-    assert.deepEqual(scores, [1, 2, 3, 4].slice(0, n), 'scores are 1..n by placement');
+    assert.deepEqual(scores, Array.from({ length: n }, (_, i) => i + 1), 'scores are 1..n by placement');
     assert.ok(res.some((r) => r.score === 1), 'last place scores 1');
   }
 });
