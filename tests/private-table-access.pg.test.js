@@ -84,7 +84,7 @@ async function run() {
       const browser = new Browser(app.port);
       await browser.csrf();
       const username = `${label.toLowerCase()}_${n}`;
-      const reg = await browser.must('/api/auth/register', { email: `${username}@test.local`, username, password: 'TestPass123!', displayName: label });
+      const reg = await browser.must('/api/auth/register', { adultConfirmed: true, email: `${username}@test.local`, username, password: 'TestPass123!', displayName: label });
       await browser.must('/api/auth/verify-email', { token: reg.json.debug.verifyToken });
       const login = await browser.must('/api/auth/login', { email: `${username}@test.local`, password: 'TestPass123!' });
       const client = wsClient(app.port, login.json.token);

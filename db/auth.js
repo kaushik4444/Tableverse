@@ -159,9 +159,11 @@ async function issueEmailToken(client, { playerId, purpose, email, ttlMinutes })
   return raw;
 }
 
-async function registerEmail({ email, username, password, displayName, avatar }) {
+async function registerEmail({ email, username, password, displayName, avatar, adultConfirmed }) {
   if (!db.hasDatabase()) throw new AuthError('Email authentication requires PostgreSQL (set DATABASE_URL).', 503);
   if (!isEmail(email)) throw new AuthError('Please enter a valid email address.');
+  // The beta is for adults only. Only an explicit true counts; no date of birth is asked for or stored.
+  if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
   if (typeof password !== 'string' || password.length < 8 || password.length > 200) throw new AuthError('Password must be 8-200 characters.');
 
   const e = normEmail(email);
@@ -181,8 +183,8 @@ async function registerEmail({ email, username, password, displayName, avatar })
       if (existsEmail.rows.length) return { alreadyRegistered: true, email: e };
 
       const p = await client.query(
-        `INSERT INTO players (username, display_name, avatar, is_anonymous)
-         VALUES ($1, $2, $3, FALSE)
+        `INSERT INTO players (username, display_name, avatar, is_anonymous, adult_confirmed_at)
+         VALUES ($1, $2, $3, FALSE, NOW())
          RETURNING id, username, display_name, avatar, created_at`,
         [u, cleanName(displayName), cleanAvatar(avatar)]
       );
