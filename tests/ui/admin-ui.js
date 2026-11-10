@@ -29,6 +29,7 @@ const api = (role) => ({
   'GET /api/admin/broadcasts/preview?audience=all&category=account': () => ({ ok: true, count: 6 }),
   'GET /api/admin/broadcasts/preview?audience=verified&category=account': () => ({ ok: true, count: 5 }),
   'POST /api/admin/broadcasts': () => ({ ok: true, id: 'b2', recipientCount: 6 }),
+  'GET /api/admin/render-logs?text=&limit=100': () => ({ ok: true, configured: false, items: [] }),
   'GET /api/admin/users/lookup?username=ann': () => ({ ok: true, user: { id: 'u1', username: 'ann', display_name: 'Ann', role: 'user', verified: true, created_at: '2026-11-01T10:00:00Z', last_seen_at: '2026-11-08T09:00:00Z', suspended_at: '2026-11-09T09:00:00Z', suspended_reason: 'spam', active_sessions: 0 } }),
   'POST /api/admin/users/suspend': () => ({ ok: true, suspended: true, sessions: 1 }),
 });
@@ -330,6 +331,15 @@ const api = (role) => ({
     assert.equal(await o.page.locator('#lookupOut').innerText().then((t) => t.includes('@ann')), true);
     assert.equal(await o.page.locator('#lookupOut').innerText().then((t) => /@.*\.(com|test)|@example/.test(t)), false, 'no address shown');
     await o.close();
+  });
+
+  await test('logs: Render history is owner only and says when it is not set up', async () => {
+    const o = await open('owner'); await tab(o.page, 'logs'); await o.page.waitForSelector('#rHist:has-text("not set up")');
+    await o.close();
+    const a = await open('admin'); await tab(a.page, 'logs'); await a.page.waitForSelector('.ad-t');
+    assert.equal(await a.page.locator('#rHistWrap').count(), 0, 'admins do not see Render history');
+    assert.equal(a.calls.some((c) => c.path.startsWith('/api/admin/render-logs')), false, 'and nothing is requested for them');
+    await a.close();
   });
 
   await browser.close();

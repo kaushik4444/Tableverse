@@ -535,6 +535,14 @@ const ADMIN_POSTS = [
       assert.ok(!JSON.stringify(r.json).includes('lookup.me@example.com'), 'no address');
       assert.equal((await admin.b.get('/api/admin/users/lookup?username=nobody_here_x')).json.user, null);
     });
+    console.log('Render history (Stage 20.8)');
+    await test('Render history is for the owner only; without the settings the owner is told so and nothing is called', async () => {
+      assert.equal((await admin.b.get('/api/admin/render-logs')).status, 403);
+      assert.equal((await user.b.get('/api/admin/render-logs')).status, 403);
+      const r = await owner.b.get('/api/admin/render-logs?text=error');
+      assert.equal(r.status, 200);
+      assert.deepEqual([r.json.configured, r.json.items], [false, []]);
+    });
   } finally { await s.close(); }
   console.log(`\n${passed} admin API tests passed`);
 })();

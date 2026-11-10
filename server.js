@@ -32,6 +32,7 @@ const { createAnalytics } = require('./lib/analytics');
 const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
 const { createBroadcastWorker } = require('./lib/broadcast');
+const { createRenderLogs } = require('./lib/renderLogs');
 const { createLogger, requestIdFrom } = require('./lib/log');
 const serverLog = createLogger({ component: 'server' });
 const httpLog = createLogger({ component: 'http' });
@@ -259,11 +260,12 @@ function start(opts = {}) {
     uptimeSec: Math.round(process.uptime()), node: process.version, memoryMb: Math.round(process.memoryUsage().rss / 1048576),
     mode: dbPool.hasDatabase() ? 'postgres' : 'memory', rooms: rooms.size, players: players.size, sockets: wss.clients.size, shuttingDown,
   });
+  const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   const authRoutes = createAuthRoutes({
     env,
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
-      env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender,
+      env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
       onSignedOut: closeSignedOutSockets, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
     }).routes,
     production,
