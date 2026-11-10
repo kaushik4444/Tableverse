@@ -82,7 +82,7 @@ Everyone (guests included) can send feedback from the account menu or `POST /api
 
 ## Suspension and lookup (Stage 20.8)
 
-- **Suspend** (owner only, ordinary registered accounts only; never the owner, an admin, a guest or the owner's own account): the account's sessions end at once, its open connections close, and sign-in is refused with "This account is suspended." Existing sessions stop working because every session check also requires the account not to be suspended. The reason is optional, kept to 200 characters, cleaned of line breaks, and stored on the account and in the audit log.
+- **Suspend** (owner only, ordinary registered accounts only; never the owner, an admin, a guest or the owner's own account): the account's sessions end at once, its open connections close, and sign-in is refused with "This account is suspended." Existing sessions stop working because every session check also requires the account not to be suspended. The reason is optional, kept to 200 characters, cleaned of line breaks, and stored on the account and in the audit log. Staff who can use the lookup, and staff who can read the audit log, can see the reason, so it must not hold anything confidential.
 - **Lift** (owner only): sign-in works again. Sessions that ended stay ended; the player signs in again.
 - **Sign out** of every device is owner only.
 - **Lookup** (staff): exact username. Shows role, verified state, dates, active session count and suspension state. Never an e-mail address, a network address or a token.

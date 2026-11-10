@@ -172,7 +172,7 @@
     document.getElementById('uNext').onclick = () => users(q, page + 1).catch(fail);
     main.querySelectorAll('[data-rv]').forEach((b) => { b.onclick = async () => { if (!confirm('Send this player a new verification e-mail?')) return; try { await api('/api/admin/users/resend-verification', { playerId: b.dataset.rv }); say('uMsg', 'Verification e-mail sent.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });
     main.querySelectorAll('[data-susp]').forEach((b) => { b.onclick = async () => {
-      const reason = prompt('Reason for the suspension (shown to the owner only, kept in the audit log):', '');
+      const reason = prompt('Reason for the suspension (kept in the audit log; staff with lookup access can also see it):', '');
       if (reason === null) return;
       if (!confirm('Suspend this account? Its sessions end now and it cannot sign in until the suspension is lifted.')) return;
       try { await api('/api/admin/users/suspend', { playerId: b.dataset.susp, reason }); await users(q, page); say('uMsg', 'Account suspended.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
