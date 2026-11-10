@@ -492,10 +492,33 @@ const ADMIN_POSTS = [
       assert.equal(sentTo.length, 5);
       assert.equal(sb.store.broadcastRecipients.get(row.id).get(pid), 'failed');
     });
+    await test('a provider that never answers is cut off: the run stops, frees its guard, and the recipient is retried later, not failed', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Stall', body: 'Nine', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      let seen = null;
+      const stalled = createBroadcastWorker({
+        store: sb.store, makeUnsubscribeUrl: () => null, pauseMs: 0, gapMs: 0, retryDelays: [0, 0, 0], logger: { error() {} },
+        deliverTimeoutMs: 30,
+        deliver: (m) => { seen = m; return new Promise((_, rej) => m.signal.addEventListener('abort', () => rej(new Error('aborted')))); },
+      });
+      await assert.rejects(stalled.runOnce(), (e) => e.code === 'DELIVERY_TIMEOUT');
+      assert.equal(stalled.isRunning(), false, 'the worker is free again, so the queue is not blocked');
+      assert.equal(seen.signal.aborted, true, 'the stalled request is cancelled');
+      assert.equal(sb.store.broadcastRecipients.get(row.id).get(seen.playerId), 'pending', 'an unanswered send is not recorded as failed');
+      // the lease is still held, so nothing else starts until it runs out
+      assert.equal(await sb.store.claimNext(), null);
+      // once the lease runs out, the same recipient is tried again with the same idempotency key, and the broadcast finishes
+      sb.store.broadcasts.find((b) => b.id === row.id).leaseUntil = Date.now() - 1;
+      const keys = [];
+      await worker(async (m) => { keys.push(m.idempotencyKey); }).runOnce();
+      assert.ok(keys.includes(`broadcast:${row.id}:${seen.playerId}`), 'retried with the same key');
+      assert.equal(row.status, 'sent');
+    });
     await test('the broadcast history is owner-only and carries no message text', async () => {
       const r = await bOwner.b.get('/api/admin/broadcasts');
       assert.equal(r.status, 200);
-      assert.equal(r.json.items.length, 10);
+      assert.equal(r.json.items.length, 11);
       assert.ok(r.json.items.every((x) => !('body' in x)));
       assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
     });

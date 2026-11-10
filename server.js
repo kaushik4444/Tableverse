@@ -226,7 +226,7 @@ function start(opts = {}) {
     makeUnsubscribeUrl,
     logger: opts.log || console,
     deliver: (m) => emailSender.sendBroadcast({
-      to: m.to, subject: m.subject, html: m.html, text: m.text, idempotencyKey: m.idempotencyKey,
+      to: m.to, subject: m.subject, html: m.html, text: m.text, idempotencyKey: m.idempotencyKey, signal: m.signal,
       headers: m.unsubscribeUrl ? { 'List-Unsubscribe': `<${m.unsubscribeUrl}>` } : {},
     }),
   }) : null;
