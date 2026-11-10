@@ -114,11 +114,12 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       const grants = (await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE target_id = $1", [u.id]))[0].n;
       assert.ok(grants >= 1);
     });
-    await test('an admin can sign an ordinary player out (their sessions are revoked) but not staff', async () => {
+    await test('sign-out is owner only: an admin is refused, the owner signs an ordinary player out and their sessions are revoked', async () => {
       const adm = await newUser('Hal'); const victim = await newUser('Ivy');
       await boss().browser.post('/api/admin/roles', { playerId: adm.id, role: 'admin' });
       assert.equal((await adm.browser.post('/api/admin/users/sign-out', { playerId: boss().id })).status, 403);
-      assert.equal((await adm.browser.post('/api/admin/users/sign-out', { playerId: victim.id })).status, 200);
+      assert.equal((await adm.browser.post('/api/admin/users/sign-out', { playerId: victim.id })).status, 403, 'sign-out is owner only');
+      assert.equal((await boss().browser.post('/api/admin/users/sign-out', { playerId: victim.id })).status, 200);
       assert.equal((await victim.browser.get('/api/auth/session')).json.authenticated, false);
     });
     await test('staff resend: the mailed token verifies the targeted account; refusals send nothing', async () => {
@@ -416,15 +417,6 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(Number.isInteger(r.json.queues.reports7d) && Number.isInteger(r.json.queues.reports_total) && Number.isInteger(r.json.queues.feedback_new), 'queue counts');
       assert.equal((await boss().browser.get('/api/admin/health')).json.db.ok, true);
     });
-    await test('real traffic is counted: registrations and logins reach the table when the server shuts down (final flush)', async () => {
-      await newUser('Ned');
-      await srv.close();
-      srv = null;
-      const rows = await q("SELECT metric, SUM(total)::int AS n FROM analytics_daily WHERE day = CURRENT_DATE GROUP BY metric");
-      const n = (m) => (rows.find((r) => r.metric === m) || { n: 0 }).n;
-      assert.ok(n('registration') >= 1 && n('login') >= 1, JSON.stringify(rows));
-    });
-
     console.log('suspension and lookup (Stage 20.8)');
     await test('a suspended account cannot sign in and its existing session stops working; lifting it allows sign-in again', async () => {
       const v = await newUser('Susp');
@@ -440,6 +432,16 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       const again = new Browser(srv.port); await again.csrf();
       assert.equal((await again.post('/api/auth/login', { email: v.email, password: PW })).ok, true, 'sign-in works after the suspension is lifted');
     });
+    // last: this check stops the server, so it must run after every check that needs it
+    await test('real traffic is counted: registrations and logins reach the table when the server shuts down (final flush)', async () => {
+      await newUser('Ned');
+      await srv.close();
+      srv = null;
+      const rows = await q("SELECT metric, SUM(total)::int AS n FROM analytics_daily WHERE day = CURRENT_DATE GROUP BY metric");
+      const n = (m) => (rows.find((r) => r.metric === m) || { n: 0 }).n;
+      assert.ok(n('registration') >= 1 && n('login') >= 1, JSON.stringify(rows));
+    });
+
     console.log(`${passed} admin PostgreSQL checks passed`);
   } finally {
     if (srvB) await srvB.close();
