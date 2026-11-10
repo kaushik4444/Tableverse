@@ -618,3 +618,6 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .fb-form select, .fb-form textarea { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .2); background: transparent; color: inherit; font: inherit; }
 /* Profile placeholder in the top bar while the login finishes connecting */
 .tb-signing { display: inline-flex; align-items: center; gap: 8px; cursor: progress; }
+
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.check-row .hint { margin-left: 4px; }

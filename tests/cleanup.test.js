@@ -31,7 +31,7 @@ test('schema_migrations is preserved and is not in the delete list', () => {
 test('the delete order puts every table before the tables it references', () => {
   const fks = c.EXPECTED_FKS.map((f) => ({ ...f, name: `${f.child}_fk` }));
   assert.doesNotThrow(() => c.validateOrder(c.CLEAN_TABLES, fks));
-  assert.deepEqual(c.CLEAN_TABLES, ['announcement_dismissals', 'admin_audit_log', 'feedback', 'announcements', 'email_broadcast_recipients', 'email_broadcasts', 'analytics_active', 'analytics_batches', 'analytics_meta', 'analytics_daily', 'match_participants', 'private_table_invitations', 'chat_reports', 'player_blocks', 'friend_requests', 'friendships', 'matches', 'auth_email_tokens', 'auth_sessions', 'auth_identities', 'player_recent_tables', 'auth_rate_limits', 'players']);
+  assert.deepEqual(c.CLEAN_TABLES, ['announcement_dismissals', 'admin_audit_log', 'feedback', 'announcements', 'email_broadcast_recipients', 'email_broadcasts', 'analytics_active', 'analytics_batches', 'analytics_meta', 'analytics_daily', 'match_participants', 'private_table_invitations', 'chat_reports', 'player_blocks', 'friend_requests', 'friendships', 'matches', 'auth_email_tokens', 'auth_sessions', 'auth_devices', 'auth_identities', 'player_recent_tables', 'auth_rate_limits', 'players']);
   assert.equal(c.CLEAN_TABLES[c.CLEAN_TABLES.length - 1], 'players', 'accounts last: everything refers to them');
 });
 test('an order that deletes a parent before its child is refused', () => {
@@ -61,7 +61,7 @@ test('a missing table, another schema, a trigger, a new foreign key, a view, a s
   f = healthy(); f.fks.push({ name: 'x', child: 'matches', parent: 'players', onDelete: 'CASCADE' });
   refused(() => c.checkSchema(f), /unexpected foreign key\(s\): matches>players/);
   f = healthy(); f.fks = f.fks.filter((k) => k.child !== 'auth_sessions');
-  refused(() => c.checkSchema(f), /foreign key\(s\) missing: auth_sessions>players/);
+  refused(() => c.checkSchema(f), /foreign key\(s\) missing: auth_sessions>auth_devices:SET NULL, auth_sessions>players:CASCADE/);
   f = healthy(); f.views = ['user_view'];
   refused(() => c.checkSchema(f), /unexpected view\(s\): user_view/);
   f = healthy(); f.sequences = ['custom_seq'];

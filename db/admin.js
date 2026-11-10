@@ -137,6 +137,7 @@ async function signOutUser({ actorId, targetId }) {
     const rows = await lockAccounts(c, [actorId, targetId]);
     policy.checkSignOut({ actor: rows.get(actorId), target: rows.get(targetId) });
     const r = await c.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [targetId]);
+    await c.query('UPDATE auth_devices SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [targetId]);
     await audit(c, { actorId, action: 'user.sign_out', targetType: 'player', targetId, detail: { sessions: r.rowCount } });
     return { revoked: r.rowCount };
   });
@@ -170,6 +171,7 @@ async function suspendUser({ actorId, targetId, reason = '' }) {
     const why = Array.from(String(reason || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 200).join('') || null;
     await c.query('UPDATE players SET suspended_at = NOW(), suspended_reason = $2 WHERE id = $1', [targetId, why]);
     const r = await c.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [targetId]);
+    await c.query('UPDATE auth_devices SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [targetId]);
     await audit(c, { actorId, action: 'user.suspend', targetType: 'player', targetId, detail: { sessions: r.rowCount, reason: why } });
     return { suspended: true, sessions: r.rowCount };
   });

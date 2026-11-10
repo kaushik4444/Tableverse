@@ -237,6 +237,14 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - Tests: `tests/propertyrivals.test.js` (card figures from the rules), `tests/ui/propertyrivals-ui.js` (card, cash/net worth, keyboard), `tests/ui/game-settings-ui.js` (chip, focus, Space, all six games). Full `npm run test:ui` passes locally.
 - Status: merged into `main` as merge commit `2d04d77` (PR #87, closed 2026-11-10 02:13 UTC, head `a3a169d`). The docs and What's new follow-up is PR #95 (`docs/property-rivals-whats-new`); nothing else on this branch is pending.
 
+## Stage 20.9 — Keep me signed in on this device (branch `feat/remember-device`, PR #94)
+- Sessions are linked to the trusted device they came from (`auth_sessions.device_id`, migration 019, `ON DELETE SET NULL`). Sign-out ends that device's sessions too, including one a racing restore started. Two tabs restoring from the same device at the same moment each get a session; only the last stays live, and a tab whose cookie was refused restores again on its next request (no reuse window: a reused session could not hand over its cookie).
+- Trusted devices: `auth_devices` (migration 018) holds hashed device tokens, a browser and system label, and expiry; the raw token is only in the `ct_device` cookie. Restore, login, sign-out, sign-out everywhere, password reset, suspension and cleanup all go through `db/auth.js` and `db/admin.js`.
+- Every change that starts or ends trust runs under the account lock (`players … FOR UPDATE`), in one transaction with the sessions it affects: login (issue and retire), restore, logout, sign-out everywhere, reset, suspension and owner sign-out.
+- Removed the unused unlocked revocation helpers; only the locked paths remain.
+- Cleanup: `auth_devices` is in the plan (25 tables, 26 foreign keys, 24 emptied; see `docs/DATA_CLEANUP.md`).
+- Tests: `tests/devices.pg.test.js` drives the real routes against PostgreSQL (in `npm run test:pg`, which CI runs with `--require`); no-database checks in `tests/cleanup.test.js`. Those PostgreSQL suites cannot run in the sandbox.
+
 ## Stage 20.7 — Owner e-mail broadcasts (branch `feat/owner-email-broadcasts`, PR #91)
 - Owner-only sends from the admin console: audiences all, verified, unverified, inactive (30 days). Queued in `email_broadcasts` / `email_broadcast_recipients` (migration 016); a background worker claims a broadcast under a lease and sends one recipient at a time with a per-recipient idempotency key.
 - Delivery: a 60-second application deadline (aborts the request and body) sits well inside the 5-minute lease. A recipient's first attempt is recorded once and a retry is refused after 24 hours, so repeated recoveries cannot send twice. Completed broadcasts keep their saved totals when a recipient deletes an account.

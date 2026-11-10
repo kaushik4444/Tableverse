@@ -242,6 +242,7 @@ const DAY = 24 * 60 * 60 * 1000;
         announcement_dismissals: ['c'],
         announcements: ['n'],
         auth_email_tokens: ['c'],
+        auth_devices: ['c'],
         auth_identities: ['c'],
         auth_sessions: ['c'],
         chat_reports: ['c', 'n'],

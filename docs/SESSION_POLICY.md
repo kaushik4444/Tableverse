@@ -24,6 +24,19 @@ Each account has at most one active session at a time.
 - Two tabs in one browser share one cookie, so they share one session; this is not a second device.
 - A moderation or abuse action (see `docs/CHAT_MODERATION.md`) never changes this policy. Blocking hides chat; it does not sign anyone out.
 
+## Keep me signed in on this device (Stage 20.9)
+
+- A login with **"Keep me signed in on this device"** ticked also issues a device token, in the `ct_device` cookie. It is random, HttpOnly, sent only to `/api/auth` (`Path=/api/auth`), and never across sites (`SameSite=Lax`). Its SHA-256 hash is stored in `auth_devices` with a short label such as "Chrome on Windows" (browser and system only, never the full user agent or an address).
+- When the page starts without a live session, the server starts a session from a valid device token. The same checks as a login apply: the account must be registered and not suspended. The one-session rule applies too, so the older session of the account is retired and its open connections close.
+- The device lasts 30 days and each use slides that forward: a visit that starts a session from it, and a visit with a live session, both renew the device and its cookie. A device not used for 30 days after it ends is removed by the housekeeping.
+- A password login replaces the device the browser already had: the token it sent stops working at once. A login without the box ticked clears the cookie.
+- Issuing a device happens under the account lock, the same lock sign-in, sign-out, reset and suspension take. Restoring a session checks the device again under that lock. Each revocation (logout, sign-out everywhere, reset, owner sign-out, suspension) ends sessions and devices in one transaction.
+- Trust ends: on that device's sign-out; on sign-out everywhere; on a successful password reset; on an owner sign-out; and on a suspension. Lifting a suspension does not bring the devices back.
+- The box is not ticked by default, and the page says "Only on a device you own."
+- Without PostgreSQL (memory mode) there is no device trust.
+
+Not yet built: a list of trusted devices with a per-device "forget" button in account settings. Sign-out everywhere already ends all of them.
+
 ## Where this is enforced
 
 | Behaviour | Location |

@@ -41,6 +41,7 @@ Tableverse is currently open for friend testing.
 - **Private tables** (the default for new tables) with friend invitations, and **host tools** to hand over the table or remove people.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - **Game settings at a glance**: every game shows its current settings at the top right. Tap them for the full list with each choice explained. Settings are set by the host in the lobby and can't change during a game.
+- **Keep me signed in on this device**: optional at sign-in. The browser stays signed in for 30 days after its last visit. It ends on sign-out, sign-out everywhere, a password reset, or a suspension.
 - **Owner e-mail broadcasts** (owner only, admin console): mail to everyone, verified or unverified accounts, or accounts inactive for 30 days. Promotional mail needs `PUBLIC_APP_URL` for its unsubscribe link.
 - **Blocking**: a block hides the other player's table chat and voice, and stops invitations between you. A block never removes anyone from a table, so you can still share one.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.

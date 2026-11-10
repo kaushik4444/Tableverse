@@ -44,6 +44,7 @@ const PLAN = [
   { table: 'matches', stores: 'Finished games (game, room code, seats, options, time, idempotency key)', references: [] },
   { table: 'auth_email_tokens', stores: 'Hashed single-use email verification and password-reset tokens with the address they were sent to', references: ['players'] },
   { table: 'auth_sessions', stores: 'Hashed session tokens (registered and legacy anonymous), expiry and revocation', references: ['players'] },
+  { table: 'auth_devices', stores: 'Trusted devices: hashed device tokens for "keep me signed in on this device", label (browser and system only), dates', references: ['players'] },
   { table: 'auth_identities', stores: 'Login methods: email address, Argon2 password hash, verification time', references: ['players'] },
   { table: 'player_recent_tables', stores: 'Recently visited table codes per account', references: ['players'] },
   { table: 'auth_rate_limits', stores: 'Hashed per-address / per-email rate-limit counters', references: [] },
@@ -60,6 +61,8 @@ const EXPECTED_FKS = [
   { child: 'auth_email_tokens', parent: 'players', onDelete: 'CASCADE' },
   { child: 'auth_identities', parent: 'players', onDelete: 'CASCADE' },
   { child: 'auth_sessions', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'auth_devices', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'auth_sessions', parent: 'auth_devices', onDelete: 'SET NULL' },
   { child: 'player_recent_tables', parent: 'players', onDelete: 'CASCADE' },
   { child: 'friendships', parent: 'players', onDelete: 'CASCADE' },
   { child: 'friendships', parent: 'players', onDelete: 'CASCADE' },
@@ -243,6 +246,7 @@ const SAMPLE_SQL = {
   players: 'SELECT id, username, display_name, is_anonymous, created_at, last_seen_at FROM public."players" ORDER BY created_at LIMIT $1',
   auth_identities: 'SELECT player_id, provider, email, (email_verified_at IS NOT NULL) AS verified, created_at FROM public."auth_identities" ORDER BY created_at LIMIT $1',
   auth_sessions: 'SELECT player_id, created_at, expires_at, (revoked_at IS NOT NULL) AS revoked FROM public."auth_sessions" ORDER BY created_at LIMIT $1', // never the token hash
+  auth_devices: 'SELECT player_id, label, created_at, last_used_at, expires_at, (revoked_at IS NOT NULL) AS revoked FROM public."auth_devices" ORDER BY created_at LIMIT $1', // never the token hash
   auth_email_tokens: 'SELECT player_id, purpose, expires_at, (used_at IS NOT NULL) AS used FROM public."auth_email_tokens" ORDER BY created_at LIMIT $1',
   auth_rate_limits: 'SELECT scope, left(key, 8) AS key_prefix, count, window_start FROM public."auth_rate_limits" ORDER BY window_start LIMIT $1',
   matches: 'SELECT id, game_id, room_code, seats, finished_at FROM public."matches" ORDER BY finished_at LIMIT $1',
