@@ -249,7 +249,7 @@
   /** Microphone and speaker buttons: shown in the lobby header and in every game's toolbar. */
   function voiceButtonsHTML() {
     const st = voice.state;
-    if (!st.supported || (S.room && isSpectator())) return ''; // watchers can listen to nobody and talk to nobody: take a seat first
+    if (!S.voiceEnabled || !st.supported || (S.room && isSpectator())) return ''; // off on the server (VOICE_ENABLED), or watchers can listen to nobody and talk to nobody: take a seat first
     const talking = st.joined && !st.muted;
     const hearing = st.joined && !st.deafened;
     return `<button type="button" class="btn ghost small vc-btn vc-mic ${talking ? 'on' : st.joined ? 'muted' : ''}" data-act="voiceMic" aria-pressed="${talking}" aria-label="${talking ? 'Mute your microphone' : st.joined ? 'Unmute your microphone' : 'Join voice chat and talk'}" title="${talking ? 'Microphone on: tap to mute' : st.joined ? 'Microphone muted: tap to talk' : 'Talk to the table'}">🎙️</button>`
@@ -940,6 +940,7 @@
         S.emotes = m.emotes || [];
         S.ice = Array.isArray(m.ice) ? m.ice : [];
         S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        S.voiceEnabled = m.voiceEnabled === true; // the server decides; voice controls stay hidden unless it says yes
         noteTurnStatus(m.turnStatus);
         scheduleIceRefresh();
         if (!S.name) S.name = m.name;
@@ -977,6 +978,7 @@
         // fresh TURN logins: used by new connections, and applied to the ones already open
         S.ice = Array.isArray(m.ice) ? m.ice : [];
         S.iceExpiresAt = typeof m.iceExpiresAt === 'number' ? m.iceExpiresAt : null;
+        S.voiceEnabled = m.voiceEnabled === true;
         noteTurnStatus(m.turnStatus);
         scheduleIceRefresh();
         if (voice) voice.refreshIce();
@@ -1687,7 +1689,7 @@
   const WHATS_NEW = [
     ['🏙️', 'Property Rivals: city cards', 'Tap a city in a player’s holdings to see its mortgage value, the rent right now and the full rent table, and what houses and hotels cost. Each rival shows cash and net worth; the crown follows net worth.'],
     ['⚙️', 'Game settings at a glance', 'Every game shows its current settings at the top right. Tap them for the full list with each choice explained.'],
-    ['🎙️', 'Talk at the table — voice chat', 'Tap the microphone to join voice and talk with everyone at your table, in the lobby or during a game. Tap it again to mute yourself. Use the speaker to listen without speaking or silence table audio. A mic marks people in voice and a green ring shows who is speaking. Voice supports up to 8 people. Allow microphone access when your browser asks; a headset helps prevent echo.'],
+    ['🎙️', 'Talk at the table — voice chat', 'Tap the microphone to join voice and talk with everyone at your table, in the lobby or during a game. Tap it again to mute yourself. Use the speaker to listen without speaking or silence table audio. A mic marks people in voice and a green ring shows who is speaking. Voice supports up to 8 people. Allow microphone access when your browser asks; a headset helps prevent echo.', 'voice'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
@@ -1892,7 +1894,7 @@
     S.wnSeen = WHATS_NEW_VERSION;
     store.set('ct_wn_seen', S.wnSeen);
     render();
-    openModal('What’s new', `<ul class="wn-list">${WHATS_NEW.map(([ico, t, d]) => `<li><span class="wn-ico" aria-hidden="true">${ico}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>`);
+    openModal('What’s new', `<ul class="wn-list">${WHATS_NEW.filter((w) => S.voiceEnabled || w[3] !== 'voice').map(([ico, t, d]) => `<li><span class="wn-ico" aria-hidden="true">${ico}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>`);
   }
 
   /** Fields whose text must survive a redraw (someone joins, a friend comes online) while the person is typing or choosing. */

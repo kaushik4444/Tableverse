@@ -95,12 +95,18 @@ function start(opts = {}) {
     }
   };
   const metered = opts.metered !== undefined ? opts.metered : meteredTurn.fromEnv(env, { log: opts.log || console, onReady: pushIceToAll, onChange: pushIceToAll });
+  // Table voice is off unless VOICE_ENABLED=true (fail closed). While off, no TURN login or ICE list is handed out and voice messages are refused.
+  const voiceOn = opts.voiceEnabled ?? voiceRelay.voiceEnabled(env);
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId, metered });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
   // turnStatus tells the browser what voice can rely on: ready | pending | unavailable | quota (Metered), static, or none
   const turnStatus = () => (metered ? metered.status() : (env.TURN_URL ? 'static' : 'none'));
-  const iceMsg = (playerId) => { const ice = iceFor(playerId); return { ice, turnStatus: turnStatus(), iceExpiresAt: opts.iceServers ? null : voiceRelay.iceExpiresAt(ice, env, metered) }; };
+  const iceMsg = (playerId) => {
+    if (!voiceOn) return { ice: [], turnStatus: 'off', iceExpiresAt: null, voiceEnabled: false };
+    const ice = iceFor(playerId);
+    return { ice, turnStatus: turnStatus(), iceExpiresAt: opts.iceServers ? null : voiceRelay.iceExpiresAt(ice, env, metered), voiceEnabled: true };
+  };
   const ICE_REFRESH_MIN_MS = 20000; // a browser may ask for fresh logins at most this often (see the 'ice' handler)
   assertSafeDebugConfig(env); // refuses test mode or a non-production NODE_ENV on a hosted deployment, before anything listens
   const production = env.NODE_ENV === 'production';
@@ -1070,6 +1076,7 @@ function start(opts = {}) {
 
     /** Join or leave the table's voice chat, or change mute. The audio itself never passes through the server. */
     voice(p, msg) {
+      if (!voiceOn) return sendError(p, 'Voice chat is not available on this server');
       const room = rooms.get(p.room);
       if (!room) return;
       const r = voiceRelay.setVoice(room, p.id, msg.on === true, msg.muted === true);
@@ -1087,6 +1094,7 @@ function start(opts = {}) {
 
     /** One setup message (offer, answer, ICE) for another person in voice at the same table. */
     rtc(p, msg) {
+      if (!voiceOn) return sendError(p, 'Voice chat is not available on this server');
       const room = rooms.get(p.room);
       if (!room) return;
       // refused with the same answer as "not in voice", so the sender cannot tell a block from an absent person
