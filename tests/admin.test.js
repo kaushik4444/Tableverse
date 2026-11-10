@@ -128,9 +128,15 @@ const ADMIN_POSTS = [
       assert.equal(mail.length, before);
     });
     await test('refused requests do not use up the resend quota of an allowed one', async () => {
-      const otherAdmin = await s.login({ role: 'admin', email: 'peer-admin@example.com', verified: false });
-      for (let i = 0; i < 4; i++) assert.equal((await admin.b.post('/api/admin/users/resend-verification', { playerId: otherAdmin.id })).status, 403);
-      assert.equal((await owner.b.post('/api/admin/users/resend-verification', { playerId: otherAdmin.id })).status, 200);
+      // its own server with the real per-account limit (3), so four refusals would exhaust it if they counted
+      const s3 = await start({ env: { RL_ADMIN_RESEND_LIMIT: '3' } });
+      try {
+        const admin3 = await s3.login({ role: 'admin' });
+        const owner3 = await s3.login({ role: 'owner' });
+        const peer = await s3.login({ role: 'admin', email: 'peer-admin@example.com', verified: false });
+        for (let i = 0; i < 4; i++) assert.equal((await admin3.b.post('/api/admin/users/resend-verification', { playerId: peer.id })).status, 403);
+        assert.equal((await owner3.b.post('/api/admin/users/resend-verification', { playerId: peer.id })).status, 200);
+      } finally { await s3.close(); }
     });
     await test('the owner can grant and revoke admin, and each change is audited', async () => {
       assert.equal((await owner.b.post('/api/admin/roles', { playerId: other.id, role: 'admin' })).json.changed, true);
