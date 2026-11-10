@@ -47,7 +47,7 @@ The cutover is a separate owner-authorized production operation. Until then, ret
 Review only the remaining known high-impact areas on current `main`:
 
 - Guest and signed-in socket authorization; guest Metered access follows the owner decision above.
-- Blocked-user privacy in chat, voice, friend/invite flows and table seating. Chat/voice filtering and public-profile hiding are implemented; PR #81 adds table-entry, seating, lobby-removal and active-game rejoin enforcement and is awaiting CI/review/merge.
+- Blocked-user privacy in chat, voice, friend/invite flows and table seating. Owner's rule (PR #85, merged as `0207b31`): blocked players may share a table, but may not invite, chat, voice or friend each other; a block never removes anyone from a table. Chat is one way (the blocker stops seeing the blocked player's chat); voice is two ways. PR #81 (merged, `d7da199`) had the opposite seating rule and PR #82 is superseded. The owner decided the open questions on 2026-11-10 (Stage 20.3 section 13.1, M3).
 - Admin/owner authorization and session revocation.
 - TURN secret handling and cleanup workflow permissions.
 
@@ -76,11 +76,11 @@ Before inviting the initial beta cohort, verify and record:
 - [ ] One-instance operating model is retained; do not scale horizontally.
 - [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable. The default spool uses `os.tmpdir()`; it can cover a process restart on the same machine but does not survive a Render redeploy onto a fresh instance.
 - [ ] Privacy notice, terms/rules, support contact and account/data deletion explanation are available and reviewed. None of these public-facing legal/support pages currently exists in the repository.
-- [ ] The focused security review in Stage 20.3 section 13 is complete and recorded; all critical/high-severity findings are resolved.
+- [x] PR #85 (owner's block rule) is merged with CI green (`0207b31`);
 - [ ] A rollback path and person responsible for responding to beta reports are identified.
 
 ## Release decision
 
-Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until PR #81 is merged with CI green, the focused security review is complete with critical/high findings resolved, required live deployment and signup/email checks are recorded, and privacy/support checks above are complete. If voice is included, its Metered HTTP 401 must be resolved and the dynamic credential, relay, network recovery, and ICE-restart gates must pass; a recorded voice-disabled state satisfies the voice portion of the gate. Cross-network voice connectivity and TURN relay selection are owner-tested and confirmed by the supplied WebRTC stats, but the current welcome payload/logs show dynamic Metered credential authentication is unavailable (HTTP 401). A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
+Stage 20.6 can be prepared now. A limited beta release is **not yet a PASS** until the live deployment and signup/email checks are recorded and the privacy/support checks above are complete. PR #85 is merged (`0207b31`), the owner has decided the M3 questions and accepted M2, and the focused security review is recorded with its critical/high findings resolved (H1 and M1 are void under #85). If voice is included, its Metered HTTP 401 must be resolved and the dynamic credential, relay, network recovery, and ICE-restart gates must pass; a recorded voice-disabled state satisfies the voice portion of the gate. Cross-network voice connectivity and TURN relay selection are owner-tested and confirmed by the supplied WebRTC stats, but the current welcome payload/logs show dynamic Metered credential authentication is unavailable (HTTP 401). A public, unrestricted launch requires a separate review of hosting availability, durable match-result storage, monitoring and legal/privacy obligations.
 
 No production changes, credential deletion/rotation, cleanup execution, paid upgrades, or load tests are authorized by this document.
