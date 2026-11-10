@@ -29,6 +29,8 @@ const api = (role) => ({
   'GET /api/admin/broadcasts/preview?audience=all&category=account': () => ({ ok: true, count: 6 }),
   'GET /api/admin/broadcasts/preview?audience=verified&category=account': () => ({ ok: true, count: 5 }),
   'POST /api/admin/broadcasts': () => ({ ok: true, id: 'b2', recipientCount: 6 }),
+  'GET /api/admin/users/lookup?username=ann': () => ({ ok: true, user: { id: 'u1', username: 'ann', display_name: 'Ann', role: 'user', verified: true, created_at: '2026-11-01T10:00:00Z', last_seen_at: '2026-11-08T09:00:00Z', suspended_at: '2026-11-09T09:00:00Z', suspended_reason: 'spam', active_sessions: 0 } }),
+  'POST /api/admin/users/suspend': () => ({ ok: true, suspended: true, sessions: 1 }),
 });
 
 (async () => {
@@ -312,6 +314,21 @@ const api = (role) => ({
     assert.deepEqual([body.audience, body.category, body.expectedCount], ['all', 'account', 6]);
     assert.equal(body.subject, 'Release 2');
     assert.equal(await o.page.inputValue('#mSub'), '', 'the form is cleared after queuing');
+    await o.close();
+  });
+
+  await test('users: sign-out and suspension are owner only; an admin sees neither; lookup shows the state of an account', async () => {
+    const a = await open('admin'); await tab(a.page, 'users'); await a.page.waitForSelector('.ad-t');
+    assert.equal(await a.page.locator('[data-so]').count(), 0, 'admins cannot sign players out');
+    assert.equal(await a.page.locator('[data-susp]').count(), 0, 'admins cannot suspend');
+    await a.close();
+    const o = await open('owner'); await tab(o.page, 'users'); await o.page.waitForSelector('.ad-t');
+    assert.ok(await o.page.locator('[data-so]').count() >= 1, 'the owner can sign out');
+    assert.ok(await o.page.locator('[data-susp]').count() >= 1, 'the owner can suspend an ordinary player');
+    await o.page.fill('#lookupForm input', 'ann'); await o.page.click('#lookupForm button');
+    await o.page.waitForSelector('#lookupOut:has-text("Suspended")');
+    assert.equal(await o.page.locator('#lookupOut').innerText().then((t) => t.includes('@ann')), true);
+    assert.equal(await o.page.locator('#lookupOut').innerText().then((t) => /@.*\.(com|test)|@example/.test(t)), false, 'no address shown');
     await o.close();
   });
 

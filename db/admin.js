@@ -35,7 +35,7 @@ async function lockStaff(client, actorId) {
 
 /** Locks the given accounts (always in id order, so two admins cannot deadlock) and returns them by id. */
 async function lockAccounts(client, ids) {
-  const r = await client.query('SELECT id, role FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[...new Set(ids)]]);
+  const r = await client.query('SELECT id, role, is_anonymous, suspended_at FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[...new Set(ids)]]);
   return new Map(r.rows.map((row) => [row.id, row]));
 }
 
@@ -106,6 +106,8 @@ async function setRole({ actorId, targetId, role }) {
     const rows = await lockAccounts(c, [actorId, targetId]);
     const { noop } = policy.checkSetRole({ actor: rows.get(actorId), target: rows.get(targetId), newRole: role });
     if (noop) return { changed: false, role };
+    // a suspended account stays a plain user until the suspension is lifted: a promotion now would leave it unable to sign in
+    if (rows.get(targetId).suspended_at) throw new policy.PolicyError('Lift the suspension before changing this account\'s role.', 409);
     // the WHERE clause repeats the rule in SQL: an owner row can never match, whatever the code above did
     const upd = await c.query("UPDATE players SET role = $2 WHERE id = $1 AND role <> 'owner' AND role <> $2", [targetId, role]);
     if (upd.rowCount !== 1) throw new policy.PolicyError('The role was not changed.', 409);
@@ -120,7 +122,7 @@ async function listUsers({ q = '', page: p = 1 } = {}) {
   const args = term ? [like(term)] : [];
   const total = (await db.query(`SELECT COUNT(*)::int AS n FROM players ${where}`, args)).rows[0].n;
   const r = await db.query(
-    `SELECT p.id, p.username, p.display_name, p.role, p.is_anonymous, p.created_at, p.last_seen_at,
+    `SELECT p.id, p.username, p.display_name, p.role, p.is_anonymous, p.created_at, p.last_seen_at, p.suspended_at,
             EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified
        FROM players p ${where}
       ORDER BY p.created_at DESC, p.id
@@ -133,7 +135,7 @@ async function listUsers({ q = '', page: p = 1 } = {}) {
 async function signOutUser({ actorId, targetId }) {
   return db.withTransaction(async (c) => {
     const rows = await lockAccounts(c, [actorId, targetId]);
-    policy.checkManageUser({ actor: rows.get(actorId), target: rows.get(targetId) });
+    policy.checkSignOut({ actor: rows.get(actorId), target: rows.get(targetId) });
     const r = await c.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [targetId]);
     await audit(c, { actorId, action: 'user.sign_out', targetType: 'player', targetId, detail: { sessions: r.rowCount } });
     return { revoked: r.rowCount };
@@ -157,6 +159,47 @@ async function authorizeVerifyResend({ actorId, targetId }) {
     await audit(c, { actorId, action: 'user.verify_resend', targetType: 'player', targetId, detail: {} });
     return { email: r.rows[0].email };
   });
+}
+
+/** Owner only: suspends an ordinary account. Its sessions are revoked in the same transaction, and the audit row is written there too. */
+async function suspendUser({ actorId, targetId, reason = '' }) {
+  return db.withTransaction(async (c) => {
+    const rows = await lockAccounts(c, [actorId, targetId]);
+    policy.checkSuspend({ actor: rows.get(actorId), target: rows.get(targetId) });
+    // 200 characters by code point, so an emoji is never cut in half
+    const why = Array.from(String(reason || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 200).join('') || null;
+    await c.query('UPDATE players SET suspended_at = NOW(), suspended_reason = $2 WHERE id = $1', [targetId, why]);
+    const r = await c.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [targetId]);
+    await audit(c, { actorId, action: 'user.suspend', targetType: 'player', targetId, detail: { sessions: r.rowCount, reason: why } });
+    return { suspended: true, sessions: r.rowCount };
+  });
+}
+
+/** Owner only: lifts a suspension. Signing in again is then possible; sessions are not restored. */
+async function unsuspendUser({ actorId, targetId }) {
+  return db.withTransaction(async (c) => {
+    const rows = await lockAccounts(c, [actorId, targetId]);
+    policy.checkSuspend({ actor: rows.get(actorId), target: rows.get(targetId) });
+    await c.query('UPDATE players SET suspended_at = NULL, suspended_reason = NULL WHERE id = $1', [targetId]);
+    await audit(c, { actorId, action: 'user.unsuspend', targetType: 'player', targetId, detail: {} });
+    return { suspended: false };
+  });
+}
+
+/** Read-only account lookup for staff. Never returns an e-mail address, IP address or session token; active_sessions is a count. */
+async function lookupUser({ username }) {
+  const u = String(username || '').trim().toLowerCase();
+  if (!/^[a-z0-9_]{3,24}$/.test(u)) return { user: null };
+  const r = await db.query(
+    `SELECT p.id, p.username, p.display_name, p.role, p.created_at, p.last_seen_at, p.suspended_at, p.suspended_reason,
+            EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified,
+            (SELECT COUNT(*)::int FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW()) AS active_sessions
+       FROM players p
+      WHERE p.username = $1 AND p.is_anonymous = FALSE
+      LIMIT 1`,
+    [u]
+  );
+  return { user: r.rows[0] || null };
 }
 
 /** Used by the account deletion path: the owner account must be handed over (an operator action) before it can be deleted. */
@@ -410,7 +453,7 @@ async function purge() {
 
 module.exports = {
   RETENTION, PAGE,
-  getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, isOwner,
+  getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, lookupUser, isOwner,
   addCounters, addActive, forgetActor, overview, health,
   createFeedback, listFeedback, setFeedbackStatus,
   createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissed,

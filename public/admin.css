@@ -72,3 +72,4 @@ button.ad-btn, .ad-btn { min-height: 40px; padding: 0 14px; border-radius: 10px;
 .ad-form textarea { resize: vertical; }
 .ad-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 section.ad-card + section.ad-card { margin-top: 16px; }
+.ad-pill.danger { background: #3a1212; color: #ffb4b4; }

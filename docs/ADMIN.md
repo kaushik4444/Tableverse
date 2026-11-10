@@ -8,8 +8,8 @@ The console lives at `/admin.html` (linked from the account menu for staff only)
 
 | Role | Can |
 |---|---|
-| `owner` | Everything an admin can, plus grant and remove the `admin` role. Exactly one account. |
-| `admin` | See the console, manage announcements and feedback, sign ordinary players out. Cannot touch the owner or other admins. |
+| `owner` | Everything an admin can, plus grant and remove the `admin` role, sign accounts out of every device, suspend and lift suspensions of ordinary accounts, and send e-mail. Exactly one account. |
+| `admin` | See the console, look accounts up, manage announcements and feedback, resend verification e-mail to ordinary players. Cannot sign anyone out, suspend anyone, or touch the owner or other admins. |
 | `user` | Nothing in the console. |
 
 Protections (each is covered by `tests/admin.test.js` or `tests/admin.pg.test.js`):
@@ -80,6 +80,13 @@ How it behaves (covered by `tests/announcements.test.js`, `tests/admin.pg.test.j
 
 Everyone (guests included) can send feedback from the account menu or `POST /api/feedback` (CSRF-protected, 1000 characters, rate limited per address and per account). The account is taken from the session, never from the request. Staff triage it on the **Feedback** tab (new / read / resolved).
 
+## Suspension and lookup (Stage 20.8)
+
+- **Suspend** (owner only, ordinary registered accounts only; never the owner, an admin, a guest or the owner's own account): the account's sessions end at once, its open connections close, and sign-in is refused with "This account is suspended." Existing sessions stop working because every session check also requires the account not to be suspended. The reason is optional, kept to 200 characters, cleaned of line breaks, and stored on the account and in the audit log. Staff who can use the lookup, and staff who can read the audit log, can see the reason, so it must not hold anything confidential.
+- **Lift** (owner only): sign-in works again. Sessions that ended stay ended; the player signs in again.
+- **Sign out** of every device is owner only.
+- **Lookup** (staff): exact username. Shows role, verified state, dates, active session count and suspension state. Never an e-mail address, a network address or a token.
+
 ## Audit log
 
 Every state change in the console (role changes, sign-outs, feedback status, announcement create / edit / end, owner claim) is written to `admin_audit_log` in the same transaction as the change. It stores who (account id), what, which target and small details. No IP address. There is no API to edit or delete entries; only retention removes them.
@@ -113,7 +120,10 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 |---|---|
 | `GET /api/admin/me` | any signed-in account (says whether you are staff) |
 | `GET /api/admin/overview?days=`, `/health`, `/users?q=&page=`, `/feedback?status=&page=`, `/announcements`, `/audit?page=`, `/logs` | staff |
-| `POST /api/admin/users/sign-out`, `/users/resend-verification` | staff (admins only on ordinary players) |
+| `POST /api/admin/users/sign-out` | owner |
+| `POST /api/admin/users/suspend`, `/users/unsuspend` | owner (ordinary registered accounts only) |
+| `GET /api/admin/users/lookup?username=` | staff (read-only; never an address, network address or token) |
+| `POST /api/admin/users/resend-verification` | staff (admins only on ordinary players) |
 | `POST /api/admin/roles` | owner |
 | `GET /api/admin/broadcasts`, `GET /api/admin/broadcasts/preview?audience=&category=`, `POST /api/admin/broadcasts` (`{audience, category, subject, body, expectedCount}`) | owner |
 | `GET /api/email/unsubscribe?token=` | everyone (public, answered the same for every token) |
@@ -126,7 +136,6 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 
 ## Not included (limits of the free beta)
 
-- No account suspension or ban (it would need changes to the login flow that Stage 20.3 is also touching).
 - No owner transfer in the UI, no two-factor step for admins, no e-mail alerts.
 - Multi-instance: the 15 s banner cache is per instance (fine for one Render instance; at most 15 s of delay across several).
 - Analytics counts a session per WebSocket connection, so a reconnecting player counts again.

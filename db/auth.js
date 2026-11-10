@@ -226,7 +226,7 @@ async function loginEmail({ email, password }) {
   let r;
   try {
     r = await db.query(
-      `SELECT p.id, p.username, p.display_name, p.avatar, p.created_at,
+      `SELECT p.id, p.username, p.display_name, p.avatar, p.created_at, p.suspended_at,
               i.password_hash, i.email, i.email_verified_at
        FROM auth_identities i
        JOIN players p ON p.id = i.player_id
@@ -246,11 +246,14 @@ async function loginEmail({ email, password }) {
   }
   const row = r.rows[0];
   if (!(await verifyPassword(row.password_hash, password))) throw new AuthError('Invalid email or password.', 401);
+  if (row.suspended_at) throw new AuthError('This account is suspended.', 403);
 
   // Re-check under the account lock, the same lock a password reset takes. A reset that committed while this login was
   // checking the old password has changed the stored hash by now, so no session is issued for a password that no longer works.
   const token = await db.withTransaction(async (client) => {
-    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [row.id]);
+    const locked = await client.query('SELECT suspended_at FROM players WHERE id = $1 FOR UPDATE', [row.id]);
+    // a suspension that committed during the password check has already revoked the older sessions: issue none
+    if (locked.rows[0] && locked.rows[0].suspended_at) throw new AuthError('This account is suspended.', 403);
     const now = await client.query(
       'SELECT password_hash FROM auth_identities WHERE player_id = $1 AND provider = $2 AND provider_user_id = $3',
       [row.id, PROVIDER_EMAIL, normEmail(email)]
