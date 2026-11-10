@@ -1776,9 +1776,13 @@
       makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
       kickPlayerConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'kick', id }); } },
   };
+  // an optional one-shot hook that runs when the dialog closes (used to return focus to the control that opened it)
+  let modalOnClose = null;
   function closeModal() {
     const o = document.getElementById('modal-overlay');
     if (o) o.remove();
+    const done = modalOnClose; modalOnClose = null;
+    if (done) done();
   }
   function openModal(title, bodyHTML, onMount) {
     closeModal();
@@ -2010,6 +2014,8 @@
       if (!close) return;
       close.focus();
       o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
+      // when it closes, focus returns to the settings chip; the chip is looked up at close time because a redraw may have replaced it
+      modalOnClose = () => { const chip = document.querySelector('.gs-chip'); if (chip) chip.focus(); };
     });
   }
 

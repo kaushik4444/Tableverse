@@ -26,6 +26,10 @@ const four = [{ name: 'Aarav' }, { name: 'Bo' }, { name: 'Charlotte' }, { name: 
       assert.ok(focused, gameId + ' focuses the dialog close button');
       await page.keyboard.press('Tab');
       assert.ok(await page.evaluate(() => document.activeElement && document.activeElement.hasAttribute('data-modal-close')), gameId + ' keeps Tab in the dialog');
+      // closing returns focus to the settings chip
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(50);
+      assert.ok(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('gs-chip')), gameId + ' returns focus to the chip on close');
       await ctx.close();
       passed++; console.log(`  ok  ${gameId}: settings chip and full list`);
     } catch (e) {
