@@ -45,6 +45,14 @@ async function assertVisibleAndClickable(page, selector, label) {
         await page.goto(url + '/');
         await page.waitForSelector('#loginForm', { timeout: 8000 });
         await assertVisibleAndClickable(page, '#auth-overlay .auth-legal a[href="/impressum.html"]', 'sign-in sheet link');
+        // WCAG AA for small text: the link must reach 4.5:1 against the darker stop of the sheet's dark gradient (#1d1c55)
+        const css = await page.$eval('#auth-overlay .auth-legal a', (el) => getComputedStyle(el).color);
+        const [r, g, b] = css.match(/\d+(\.\d+)?/g).map(Number);
+        const lum = (c) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+        const L1 = 0.2126 * lum(r) + 0.7152 * lum(g) + 0.0722 * lum(b);
+        const L2 = 0.2126 * lum(0x1d) + 0.7152 * lum(0x1c) + 0.0722 * lum(0x55);
+        const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+        assert.ok(ratio >= 4.5, `sign-in link contrast ${ratio.toFixed(2)}:1 (colour ${css}) must be at least 4.5:1`);
         await page.click('#auth-overlay .auth-legal a[href="/impressum.html"]', { timeout: 5000 });
         await page.waitForURL('**/impressum.html', { timeout: 8000 });
         assert.equal(await page.textContent('h1'), 'Impressum');

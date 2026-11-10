@@ -403,6 +403,7 @@ html { scroll-behavior: auto; }
 .home-foot a:hover { color: var(--ink); }
 /* Legal links are tap targets too: at least 44px tall (see tests/ui/touch-targets-ui.js). */
 .home-foot a, .auth-legal a { display: inline-block; min-height: 44px; line-height: 44px; }
+.auth-legal a { color: var(--muted); }
 
 /* ---------- states shared by every screen */
 .empty { display: grid; justify-items: center; gap: 4px; padding: 26px 16px; text-align: center; border: 1px dashed var(--panel-line); border-radius: 16px; color: var(--muted); }
