@@ -446,6 +446,7 @@
           <button class="btn big" type="submit">Create account</button>
         </form>
       `}
+      <p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     document.body.appendChild(overlay);
@@ -1980,7 +1981,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}</footer>
+      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button> · '}<a href="/impressum.html">Impressum</a></footer>
     </main>`;
   }
 
