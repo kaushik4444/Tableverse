@@ -246,10 +246,19 @@ async function loginEmail({ email, password, rememberDevice = false, userAgent =
 
   // Re-check under the account lock, the same lock a password reset takes. A reset that committed while this login was
   // checking the old password has changed the stored hash by now, so no session is issued for a password that no longer works.
+  // The device this browser is replacing may belong to another account (a shared browser). Its owner is looked up here, then
+  // locked in the same sorted-id order as the signing-in account, so two sign-ins that replace each other's devices cannot deadlock.
+  const replacedOwner = dbPlayers.isWellFormedToken(replaceDevice)
+    ? ((await db.query('SELECT player_id FROM auth_devices WHERE token_hash = $1', [hashToken(replaceDevice)])).rows[0] || {}).player_id || null
+    : null;
   const token = await db.withTransaction(async (client) => {
-    const locked = await client.query('SELECT suspended_at FROM players WHERE id = $1 FOR UPDATE', [row.id]);
+    const lockIds = [...new Set([row.id, replacedOwner].filter(Boolean))].sort();
+    const locked = new Map();
+    for (const id of lockIds) {
+      locked.set(id, (await client.query('SELECT suspended_at FROM players WHERE id = $1 FOR UPDATE', [id])).rows[0]);
+    }
     // a suspension that committed during the password check has already revoked the older sessions: issue none
-    if (locked.rows[0] && locked.rows[0].suspended_at) throw new AuthError('This account is suspended.', 403);
+    if (locked.get(row.id) && locked.get(row.id).suspended_at) throw new AuthError('This account is suspended.', 403);
     const now = await client.query(
       'SELECT password_hash FROM auth_identities WHERE player_id = $1 AND provider = $2 AND provider_user_id = $3',
       [row.id, PROVIDER_EMAIL, normEmail(email)]
@@ -257,7 +266,9 @@ async function loginEmail({ email, password, rememberDevice = false, userAgent =
     if (!now.rows.length || now.rows[0].password_hash !== row.password_hash) throw new AuthError('Invalid email or password.', 401);
     // the device the browser sent is retired in this same transaction: its old token stops working with the new sign-in
     if (dbPlayers.isWellFormedToken(replaceDevice)) {
-      await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(replaceDevice)]);
+      const old = await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL RETURNING id', [hashToken(replaceDevice)]);
+      // sessions started from the replaced device end with it, whichever account they belong to
+      for (const d of old.rows) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL', [d.id]);
     }
     // the new trusted device is issued under the same lock, so a reset, sign-out or suspension cannot slip in between;
     // the session is linked to it, so ending that device later ends this session too

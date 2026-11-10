@@ -188,6 +188,19 @@ const PW = 'TestPass123!';
       assert.equal((await stale.post('/api/auth/logout', {})).ok, true);
       assert.equal((await fresh.get('/api/auth/session')).json.authenticated, true, 'the fresh login is untouched');
     });
+    await test('a shared browser that signs into another account ends the first account\'s session from the device it replaces', async () => {
+      const a = await newUser('ShareA');
+      const b = await newUser('ShareB');
+      const aBrowser = await login(a.email, true);
+      const aDevice = aBrowser.cookies.get('ct_device');
+      assert.equal((await aBrowser.get('/api/auth/session')).json.authenticated, true);
+      const shared = new Browser(srv.port);
+      shared.cookies.set('ct_device', aDevice);
+      await shared.csrf();
+      assert.equal((await shared.post('/api/auth/login', { email: b.email, password: PW, rememberDevice: true })).ok, true);
+      assert.equal((await aBrowser.get('/api/auth/session')).json.authenticated, false, 'the first account\'s session from the replaced device ended');
+      assert.equal((await shared.get('/api/auth/session')).json.player.id, b.id, 'the second account is signed in');
+    });
     console.log(`${passed} device-trust checks passed`);
   } finally {
     if (srv) await srv.close();
