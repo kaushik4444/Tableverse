@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Snakes and Ladders: the rules only (no sockets, no timers).
- * 2-4 players race along a 10x10 board numbered 1-100 (every second row runs the other way, so the path snakes up the
+ * 2-6 players race along a 10x10 board numbered 1-100 (every second row runs the other way, so the path snakes up the
  * board). Everyone starts off the board on square 0. On your turn roll one die and move that many squares. A ladder
  * foot lifts you up to its top; a snake head drops you down to its tail. First to reach square 100 wins.
  *
@@ -16,7 +16,7 @@ const SIZE = 100;
 const LADDERS = { 4: 25, 9: 31, 20: 41, 28: 55, 40: 62, 51: 72, 63: 81, 71: 91 };
 const SNAKES = { 17: 7, 27: 5, 47: 26, 56: 37, 64: 42, 87: 49, 93: 73, 95: 75, 98: 78 };
 const JUMPS = { ...LADDERS, ...SNAKES };
-const COLORS = ['red', 'blue', 'green', 'yellow'];
+const COLORS = ['red', 'blue', 'green', 'yellow', 'orange', 'purple'];
 
 const indexOf = (g, id) => g.players.findIndex((p) => p.id === id);
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
@@ -25,7 +25,7 @@ const bump = (g) => { g.version++; };
 
 function createGame(players, options = {}, rng = Math.random) {
   const n = players.length;
-  if (n < 2 || n > 4) throw new Error('Snakes and Ladders is for 2 to 4 players');
+  if (n < 2 || n > 6) throw new Error('Snakes and Ladders is for 2 to 6 players');
   return {
     game: 'snakesladders',
     n,

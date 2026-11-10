@@ -11,8 +11,8 @@ module.exports = {
   icon: '🐍',
   accent: '#2f9e6b',
   tagline: 'Roll, climb the ladders and dodge the snakes. First to square 100 wins.',
-  seats: { min: 2, max: 4, default: 4 },
-  seatLabel: (i) => ['Red', 'Blue', 'Green', 'Yellow'][i],
+  seats: { min: 2, max: 6, default: 4 },
+  seatLabel: (i) => ['Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Purple'][i],
   stats: { kind: 'none', bestLabel: 'Best finish', bestOf: (row) => row.score - row.seats - 1, formatBest: (value) => String(-value) },
   options: [
     { key: 'exactFinish', type: 'boolean', label: 'Exact roll to finish', desc: 'You need the exact number to land on 100. Turn it off and any roll that reaches 100 wins.', default: true },
@@ -20,7 +20,7 @@ module.exports = {
     TIME_LIMIT_OPTION,
   ],
   rules: [
-    'Two to four players start off the board. Take turns to roll one die and move that many squares along the numbered path, which winds up the board from 1 to 100.',
+    'Two to six players start off the board. Take turns to roll one die and move that many squares along the numbered path, which winds up the board from 1 to 100.',
     'If you land on the foot of a ladder, climb to its top. If you land on a snake’s head, slide down to its tail. Ladders and snakes only work when you land exactly on their start.',
     'With “Roll again on a six” on, a six gives you another roll, but a third six in a row ends your turn without a move.',
     'With “Exact roll to finish” on, you must land on 100 exactly. If your roll is too big you stay where you are.',
