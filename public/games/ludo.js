@@ -159,7 +159,7 @@
   function crossSVG(seats) {
     const G = CROSS;
     const cells = [];
-    const rect = (c, r, fill) => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.14" fill="${fill}"/>`;
+    const rect = (c, r, fill) => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.14" fill="${fill}" stroke="#94a3b8" stroke-width="0.05"/>`;
     CROSS_RING.forEach(([c, r], i) => {
       const startSeat = G.starts.indexOf(i);
       const used = startSeat >= 0 && seats.includes(startSeat);
@@ -182,7 +182,7 @@
   function hexSVG(seats) {
     const G = HEX;
     const used = (k) => seats.includes(k);
-    const sq = (p, fill) => `<rect x="${(p[0] - 2.9).toFixed(2)}" y="${(p[1] - 2.9).toFixed(2)}" width="5.8" height="5.8" rx="0.8" fill="${fill}"/>`;
+    const sq = (p, fill) => `<rect x="${(p[0] - 3.3).toFixed(2)}" y="${(p[1] - 3.3).toFixed(2)}" width="6.6" height="6.6" rx="0.9" fill="${fill}" stroke="#94a3b8" stroke-width="0.45"/>`;
     const star = (p, fill) => `<text x="${p[0].toFixed(2)}" y="${(p[1] + 0.9).toFixed(2)}" text-anchor="middle" font-size="2.8" fill="${fill}">★</text>`;
     // the centre: one coloured wedge per arm
     const centre = [0, 1, 2, 3, 4, 5].map((k) => {
@@ -191,17 +191,17 @@
     }).join('');
     const ring = hexRing.map((p, i) => {
       const k = G.starts.indexOf(i);
-      let out = sq(p, k >= 0 ? (used(k) ? SEAT[k].hex : SEAT[k].light) : '#f1f5f9');
+      let out = sq(p, k >= 0 ? (used(k) ? SEAT[k].hex : SEAT[k].light) : '#ffffff');
       if (k >= 0) out += star(p, '#fff');
       else if (G.safe.has(i)) out += star(p, '#94a3b8');
       return out;
     }).join('');
-    const lanes = [0, 1, 2, 3, 4, 5].map((k) => hexLane(k).map((p) => sq(p, used(k) ? SEAT[k].light : '#e2e8f0')).join('')).join('');
+    const lanes = [0, 1, 2, 3, 4, 5].map((k) => hexLane(k).map((p) => sq(p, used(k) ? SEAT[k].hex : '#e2e8f0')).join('')).join('');
     const yards = [0, 1, 2, 3, 4, 5].map((k) => {
       const on = used(k);
       const y = hexYard(k);
       const slots = HEX_YARD_OFF.map(([dx, dy]) => `<circle cx="${(y[0] + dx).toFixed(2)}" cy="${(y[1] + dy).toFixed(2)}" r="1.6" fill="${on ? SEAT[k].dark : '#cbd5e1'}" opacity="${on ? 0.22 : 0.5}"/>`).join('');
-      return `<g><rect x="${(y[0] - 6).toFixed(2)}" y="${(y[1] - 6).toFixed(2)}" width="12" height="12" rx="1.4" fill="${on ? SEAT[k].hex : '#cbd5e1'}"/><rect x="${(y[0] - 5).toFixed(2)}" y="${(y[1] - 5).toFixed(2)}" width="10" height="10" rx="1.1" fill="#fff" opacity="${on ? 0.92 : 0.6}"/>${slots}</g>`;
+      return `<g><rect x="${(y[0] - 7).toFixed(2)}" y="${(y[1] - 7).toFixed(2)}" width="14" height="14" rx="1.6" fill="${on ? SEAT[k].hex : '#cbd5e1'}"/><rect x="${(y[0] - 5.6).toFixed(2)}" y="${(y[1] - 5.6).toFixed(2)}" width="11.2" height="11.2" rx="1.2" fill="#fff" opacity="${on ? 0.95 : 0.6}"/>${slots}</g>`;
     }).join('');
     return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="2" fill="#fff"/>${centre}${ring}${lanes}${yards}<circle cx="50" cy="50" r="1.2" fill="#fff" opacity=".9"/></svg>`;
   }
