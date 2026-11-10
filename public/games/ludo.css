@@ -43,7 +43,8 @@
 .ludo-board.hex .ludo-token.done { width: 4%; }
 /* move buttons under the hexagon board: full-size touch targets for each legal token */
 .ludo-picks { display: flex; flex-wrap: wrap; gap: 8px; }
-.ludo-home-count { position: absolute; z-index: 4; width: 5.6%; aspect-ratio: 1; transform: translate(-50%, -50%); display: grid; place-items: center; border-radius: 50%; background: var(--c); color: #fff; font-size: clamp(9px, 2.2vw, 13px); font-weight: 700; box-shadow: 0 0 0 2px #fff; pointer-events: none; }
+/* white badge, dark seat-coloured text: the dark shades all pass 4.5:1 on white, unlike white text on yellow or green */
+.ludo-home-count { position: absolute; z-index: 4; width: 5.6%; aspect-ratio: 1; transform: translate(-50%, -50%); display: grid; place-items: center; border-radius: 50%; background: #fff; color: var(--d); border: 2px solid var(--c); font-size: clamp(9px, 2.2vw, 13px); font-weight: 700; pointer-events: none; }
 .ludo-pick { min-height: 44px; min-width: 44px; }
 .ludo-token.stacked { width: 5.2%; }
 .ludo-token.done { width: 4.4%; opacity: .95; }
