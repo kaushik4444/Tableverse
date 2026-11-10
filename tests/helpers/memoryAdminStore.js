@@ -42,6 +42,13 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     },
     async listUsers({ q = '' } = {}) { const u = [...players.values()].filter((p) => !q || p.username.includes(q)); return { total: u.length, pageSize: 25, users: u.map(({ email, ...rest }) => rest) }; },
     async signOutUser({ actorId, targetId }) { policy.checkManageUser({ actor: players.get(actorId), target: players.get(targetId) }); signedOut.push(targetId); log(actorId, 'user.sign_out', 'player', targetId); return { revoked: 1 }; },
+    async authorizeVerifyResend({ actorId, targetId }) {
+      const t = players.get(targetId);
+      policy.checkManageUser({ actor: players.get(actorId), target: t });
+      if (!t || !t.email || t.verified) throw new policy.PolicyError('This account has no unverified email address.', 409);
+      log(actorId, 'user.verify_resend', 'player', targetId);
+      return { email: t.email };
+    },
     async overview({ days = 30 } = {}) { return { days, series: [], dims: [], active: { dau: 0, wau: 0, mau: 0 }, accounts: { registered: players.size, registered_24h: 0, staff: 0 } }; },
     async health() { return { dbMs: 1, migrations: 13, feedback_new: feedback.filter((f) => f.status === 'new').length, analytics_rows: 0 }; },
     async createFeedback({ playerId, category, message }) { st.check(); const row = { id: crypto.randomUUID(), player_id: playerId, category, message, status: 'new', created_at: now() }; feedback.push(row); return { id: row.id }; },

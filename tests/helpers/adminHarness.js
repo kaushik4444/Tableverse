@@ -12,12 +12,15 @@ const { createMemoryAdminStore } = require('./memoryAdminStore');
 const { Browser } = require('./auth');
 const dbPlayers = require('../../db/players');
 
-async function start({ env = {}, analytics = null, store: given = null, clock = { t: Date.parse('2026-11-08T10:00:00Z') } } = {}) {
+async function start({ env = {}, analytics = null, store: given = null, clock = { t: Date.parse('2026-11-08T10:00:00Z') }, mail = [] } = {}) {
   require('../../db/rateLimit').resetMemoryCountersForTests();
   const now = () => new Date(clock.t);
   const e = { NODE_ENV: 'test', ...env };
   const store = given || createMemoryAdminStore({ now, env: e });
   const signedOutCalls = [];
+  // stand-ins for the database token issue and the mail sender: `mail` collects what would have been sent
+  const auth = { resendVerification: async ({ email }) => ({ ok: true, verifyToken: 'tok-' + mail.length, email }) };
+  const emailSender = { sendVerification: async ({ email, token }) => { mail.push({ email, token }); } };
   const sendJson = (res, status, body) => { res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.writeHead(status); res.end(JSON.stringify(body)); };
   const readJsonBody = (req) => new Promise((resolve, reject) => {
     let text = '';
@@ -27,7 +30,7 @@ async function start({ env = {}, analytics = null, store: given = null, clock = 
   const routes = createAuthRoutes({
     env: e, production: false, trustProxy: false, emailSender: {}, sendJson, readJsonBody, log: { error() {}, warn() {}, log() {} },
     extraRoutes: (ctx) => createAdminRoutes({ env: e, store, analytics, now, ctx, platform: () => ({ rooms: 0 }), idPattern: /^(p_)?[0-9a-f-]{36}$/i, // in-memory players have p_<uuid> ids; production uses plain UUIDs
-       onSignedOut: (o) => signedOutCalls.push(o) }).routes,
+       auth, emailSender, onSignedOut: (o) => signedOutCalls.push(o) }).routes,
     onEvent: () => {},
   });
   const server = http.createServer((req, res) => {
