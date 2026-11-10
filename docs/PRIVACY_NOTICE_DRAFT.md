@@ -1,6 +1,6 @@
 # Tableverse privacy notice — BETA DRAFT
 
-**Status: DRAFT for the limited beta. Not approved for publication. Requires legal review before any public launch (see the list at the end).**
+**Status: DRAFT for the limited beta. Not approved for publication, and not shown in the app. Requires the owner's approval and legal review before any publication or public launch (see the list at the end). The beta decisions it reflects are in `docs/STAGE_20_6_BETA_READINESS.md`.**
 
 This draft is written from what the Tableverse code does today (`main`, 2026-11-10). Where a fact is not verified, the text says so, or leaves a placeholder in square brackets for the owner to complete. Details of retention and deletion are in `docs/ACCOUNT_DELETION_AND_RETENTION.md`.
 
@@ -19,7 +19,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by [OWNE
 - Your friends, friend requests, blocks, and tables you have recently visited.
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 
-**Guests:** you cannot play without signing in. Browsing the public home screen and table list does not create an account or a record. [OWNER: confirm there are no guest records in the database; see docs/ACCOUNT_DELETION_AND_RETENTION.md.]
+**Guests:** the beta is for signed-in players only. Browsing the public home screen and table list does not create an account or a record. [OWNER: confirm there are no guest records in the database; see docs/ACCOUNT_DELETION_AND_RETENTION.md.]
 
 **Technical and security data (all users):**
 - Your network address is recorded for rate limiting, for a short time (deleted after one day).
@@ -31,7 +31,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by [OWNE
 - A chat report includes the reported message (up to 200 characters), the reason and, optionally, a short note. Reports are kept until a decision is made, with no automatic deletion yet (see below).
 - Feedback you send through the in-app form is kept with your account link. The form asks you not to include personal details.
 
-**Voice chat:** Voice is set up directly between players. When a direct connection is not possible, the audio is relayed through Metered's TURN servers. Tableverse does not record or store voice audio.
+**Voice chat:** voice is not available during the beta. [OWNER: this paragraph applies only if voice is switched on later.] When voice is available, it is set up directly between players. When a direct connection is not possible, the audio is relayed through Metered's TURN servers. Tableverse does not record or store voice audio.
 
 ## Why we use it
 
@@ -52,7 +52,7 @@ We do not sell your data. The game page loads no third-party advertising or anal
 
 ## Promotional e-mail
 
-We may send occasional promotional e-mail, such as news or offers. It is sent only to verified accounts that have not opted out. E-mail the owner sends in the "account" category (service notices, not promotion) is not promotional: it can reach every registered account, including accounts whose address is not yet verified. [LEGAL: confirm whether non-promotional mail may reach unverified accounts.] Every promotional message has an unsubscribe link, and you can opt out at any time with that link. Account messages (verification, password reset, important notices about your account) are not affected by this choice. [OWNER: confirm whether an in-app opt-out will be offered; at present the opt-out is only the e-mail link.]
+We do not send promotional e-mail during the beta. [OWNER: confirm.] Service e-mail (account notices) is, during the beta, sent only to verified addresses. [Applies once the owner approves the beta rule for broadcasts; the current code does not yet enforce it.] Promotional e-mail, if it is ever sent later, goes only to verified accounts that have not opted out, and every such message has an unsubscribe link. You can opt out at any time with that link.
 
 ## How long we keep data
 
@@ -73,7 +73,7 @@ The retention periods that apply now are listed in `docs/ACCOUNT_DELETION_AND_RE
 
 ## Children
 
-Tableverse is not designed for children. [LEGAL: state the minimum age and what happens if a child creates an account.]
+Tableverse is for adults aged 18 and over during the beta. Registration asks you to confirm that you are 18 or over. We do not collect a date of birth, so this is a self-declaration and not a check of your age. [LEGAL: confirm whether this approach is adequate for each country where users are, and what applies to children who register anyway.]
 
 ## Security
 
@@ -98,3 +98,7 @@ Last updated: [OWNER: date].
 7. Cookies: the session and device cookies are strictly necessary; confirm no other cookie is set.
 8. Whether any in-app opt-out for promotional e-mail is needed, beyond the e-mail link.
 9. The provider list must match the live configuration at launch.
+9. The provider list must match the live configuration at launch.
+10. Whether an 18+ self-declaration at registration (no date of birth, no age check) is adequate.
+11. Whether service e-mail to verified accounts only, during the beta, is the intended wording.
+12. Whether the approved text should be shown in the app before sign-up (planned, change C-B).

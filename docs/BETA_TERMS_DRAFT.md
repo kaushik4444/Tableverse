@@ -1,6 +1,6 @@
 # Tableverse beta terms and acceptable use — BETA DRAFT
 
-**Status: DRAFT for the limited beta. Not approved for publication. Requires legal review before publication and before any public launch. Nothing here has been checked by a lawyer.**
+**Status: DRAFT for the limited beta. Not approved for publication, and not shown in the app. Requires the owner's approval and legal review before publication and before any public launch. Nothing here has been checked by a lawyer.**
 
 Based on the behaviour of the code on `main` (2026-11-10). Bracketed items are for the owner to complete. Privacy matters are in `docs/PRIVACY_NOTICE_DRAFT.md`.
 
@@ -11,10 +11,11 @@ Tableverse is a beta service. It is provided free of charge, and features may ch
 - **Availability:** the service may be unavailable, slow or interrupted, including for planned maintenance and during redeployments. The game runs on one server instance.
 - **Games in progress are not kept:** tables, games in progress, table chat and presence exist only in the server's memory. A restart or redeployment ends them, and an unfinished game is not recorded. Finished results are saved to the database. A game that is still in progress is not kept if the server restarts or is updated. In rare cases a finished game may not be saved, for example if the server is replaced while the save is pending. Do not rely on Tableverse as the only record of anything important.
 - **Possible data loss:** we make reasonable efforts to keep your data, but beta services can lose data. Do not rely on Tableverse as the only record of anything important.
-- **Voice chat** depends on your network and may not connect on every network.
+- **Voice chat** is not available during the beta. [OWNER: this section applies only if voice is switched on later.]
 
 ## 2. Your account
 
+- You must be 18 or over to create an account. Registration asks you to confirm this; it is a self-declaration. [LEGAL: confirm the wording.]
 - You need a working e-mail address. You must verify it before you can play. You can look at the public pages without an account, but playing needs a signed-in account.
 - You are responsible for keeping your password and your signed-in devices safe. Tell us at once if you think someone else has used your account (see the contact in `docs/SUPPORT_AND_REPORTING.md`). In your settings, **Sessions** lets you sign out of this device or of every device, which you should do if a device you no longer control is signed in.
 - You may delete your account at any time from your profile. The steps and what is removed are in `docs/ACCOUNT_DELETION_AND_RETENTION.md`. Deletion cannot be undone.
@@ -37,16 +38,16 @@ You agree not to:
 - Table chat and display names are user-generated content. You are responsible for what you post.
 - Players can **block** another account. The effects differ by kind of communication and are not a complete privacy guarantee:
   - **Chat is one way.** After you block someone, you stop seeing their table chat. They still see yours, and they are not told about the block.
-  - **Voice is two ways.** You and the blocked player cannot hear each other in table voice.
+  - **Voice is two ways** (when voice is available).
   - You cannot invite each other or become friends, and you can still share a table, including one hosted by someone else. A host may keep a blocked player at their own table.
   - Full rules are in `docs/CHAT_MODERATION.md`.
-- Players can **report** a message with a reason. A report is recorded for review. [OWNER: state how and by whom reports are reviewed. At present reports are recorded in the database and there is no review queue in the product.]
+- Players can **report** a message with a reason. A report is read by the owner, who checks reports by hand during the beta. There is no review queue in the product and no appeal process yet. [OWNER: approve this wording.]
 - We may remove content, rename an account or suspend an account when we believe this terms document has been broken. There is no automatic action against anyone.
 
 ## 5. Suspension and termination
 
 - We may suspend an account, with a reason, while we review a concern. A suspended account cannot sign in or keep an existing session.
-- We may end an account for serious or repeated breaches of section 3. [OWNER: state the review and appeal process.]
+- We may end an account for serious or repeated breaches of section 3. There is no appeal process during the beta. [OWNER: approve this wording.]
 - You may stop using the service and delete your account at any time.
 - On termination, the rules for deletion in section 2 apply.
 
@@ -77,3 +78,5 @@ Last updated: [OWNER: date].
 5. How reports are reviewed, by whom and how quickly.
 6. Notice period for changes to the terms.
 7. Consistency with the privacy notice once the open retention decisions are made.
+8. The 18+ self-declaration wording (section 2).
+9. The beta description of how reports are read, and whether to state a response target (see `docs/SUPPORT_AND_REPORTING.md`).

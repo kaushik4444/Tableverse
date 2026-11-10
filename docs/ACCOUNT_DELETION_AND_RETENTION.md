@@ -54,7 +54,7 @@ Housekeeping (`server.js`, `db/auth.js` `purgeExpired`, `db/admin.js` `purge`) r
 | Feedback text | 180 days | `RETENTION.feedbackDays` |
 | Admin audit log | 365 days | `RETENTION.auditDays` |
 | Announcements (ended) | 90 days after they end | `RETENTION.announcementDays` |
-| Unverified e-mail accounts (older than 30 days) | **not removed yet**: the cleanup exists but `CLEANUP_EXECUTE=false`; a dry run reports the count only | `docs/DATA_CLEANUP.md`, `db/unverifiedCleanup.js` |
+| Unverified e-mail accounts (older than 30 days) | **not removed by any automatic job.** The scheduled workflow is a dry run. Deletion runs only by hand, through the `production-cleanup` approval, with `CLEANUP_EXECUTE` set to `true` on GitHub. The live value is a manual check (M-5), not something the repository proves. | `docs/DATA_CLEANUP.md`, `docs/OPERATIONS_RUNBOOK.md`, `db/unverifiedCleanup.js` |
 
 ## Data with no automatic deletion (gaps to resolve before public beta)
 
