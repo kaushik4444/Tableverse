@@ -91,6 +91,21 @@ Everyone (guests included) can send feedback from the account menu or `POST /api
 
 Every state change in the console (role changes, sign-outs, feedback status, announcement create / edit / end, owner claim) is written to `admin_audit_log` in the same transaction as the change. It stores who (account id), what, which target and small details. No IP address. There is no API to edit or delete entries; only retention removes them.
 
+## E-mail broadcasts (Stage 20.7, owner only)
+
+The owner can e-mail a chosen group from the **E-mail** tab. Only the owner sees the tab, and the server refuses every other account on each call.
+
+- **Who:** everyone with an address; verified accounts; unverified accounts; admins and the owner; ordinary players; inactive accounts (no login for 30 days).
+- **Kind:**
+  - **Account e-mail** (service notices): goes to the chosen group, including unverified accounts. No unsubscribe link, because it is not marketing.
+  - **Promotion or greeting** (offers, seasonal messages, comeback mail): only to **verified** accounts that have not opted out. Every message has a one-click unsubscribe link and a `List-Unsubscribe` header. An unverified audience cannot be combined with this kind (refused).
+- **Two steps:** "Check recipients" shows the current count. The owner types that number, and only then can the send be queued. If the list has changed since the check, the server refuses the send (409) and asks for a new check.
+- **Delivery:** the queued send is fixed to the recipients chosen at queue time. A background worker sends in batches of 20 with a pause between batches, once a minute and straight after queuing. It reads each address when it sends and skips a promotional mail for an account that has opted out since. A failed delivery is recorded as failed and does not stop the rest. A restart resumes a send that was half done. The provider's idempotency key stops a retry repeating a delivery. One server instance sends at a time.
+- **Limits:** subject up to 160 characters on one line, message up to 5000 characters (escaped; the text is never HTML), at most 20 queued sends per day (`RL_BROADCAST_LIMIT`).
+- **Records:** the audit log holds who queued what, the audience, the kind and the count, never the message text. The history table shows status, counts and the subject. The addresses are not stored in the broadcast tables; recipients are account ids, and the address is read from the account when mail is sent.
+- **Unsubscribe:** `GET /api/email/unsubscribe?token=` (public, rate limited per address). The token is random per account and is the only thing the link carries. Every answer looks the same, so a token cannot be tested for existence. Account e-mail is not affected by an opt-out.
+- **Configuration:** the mail provider must be set up (`EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM`). Promotional mail also needs `PUBLIC_APP_URL`, because the unsubscribe link is built from it; without it a promotional send is refused (503).
+
 ## API summary
 
 All under the session cookie. `POST` needs the `X-CSRF-Token` header. Staff = admin or owner.
@@ -110,12 +125,14 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 | `GET /api/admin/users/lookup?username=` | staff (read-only; never an address, network address or token) |
 | `POST /api/admin/users/resend-verification` | staff (admins only on ordinary players) |
 | `POST /api/admin/roles` | owner |
+| `GET /api/admin/broadcasts`, `GET /api/admin/broadcasts/preview?audience=&category=`, `POST /api/admin/broadcasts` (`{audience, category, subject, body, expectedCount}`) | owner |
+| `GET /api/email/unsubscribe?token=` | everyone (public, answered the same for every token) |
 | `POST /api/admin/feedback/status`, `/announcements`, `/announcements/update`, `/announcements/end` | staff |
 | `GET /api/announcements`, `POST /api/announcements/dismiss`, `POST /api/feedback` | everyone / signed-in / everyone |
 
 ## Environment variables
 
-`ADMIN_OWNER_ID`, `ADMIN_OWNER_EMAIL` (owner bootstrap), `ANALYTICS_ENABLED` (`0` disables). Rate limits can be tuned with `RL_ADMIN_IP_LIMIT`, `RL_ADMIN_PLAYER_LIMIT`, `RL_ANNOUNCE_IP_LIMIT`, `RL_FEEDBACK_IP_LIMIT`, `RL_FEEDBACK_PLAYER_LIMIT`. `ANNOUNCEMENT_CACHE_MS` changes the 15 s banner cache (tests use 0).
+`ADMIN_OWNER_ID`, `ADMIN_OWNER_EMAIL` (owner bootstrap), `ANALYTICS_ENABLED` (`0` disables). E-mail: `PUBLIC_APP_URL` (needed for promotional mail), `RL_BROADCAST_LIMIT` (queued sends per owner per day, default 20), `RL_UNSUBSCRIBE_IP_LIMIT`. Rate limits can be tuned with `RL_ADMIN_IP_LIMIT`, `RL_ADMIN_PLAYER_LIMIT`, `RL_ANNOUNCE_IP_LIMIT`, `RL_FEEDBACK_IP_LIMIT`, `RL_FEEDBACK_PLAYER_LIMIT`. `ANNOUNCEMENT_CACHE_MS` changes the 15 s banner cache (tests use 0).
 
 ## Not included (limits of the free beta)
 

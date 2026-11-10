@@ -31,6 +31,7 @@ const { createReadinessCheck } = require('./lib/health');
 const { createAnalytics } = require('./lib/analytics');
 const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
+const { createBroadcastWorker } = require('./lib/broadcast');
 const { createRenderLogs } = require('./lib/renderLogs');
 const { createLogger, requestIdFrom } = require('./lib/log');
 const serverLog = createLogger({ component: 'server' });
@@ -158,6 +159,7 @@ function start(opts = {}) {
   }
   let purgeTimer = null;
   let spoolTimer = null;
+  let broadcastTimer = null;
   let shuttingDown = false; // set when the process is asked to stop: readiness fails, no new tables, players are told
   // Readiness: the database must answer within 3 s; an outage is logged once when it starts and once when it ends (lib/health.js).
   const readiness = createReadinessCheck({
@@ -213,6 +215,24 @@ function start(opts = {}) {
   const emailSender = opts.emailSender || makeAuthEmailSender({ env, logger: opts.log || console });
   // Stage 20.5: privacy-light analytics (buffered, never blocks) and the admin store. Both need PostgreSQL; without it they are off.
   const dbAdmin = dbPool.hasDatabase() ? require('./db/admin') : null;
+  // Stage 20.7: owner e-mail broadcasts. The worker sends queued mail in small batches; one instance sends (the provider's
+  // idempotency key stops a retry from repeating a delivery). Off without PostgreSQL or without a configured mail provider.
+  const broadcastStore = dbPool.hasDatabase() ? require('./db/broadcast') : null;
+  const adminStore = dbAdmin && broadcastStore ? { ...dbAdmin, ...broadcastStore } : dbAdmin;
+  const publicAppUrl = String(env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
+  const makeUnsubscribeUrl = (token) => (publicAppUrl ? `${publicAppUrl}/api/email/unsubscribe?token=${token}` : null);
+  const broadcastWorker = broadcastStore && emailSender.enabled ? createBroadcastWorker({
+    store: broadcastStore,
+    makeUnsubscribeUrl,
+    logger: opts.log || console,
+    deliver: (m) => emailSender.sendBroadcast({
+      to: m.to, subject: m.subject, html: m.html, text: m.text, idempotencyKey: m.idempotencyKey, signal: m.signal,
+      headers: m.unsubscribeUrl ? { 'List-Unsubscribe': `<${m.unsubscribeUrl}>` } : {},
+    }),
+  }) : null;
+  const kickBroadcasts = () => {
+    if (broadcastWorker) broadcastWorker.runOnce().catch((e) => (opts.log || console).error('[broadcast] sending failed: ' + e.message));
+  };
   // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
@@ -245,8 +265,8 @@ function start(opts = {}) {
     env,
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
-      env, store: dbAdmin, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
-      onSignedOut: closeSignedOutSockets,
+      env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
+      onSignedOut: closeSignedOutSockets, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
     }).routes,
     production,
     trustProxy,
@@ -1910,6 +1930,7 @@ function start(opts = {}) {
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
+    clearInterval(broadcastTimer);
     // Let auth handlers finish before taking the delivery snapshot, within one shared shutdown window.
     if (drainMs) {
       const matchDrain = matchQueue.drain(drainMs);
@@ -1949,6 +1970,11 @@ function start(opts = {}) {
       purgeAdmin();
       purgeTimer = setInterval(() => { purge(); purgeAdmin(); }, 6 * 60 * 60 * 1000);
       purgeTimer.unref();
+      // queued owner broadcasts: checked once a minute, sent in batches (a restart resumes the one that was half sent)
+      if (broadcastWorker) {
+        broadcastTimer = setInterval(kickBroadcasts, 60 * 1000);
+        broadcastTimer.unref();
+      }
     }
     if (metered) metered.start(); // both modes: the credential is fetched ahead of the first welcome, and refreshed in the background
     return new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine })));

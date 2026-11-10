@@ -246,6 +246,8 @@ const DAY = 24 * 60 * 60 * 1000;
         auth_identities: ['c'],
         auth_sessions: ['c'],
         chat_reports: ['c', 'n'],
+        email_broadcast_recipients: ['c'],
+        email_broadcasts: ['n'],
         feedback: ['n'],
         friend_requests: ['c'],
         friendships: ['c'],

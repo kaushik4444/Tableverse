@@ -459,6 +459,6 @@ module.exports = {
   addCounters, addActive, forgetActor, overview, health,
   createFeedback, listFeedback, setFeedbackStatus,
   createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissed,
-  listAudit, purge,
+  listAudit, purge, audit,
   _resetForTests: () => { ownerKnown = false; salt = null; },
 };

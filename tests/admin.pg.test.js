@@ -442,6 +442,83 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(n('registration') >= 1 && n('login') >= 1, JSON.stringify(rows));
     });
 
+    console.log('owner e-mail broadcasts (Stage 20.7)');
+    const dbBroadcast = require('../db/broadcast');
+    // Counts are measured before and after the rows this test adds, so other tests in this database cannot change the result.
+    const tag = Math.random().toString(36).slice(2, 8); // lowercase letters and digits: a valid username
+    const mk = async (suffix, { verified, optOut = false, daysAgo = 0 }) => {
+      const id = (await q(
+        `INSERT INTO players (username, display_name, is_anonymous, role, last_seen_at, marketing_opt_out_at)
+         VALUES ($1, $1, FALSE, 'user', NOW() - ($2::int * INTERVAL '1 day'), ${optOut ? 'NOW()' : 'NULL'}) RETURNING id`,
+        [`bc${tag}${suffix}`, daysAgo]
+      ))[0].id;
+      await q(
+        `INSERT INTO auth_identities (id, player_id, provider, provider_user_id, email, email_verified_at)
+         VALUES (gen_random_uuid(), $1, 'email', $2, $2, ${verified ? 'NOW()' : 'NULL'})`,
+        [id, `bc${tag}${suffix}@test.local`]
+      );
+      return id;
+    };
+    const count = (audience, category) => dbBroadcast.broadcastCount({ audience, category });
+    await test('the audience rules count the right accounts in PostgreSQL; promotions skip unverified and opted-out accounts', async () => {
+      const before = { all: await count('all', 'account'), promo: await count('all', 'promo'), unv: await count('unverified', 'account'), idle: await count('inactive', 'account') };
+      const verified = await mk('v', { verified: true });
+      await mk('u', { verified: false });
+      await mk('o', { verified: true, optOut: true });
+      await mk('l', { verified: true, daysAgo: 40 });
+      assert.equal((await count('all', 'account')) - before.all, 4);
+      assert.equal((await count('all', 'promo')) - before.promo, 2, 'the verified and the lapsed one, not the opted-out one');
+      assert.equal((await count('unverified', 'account')) - before.unv, 1);
+      assert.equal((await count('inactive', 'account')) - before.idle, 1);
+      assert.equal(await count('unverified', 'promo'), 0, 'promotional mail never reaches unverified accounts');
+      assert.ok(verified);
+    });
+    await test('a queued send is fixed to the count the owner confirmed; a changed list is refused; the audit keeps counts, not text', async () => {
+      const ownerId = (await q("SELECT id FROM players WHERE role = 'owner'"))[0].id;
+      const expected = await count('all', 'account');
+      await assert.rejects(dbBroadcast.queueBroadcast({ actorId: ownerId, audience: 'all', category: 'account', subject: 'S', body: 'B', expectedCount: expected + 1 }), (e) => e.status === 409);
+      const id = (await dbBroadcast.queueBroadcast({ actorId: ownerId, audience: 'all', category: 'account', subject: 'Release', body: 'Secret text here', expectedCount: expected })).id;
+      assert.equal((await q('SELECT COUNT(*)::int AS n FROM email_broadcast_recipients WHERE broadcast_id = $1', [id]))[0].n, expected);
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'broadcast.queue' AND detail::text NOT LIKE '%Secret%'"))[0].n >= 1, true);
+      const job = await dbBroadcast.claimNext();
+      assert.equal(job.id, id, 'the oldest queued send is the one claimed');
+      const batch = await dbBroadcast.pendingBatch(job.id, 1000);
+      assert.equal(batch.length, expected);
+      assert.ok(batch.every((r) => r.email && r.unsubscribe_token), 'each recipient has an address and a token');
+      for (const r of batch) await dbBroadcast.markRecipient(job.id, r.player_id, 'sent', job.owner);
+      await dbBroadcast.finishBroadcast(job.id, job.owner);
+      const row = (await dbBroadcast.listBroadcasts()).items.find((x) => x.id === id);
+      assert.equal(row.status, 'sent');
+      assert.equal(row.sent_count, expected);
+      assert.ok(!('body' in row), 'the history carries no text');
+    });
+    await test('a finished broadcast keeps its totals when a recipient deletes the account afterwards', async () => {
+      const ownerId = (await q("SELECT id FROM players WHERE role = 'owner'"))[0].id;
+      const gone = await mk('gone', { verified: true });
+      const expected = await count('all', 'account');
+      const id = (await dbBroadcast.queueBroadcast({ actorId: ownerId, audience: 'all', category: 'account', subject: 'Totals', body: 'Body', expectedCount: expected })).id;
+      const job = await dbBroadcast.claimNext();
+      assert.equal(job.id, id);
+      for (const r of await dbBroadcast.pendingBatch(job.id, 1000)) {
+        await dbBroadcast.markRecipient(job.id, r.player_id, r.player_id === gone ? 'failed' : 'sent', job.owner);
+      }
+      await dbBroadcast.finishBroadcast(job.id, job.owner);
+      const before = (await dbBroadcast.listBroadcasts()).items.find((x) => x.id === id);
+      assert.equal(before.failed_count, 1);
+      await q('DELETE FROM players WHERE id = $1', [gone]);
+      const after = (await dbBroadcast.listBroadcasts()).items.find((x) => x.id === id);
+      assert.equal(after.sent_count, before.sent_count, 'sent total is kept');
+      assert.equal(after.failed_count, before.failed_count, 'failed total is kept');
+      assert.equal(after.recipient_count, expected, 'the queued count is kept');
+    });
+    await test('an opt-out from a promotion link takes effect at once and is not reversed by a second visit', async () => {
+      const token = (await q("SELECT unsubscribe_token::text AS t FROM players WHERE username LIKE $1 LIMIT 1", [`bc${tag}v`]))[0].t;
+      const before = await count('all', 'promo');
+      assert.equal(await dbBroadcast.unsubscribe(token), true);
+      assert.equal(await count('all', 'promo') - before, -1);
+      assert.equal(await dbBroadcast.unsubscribe(token), true, 'a second visit is harmless');
+      assert.equal(await dbBroadcast.unsubscribe('00000000-0000-4000-8000-000000000000'), false, 'an unknown token changes nothing');
+    });
     console.log(`${passed} admin PostgreSQL checks passed`);
   } finally {
     if (srvB) await srvB.close();

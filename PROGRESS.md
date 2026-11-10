@@ -242,5 +242,12 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - Trusted devices: `auth_devices` (migration 018) holds hashed device tokens, a browser and system label, and expiry; the raw token is only in the `ct_device` cookie. Restore, login, sign-out, sign-out everywhere, password reset, suspension and cleanup all go through `db/auth.js` and `db/admin.js`.
 - Every change that starts or ends trust runs under the account lock (`players … FOR UPDATE`), in one transaction with the sessions it affects: login (issue and retire), restore, logout, sign-out everywhere, reset, suspension and owner sign-out.
 - Removed the unused unlocked revocation helpers; only the locked paths remain.
-- Cleanup: `auth_devices` is in the plan (23 tables, 22 foreign keys, 22 emptied; see `docs/DATA_CLEANUP.md`).
+- Cleanup: `auth_devices` is in the plan (25 tables, 26 foreign keys, 24 emptied; see `docs/DATA_CLEANUP.md`).
 - Tests: `tests/devices.pg.test.js` drives the real routes against PostgreSQL (in `npm run test:pg`, which CI runs with `--require`); no-database checks in `tests/cleanup.test.js`. Those PostgreSQL suites cannot run in the sandbox.
+
+## Stage 20.7 — Owner e-mail broadcasts (branch `feat/owner-email-broadcasts`, PR #91)
+- Owner-only sends from the admin console: audiences all, verified, unverified, inactive (30 days). Queued in `email_broadcasts` / `email_broadcast_recipients` (migration 016); a background worker claims a broadcast under a lease and sends one recipient at a time with a per-recipient idempotency key.
+- Delivery: a 60-second application deadline (aborts the request and body) sits well inside the 5-minute lease. A recipient's first attempt is recorded once and a retry is refused after 24 hours, so repeated recoveries cannot send twice. Completed broadcasts keep their saved totals when a recipient deletes an account.
+- Promotional mail needs a verified recipient, an unsubscribe link built from `PUBLIC_APP_URL`, and no opt-out; otherwise it is recorded as failed.
+- Docs: `docs/ADMIN.md` (feature and API), `docs/DATA_CLEANUP.md` (new tables in the plan), README and CHANGELOG (user-facing), runbook (log lines).
+- Tests: `tests/admin.test.js` (audiences, recovery, day-old attempt never resent), `tests/email.test.js`, `tests/admin.pg.test.js`. PostgreSQL suites run in CI only.

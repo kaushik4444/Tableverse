@@ -9,7 +9,7 @@ with `--execute` and the confirmation. The script was developed and tested only 
 
 ## 1. Every table in the database (from `db/migrations/001` to `015`)
 
-There are 23 tables and 23 foreign keys: 22 tables are emptied and `schema_migrations` is preserved. The list below is the
+There are 25 tables and 26 foreign keys: 24 tables are emptied and `schema_migrations` is preserved. The list below is the
 plan in `db/cleanup.js` (`PLAN`, `PRESERVE`, `EXPECTED_FKS`). The script re-discovers the live schema on every run and
 **refuses** if it finds a table or foreign key that is not in this list, a trigger, or a migration set that differs from
 this code version.
@@ -20,24 +20,26 @@ this code version.
 | 2 | `admin_audit_log` | Admin console audit log: who (account id) did what to which target (migration 013) | **Empty** | `players` (SET NULL) |
 | 3 | `feedback` | Feedback sent by players: optional account id, category, message, status (migration 013) | **Empty** | `players` (SET NULL) |
 | 4 | `announcements` | Announcement banners (text, level, audience, schedule) and the admin who created them (migration 013) | **Empty** | `players` (SET NULL) |
-| 5 | `analytics_active` | Distinct active accounts per day as keyed hashes, no account ids (migration 013) | **Empty** | none |
-| 6 | `analytics_batches` | Keys of applied analytics writes: random ids, no account or personal data (migration 013) | **Empty** | none |
-| 7 | `analytics_meta` | Server-side analytics settings: the hashing salt, created on demand (migration 013) | **Empty** | none |
-| 8 | `analytics_daily` | Aggregate daily counters per metric and dimension, no personal data (migration 013) | **Empty** | none |
-| 9 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
-| 10 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
-| 11 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, optional reported account, reported-name snapshot, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
-| 12 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
-| 13 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
-| 14 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
-| 15 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` (deleted before it) |
-| 16 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `players` (CASCADE) |
-| 17 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `players` (CASCADE) |
-| 18 | `auth_devices` | Trusted devices for "keep me signed in on this device" (migration 018): hashed device tokens, browser and system label, dates | **Empty** | `players` (CASCADE) |
-| 19 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
-| 20 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
-| 21 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
-| 22 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
+| 5 | `email_broadcast_recipients` | Which accounts an owner e-mail broadcast was addressed to, and the delivery state for each (migration 016) | **Empty** | `email_broadcasts`, `players` (CASCADE) |
+| 6 | `email_broadcasts` | Owner e-mail broadcasts: audience, kind, subject, message text, status and counts (migration 016) | **Empty** | `players` (SET NULL) |
+| 7 | `analytics_active` | Distinct active accounts per day as keyed hashes, no account ids (migration 013) | **Empty** | none |
+| 8 | `analytics_batches` | Keys of applied analytics writes: random ids, no account or personal data (migration 013) | **Empty** | none |
+| 9 | `analytics_meta` | Server-side analytics settings: the hashing salt, created on demand (migration 013) | **Empty** | none |
+| 10 | `analytics_daily` | Aggregate daily counters per metric and dimension, no personal data (migration 013) | **Empty** | none |
+| 11 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
+| 12 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
+| 13 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, optional reported account, reported-name snapshot, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
+| 14 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
+| 15 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
+| 16 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
+| 17 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` (deleted before it) |
+| 18 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `players` (CASCADE) |
+| 19 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `players` (CASCADE), `auth_devices` (SET NULL, migration 019) |
+| 20 | `auth_devices` | Trusted devices for "keep me signed in on this device" (migration 018): hashed device tokens, browser and system label, dates | **Empty** | `players` (CASCADE) |
+| 21 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
+| 22 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
+| 23 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
+| 24 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
 | – | `schema_migrations` | Which migration files were applied | **PRESERVE, never touched** | none, not in the plan |
 
 **Migration 018 (keep me signed in on this device, Stage 20.9) adds one table**, `auth_devices`, emptied in the plan above.
@@ -47,7 +49,7 @@ this code version.
 **Migration 013 (admin console, Stage 20.5) adds eight tables**, all of them emptied in the plan above:
 `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, `feedback`, `announcements`,
 `announcement_dismissals` and `admin_audit_log`. It also adds the column `players.role`, which needs no separate step.
-Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Migration 015 adds the reported-name snapshot and changes the moderation report foreign-key action. Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
+Migration 016 (owner e-mail broadcasts, Stage 20.7) adds two tables, `email_broadcasts` and `email_broadcast_recipients`, both emptied in the plan above, and two columns on `players` (`marketing_opt_out_at`, `unsubscribe_token`), which need no separate step. Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Migration 015 adds the reported-name snapshot and changes the moderation report foreign-key action. Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
 until every table in the migrations is classified there, and this section must be updated with it.
 
 Player statistics are not stored anywhere: they are computed from `matches` / `match_participants`, so emptying those
@@ -66,7 +68,7 @@ It never uses `TRUNCATE`, `DROP`, `ALTER`, `CREATE` or `CASCADE`.
 * **Dry run by default**: read-only transaction (`BEGIN READ ONLY`), always rolled back. Prints the row count of every table, breakdowns and a masked sample of the records.
 * **Two things are needed to delete**: `--execute` and `--confirm=<exact database name>`.
 * **The target is named on purpose**: `CLEANUP_DATABASE_URL` only. `DATABASE_URL` and `.env` files are ignored. A remote host must also be repeated with `--expect-host=<host>`. The connected `current_database()` must equal the URL's database. A running migration (advisory lock) blocks it.
-* **Expected state only**: same 23 tables (22 emptied and `schema_migrations`), same 23 foreign keys, no triggers, no other schema, and exactly the migrations in `db/migrations` applied. Anything else is refused with the list of differences.
+* **Expected state only**: same 25 tables (24 emptied and `schema_migrations`), same 26 foreign keys, no triggers, no other schema, and exactly the migrations in `db/migrations` applied. Anything else is refused with the list of differences.
 * **One transaction**: tables are locked (`SHARE ROW EXCLUSIVE`: readers keep working, writers wait), counted, deleted in the order above and checked; a schema and migration-history fingerprint taken before and after must be identical. Any error, mismatch or timeout rolls everything back (`lock_timeout` 10 s, `statement_timeout` 5 min).
 * **Nothing sensitive is printed**: emails are masked (`a***@example.com`), token hashes are never selected, chat-report message text and user-supplied details are excluded from samples, the connection password is never shown, and the snapshot file holds only structure digests and counts.
 
@@ -103,9 +105,9 @@ Exit codes: `0` done, `1` failed (rolled back), `2` refused (nothing changed).
 
 `--verify` (read-only) checks that:
 
-* every one of the 22 emptied tables is empty, and no legacy anonymous player remains;
+* every one of the 24 emptied tables is empty, and no legacy anonymous player remains;
 * `schema_migrations` lists exactly the repository's migrations and is byte-identical to the snapshot (versions and `applied_at`);
-* the schema fingerprint (tables, columns, indexes, constraints, triggers) equals the snapshot, and all 23 foreign keys exist;
+* the schema fingerprint (tables, columns, indexes, constraints, triggers) equals the snapshot, and all 26 foreign keys exist;
 * the application's own read paths work on the database (player stats query, username lookup, session lookup).
 
 Then do the manual end-to-end check: open the site, register a test account, verify the email, log in, join a table.
@@ -113,7 +115,7 @@ Then do the manual end-to-end check: open the site, register a test account, ver
 
 ## 6. Tests
 
-* `tests/cleanup.test.js` (no database): the plan covers exactly the tables the migrations create (23, including `analytics_batches` and `auth_devices`); order versus foreign keys; refusals (unknown table, trigger, extra / missing foreign key or migration, remote host, missing or wrong confirmation, `DATABASE_URL` fallback); the source contains no `TRUNCATE` / `DROP` / `ALTER` / `CASCADE`.
+* `tests/cleanup.test.js` (no database): the plan covers exactly the tables the migrations create (25, including `analytics_batches` and `auth_devices`); order versus foreign keys; refusals (unknown table, trigger, extra / missing foreign key or migration, remote host, missing or wrong confirmation, `DATABASE_URL` fallback); the source contains no `TRUNCATE` / `DROP` / `ALTER` / `CASCADE`.
 * `tests/cleanup.pg.test.js` (real PostgreSQL, throw-away database, needs `TEST_DATABASE_URL`): a dry run issues only read statements and leaves every table byte-identical; `--execute` without or with a wrong confirmation deletes nothing; wrong deletion orders are refused; errors after any delete, before commit and a lock timeout all roll back completely; the real execution empties the 21 tables in plan order (the seeded row counts are derived from the plan), keeps `schema_migrations` byte-identical and the schema fingerprint and foreign keys unchanged; `--verify` passes afterwards and fails on a database that still has data; an end-to-end CLI run (dry run, execute, verify); and the application then registers, verifies, logs in and reaches the lobby, and migrations report nothing pending.
 
 ```bash
