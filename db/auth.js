@@ -92,7 +92,9 @@ async function revokeAllSessionsForCurrent(rawToken) {
     );
     if (!s.rows.length) return { revoked: 0 };
     const playerId = s.rows[0].player_id;
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [playerId]);
     const out = await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
+    await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
     return { revoked: out.rowCount, playerId };
   });
 }
@@ -218,7 +220,7 @@ async function checkUsernameAvailability({ username }) {
   return { available: r.rows.length === 0, username: u };
 }
 
-async function loginEmail({ email, password }) {
+async function loginEmail({ email, password, rememberDevice = false, userAgent = '' }) {
   if (!db.hasDatabase()) throw new AuthError('Email authentication requires PostgreSQL (set DATABASE_URL).', 503);
   if (!isEmail(email) || typeof password !== 'string') throw new AuthError('Invalid email or password.', 401);
 
@@ -259,9 +261,14 @@ async function loginEmail({ email, password }) {
       [row.id, PROVIDER_EMAIL, normEmail(email)]
     );
     if (!now.rows.length || now.rows[0].password_hash !== row.password_hash) throw new AuthError('Invalid email or password.', 401);
-    return createSession(client, row.id);
+    const session = await createSession(client, row.id);
+    // the trusted device is issued under the same lock, so a reset, sign-out or suspension cannot slip in between
+    const device = rememberDevice ? await insertDevice(client, row.id, userAgent) : null;
+    return { session, device };
   });
-  return makeSessionResult(row, token);
+  const result = makeSessionResult(row, token.session);
+  if (token.device) result.device = token.device;
+  return result;
 }
 
 async function resendVerification({ email }) {
@@ -419,6 +426,7 @@ async function resetPassword({ token, newPassword }) {
     // and the sessions below are not revoked for a password that never changed.
     if (identity.rowCount !== 1) throw new AuthError('This reset link can no longer be used. Request a new one.', 400);
     await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [t.player_id]);
+    await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [t.player_id]);
     return { ok: true, playerId: t.player_id };
   });
 }
@@ -467,11 +475,10 @@ function deviceLabel(userAgent) {
   return `${browser} on ${system}`.slice(0, 80);
 }
 
-/** Called after a password has been checked. Returns the device token once; only its hash is stored. Memory mode: none. */
-async function rememberDevice({ playerId, userAgent = '' }) {
-  if (!db.hasDatabase() || !playerId) return null;
+/** Issues a trusted device inside the caller's transaction (which holds the account lock). Returns the token once; only its hash is stored. */
+async function insertDevice(client, playerId, userAgent = '') {
   const raw = newRawToken();
-  await db.query(
+  await client.query(
     `INSERT INTO auth_devices (player_id, token_hash, label, expires_at)
      VALUES ($1, $2, $3, NOW() + ($4::text || ' days')::interval)`,
     [playerId, hashToken(raw), deviceLabel(userAgent), String(DEVICE_DAYS)]
@@ -480,37 +487,84 @@ async function rememberDevice({ playerId, userAgent = '' }) {
 }
 
 /**
- * Starts a new session from a valid device token, for a registered account that is not suspended. The usual one-session rule
- * applies (the older session of the account is retired), and the device's expiry slides forward.
+ * Starts a new session from a valid device token, for a registered account that is not suspended. The device is looked up first,
+ * then the account is locked (the same lock every sign-in, sign-out, reset and suspension takes), and the device is checked again
+ * under that lock. A revocation that committed while this waited therefore wins: no session is issued from it.
  */
 async function restoreFromDevice(rawDevice) {
   if (!db.hasDatabase() || !dbPlayers.isWellFormedToken(rawDevice)) return null;
   const tokenHash = hashToken(rawDevice);
+  const peek = await db.query(
+    'SELECT player_id FROM auth_devices WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()',
+    [tokenHash]
+  );
+  if (!peek.rows.length) return null;
+  const playerId = peek.rows[0].player_id;
   return db.withTransaction(async (client) => {
-    const r = await client.query(
-      `SELECT d.id, d.player_id
-         FROM auth_devices d
-         JOIN players p ON p.id = d.player_id
-        WHERE d.token_hash = $1 AND d.revoked_at IS NULL AND d.expires_at > NOW()
-          AND p.suspended_at IS NULL AND p.is_anonymous = FALSE`,
-      [tokenHash]
+    const p = await client.query('SELECT suspended_at, is_anonymous FROM players WHERE id = $1 FOR UPDATE', [playerId]);
+    if (!p.rows.length || p.rows[0].suspended_at || p.rows[0].is_anonymous) return null;
+    const d = await client.query(
+      `SELECT id FROM auth_devices
+        WHERE token_hash = $1 AND player_id = $2 AND revoked_at IS NULL AND expires_at > NOW()
+        FOR UPDATE`,
+      [tokenHash, playerId]
     );
-    if (!r.rows.length) return null;
-    const { id, player_id: playerId } = r.rows[0];
-    const token = await createSession(client, playerId); // locks the account and retires its older sessions
+    if (!d.rows.length) return null;
+    const token = await createSession(client, playerId); // the older sessions of the account are retired here
     await client.query(
       `UPDATE auth_devices SET last_used_at = NOW(), expires_at = NOW() + ($2::text || ' days')::interval WHERE id = $1`,
-      [id, String(DEVICE_DAYS)]
+      [d.rows[0].id, String(DEVICE_DAYS)]
     );
-    return { token, playerId };
+    return { token, playerId, device: rawDevice }; // the device token comes back so the cookie's lifetime is renewed too
   });
 }
 
-/** Ends one device's trust (used by sign-out on that device). */
+/**
+ * Renews a trusted device that belongs to this account and is still valid, on every visit that has a live session. Returns true
+ * when it did, so the caller renews the cookie. It needs no account lock: it only extends a row that is already valid, and a
+ * revocation that commits first makes the update match nothing.
+ */
+async function touchDevice(rawDevice, playerId) {
+  if (!db.hasDatabase() || !playerId || !dbPlayers.isWellFormedToken(rawDevice)) return false;
+  const r = await db.query(
+    `UPDATE auth_devices SET last_used_at = NOW(), expires_at = NOW() + ($3::text || ' days')::interval
+      WHERE token_hash = $1 AND player_id = $2 AND revoked_at IS NULL AND expires_at > NOW()`,
+    [hashToken(rawDevice), playerId, String(DEVICE_DAYS)]
+  );
+  return r.rowCount > 0;
+}
+
+/** Ends this browser's sign-in: its session and its trusted device, in one transaction, under the account lock(s). */
+async function endCurrentSession({ sessionToken, deviceToken }) {
+  if (!db.hasDatabase()) { await revokeSession(sessionToken); return false; }
+  const sessionHash = dbPlayers.isWellFormedToken(sessionToken) ? hashToken(sessionToken) : null;
+  const deviceHash = dbPlayers.isWellFormedToken(deviceToken) ? hashToken(deviceToken) : null;
+  return db.withTransaction(async (client) => {
+    const owners = await client.query(
+      `SELECT player_id FROM auth_sessions WHERE token_hash = $1
+       UNION
+       SELECT player_id FROM auth_devices WHERE token_hash = $2
+       ORDER BY player_id`,
+      [sessionHash, deviceHash]
+    );
+    for (const { player_id: id } of owners.rows) await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [id]);
+    if (sessionHash) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [sessionHash]);
+    if (deviceHash) await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [deviceHash]);
+    return owners.rows.length > 0;
+  });
+}
+
+/** Ends one device's trust, under the account lock (used by a password login that replaces an older device). */
 async function forgetDevice(rawDevice) {
   if (!db.hasDatabase() || !dbPlayers.isWellFormedToken(rawDevice)) return false;
-  const r = await db.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(rawDevice)]);
-  return r.rowCount > 0;
+  const tokenHash = hashToken(rawDevice);
+  return db.withTransaction(async (client) => {
+    const d = await client.query('SELECT player_id FROM auth_devices WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]);
+    if (!d.rows.length) return false;
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [d.rows[0].player_id]);
+    const r = await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]);
+    return r.rowCount > 0;
+  });
 }
 
 /** Ends every device of an account: sign-out everywhere, a password reset, an owner sign-out, a suspension. */
@@ -552,5 +606,5 @@ module.exports = {
   revokeAllSessionsForPlayer,
   readSessionFromCookie,
   sessionInfo,
-  deviceLabel, rememberDevice, restoreFromDevice, forgetDevice, revokeDevicesForPlayer, DEVICE_MAX_AGE_SECONDS,
+  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, revokeDevicesForPlayer, DEVICE_MAX_AGE_SECONDS,
 };

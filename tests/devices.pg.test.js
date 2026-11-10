@@ -63,7 +63,20 @@ const PW = 'TestPass123!';
       assert.equal(me.json.authenticated, true);
       assert.equal(me.json.player.id, u.id);
       assert.ok(again.cookies.has('ct_session'), 'a session cookie is issued');
+      first.cookies.delete('ct_device'); // only the session is under test here: without the device this browser cannot sign itself back in
       assert.equal((await first.get('/api/auth/session')).json.authenticated, false, 'the older session no longer works');
+    });
+    await test('a password login that sends an older trusted device replaces it: the old token no longer signs anyone in', async () => {
+      const u = await newUser('Repl');
+      const first = await login(u.email, true);
+      const oldDevice = first.cookies.get('ct_device');
+      const again = new Browser(srv.port);
+      again.cookies.set('ct_device', oldDevice);
+      await again.csrf();
+      assert.equal((await again.post('/api/auth/login', { email: u.email, password: PW, rememberDevice: true })).ok, true);
+      assert.notEqual(again.cookies.get('ct_device'), oldDevice, 'a new device is issued');
+      assert.equal((await (await restoreOn(oldDevice)).get('/api/auth/session')).json.authenticated, false, 'the replaced token is refused');
+      assert.equal((await (await restoreOn(again.cookies.get('ct_device'))).get('/api/auth/session')).json.authenticated, true, 'the new one works');
     });
     await test('a forged, unknown or other-account device token gives no session', async () => {
       assert.equal((await (await restoreOn('abc')).get('/api/auth/session')).json.authenticated, false);
