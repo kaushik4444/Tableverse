@@ -16,6 +16,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
   const dismissals = new Map(); // `${playerId}:${annId}` -> the revision dismissed
   const signedOut = [];
   const broadcasts = [];
+  const broadcastAttempts = new Map(); // `${broadcastId}|${playerId}` -> ms of the first attempt
   const broadcastRecipients = new Map(); // broadcast id -> Map(player id -> pending | sent | failed | skipped)
   const INACTIVE_MS = INACTIVE_DAYS * 24 * 60 * 60 * 1000;
   const inAudience = (p, audience) => {
@@ -34,7 +35,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
   let failNext = null;
   const log = (actorId, action, targetType, targetId, detail = {}) => audit.push({ id: crypto.randomUUID(), at: now(), actor: players.get(actorId)?.username || null, action, target_type: targetType, target_id: targetId, detail });
   const st = {
-    players, audit, feedback, anns, dismissals, signedOut, broadcasts, broadcastRecipients,
+    players, audit, feedback, anns, dismissals, signedOut, broadcasts, broadcastRecipients, broadcastAttempts,
     RETENTION: { activeDays: 35, dailyDays: 400, auditDays: 365, feedbackDays: 180, announcementDays: 90 },
     addPlayer(id, { username = id.slice(0, 8), role = 'user', email = null, verified = false } = {}) { players.set(id, { id, username, display_name: username, role, email, verified, is_anonymous: !email, created_at: now(), last_seen_at: now() }); return id; },
     failWith(err) { failNext = err; },
@@ -187,7 +188,16 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       p.unsubscribe_token ??= crypto.randomUUID();
       const verified = !!p.verified;
       const skip = !p.email || (b.category === 'promo' && (!verified || !!p.opted_out));
-      return { player_id: pid, email: p.email || null, unsubscribe_token: p.unsubscribe_token, skip };
+      const attempted = broadcastAttempts.get(`${id}|${pid}`);
+      return { player_id: pid, email: p.email || null, unsubscribe_token: p.unsubscribe_token, skip, attempted_at: attempted ? new Date(attempted) : null };
+    },
+    async markAttempt(id, pid, owner) {
+      const b = broadcasts.find((x) => x.id === id);
+      if (!b || b.status !== 'sending' || b.leaseOwner !== owner) {
+        const err = new Error('the broadcast was taken over by another run'); err.code = 'LEASE_LOST'; throw err;
+      }
+      const key = `${id}|${pid}`;
+      if (!broadcastAttempts.has(key)) broadcastAttempts.set(key, Date.now());
     },
     async markRecipient(id, pid, state, owner) {
       const b = broadcasts.find((x) => x.id === id);

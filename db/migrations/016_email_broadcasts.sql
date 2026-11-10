@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS email_broadcast_recipients (
   broadcast_id UUID NOT NULL REFERENCES email_broadcasts(id) ON DELETE CASCADE,
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'sent', 'failed', 'skipped')),
+  -- when the first send attempt for this recipient was made. Written before the provider is called; never moves after that
+  attempted_at TIMESTAMPTZ,
   PRIMARY KEY (broadcast_id, player_id)
 );
 CREATE INDEX IF NOT EXISTS idx_email_broadcast_recipients_pending ON email_broadcast_recipients (broadcast_id) WHERE state = 'pending';

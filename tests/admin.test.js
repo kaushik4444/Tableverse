@@ -474,10 +474,22 @@ const ADMIN_POSTS = [
       assert.equal(row.status, 'sent');
       assert.equal([...sb.store.broadcastRecipients.get(old.id).values()].filter((x) => x === 'failed').length, 6);
     });
+    await test('a recipient whose first attempt was more than a day ago is not tried again: it is recorded as failed', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Attempt', body: 'Eight', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      const pid = [...sb.store.broadcastRecipients.get(row.id).keys()][0];
+      sb.store.broadcastAttempts.set(`${row.id}|${pid}`, Date.now() - 25 * 3600 * 1000);
+      const sentTo = [];
+      await worker(async (m) => { sentTo.push(m.playerId); }).runOnce();
+      assert.ok(!sentTo.includes(pid), 'the old attempt is not sent again');
+      assert.equal(sentTo.length, 5);
+      assert.equal(sb.store.broadcastRecipients.get(row.id).get(pid), 'failed');
+    });
     await test('the broadcast history is owner-only and carries no message text', async () => {
       const r = await bOwner.b.get('/api/admin/broadcasts');
       assert.equal(r.status, 200);
-      assert.equal(r.json.items.length, 9);
+      assert.equal(r.json.items.length, 10);
       assert.ok(r.json.items.every((x) => !('body' in x)));
       assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
     });
