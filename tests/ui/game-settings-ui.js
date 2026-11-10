@@ -30,6 +30,10 @@ const four = [{ name: 'Aarav' }, { name: 'Bo' }, { name: 'Charlotte' }, { name: 
       await page.keyboard.press('Escape');
       await page.waitForTimeout(50);
       assert.ok(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('gs-chip')), gameId + ' returns focus to the chip on close');
+      // Space on the focused chip opens the settings, and does not fall through to a game's Space shortcut
+      await page.keyboard.press('Space');
+      await page.waitForSelector('.gs-list', { timeout: 2000 });
+      assert.ok(await page.isVisible('.gs-list'), gameId + ' opens settings with Space on the chip');
       await ctx.close();
       passed++; console.log(`  ok  ${gameId}: settings chip and full list`);
     } catch (e) {
