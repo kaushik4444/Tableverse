@@ -251,3 +251,9 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - Promotional mail needs a verified recipient, an unsubscribe link built from `PUBLIC_APP_URL`, and no opt-out; otherwise it is recorded as failed.
 - Docs: `docs/ADMIN.md` (feature and API), `docs/DATA_CLEANUP.md` (new tables in the plan), README and CHANGELOG (user-facing), runbook (log lines).
 - Tests: `tests/admin.test.js` (audiences, recovery, day-old attempt never resent), `tests/email.test.js`, `tests/admin.pg.test.js`. PostgreSQL suites run in CI only.
+
+## Player counts and win conditions (game expansion)
+- Ludo: 2-6 players. 2-4 keep the cross board (52-square ring). 5-6 use a hexagon: 60 ring squares, ten a side, a seat at each corner, stars at the corners and side middles, coloured home lanes to the centre. `GEOMETRY` in `games/ludo/engine.js`; the renderer picks the board from the player count (`geoFor` in `public/games/ludo.js`).
+- Snakes and Ladders: 2-6 players (orange and purple tokens, wider token ring when five or six share a square).
+- Property Rivals: game length gains "First to 2,000 net worth" and "First to 3,000 net worth". Checked at the end of each turn; the richest player wins. The 30/60-round and last-player-standing options are unchanged.
+- Tests: `tests/ludo.test.js` (hexagon ring, renderer placement, bot playouts for 2-6), `tests/snakesladders.test.js` (2-6), `tests/propertyrivals.test.js` (net-worth goal).
