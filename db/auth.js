@@ -220,7 +220,7 @@ async function checkUsernameAvailability({ username }) {
   return { available: r.rows.length === 0, username: u };
 }
 
-async function loginEmail({ email, password, rememberDevice = false, userAgent = '' }) {
+async function loginEmail({ email, password, rememberDevice = false, userAgent = '', replaceDevice = null }) {
   if (!db.hasDatabase()) throw new AuthError('Email authentication requires PostgreSQL (set DATABASE_URL).', 503);
   if (!isEmail(email) || typeof password !== 'string') throw new AuthError('Invalid email or password.', 401);
 
@@ -262,7 +262,11 @@ async function loginEmail({ email, password, rememberDevice = false, userAgent =
     );
     if (!now.rows.length || now.rows[0].password_hash !== row.password_hash) throw new AuthError('Invalid email or password.', 401);
     const session = await createSession(client, row.id);
-    // the trusted device is issued under the same lock, so a reset, sign-out or suspension cannot slip in between
+    // the device the browser sent is retired in this same transaction: its old token stops working with the new sign-in
+    if (dbPlayers.isWellFormedToken(replaceDevice)) {
+      await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(replaceDevice)]);
+    }
+    // the new trusted device is issued under the same lock, so a reset, sign-out or suspension cannot slip in between
     const device = rememberDevice ? await insertDevice(client, row.id, userAgent) : null;
     return { session, device };
   });
