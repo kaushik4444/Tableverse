@@ -438,9 +438,13 @@ test('hexagon: 5-6 players share a 60-square ring with a seat at each corner', a
   const six = E.createGame(people(6), {}, mulberry32(3));
   six.phase = 'moving'; six.turn = 0; six.dice = 6;
   six.tokens[0][0] = 0; six.tokens[0][1] = 2;
-  six.tokens[1][0] = 2; // 2 squares past seat 0's start: capturable
+  // seat 1 starts at absolute square 10, so its token at relative position 56 sits on absolute square 6 (60-square ring)
+  six.tokens[1][0] = 56;
   const r = E.applyAction(six, six.players[0].id, { type: 'move', token: 0 });
   assert.ok(r.ok, 'move ok');
+  assert.equal(six.tokens[0][0], 6, 'seat 0 lands on absolute square 6');
+  assert.equal(six.tokens[1][0], -1, 'the opponent on that hexagon square is sent back to its yard');
+  assert.ok(six.log.some((e) => e.kind === 'capture'), 'the capture is logged');
   assert.equal(E.newPosFor(six, 0, 58, 1), 59, 'the last ring square before home');
   assert.equal(E.newPosFor(six, 0, 59, 5), 64, 'exactly home from the last ring square');
   assert.equal(E.newPosFor(six, 0, 59, 6), null, 'overshoot is illegal');

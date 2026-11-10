@@ -54,7 +54,8 @@
   const lerp = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
   const hexRing = [];
   for (let k = 0; k < 6; k++) for (let j = 0; j < 10; j++) hexRing.push(lerp(HV[k], HV[(k + 1) % 6], j / 10));
-  const hexLane = (k) => [0, 1, 2, 3, 4].map((j) => lerp(HV[k], HC, (j + 1) / 10));
+  // five home squares spread evenly from the corner to just short of the centre, where the finished tokens gather
+  const hexLane = (k) => [0, 1, 2, 3, 4].map((j) => lerp(HV[k], HC, (j + 1) / 6));
   const hexYard = (k) => lerp(lerp(HV[k], HV[(k + 1) % 6], 0.5), HC, 0.35); // between two corners, inside the ring
   const HEX_YARD_OFF = [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]];
   const HEX_HOME_OFF = [[-1.4, -1.2], [1.4, -1.2], [-1.4, 1.2], [1.4, 1.2]];
@@ -63,7 +64,7 @@
     safe: new Set([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]), // corners and the middle of each side
     where(seat, pos, t) {
       if (pos === -1) { const y = hexYard(seat); const o = HEX_YARD_OFF[t]; return [y[0] + o[0], y[1] + o[1]]; }
-      if (pos === this.finished) { const h = lerp(HC, HV[seat], 0.12); const o = HEX_HOME_OFF[t % 4]; return [h[0] + o[0], h[1] + o[1]]; }
+      if (pos === this.finished) { const h = lerp(HC, HV[seat], 0.03); const o = HEX_HOME_OFF[t % 4]; return [h[0] + o[0], h[1] + o[1]]; }
       if (pos >= this.lap) return hexLane(seat)[pos - this.lap];
       return hexRing[(this.starts[seat] + pos) % this.track];
     },

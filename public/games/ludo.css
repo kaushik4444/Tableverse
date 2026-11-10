@@ -41,6 +41,8 @@
 .ludo-board.hex .ludo-token { width: 3.6%; }
 .ludo-board.hex .ludo-token.stacked { width: 3%; }
 .ludo-board.hex .ludo-token.done { width: 3.2%; }
+/* the visible token is small on the hexagon; this invisible area keeps every token at least 24px to tap */
+.ludo-board.hex .ludo-token::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
 .ludo-token.stacked { width: 5.2%; }
 .ludo-token.done { width: 4.4%; opacity: .95; }
 .ludo-token:disabled { opacity: 1; }
