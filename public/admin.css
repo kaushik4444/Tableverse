@@ -55,3 +55,12 @@ button.ad-btn, .ad-btn { min-height: 40px; padding: 0 14px; border-radius: 10px;
   .ad-t.stack td::before { content: attr(data-l); color: var(--muted); font-size: 12px; }
 }
 [hidden] { display: none !important; }
+
+/* charts: an SVG line with a data table under it */
+.ad-chart { margin: 8px 0 16px; }
+.ad-chart svg { width: 100%; max-width: 640px; height: auto; display: block; }
+.ad-chart .ad-line { stroke: var(--accent); stroke-width: 2; }
+.ad-chart .ad-dot { fill: var(--accent); }
+.ad-chart .ad-grid-line { stroke: var(--line); stroke-width: 1; }
+.ad-chart .ad-axis { fill: currentColor; font-size: 11px; opacity: .75; }
+.ad-chart details { margin-top: 6px; }

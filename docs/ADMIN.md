@@ -91,6 +91,10 @@ All under the session cookie. `POST` needs the `X-CSRF-Token` header. Staff = ad
 | Endpoint | Who |
 |---|---|
 | `GET /api/admin/me` | any signed-in account (says whether you are staff) |
+Overview charts (staff): a 7, 30 or 90-day range, active players per day and registrations per day as line charts. Each chart has a data table underneath. The counts come from the same counters as before: no names, addresses or messages.
+
+Logs (staff): `GET /api/admin/logs?level=&component=&event=&limit=` returns the recent lines of this server process since its last restart. Lines are redacted before they are kept (`lib/log.js`), the buffer is bounded (500) and in memory only. Render's log view keeps the full history; this tab does not replace it. The overview also counts chat reports (last 7 days and total) and feedback not yet read.
+
 | `GET /api/admin/overview?days=`, `/health`, `/users?q=&page=`, `/feedback?status=&page=`, `/announcements`, `/audit?page=` | staff |
 | `POST /api/admin/users/sign-out` | staff (admins only on ordinary players) |
 | `POST /api/admin/roles` | owner |
