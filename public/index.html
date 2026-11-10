@@ -25,6 +25,11 @@
   <link rel="stylesheet" href="/games/linegames.css">
   <link rel="stylesheet" href="/games/snakesladders.css">
   <link rel="stylesheet" href="/game-ux.css">
+  <style>
+    /* Legal link, visible to signed-out visitors too: above the sign-in overlay (z-index 30) so it stays clickable. */
+    .legal-foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 31; text-align: center; font-size: 13px; padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); background: rgba(10, 12, 30, .85); }
+    .legal-foot a { color: #e9f5ef; }
+  </style>
 </head>
 <body>
   <div id="app"></div>
@@ -43,6 +48,7 @@
   <script src="/games/themind.js" defer></script>
   <script src="/games/ludo.js" defer></script>
   <script src="/games/gofish.js" defer></script>
+  <footer class="legal-foot"><a href="/impressum.html">Impressum</a></footer>
   <script src="/games/propertyrivals.js" defer></script>
   <script src="/games/linegames.js" defer></script>
   <script src="/games/snakesladders.js" defer></script>
