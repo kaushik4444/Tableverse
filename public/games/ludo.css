@@ -37,10 +37,10 @@
 .ludo-token.blue { --c: #3b82f6; --d: #1e40af; --l: #bfdbfe; }
 .ludo-token.orange { --c: #f97316; --d: #c2410c; --l: #fed7aa; }
 .ludo-token.purple { --c: #a855f7; --d: #7e22ce; --l: #e9d5ff; }
-/* hexagon board: 60 squares around the ring, so the tokens are smaller than on the cross */
-.ludo-board.hex .ludo-token { width: 3.6%; }
-.ludo-board.hex .ludo-token.stacked { width: 3%; }
-.ludo-board.hex .ludo-token.done { width: 3.2%; }
+/* six-arm board: 60 squares around the ring, so the tokens are smaller than on the cross */
+.ludo-board.hex .ludo-token { width: 4.6%; }
+.ludo-board.hex .ludo-token.stacked { width: 3.8%; }
+.ludo-board.hex .ludo-token.done { width: 4%; }
 /* move buttons under the hexagon board: full-size touch targets for each legal token */
 .ludo-picks { display: flex; flex-wrap: wrap; gap: 8px; }
 .ludo-pick { min-height: 44px; min-width: 44px; }

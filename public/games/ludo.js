@@ -1,10 +1,10 @@
-/* Ludo table renderer: a cross board for 2-4 players, or a hexagon for 5-6, drawn as one SVG, glossy tokens on top,
+/* Ludo table renderer: a cross board for 2-4 players, or a six-arm board for 5-6, drawn as one SVG, glossy tokens on top,
  * and a single compact turn bar.
  * Rules and server state live in games/ludo/engine.js; this file only draws a view and sends { roll | ready | move }.
  *
  * Two boards share one interface (see geometry below): where(seat, pos, t) gives the centre of the square a token
  * stands on, and ringKey tells tokens that share a square apart. Board coordinates: the cross is 15 x 15 cells, the
- * hexagon is 100 x 100 units. The square board is unchanged from before 5-6 player support. */
+ * six-arm board is 100 x 100 units. The square board is unchanged from before 5-6 player support. */
 (() => {
   'use strict';
   const { esc } = window.CardTable;
@@ -45,26 +45,39 @@
     },
   };
 
-  // ---- Hexagon board (5-6 players), units on 100 x 100 ----
-  // Corners are the seats' start squares, in clockwise order from the top. Ten ring squares a side, so 60 in all.
-  // A seat's home column runs from its corner to the centre, five squares, and the finished tokens gather there.
+  // ---- Six-arm board (5-6 players), after the reference board: arms at 60-degree steps. Each arm is three squares
+  // wide: its outer side runs out to a tip, and the middle column of the tip is that seat's start. The middle of the
+  // arm is the seat's home lane, five squares running in to the centre, where finished tokens gather. The yards sit
+  // in the wedges between arms. Units on a 100 x 100 board.
   const HC = [50, 50];
-  const HR = 46; // corner radius
-  const HV = [0, 1, 2, 3, 4, 5].map((k) => { const a = ((-90 + 60 * k) * Math.PI) / 180; return [HC[0] + HR * Math.cos(a), HC[1] + HR * Math.sin(a)]; });
+  const HP = 7; // square pitch
+  const HR = 42; // radius of the arm tips (cell centres)
+  const HNOTCH = 26; // radius of the notch where one arm's track meets the next arm's
+  const HYARD = 36; // radius of the yard in the wedge
+  const HA = [0, 1, 2, 3, 4, 5].map((j) => ((-90 + 60 * j) * Math.PI) / 180); // arm j's direction, seat j's arm
+  // a point at angle `ang`, `r` from the centre, shifted `s` sideways (clockwise is positive)
+  const hpt = (ang, r, s) => [HC[0] + r * Math.cos(ang) - s * Math.sin(ang), HC[1] + r * Math.sin(ang) + s * Math.cos(ang)];
   const lerp = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  // The ring, in track order: per arm, left side outwards (0-2), tip left (3), tip middle = start (4), tip right (5),
+  // right side inwards (6-8), then the notch (9) to the next arm.
   const hexRing = [];
-  for (let k = 0; k < 6; k++) for (let j = 0; j < 10; j++) hexRing.push(lerp(HV[k], HV[(k + 1) % 6], j / 10));
-  // five home squares spread evenly from the corner to just short of the centre, where the finished tokens gather
-  const hexLane = (k) => [0, 1, 2, 3, 4].map((j) => lerp(HV[k], HC, (j + 1) / 6));
-  const hexYard = (k) => lerp(lerp(HV[k], HV[(k + 1) % 6], 0.5), HC, 0.35); // between two corners, inside the ring
+  for (let j = 0; j < 6; j++) {
+    const a = HA[j];
+    for (let k = 0; k < 3; k++) hexRing.push(hpt(a, HR - (3 - k) * HP, -HP));
+    hexRing.push(hpt(a, HR, -HP), hpt(a, HR, 0), hpt(a, HR, HP));
+    for (let k = 0; k < 3; k++) hexRing.push(hpt(a, HR - (k + 1) * HP, HP));
+    hexRing.push(hpt(a + Math.PI / 6, HNOTCH, 0));
+  }
+  const hexLane = (k) => [0, 1, 2, 3, 4].map((i) => hpt(HA[k], HR - (i + 1) * HP, 0));
+  const hexYard = (k) => hpt(HA[k] + Math.PI / 6, HYARD, 0); // the wedge clockwise from the arm
   const HEX_YARD_OFF = [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]];
   const HEX_HOME_OFF = [[-1.4, -1.2], [1.4, -1.2], [-1.4, 1.2], [1.4, 1.2]];
   const HEX = {
-    S: 100, fan: 100 / 15, track: 60, lap: 59, finished: 64, starts: [0, 10, 20, 30, 40, 50],
-    safe: new Set([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]), // corners and the middle of each side
+    S: 100, fan: 100 / 15, track: 60, lap: 59, finished: 64, starts: [4, 14, 24, 34, 44, 54],
+    safe: new Set([4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59]), // each start and each notch
     where(seat, pos, t) {
       if (pos === -1) { const y = hexYard(seat); const o = HEX_YARD_OFF[t]; return [y[0] + o[0], y[1] + o[1]]; }
-      if (pos === this.finished) { const h = lerp(HC, HV[seat], 0.03); const o = HEX_HOME_OFF[t % 4]; return [h[0] + o[0], h[1] + o[1]]; }
+      if (pos === this.finished) { const h = lerp(HC, hpt(HA[seat], HR, 0), 0.03); const o = HEX_HOME_OFF[t % 4]; return [h[0] + o[0], h[1] + o[1]]; }
       if (pos >= this.lap) return hexLane(seat)[pos - this.lap];
       return hexRing[(this.starts[seat] + pos) % this.track];
     },
@@ -166,30 +179,29 @@
 
   function hexSVG(seats) {
     const G = HEX;
-    const pt = ([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`;
-    const wedges = [0, 1, 2, 3, 4, 5].map((k) => {
-      const on = seats.includes(k);
-      return `<polygon points="${pt(HC)} ${pt(HV[k])} ${pt(HV[(k + 1) % 6])}" fill="${on ? SEAT[k].light : '#f1f5f9'}" opacity="${on ? 0.55 : 0.9}"/>`;
+    const used = (k) => seats.includes(k);
+    const sq = (p, fill) => `<rect x="${(p[0] - 2.9).toFixed(2)}" y="${(p[1] - 2.9).toFixed(2)}" width="5.8" height="5.8" rx="0.8" fill="${fill}"/>`;
+    const star = (p, fill) => `<text x="${p[0].toFixed(2)}" y="${(p[1] + 0.9).toFixed(2)}" text-anchor="middle" font-size="2.8" fill="${fill}">★</text>`;
+    // the centre: one coloured wedge per arm
+    const centre = [0, 1, 2, 3, 4, 5].map((k) => {
+      const pts = [HC, hpt(HA[k] - Math.PI / 6, 9.5, 0), hpt(HA[k] + Math.PI / 6, 9.5, 0)].map((p) => p.map((v) => v.toFixed(2)).join(',')).join(' ');
+      return `<polygon points="${pts}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}"/>`;
     }).join('');
-    const sq = (p, fill) => `<rect x="${(p[0] - 2.1).toFixed(2)}" y="${(p[1] - 2.1).toFixed(2)}" width="4.2" height="4.2" rx="0.6" fill="${fill}"/>`;
-    const star = (p, fill) => `<text x="${p[0].toFixed(2)}" y="${(p[1] + 0.85).toFixed(2)}" text-anchor="middle" font-size="2.6" fill="${fill}">★</text>`;
     const ring = hexRing.map((p, i) => {
       const k = G.starts.indexOf(i);
-      const used = k >= 0 && seats.includes(k);
-      let out = sq(p, k >= 0 ? (used ? SEAT[k].hex : SEAT[k].light) : '#f1f5f9');
+      let out = sq(p, k >= 0 ? (used(k) ? SEAT[k].hex : SEAT[k].light) : '#f1f5f9');
       if (k >= 0) out += star(p, '#fff');
       else if (G.safe.has(i)) out += star(p, '#94a3b8');
       return out;
     }).join('');
-    const lanes = [0, 1, 2, 3, 4, 5].map((k) => hexLane(k).map((p) => sq(p, seats.includes(k) ? SEAT[k].light : '#e2e8f0')).join('')).join('');
+    const lanes = [0, 1, 2, 3, 4, 5].map((k) => hexLane(k).map((p) => sq(p, used(k) ? SEAT[k].light : '#e2e8f0')).join('')).join('');
     const yards = [0, 1, 2, 3, 4, 5].map((k) => {
-      const on = seats.includes(k);
+      const on = used(k);
       const y = hexYard(k);
       const slots = HEX_YARD_OFF.map(([dx, dy]) => `<circle cx="${(y[0] + dx).toFixed(2)}" cy="${(y[1] + dy).toFixed(2)}" r="1.6" fill="${on ? SEAT[k].dark : '#cbd5e1'}" opacity="${on ? 0.22 : 0.5}"/>`).join('');
       return `<g><rect x="${(y[0] - 6).toFixed(2)}" y="${(y[1] - 6).toFixed(2)}" width="12" height="12" rx="1.4" fill="${on ? SEAT[k].hex : '#cbd5e1'}"/><rect x="${(y[0] - 5).toFixed(2)}" y="${(y[1] - 5).toFixed(2)}" width="10" height="10" rx="1.1" fill="#fff" opacity="${on ? 0.92 : 0.6}"/>${slots}</g>`;
     }).join('');
-    const outline = `<polygon points="${HV.map(pt).join(' ')}" fill="none" stroke="#cbd5e1" stroke-width="0.5"/>`;
-    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="2" fill="#fff"/>${wedges}${outline}${yards}${lanes}${ring}<circle cx="50" cy="50" r="1.2" fill="#fff" opacity=".9"/></svg>`;
+    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="2" fill="#fff"/>${centre}${ring}${lanes}${yards}<circle cx="50" cy="50" r="1.2" fill="#fff" opacity=".9"/></svg>`;
   }
 
   function boardSVG(n) {

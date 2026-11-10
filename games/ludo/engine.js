@@ -14,12 +14,14 @@ const WALK = { step: 400, capture: 800, settle: 1300 };
 const TOKENS = 4;
 const HOME_COL = 5; // squares in each home column
 // Board shapes. 'square' is the classic cross board for 2-4 players: a ring of 52 squares, the seats at 13-square
-// spacing. 'hex' is a hexagon for 5-6 players: a ring of 60 squares, ten a side, with a seat at each corner.
-// Star (safe) squares are the seat starts plus the square eight steps after a start on the cross, or the middle of
-// each side on the hexagon. Ring positions are counted from the seat's own start square.
+// spacing. 'hex' is the six-arm board for 5-6 players: a ring of 60 squares around six arms.
+// Star (safe) squares are the seat starts plus the square eight steps after a start on the cross, or on the six-arm
+// board the start and the notch between two arms. Ring positions are counted from the seat's own start square.
 const GEOMETRY = {
   square: { track: 52, lap: 51, starts: [0, 13, 26, 39], safe: [0, 8, 13, 21, 26, 34, 39, 47] },
-  hex: { track: 60, lap: 59, starts: [0, 10, 20, 30, 40, 50], safe: [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55] },
+  // Six arms, as on the reference board: each arm is a block of 10 ring squares (its left side outwards, the tip,
+  // its right side inwards, then the notch to the next arm). A seat starts on the middle of its own arm's tip.
+  hex: { track: 60, lap: 59, starts: [4, 14, 24, 34, 44, 54], safe: [4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59] },
 };
 // Lookup with the safe squares as a Set. Built once per shape; never sent to clients.
 const GEO_CACHE = {};
@@ -34,7 +36,7 @@ const LAP = GEOMETRY.square.lap; // squares a token walks on the ring (internal 
 const FINISHED = LAP + HOME_COL; // 56: token is home
 const STARTS = GEOMETRY.square.starts; // ring square where each board seat enters
 const SAFE = new Set(GEOMETRY.square.safe);
-const SEAT_COLORS = ['🔴', '🟢', '🟡', '🔵', '🟠', '🟣']; // seats clockwise from the top-left; 5-6 player seats are the hexagon corners
+const SEAT_COLORS = ['🔴', '🟢', '🟡', '🔵', '🟠', '🟣']; // seats clockwise from the top-left; the 5th and 6th seats are the last two arms of the six-arm board
 const COLORS = SEAT_COLORS;
 // Which board seats are used for n players. Two players sit opposite each other, as on a real board.
 const SEATS_FOR = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3], 5: [0, 1, 2, 3, 4], 6: [0, 1, 2, 3, 4, 5] };
