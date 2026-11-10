@@ -77,7 +77,7 @@
     const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
     main.innerHTML = `<h2>Overview <small class="ad-muted">last ${o.days} days</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:12px">${rangeButtons}</div>
-      <div class="ad-grid">${tile(o.active.dau, 'active today')}${tile(o.active.wau, 'active, 7 days')}${tile(o.active.mau, 'active, 30 days')}${tile(o.accounts.registered, 'registered accounts')}${tile(o.accounts.registered_24h, 'new in 24 hours')}${tile(t('registration'), 'registrations')}${tile(t('session'), 'sessions')}${tile(t('game_finished'), 'games finished')}${tile(t('error'), 'errors')}${tile(q.feedback_new || 0, 'feedback to read')}${tile(q.reports7d || 0, 'chat reports, 7 days')}</div>
+      <div class="ad-grid">${tile(o.active.dau, 'active today')}${tile(o.active.wau, 'active, 7 days')}${tile(o.active.mau, 'active, 30 days')}${tile(o.accounts.registered, 'registered accounts')}${tile(o.accounts.registered_24h, 'new in 24 hours')}${tile(t('registration'), 'registrations')}${tile(t('session'), 'sessions')}${tile(t('game_finished'), 'games finished')}${tile(t('error'), 'errors')}${tile(q.feedback_new || 0, 'feedback to read')}${tile(q.reports7d || 0, 'chat reports, 7 days')}${tile(q.reports_total || 0, 'chat reports, all time')}</div>
       <h3>Active players per day</h3>${lineChart(o.activeDaily || [], o.labels || [], 'Active players')}
       <h3>Registrations per day</h3>${lineChart(o.series.registration || (o.labels || []).map(() => 0), o.labels || [], 'Registrations')}
       <h3>Sessions per day</h3>${spark(o.series.session || [], 'Sessions per day')}
@@ -117,7 +117,13 @@
       </form>
       <p class="ad-muted">Recent lines of this server since its last restart, secrets masked. Buffer capacity ${esc(o.capacity)}; ${esc(o.dropped)} older lines dropped. Render's log view keeps the full history.</p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Time</th><th>Level</th><th>Component</th><th>Event</th><th>Details</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="ad-muted">No lines match.</td></tr>'}</tbody></table></div>`;
-    document.getElementById('lFilter').onsubmit = (e) => { e.preventDefault(); const d = new FormData(e.target); logs({ level: d.get('level'), component: d.get('component'), event: d.get('event') }).catch(fail); };
+    document.getElementById('lFilter').onsubmit = (e) => {
+      e.preventDefault();
+      const d = new FormData(e.target);
+      state.gen += 1; // a newer filter makes every older answer out of date, including its error
+      const mine = state.gen;
+      logs({ level: d.get('level'), component: d.get('component'), event: d.get('event') }).catch((err) => { if (mine === state.gen) fail(err); });
+    };
   }
 
   // ---------------------------------------------------------------- users
