@@ -206,12 +206,40 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 
 ## Suspected account compromise (added 2026-11-10)
 1. Confirm the signs: sign-ins or changes the player did not make. The audit log shows admin actions only. The sessions table keeps each sign-in (its creation time and, for "keep me signed in", the device it came from) until it is purged, 7 to 30 days after it ends (`docs/ACCOUNT_DELETION_AND_RETENTION.md`), so look there quickly before it is removed.
-2. The owner suspends the account in the admin console (reason required). Suspension revokes all of the account's sessions and trusted devices and blocks sign-in (`POST /api/admin/users/suspend`, owner only). This is the step that signs the account out everywhere; no separate sign-out is needed.
+2. The owner suspends the account in the admin console (reason required). Suspension revokes all of the account's sessions and trusted devices and blocks sign-in (`POST /api/admin/users/suspend`, owner only). This is the step that signs the account out everywhere; no separate sign-out is needed. **The owner account itself cannot be suspended**: use "Compromised owner account" below.
 3. The owner may also sign the account out of every device with `POST /api/admin/users/sign-out`. This is owner-only (`checkSignOut` in `lib/adminPolicy.js`); admins cannot do it, even for ordinary players.
-4. The person behind the account resets the password through the unauthenticated e-mail reset, which stays available while the account is suspended. Check that the reset went to the right address. Whether a reset can be completed while the account is suspended was not verified here; the owner should test it before relying on this step.
+4. The person behind the account resets the password through the e-mail reset (`POST /api/auth/forgot-password`, then `reset-password`). Checked in code: the reset is not blocked by a suspension, and a suspended account still cannot sign in (`loginEmail` rechecks the suspension under the account lock). A reset works only for a verified address. Not yet tested on the live site: run it on a throwaway account before relying on this step. Check that the reset went to the right address.
 5. Record the time, the account id (not the e-mail address), what was seen and what was done, in the owner's private notes. Do not paste it into the repository, a chat or an issue.
 6. Do not delete the account as a response, because deletion removes the evidence.
 7. Owner decides whether to unsuspend, and whether to tell the player more.
+
+## Compromised owner account (added 2026-11-10)
+The owner account is the highest-impact target: it can send e-mail to every registered account, change admin roles and sign accounts out. It **cannot be suspended** (`checkSuspend` in `lib/adminPolicy.js`), **cannot be deleted** (409), and **no other admin exists** for this beta, so the admin console cannot contain it. Containment goes through the owner's e-mail account and the provider dashboards. The owner runs every step; nothing here is automated.
+
+1. **Secure the owner's e-mail account first.** The app has no signed-in change-password route: the only password change is the e-mail reset link (`POST /api/auth/forgot-password`, then `POST /api/auth/reset-password`). If the mailbox is also compromised, a reset gives the attacker the password. Change the mailbox password, turn on its two-factor sign-in, and check its sign-in history, forwarding rules and filters. Do this before step 2.
+2. **End every session.** While signed in, use **Log out everywhere** in the account menu, or **Sessions > sign out of every device** in Settings (`POST /api/auth/logout-all`). This ends the owner's sessions and trusted devices, and closes open sockets. It does not change the password, so it does not by itself stop someone who already knows it.
+3. **Reset the password from the secured mailbox, straight after step 1 (no waiting before it).** The reset sets a new password, so the old one stops working, and it ends every session and closes open sockets (tested: `tests/session.pg.test.js`, `tests/devices.pg.test.js`). A reset works only for an account whose e-mail address is verified.
+   - Reset links already issued before containment are a separate risk. The server does not cancel other unused reset links when one is used (`db/auth.js` `resetPassword` consumes only the link submitted), so an older link that someone holds can still set a new password until it expires. Its lifetime is `AUTH_RESET_TTL_MIN` (default 30 minutes; check the live value).
+   - An attacker who holds an older link can still redeem it during the wait, and that sets a password and does not end their sessions. So after the owner's reset:
+     (a) keep the account out of use (sign in only to check the mailbox) for at least the live `AUTH_RESET_TTL_MIN` (default 30 minutes) counted from the last reset e-mail sent before containment; check the mailbox for any reset e-mail the owner did not request;
+     (b) once that time has passed, do a fresh password reset, which sets a password that no older link can change, and sign in again only after it;
+     (c) if the owner sees a reset e-mail or a sign-in they did not start during the wait, the owner stops and treats it as a new compromise (step 2 again).
+   - Proposed change C-F (cancel other unused reset links) removes the wait; until it is approved and built, this procedure applies.
+4. **Check what the compromised session did.** Run these read-only in the database after step 3 (never through the console, which the attacker may have used):
+   - `SELECT id, role FROM players WHERE role <> 'user';` must show only the owner. Any other admin is a grant the owner did not make: the owner demotes it through the console only after step 3 (`POST /api/admin/roles`).
+   - `SELECT at, action, actor_id, target_type, target_id FROM admin_audit_log ORDER BY at DESC LIMIT 200;` lists every admin action with its time. Look for sign-outs, suspensions, role changes, announcements and broadcasts that the owner did not make.
+   - `SELECT id, created_at, audience, category, status, recipient_count FROM email_broadcasts ORDER BY created_at DESC LIMIT 20;` A sent broadcast cannot be unsent. Record it and the recipient count.
+   - **A queued or sending broadcast cannot be cancelled in the app.** Its only statuses are `queued`, `sending` and `sent` (migration 016), and the worker resumes unfinished jobs after a restart, so a restart does not stop it. Stopping one needs a database change, which needs owner approval, or a proposed cancel control (C-G, not built). Wave 1 sends no broadcasts at all, so this should never arise during the beta.
+   - Announcements: check the admin console's Announcements list for banners the owner did not write.
+5. **Check the providers the owner account could reach**, and rotate what might have been seen (owner-run; see "Accidental exposure of credentials" for the list of secrets and where each is stored):
+   - **GitHub:** account password and two-factor sign-in, personal access tokens, repository and environment secrets, the `production-cleanup` environment's reviewers, the Actions run history (any manual run of the cleanup workflow the owner did not start), and the Protect-Main ruleset.
+   - **Render:** account access, deploy history (any deploy not from `main`), and the environment values of the web service (`DATABASE_URL`, `RESEND_API_KEY`, `METERED_SECRET_KEY`, TURN values, `ADMIN_OWNER_*`). Compare with `render.yaml`.
+   - **Neon:** account access and database roles. Rotate the database password only after the Render value is ready to change, and redeploy.
+   - **Resend** and **Metered**: account access and API or secret keys.
+   Each rotation is recorded in the owner's private notes with the time. Do not paste any value into the repository, a chat or an issue.
+6. **Take a backup before any data change**: `npm run db:backup` (see "Backups"). Only then consider deleting anything, and do not delete the owner account as a response: it is blocked anyway and deleting evidence is never the fix.
+7. **Recover the owner role only if the owner account must be replaced.** Ownership cannot be granted through the API. It is a database operator action (demote the old owner and promote the new account in one transaction, as described in `docs/ADMIN.md`). Ask before doing it, and record the approval.
+8. **Record** the time the compromise was noticed, what was seen (account id, not e-mail), what was done, which providers were rotated and when, and what was left unresolved. Keep the note private.
 
 ## Accidental exposure of credentials (added 2026-11-10)
 Secrets in use: `DATABASE_URL` (Neon), `RESEND_API_KEY`, `METERED_SECRET_KEY`, `TURN_CREDENTIAL` and `TURN_SHARED_SECRET` (if set), `ADMIN_OWNER_*` configuration. Values never belong in the repository, in docs, in logs or in chat.
@@ -237,6 +265,23 @@ Nobody else, and no automated job, may do these without the owner's explicit app
 - send an e-mail broadcast.
 
 The project owner is the decision-maker for every item in this section and for every incident that needs a decision. Owner contact: [OWNER: private contact address].
+
+## Cleanup safeguards (checked against code, 2026-11-10)
+Production cleanup stays disabled. There are two scripts with **different** guards. Check which one a command uses.
+
+**`scripts/cleanup-unverified.js`** removes unverified accounts older than 30 days. It is the only script the scheduled workflow and the deletion job run.
+1. Nothing in the server runs it. Without `--execute` it is a dry run.
+2. The dry run runs in a READ ONLY transaction and refuses a database role that is a superuser or has any write privilege (`db/unverifiedCleanup.js`, error `READONLY_ROLE_REQUIRED`).
+3. `--execute` refuses, and deletes nothing, when more accounts qualify than `--max` (default 1000, exit code 3). It has **no** `--confirm` or `--expect-host` guard: its only target is the URL in `DATABASE_URL`.
+4. The daily workflow (`.github/workflows/cleanup-unverified.yml`, 03:17 UTC) is a dry run only, with the read-only secret `CLEANUP_DRYRUN_DATABASE_URL`.
+5. The deletion job runs only when someone starts the workflow by hand with `execute=true` **and** the repository variable `CLEANUP_EXECUTE` is `true`, and only after a reviewer approves the `production-cleanup` environment. It uses `CLEANUP_DATABASE_URL`. Check the reviewer and the variable on GitHub (manual check M-5).
+
+**`scripts/cleanup-user-data.js`** is manual and is not used by any workflow.
+1. It ignores `DATABASE_URL` and `.env` files; the target is `CLEANUP_DATABASE_URL` only.
+2. The dry run is the default. `--execute` also needs `--confirm=<exact database name>`, and `--expect-host` for a remote host (`db/cleanup.js`).
+3. Failures roll back the transaction.
+
+Owner-recorded: the production dry run reported zero eligible accounts. The live values (the variable, the reviewer, the role of each secret) are not verifiable from the repository and stay manual checks.
 
 ## Repository safety
 `main` is protected by a ruleset ("Protect-Main", GitHub > Settings > Rules > Rulesets) that requires a pull request and passing status checks before merge. **Status: enabled**, all five CI jobs required: `Build and test (Node 20)`, `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`.
