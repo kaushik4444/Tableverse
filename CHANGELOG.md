@@ -7,6 +7,7 @@ User-facing changes are listed first. Operational and internal implementation de
 - Property Rivals: tap a city in the player list to see its owner, buildings, rent now, the full rent table, and the mortgage, unmortgage and house costs.
 - Property Rivals: each player shows cash and net worth separately. The crown marks the player with the highest net worth, not the most cash.
 - Every game shows its current settings at the top right. Tap them for the full list with each choice explained.
+- Blocking hides the blocked player's table chat and voice and stops invitations between you. A block no longer removes anyone from a table, so blocked players can share one.
 
 ## 0.14.0 — Voice chat
 
