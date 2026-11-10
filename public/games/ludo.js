@@ -75,6 +75,8 @@
   const HEX = {
     S: 100, fan: 100 / 15, track: 60, lap: 59, finished: 64, starts: [4, 14, 24, 34, 44, 54],
     safe: new Set([4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59]), // each start and each notch
+    // the count badge for a seat's finished tokens: in that seat's wedge of the centre, clear of the other seats' badges
+    badge(seat) { return hpt(HA[seat] + Math.PI / 6, 10, 0); },
     where(seat, pos, t) {
       if (pos === -1) { const y = hexYard(seat); const o = HEX_YARD_OFF[t]; return [y[0] + o[0], y[1] + o[1]]; }
       if (pos === this.finished) { const h = lerp(HC, hpt(HA[seat], HR, 0), 0.03); const o = HEX_HOME_OFF[t % 4]; return [h[0] + o[0], h[1] + o[1]]; }
@@ -235,13 +237,23 @@
         const off = (FAN[stack] || FAN[4])[idx % stack];
         x += off[0] * G.fan; y += off[1] * G.fan;
       }
-      const legal = !busy() && i === v.me && v.canMove && (v.legalTokens || []).includes(t);
       const home = pos === G.finished;
+      // on the six-arm board finished tokens are counted in a badge in the centre, not stacked on top of each other
+      if (home && G === HEX) return;
+      const legal = !busy() && i === v.me && v.canMove && (v.legalTokens || []).includes(t);
       const label = pos === -1 ? `Bring token ${t + 1} out` : pos >= G.lap && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
       const moved = ui.plans.has(`${i}-${t}`);
       const pid = `${i}-${t}`;
       out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / G.S) * 100}%;top:${(y / G.S) * 100}%"><i></i></button>`);
     }));
+    if (G === HEX) {
+      v.players.forEach((p, i) => {
+        const done = p.tokens.filter((x) => x === G.finished).length;
+        if (!done) return;
+        const c = G.badge(seats[i]);
+        out.push(`<span class="ludo-home-count" style="left:${c[0]}%;top:${c[1]}%;--c:${SEAT[seats[i]].hex}" aria-label="${esc(p.name)}: ${done} of 4 home">${done}/4</span>`);
+      });
+    }
     return out.join('');
   }
 
@@ -251,7 +263,7 @@
     if (ui.geo !== HEX || !v.canMove) return '';
     const me = v.players[v.me];
     // each button says where its token stands, so it can be matched with a piece on the board
-    const where = (pos) => (pos === -1 ? 'in the yard' : pos >= ui.geo.lap ? 'in the home lane' : `${pos} squares from start`);
+    const where = (pos) => (pos === -1 ? 'in the yard' : pos >= ui.geo.lap ? `${ui.geo.finished - pos} steps from home` : `${pos + 1} squares along the track`);
     return `<div class="ludo-picks" role="group" aria-label="Legal moves">${(v.legalTokens || []).map((t) => `<button type="button" class="btn ludo-pick" data-lt="tok:${t}" ${busy() ? 'disabled' : ''}>Token ${t + 1}: ${where(me.tokens[t])}</button>`).join('')}</div>`;
   }
 

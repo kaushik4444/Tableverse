@@ -326,8 +326,10 @@ test('renderer: 5-6 players get the hexagon board, every token lands inside it',
     const html = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
     registered.render(html, v, { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
     assert.equal(html.innerHTML.includes('ludo-board hex'), n >= 5, `${n} players: hexagon only for 5-6`);
-    const left = [...html.innerHTML.matchAll(/left:([-\d.]+)%;top:([-\d.]+)%/g)].map((m) => [Number(m[1]), Number(m[2])]);
-    assert.equal(left.length, n * 4, 'four tokens per player');
+    const left = [...html.innerHTML.matchAll(/class="ludo-token [^"]*"[^>]*style="left:([-\d.]+)%;top:([-\d.]+)%"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    const hex = n >= 5;
+    assert.equal(left.length, hex ? n * 3 : n * 4, 'the six-arm board counts a finished token in a badge; the cross keeps every token');
+    assert.equal((html.innerHTML.match(/ludo-home-count/g) || []).length, hex ? n : 0, 'one home badge per player on the six-arm board');
     assert.ok(left.every(([x, y]) => x >= 0 && x <= 100 && y >= 0 && y <= 100), 'tokens sit on the board');
   }
 });
