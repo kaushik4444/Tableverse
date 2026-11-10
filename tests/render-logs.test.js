@@ -53,9 +53,11 @@ console.log('render history (Stage 20.8)');
       { timestamp: '2026-11-10T09:00:00Z', message: 'connect postgres://app:hunter2@db.example/x failed', labels: [{ name: 'type', value: 'app' }] },
       { timestamp: '2026-11-10T09:01:00Z', message: 'Authorization: Bearer abc.def.ghi123 used', labels: [{ name: 'level', value: 'WARN' }] },
       { timestamp: '2026-11-10T09:02:00Z', message: 'plain request served' },
+      { timestamp: '2026-11-10T09:03:00Z', message: 'config echoed rnd_9f8e7d6c5b4a3210zz and the key ' + KEY },
     ], hasMore: true });
     const out = await createRenderLogs({ env: ENV, fetchImpl: f.fn, now: fixedNow }).recent();
-    assert.equal(out.items.length, 3);
+    assert.equal(out.items.length, 4);
+    assert.ok(!JSON.stringify(out).includes('9f8e7d6c5b4a3210zz'), 'a bare Render-style key is masked too');
     assert.ok(!JSON.stringify(out).includes('hunter2') && !JSON.stringify(out).includes('abc.def.ghi123'), 'secrets are masked');
     assert.equal(out.items[0].level, 'error', 'failed is an error');
     assert.equal(out.items[0].source, 'app');
