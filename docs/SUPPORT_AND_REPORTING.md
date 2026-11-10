@@ -6,11 +6,11 @@ Status: **describes what exists today.** No support e-mail address or security c
 
 | Route | Who can use it | What it does | Limits |
 |---|---|---|---|
-| **Feedback form** (in the app, `POST /api/feedback`) | everyone, including guests | Sends a bug report, an idea or other feedback. Stored with the account link if signed in. | 1,000 characters; per address 6 an hour (`RL_FEEDBACK_IP_LIMIT`); per signed-in player 10 a day (`RL_FEEDBACK_PLAYER_LIMIT`). The form asks people not to include passwords or personal details. |
-| **Chat report** (report button on a chat message) | signed-in and guest players at a table | Records the reported message, the reason and an optional note for the moderation record. | One report per person per message. Nothing is hidden or sanctioned automatically. There is no review queue in the product yet. |
+| **Feedback form** (in the app, `POST /api/feedback`) | anyone, signed in or not | Sends a bug report, an idea or other feedback. Stored with the account link if signed in. | 1,000 characters; per address 6 an hour (`RL_FEEDBACK_IP_LIMIT`); per signed-in player 10 a day (`RL_FEEDBACK_PLAYER_LIMIT`). The form asks people not to include passwords or personal details. |
+| **Chat report** (report button on a chat message) | signed-in players at a table | Records the reported message, the reason and an optional note for the moderation record. | One report per person per message. Nothing is hidden or sanctioned automatically. There is no review queue in the product yet. |
 | **Block** (block button on a chat message) | players | Hides a player's table chat and voice from you, and stops you inviting each other. | Details in `docs/CHAT_MODERATION.md`. |
 
-Staff read feedback in the admin console's **Feedback** tab and move each item between new, read and resolved. The overview counts new feedback and reports.
+For this beta the owner is the only person who reads feedback and reports. The owner reads them in the admin console's **Feedback** tab and moves each item between new, read and resolved. The overview counts new feedback and reports.
 
 **There is no support e-mail address, no help page and no public contact in the app today.** Within the product, the feedback form and the chat report are the only routes to the owner.
 

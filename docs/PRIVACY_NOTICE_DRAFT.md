@@ -19,9 +19,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by [OWNE
 - Your friends, friend requests, blocks, and tables you have recently visited.
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 
-**If you play as a guest (no account):**
-- A display name and an avatar you choose.
-- A guest record in the database, so that your seat in a finished game can be recorded. Guest records are not removed automatically (see "How long we keep data").
+**Guests:** you cannot play without signing in. Browsing the public home screen and table list does not create an account or a record. [OWNER: confirm there are no guest records in the database; see docs/ACCOUNT_DELETION_AND_RETENTION.md.]
 
 **Technical and security data (all users):**
 - Your network address is recorded for rate limiting, for a short time (deleted after one day).
@@ -54,7 +52,7 @@ We do not sell your data. The game page loads no third-party advertising or anal
 
 ## Promotional e-mail
 
-We may send occasional promotional e-mail, such as news or offers. It is sent only to verified accounts that have not opted out. Every promotional message has an unsubscribe link, and you can opt out at any time with that link. Account messages (verification, password reset, important notices about your account) are not affected by this choice. [OWNER: confirm whether an in-app opt-out will be offered; at present the opt-out is only the e-mail link.]
+We may send occasional promotional e-mail, such as news or offers. It is sent only to verified accounts that have not opted out. E-mail the owner sends in the "account" category (service notices, not promotion) is not promotional: it can reach every registered account, including accounts whose address is not yet verified. [LEGAL: confirm whether non-promotional mail may reach unverified accounts.] Every promotional message has an unsubscribe link, and you can opt out at any time with that link. Account messages (verification, password reset, important notices about your account) are not affected by this choice. [OWNER: confirm whether an in-app opt-out will be offered; at present the opt-out is only the e-mail link.]
 
 ## How long we keep data
 
@@ -64,11 +62,11 @@ The retention periods that apply now are listed in `docs/ACCOUNT_DELETION_AND_RE
 - Network-address rate-limit records are deleted after one day.
 - Feedback is kept for 180 days; admin audit records for 365 days.
 - Finished match results are kept for as long as the game history is kept (no fixed period yet).
-- Chat reports and guest records have **no fixed period yet**. [OWNER: decide and state these.]
+- Chat reports and broadcast history have **no fixed period yet**. [OWNER: decide and state these.]
 
 ## Your choices and rights
 
-- **Delete your account**: in the app, open your profile and choose Delete account. You will be asked for your password. Deletion removes your account, sign-in details, sessions, friends, blocks and recent tables. Your past match results remain, but are shown under the name "Deleted player".
+- **Delete your account**: in the app, open your profile and choose Delete account. You will be asked for your password. Deletion removes your account, sign-in details, sessions, friends, blocks and recent tables. Your past match results remain, but are shown under the name "Deleted player". Chat messages you sent while a table was open are not removed by deletion; they stay in that table's memory until the table closes or the server restarts.
 - **Access or a copy of your data**: there is no self-service export yet. [OWNER / LEGAL: state how requests are handled and the response time.]
 - **Correct your profile**: change your display name and avatar in the app. Your username cannot be changed in the app. [OWNER: confirm.]
 - **Opt out of promotional e-mail**: use the unsubscribe link in any promotional message.
@@ -93,7 +91,7 @@ Last updated: [OWNER: date].
 
 1. Lawful basis for each purpose, and the controller/processor roles with each provider.
 2. Processor agreements and data-transfer terms (Render, Neon, Resend, Metered, Google, Cloudflare).
-3. Retention decisions for guests, chat reports and broadcast history (no automatic deletion yet).
+3. Retention decisions for chat reports and broadcast history (no automatic deletion yet), and for any legacy guest records.
 4. Whether a self-service data export, and a response time for access requests, must be offered.
 5. Minimum age and handling of children's accounts.
 6. Breach-notification commitments and the regulator to contact.

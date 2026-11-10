@@ -1,6 +1,6 @@
 # Match-result durability — assessment for the limited beta (2026-11-10)
 
-Status: **assessment and recommendation. No code was changed.** The decision belongs to the owner. The recommendation below is option A, with conditions.
+Status: **DECIDED — Option A accepted by the owner for the limited beta (2026-11-10).** No code was changed by this decision. The accepted limitations, the conditions that go with them, and the wording shown to testers are in the section "Owner decision and accepted limitations" at the end. The assessment below is kept as the record of why.
 
 ## What survives a server restart or redeploy
 
@@ -54,3 +54,31 @@ This means setting `MATCH_SPOOL_DIR` on a persistent disk, or moving the pending
 **Option A, with the conditions above.** The risk is real but narrow. It covers only finished results that are still pending when the instance is replaced, and it does not affect ongoing play, which is already lost on any restart. The cost of option B (new persistence work and a possible paid disk) is not justified for a small invited beta, and that work would itself need testing. Revisit before a public launch, and as soon as either of these is verified: the Render plan offers a persistent disk, or match loss is seen in the logs.
 
 **Decision needed from the owner:** A or B. Until a decision is recorded, the beta gate in `docs/STAGE_20_6_BETA_READINESS.md` ("Match-result spool durability limitation") stays open.
+
+## Owner decision and accepted limitations
+
+**Decision (2026-11-10):** Option A. Successfully committed results are stored in PostgreSQL. Pending writes and failed spool writes are **not guaranteed** to survive an instance replacement. This is accepted for the limited, invited beta only. Revisit before any public launch, or as soon as the Render plan offers a persistent disk for the spool or match loss is seen in the logs.
+
+### Accepted limitations (what the owner has accepted)
+1. A game in progress is lost on any restart or deploy. Unfinished games are never recorded.
+2. A finished result is saved to PostgreSQL after the database write succeeds. Until then it is held in memory and in the spool file. A result still pending when the instance is replaced (database unreachable beyond the retries and the periodic replay, the spool write failed, or the 15-second shutdown wait ended first) can be lost.
+3. The default spool is in the container's temporary directory. It is not guaranteed to survive a redeploy onto a fresh instance.
+4. Database backups and point-in-time restore depend on Neon. Their window is recorded as a manual check (`docs/OPERATIONS_RUNBOOK.md`, "Neon backups").
+5. Match history and statistics are derived from the saved rows. A lost result is missing from history and statistics, with no correction.
+6. The app runs one instance. A redeploy interrupts every active table.
+
+### Conditions that go with the acceptance
+- Testers are told the wording below before they play.
+- After every deploy, the logs are checked for `[matches] NOT SAVED`, and the runbook section "Investigate lost or inconsistent match records" is followed if it appears.
+- Do not restart the service while matches are pending, unless the owner decides otherwise (runbook, "Database failure").
+- The beta terms do not describe match history as an official record.
+
+### Wording shown to testers
+Use this in the invitation message and in the beta terms (section 1):
+
+> This is a beta. A game in progress is not kept if the server restarts or is updated, and the table ends. A finished game is saved to our database, and it appears in your history. In rare cases a finished game may not be saved, for example if the server is replaced while the save is still pending. If a game you finished is missing from your history, tell us the time and the table code, and we will look at the server logs. Please do not rely on Tableverse as the only record of anything important.
+
+### Not verified (recorded so nobody relies on them)
+- Whether a Render restart reuses the same machine or the spool directory (owner to check in the Render dashboard).
+- Render's 30-second SIGTERM-to-kill window: the code waits 15 seconds; the platform's behaviour is not verified from the repository.
+

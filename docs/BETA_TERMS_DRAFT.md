@@ -9,13 +9,13 @@ Based on the behaviour of the code on `main` (2026-11-10). Bracketed items are f
 Tableverse is a beta service. It is provided free of charge, and features may change, be removed or be added at any time.
 
 - **Availability:** the service may be unavailable, slow or interrupted, including for planned maintenance and during redeployments. The game runs on one server instance.
-- **Games in progress are not kept:** tables, games in progress, table chat and presence exist only in the server's memory. A restart or redeployment ends them, and an unfinished game is not recorded. Finished results are saved to the database. [OWNER: confirm the wording of the durability decision in docs/MATCH_RESULT_DURABILITY.md.]
+- **Games in progress are not kept:** tables, games in progress, table chat and presence exist only in the server's memory. A restart or redeployment ends them, and an unfinished game is not recorded. Finished results are saved to the database. A game that is still in progress is not kept if the server restarts or is updated. In rare cases a finished game may not be saved, for example if the server is replaced while the save is pending. Do not rely on Tableverse as the only record of anything important.
 - **Possible data loss:** we make reasonable efforts to keep your data, but beta services can lose data. Do not rely on Tableverse as the only record of anything important.
 - **Voice chat** depends on your network and may not connect on every network.
 
 ## 2. Your account
 
-- You must give a working e-mail address, and verify it, to create an account. A guest may play without an account, with the limits the app shows.
+- You need a working e-mail address. You must verify it before you can play. You can look at the public pages without an account, but playing needs a signed-in account.
 - You are responsible for keeping your password and your signed-in devices safe. Tell us at once if you think someone else has used your account (see the contact in `docs/SUPPORT_AND_REPORTING.md`). In your settings, **Sessions** lets you sign out of this device or of every device, which you should do if a device you no longer control is signed in.
 - You may delete your account at any time from your profile. The steps and what is removed are in `docs/ACCOUNT_DELETION_AND_RETENTION.md`. Deletion cannot be undone.
 - Only one account per person [OWNER: confirm whether multiple accounts are allowed in the beta].
