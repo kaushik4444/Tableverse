@@ -447,29 +447,42 @@ test('plugin: create/view/act/awaiting/botAction/results wiring', async () => {
   assert.ok(res.every((r) => Number.isFinite(r.score) && typeof r.winner === 'boolean'));
 });
 
-test('six-arm board: 5-6 players share a 60-square ring with a start on each arm tip', async () => {
+test('six-arm board data: the track is one closed loop of neighbouring squares, and each home lane starts beside the square before its start', () => {
+  const B = require('../games/ludo/board');
+  const adj = (a, b) => B.DIRS.some(([dq, dr]) => a.q + dq === b.q && a.r + dr === b.r);
+  const ring = B.order;
+  assert.equal(ring.length, B.TRACK);
+  ring.forEach((c, i) => assert.ok(adj(c, ring[(i + 1) % ring.length]), `square ${i} touches the next one`));
+  assert.equal(new Set(ring.map((c) => c.q + ',' + c.r)).size, ring.length, 'no square is used twice');
+  B.STARTS.forEach((s, k) => {
+    assert.ok(adj(ring[(s - 1 + B.TRACK) % B.TRACK], B.lanes[k][0]), `seat ${k}: the square before its start sits beside its home lane`);
+    assert.equal(B.lanes[k].length, 5, 'five home-lane squares');
+  });
+});
+
+test('six-arm board: 5-6 players share a 72-square track with a start on each arm tip', async () => {
   for (const n of [5, 6]) {
     const g = E.createGame(people(n), {}, mulberry32(7));
-    assert.equal(g.geo.track, 60); assert.equal(g.geo.lap, 59); assert.equal(g.geo.finished, 64);
+    assert.equal(g.geo.track, 72); assert.equal(g.geo.lap, 71); assert.equal(g.geo.finished, 76);
     assert.deepEqual(g.players.map((p) => p.seat), [0, 1, 2, 3, 4, 5].slice(0, n));
     assert.equal(g.players[n - 1].color, E.SEAT_COLORS[n - 1]);
-    assert.equal(E.absPos(g, 1, 0), 14, 'the second seat enters on the second arm tip');
-    assert.equal(E.absPos(g, 0, 58), 2, 'the seat walks 59 squares, ending just before its own tip');
-    assert.ok(g.geo.safe.has(4) && g.geo.safe.has(9) && !g.geo.safe.has(5), 'safe squares: each start and each notch');
+    assert.equal(E.absPos(g, 1, 0), 12, 'the second seat enters on the second arm tip');
+    assert.equal(E.absPos(g, 0, 70), 70, 'the seat walks 71 squares, ending just before its own start');
+    assert.ok(g.geo.safe.has(0) && g.geo.safe.has(4) && !g.geo.safe.has(1), 'safe squares: each start and the square four steps round from it');
   }
   const six = E.createGame(people(6), {}, mulberry32(3));
   six.phase = 'moving'; six.turn = 0; six.dice = 6;
   six.tokens[0][0] = 0; six.tokens[0][1] = 2;
-  // seat 0 lands on absolute square 10; seat 1 starts at 14, so its token at relative position 56 sits on absolute square 10
-  six.tokens[1][0] = 56;
+  // seat 0 lands on absolute square 6; seat 1 starts at 12, so its token at relative position 66 sits on absolute square 6
+  six.tokens[1][0] = 66;
   const r = E.applyAction(six, six.players[0].id, { type: 'move', token: 0 });
   assert.ok(r.ok, 'move ok');
   assert.equal(six.tokens[0][0], 6, 'seat 0 moves six squares');
   assert.equal(six.tokens[1][0], -1, 'the opponent on that hexagon square is sent back to its yard');
   assert.ok(six.log.some((e) => e.kind === 'capture'), 'the capture is logged');
-  assert.equal(E.newPosFor(six, 0, 58, 1), 59, 'the last ring square before home');
-  assert.equal(E.newPosFor(six, 0, 59, 5), 64, 'exactly home from the last ring square');
-  assert.equal(E.newPosFor(six, 0, 59, 6), null, 'overshoot is illegal');
+  assert.equal(E.newPosFor(six, 0, 70, 1), 71, 'the last ring square before home');
+  assert.equal(E.newPosFor(six, 0, 71, 5), 76, 'exactly home from the last ring square');
+  assert.equal(E.newPosFor(six, 0, 71, 6), null, 'overshoot is illegal');
 });
 
 test('playOut: full bot-only game finishes for 2 to 6 players', async () => {

@@ -9,6 +9,7 @@
 // column), then climbs five home-column squares and reaches home.
 
 const pacing = require('../pacing');
+const BOARD = require('./board');
 // Milliseconds the clients take to walk a token one square, to send a captured token home, and the pause after (public/games/ludo.js)
 const WALK = { step: 400, capture: 800, settle: 1300 };
 const TOKENS = 4;
@@ -21,7 +22,7 @@ const GEOMETRY = {
   square: { track: 52, lap: 51, starts: [0, 13, 26, 39], safe: [0, 8, 13, 21, 26, 34, 39, 47] },
   // Six arms, as on the reference board: each arm is a block of 10 ring squares (its left side outwards, the tip,
   // its right side inwards, then the notch to the next arm). A seat starts on the middle of its own arm's tip.
-  hex: { track: 60, lap: 59, starts: [4, 14, 24, 34, 44, 54], safe: [4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59] },
+  hex: { track: BOARD.TRACK, lap: BOARD.TRACK - 1, starts: BOARD.STARTS, safe: [...BOARD.SAFE] }, // the six-arm board, see board.js
 };
 // Lookup with the safe squares as a Set. Built once per shape; never sent to clients.
 const GEO_CACHE = {};
@@ -355,6 +356,7 @@ function viewFor(g, playerId) {
     })),
     turn: g.turn,
     phase: g.phase,
+    board: g.n >= 5 ? BOARD.boardView() : null, // the six-arm board for 5-6 players, drawn from this
     dice: g.dice,
     sixes: g.sixes,
     hand: myTokens, // for the shared card/hand UI conventions
