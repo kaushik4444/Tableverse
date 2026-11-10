@@ -311,6 +311,6 @@ Checked by reading the code (not observed in production):
 
 Test evidence:
 - CI on `d7da199`: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Production dependency audit and Build production Docker image all passed.
-- On the #85 branch (merged as `0207b31`)
+- PR #85 (merged as `0207b31`): tested head `f813db3`; CI green on that head (Build and test on Node 20 and 22, Browser layout and interaction checks, Production dependency audit, Build production Docker image) and Copilot review complete. Offline `npm test` was run in the sandbox earlier on the branch; `tests/pool-config.test.js` needs `pg-connection-string`, which the sandbox does not have. The PostgreSQL suites ran in CI.
 
 Stage 20.3 is marked PASS for this review item: PR #85 is merged, M2 is accepted as a follow-up and the M3 questions are decided.
