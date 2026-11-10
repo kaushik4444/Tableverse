@@ -240,6 +240,7 @@ const SAMPLE_SQL = {
   players: 'SELECT id, username, display_name, is_anonymous, created_at, last_seen_at FROM public."players" ORDER BY created_at LIMIT $1',
   auth_identities: 'SELECT player_id, provider, email, (email_verified_at IS NOT NULL) AS verified, created_at FROM public."auth_identities" ORDER BY created_at LIMIT $1',
   auth_sessions: 'SELECT player_id, created_at, expires_at, (revoked_at IS NOT NULL) AS revoked FROM public."auth_sessions" ORDER BY created_at LIMIT $1', // never the token hash
+  auth_devices: 'SELECT player_id, label, created_at, last_used_at, expires_at, (revoked_at IS NOT NULL) AS revoked FROM public."auth_devices" ORDER BY created_at LIMIT $1', // never the token hash
   auth_email_tokens: 'SELECT player_id, purpose, expires_at, (used_at IS NOT NULL) AS used FROM public."auth_email_tokens" ORDER BY created_at LIMIT $1',
   auth_rate_limits: 'SELECT scope, left(key, 8) AS key_prefix, count, window_start FROM public."auth_rate_limits" ORDER BY window_start LIMIT $1',
   matches: 'SELECT id, game_id, room_code, seats, finished_at FROM public."matches" ORDER BY finished_at LIMIT $1',
