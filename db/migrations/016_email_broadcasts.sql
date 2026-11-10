@@ -1,4 +1,4 @@
--- 017_email_broadcasts.sql: owner-only e-mail broadcasts (Stage 20.7).
+-- 016_email_broadcasts.sql: owner-only e-mail broadcasts.
 -- players.marketing_opt_out_at: when the account opted out of PROMOTIONAL mail (account mail is never affected).
 -- players.unsubscribe_token: random per account; the one-click unsubscribe link carries it, so no secret is needed.
 -- A broadcast stores WHO was chosen (player ids), never copies of addresses: the address is read when the mail is sent.
@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS email_broadcasts (
   subject VARCHAR(160) NOT NULL,
   body TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sending', 'sent')),
+  -- a worker holds a run while this lease is in the future; it renews it per batch. An expired lease means the run was abandoned.
+  lease_until TIMESTAMPTZ,
   recipient_count INT NOT NULL DEFAULT 0,
   sent_count INT NOT NULL DEFAULT 0,
   failed_count INT NOT NULL DEFAULT 0,

@@ -49,7 +49,9 @@ async function queueBroadcast({ actorId, audience, category, subject, body, expe
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [actorId, audience, category, subject, body, n]
     )).rows[0].id;
-    await c.query(`INSERT INTO email_broadcast_recipients (broadcast_id, player_id) SELECT DISTINCT $1::uuid, p.id ${from}`, [id]);
+    const copied = await c.query(`INSERT INTO email_broadcast_recipients (broadcast_id, player_id) SELECT DISTINCT $1::uuid, p.id ${from}`, [id]);
+    // the statements above run in READ COMMITTED: if the list moved between the count and the copy, nothing is queued
+    if (copied.rowCount !== n) throw new BroadcastError('The list changed while this was being queued. Check the count again before sending.', 409);
     // the audit row records what was sent to whom, never the message text
     await audit(c, { actorId, action: 'broadcast.queue', targetType: 'broadcast', targetId: id, detail: { audience, category, recipients: n } });
     return { id, recipientCount: n };
@@ -69,15 +71,27 @@ async function listBroadcasts({ page: p = 1 } = {}) {
   return { total, pageSize: PAGE, items: r.rows };
 }
 
-/** The next broadcast to send (also one that a crashed run left half sent). FOR UPDATE SKIP LOCKED: two runs never take the same one. */
+const LEASE = `NOW() + INTERVAL '5 minutes'`;
+
+/**
+ * The next broadcast to send. A queued one, or a sending one whose lease has run out (its worker stopped). The lease is what keeps
+ * two servers from sending the same broadcast: the row lock above ends with the statement, so the lease is the real guard.
+ */
 async function claimNext() {
   const r = await db.query(
-    `UPDATE email_broadcasts SET status = 'sending'
-      WHERE id = (SELECT id FROM email_broadcasts WHERE status IN ('queued', 'sending')
+    `UPDATE email_broadcasts SET status = 'sending', lease_until = ${LEASE}
+      WHERE id = (SELECT id FROM email_broadcasts
+                   WHERE status = 'queued' OR (status = 'sending' AND (lease_until IS NULL OR lease_until < NOW()))
                    ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
       RETURNING id, category, subject, body`
   );
   return r.rows[0] || null;
+}
+
+/** Called after each batch. Returns false when this run no longer holds the broadcast (it was finished elsewhere). */
+async function renewLease(broadcastId) {
+  const r = await db.query(`UPDATE email_broadcasts SET lease_until = ${LEASE} WHERE id = $1 AND status = 'sending'`, [broadcastId]);
+  return r.rowCount > 0;
 }
 
 /** Next pending recipients. `skip` is true when the mail must not go out now (no address, or promo after an opt-out). */
@@ -102,7 +116,7 @@ async function markRecipient(broadcastId, playerId, state) {
 
 async function finishBroadcast(broadcastId) {
   await db.query(
-    `UPDATE email_broadcasts b SET status = 'sent', finished_at = NOW(),
+    `UPDATE email_broadcasts b SET status = 'sent', finished_at = NOW(), lease_until = NULL,
             recipient_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id),
             sent_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id AND state = 'sent'),
             failed_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id AND state = 'failed')
@@ -120,4 +134,4 @@ async function unsubscribe(token) {
   return r.rowCount > 0;
 }
 
-module.exports = { broadcastCount, queueBroadcast, listBroadcasts, claimNext, pendingBatch, markRecipient, finishBroadcast, unsubscribe };
+module.exports = { broadcastCount, queueBroadcast, listBroadcasts, claimNext, renewLease, pendingBatch, markRecipient, finishBroadcast, unsubscribe };

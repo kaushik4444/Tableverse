@@ -383,10 +383,42 @@ const ADMIN_POSTS = [
       assert.equal(row.failed_count, 1);
       assert.equal(calls, 6);
     });
+    await test('a broadcast held by one run cannot be taken by another until its lease runs out', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Lease', body: 'One', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const first = await sb.store.claimNext();
+      assert.ok(first && first.id, 'the run claims the queued broadcast');
+      assert.equal(await sb.store.claimNext(), null, 'a second run gets nothing while the lease is held');
+      sb.store.broadcasts.find((b) => b.id === first.id).leaseUntil = Date.now() - 1; // the first run stopped
+      const again = await sb.store.claimNext();
+      assert.equal(again && again.id, first.id, 'an abandoned run is taken over');
+      await sb.store.finishBroadcast(first.id);
+    });
+    await test('a database error while recording a delivered mail stops the run and is not recorded as a failed delivery', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Store', body: 'Two', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      const real = sb.store.markRecipient;
+      let broke = false;
+      sb.store.markRecipient = async (bid, pid, state) => {
+        if (state === 'sent' && !broke) { broke = true; throw new Error('database unavailable'); }
+        return real(bid, pid, state);
+      };
+      try {
+        await assert.rejects(worker(async () => {}).runOnce(), /database unavailable/);
+      } finally { sb.store.markRecipient = real; }
+      const states = [...sb.store.broadcastRecipients.get(row.id).values()];
+      assert.ok(!states.includes('failed'), 'the mail that went out is not recorded as failed');
+      assert.equal(row.status, 'sending', 'the run is left for a later attempt');
+      row.leaseUntil = Date.now() - 1;
+      await worker(async () => {}).runOnce(); // the retry finishes the broadcast
+      assert.equal(row.status, 'sent');
+      assert.equal(row.failed_count, 0);
+    });
     await test('the broadcast history is owner-only and carries no message text', async () => {
       const r = await bOwner.b.get('/api/admin/broadcasts');
       assert.equal(r.status, 200);
-      assert.equal(r.json.items.length, 3);
+      assert.equal(r.json.items.length, 5);
       assert.ok(r.json.items.every((x) => !('body' in x)));
       assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
     });

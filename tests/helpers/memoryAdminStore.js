@@ -121,10 +121,18 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       return { total: items.length, pageSize: 25, items: items.slice((Math.max(1, Number(p) || 1) - 1) * 25, Math.max(1, Number(p) || 1) * 25) };
     },
     async claimNext() {
-      const b = broadcasts.find((x) => x.status === 'queued' || x.status === 'sending');
+      const now = Date.now();
+      const b = broadcasts.find((x) => x.status === 'queued' || (x.status === 'sending' && (!x.leaseUntil || x.leaseUntil < now)));
       if (!b) return null;
       b.status = 'sending';
+      b.leaseUntil = now + 5 * 60 * 1000;
       return { id: b.id, category: b.category, subject: b.subject, body: b.body };
+    },
+    async renewLease(id) {
+      const b = broadcasts.find((x) => x.id === id);
+      if (!b || b.status !== 'sending') return false;
+      b.leaseUntil = Date.now() + 5 * 60 * 1000;
+      return true;
     },
     async pendingBatch(id, n) {
       const out = [];
