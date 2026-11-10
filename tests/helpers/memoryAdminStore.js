@@ -35,6 +35,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     async setRole({ actorId, targetId, role }) {
       const { noop } = policy.checkSetRole({ actor: players.get(actorId), target: players.get(targetId), newRole: role });
       if (noop) return { changed: false, role };
+      if (players.get(targetId).suspended_at) throw new policy.PolicyError('Lift the suspension before changing this account\'s role.', 409);
       const from = players.get(targetId).role;
       players.get(targetId).role = role;
       log(actorId, role === 'admin' ? 'role.grant_admin' : 'role.revoke_admin', 'player', targetId, { from, to: role });

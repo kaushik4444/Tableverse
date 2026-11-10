@@ -285,6 +285,12 @@ const ADMIN_POSTS = [
       assert.equal((await admin.b.post('/api/admin/users/unsuspend', { playerId: victim.id })).status, 403);
       assert.equal(s.store.players.get(victim.id).suspended_at ?? null, null);
     });
+    await test('a suspended account cannot be promoted until the suspension is lifted', async () => {
+      const p = await s.login({ email: 'promoted@t.test', verified: true });
+      assert.equal((await owner.b.post('/api/admin/users/suspend', { playerId: p.id, reason: 'x' })).status, 200);
+      assert.equal((await owner.b.post('/api/admin/roles', { playerId: p.id, role: 'admin' })).status, 409);
+      assert.equal(s.store.players.get(p.id).role, 'user');
+    });
     await test('the owner suspends an ordinary account with a cleaned reason, the audit row and the socket closing', async () => {
       const victim = await s.login({ email: 'bad.actor@example.com', verified: true });
       const r = await owner.b.post('/api/admin/users/suspend', { playerId: victim.id, reason: '  spam\n\nlinks  ' });

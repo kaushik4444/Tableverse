@@ -35,7 +35,7 @@ async function lockStaff(client, actorId) {
 
 /** Locks the given accounts (always in id order, so two admins cannot deadlock) and returns them by id. */
 async function lockAccounts(client, ids) {
-  const r = await client.query('SELECT id, role, is_anonymous FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[...new Set(ids)]]);
+  const r = await client.query('SELECT id, role, is_anonymous, suspended_at FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[...new Set(ids)]]);
   return new Map(r.rows.map((row) => [row.id, row]));
 }
 
@@ -106,6 +106,8 @@ async function setRole({ actorId, targetId, role }) {
     const rows = await lockAccounts(c, [actorId, targetId]);
     const { noop } = policy.checkSetRole({ actor: rows.get(actorId), target: rows.get(targetId), newRole: role });
     if (noop) return { changed: false, role };
+    // a suspended account stays a plain user until the suspension is lifted: a promotion now would leave it unable to sign in
+    if (rows.get(targetId).suspended_at) throw new policy.PolicyError('Lift the suspension before changing this account\'s role.', 409);
     // the WHERE clause repeats the rule in SQL: an owner row can never match, whatever the code above did
     const upd = await c.query("UPDATE players SET role = $2 WHERE id = $1 AND role <> 'owner' AND role <> $2", [targetId, role]);
     if (upd.rowCount !== 1) throw new policy.PolicyError('The role was not changed.', 409);

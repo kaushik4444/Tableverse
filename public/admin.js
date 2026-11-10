@@ -148,7 +148,7 @@
     main.innerHTML = `<h2>Users <small class="ad-muted">${o.total}</small></h2>
       <form class="ad-search ad-row" id="uSearch"><input name="q" value="${esc(q)}" placeholder="Search name or username" maxlength="40" aria-label="Search users" style="flex:1"><button class="ad-btn primary">Search</button></form>
       <form class="ad-search ad-row" id="lookupForm"><input name="username" placeholder="Exact username for lookup" maxlength="24" aria-label="Look up a username" style="flex:1"><button class="ad-btn">Look up</button></form>
-      <div id="lookupOut"></div>
+      <div id="lookupOut" aria-live="polite"></div>
       <p id="uMsg" class="ad-msg" role="status"></p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Player</th><th>Role</th><th>Verified</th><th>Joined</th><th>Last seen</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="ad-muted">No players found.</td></tr>'}</tbody></table></div>
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="uPrev" ${page <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${page} of ${pages}</span><button class="ad-btn" id="uNext" ${page >= pages ? 'disabled' : ''}>Next</button></div>
