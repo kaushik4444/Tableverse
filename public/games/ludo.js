@@ -1,48 +1,78 @@
-/* Ludo table renderer: a classic cross board drawn as one SVG, glossy tokens on top, and a single compact turn bar.
+/* Ludo table renderer: a cross board for 2-4 players, or a hexagon for 5-6, drawn as one SVG, glossy tokens on top,
+ * and a single compact turn bar.
  * Rules and server state live in games/ludo/engine.js; this file only draws a view and sends { roll | ready | move }.
  *
- * Geometry (cell units on a 15 x 15 board, a cell's centre is +0.5): seat 0 is the top-left yard and the other seats
- * follow clockwise. Everything for seat 0 is defined once and rotated by 90 degrees per seat. */
+ * Two boards share one interface (see geometry below): where(seat, pos, t) gives the centre of the square a token
+ * stands on, and ringKey tells tokens that share a square apart. Board coordinates: the cross is 15 x 15 cells, the
+ * hexagon is 100 x 100 units. The square board is unchanged from before 5-6 player support. */
 (() => {
   'use strict';
   const { esc } = window.CardTable;
 
-  const LAP = 51; // ring squares a token walks (internal positions 0..50), then 51..55 = home column, 56 = home
-  const FINISHED = 56;
   const SEAT = [
     { name: 'red', hex: '#ef4444', dark: '#b91c1c', light: '#fecaca' },
     { name: 'green', hex: '#22c55e', dark: '#15803d', light: '#bbf7d0' },
     { name: 'yellow', hex: '#f5b301', dark: '#b45309', light: '#fde68a' },
     { name: 'blue', hex: '#3b82f6', dark: '#1d4ed8', light: '#bfdbfe' },
+    { name: 'orange', hex: '#f97316', dark: '#c2410c', light: '#fed7aa' },
+    { name: 'purple', hex: '#a855f7', dark: '#7e22ce', light: '#e9d5ff' },
   ];
-  const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]); // ring squares that protect from capture
-  const seatsFor = (n) => (n === 2 ? [0, 2] : [0, 1, 2, 3].slice(0, n));
+  // Seats used for n players. Two players sit opposite each other on the cross, as on a real board.
+  const seatsFor = (n) => (n === 2 ? [0, 2] : Array.from({ length: n }, (_, i) => i));
 
   // rotate a point (cell units) a quarter turn clockwise, k times
   const rot = ([x, y], k) => { for (let i = 0; i < k; i++) [x, y] = [15 - y, x]; return [x, y]; };
   const center = ([c, r]) => [c + 0.5, r + 0.5];
 
+  // ---- Cross board (2-4 players), cell units on 15 x 15 ----
   // Ring: 13 squares for seat 0 (start square first), rotated for the next three seats.
   const RING0 = [[1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [6, 5], [6, 4], [6, 3], [6, 2], [6, 1], [6, 0], [7, 0], [8, 0]];
-  const RING = [];
-  for (let k = 0; k < 4; k++) for (const cell of RING0) RING.push(rot(center(cell), k).map((v) => v - 0.5));
-  // Home column for seat 0: five squares leading to the centre; position 56 sits in the centre triangle.
+  const CROSS_RING = [];
+  for (let k = 0; k < 4; k++) for (const cell of RING0) CROSS_RING.push(rot(center(cell), k).map((v) => v - 0.5));
+  // Home column for seat 0: five squares leading to the centre; the finished position sits in the centre triangle.
   const LANE0 = [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7]];
-  const lane = (seat) => LANE0.map((cell) => rot(center(cell), seat).map((v) => v - 0.5));
+  const crossLane = (seat) => LANE0.map((cell) => rot(center(cell), seat).map((v) => v - 0.5));
   const YARD0 = [[1.9, 1.9], [4.1, 1.9], [1.9, 4.1], [4.1, 4.1]]; // token slots in the top-left yard
   const HOME0 = [[6.45, 7.05], [6.45, 7.5], [6.45, 7.95], [6.85, 7.5]]; // finished tokens in the seat's centre triangle
+  const CROSS = {
+    S: 15, fan: 1, track: 52, lap: 51, finished: 56, starts: [0, 13, 26, 39],
+    safe: new Set([0, 8, 13, 21, 26, 34, 39, 47]), // ring squares that protect from capture
+    where(seat, pos, t) {
+      if (pos === -1) return rot(YARD0[t], seat);
+      if (pos === this.finished) return rot(HOME0[t % 4], seat);
+      if (pos >= this.lap) return center(crossLane(seat)[pos - this.lap]);
+      return center(CROSS_RING[(this.starts[seat] + pos) % this.track]);
+    },
+  };
 
-  /** Centre of the square a token stands on, in cell units. */
-  function where(seat, pos, t) {
-    if (pos === -1) return rot(YARD0[t], seat);
-    if (pos === FINISHED) return rot(HOME0[t % 4], seat);
-    if (pos >= LAP) return center(lane(seat)[pos - LAP]);
-    return center(RING[(seat * 13 + pos) % 52]);
-  }
-  const ringKey = (seat, pos) => (pos >= 0 && pos < LAP ? 'r' + ((seat * 13 + pos) % 52) : null);
+  // ---- Hexagon board (5-6 players), units on 100 x 100 ----
+  // Corners are the seats' start squares, in clockwise order from the top. Ten ring squares a side, so 60 in all.
+  // A seat's home column runs from its corner to the centre, five squares, and the finished tokens gather there.
+  const HC = [50, 50];
+  const HR = 46; // corner radius
+  const HV = [0, 1, 2, 3, 4, 5].map((k) => { const a = ((-90 + 60 * k) * Math.PI) / 180; return [HC[0] + HR * Math.cos(a), HC[1] + HR * Math.sin(a)]; });
+  const lerp = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  const hexRing = [];
+  for (let k = 0; k < 6; k++) for (let j = 0; j < 10; j++) hexRing.push(lerp(HV[k], HV[(k + 1) % 6], j / 10));
+  const hexLane = (k) => [0, 1, 2, 3, 4].map((j) => lerp(HV[k], HC, (j + 1) / 10));
+  const hexYard = (k) => lerp(lerp(HV[k], HV[(k + 1) % 6], 0.5), HC, 0.35); // between two corners, inside the ring
+  const HEX_YARD_OFF = [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]];
+  const HEX_HOME_OFF = [[-1.4, -1.2], [1.4, -1.2], [-1.4, 1.2], [1.4, 1.2]];
+  const HEX = {
+    S: 100, fan: 100 / 15, track: 60, lap: 59, finished: 64, starts: [0, 10, 20, 30, 40, 50],
+    safe: new Set([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]), // corners and the middle of each side
+    where(seat, pos, t) {
+      if (pos === -1) { const y = hexYard(seat); const o = HEX_YARD_OFF[t]; return [y[0] + o[0], y[1] + o[1]]; }
+      if (pos === this.finished) { const h = lerp(HC, HV[seat], 0.12); const o = HEX_HOME_OFF[t % 4]; return [h[0] + o[0], h[1] + o[1]]; }
+      if (pos >= this.lap) return hexLane(seat)[pos - this.lap];
+      return hexRing[(this.starts[seat] + pos) % this.track];
+    },
+  };
+  const geoFor = (n) => (n >= 5 ? HEX : CROSS);
+  const ringKey = (geo, seat, pos) => (pos >= 0 && pos < geo.lap ? 'r' + ((geo.starts[seat] + pos) % geo.track) : null);
 
   const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map(), seq: null, myTurnWas: false,
-    key: null, disp: new Map(), plans: new Map(), snaps: new Map(), timer: null, holdUntil: 0 };
+    key: null, disp: new Map(), plans: new Map(), snaps: new Map(), timer: null, holdUntil: 0, geo: CROSS };
   const STEP_MS = 400; // one square per step, so every square of the walk can be followed (the server waits for this too)
   const SNAP_MS = 800; // a captured token stays visible a moment before it goes back to its yard
   const busy = () => ui.plans.size > 0 || ui.snaps.size > 0 || Date.now() < ui.holdUntil;
@@ -110,19 +140,18 @@
     ui.myTurnWas = v.myTurn;
   }
 
-  function boardSVG(n) {
-    const seats = seatsFor(n);
+  function crossSVG(seats) {
+    const G = CROSS;
     const cells = [];
-    const rect = (c, r, fill, extra = '') => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.14" fill="${fill}" ${extra}/>`;
-    RING.forEach(([c, r], i) => {
-      const startSeat = i % 13 === 0 ? i / 13 : -1;
+    const rect = (c, r, fill) => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.14" fill="${fill}"/>`;
+    CROSS_RING.forEach(([c, r], i) => {
+      const startSeat = G.starts.indexOf(i);
       const used = startSeat >= 0 && seats.includes(startSeat);
-      cells.push(rect(c, r, startSeat >= 0 ? SEAT[startSeat].hex : '#f1f5f9'));
-      if (startSeat >= 0 && !used) cells[cells.length - 1] = rect(c, r, SEAT[startSeat].light);
-      if (SAFE.has(i) && startSeat < 0) cells.push(`<text x="${c + 0.5}" y="${r + 0.72}" text-anchor="middle" font-size="0.62" fill="#94a3b8">★</text>`);
+      cells.push(rect(c, r, startSeat >= 0 ? (used ? SEAT[startSeat].hex : SEAT[startSeat].light) : '#f1f5f9'));
+      if (G.safe.has(i) && startSeat < 0) cells.push(`<text x="${c + 0.5}" y="${r + 0.72}" text-anchor="middle" font-size="0.62" fill="#94a3b8">★</text>`);
       if (startSeat >= 0) cells.push(`<text x="${c + 0.5}" y="${r + 0.72}" text-anchor="middle" font-size="0.62" fill="#fff">★</text>`);
     });
-    for (let k = 0; k < 4; k++) lane(k).forEach(([c, r]) => cells.push(rect(c, r, seats.includes(k) ? SEAT[k].light : '#f1f5f9')));
+    for (let k = 0; k < 4; k++) crossLane(k).forEach(([c, r]) => cells.push(rect(c, r, seats.includes(k) ? SEAT[k].light : '#f1f5f9')));
     const yards = [0, 1, 2, 3].map((k) => {
       const active = seats.includes(k);
       const [x, y] = rot([3, 3], k);
@@ -134,38 +163,71 @@
     return `<svg class="ludo-svg" viewBox="0 0 15 15" aria-hidden="true" focusable="false"><rect width="15" height="15" rx="0.7" fill="#fff"/>${yards}${cells.join('')}${centre}<circle cx="7.5" cy="7.5" r="0.28" fill="#fff" opacity=".9"/></svg>`;
   }
 
+  function hexSVG(seats) {
+    const G = HEX;
+    const pt = ([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`;
+    const wedges = [0, 1, 2, 3, 4, 5].map((k) => {
+      const on = seats.includes(k);
+      return `<polygon points="${pt(HC)} ${pt(HV[k])} ${pt(HV[(k + 1) % 6])}" fill="${on ? SEAT[k].light : '#f1f5f9'}" opacity="${on ? 0.55 : 0.9}"/>`;
+    }).join('');
+    const sq = (p, fill) => `<rect x="${(p[0] - 2.1).toFixed(2)}" y="${(p[1] - 2.1).toFixed(2)}" width="4.2" height="4.2" rx="0.6" fill="${fill}"/>`;
+    const star = (p, fill) => `<text x="${p[0].toFixed(2)}" y="${(p[1] + 0.85).toFixed(2)}" text-anchor="middle" font-size="2.6" fill="${fill}">★</text>`;
+    const ring = hexRing.map((p, i) => {
+      const k = G.starts.indexOf(i);
+      const used = k >= 0 && seats.includes(k);
+      let out = sq(p, k >= 0 ? (used ? SEAT[k].hex : SEAT[k].light) : '#f1f5f9');
+      if (k >= 0) out += star(p, '#fff');
+      else if (G.safe.has(i)) out += star(p, '#94a3b8');
+      return out;
+    }).join('');
+    const lanes = [0, 1, 2, 3, 4, 5].map((k) => hexLane(k).map((p) => sq(p, seats.includes(k) ? SEAT[k].light : '#e2e8f0')).join('')).join('');
+    const yards = [0, 1, 2, 3, 4, 5].map((k) => {
+      const on = seats.includes(k);
+      const y = hexYard(k);
+      const slots = HEX_YARD_OFF.map(([dx, dy]) => `<circle cx="${(y[0] + dx).toFixed(2)}" cy="${(y[1] + dy).toFixed(2)}" r="1.6" fill="${on ? SEAT[k].dark : '#cbd5e1'}" opacity="${on ? 0.22 : 0.5}"/>`).join('');
+      return `<g><rect x="${(y[0] - 6).toFixed(2)}" y="${(y[1] - 6).toFixed(2)}" width="12" height="12" rx="1.4" fill="${on ? SEAT[k].hex : '#cbd5e1'}"/><rect x="${(y[0] - 5).toFixed(2)}" y="${(y[1] - 5).toFixed(2)}" width="10" height="10" rx="1.1" fill="#fff" opacity="${on ? 0.92 : 0.6}"/>${slots}</g>`;
+    }).join('');
+    const outline = `<polygon points="${HV.map(pt).join(' ')}" fill="none" stroke="#cbd5e1" stroke-width="0.5"/>`;
+    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="2" fill="#fff"/>${wedges}${outline}${yards}${lanes}${ring}<circle cx="50" cy="50" r="1.2" fill="#fff" opacity=".9"/></svg>`;
+  }
+
+  function boardSVG(n) {
+    const seats = seatsFor(n);
+    return geoFor(n) === HEX ? hexSVG(seats) : crossSVG(seats);
+  }
+
   function tokensHTML(v) {
+    const G = ui.geo;
     const seats = v.players.map((p, i) => (Number.isInteger(p.seat) ? p.seat : seatsFor(v.n)[i]));
     // tokens that share a ring square are fanned out so each stays visible and tappable
     const groups = new Map();
     const shownTokens = v.players.map((p, i) => p.tokens.map((pos, t) => shownPos(`${i}-${t}`, pos)));
     v.players.forEach((p, i) => p.tokens.forEach((realPos, t) => {
       const pos = shownTokens[i][t];
-      const key = ringKey(seats[i], pos);
+      const key = ringKey(G, seats[i], pos);
       if (key) groups.set(key, (groups.get(key) || 0) + 1);
     }));
     const seen = new Map();
     const FAN = { 2: [[-0.2, 0], [0.2, 0]], 3: [[-0.2, -0.16], [0.2, -0.16], [0, 0.2]], 4: [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]] };
     const out = [];
-    const last = v.lastMove;
     v.players.forEach((p, i) => p.tokens.forEach((realPos, t) => {
       const pos = shownTokens[i][t];
       const seat = seats[i];
-      let [x, y] = where(seat, pos, t);
-      const key = ringKey(seat, pos);
+      let [x, y] = G.where(seat, pos, t);
+      const key = ringKey(G, seat, pos);
       let stack = 1;
       if (key && groups.get(key) > 1) {
         stack = Math.min(groups.get(key), 4);
         const idx = seen.get(key) || 0; seen.set(key, idx + 1);
         const off = (FAN[stack] || FAN[4])[idx % stack];
-        x += off[0]; y += off[1];
+        x += off[0] * G.fan; y += off[1] * G.fan;
       }
       const legal = !busy() && i === v.me && v.canMove && (v.legalTokens || []).includes(t);
-      const home = pos === FINISHED;
-      const label = pos === -1 ? `Bring token ${t + 1} out` : pos >= LAP && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
+      const home = pos === G.finished;
+      const label = pos === -1 ? `Bring token ${t + 1} out` : pos >= G.lap && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
       const moved = ui.plans.has(`${i}-${t}`);
       const pid = `${i}-${t}`;
-      out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / 15) * 100}%;top:${(y / 15) * 100}%"><i></i></button>`);
+      out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / G.S) * 100}%;top:${(y / G.S) * 100}%"><i></i></button>`);
     }));
     return out.join('');
   }
@@ -209,10 +271,10 @@
   }
 
   function playersHTML(v) {
-    const lead = (window.CardTable.pt ? window.CardTable.pt.leaderOf : () => -1)(v.players.length, (k) => v.players[k].tokens.reduce((s, x) => s + (x === FINISHED ? 100 : Math.max(x, 0)), 0), 1);
+    const lead = (window.CardTable.pt ? window.CardTable.pt.leaderOf : () => -1)(v.players.length, (k) => v.players[k].tokens.reduce((s, x) => s + (x === ui.geo.finished ? 100 : Math.max(x, 0)), 0), 1);
     return `<ul class="ludo-players" aria-label="Players">${v.players.map((p, i) => {
       const seat = SEAT[Number.isInteger(p.seat) ? p.seat : seatsFor(v.n)[i]];
-      const home = p.tokens.filter((x) => x === FINISHED).length;
+      const home = p.tokens.filter((x) => x === ui.geo.finished).length;
       const active = i === v.turn && v.phase !== 'gameOver' && v.phase !== 'ready';
       const pips = [0, 1, 2, 3].map((k) => `<i class="${k < home ? 'on' : ''}"></i>`).join('');
       return `<li data-vid="${esc(p.id)}" data-pid="${esc(p.id)}" class="ludo-player ${active ? 'active' : ''} ${i === v.me ? 'you' : ''}" style="--c:${seat.hex}"><span class="player-dot"></span><b>${i === lead && (v.phase === 'rolling' || v.phase === 'moving') ? '<span class="crown" title="In the lead">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' <small>you</small>' : ''}</b><span class="pips" title="${home} of 4 home">${pips}</span></li>`;
@@ -228,6 +290,7 @@
 
   function render(root, v, ctx) {
     ui.latest = v; ui.ctx = ctx; ui.root = root;
+    ui.geo = geoFor(v.n);
     react(v); planMoves(v);
     // remember where tokens were so moves glide instead of jumping
     const before = new Map();
@@ -235,7 +298,7 @@
     root.innerHTML = `<section class="ludo ${v.phase === 'gameOver' ? 'over' : ''}">
       <div class="wz-top"><div class="wz-round"><b>Ludo</b><span class="label"> · ${v.players.length} players</span></div>${CardTable.toolbarSeed('<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>', 'lt', 'ludo-tools')}</div>
       <div class="ludo-layout">
-        <div class="ludo-main">${barHTML(v)}<div class="ludo-board" style="--n:${v.n}">${boardSVG(v.n)}<div class="ludo-tokens">${tokensHTML(v)}</div></div></div>
+        <div class="ludo-main">${barHTML(v)}<div class="ludo-board ${ui.geo === HEX ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v.n)}<div class="ludo-tokens">${tokensHTML(v)}</div></div></div>
         <aside class="ludo-side">${playersHTML(v)}${endHTML(v, ctx)}</aside>
       </div>
     </section>`;

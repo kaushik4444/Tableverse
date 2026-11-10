@@ -313,6 +313,25 @@ test('renderer exposes clickable own yard, track and home tokens only when legal
   assert.ok(!root.innerHTML.includes('tok:4'), 'opponent tokens cannot be selected');
 });
 
+test('renderer: 5-6 players get the hexagon board, every token lands inside it', async () => {
+  const reg = {};
+  const cardTable = { esc: (x) => String(x), toast() {}, sound: { button: () => '' }, chat: { button: () => '' },
+    toolbarSeed: (mid) => mid, register: (id, r) => { reg[id] = r; } };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/games/ludo.js'), 'utf8'), { window: { CardTable: cardTable, innerWidth: 900 }, CardTable: cardTable });
+  const registered = reg.ludo;
+  for (const n of [4, 5, 6]) {
+    const g = E.createGame(people(n), {}, mulberry32(9));
+    const v = E.viewFor(g, 'p0');
+    v.players.forEach((p) => { p.tokens = [-1, 0, g.geo.lap - 1, g.geo.finished]; });
+    const html = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
+    registered.render(html, v, { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
+    assert.equal(html.innerHTML.includes('ludo-board hex'), n >= 5, `${n} players: hexagon only for 5-6`);
+    const left = [...html.innerHTML.matchAll(/left:([-\d.]+)%;top:([-\d.]+)%/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    assert.equal(left.length, n * 4, 'four tokens per player');
+    assert.ok(left.every(([x, y]) => x >= 0 && x <= 100 && y >= 0 && y <= 100), 'tokens sit on the board');
+  }
+});
+
 test('geometry: a lap is 51 ring squares, then a 5-square home column, then home (56)', async () => {
   assert.equal(E.LAP, 51); assert.equal(E.HOME_COL, 5); assert.equal(E.FINISHED, 56);
   const g = E.createGame(people(2), {}, mulberry32(1));

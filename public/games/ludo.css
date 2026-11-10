@@ -35,6 +35,12 @@
 .ludo-token.green { --c: #22c55e; --d: #166534; --l: #bbf7d0; }
 .ludo-token.yellow { --c: #f5b301; --d: #a16207; --l: #fef3c7; }
 .ludo-token.blue { --c: #3b82f6; --d: #1e40af; --l: #bfdbfe; }
+.ludo-token.orange { --c: #f97316; --d: #c2410c; --l: #fed7aa; }
+.ludo-token.purple { --c: #a855f7; --d: #7e22ce; --l: #e9d5ff; }
+/* hexagon board: 60 squares around the ring, so the tokens are smaller than on the cross */
+.ludo-board.hex .ludo-token { width: 3.6%; }
+.ludo-board.hex .ludo-token.stacked { width: 3%; }
+.ludo-board.hex .ludo-token.done { width: 3.2%; }
 .ludo-token.stacked { width: 5.2%; }
 .ludo-token.done { width: 4.4%; opacity: .95; }
 .ludo-token:disabled { opacity: 1; }
