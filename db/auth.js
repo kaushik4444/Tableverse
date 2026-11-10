@@ -123,15 +123,15 @@ async function readSessionFromCookie(rawToken) {
  * session is revoked, and only then is the new one inserted. The partial unique index in migration 006 is the backstop:
  * even a code path that forgets this cannot leave two active sessions.
  */
-async function createSession(client, playerId) {
+async function createSession(client, playerId, deviceId = null) {
   const raw = newRawToken();
   const tokenHash = hashToken(raw);
   const ttlDays = sessionTtlDays();
   await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [playerId]);
   await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
   await client.query(
-    'INSERT INTO auth_sessions (player_id, token_hash, expires_at) VALUES ($1, $2, NOW() + ($3::text || \' days\')::interval)',
-    [playerId, tokenHash, String(ttlDays)]
+    'INSERT INTO auth_sessions (player_id, token_hash, expires_at, device_id) VALUES ($1, $2, NOW() + ($3::text || \' days\')::interval, $4)',
+    [playerId, tokenHash, String(ttlDays), deviceId]
   );
   return raw;
 }
@@ -255,14 +255,15 @@ async function loginEmail({ email, password, rememberDevice = false, userAgent =
       [row.id, PROVIDER_EMAIL, normEmail(email)]
     );
     if (!now.rows.length || now.rows[0].password_hash !== row.password_hash) throw new AuthError('Invalid email or password.', 401);
-    const session = await createSession(client, row.id);
     // the device the browser sent is retired in this same transaction: its old token stops working with the new sign-in
     if (dbPlayers.isWellFormedToken(replaceDevice)) {
       await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(replaceDevice)]);
     }
-    // the new trusted device is issued under the same lock, so a reset, sign-out or suspension cannot slip in between
+    // the new trusted device is issued under the same lock, so a reset, sign-out or suspension cannot slip in between;
+    // the session is linked to it, so ending that device later ends this session too
     const device = rememberDevice ? await insertDevice(client, row.id, userAgent) : null;
-    return { session, device };
+    const session = await createSession(client, row.id, device ? device.id : null);
+    return { session, device: device ? device.raw : null };
   });
   const result = makeSessionResult(row, token.session);
   if (token.device) result.device = token.device;
@@ -429,6 +430,28 @@ async function resetPassword({ token, newPassword }) {
   });
 }
 
+/** The same answer as sessionInfo, for a player whose session another tab of this browser has just started. */
+async function sessionInfoForPlayer(playerId) {
+  const r = await db.query(
+    `SELECT id, username, display_name, avatar, is_anonymous, created_at, last_seen_at
+     FROM players WHERE id = $1 AND suspended_at IS NULL`,
+    [playerId]
+  );
+  if (!r.rows.length) return { authenticated: false, emailVerified: false, provider: null, email: null, player: null };
+  const player = r.rows[0];
+  const i = (await db.query(
+    `SELECT email, email_verified_at, provider FROM auth_identities WHERE player_id = $1 ORDER BY created_at ASC LIMIT 1`,
+    [player.id]
+  )).rows[0] || null;
+  return {
+    authenticated: true,
+    emailVerified: Boolean(i && i.email_verified_at),
+    provider: i ? i.provider : null,
+    email: i ? i.email : null,
+    player,
+  };
+}
+
 async function sessionInfo(rawToken) {
   const player = await dbPlayers.authenticateToken(rawToken);
   if (!player || !db.hasDatabase()) {
@@ -462,6 +485,8 @@ async function sessionInfo(rawToken) {
 /** Stage 20.9: device trust. Pure helpers first, then the functions the routes use. */
 const DEVICE_DAYS = 30;
 const DEVICE_MAX_AGE_SECONDS = DEVICE_DAYS * 24 * 60 * 60;
+/** How long a session started from a device is reused by a second restore of the same device (two tabs at once). */
+const REUSE_WINDOW_SECONDS = 10;
 
 /** A short label for the device, from the browser and system only (never the full user agent, never an address). */
 function deviceLabel(userAgent) {
@@ -476,12 +501,13 @@ function deviceLabel(userAgent) {
 /** Issues a trusted device inside the caller's transaction (which holds the account lock). Returns the token once; only its hash is stored. */
 async function insertDevice(client, playerId, userAgent = '') {
   const raw = newRawToken();
-  await client.query(
+  const r = await client.query(
     `INSERT INTO auth_devices (player_id, token_hash, label, expires_at)
-     VALUES ($1, $2, $3, NOW() + ($4::text || ' days')::interval)`,
+     VALUES ($1, $2, $3, NOW() + ($4::text || ' days')::interval)
+     RETURNING id`,
     [playerId, hashToken(raw), deviceLabel(userAgent), String(DEVICE_DAYS)]
   );
-  return raw;
+  return { id: r.rows[0].id, raw };
 }
 
 /**
@@ -508,11 +534,21 @@ async function restoreFromDevice(rawDevice) {
       [tokenHash, playerId]
     );
     if (!d.rows.length) return null;
-    const token = await createSession(client, playerId); // the older sessions of the account are retired here
+    const deviceId = d.rows[0].id;
     await client.query(
       `UPDATE auth_devices SET last_used_at = NOW(), expires_at = NOW() + ($2::text || ' days')::interval WHERE id = $1`,
-      [d.rows[0].id, String(DEVICE_DAYS)]
+      [deviceId, String(DEVICE_DAYS)]
     );
+    // Two tabs of one browser restoring at the same moment: the first restore has just started a session for this device. Keep
+    // that session instead of replacing it, so the second tab does not revoke the cookie the first one is about to use.
+    const recent = await client.query(
+      `SELECT 1 FROM auth_sessions
+        WHERE device_id = $1 AND revoked_at IS NULL AND expires_at > NOW() AND created_at > NOW() - INTERVAL '${REUSE_WINDOW_SECONDS} seconds'
+        LIMIT 1`,
+      [deviceId]
+    );
+    if (recent.rows.length) return { token: null, reused: true, playerId, device: rawDevice };
+    const token = await createSession(client, playerId, deviceId); // the older sessions of the account are retired here
     return { token, playerId, device: rawDevice }; // the device token comes back so the cookie's lifetime is renewed too
   });
 }
@@ -547,7 +583,12 @@ async function endCurrentSession({ sessionToken, deviceToken }) {
     );
     for (const { player_id: id } of owners.rows) await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [id]);
     if (sessionHash) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [sessionHash]);
-    if (deviceHash) await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [deviceHash]);
+    if (deviceHash) {
+      // sessions started from this browser's trusted device end with it, even one a racing restore created after this request began
+      const dev = await client.query('SELECT id FROM auth_devices WHERE token_hash = $1', [deviceHash]);
+      if (dev.rows.length) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL', [dev.rows[0].id]);
+      await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [deviceHash]);
+    }
     return owners.rows.length > 0;
   });
 }
@@ -596,5 +637,5 @@ module.exports = {
   revokeAllSessionsForCurrent,
   readSessionFromCookie,
   sessionInfo,
-  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, DEVICE_MAX_AGE_SECONDS,
+  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, sessionInfoForPlayer, DEVICE_MAX_AGE_SECONDS,
 };
