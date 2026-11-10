@@ -274,6 +274,123 @@ const ADMIN_POSTS = [
       assert.ok(!/10\.0\.0\.5|ECONNREFUSED/.test(JSON.stringify(r.json)));
       assert.equal((await admin.b.get('/api/admin/overview')).status, 200);
     });
+
+    console.log('owner e-mail broadcasts (Stage 20.7)');
+    const { createBroadcastWorker } = require('../lib/broadcast');
+    const bmail = [];
+    const sb = await start({ broadcastMail: bmail }); // its own store and mail, so the counts below are exact
+    const bOwner = await sb.login({ role: 'owner', email: 'owner@b.test', verified: true });
+    const bAdmin = await sb.login({ role: 'admin', email: 'staff@b.test', verified: true });
+    const bVer = await sb.login({ email: 'verified@b.test', verified: true });
+    const bUnver = await sb.login({ email: 'pending@b.test', verified: false });
+    const bOpted = await sb.login({ email: 'opted@b.test', verified: true });
+    const bOld = await sb.login({ email: 'lapsed@b.test', verified: true });
+    const bGuest = await sb.login({});
+    sb.store.players.get(bOld.id).last_seen = new Date(sb.clock.t - 40 * 24 * 3600 * 1000);
+    sb.store.players.get(bVer.id).last_seen = new Date(sb.clock.t - 1 * 24 * 3600 * 1000);
+    const preview = (audience, category) => bOwner.b.get(`/api/admin/broadcasts/preview?audience=${audience}&category=${category}`);
+    const sendBody = (over = {}) => ({ audience: 'all', category: 'account', subject: 'Hello', body: 'A line', expectedCount: 0, ...over });
+    const worker = (deliver) => createBroadcastWorker({
+      store: sb.store, makeUnsubscribeUrl: (t) => 'https://app.test/api/email/unsubscribe?token=' + t, pauseMs: 0, logger: { error() {} }, deliver,
+    });
+
+    await test('the broadcast tools are refused to admins, players and guests (403 / 401)', async () => {
+      assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
+      assert.equal((await bAdmin.b.get('/api/admin/broadcasts/preview?audience=all&category=account')).status, 403);
+      assert.equal((await bAdmin.b.post('/api/admin/broadcasts', sendBody())).status, 403);
+      assert.equal((await bVer.b.post('/api/admin/broadcasts', sendBody())).status, 403);
+      assert.equal((await (await sb.guest()).get('/api/admin/broadcasts')).status, 401, 'anonymous');
+      assert.equal((await bGuest.b.get('/api/admin/broadcasts')).status, 403, 'a signed-in player with no e-mail is still a player');
+      assert.equal(sb.queued.count, 0);
+    });
+    await test('the preview counts exactly the accounts each audience reaches, and never returns an address', async () => {
+      const count = async (a, c) => { const r = await preview(a, c); assert.equal(r.status, 200); assert.ok(!JSON.stringify(r.json).includes('@b.test')); return r.json.count; };
+      // accounts with an address: owner, admin, verified, pending (unverified), opted (verified), lapsed (verified, inactive); the guest has none
+      assert.equal(await count('all', 'account'), 6);
+      assert.equal(await count('verified', 'account'), 5);
+      assert.equal(await count('unverified', 'account'), 1);
+      assert.equal(await count('admins', 'account'), 2);
+      assert.equal(await count('players', 'account'), 4);
+      assert.equal(await count('inactive', 'account'), 1);
+      assert.equal(await count('all', 'promo'), 5, 'promotions skip unverified accounts');
+    });
+    await test('promotional mail is never offered to unverified accounts (400), in the preview and in a send', async () => {
+      assert.equal((await preview('unverified', 'promo')).status, 400);
+      assert.equal((await bOwner.b.post('/api/admin/broadcasts', sendBody({ audience: 'unverified', category: 'promo', expectedCount: 1 }))).status, 400);
+      assert.equal(sb.queued.count, 0);
+    });
+    await test('a send is refused (409) when the list changed since the owner looked at the count, and nothing is queued', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ expectedCount: 4 }));
+      assert.equal(r.status, 409);
+      assert.match(r.json.error, /recipients, not 4/);
+      assert.equal(sb.store.broadcasts.length, 0);
+    });
+    await test('an owner send is queued with its recipients fixed; the audit row keeps counts, never the message text', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ expectedCount: 6, body: 'Secret launch text' }));
+      assert.equal(r.status, 200);
+      assert.equal(r.json.recipientCount, 6);
+      assert.equal(sb.queued.count, 1, 'the sender is woken straight away');
+      const row = sb.store.broadcasts[0];
+      assert.equal(row.status, 'queued');
+      assert.equal(sb.store.broadcastRecipients.get(row.id).size, 6);
+      const entry = sb.store.audit.find((a) => a.action === 'broadcast.queue');
+      assert.ok(entry && entry.detail.recipients === 6 && entry.detail.audience === 'all');
+      assert.ok(!JSON.stringify(sb.store.audit).includes('Secret launch text'), 'the audit never keeps the message');
+    });
+    await test('an opt-out is honoured at once for promotions; the unsubscribe link needs no login and is answered the same for any token', async () => {
+      sb.store.players.get(bOpted.id).unsubscribe_token = '11111111-2222-4333-8444-555555555555';
+      const page = await fetch(`http://127.0.0.1:${sb.port}/api/email/unsubscribe?token=11111111-2222-4333-8444-555555555555`);
+      assert.equal(page.status, 200);
+      assert.match(await page.text(), /You are unsubscribed/);
+      assert.equal(sb.store.players.get(bOpted.id).opted_out, true);
+      assert.equal((await preview('all', 'promo')).json.count, 4, 'promotions now skip the opted-out account');
+      assert.equal((await preview('all', 'account')).json.count, 6, 'account mail is not affected by promotions opt-out');
+      for (const tok of ['nope', '00000000-0000-4000-8000-000000000000', '1%27%20OR%201%3D1']) {
+        const r = await fetch(`http://127.0.0.1:${sb.port}/api/email/unsubscribe?token=${encodeURIComponent(tok)}`);
+        assert.equal(r.status, 200, tok);
+        assert.match(await r.text(), /You are unsubscribed/);
+      }
+    });
+    await test('the sender delivers each recipient once, reads opt-outs at send time, and finishes the broadcast', async () => {
+      const sent = [];
+      sb.store.players.get(bOld.id).opted_out = true; // after queuing: account mail still goes, it is not promotional
+      const out = await worker(async (m) => sent.push(m)).runOnce();
+      assert.equal(out.done, true);
+      const row = sb.store.broadcasts[0];
+      assert.equal(row.status, 'sent');
+      assert.equal(row.sent_count, 6);
+      assert.equal(sent.length, 6, 'one delivery per recipient');
+      assert.equal(new Set(sent.map((m) => m.idempotencyKey)).size, 6, 'each delivery has its own idempotency key');
+      assert.ok(sent.every((m) => m.category === 'account' && m.unsubscribeUrl === null), 'account mail carries no unsubscribe link');
+      assert.equal((await worker(async () => {}).runOnce()).idle, true, 'nothing left to send, and nothing is sent twice');
+    });
+    await test('a promotional send skips unverified and opted-out recipients, links every mail to unsubscribe and escapes the text', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ category: 'promo', subject: 'Diwali offer', body: 'Lamps <3 & sweets', expectedCount: 3 }));
+      assert.equal(r.status, 200, JSON.stringify(r.json));
+      const sent = [];
+      await worker(async (m) => sent.push(m)).runOnce();
+      assert.deepEqual(sent.map((m) => m.to).sort(), ['owner@b.test', 'staff@b.test', 'verified@b.test']);
+      assert.ok(sent.every((m) => m.unsubscribeUrl && m.html.includes(m.unsubscribeUrl) && m.text.includes(m.unsubscribeUrl)), 'every promo mail has the link');
+      assert.ok(sent.every((m) => m.html.includes('Lamps &lt;3 &amp; sweets') && !m.html.includes('<3')), 'the owner text is escaped');
+    });
+    await test('a failed delivery is recorded as failed and the rest of the broadcast still goes out', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Release', body: 'New version', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      let calls = 0;
+      await worker(async (m) => { calls++; if (m.to === 'verified@b.test') throw new Error('provider 503'); }).runOnce();
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      assert.equal(row.status, 'sent');
+      assert.equal(row.failed_count, 1);
+      assert.equal(calls, 6);
+    });
+    await test('the broadcast history is owner-only and carries no message text', async () => {
+      const r = await bOwner.b.get('/api/admin/broadcasts');
+      assert.equal(r.status, 200);
+      assert.equal(r.json.items.length, 3);
+      assert.ok(r.json.items.every((x) => !('body' in x)));
+      assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
+    });
+    await sb.close();
   } finally { await s.close(); }
   console.log(`\n${passed} admin API tests passed`);
 })();
