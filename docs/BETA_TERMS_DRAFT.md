@@ -1,6 +1,6 @@
 # Tableverse beta terms and acceptable use — BETA DRAFT
 
-**Status: DRAFT for the limited beta. Not approved for publication, and not shown in the app. Requires the owner's approval and legal review before publication and before any public launch. Nothing here has been checked by a lawyer.**
+**Status: DRAFT for the limited beta. Not approved for publication, and not shown in the app. Requires the owner's written approval of each open question at the end before publication (no lawyer review is planned). Nothing here has been checked by a lawyer.**
 
 Based on the behaviour of the code on `main` (2026-11-10). Bracketed items are for the owner to complete. Privacy matters are in `docs/PRIVACY_NOTICE_DRAFT.md`.
 
@@ -15,7 +15,7 @@ Tableverse is a beta service. It is provided free of charge, and features may ch
 
 ## 2. Your account
 
-- You must be 18 or over to create an account. Registration asks you to confirm this; it is a self-declaration. [LEGAL: confirm the wording.]
+- You must be 18 or over to create an account. Once approved and built, registration will ask you to confirm this; it is a self-declaration. [OWNER: approve the wording.]
 - You need a working e-mail address. You must verify it before you can play. You can look at the public pages without an account, but playing needs a signed-in account.
 - You are responsible for keeping your password and your signed-in devices safe. Tell us at once if you think someone else has used your account (see the contact in `docs/SUPPORT_AND_REPORTING.md`). In your settings, **Sessions** lets you sign out of this device or of every device, which you should do if a device you no longer control is signed in.
 - You may delete your account at any time from your profile. The steps and what is removed are in `docs/ACCOUNT_DELETION_AND_RETENTION.md`. Deletion cannot be undone.
@@ -54,12 +54,12 @@ You agree not to:
 ## 6. The service and its limits
 
 - The service is provided "as is" during the beta, without any warranty that it will be available, error-free or secure.
-- [LEGAL: limitation of liability and disclaimer wording to be provided by a lawyer. Do not publish without it.]
+- [OWNER: approve the wording of this section. No lawyer wording has been obtained, and none is claimed.]
 - Nothing in these terms limits any right you have under law that cannot be excluded.
 
 ## 7. Changes
 
-We may change these terms during the beta. We will say the date of the change at the top of this page. Continued use after a change means you accept it. [LEGAL: confirm the notice period required.]
+We may change these terms during the beta. We will say the date of the change at the top of this page. Continued use after a change means you accept it. [OWNER: approve the notice period.]
 
 ## 8. Contact
 
@@ -69,7 +69,7 @@ Last updated: [OWNER: date].
 
 ---
 
-## Items requiring owner decisions or legal review
+## Items requiring owner decisions
 
 1. Governing law and the place where disputes are resolved.
 2. Limitation-of-liability, indemnity and disclaimer wording.

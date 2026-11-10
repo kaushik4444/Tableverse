@@ -217,12 +217,16 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 The owner account is the highest-impact target: it can send e-mail to every registered account, change admin roles and sign accounts out. It **cannot be suspended** (`checkSuspend` in `lib/adminPolicy.js`), **cannot be deleted** (409), and **no other admin exists** for this beta, so the admin console cannot contain it. Containment goes through the owner's e-mail account and the provider dashboards. The owner runs every step; nothing here is automated.
 
 1. **Secure the owner's e-mail account first.** The app has no signed-in change-password route: the only password change is the e-mail reset link (`POST /api/auth/forgot-password`, then `POST /api/auth/reset-password`). If the mailbox is also compromised, a reset gives the attacker the password. Change the mailbox password, turn on its two-factor sign-in, and check its sign-in history, forwarding rules and filters. Do this before step 2.
-2. **End every session.** While signed in, use **Settings > Sessions > sign out of every device** (`POST /api/auth/logout-all`). This ends the owner's sessions and trusted devices, and closes open sockets.
-3. **Reset the password from the secured mailbox, at least 30 minutes after step 1.** A reset ends every session and closes open sockets (tested: `tests/session.pg.test.js`, `tests/devices.pg.test.js`). A reset works only for an account whose e-mail address is verified. The server does not cancel other unused reset links when one is used (`db/auth.js` `resetPassword` consumes only the link submitted). A link the attacker already holds therefore stays usable until it expires, 30 minutes after it was issued (`AUTH_RESET_TTL_MIN`). Waiting out that window is the only mitigation in place today (see proposed change C-F in the readiness document).
+2. **End every session.** While signed in, use **Log out everywhere** in the account menu, or **Sessions > sign out of every device** in Settings (`POST /api/auth/logout-all`). This ends the owner's sessions and trusted devices, and closes open sockets. It does not change the password, so it does not by itself stop someone who already knows it.
+3. **Reset the password from the secured mailbox, straight after step 1 (no waiting before it).** The reset sets a new password, so the old one stops working, and it ends every session and closes open sockets (tested: `tests/session.pg.test.js`, `tests/devices.pg.test.js`). A reset works only for an account whose e-mail address is verified.
+   - Reset links already issued before containment are a separate risk. The server does not cancel other unused reset links when one is used (`db/auth.js` `resetPassword` consumes only the link submitted), so an older link that someone holds can still set a new password until it expires. Its lifetime is `AUTH_RESET_TTL_MIN` (default 30 minutes; check the live value).
+   - After the reset, wait at least `AUTH_RESET_TTL_MIN` from the time the last reset e-mail was sent before the owner signs in again, and check the mailbox for any reset e-mail the owner did not request. Sign in again only after that.
+   - Proposed change C-F (cancel other unused reset links) removes the wait; until it is approved and built, this waiting rule applies.
 4. **Check what the compromised session did.** Run these read-only in the database after step 3 (never through the console, which the attacker may have used):
    - `SELECT id, role FROM players WHERE role <> 'user';` must show only the owner. Any other admin is a grant the owner did not make: the owner demotes it through the console only after step 3 (`POST /api/admin/roles`).
    - `SELECT at, action, actor_id, target_type, target_id FROM admin_audit_log ORDER BY at DESC LIMIT 200;` lists every admin action with its time. Look for sign-outs, suspensions, role changes, announcements and broadcasts that the owner did not make.
    - `SELECT id, created_at, audience, category, status, recipient_count FROM email_broadcasts ORDER BY created_at DESC LIMIT 20;` A sent broadcast cannot be unsent. Record it and the recipient count.
+   - **A queued or sending broadcast cannot be cancelled in the app.** Its only statuses are `queued`, `sending` and `sent` (migration 016), and the worker resumes unfinished jobs after a restart, so a restart does not stop it. Stopping one needs a database change, which needs owner approval, or a proposed cancel control (C-G, not built). Wave 1 sends no broadcasts at all, so this should never arise during the beta.
    - Announcements: check the admin console's Announcements list for banners the owner did not write.
 5. **Check the providers the owner account could reach**, and rotate what might have been seen (owner-run; see "Accidental exposure of credentials" for the list of secrets and where each is stored):
    - **GitHub:** account password and two-factor sign-in, personal access tokens, repository and environment secrets, the `production-cleanup` environment's reviewers, the Actions run history (any manual run of the cleanup workflow the owner did not start), and the Protect-Main ruleset.
@@ -275,3 +279,15 @@ Production cleanup stays disabled. There are two scripts with **different** guar
 3. Failures roll back the transaction.
 
 Owner-recorded: the production dry run reported zero eligible accounts. The live values (the variable, the reviewer, the role of each secret) are not verifiable from the repository and stay manual checks.
+
+## Repository safety
+`main` is protected by a ruleset ("Protect-Main", GitHub > Settings > Rules > Rulesets) that requires a pull request and passing status checks before merge. **Status: enabled**, all five CI jobs required: `Build and test (Node 20)`, `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`.
+
+## Abuse / rate limits
+Auth endpoints are rate limited per address and account in `auth_rate_limits`; WebSockets are limited per IP, per socket message rate, payload (8 KiB) and buffered bytes. Check logs for `slow down` closes and `too many connections` spikes.
+
+## Neon connection: TLS setting (`sslmode`)
+
+- Keep `?sslmode=require` (or `verify-full`) in the Neon URL. `db/poolConfig.js` rewrites `require`, `prefer` and `verify-ca` to `verify-full` at start-up, which is what they already mean: TLS with the certificate and host name checked. The connection is the same; only the library's deprecation warning goes away.
+- Do not change it to `disable`. In production a remote host whose URL has no `sslmode` at all is still forced to verified TLS.
+- A URL that also sets `ssl`, `sslrootcert` or similar, or `uselibpqcompat`, is passed on unchanged, so the warning can still appear for those. That is expected.

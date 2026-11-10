@@ -1,6 +1,6 @@
 # Stage 20.6: invite-only beta readiness (updated 2026-11-10)
 
-**Status: NOT A GO YET.** The server-side gaps for a signed-in, invited beta are closed on `main` (through PR #96). Before Wave 1, four small code changes need the owner's approval (section 3), the policy text needs approval, and several manual checks must be recorded on the live site.
+**Status: NOT A GO YET.** The server-side gaps for a signed-in, invited beta are closed on `main` (through PR #96). Before Wave 1, three small code changes need the owner's approval (C-A, C-B and C-D in section 3), the policy text needs approval, and several manual checks must be recorded on the live site. C-C is deferred, because Wave 1 sends no broadcasts.
 
 **Scope:** free, invite-only beta for friends and friends-of-friends. Signed-in players only. Adults aged 18 and over. One owner account and no other admin. No ads, payments or promotional e-mail campaigns. Nothing in this document authorises a production change, a secret change, a credential rotation, a cleanup run, a database change, a load test, a new admin account or a merge.
 
@@ -55,7 +55,7 @@ Each change is described with its exact anchors. None is implemented or tested y
 - Until this ships, the fallback is a direct link to the approved text in the invitation message, if the owner accepts that.
 - Test: a browser check that the links exist and open.
 
-**C-C. No broadcasts to unverified accounts (D-6).** Recommended option:
+**C-C. No broadcasts to unverified accounts (D-6). Deferred: not needed for Wave 1.** Wave 1 sends no broadcasts at all (owner rule, section 7), so this code change is not a Wave 1 blocker. Build it only if broadcasts are ever used. Option described for that later use:
 - `db/broadcast.js` `recipientsFrom` (lines 23–28): require `a.email_verified_at IS NOT NULL` for every category during the beta. This changes what `all`, `players`, `inactive` and `admins` mean: they become verified-only.
 - `lib/broadcast.js` `validateTarget` (line 25): refuse `audience: 'unverified'` with a clear message.
 - `public/admin.js` (lines 296 and 307): preselect "Verified accounts" and update the category labels.
@@ -80,12 +80,14 @@ Each change is described with its exact anchors. None is implemented or tested y
 - Test: a second reset link stops working after the first is used.
 - Until this ships, the runbook's compromise procedure waits at least 30 minutes after the mailbox is secured (`docs/OPERATIONS_RUNBOOK.md`, step 3).
 
+**C-G. Cancel control for e-mail broadcasts (optional; only if broadcasts are ever used).** Broadcast statuses are `queued`, `sending` and `sent` (migration 016), and the worker resumes unfinished jobs after a restart, so there is no way in the app to stop one. The change would add a `cancelled` status and an owner-only cancel route. Not needed while Wave 1 sends no broadcasts.
+
 ## 4. Release gate
 
 Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** open, **[C]** needs an approved change, **[D]** owner decision, **[M]** manual check on the live site.
 
 **Repository and deployment**
-- [x] Protect-Main requires the CI checks before merge (`docs/OPERATIONS_RUNBOOK.md`, "Repository safety").
+- [x] Protect-Main requires the CI checks before merge (`docs/OPERATIONS_RUNBOOK.md`, "Repository safety"). Ruleset status checked live through the rulesets API on 2026-11-10: `Protect-Main` is active on the branch target.
 - [M] M-1: latest `main` deployed on Render; `/healthz` 200; `/readyz` 200 `ready` with `store: postgres`.
 - [M] M-3: `MATCH_SPOOL_DIR` unset as in `render.yaml`; Render's behaviour on a restart (same machine or fresh) checked in the dashboard.
 
@@ -112,7 +114,7 @@ Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** o
 
 **Data and deletion**
 - [ ] S-11: deletion of a throwaway account; its finished match shows `Deleted player`.
-- [ ] **C-C** broadcasts limited to verified accounts, approved and built.
+- [D] **Owner rule:** no broadcasts during Wave 1 (recorded in section 7). Code change C-C deferred.
 - [D] O-8: retention for chat reports and broadcast history (see section 5).
 
 **Operations**
@@ -156,7 +158,7 @@ After each deploy, repeat S-1, S-6 and S-13.
 | O-3 | Age rule. | 18+ with a self-declared tick and no date of birth (D-2). Approve C-A. |
 | O-4 | Where the policy text is shown, and who approves it. | In-app pages after approval (C-B); the owner approves. |
 | O-5 | Operator identity and any details the law requires (for example, a provider notice). | Owner supplies. Nothing is invented. Open question for the owner, not for this document. |
-| O-6 | Legal questions: lawful basis, processor agreements (Render, Neon, Resend, Metered, Google, Cloudflare), governing law, liability, notice periods, EU and UK users. | Not reviewed now (D-9). Listed in both drafts; any remaining risk is accepted by the owner in writing, or the beta is limited to users the owner has agreed to accept. |
+| O-6 | Legal questions: controller and contact, provider identification (DDG § 5), legal bases, cookies (TDDDG § 25), rights and complaints, processor terms, age, retention, breach notice. | No lawyer review (D-9). The 14 questions are listed at the end of the privacy draft, each marked for the owner's written approval, with the sources checked on 2026-11-10. Any remaining risk is accepted by the owner in writing before Wave 1. |
 | O-7 | Support address, response target. | Placeholder until provided (D-4); wording in `docs/SUPPORT_AND_REPORTING.md` needs approval. |
 | O-8 | Retention for chat reports and broadcast history; whether live chat not removed on deletion is acceptable. | Decide before Wave 1 for reports (the full cleanup command empties them). Live chat: accept and disclose (already in the privacy draft). |
 | O-9 | Who reads reports, how often, appeals. | Owner, daily during the beta, by query. No appeals route yet; say so. |
@@ -168,14 +170,14 @@ After each deploy, repeat S-1, S-6 and S-13.
 
 **Launch blockers (must be done before the first invitation):**
 1. C-A approved and built: 18+ confirmation at registration, enforced on the server.
-2. C-C approved and built, or the owner records that the unverified-broadcast default is avoided by manual choice every time.
+2. Owner rule recorded: no broadcasts during Wave 1. C-C (verified-only broadcasts) is deferred, so it is not a blocker.
 3. C-D approved and built, and `VOICE_ENABLED=false` set on Render after approval; voice verified off on the live site.
 4. Policy text approved and reachable (C-B), or the owner accepts a direct-link fallback in writing.
 5. Smoke tests S-2 to S-6, S-8, S-9, S-11 and S-12 run on the live site with the results recorded.
 6. M-1, M-5, M-6 and M-7 recorded.
 7. Tester wording from `docs/MATCH_RESULT_DURABILITY.md` included in the invitation.
 
-**Recommendation:** approve C-A to C-D, let them ship as four small PRs with tests, record the live checks, and then go for a small Wave 1 of invited accounts. Hold any public launch until the legal questions in D-9 are settled.
+**Recommendation:** approve C-A, C-B and C-D, let them ship as three small PRs with tests, record the live checks, and then go for a small Wave 1 of invited accounts. Hold any public launch until the legal questions in D-9 are settled.
 
 ## 8. Deferred until after Wave 1
 

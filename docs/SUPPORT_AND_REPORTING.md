@@ -24,7 +24,7 @@ The in-app routes also reach the owner, and they stay in place:
 ## Manual process (beta)
 
 1. **Bug reports and feedback:** read in the Feedback tab; mark each item new, read or resolved.
-2. **Chat reports (safety):** run the read-only query in `docs/CHAT_MODERATION.md` daily; decide each one; record the decision in the owner's private notes. Suspensions go through the console (reason required).
+2. **Chat reports (safety):** the owner reviews every report, not only the newest. Each day, read the reports created after the checkpoint (the `created_at` and `id` of the last report reviewed, kept in the owner's private notes), oldest first, in pages of 50 with `ORDER BY created_at, id` and a keyset condition on that checkpoint. Decide each one, record the decision, and move the checkpoint to the last report reviewed. The query in `docs/CHAT_MODERATION.md` returns only the newest 50 and must not be used as the review. Suspensions go through the console (reason required).
 3. **Account deletion requests that cannot be done in the app** (for example, the account holder has lost the password): the owner replies from the support address, confirms the request came from the registered address, and then deletes the account only after taking a database backup and with the approval recorded in the runbook ("Decisions that always need explicit owner approval"). The owner account is never deleted this way.
 4. **Security or privacy reports:** handled in the same inbox, as a priority. Suspected compromise of an account: the owner follows "Suspected account compromise" in the runbook.
 
@@ -45,7 +45,7 @@ Do **not** include your password, your e-mail address, a verification or reset l
 
 Report it privately, to the support address above. Do not post it in chat, in a public issue or in a feedback message, and do not test it on other people's accounts.
 
-- **Suspected compromise of your account:** change your password, then use **Settings > Sessions > sign out of every device**. Then write to the support address.
+- **Suspected compromise of your account:** change your password, then use **Log out everywhere** in the account menu (or **Sessions** in Settings) to sign out of every device. Then write to the support address.
 - **Someone's personal information visible in the app:** report the message with the chat report button, and write to the support address.
 - **A possible vulnerability:** write to the support address with what you found and how to reproduce it, without accessing data that is not yours.
 
