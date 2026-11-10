@@ -233,6 +233,13 @@
     return out.join('');
   }
 
+  /* On the hexagon the squares are close together, so the tokens cannot each have a large touch target on the board.
+   * These buttons list the legal moves with full-size targets. */
+  function pickHTML(v) {
+    if (ui.geo !== HEX || !v.canMove) return '';
+    return `<div class="ludo-picks" role="group" aria-label="Legal moves">${(v.legalTokens || []).map((t) => `<button type="button" class="btn ludo-pick" data-lt="tok:${t}" ${busy() ? 'disabled' : ''}>Move token ${t + 1}</button>`).join('')}</div>`;
+  }
+
   function dieHTML(d, rolling) {
     const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
     const on = new Set(PIPS[d] || []);
@@ -299,7 +306,7 @@
     root.innerHTML = `<section class="ludo ${v.phase === 'gameOver' ? 'over' : ''}">
       <div class="wz-top"><div class="wz-round"><b>Ludo</b><span class="label"> · ${v.players.length} players</span></div>${CardTable.toolbarSeed('<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>', 'lt', 'ludo-tools')}</div>
       <div class="ludo-layout">
-        <div class="ludo-main">${barHTML(v)}<div class="ludo-board ${ui.geo === HEX ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v.n)}<div class="ludo-tokens">${tokensHTML(v)}</div></div></div>
+        <div class="ludo-main">${barHTML(v)}<div class="ludo-board ${ui.geo === HEX ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v.n)}<div class="ludo-tokens">${tokensHTML(v)}</div></div>${pickHTML(v)}</div>
         <aside class="ludo-side">${playersHTML(v)}${endHTML(v, ctx)}</aside>
       </div>
     </section>`;

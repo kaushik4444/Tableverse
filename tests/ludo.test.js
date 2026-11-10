@@ -332,6 +332,25 @@ test('renderer: 5-6 players get the hexagon board, every token lands inside it',
   }
 });
 
+test('hexagon: legal moves are also offered as full-size buttons under the board', async () => {
+  const reg = {};
+  const cardTable = { esc: (x) => String(x), toast() {}, sound: { button: () => '' }, chat: { button: () => '' },
+    toolbarSeed: (mid) => mid, register: (id, r) => { reg[id] = r; } };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/games/ludo.js'), 'utf8'), { window: { CardTable: cardTable, innerWidth: 900 }, CardTable: cardTable });
+  const g = E.createGame(people(6), {}, mulberry32(4));
+  g.phase = 'moving'; g.turn = 0; g.dice = 6;
+  g.tokens[0] = [0, 2, -1, -1];
+  const v = E.viewFor(g, 'p0');
+  const html = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
+  reg.ludo.render(html, v, { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
+  for (const t of v.legalTokens) assert.ok(html.innerHTML.includes(`class="btn ludo-pick" data-lt="tok:${t}"`), `token ${t} has a move button`);
+  const five = E.createGame(people(4), {}, mulberry32(4));
+  five.phase = 'moving'; five.turn = 0; five.dice = 6;
+  const sq = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
+  reg.ludo.render(sq, E.viewFor(five, 'p0'), { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
+  assert.ok(!sq.innerHTML.includes('ludo-pick'), 'the cross board does not need move buttons');
+});
+
 test('geometry: a lap is 51 ring squares, then a 5-square home column, then home (56)', async () => {
   assert.equal(E.LAP, 51); assert.equal(E.HOME_COL, 5); assert.equal(E.FINISHED, 56);
   const g = E.createGame(people(2), {}, mulberry32(1));
