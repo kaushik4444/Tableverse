@@ -64,3 +64,5 @@ button.ad-btn, .ad-btn { min-height: 40px; padding: 0 14px; border-radius: 10px;
 .ad-chart .ad-grid-line { stroke: var(--line); stroke-width: 1; }
 .ad-chart .ad-axis { fill: currentColor; font-size: 11px; opacity: .75; }
 .ad-chart details { margin-top: 6px; }
+
+.ad-pill.danger { background: #3a1212; color: #ffb4b4; }

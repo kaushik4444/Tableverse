@@ -25,6 +25,8 @@ const api = (role) => ({
   'GET /api/admin/logs?level=&component=&event=&limit=100': () => ({ ok: true, held: 2, dropped: 0, capacity: 500, items: [{ time: '2026-11-08T08:00:00Z', level: 'error', component: 'db', event: 'db.pool_error', message: EVIL }, { time: '2026-11-08T07:00:00Z', level: 'info', component: 'app', event: 'server.started', port: 3000 }] }),
   'GET /api/admin/audit?page=1': () => ({ ok: true, total: 1, pageSize: 25, items: [{ id: 'x', at: '2026-11-08T08:00:00Z', actor: 'boss', action: 'role.grant_admin', target_type: 'player', target_id: 'abcdef1234', detail: { to: 'admin' } }] }),
   'POST /api/admin/announcements': () => ({ ok: true, announcement: { id: 'a2' } }),
+  'GET /api/admin/users/lookup?username=ann': () => ({ ok: true, user: { id: 'u1', username: 'ann', display_name: 'Ann', role: 'user', verified: true, created_at: '2026-11-01T10:00:00Z', last_seen_at: '2026-11-08T09:00:00Z', suspended_at: '2026-11-09T09:00:00Z', suspended_reason: 'spam', active_sessions: 0 } }),
+  'POST /api/admin/users/suspend': () => ({ ok: true, suspended: true, sessions: 1 }),
 });
 
 (async () => {
@@ -264,6 +266,21 @@ const api = (role) => ({
     await page.waitForSelector('[data-act="openFeedback"]');
     assert.equal(await page.locator('[data-act="openAdmin"]').count(), 0);
     await ctx.close(); server.close();
+  });
+
+  await test('users: sign-out and suspension are owner only; an admin sees neither; lookup shows the state of an account', async () => {
+    const a = await open('admin'); await tab(a.page, 'users'); await a.page.waitForSelector('.ad-t');
+    assert.equal(await a.page.locator('[data-so]').count(), 0, 'admins cannot sign players out');
+    assert.equal(await a.page.locator('[data-susp]').count(), 0, 'admins cannot suspend');
+    await a.close();
+    const o = await open('owner'); await tab(o.page, 'users'); await o.page.waitForSelector('.ad-t');
+    assert.ok(await o.page.locator('[data-so]').count() >= 1, 'the owner can sign out');
+    assert.ok(await o.page.locator('[data-susp]').count() >= 1, 'the owner can suspend an ordinary player');
+    await o.page.fill('#lookupForm input', 'ann'); await o.page.click('#lookupForm button');
+    await o.page.waitForSelector('#lookupOut:has-text("Suspended")');
+    assert.equal(await o.page.locator('#lookupOut').innerText().then((t) => t.includes('@ann')), true);
+    assert.equal(await o.page.locator('#lookupOut').innerText().then((t) => /@.*\.(com|test)|@example/.test(t)), false, 'no address shown');
+    await o.close();
   });
 
   await browser.close();

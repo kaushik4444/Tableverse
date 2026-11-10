@@ -156,11 +156,13 @@ const ADMIN_POSTS = [
       assert.equal((await owner.b.post('/api/admin/roles', { playerId: owner.id, role: 'admin' })).status, 400);
       assert.equal(s.store.players.get(owner.id).role, 'owner');
     });
-    await test('an admin cannot sign out the owner or another admin, but can sign out an ordinary player', async () => {
-      assert.equal((await admin.b.post('/api/admin/users/sign-out', { playerId: owner.id })).status, 403);
-      assert.equal((await admin.b.post('/api/admin/users/sign-out', { playerId: admin2.id })).status, 403);
-      assert.equal((await admin.b.post('/api/admin/users/sign-out', { playerId: user.id })).status, 200);
-      assert.deepEqual(s.signedOutCalls.map((c) => c.playerId), [user.id], 'open sockets of that player are closed');
+    await test('signing an account out is the owner\'s alone: an admin gets 403 even for an ordinary player, and nothing is revoked', async () => {
+      for (const target of [owner, admin2, user]) assert.equal((await admin.b.post('/api/admin/users/sign-out', { playerId: target.id })).status, 403);
+      assert.deepEqual(s.signedOutCalls, [], 'no sockets are closed by a refused request');
+    });
+    await test('the owner can sign an ordinary player out, and the open sockets of that player are closed', async () => {
+      assert.equal((await owner.b.post('/api/admin/users/sign-out', { playerId: user.id })).status, 200);
+      assert.deepEqual(s.signedOutCalls.map((c) => c.playerId), [user.id]);
     });
     await test('the owner may sign an admin out', async () => {
       assert.equal((await owner.b.post('/api/admin/users/sign-out', { playerId: admin2.id })).status, 200);
@@ -273,6 +275,48 @@ const ADMIN_POSTS = [
       assert.equal(r.status, 500);
       assert.ok(!/10\.0\.0\.5|ECONNREFUSED/.test(JSON.stringify(r.json)));
       assert.equal((await admin.b.get('/api/admin/overview')).status, 200);
+    });
+
+    console.log('suspension and lookup (Stage 20.8)');
+    await test('only the owner can suspend or lift a suspension; admins and players get 403 and change nothing', async () => {
+      const victim = await s.login({ email: 'victim.susp@example.com', verified: true });
+      assert.equal((await admin.b.post('/api/admin/users/suspend', { playerId: victim.id, reason: 'x' })).status, 403);
+      assert.equal((await user.b.post('/api/admin/users/suspend', { playerId: victim.id, reason: 'x' })).status, 403);
+      assert.equal((await admin.b.post('/api/admin/users/unsuspend', { playerId: victim.id })).status, 403);
+      assert.equal(s.store.players.get(victim.id).suspended_at ?? null, null);
+    });
+    await test('a suspended account cannot be promoted until the suspension is lifted', async () => {
+      const p = await s.login({ email: 'promoted@t.test', verified: true });
+      assert.equal((await owner.b.post('/api/admin/users/suspend', { playerId: p.id, reason: 'x' })).status, 200);
+      assert.equal((await owner.b.post('/api/admin/roles', { playerId: p.id, role: 'admin' })).status, 409);
+      assert.equal(s.store.players.get(p.id).role, 'user');
+    });
+    await test('the owner suspends an ordinary account with a cleaned reason, the audit row and the socket closing', async () => {
+      const victim = await s.login({ email: 'bad.actor@example.com', verified: true });
+      const r = await owner.b.post('/api/admin/users/suspend', { playerId: victim.id, reason: '  spam\n\nlinks  ' });
+      assert.equal(r.status, 200);
+      assert.ok(s.store.players.get(victim.id).suspended_at, 'suspended');
+      assert.equal(s.store.players.get(victim.id).suspended_reason, 'spam links');
+      assert.ok(s.store.audit.some((a) => a.action === 'user.suspend' && a.target_id === victim.id));
+      assert.ok(s.signedOutCalls.some((c) => c.playerId === victim.id), 'live sockets close now');
+      assert.equal((await owner.b.post('/api/admin/users/unsuspend', { playerId: victim.id })).status, 200);
+      assert.equal(s.store.players.get(victim.id).suspended_at, null);
+    });
+    await test('an owner cannot suspend an admin, the owner or themselves, or a guest', async () => {
+      const guest = await s.login({});
+      assert.equal((await owner.b.post('/api/admin/users/suspend', { playerId: admin.id })).status, 403);
+      assert.equal((await owner.b.post('/api/admin/users/suspend', { playerId: owner.id })).status, 400);
+      assert.equal((await owner.b.post('/api/admin/users/suspend', { playerId: guest.id })).status, 400);
+    });
+    await test('lookup is for staff, returns the state without an address, and an unknown name is simply not found', async () => {
+      const found = await s.login({ email: 'lookup.me@example.com', verified: true });
+      const uname = s.store.players.get(found.id).username;
+      assert.equal((await user.b.get('/api/admin/users/lookup?username=' + uname)).status, 403);
+      const r = await admin.b.get('/api/admin/users/lookup?username=' + uname);
+      assert.equal(r.status, 200);
+      assert.equal(r.json.user.username, uname);
+      assert.ok(!JSON.stringify(r.json).includes('lookup.me@example.com'), 'no address');
+      assert.equal((await admin.b.get('/api/admin/users/lookup?username=nobody_here_x')).json.user, null);
     });
   } finally { await s.close(); }
   console.log(`\n${passed} admin API tests passed`);

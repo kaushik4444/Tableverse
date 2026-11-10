@@ -112,6 +112,7 @@ async function authenticateToken(rawToken) {
     WHERE s.token_hash = $1
       AND s.revoked_at IS NULL
       AND s.expires_at > NOW()
+      AND p.suspended_at IS NULL
     LIMIT 1;
   `;
 
