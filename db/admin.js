@@ -164,7 +164,8 @@ async function suspendUser({ actorId, targetId, reason = '' }) {
   return db.withTransaction(async (c) => {
     const rows = await lockAccounts(c, [actorId, targetId]);
     policy.checkSuspend({ actor: rows.get(actorId), target: rows.get(targetId) });
-    const why = String(reason || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) || null;
+    // 200 characters by code point, so an emoji is never cut in half
+    const why = Array.from(String(reason || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 200).join('') || null;
     await c.query('UPDATE players SET suspended_at = NOW(), suspended_reason = $2 WHERE id = $1', [targetId, why]);
     const r = await c.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [targetId]);
     await audit(c, { actorId, action: 'user.suspend', targetType: 'player', targetId, detail: { sessions: r.rowCount, reason: why } });

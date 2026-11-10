@@ -160,15 +160,18 @@
       const name = String(new FormData(e.target).get('username') || '').trim().toLowerCase();
       const out = document.getElementById('lookupOut');
       if (!name) return;
+      const seq = ++lookupSeq;
       try {
         const r = await api('/api/admin/users/lookup?username=' + encodeURIComponent(name));
+        if (seq !== lookupSeq) return; // a later lookup has been asked for: this answer is out of date
         if (!r.user) { out.innerHTML = '<p class="ad-muted">No account with that username.</p>'; return; }
         const x = r.user;
         out.innerHTML = `<div class="ad-card"><b>${esc(x.display_name)}</b> <small class="ad-muted">@${esc(x.username)}</small>
           <p>Role: ${esc(x.role)} · Verified: ${x.verified ? 'yes' : 'no'} · Joined ${esc(when(x.created_at))} · Last seen ${esc(when(x.last_seen_at))}</p>
           <p>Active sessions: ${x.active_sessions}${x.suspended_at ? ` · <b>Suspended</b> since ${esc(when(x.suspended_at))}${x.suspended_reason ? ': ' + esc(x.suspended_reason) : ''}` : ''}</p></div>`;
-      } catch (err) { out.innerHTML = `<p class="ad-msg err">${esc(err.message)}</p>`; }
+      } catch (err) { if (seq === lookupSeq) out.innerHTML = `<p class="ad-msg err">${esc(err.message)}</p>`; }
     };
+    let lookupSeq = 0;
     document.getElementById('uNext').onclick = () => users(q, page + 1).catch(fail);
     main.querySelectorAll('[data-rv]').forEach((b) => { b.onclick = async () => { if (!confirm('Send this player a new verification e-mail?')) return; try { await api('/api/admin/users/resend-verification', { playerId: b.dataset.rv }); say('uMsg', 'Verification e-mail sent.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });
     main.querySelectorAll('[data-susp]').forEach((b) => { b.onclick = async () => {
