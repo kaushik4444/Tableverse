@@ -344,6 +344,7 @@ test('hexagon: legal moves are also offered as full-size buttons under the board
   const html = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
   reg.ludo.render(html, v, { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
   for (const t of v.legalTokens) assert.ok(html.innerHTML.includes(`class="btn ludo-pick" data-lt="tok:${t}"`), `token ${t} has a move button`);
+  assert.ok(html.innerHTML.includes('Token 3: in the yard'), 'a button says where a yard token stands');
   const five = E.createGame(people(4), {}, mulberry32(4));
   five.phase = 'moving'; five.turn = 0; five.dice = 6;
   const sq = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };

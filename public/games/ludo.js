@@ -249,7 +249,10 @@
    * These buttons list the legal moves with full-size targets. */
   function pickHTML(v) {
     if (ui.geo !== HEX || !v.canMove) return '';
-    return `<div class="ludo-picks" role="group" aria-label="Legal moves">${(v.legalTokens || []).map((t) => `<button type="button" class="btn ludo-pick" data-lt="tok:${t}" ${busy() ? 'disabled' : ''}>Move token ${t + 1}</button>`).join('')}</div>`;
+    const me = v.players[v.me];
+    // each button says where its token stands, so it can be matched with a piece on the board
+    const where = (pos) => (pos === -1 ? 'in the yard' : pos >= ui.geo.lap ? 'in the home lane' : `${pos} squares from start`);
+    return `<div class="ludo-picks" role="group" aria-label="Legal moves">${(v.legalTokens || []).map((t) => `<button type="button" class="btn ludo-pick" data-lt="tok:${t}" ${busy() ? 'disabled' : ''}>Token ${t + 1}: ${where(me.tokens[t])}</button>`).join('')}</div>`;
   }
 
   function dieHTML(d, rolling) {
