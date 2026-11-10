@@ -163,4 +163,9 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 .wz-round.gs-host { min-width: 0; flex: 0 1 auto; overflow: hidden; }
 .wz-round.gs-host > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wz-top > .gs-chip { margin-left: auto; flex: 0 0 auto; }
+/* Narrow phones: the settings chip is icon-only and sits flush against the title, so the title row stays on one line at 360 px */
+@media (max-width: 400px) {
+  .wz-top { gap: 0; }
+  .wz-top > .gs-chip { min-width: 32px; width: 32px; padding-inline: 0; margin-left: 0; }
+}
 .gs-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; text-align: left; }

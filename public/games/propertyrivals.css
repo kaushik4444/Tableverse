@@ -89,10 +89,9 @@
 @media (prefers-reduced-motion: reduce) { .pr .pr-news { animation: none; } }
 
 /* Tappable holdings in the rivals list and the city card */
-.pr .pr-hold-b { position: relative; display: inline-flex; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; border-radius: 4px; }
-/* a larger invisible tap area, so the layout does not change: 24 px on desktop, 44 px on touch screens and phones */
-.pr .pr-hold-b::before { content: ""; position: absolute; inset: -6px; }
-@media (max-width: 768px), (pointer: coarse) { .pr .pr-hold-b::before { inset: -16px; } }
+/* a real 24 px target on desktop and 44 px on touch screens and phones; the small swatch sits centred inside it and the targets never overlap */
+.pr .pr-hold-b { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; border-radius: 4px; }
+@media (max-width: 768px), (pointer: coarse) { .pr .pr-hold-b { width: 44px; height: 44px; } }
 .pr .pr-hold-b:focus-visible { outline: 2px solid var(--gold, #f2c14e); outline-offset: 2px; }
 .pr .pr-cash { display: grid; justify-items: end; line-height: 1.2; }
 .pr .pr-cash small { opacity: .75; font-weight: 600; }

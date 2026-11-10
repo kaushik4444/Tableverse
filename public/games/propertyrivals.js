@@ -240,7 +240,9 @@
     if (v.phase !== 'auction') ui.bid = 0;
     const board = `<div class="pr-board" role="group" aria-label="Game board">${v.squares.map((_, i) => squareHTML(v, i)).join('')}<div class="pr-center">${centerHTML(v)}</div></div>`;
     const focus = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.pr : null;
-    root.innerHTML = `<div class="wz pr" data-game="propertyrivals">
+    // a live redraw must not jump a reader back to the top of the city card's rent table
+    const scrolled = ['.pr-card-ov', '.pr-cardsheet'].map((sel) => { const el = root.querySelector(sel); return el ? el.scrollTop : null; });
+    root.innerHTML =`<div class="wz pr" data-game="propertyrivals">
       <div class="wz-top"><div class="wz-round"><b>Property Rivals</b><span class="label"> · round ${v.round}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-pr="rules">Rules</button>', 'pr')}</div>
       ${board}
@@ -249,12 +251,14 @@
     if (focus === 'bidv') { const el = root.querySelector('[data-pr="bidv"]'); if (el) el.focus(); }
     root.onclick = onClick; root.onchange = onChange;
     // the card takes focus when it opens and keeps it through live redraws; when it closes, focus returns to its holding
+    ['.pr-card-ov', '.pr-cardsheet'].forEach((sel, i) => { const el = root.querySelector(sel); if (el && scrolled[i] != null) el.scrollTop = scrolled[i]; });
+    // focus moves without scrolling, so the restored position is kept
     if (ui.card != null) {
       const sheet = root.querySelector('.pr-cardsheet');
-      if (sheet && !sheet.contains(document.activeElement)) { const x = sheet.querySelector('[data-pr="closeCard"]'); if (x) x.focus(); }
+      if (sheet && !sheet.contains(document.activeElement)) { const x = sheet.querySelector('[data-pr="closeCard"]'); if (x) x.focus({ preventScroll: true }); }
     } else if (ui.returnSq != null) {
       const back = root.querySelector(`[data-pr="card"][data-sq="${ui.returnSq}"]`);
-      if (back) back.focus();
+      if (back) back.focus({ preventScroll: true });
       ui.returnSq = null;
     }
   }
