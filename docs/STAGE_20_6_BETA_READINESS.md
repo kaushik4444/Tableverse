@@ -70,6 +70,16 @@ Each change is described with its exact anchors. None is implemented or tested y
 - Tests: a voice request is refused, and the welcome payload says voice is off.
 - Metered and the static TURN pair stay as they are. No rotation, no deletion, no cutover.
 
+**C-E. Database-name confirmation for the deletion job (optional, recommended for parity).**
+- `scripts/cleanup-unverified.js`: with `--execute`, require `--confirm=<database name>` equal to the database named in `DATABASE_URL`. Refuse otherwise, deleting nothing.
+- `.github/workflows/cleanup-unverified.yml`: pass the confirmation from a repository variable the owner sets (a name only, no value in the repository).
+- Test: `--execute` without a matching confirmation is refused, and nothing is deleted.
+
+**C-F. Cancel other unused reset links when one is used (optional security hardening).**
+- `db/auth.js` `resetPassword`: in the same transaction, mark every other unused `password_reset` token for that player as used.
+- Test: a second reset link stops working after the first is used.
+- Until this ships, the runbook's compromise procedure waits at least 30 minutes after the mailbox is secured (`docs/OPERATIONS_RUNBOOK.md`, step 3).
+
 ## 4. Release gate
 
 Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** open, **[C]** needs an approved change, **[D]** owner decision, **[M]** manual check on the live site.
@@ -106,7 +116,8 @@ Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** o
 - [D] O-8: retention for chat reports and broadcast history (see section 5).
 
 **Operations**
-- [x] Cleanup disabled and guarded (per script, `docs/OPERATIONS_RUNBOOK.md`); the owner recorded zero eligible accounts.
+- [x] Cleanup disabled; the scheduled workflow is a dry run; the owner recorded zero eligible accounts (`docs/OPERATIONS_RUNBOOK.md`).
+- [ ] **Known gap, owner to accept or approve C-E:** the deletion job runs `cleanup-unverified.js --execute`. Its guards are the production-cleanup reviewer, the `CLEANUP_EXECUTE` variable and the 1000-account cap. It has **no** database-name confirmation, unlike `cleanup-user-data.js`.
 - [M] M-5: `production-cleanup` has a required reviewer; `CLEANUP_EXECUTE` is not `true`; `CLEANUP_DRYRUN_DATABASE_URL` is a read-only role (names only, never values).
 - [M] M-6: `SELECT id, role FROM players WHERE role <> 'user';` returns only the owner (D-10).
 - [M] M-7: `SELECT count(*) FROM players WHERE is_anonymous;` returns 0; otherwise decide a rule first.
@@ -125,7 +136,7 @@ Run on the live domain with two test accounts that are not testers. Record times
 | S-4 | Open the verification link; reuse it | Verified; second use refused |
 | S-5 | Log in, log out, forgot password, new password, old session ends | As described |
 | S-6 | Public table, two accounts, one short game | Result in both histories |
-| S-7 | Keep me signed in: close and reopen | Signed in again; device listed under Sessions |
+| S-7 | Keep me signed in: sign in with the box ticked. In the browser's developer tools, delete **only** the `ct_session` cookie (keep `ct_device`), then reload | Signed in again, restored from the device cookie. Settings > Sessions > sign out of every device ends it, and the device cookie stops working |
 | S-8 | Chat: send, report, block | Report stored (checked with the read-only query); block hides chat and refuses invites |
 | S-9 | Feedback form, then the Feedback tab | Item listed as new |
 | S-10 | Owner console: Overview, Users lookup, Broadcasts preview (no send) | Loads for the owner; a second account gets 403 on `/api/admin/*` |
@@ -153,7 +164,7 @@ After each deploy, repeat S-1, S-6 and S-13.
 
 ## 7. Go / no-go
 
-**Current verdict: NO-GO for Wave 1.** Blocking items are listed below.
+**Current verdict: NO-GO for Wave 1.** Blocking items are listed below. The list is a minimum: a go requires every item in section 4 that applies to the chosen setup to be marked [x], including the known gap in cleanup unless the owner accepts it in writing.
 
 **Launch blockers (must be done before the first invitation):**
 1. C-A approved and built: 18+ confirmation at registration, enforced on the server.
