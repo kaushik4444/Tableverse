@@ -456,28 +456,6 @@ async function resetPassword({ token, newPassword }) {
   });
 }
 
-/** The same answer as sessionInfo, for a player whose session another tab of this browser has just started. */
-async function sessionInfoForPlayer(playerId) {
-  const r = await db.query(
-    `SELECT id, username, display_name, avatar, is_anonymous, created_at, last_seen_at
-     FROM players WHERE id = $1 AND suspended_at IS NULL`,
-    [playerId]
-  );
-  if (!r.rows.length) return { authenticated: false, emailVerified: false, provider: null, email: null, player: null };
-  const player = r.rows[0];
-  const i = (await db.query(
-    `SELECT email, email_verified_at, provider FROM auth_identities WHERE player_id = $1 ORDER BY created_at ASC LIMIT 1`,
-    [player.id]
-  )).rows[0] || null;
-  return {
-    authenticated: true,
-    emailVerified: Boolean(i && i.email_verified_at),
-    provider: i ? i.provider : null,
-    email: i ? i.email : null,
-    player,
-  };
-}
-
 async function sessionInfo(rawToken) {
   const player = await dbPlayers.authenticateToken(rawToken);
   if (!player || !db.hasDatabase()) {
@@ -511,8 +489,6 @@ async function sessionInfo(rawToken) {
 /** Stage 20.9: device trust. Pure helpers first, then the functions the routes use. */
 const DEVICE_DAYS = 30;
 const DEVICE_MAX_AGE_SECONDS = DEVICE_DAYS * 24 * 60 * 60;
-/** How long a session started from a device is reused by a second restore of the same device (two tabs at once). */
-const REUSE_WINDOW_SECONDS = 10;
 
 /** A short label for the device, from the browser and system only (never the full user agent, never an address). */
 function deviceLabel(userAgent) {
@@ -565,15 +541,8 @@ async function restoreFromDevice(rawDevice) {
       `UPDATE auth_devices SET last_used_at = NOW(), expires_at = NOW() + ($2::text || ' days')::interval WHERE id = $1`,
       [deviceId, String(DEVICE_DAYS)]
     );
-    // Two tabs of one browser restoring at the same moment: the first restore has just started a session for this device. Keep
-    // that session instead of replacing it, so the second tab does not revoke the cookie the first one is about to use.
-    const recent = await client.query(
-      `SELECT 1 FROM auth_sessions
-        WHERE device_id = $1 AND revoked_at IS NULL AND expires_at > NOW() AND created_at > NOW() - INTERVAL '${REUSE_WINDOW_SECONDS} seconds'
-        LIMIT 1`,
-      [deviceId]
-    );
-    if (recent.rows.length) return { token: null, reused: true, playerId, device: rawDevice };
+    // two tabs restoring at the same moment: the last one to run keeps its session; the other tab's cookie is refused, and its
+    // next request restores again from the same device
     const token = await createSession(client, playerId, deviceId); // the older sessions of the account are retired here
     return { token, playerId, device: rawDevice }; // the device token comes back so the cookie's lifetime is renewed too
   });
@@ -674,5 +643,5 @@ module.exports = {
   revokeAllSessionsForCurrent,
   readSessionFromCookie,
   sessionInfo,
-  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, sessionInfoForPlayer, DEVICE_MAX_AGE_SECONDS,
+  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, DEVICE_MAX_AGE_SECONDS,
 };

@@ -58,8 +58,6 @@ const PW = 'TestPass123!';
       const u = await newUser('Auto');
       const first = await login(u.email, true);
       const device = first.cookies.get('ct_device');
-      // a restore only replaces a session that is older than the reuse window (two tabs), so this one is aged first
-      await q("UPDATE auth_sessions SET created_at = NOW() - INTERVAL '1 minute' WHERE player_id = $1", [u.id]);
       const again = await restoreOn(device);
       const me = await again.get('/api/auth/session');
       assert.equal(me.json.authenticated, true);
@@ -142,7 +140,7 @@ const PW = 'TestPass123!';
       assert.equal((await restored.get('/api/auth/session')).json.authenticated, false, 'the restored session ended with its device');
       assert.equal(await activeSessions(u.id), 0);
     });
-    await test('two tabs of one browser restoring at the same moment share one session, and the cookie that was set works', async () => {
+    await test('two tabs of one browser restoring at the same moment both get a session, one live session remains, and each tab recovers', async () => {
       const u = await newUser('TwoTabs');
       const b1 = await login(u.email, true);
       const device = b1.cookies.get('ct_device');
@@ -150,27 +148,26 @@ const PW = 'TestPass123!';
       const tabA = await restoreOn(device);
       const tabB = await restoreOn(device);
       const [ra, rb] = await Promise.all([tabA.get('/api/auth/session'), tabB.get('/api/auth/session')]);
-      assert.equal(ra.json.authenticated, true, 'tab A is signed in');
-      assert.equal(rb.json.authenticated, true, 'tab B is signed in');
+      assert.equal(ra.json.authenticated, true, 'tab A is signed in by its own response');
+      assert.equal(rb.json.authenticated, true, 'tab B is signed in by its own response');
       assert.equal(ra.json.player.id, u.id);
-      assert.equal(rb.json.player.id, u.id);
-      const setters = [tabA, tabB].filter((c) => c.cookies.has('ct_session'));
-      assert.equal(setters.length, 1, 'exactly one response issued the session cookie');
-      assert.equal((await setters[0].get('/api/auth/session')).json.authenticated, true, 'the cookie that was set still works');
       assert.equal(await activeSessions(u.id), 1, 'one live session for the account');
+      // whichever tab lost the race has a refused cookie; its next request restores again from the device
+      assert.equal((await tabA.get('/api/auth/session')).json.authenticated, true, 'tab A recovers');
+      assert.equal((await tabB.get('/api/auth/session')).json.authenticated, true, 'tab B recovers');
+      assert.equal(await activeSessions(u.id), 1);
     });
-    await test('a restore right after another restore of the same device answers without issuing a second session', async () => {
+    await test('a second restore of the same device replaces the first session, and the first tab recovers on its next request', async () => {
       const u = await newUser('Second');
       const b1 = await login(u.email, true);
       const device = b1.cookies.get('ct_device');
       await ageSessions(u.id);
       const first = await restoreOn(device);
       assert.equal((await first.get('/api/auth/session')).json.authenticated, true);
-      const second = await restoreOn(device); // a second browser with only the device cookie, within the window
-      const r = await second.get('/api/auth/session');
-      assert.equal(r.json.authenticated, true);
-      assert.equal(r.json.player.id, u.id);
-      assert.equal(second.cookies.has('ct_session'), false, 'the reused session is not replaced, so no session cookie is set');
+      const second = await restoreOn(device);
+      assert.equal((await second.get('/api/auth/session')).json.authenticated, true);
+      assert.equal(await activeSessions(u.id), 1, 'the first session was retired');
+      assert.equal((await first.get('/api/auth/session')).json.authenticated, true, 'the first tab restores again from the device');
       assert.equal(await activeSessions(u.id), 1);
     });
     await test('replaying a device token after a password reset does not end a fresh login on another browser', async () => {
