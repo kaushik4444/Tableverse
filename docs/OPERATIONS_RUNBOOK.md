@@ -184,6 +184,60 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 - Test: two phones on different mobile networks join one table, both tap the microphone; each must hear the other. Status: **passed** (2026-11-06).
 - If it fails only on some networks, TURN is missing or misconfigured (wrong port or protocol, expired credential).
 
+## Failed deployment (added 2026-11-10)
+- A new instance that fails its migrations or cannot reach the database refuses to start. Render keeps the previous instance serving, so players are usually not affected. Confirm with `/readyz` and the Render events page.
+- Do not start a second deploy to "fix" a failed one. Find the cause in the start-up log (`Cannot reach the database`, a migration error), then roll back (above) if the cause is the new code.
+- Owner decides any change to Render settings or environment variables.
+
+## Authentication and session problems (added 2026-11-10)
+- **Symptoms:** players cannot sign in, sign-in loops, a session ends early, verification or reset e-mail does not arrive.
+- **Check first:** `/readyz`; a test sign-in; the logs for `[auth]` and `[email]` lines. E-mail failures are logged by kind, never with the address (`lib/email.js`).
+- **Known behaviour, not a fault:** signing in on a second device signs out the first (`docs/SESSION_POLICY.md`). Two tabs share one session. Verification links last 24 hours and reset links 30 minutes. Rate limits can answer "slow down" for a few minutes after many attempts from one address.
+- **E-mail not delivered:** check the Resend dashboard for the send; check the sender domain and `EMAIL_FROM` on Render. Do not turn off `REQUIRE_EMAIL_VERIFICATION` as a workaround; that needs owner approval (see "Incident handling").
+- **Resend a verification for one account:** staff use the Users tab, "Resend verification", on an unverified account (3 sends an hour per account).
+- **Never:** change sessions or passwords for many accounts at once, or edit the sessions table by hand, without owner approval.
+
+## Multiplayer or WebSocket outage (added 2026-11-10)
+- **Check:** `/healthz` (process up) and `/readyz` (database reachable). A `503 shutting down` answer during a deploy is expected for a short time.
+- **Player-side codes:** `4001` means the session ended (signed out or revoked); `4002` means the account signed in elsewhere; `slow down` or `too many connections` closes are the per-socket and per-address limits (`docs/SESSION_POLICY.md`, "Abuse / rate limits").
+- **Expected loss on any restart:** tables, games in progress and table chat are lost (see "What happens to players on a restart"). Tell players before a planned deploy, and deploy when few tables are active.
+- **Action:** if `/healthz` fails, roll back to the last good deploy. If only sockets fail, check the logs for a repeating error at connection time before restarting.
+- **Do not** raise the connection or message limits in an outage without owner approval.
+
+## Suspected account compromise (added 2026-11-10)
+1. Confirm the signs: sign-ins or changes the player did not make. The audit log shows admin actions only. The sessions table keeps each sign-in (its creation time and, for "keep me signed in", the device it came from) until it is purged, 7 to 30 days after it ends (`docs/ACCOUNT_DELETION_AND_RETENTION.md`), so look there quickly before it is removed.
+2. The owner suspends the account in the admin console (reason required). Suspension revokes all of the account's sessions and trusted devices and blocks sign-in (`POST /api/admin/users/suspend`, owner only). This is the step that signs the account out everywhere; no separate sign-out is needed.
+3. The owner may also sign the account out of every device with `POST /api/admin/users/sign-out`. This is owner-only (`checkSignOut` in `lib/adminPolicy.js`); admins cannot do it, even for ordinary players.
+4. The person behind the account resets the password through the unauthenticated e-mail reset, which stays available while the account is suspended. Check that the reset went to the right address. Whether a reset can be completed while the account is suspended was not verified here; the owner should test it before relying on this step.
+5. Record the time, the account id (not the e-mail address), what was seen and what was done, in the owner's private notes. Do not paste it into the repository, a chat or an issue.
+6. Do not delete the account as a response, because deletion removes the evidence.
+7. Owner decides whether to unsuspend, and whether to tell the player more.
+
+## Accidental exposure of credentials (added 2026-11-10)
+Secrets in use: `DATABASE_URL` (Neon), `RESEND_API_KEY`, `METERED_SECRET_KEY`, `TURN_CREDENTIAL` and `TURN_SHARED_SECRET` (if set), `ADMIN_OWNER_*` configuration. Values never belong in the repository, in docs, in logs or in chat.
+1. Stop the spread: if a value was pasted into a chat, an issue, a commit or a log, treat it as exposed.
+2. **Tell the owner immediately.** Rotation of any production credential needs explicit owner approval; this repository does not rotate or revoke them.
+3. Where the value is in git history, the owner decides how to remove it. Do not force-push `main` without approval.
+4. After rotation (owner-run), update every store that holds the value and verify each consumer. Do not assume Render is the only place:
+   - Render's secret environment for the web service (`DATABASE_URL`, `RESEND_API_KEY`, `METERED_SECRET_KEY`, TURN values). Redeploy, then confirm `/readyz` and a voice test.
+   - GitHub repository secrets for the cleanup workflow (`.github/workflows/cleanup-unverified.yml`): `CLEANUP_DRYRUN_DATABASE_URL` (read-only dry run) and `CLEANUP_DATABASE_URL` (the gated deletion job, in the production-cleanup environment). If the database role changed, the dry-run job fails until its secret is updated, and the deletion job cannot run.
+   - Any local or shell copy the owner keeps.
+   Each of these updates is an owner action.
+5. Check the logs for the value and note the result. The Metered key is never logged by design (`lib/meteredTurn.js`).
+
+## Decisions that always need explicit owner approval (added 2026-11-10)
+Nobody else, and no automated job, may do these without the owner's explicit approval recorded in writing:
+- change any Render setting or environment variable, or any Neon configuration;
+- run a destructive migration, a data cleanup, or set `CLEANUP_EXECUTE=true`;
+- delete accounts or data in bulk, or restore a database;
+- rotate or revoke any production credential, or change the Metered TURN configuration, including the static-to-dynamic cutover;
+- disable email verification, or change the session lifetime;
+- hand over the owner role, or change `ADMIN_OWNER_*`;
+- deploy by hand, merge a pull request, or buy or upgrade any paid service;
+- send an e-mail broadcast.
+
+The project owner is the decision-maker for every item in this section and for every incident that needs a decision. Owner contact: [OWNER: private contact address].
+
 ## Repository safety
 `main` is protected by a ruleset ("Protect-Main", GitHub > Settings > Rules > Rulesets) that requires a pull request and passing status checks before merge. **Status: enabled**, all five CI jobs required: `Build and test (Node 20)`, `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`.
 
