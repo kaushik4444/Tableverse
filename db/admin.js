@@ -140,6 +140,25 @@ async function signOutUser({ actorId, targetId }) {
   });
 }
 
+/**
+ * Staff asks for the verification email of an account that has not verified yet. The role check and the lookup run inside one
+ * transaction, and the address is returned to the server only (never to the browser). The audit row records the attempt, not the address.
+ */
+async function authorizeVerifyResend({ actorId, targetId }) {
+  return db.withTransaction(async (c) => {
+    const rows = await lockAccounts(c, [actorId, targetId]);
+    policy.checkManageUser({ actor: rows.get(actorId), target: rows.get(targetId) });
+    const r = await c.query(
+      `SELECT provider_user_id AS email FROM auth_identities
+       WHERE player_id = $1 AND provider = 'email' AND email_verified_at IS NULL LIMIT 1`,
+      [targetId]
+    );
+    if (!r.rows.length) throw new policy.PolicyError('This account has no unverified email address.', 409);
+    await audit(c, { actorId, action: 'user.verify_resend', targetType: 'player', targetId, detail: {} });
+    return { email: r.rows[0].email };
+  });
+}
+
 /** Used by the account deletion path: the owner account must be handed over (an operator action) before it can be deleted. */
 async function isOwner(playerId) { return (await getRole(playerId)) === 'owner'; }
 
@@ -391,7 +410,7 @@ async function purge() {
 
 module.exports = {
   RETENTION, PAGE,
-  getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, isOwner,
+  getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, isOwner,
   addCounters, addActive, forgetActor, overview, health,
   createFeedback, listFeedback, setFeedbackStatus,
   createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissed,
