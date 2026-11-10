@@ -9,9 +9,9 @@ module.exports = {
   icon: '🎲',
   accent: '#f59e0b',
   tagline: 'Race your four tokens home. Roll a six to get out, send opponents back to start, and finish by exact count.',
-  seats: { min: 2, max: 4, default: 4 },
+  seats: { min: 2, max: 6, default: 4 },
   stats: { kind: 'none', bestLabel: 'Best finish', bestOf: (row) => row.score - row.seats - 1, formatBest: (value) => String(-value) },
-  seatLabel: (i, seats) => (seats === 2 ? ['Red', 'Yellow'] : seats === 3 ? ['Red', 'Green', 'Yellow'] : ['Red', 'Green', 'Yellow', 'Blue'])[i],
+  seatLabel: (i, seats) => (seats === 2 ? ['Red', 'Yellow'] : seats === 3 ? ['Red', 'Green', 'Yellow'] : ['Red', 'Green', 'Yellow', 'Blue', 'Orange', 'Purple'])[i],
   options: [
     {
       key: 'bonusRolls',
@@ -39,10 +39,10 @@ module.exports = {
     },
   ],
   rules: [
-    '2-4 players, four tokens each. Everyone starts with all tokens in their yard.',
+    '2-6 players, four tokens each. Everyone starts with all tokens in their yard. Two to four players use a cross-shaped board; five or six use a hexagon with a colour at each corner.',
     'Roll a six to bring a token out onto your starting square. A six also earns another roll.',
     'Move your tokens clockwise around the board by the number rolled. After a full lap your token turns into its own coloured home column and must reach the centre by exact count.',
-    'Land on an opponent\'s token on a non-safe square and send it back to its yard. Safe squares (the four starts and four marked spots) protect from capture.',
+    'Land on an opponent\'s token on a non-safe square and send it back to its yard. Safe squares protect from capture: the starts, plus the marked spots (on the cross, eight steps after each start; on the hexagon, the middle of each side).',
     'Three sixes in a row end your turn. First player to get all four tokens home wins.',
   ],
 
