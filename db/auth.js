@@ -265,19 +265,24 @@ async function loginEmail({ email, password, rememberDevice = false, userAgent =
     );
     if (!now.rows.length || now.rows[0].password_hash !== row.password_hash) throw new AuthError('Invalid email or password.', 401);
     // the device the browser sent is retired in this same transaction: its old token stops working with the new sign-in
+    const revoked = []; // the sessions this sign-in ended (possibly another account's): the route closes their sockets
     if (dbPlayers.isWellFormedToken(replaceDevice)) {
       const old = await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL RETURNING id', [hashToken(replaceDevice)]);
       // sessions started from the replaced device end with it, whichever account they belong to
-      for (const d of old.rows) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL', [d.id]);
+      for (const d of old.rows) {
+        const r = await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL RETURNING player_id, token_hash', [d.id]);
+        revoked.push(...r.rows);
+      }
     }
     // the new trusted device is issued under the same lock, so a reset, sign-out or suspension cannot slip in between;
     // the session is linked to it, so ending that device later ends this session too
     const device = rememberDevice ? await insertDevice(client, row.id, userAgent) : null;
     const session = await createSession(client, row.id, device ? device.id : null);
-    return { session, device: device ? device.raw : null };
+    return { session, device: device ? device.raw : null, revoked: revoked.map((r) => ({ playerId: r.player_id, tokenHash: r.token_hash })) };
   });
   const result = makeSessionResult(row, token.session);
   if (token.device) result.device = token.device;
+  result.revokedSessions = token.revoked; // read by the login route only; never sent to the browser
   return result;
 }
 
