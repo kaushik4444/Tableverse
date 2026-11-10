@@ -127,6 +127,11 @@ const ADMIN_POSTS = [
       assert.equal((await user.b.post('/api/admin/users/resend-verification', { playerId: pending.id })).status, 403);
       assert.equal(mail.length, before);
     });
+    await test('refused requests do not use up the resend quota of an allowed one', async () => {
+      const otherAdmin = await s.login({ role: 'admin', email: 'peer-admin@example.com', verified: false });
+      for (let i = 0; i < 4; i++) assert.equal((await admin.b.post('/api/admin/users/resend-verification', { playerId: otherAdmin.id })).status, 403);
+      assert.equal((await owner.b.post('/api/admin/users/resend-verification', { playerId: otherAdmin.id })).status, 200);
+    });
     await test('the owner can grant and revoke admin, and each change is audited', async () => {
       assert.equal((await owner.b.post('/api/admin/roles', { playerId: other.id, role: 'admin' })).json.changed, true);
       assert.equal(s.store.players.get(other.id).role, 'admin');

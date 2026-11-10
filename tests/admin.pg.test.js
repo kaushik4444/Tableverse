@@ -27,7 +27,11 @@ const OWNER_EMAIL = 'boss.admin@test.local';
     const { start } = require('../server');
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
-    const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80], matchLog: quiet(), env: { ...process.env, ADMIN_OWNER_EMAIL: OWNER_EMAIL }, announcement: 'Legacy banner' };
+    // the real sender, with a record of each verification mail (what it sends is unchanged)
+    const mailed = [];
+    const realSender = require('../lib/email').makeAuthEmailSender({ env: process.env, logger: quiet() });
+    const recordingSender = { ...realSender, sendVerification: async (o) => { mailed.push(o); return realSender.sendVerification(o); } };
+    const fast = { emailSender: recordingSender, port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80], matchLog: quiet(), env: { ...process.env, ADMIN_OWNER_EMAIL: OWNER_EMAIL }, announcement: 'Legacy banner' };
     srv = await start(fast);
     let seq = 1;
     const newUser = async (tag, email) => {
@@ -115,6 +119,25 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await adm.browser.post('/api/admin/users/sign-out', { playerId: boss().id })).status, 403);
       assert.equal((await adm.browser.post('/api/admin/users/sign-out', { playerId: victim.id })).status, 200);
       assert.equal((await victim.browser.get('/api/auth/session')).json.authenticated, false);
+    });
+    await test('staff resend: the mailed token verifies the targeted account; refusals send nothing', async () => {
+      const staff = await newUser('Rs'); const pend = await newUser('Rp'); const plain = await newUser('Rq');
+      await boss().browser.post('/api/admin/roles', { playerId: staff.id, role: 'admin' });
+      await q('UPDATE auth_identities SET email_verified_at = NULL WHERE player_id = $1', [pend.id]);
+      const before = mailed.length;
+      const ok = await staff.browser.post('/api/admin/users/resend-verification', { playerId: pend.id });
+      assert.equal(ok.status, 200);
+      assert.ok(!JSON.stringify(ok.json).includes(pend.email), 'the response never carries the address');
+      assert.equal(mailed.length, before + 1);
+      assert.equal(mailed[mailed.length - 1].email, pend.email);
+      const v = await pend.browser.post('/api/auth/verify-email', { token: mailed[mailed.length - 1].token });
+      assert.equal(v.status, 200, 'the mailed token is the one that verifies this account');
+      assert.ok((await q('SELECT email_verified_at FROM auth_identities WHERE player_id = $1', [pend.id]))[0].email_verified_at);
+      assert.equal((await staff.browser.post('/api/admin/users/resend-verification', { playerId: pend.id })).status, 409, 'now verified: no mail');
+      const noRight = await plain.browser.post('/api/admin/users/resend-verification', { playerId: pend.id });
+      assert.equal(noRight.status, 403);
+      assert.equal(mailed.length, before + 1, 'refused requests send nothing');
+      assert.ok((await q("SELECT 1 FROM admin_audit_log WHERE action = 'user.verify_resend' AND target_id = $1", [pend.id])).length >= 1);
     });
     await test('user search escapes wildcards and never returns e-mail addresses', async () => {
       const r = await boss().browser.get('/api/admin/users?q=%25');
