@@ -236,3 +236,10 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - Narrow phones (≤400 px): toolbar gaps and an icon-only chip keep the title row on one line at 360 px (`game-ux.css`).
 - Tests: `tests/propertyrivals.test.js` (card figures from the rules), `tests/ui/propertyrivals-ui.js` (card, cash/net worth, keyboard), `tests/ui/game-settings-ui.js` (chip, focus, Space, all six games). Full `npm run test:ui` passes locally.
 - Status: merged into `main` as merge commit `2d04d77` (PR #87, closed 2026-11-10 02:13 UTC, head `a3a169d`). The docs and What's new follow-up is PR #95 (`docs/property-rivals-whats-new`); nothing else on this branch is pending.
+
+## Stage 20.7 — Owner e-mail broadcasts (branch `feat/owner-email-broadcasts`, PR #91)
+- Owner-only sends from the admin console: audiences all, verified, unverified, inactive (30 days). Queued in `email_broadcasts` / `email_broadcast_recipients` (migration 016); a background worker claims a broadcast under a lease and sends one recipient at a time with a per-recipient idempotency key.
+- Delivery: a 60-second application deadline (aborts the request and body) sits well inside the 5-minute lease. A recipient's first attempt is recorded once and a retry is refused after 24 hours, so repeated recoveries cannot send twice. Completed broadcasts keep their saved totals when a recipient deletes an account.
+- Promotional mail needs a verified recipient, an unsubscribe link built from `PUBLIC_APP_URL`, and no opt-out; otherwise it is recorded as failed.
+- Docs: `docs/ADMIN.md` (feature and API), `docs/DATA_CLEANUP.md` (new tables in the plan), README and CHANGELOG (user-facing), runbook (log lines).
+- Tests: `tests/admin.test.js` (audiences, recovery, day-old attempt never resent), `tests/email.test.js`, `tests/admin.pg.test.js`. PostgreSQL suites run in CI only.
