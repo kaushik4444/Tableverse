@@ -118,12 +118,6 @@ async function readSessionFromCookie(rawToken) {
   return r.rows[0] || null;
 }
 
-async function revokeAllSessionsForPlayer(playerId) {
-  if (!db.hasDatabase() || !playerId) return { revoked: 0 };
-  const out = await db.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
-  return { revoked: out.rowCount };
-}
-
 /**
  * Single active session per account. The player row is locked first so two simultaneous logins queue up, every earlier
  * session is revoked, and only then is the new one inserted. The partial unique index in migration 006 is the backstop:
@@ -571,13 +565,6 @@ async function forgetDevice(rawDevice) {
   });
 }
 
-/** Ends every device of an account: sign-out everywhere, a password reset, an owner sign-out, a suspension. */
-async function revokeDevicesForPlayer(playerId) {
-  if (!db.hasDatabase() || !playerId) return { revoked: 0 };
-  const r = await db.query('UPDATE auth_devices SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
-  return { revoked: r.rowCount };
-}
-
 async function purgeExpired() {
   if (!db.hasDatabase()) return { rateLimits: 0, tokens: 0, sessions: 0 };
   // trusted devices that ended or expired more than 30 days ago are removed
@@ -607,8 +594,7 @@ module.exports = {
   resetPassword,
   revokeSession,
   revokeAllSessionsForCurrent,
-  revokeAllSessionsForPlayer,
   readSessionFromCookie,
   sessionInfo,
-  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, revokeDevicesForPlayer, DEVICE_MAX_AGE_SECONDS,
+  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, DEVICE_MAX_AGE_SECONDS,
 };
