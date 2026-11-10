@@ -39,11 +39,14 @@ async function test(name, fn) {
       assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
     });
 
-    await test('the shell page, which signed-out visitors load first, links to the Impressum in a footer', async () => {
+    await test('the shell page has no fixed legal footer; the links live in the app (sign-in sheet and home footer)', async () => {
       const res = await fetch(base + '/', { redirect: 'manual' });
       assert.equal(res.status, 200);
       const body = await res.text();
-      assert.match(body, /<footer class="legal-foot"><a href="\/impressum\.html">Impressum<\/a><\/footer>/);
+      assert.doesNotMatch(body, /legal-foot/);
+      const app = await (await fetch(base + '/app.js')).text();
+      assert.match(app, /class="hint auth-legal"><a href="\/impressum\.html">Impressum<\/a>/, 'sign-in sheet link');
+      assert.match(app, /<footer class="home-foot">[\s\S]*<a href="\/impressum\.html">Impressum<\/a><\/footer>/, 'home footer link');
     });
   } finally {
     clearTimeout(guard);

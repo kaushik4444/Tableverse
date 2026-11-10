@@ -1,29 +1,102 @@
 'use strict';
-// Signed-out visitors can reach the Impressum from the footer, even while the sign-in sheet is open, and the page loads directly.
+// The Impressum is reachable from the sign-in sheet (signed out) and from the home footer (signed in), with no fixed footer
+// in the way: links and the host's Start game button are fully visible and clickable at phone and desktop sizes.
 const assert = require('node:assert/strict');
-const { serve, scriptedPage, loadPlaywright, sessionOk } = require('./harness');
+const { serve, scriptedPage, loadPlaywright, sessionOk, welcome } = require('./harness');
+const games = require('../../games');
 
 const { chromium } = loadPlaywright();
+const SIZES = [{ width: 390, height: 844 }, { width: 1280, height: 800 }];
 
 async function test(name, fn) {
   try { await fn(); console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 
+/** Fully inside the viewport and the element at its centre is the element itself or one of its children. */
+async function assertVisibleAndClickable(page, selector, label) {
+  const r = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return { found: false };
+    const b = el.getBoundingClientRect();
+    const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+    const top = document.elementFromPoint(cx, cy);
+    return {
+      found: true,
+      inViewport: b.top >= 0 && b.left >= 0 && b.bottom <= innerHeight && b.right <= innerWidth && b.width > 0 && b.height > 0,
+      top: Math.round(b.top), bottom: Math.round(b.bottom), viewportH: innerHeight,
+      tapHitsTarget: !!top && (top === el || el.contains(top)),
+    };
+  }, selector);
+  assert.ok(r.found, `${label}: element present`);
+  assert.ok(r.inViewport, `${label}: fully inside the viewport (top ${r.top}, bottom ${r.bottom}, viewport ${r.viewportH})`);
+  assert.ok(r.tapHitsTarget, `${label}: nothing covers its centre`);
+}
+
 (async () => {
-  const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }) });
+  const sessionApi = { 'GET /api/auth/session': () => sessionOk(), 'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }) };
+  const { server, url } = await serve(sessionApi);
   const browser = await chromium.launch();
   try {
-    await test('signed-out visitor sees the sign-in sheet and a footer link that is clickable above it, and it opens the Impressum', async () => {
-      const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
-      await page.goto(url + '/');
-      await page.waitForSelector('#loginForm', { timeout: 8000 });
-      const link = page.locator('footer.legal-foot a[href="/impressum.html"]');
-      assert.equal(await link.count(), 1, 'footer link present');
-      await link.click({ timeout: 5000 }); // fails if the sign-in overlay covers the link
-      await page.waitForURL('**/impressum.html', { timeout: 8000 });
-      assert.equal(await page.textContent('h1'), 'Impressum');
-      await ctx.close();
-    });
+    for (const vp of SIZES) {
+      const size = `${vp.width}x${vp.height}`;
+
+      await test(`signed out (${size}): the sign-in sheet has an Impressum link that is visible and opens the page`, async () => {
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+        await page.goto(url + '/');
+        await page.waitForSelector('#loginForm', { timeout: 8000 });
+        await assertVisibleAndClickable(page, '#auth-overlay .auth-legal a[href="/impressum.html"]', 'sign-in sheet link');
+        await page.click('#auth-overlay .auth-legal a[href="/impressum.html"]', { timeout: 5000 });
+        await page.waitForURL('**/impressum.html', { timeout: 8000 });
+        assert.equal(await page.textContent('h1'), 'Impressum');
+        await ctx.close();
+      });
+
+      await test(`signed in (${size}): the home footer has an Impressum link that is visible and opens the page`, async () => {
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room: null, view: null }] });
+        await page.goto(url + '/');
+        await page.waitForSelector('.home-foot', { timeout: 8000 });
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        await assertVisibleAndClickable(page, '.home-foot a[href="/impressum.html"]', 'home footer link');
+        await page.click('.home-foot a[href="/impressum.html"]', { timeout: 5000 });
+        await page.waitForURL('**/impressum.html', { timeout: 8000 });
+        assert.equal(await page.textContent('h1'), 'Impressum');
+        await ctx.close();
+      });
+
+      await test(`host lobby (${size}): the Start game button is fully visible and clickable`, async () => {
+        const def = games.get('wizard');
+        const members = [
+          { id: 'me', name: 'Aarav', bot: false, avatar: '🧙', connected: true, ping: null, username: null },
+          { id: 'p1', name: 'Bo', bot: false, avatar: '🧙', connected: true, ping: null, username: null },
+        ];
+        const room = { code: 'ABCDEF', gameId: 'wizard', hostId: 'me', status: 'lobby', options: {}, visibility: 'public', seats: 4, min: def.seats.min, max: def.seats.max, seatLabels: null, deadline: null, now: Date.now(), spectators: [], members };
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room, view: null }] });
+        await page.goto(url + '/');
+        await page.waitForSelector('.start-bar button', { timeout: 8000 });
+        await assertVisibleAndClickable(page, '.start-bar button', 'Start game');
+        await ctx.close();
+      });
+
+      await test(`(${size}): no fixed footer is rendered, and no visible clickable fixed element sits over the home page`, async () => {
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room: null, view: null }] });
+        await page.goto(url + '/');
+        await page.waitForSelector('.home-foot', { timeout: 8000 });
+        const fixed = await page.evaluate(() => {
+          return {
+            legalFoot: !!document.querySelector('.legal-foot'),
+            fixed: [...document.querySelectorAll('body *')].filter((el) => {
+              const cs = getComputedStyle(el);
+              const b = el.getBoundingClientRect();
+              // only fixed elements that can take clicks matter; pointer-events:none ones (the 1px voice audio root) cannot obstruct
+              return cs.position === 'fixed' && cs.pointerEvents !== 'none' && cs.display !== 'none' && cs.visibility !== 'hidden' && b.width > 0 && b.height > 0;
+            }).map((el) => el.id || el.className || el.tagName),
+          };
+        });
+        assert.equal(fixed.legalFoot, false, 'no .legal-foot');
+        assert.deepEqual(fixed.fixed, [], 'no visible, clickable fixed element on the home page');
+        await ctx.close();
+      });
+    }
 
     await test('the Impressum loads directly with no session, and the page has no sign-in sheet', async () => {
       const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
