@@ -26,6 +26,7 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await page.fill('#registerUsername', 'aarav');
     await page.fill('#registerEmail', 'someone@example.com');
     await page.fill('#registerPassword', 'TestPass123!');
+    await page.check('#registerAdult');
     await page.click('#registerForm button[type="submit"]');
     await page.waitForSelector('#auth-overlay .auth-msg[role="alert"]', { timeout: 8000 });
     assert.match(await page.textContent('#auth-overlay .auth-msg'), /already taken/);
@@ -42,6 +43,34 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await page.waitForSelector('#auth-overlay .auth-msg[role="alert"]', { timeout: 8000 });
     assert.match(await page.textContent('#auth-overlay .auth-msg'), /do not match/);
     await ctx.close();
+  });
+
+  await test('sign-up needs the 18+ box, and sends the confirmation only when it is ticked', async () => {
+    const srv = await serve({
+      'GET /api/auth/session': () => sessionOk(),
+      'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }),
+      'POST /api/auth/register': () => ({ ok: true, csrfToken: 'c', message: 'Check your email for a verification link.', emailVerificationRequired: true }),
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+    await page.goto(srv.url + '/');
+    await page.waitForSelector('#loginForm', { timeout: 8000 });
+    await page.click('#auth-overlay [data-act="showRegister"]');
+    await page.waitForSelector('#registerForm', { timeout: 8000 });
+    await page.fill('#registerName', 'Aarav');
+    await page.fill('#registerUsername', 'aarav');
+    await page.fill('#registerEmail', 'someone@example.com');
+    await page.fill('#registerPassword', 'TestPass123!');
+    await page.click('#registerForm button[type="submit"]');
+    await page.waitForTimeout(300);
+    assert.equal(srv.calls.filter((c) => c.path === '/api/auth/register').length, 0, 'the form is not sent without the box');
+    await page.check('#registerAdult');
+    await page.click('#registerForm button[type="submit"]');
+    await page.waitForTimeout(500);
+    const reg = srv.calls.find((c) => c.path === '/api/auth/register');
+    assert.ok(reg, 'the registration is sent once the box is ticked');
+    assert.equal(JSON.parse(reg.body).adultConfirmed, true);
+    await ctx.close();
+    srv.server.close();
   });
 
   await test('a login retries only a server-marked safe temporary failure', async () => {
