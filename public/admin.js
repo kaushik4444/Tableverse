@@ -315,7 +315,7 @@
     } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen && seq === renderSeq) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
   }
 
-  const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { await logs(f); if (state.me.isOwner) await renderHistory(); }, audit: () => audit() };
+  const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
