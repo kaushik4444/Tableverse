@@ -9,7 +9,7 @@ with `--execute` and the confirmation. The script was developed and tested only 
 
 ## 1. Every table in the database (from `db/migrations/001` to `015`)
 
-There are 23 tables and 22 foreign keys: 22 tables are emptied and `schema_migrations` is preserved. The list below is the
+There are 23 tables and 23 foreign keys: 22 tables are emptied and `schema_migrations` is preserved. The list below is the
 plan in `db/cleanup.js` (`PLAN`, `PRESERVE`, `EXPECTED_FKS`). The script re-discovers the live schema on every run and
 **refuses** if it finds a table or foreign key that is not in this list, a trigger, or a migration set that differs from
 this code version.
@@ -42,6 +42,8 @@ this code version.
 
 **Migration 018 (keep me signed in on this device, Stage 20.9) adds one table**, `auth_devices`, emptied in the plan above.
 
+**Migration 019 (session linked to its device) adds one column and one foreign key, no table:** `auth_sessions.device_id` references `auth_devices` with `ON DELETE SET NULL`. The plan empties `auth_sessions` before `auth_devices`, so the link never blocks a deletion.
+
 **Migration 013 (admin console, Stage 20.5) adds eight tables**, all of them emptied in the plan above:
 `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, `feedback`, `announcements`,
 `announcement_dismissals` and `admin_audit_log`. It also adds the column `players.role`, which needs no separate step.
@@ -64,7 +66,7 @@ It never uses `TRUNCATE`, `DROP`, `ALTER`, `CREATE` or `CASCADE`.
 * **Dry run by default**: read-only transaction (`BEGIN READ ONLY`), always rolled back. Prints the row count of every table, breakdowns and a masked sample of the records.
 * **Two things are needed to delete**: `--execute` and `--confirm=<exact database name>`.
 * **The target is named on purpose**: `CLEANUP_DATABASE_URL` only. `DATABASE_URL` and `.env` files are ignored. A remote host must also be repeated with `--expect-host=<host>`. The connected `current_database()` must equal the URL's database. A running migration (advisory lock) blocks it.
-* **Expected state only**: same 23 tables (22 emptied and `schema_migrations`), same 22 foreign keys, no triggers, no other schema, and exactly the migrations in `db/migrations` applied. Anything else is refused with the list of differences.
+* **Expected state only**: same 23 tables (22 emptied and `schema_migrations`), same 23 foreign keys, no triggers, no other schema, and exactly the migrations in `db/migrations` applied. Anything else is refused with the list of differences.
 * **One transaction**: tables are locked (`SHARE ROW EXCLUSIVE`: readers keep working, writers wait), counted, deleted in the order above and checked; a schema and migration-history fingerprint taken before and after must be identical. Any error, mismatch or timeout rolls everything back (`lock_timeout` 10 s, `statement_timeout` 5 min).
 * **Nothing sensitive is printed**: emails are masked (`a***@example.com`), token hashes are never selected, chat-report message text and user-supplied details are excluded from samples, the connection password is never shown, and the snapshot file holds only structure digests and counts.
 
@@ -103,7 +105,7 @@ Exit codes: `0` done, `1` failed (rolled back), `2` refused (nothing changed).
 
 * every one of the 22 emptied tables is empty, and no legacy anonymous player remains;
 * `schema_migrations` lists exactly the repository's migrations and is byte-identical to the snapshot (versions and `applied_at`);
-* the schema fingerprint (tables, columns, indexes, constraints, triggers) equals the snapshot, and all 22 foreign keys exist;
+* the schema fingerprint (tables, columns, indexes, constraints, triggers) equals the snapshot, and all 23 foreign keys exist;
 * the application's own read paths work on the database (player stats query, username lookup, session lookup).
 
 Then do the manual end-to-end check: open the site, register a test account, verify the email, log in, join a table.

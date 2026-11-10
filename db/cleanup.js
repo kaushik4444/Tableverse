@@ -60,6 +60,7 @@ const EXPECTED_FKS = [
   { child: 'auth_identities', parent: 'players', onDelete: 'CASCADE' },
   { child: 'auth_sessions', parent: 'players', onDelete: 'CASCADE' },
   { child: 'auth_devices', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'auth_sessions', parent: 'auth_devices', onDelete: 'SET NULL' },
   { child: 'player_recent_tables', parent: 'players', onDelete: 'CASCADE' },
   { child: 'friendships', parent: 'players', onDelete: 'CASCADE' },
   { child: 'friendships', parent: 'players', onDelete: 'CASCADE' },
