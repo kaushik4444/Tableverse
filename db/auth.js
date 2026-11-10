@@ -77,11 +77,16 @@ async function revokeSession(rawToken) {
   return res.rowCount > 0;
 }
 
-async function revokeAllSessionsForCurrent(rawToken) {
-  if (!db.hasDatabase() || !dbPlayers.isWellFormedToken(rawToken)) return { revoked: 0 };
-  const tokenHash = hashToken(rawToken);
+async function revokeAllSessionsForCurrent(rawToken, rawDevice = null) {
+  const hasSession = dbPlayers.isWellFormedToken(rawToken);
+  const hasDevice = dbPlayers.isWellFormedToken(rawDevice);
+  if (!db.hasDatabase() || (!hasSession && !hasDevice)) return { revoked: 0 };
+  const tokenHash = hasSession ? hashToken(rawToken) : null;
+  const deviceHash = hasDevice ? hashToken(rawDevice) : null;
   return db.withTransaction(async (client) => {
-    const s = await client.query(
+    // the account is the one of this browser's active session; when that session was already retired by another tab,
+    // the account is the one of this browser's trusted device, so "sign out everywhere" still ends that device
+    let s = await client.query(
       `SELECT player_id
        FROM auth_sessions
        WHERE token_hash = $1
@@ -90,6 +95,12 @@ async function revokeAllSessionsForCurrent(rawToken) {
        LIMIT 1`,
       [tokenHash]
     );
+    if (!s.rows.length) {
+      s = await client.query(
+        `SELECT player_id FROM auth_devices WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW() LIMIT 1`,
+        [deviceHash]
+      );
+    }
     if (!s.rows.length) return { revoked: 0 };
     const playerId = s.rows[0].player_id;
     await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [playerId]);

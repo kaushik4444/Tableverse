@@ -201,6 +201,17 @@ const PW = 'TestPass123!';
       assert.equal((await aBrowser.get('/api/auth/session')).json.authenticated, false, 'the first account\'s session from the replaced device ended');
       assert.equal((await shared.get('/api/auth/session')).json.player.id, b.id, 'the second account is signed in');
     });
+    await test('sign out everywhere from a stale tab still ends the account\'s trusted devices', async () => {
+      const u = await newUser('StaleAll');
+      const b1 = await login(u.email, true);
+      const device = b1.cookies.get('ct_device');
+      await ageSessions(u.id);
+      const restored = await restoreOn(device); // another tab restores: b1's session is retired
+      assert.equal((await restored.get('/api/auth/session')).json.authenticated, true);
+      assert.equal((await b1.post('/api/auth/logout-all', {})).ok, true);
+      assert.equal((await (await restoreOn(device)).get('/api/auth/session')).json.authenticated, false, 'the device no longer signs in');
+      assert.equal(await activeSessions(u.id), 0, 'no session is left');
+    });
     console.log(`${passed} device-trust checks passed`);
   } finally {
     if (srv) await srv.close();
