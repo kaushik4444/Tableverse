@@ -295,32 +295,37 @@
       body: document.getElementById('mBody'), check: document.getElementById('mCheck'), count: document.getElementById('mCount'),
       confirm: document.getElementById('mConfirm'), send: document.getElementById('mSend'), form: document.getElementById('mailForm') };
     let checked = null; // the count the owner just saw, for this audience and kind
-    const reset = () => { checked = null; f.count.textContent = ''; f.confirm.value = ''; f.confirm.disabled = true; f.send.disabled = true; };
-    const ready = () => { f.send.disabled = !(checked !== null && f.confirm.value.trim() === String(checked) && f.sub.value.trim() && f.body.value.trim()); };
+    let checkSeq = 0; // a preview answer counts only if the selection has not changed since it was asked for
+    let sending = false; // one submit at a time: the button's state alone is not a guard
+    const reset = () => { checkSeq++; checked = null; f.count.textContent = ''; f.confirm.value = ''; f.confirm.disabled = true; f.send.disabled = true; };
+    const ready = () => { f.send.disabled = sending || !(checked !== null && f.confirm.value.trim() === String(checked) && f.sub.value.trim() && f.body.value.trim()); };
     f.aud.onchange = reset; f.cat.onchange = reset;
     f.sub.oninput = ready; f.body.oninput = ready;
     f.confirm.oninput = ready;
     f.check.onclick = async () => {
       say('mMsg', '', '');
+      const seq = ++checkSeq;
       try {
         const q = new URLSearchParams({ audience: f.aud.value, category: f.cat.value });
         const out = await api('/api/admin/broadcasts/preview?' + q.toString());
+        if (seq !== checkSeq) return; // the audience or kind changed while this was pending: that count is not for the current selection
         checked = out.count;
         f.count.textContent = `${out.count} recipient${out.count === 1 ? '' : 's'} now`;
         f.confirm.disabled = out.count === 0;
         ready();
-      } catch (e) { reset(); say('mMsg', e.message, 'err'); }
+      } catch (e) { if (seq !== checkSeq) return; reset(); say('mMsg', e.message, 'err'); }
     };
     f.form.onsubmit = async (e) => {
       e.preventDefault();
-      if (f.send.disabled) return;
-      f.send.disabled = true;
+      if (sending || f.send.disabled) return;
+      sending = true; f.send.disabled = true;
       try {
         const out = await api('/api/admin/broadcasts', { audience: f.aud.value, category: f.cat.value, subject: f.sub.value, body: f.body.value, expectedCount: checked });
         say('mMsg', `Queued for ${out.recipientCount} recipient${out.recipientCount === 1 ? '' : 's'}. It is sent in batches; the history below shows progress.`, 'ok');
         f.sub.value = ''; f.body.value = ''; reset();
         await history();
-      } catch (err) { say('mMsg', err.message, 'err'); ready(); }
+      } catch (err) { say('mMsg', err.message, 'err'); }
+      finally { sending = false; ready(); }
     };
     await history();
   }
