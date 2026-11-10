@@ -110,6 +110,21 @@ async function pendingBatch(broadcastId, n) {
   return r.rows;
 }
 
+/** One recipient, read now: the current address, the current opt-out. The worker calls this right before each send. */
+async function currentRecipient(broadcastId, playerId) {
+  const r = await db.query(
+    `SELECT r.player_id, a.provider_user_id AS email, p.unsubscribe_token,
+            (a.provider_user_id IS NULL OR (b.category = 'promo' AND (a.email_verified_at IS NULL OR p.marketing_opt_out_at IS NOT NULL))) AS skip
+       FROM email_broadcast_recipients r
+       JOIN email_broadcasts b ON b.id = r.broadcast_id
+       JOIN players p ON p.id = r.player_id
+       LEFT JOIN auth_identities a ON a.player_id = p.id AND a.provider = 'email'
+      WHERE r.broadcast_id = $1 AND r.player_id = $2`,
+    [broadcastId, playerId]
+  );
+  return r.rows[0] || null;
+}
+
 async function markRecipient(broadcastId, playerId, state) {
   await db.query('UPDATE email_broadcast_recipients SET state = $3 WHERE broadcast_id = $1 AND player_id = $2', [broadcastId, playerId, state]);
 }
@@ -134,4 +149,4 @@ async function unsubscribe(token) {
   return r.rowCount > 0;
 }
 
-module.exports = { broadcastCount, queueBroadcast, listBroadcasts, claimNext, renewLease, pendingBatch, markRecipient, finishBroadcast, unsubscribe };
+module.exports = { broadcastCount, queueBroadcast, listBroadcasts, claimNext, renewLease, pendingBatch, currentRecipient, markRecipient, finishBroadcast, unsubscribe };

@@ -147,6 +147,15 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       }
       return out;
     },
+    async currentRecipient(id, pid) {
+      const b = broadcasts.find((x) => x.id === id);
+      const p = players.get(pid);
+      if (!b || !p || !broadcastRecipients.get(id)?.has(pid)) return null;
+      p.unsubscribe_token ??= crypto.randomUUID();
+      const verified = !!p.verified;
+      const skip = !p.email || (b.category === 'promo' && (!verified || !!p.opted_out));
+      return { player_id: pid, email: p.email || null, unsubscribe_token: p.unsubscribe_token, skip };
+    },
     async markRecipient(id, pid, state) { broadcastRecipients.get(id)?.set(pid, state); },
     async finishBroadcast(id) {
       const b = broadcasts.find((x) => x.id === id);

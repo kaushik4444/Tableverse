@@ -415,10 +415,24 @@ const ADMIN_POSTS = [
       assert.equal(row.status, 'sent');
       assert.equal(row.failed_count, 0);
     });
+    await test('an opt-out that lands during a batch stops the promotional mail that has not gone out yet', async () => {
+      const count = (await preview('all', 'promo')).json.count;
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Mid batch', body: 'Four', category: 'promo', expectedCount: count }));
+      assert.equal(r.status, 200);
+      const saved = [...sb.store.players.values()].map((p) => [p, p.opted_out]);
+      let calls = 0;
+      try {
+        await worker(async (m) => {
+          calls++;
+          if (calls === 1) for (const p of sb.store.players.values()) if (p.email && p.email !== m.to) p.opted_out = true; // everyone else opts out now
+        }).runOnce();
+      } finally { for (const [p, v] of saved) p.opted_out = v; }
+      assert.equal(calls, 1, 'once the accounts have opted out, nothing else is sent');
+    });
     await test('the broadcast history is owner-only and carries no message text', async () => {
       const r = await bOwner.b.get('/api/admin/broadcasts');
       assert.equal(r.status, 200);
-      assert.equal(r.json.items.length, 5);
+      assert.equal(r.json.items.length, 6);
       assert.ok(r.json.items.every((x) => !('body' in x)));
       assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
     });
