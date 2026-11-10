@@ -83,30 +83,29 @@ async function revokeAllSessionsForCurrent(rawToken, rawDevice = null) {
   if (!db.hasDatabase() || (!hasSession && !hasDevice)) return { revoked: 0 };
   const tokenHash = hasSession ? hashToken(rawToken) : null;
   const deviceHash = hasDevice ? hashToken(rawDevice) : null;
-  return db.withTransaction(async (client) => {
-    // the account is the one of this browser's active session; when that session was already retired by another tab,
-    // the account is the one of this browser's trusted device, so "sign out everywhere" still ends that device
-    let s = await client.query(
-      `SELECT player_id
-       FROM auth_sessions
-       WHERE token_hash = $1
-         AND revoked_at IS NULL
-         AND expires_at > NOW()
-       LIMIT 1`,
+  // The account of this browser's active session; when that session was already retired by another tab, the account of
+  // its active trusted device. "Sign out everywhere" still ends that device.
+  const ownerOf = async (client) => {
+    const s = await client.query(
+      `SELECT player_id FROM auth_sessions WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW() LIMIT 1`,
       [tokenHash]
     );
-    if (!s.rows.length) {
-      s = await client.query(
-        `SELECT player_id FROM auth_devices WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW() LIMIT 1`,
-        [deviceHash]
-      );
-    }
-    if (!s.rows.length) return { revoked: 0 };
-    const playerId = s.rows[0].player_id;
-    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [playerId]);
-    const out = await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
-    await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
-    return { revoked: out.rowCount, playerId };
+    if (s.rows.length) return s.rows[0].player_id;
+    const d = await client.query(
+      `SELECT player_id FROM auth_devices WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW() LIMIT 1`,
+      [deviceHash]
+    );
+    return d.rows.length ? d.rows[0].player_id : null;
+  };
+  return db.withTransaction(async (client) => {
+    const found = await ownerOf(client);
+    if (!found) return { revoked: 0 };
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [found]);
+    // the credential is checked again under the account lock: it may have been ended since the lookup above
+    if ((await ownerOf(client)) !== found) return { revoked: 0 };
+    const out = await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [found]);
+    await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [found]);
+    return { revoked: out.rowCount, playerId: found };
   });
 }
 
