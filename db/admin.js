@@ -212,7 +212,7 @@ async function forgetActor(playerId) {
 
 async function overview({ days = 30 } = {}) {
   const n = Math.min(90, Math.max(1, Math.floor(Number(days)) || 30));
-  const [series, dims, active, accounts, activeDaily] = await Promise.all([
+  const [series, dims, active, accounts, activeDaily, queues] = await Promise.all([
     db.query('SELECT day::text AS day, metric, SUM(total)::int AS total FROM analytics_daily WHERE day > CURRENT_DATE - $1::int GROUP BY day, metric ORDER BY day', [n]),
     db.query("SELECT metric, dim, SUM(total)::int AS total FROM analytics_daily WHERE day > CURRENT_DATE - $1::int AND metric IN ('game_started', 'game_finished', 'error') GROUP BY metric, dim ORDER BY total DESC LIMIT 60", [n]),
     db.query(`SELECT COUNT(DISTINCT actor) FILTER (WHERE day = CURRENT_DATE)::int AS dau,
@@ -223,8 +223,12 @@ async function overview({ days = 30 } = {}) {
                      COUNT(*) FILTER (WHERE role <> 'user')::int AS staff FROM players`),
     // one row per player per day in analytics_active (a keyed hash, never an account id), so a count is distinct players that day
     db.query('SELECT day::text AS day, COUNT(*)::int AS active FROM analytics_active WHERE day > CURRENT_DATE - $1::int GROUP BY day ORDER BY day', [n]),
+    // work waiting for a person: reports (no status column yet, so recent and total) and feedback not yet read
+    db.query(`SELECT (SELECT COUNT(*) FROM chat_reports WHERE created_at > NOW() - INTERVAL '7 days')::int AS reports7d,
+                     (SELECT COUNT(*) FROM chat_reports)::int AS reports_total,
+                     (SELECT COUNT(*) FROM feedback WHERE status = 'new')::int AS feedback_new`),
   ]);
-  return { days: n, series: series.rows, dims: dims.rows, active: active.rows[0], accounts: accounts.rows[0], activeDaily: activeDaily.rows };
+  return { days: n, series: series.rows, dims: dims.rows, active: active.rows[0], accounts: accounts.rows[0], activeDaily: activeDaily.rows, queues: queues.rows[0] };
 }
 
 async function health() {

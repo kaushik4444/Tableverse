@@ -9,7 +9,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 
-const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit'];
+const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
 const ADMIN_POSTS = [
   ['/api/admin/roles', { playerId: 'p_00000000-0000-4000-8000-000000000001', role: 'admin' }],
   ['/api/admin/users/sign-out', { playerId: 'p_00000000-0000-4000-8000-000000000001' }],

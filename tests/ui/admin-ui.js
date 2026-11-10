@@ -22,6 +22,7 @@ const api = (role) => ({
   'GET /api/admin/feedback?status=&page=1': () => ({ ok: true, total: 1, pageSize: 25, items: [{ id: 'f1', category: 'bug', status: 'new', message: EVIL, created_at: '2026-11-08T08:00:00Z', username: null }] }),
   'GET /api/admin/announcements': () => ({ ok: true, limits: { maxMessage: 200, maxDays: 90 }, items: [{ id: 'a1', message: EVIL, level: 'info', audience: 'all', status: 'live', starts_at: '2026-11-08T08:00:00Z', ends_at: '2026-11-09T08:00:00Z', ended_at: null }] }),
   'GET /api/admin/health': () => ({ ok: true, platform: { uptimeSec: 4000, sockets: 3, players: 2, rooms: 1, memoryMb: 90, mode: 'postgres', node: 'v22' }, db: { ok: true, dbMs: 4, migrations: 13, feedback_new: 1 }, analytics: { enabled: true, buffered: 2, failures: 0, dropped: 0 } }),
+  'GET /api/admin/logs?level=&component=&event=&limit=100': () => ({ ok: true, held: 2, dropped: 0, capacity: 500, items: [{ time: '2026-11-08T08:00:00Z', level: 'error', component: 'db', event: 'db.pool_error', message: EVIL }, { time: '2026-11-08T07:00:00Z', level: 'info', component: 'app', event: 'server.started', port: 3000 }] }),
   'GET /api/admin/audit?page=1': () => ({ ok: true, total: 1, pageSize: 25, items: [{ id: 'x', at: '2026-11-08T08:00:00Z', actor: 'boss', action: 'role.grant_admin', target_type: 'player', target_id: 'abcdef1234', detail: { to: 'admin' } }] }),
   'POST /api/admin/announcements': () => ({ ok: true, announcement: { id: 'a2' } }),
 });
@@ -52,7 +53,7 @@ const api = (role) => ({
     const s = await open('admin');
     await s.page.waitForSelector('.ad-grid');
     assert.match(await s.page.textContent('#adMain'), /active today/);
-    for (const [name, text] of [['users', /Users/], ['feedback', /Feedback/], ['announcements', /Announcements/], ['health', /Platform health/], ['audit', /role\.grant_admin/]]) {
+    for (const [name, text] of [['users', /Users/], ['feedback', /Feedback/], ['announcements', /Announcements/], ['health', /Platform health/], ['logs', /Logs/], ['audit', /role\.grant_admin/]]) {
       await tab(s.page, name);
       await until(async () => text.test(await s.page.textContent('#adMain')), name);
     }
