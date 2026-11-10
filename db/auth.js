@@ -570,7 +570,7 @@ async function touchDevice(rawDevice, playerId) {
 
 /** Ends this browser's sign-in: its session and its trusted device, in one transaction, under the account lock(s). */
 async function endCurrentSession({ sessionToken, deviceToken }) {
-  if (!db.hasDatabase()) { await revokeSession(sessionToken); return false; }
+  if (!db.hasDatabase()) { await revokeSession(sessionToken); return { signedOut: false, revoked: [] }; }
   const sessionHash = dbPlayers.isWellFormedToken(sessionToken) ? hashToken(sessionToken) : null;
   const deviceHash = dbPlayers.isWellFormedToken(deviceToken) ? hashToken(deviceToken) : null;
   return db.withTransaction(async (client) => {
@@ -582,14 +582,25 @@ async function endCurrentSession({ sessionToken, deviceToken }) {
       [sessionHash, deviceHash]
     );
     for (const { player_id: id } of owners.rows) await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [id]);
-    if (sessionHash) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [sessionHash]);
+    const revoked = [];
+    if (sessionHash) {
+      const r = await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL RETURNING player_id, token_hash', [sessionHash]);
+      revoked.push(...r.rows);
+    }
     if (deviceHash) {
       // sessions started from this browser's trusted device end with it, even one a racing restore created after this request began
       const dev = await client.query('SELECT id FROM auth_devices WHERE token_hash = $1', [deviceHash]);
-      if (dev.rows.length) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL', [dev.rows[0].id]);
+      if (dev.rows.length) {
+        const r = await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL RETURNING player_id, token_hash', [dev.rows[0].id]);
+        revoked.push(...r.rows);
+      }
       await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [deviceHash]);
     }
-    return owners.rows.length > 0;
+    // the callers close the sockets of exactly these sessions (their hashes), not of the account's other sessions
+    return {
+      signedOut: owners.rows.length > 0,
+      revoked: revoked.map((r) => ({ playerId: r.player_id, tokenHash: r.token_hash })),
+    };
   });
 }
 

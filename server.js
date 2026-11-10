@@ -236,11 +236,13 @@ function start(opts = {}) {
   // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
-  const closeSignedOutSockets = ({ playerId, token, exceptToken }) => {
+  const closeSignedOutSockets = ({ playerId, token, tokenHash, exceptToken }) => {
     for (const ws of wss.clients) {
       const owner = ws.player || ws.pendingPlayer; // a socket still being checked belongs to its session too
       if (!owner || owner.id !== playerId) continue;
       if (token && ws.authToken !== token) continue;
+      // tokenHash limits it to the sessions with that hash (the stored form), for sessions only known by their hash
+      if (tokenHash && (!ws.authToken || require('crypto').createHash('sha256').update(String(ws.authToken)).digest('hex') !== tokenHash)) continue;
       if (exceptToken && ws.authToken === exceptToken) continue;
       revokeSocket(ws, exceptToken ? 4002 : 4001, exceptToken ? 'signed in elsewhere' : 'signed out');
     }
