@@ -515,10 +515,53 @@ const ADMIN_POSTS = [
       assert.ok(keys.includes(`broadcast:${row.id}:${seen.playerId}`), 'retried with the same key');
       assert.equal(row.status, 'sent');
     });
+    // A send that was delivered but whose record could not be written: the run stops, and each later run that recovers the
+    // broadcast must keep the first attempt's time. A recovery that is not refreshed by the attempt never extends the window.
+    const unrecorded = async (subject) => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject, body: 'Ten', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      const firstSent = [];
+      const dbDown = { ...sb.store, markRecipient: async () => { throw new Error('database unavailable'); } };
+      const run1 = createBroadcastWorker({
+        store: dbDown, makeUnsubscribeUrl: () => null, pauseMs: 0, gapMs: 0, retryDelays: [0, 0, 0], logger: { error() {} },
+        deliver: async (m) => { firstSent.push({ playerId: m.playerId, key: m.idempotencyKey }); return undefined; },
+      });
+      await assert.rejects(run1.runOnce(), /database unavailable/);
+      assert.equal(firstSent.length, 1, 'the run stopped after the first delivery');
+      const { playerId, key } = firstSent[0];
+      const attemptKey = `${row.id}|${playerId}`;
+      sb.store.broadcasts.find((b) => b.id === row.id).leaseUntil = Date.now() - 1; // the run went quiet: its lease ran out
+      return { row, playerId, key, attemptKey };
+    };
+    await test('a recovered send inside the day reuses its idempotency key and keeps the first attempt time', async () => {
+      const { row, playerId, key, attemptKey } = await unrecorded('Recovered');
+      const firstAt = Date.now() - 2 * 3600 * 1000;
+      sb.store.broadcastAttempts.set(attemptKey, firstAt);
+      const sent = [];
+      await worker(async (m) => { sent.push({ playerId: m.playerId, key: m.idempotencyKey }); }).runOnce();
+      const again = sent.find((x) => x.playerId === playerId);
+      assert.ok(again, 'the recovered run tries the recipient');
+      assert.equal(again.key, key, 'the same key, so the provider drops the duplicate');
+      assert.equal(sb.store.broadcastAttempts.get(attemptKey), firstAt, 'the first attempt time is not moved');
+      assert.equal(row.status, 'sent');
+    });
+    await test('a recovered send after a day is not repeated, however many runs recover the broadcast', async () => {
+      const { row, playerId, attemptKey } = await unrecorded('Repeated');
+      sb.store.broadcastAttempts.set(attemptKey, Date.now() - 25 * 3600 * 1000);
+      const sentTo = [];
+      for (let i = 0; i < 2; i++) { // two recoveries in a row, each one renewing the broadcast's lease
+        sb.store.broadcasts.find((b) => b.id === row.id).leaseUntil = Date.now() - 1;
+        await worker(async (m) => { sentTo.push(m.playerId); }).runOnce();
+      }
+      assert.ok(!sentTo.includes(playerId), 'a day-old first attempt is never sent again');
+      assert.equal(sb.store.broadcastRecipients.get(row.id).get(playerId), 'failed');
+      assert.equal(row.status, 'sent');
+    });
     await test('the broadcast history is owner-only and carries no message text', async () => {
       const r = await bOwner.b.get('/api/admin/broadcasts');
       assert.equal(r.status, 200);
-      assert.equal(r.json.items.length, 11);
+      assert.equal(r.json.items.length, 13);
       assert.ok(r.json.items.every((x) => !('body' in x)));
       assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
     });
