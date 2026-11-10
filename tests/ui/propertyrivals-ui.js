@@ -166,7 +166,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     assert.equal(await page.locator('#pr-card-title').count(), 0);
     await page.click('[data-pr="card"][data-sq="1"]');
     assert.match(await page.textContent('#pr-card-title'), /Lagos/);
-    const card = await page.textContent('.pr-card');
+    const card = await page.textContent('.pr-cardsheet');
     assert.match(card, /Mortgage value[\s\S]*🪙30/);
     assert.match(card, /Unmortgage cost[\s\S]*🪙33/);
     assert.match(card, /Each house or hotel costs[\s\S]*🪙50/);
@@ -188,6 +188,20 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     assert.match(list, /Game length/);
     assert.match(list, /Starting cash/);
     assert.match(list, /Auction unbought properties/);
+    await ctx.close();
+  });
+
+  await test('the city card takes focus, Escape closes it, and focus goes back to the holding', async () => {
+    const m = mutate((v) => { v.land[1] = { owner: 0, houses: 0, mortgaged: false }; v.info[1] = { mortgage: 30, unmortgage: 33, house: 50, rentNow: 2 }; });
+    const { page, ctx } = await open(m);
+    await page.focus('[data-pr="card"][data-sq="1"]');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-pr')), 'closeCard', 'focus moves into the card');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-pr')), 'closeCard', 'Tab stays inside the card');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#pr-card-title').count(), 0, 'Escape closes the card');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-sq')), '1', 'focus returns to the holding');
     await ctx.close();
   });
 

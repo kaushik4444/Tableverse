@@ -4,7 +4,7 @@
   'use strict';
   const { esc } = window.CardTable;
   const ui = { ctx: null, v: null, root: null, seq: null, mgr: false, trade: null, bid: 0, scores: false,
-    disp: {}, plans: {}, stepTimer: null, card: null };
+    disp: {}, plans: {}, stepTimer: null, card: null, returnSq: null };
   const STEP_MS = 480; // one square per step: slow enough to follow every tile (the server waits for the same time: games/propertyrivals/board.js)
   const FAST_MS = 320; // very long advances (over 14 squares) a little quicker
   const DWELL_MS = 800; // the token rests on the square it lands on before the text and buttons follow
@@ -129,9 +129,9 @@
           .map(([a, b]) => `<tr><th scope="row">${a}</th><td>${coins(b)}</td></tr>`).join('')}
       </tbody></table>
       <p class="hint">With no buildings the rent doubles when the owner holds the whole colour group. Building needs the whole group, an even spread of houses, and no mortgages in the group.</p>` : '';
-    return `<div class="overlay pr-card-ov"><div class="sheet pr-card" role="dialog" aria-modal="true" aria-labelledby="pr-card-title">
+    return `<div class="overlay pr-card-ov"><div class="sheet pr-cardsheet" role="dialog" aria-modal="true" aria-labelledby="pr-card-title">
       <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px"><h2 id="pr-card-title">${swatch}${esc(s.name)}</h2>
-      <button type="button" class="btn ghost small" data-pr="closeCard" aria-label="Close card">✕</button></div>
+      <button type="button" class="btn small" data-pr="closeCard" aria-label="Close card">✕</button></div>
       <p class="hint" style="text-align:left;margin-top:0">${kind}</p>
       <dl class="pr-kv">${rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl>
       ${table}
@@ -144,7 +144,7 @@
       const owned = v.land.reduce((n, l) => n + (l && l.owner === i ? 1 : 0), 0);
       const st = p.bankrupt ? '💀 bankrupt' : p.inLockup ? '🔒 lockup' : '';
       const mine = v.land.map((l, k) => (l && l.owner === i ? k : -1)).filter((k) => k >= 0);
-      const holdings = mine.length ? `<span class="pr-hold" aria-hidden="true">${mine.map((k) => { const s = v.squares[k]; const m = v.land[k].mortgaged ? ' mort' : ''; return `<button type="button" class="pr-hold-b" data-pr="card" data-sq="${k}" aria-label="${esc(s.name)}: open card" title="${esc(s.name)}"><i class="${s.group ? '' : 'plain'}${m}" style="${s.group ? 'background:' + v.groups[s.group].color : ''}"></i></button>`; }).join('')}</span>` : '';
+      const holdings = mine.length ? `<span class="pr-hold">${mine.map((k) => { const s = v.squares[k]; const m = v.land[k].mortgaged ? ' mort' : ''; return `<button type="button" class="pr-hold-b" data-pr="card" data-sq="${k}" aria-label="${esc(s.name)}: open card" title="${esc(s.name)}"><i aria-hidden="true" class="${s.group ? '' : 'plain'}${m}" style="${s.group ? 'background:' + v.groups[s.group].color : ''}"></i></button>`; }).join('')}</span>` : '';
       const keep = p.keeps ? ` · 🎟️${p.keeps}` : '';
       return `<li data-vid="${esc(p.id)}" data-pid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most net worth">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>net worth ${coins(p.netWorth)} · ${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small>${holdings}</span><span class="pr-cash" title="Cash: coins in hand">${coins(p.cash)}</span></li>`;
     }).join('')}</ul>`;
@@ -248,6 +248,15 @@
       ${actionsHTML(v)}${auctionHTML(v)}${tradeOfferHTML(v)}${tradeComposerHTML(v)}${playersHTML(v, ctx)}${overlayHTML(v)}${cardHTML(v)}</div>`;
     if (focus === 'bidv') { const el = root.querySelector('[data-pr="bidv"]'); if (el) el.focus(); }
     root.onclick = onClick; root.onchange = onChange;
+    // the card takes focus when it opens and keeps it through live redraws; when it closes, focus returns to its holding
+    if (ui.card != null) {
+      const sheet = root.querySelector('.pr-cardsheet');
+      if (sheet && !sheet.contains(document.activeElement)) { const x = sheet.querySelector('[data-pr="closeCard"]'); if (x) x.focus(); }
+    } else if (ui.returnSq != null) {
+      const back = root.querySelector(`[data-pr="card"][data-sq="${ui.returnSq}"]`);
+      if (back) back.focus();
+      ui.returnSq = null;
+    }
   }
 
   function onChange(e) {
@@ -258,6 +267,19 @@
     else if (t && el.dataset.pr === 'tGiveCash') { t.giveCash = n; ui.ctx.rerender(); }
     else if (t && el.dataset.pr === 'tGetCash') { t.getCash = n; ui.ctx.rerender(); }
   }
+
+  function closeCard() {
+    if (ui.card == null) return;
+    ui.returnSq = ui.card; ui.card = null;
+    if (ui.ctx) ui.ctx.rerender();
+  }
+
+  // Escape closes the card; Tab stays on its close button while it is open
+  document.addEventListener('keydown', (e) => {
+    if (ui.card == null) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeCard(); }
+    else if (e.key === 'Tab') { const x = document.querySelector('.pr-cardsheet [data-pr="closeCard"]'); if (x) { e.preventDefault(); x.focus(); } }
+  });
 
   function onClick(e) {
     const el = e.target.closest('[data-pr]'); const v = ui.v, ctx = ui.ctx;
@@ -278,8 +300,8 @@
       case 'tGive': toggle(ui.trade.give); break;
       case 'tGet': toggle(ui.trade.get); break;
       case 'tSend': { const t = ui.trade; ui.trade = null; act({ type: 'propose', target: v.players[t.target].id, give: [...t.give], get: [...t.get], giveCash: t.giveCash, getCash: t.getCash }); break; }
-      case 'card': ui.card = sqi; ctx.rerender(); break;
-      case 'closeCard': ui.card = null; ctx.rerender(); break;
+      case 'card': ui.card = sqi; ui.returnSq = null; ctx.rerender(); break;
+      case 'closeCard': closeCard(); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;

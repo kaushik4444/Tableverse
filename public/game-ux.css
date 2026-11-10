@@ -157,9 +157,10 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 
 /* Current game settings, top right of every game */
 .gs-chip { max-width: 100%; min-width: 0; white-space: nowrap; }
-.gs-chip .gs-sum { display: inline-block; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.gs-chip .gs-sum { display: none; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+@media (min-width: 900px) { .gs-chip .gs-sum { display: inline-block; } }
 .gs-chip.gs-float { position: absolute; top: 8px; right: 8px; z-index: 5; }
-.wz-round.gs-host { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wz-round.gs-host { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.wz-round.gs-host > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wz-top > .gs-chip { margin-left: auto; flex: 0 0 auto; }
 .gs-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; text-align: left; }
-@media (max-width: 480px) { .gs-chip .gs-sum { display: none; } }
