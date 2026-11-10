@@ -453,8 +453,77 @@ async function sessionInfo(rawToken) {
 }
 
 /** Delete rows nobody can use any more. Safe to run at any time and from several instances. */
+/** Stage 20.9: device trust. Pure helpers first, then the functions the routes use. */
+const DEVICE_DAYS = 30;
+const DEVICE_MAX_AGE_SECONDS = DEVICE_DAYS * 24 * 60 * 60;
+
+/** A short label for the device, from the browser and system only (never the full user agent, never an address). */
+function deviceLabel(userAgent) {
+  const ua = String(userAgent || '');
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox'
+    : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const system = /iPhone|iPad/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows'
+    : /Mac OS X|Macintosh/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'unknown system';
+  return `${browser} on ${system}`.slice(0, 80);
+}
+
+/** Called after a password has been checked. Returns the device token once; only its hash is stored. Memory mode: none. */
+async function rememberDevice({ playerId, userAgent = '' }) {
+  if (!db.hasDatabase() || !playerId) return null;
+  const raw = newRawToken();
+  await db.query(
+    `INSERT INTO auth_devices (player_id, token_hash, label, expires_at)
+     VALUES ($1, $2, $3, NOW() + ($4::text || ' days')::interval)`,
+    [playerId, hashToken(raw), deviceLabel(userAgent), String(DEVICE_DAYS)]
+  );
+  return raw;
+}
+
+/**
+ * Starts a new session from a valid device token, for a registered account that is not suspended. The usual one-session rule
+ * applies (the older session of the account is retired), and the device's expiry slides forward.
+ */
+async function restoreFromDevice(rawDevice) {
+  if (!db.hasDatabase() || !dbPlayers.isWellFormedToken(rawDevice)) return null;
+  const tokenHash = hashToken(rawDevice);
+  return db.withTransaction(async (client) => {
+    const r = await client.query(
+      `SELECT d.id, d.player_id
+         FROM auth_devices d
+         JOIN players p ON p.id = d.player_id
+        WHERE d.token_hash = $1 AND d.revoked_at IS NULL AND d.expires_at > NOW()
+          AND p.suspended_at IS NULL AND p.is_anonymous = FALSE`,
+      [tokenHash]
+    );
+    if (!r.rows.length) return null;
+    const { id, player_id: playerId } = r.rows[0];
+    const token = await createSession(client, playerId); // locks the account and retires its older sessions
+    await client.query(
+      `UPDATE auth_devices SET last_used_at = NOW(), expires_at = NOW() + ($2::text || ' days')::interval WHERE id = $1`,
+      [id, String(DEVICE_DAYS)]
+    );
+    return { token, playerId };
+  });
+}
+
+/** Ends one device's trust (used by sign-out on that device). */
+async function forgetDevice(rawDevice) {
+  if (!db.hasDatabase() || !dbPlayers.isWellFormedToken(rawDevice)) return false;
+  const r = await db.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(rawDevice)]);
+  return r.rowCount > 0;
+}
+
+/** Ends every device of an account: sign-out everywhere, a password reset, an owner sign-out, a suspension. */
+async function revokeDevicesForPlayer(playerId) {
+  if (!db.hasDatabase() || !playerId) return { revoked: 0 };
+  const r = await db.query('UPDATE auth_devices SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
+  return { revoked: r.rowCount };
+}
+
 async function purgeExpired() {
   if (!db.hasDatabase()) return { rateLimits: 0, tokens: 0, sessions: 0 };
+  // trusted devices that ended or expired more than 30 days ago are removed
+  await db.query("DELETE FROM auth_devices WHERE expires_at < NOW() - INTERVAL '30 days' OR revoked_at < NOW() - INTERVAL '30 days'");
   const run = async (sql) => (await db.query(sql)).rowCount;
   return {
     rateLimits: await run("DELETE FROM auth_rate_limits WHERE window_start < NOW() - INTERVAL '1 day'"),
@@ -483,4 +552,5 @@ module.exports = {
   revokeAllSessionsForPlayer,
   readSessionFromCookie,
   sessionInfo,
+  deviceLabel, rememberDevice, restoreFromDevice, forgetDevice, revokeDevicesForPlayer, DEVICE_MAX_AGE_SECONDS,
 };

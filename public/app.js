@@ -430,6 +430,7 @@
         <form id="loginForm" class="auth-form">
           <input id="loginEmail" type="email" required placeholder="Email" autocomplete="email">
           <input id="loginPassword" type="password" required minlength="8" placeholder="Password" autocomplete="current-password">
+          <label class="check-row"><input id="loginRemember" type="checkbox"> Keep me signed in on this device <small class="hint">Only on a device you own.</small></label>
           <button class="btn big" type="submit">Log in</button>
         </form>
         <div class="row auth-links"><button class="btn ghost small" data-act="forgotPassword">Forgot password?</button>${resend}</div>
@@ -473,17 +474,17 @@
   }
 
   // Only retry a database lookup explicitly marked safe by the server; ambiguous responses may have created a session.
-  async function postLogin(email, password) {
+  async function postLogin(email, password, rememberDevice = false) {
     for (let attempt = 0; ; attempt++) {
-      try { return await postJson('/api/auth/login', { email, password }); } catch (err) {
+      try { return await postJson('/api/auth/login', { email, password, rememberDevice: rememberDevice === true }); } catch (err) {
         if (!err.retryable || attempt >= 2) throw err;
         await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
       }
     }
   }
 
-  async function doLogin(email, password) {
-    const out = await withBusy('Logging in…', () => postLogin(email, password));
+  async function doLogin(email, password, rememberDevice = false) {
+    const out = await withBusy('Logging in…', () => postLogin(email, password, rememberDevice));
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     adoptPlayer(out.player);
@@ -1085,7 +1086,7 @@
       const btn = e.target.querySelector('[type="submit"]');
       if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
       try {
-        await doLogin(email, password);
+        await doLogin(email, password, !!(document.getElementById('loginRemember') || {}).checked);
       } catch (err) {
         openAuthSheet('login', err.message || 'Login failed', true);
         const again = document.getElementById('loginEmail');
