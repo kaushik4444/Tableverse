@@ -392,7 +392,7 @@ const ADMIN_POSTS = [
       sb.store.broadcasts.find((b) => b.id === first.id).leaseUntil = Date.now() - 1; // the first run stopped
       const again = await sb.store.claimNext();
       assert.equal(again && again.id, first.id, 'an abandoned run is taken over');
-      await sb.store.finishBroadcast(first.id);
+      await sb.store.finishBroadcast(first.id, first.owner);
     });
     await test('a database error while recording a delivered mail stops the run and is not recorded as a failed delivery', async () => {
       const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Store', body: 'Two', expectedCount: 6 }));
@@ -400,9 +400,9 @@ const ADMIN_POSTS = [
       const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
       const real = sb.store.markRecipient;
       let broke = false;
-      sb.store.markRecipient = async (bid, pid, state) => {
+      sb.store.markRecipient = async (bid, pid, state, owner) => {
         if (state === 'sent' && !broke) { broke = true; throw new Error('database unavailable'); }
-        return real(bid, pid, state);
+        return real(bid, pid, state, owner);
       };
       try {
         await assert.rejects(worker(async () => {}).runOnce(), /database unavailable/);
@@ -429,10 +429,26 @@ const ADMIN_POSTS = [
       } finally { for (const [p, v] of saved) p.opted_out = v; }
       assert.equal(calls, 1, 'once the accounts have opted out, nothing else is sent');
     });
+    await test('a run whose lease ran out is refused every write once another run has taken the broadcast', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Fence', body: 'Five', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const stale = await sb.store.claimNext();
+      sb.store.broadcasts.find((b) => b.id === stale.id).leaseUntil = Date.now() - 1; // the first run stalled
+      const fresh = await sb.store.claimNext();
+      assert.equal(fresh.id, stale.id);
+      assert.notEqual(fresh.owner, stale.owner);
+      const pid = [...sb.store.broadcastRecipients.get(stale.id).keys()][0];
+      await assert.rejects(sb.store.markRecipient(stale.id, pid, 'sent', stale.owner), (e) => e.code === 'LEASE_LOST');
+      assert.equal(sb.store.broadcastRecipients.get(stale.id).get(pid), 'pending', 'the stale run wrote nothing');
+      assert.equal(await sb.store.renewLease(stale.id, stale.owner), false);
+      await sb.store.finishBroadcast(stale.id, stale.owner); // the stale run cannot finish it either
+      assert.equal(sb.store.broadcasts.find((b) => b.id === stale.id).status, 'sending');
+      await sb.store.finishBroadcast(fresh.id, fresh.owner);
+    });
     await test('the broadcast history is owner-only and carries no message text', async () => {
       const r = await bOwner.b.get('/api/admin/broadcasts');
       assert.equal(r.status, 200);
-      assert.equal(r.json.items.length, 6);
+      assert.equal(r.json.items.length, 7);
       assert.ok(r.json.items.every((x) => !('body' in x)));
       assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
     });

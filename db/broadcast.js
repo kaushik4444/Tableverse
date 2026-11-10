@@ -6,7 +6,7 @@
  */
 const db = require('./pool');
 const policy = require('../lib/adminPolicy');
-const { INACTIVE_DAYS, BroadcastError } = require('../lib/broadcast');
+const { INACTIVE_DAYS, BroadcastError, LeaseLostError } = require('../lib/broadcast');
 const { audit } = require('./admin');
 
 const PAGE = 25;
@@ -73,24 +73,28 @@ async function listBroadcasts({ page: p = 1 } = {}) {
 
 const LEASE = `NOW() + INTERVAL '5 minutes'`;
 
+
 /**
  * The next broadcast to send. A queued one, or a sending one whose lease has run out (its worker stopped). The lease is what keeps
  * two servers from sending the same broadcast: the row lock above ends with the statement, so the lease is the real guard.
  */
 async function claimNext() {
   const r = await db.query(
-    `UPDATE email_broadcasts SET status = 'sending', lease_until = ${LEASE}
+    `UPDATE email_broadcasts SET status = 'sending', lease_until = ${LEASE}, lease_owner = gen_random_uuid()
       WHERE id = (SELECT id FROM email_broadcasts
                    WHERE status = 'queued' OR (status = 'sending' AND (lease_until IS NULL OR lease_until < NOW()))
                    ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
-      RETURNING id, category, subject, body`
+      RETURNING id, category, subject, body, lease_owner AS owner`
   );
   return r.rows[0] || null;
 }
 
-/** Called after each batch. Returns false when this run no longer holds the broadcast (it was finished elsewhere). */
-async function renewLease(broadcastId) {
-  const r = await db.query(`UPDATE email_broadcasts SET lease_until = ${LEASE} WHERE id = $1 AND status = 'sending'`, [broadcastId]);
+/** Extends the lease. Returns false when this run (owner) no longer holds the broadcast. */
+async function renewLease(broadcastId, owner) {
+  const r = await db.query(
+    `UPDATE email_broadcasts SET lease_until = ${LEASE} WHERE id = $1 AND status = 'sending' AND lease_owner = $2`,
+    [broadcastId, owner]
+  );
   return r.rowCount > 0;
 }
 
@@ -125,18 +129,28 @@ async function currentRecipient(broadcastId, playerId) {
   return r.rows[0] || null;
 }
 
-async function markRecipient(broadcastId, playerId, state) {
-  await db.query('UPDATE email_broadcast_recipients SET state = $3 WHERE broadcast_id = $1 AND player_id = $2', [broadcastId, playerId, state]);
+/** Records one recipient's state, but only for the run that holds the broadcast. */
+async function markRecipient(broadcastId, playerId, state, owner) {
+  const r = await db.query(
+    `UPDATE email_broadcast_recipients SET state = $3
+      WHERE broadcast_id = $1 AND player_id = $2
+        AND EXISTS (SELECT 1 FROM email_broadcasts b WHERE b.id = $1 AND b.status = 'sending' AND b.lease_owner = $4)`,
+    [broadcastId, playerId, state, owner]
+  );
+  if (r.rowCount === 0) {
+    const held = await db.query(`SELECT 1 FROM email_broadcasts WHERE id = $1 AND status = 'sending' AND lease_owner = $2`, [broadcastId, owner]);
+    if (!held.rows.length) throw new LeaseLostError();
+  }
 }
 
-async function finishBroadcast(broadcastId) {
+async function finishBroadcast(broadcastId, owner) {
   await db.query(
-    `UPDATE email_broadcasts b SET status = 'sent', finished_at = NOW(), lease_until = NULL,
+    `UPDATE email_broadcasts b SET status = 'sent', finished_at = NOW(), lease_until = NULL, lease_owner = NULL,
             recipient_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id),
             sent_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id AND state = 'sent'),
             failed_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id AND state = 'failed')
-      WHERE b.id = $1`,
-    [broadcastId]
+      WHERE b.id = $1 AND b.status = 'sending' AND b.lease_owner = $2`,
+    [broadcastId, owner]
   );
 }
 

@@ -126,11 +126,12 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       if (!b) return null;
       b.status = 'sending';
       b.leaseUntil = now + 5 * 60 * 1000;
-      return { id: b.id, category: b.category, subject: b.subject, body: b.body };
+      b.leaseOwner = crypto.randomUUID();
+      return { id: b.id, category: b.category, subject: b.subject, body: b.body, owner: b.leaseOwner };
     },
-    async renewLease(id) {
+    async renewLease(id, owner) {
       const b = broadcasts.find((x) => x.id === id);
-      if (!b || b.status !== 'sending') return false;
+      if (!b || b.status !== 'sending' || b.leaseOwner !== owner) return false;
       b.leaseUntil = Date.now() + 5 * 60 * 1000;
       return true;
     },
@@ -156,9 +157,16 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       const skip = !p.email || (b.category === 'promo' && (!verified || !!p.opted_out));
       return { player_id: pid, email: p.email || null, unsubscribe_token: p.unsubscribe_token, skip };
     },
-    async markRecipient(id, pid, state) { broadcastRecipients.get(id)?.set(pid, state); },
-    async finishBroadcast(id) {
+    async markRecipient(id, pid, state, owner) {
       const b = broadcasts.find((x) => x.id === id);
+      if (!b || b.status !== 'sending' || b.leaseOwner !== owner) {
+        const err = new Error('the broadcast was taken over by another run'); err.code = 'LEASE_LOST'; throw err;
+      }
+      broadcastRecipients.get(id)?.set(pid, state);
+    },
+    async finishBroadcast(id, owner) {
+      const b = broadcasts.find((x) => x.id === id);
+      if (b.status !== 'sending' || b.leaseOwner !== owner) return;
       const m = [...(broadcastRecipients.get(id) || new Map()).values()];
       Object.assign(b, { status: 'sent', finished_at: now(), recipient_count: m.length, sent_count: m.filter((s) => s === 'sent').length, failed_count: m.filter((s) => s === 'failed').length });
     },

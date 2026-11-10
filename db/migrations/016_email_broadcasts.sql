@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS email_broadcasts (
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sending', 'sent')),
   -- a worker holds a run while this lease is in the future; it renews it per batch. An expired lease means the run was abandoned.
   lease_until TIMESTAMPTZ,
+  -- the run that holds the broadcast: every write it makes checks this token, so a run whose lease ran out cannot write after a takeover
+  lease_owner UUID,
   recipient_count INT NOT NULL DEFAULT 0,
   sent_count INT NOT NULL DEFAULT 0,
   failed_count INT NOT NULL DEFAULT 0,
