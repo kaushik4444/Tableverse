@@ -144,17 +144,27 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     },
     async claimNext() {
       const now = Date.now();
+      // a run silent for a day is closed, never resumed (see db/broadcast.js closeAbandoned)
+      for (const b of broadcasts) {
+        if (b.status === 'sending' && b.renewedAt && now - b.renewedAt > 24 * 3600 * 1000) {
+          const m = broadcastRecipients.get(b.id) || new Map();
+          for (const [pid, s] of m) if (s === 'pending') m.set(pid, 'failed');
+          Object.assign(b, { status: 'sent', finished_at: now, leaseUntil: null, leaseOwner: null });
+        }
+      }
       const b = broadcasts.find((x) => x.status === 'queued' || (x.status === 'sending' && (!x.leaseUntil || x.leaseUntil < now)));
       if (!b) return null;
       b.status = 'sending';
       b.leaseUntil = now + 5 * 60 * 1000;
       b.leaseOwner = crypto.randomUUID();
+      b.renewedAt = now;
       return { id: b.id, category: b.category, subject: b.subject, body: b.body, owner: b.leaseOwner };
     },
     async renewLease(id, owner) {
       const b = broadcasts.find((x) => x.id === id);
       if (!b || b.status !== 'sending' || b.leaseOwner !== owner) return false;
       b.leaseUntil = Date.now() + 5 * 60 * 1000;
+      b.renewedAt = Date.now();
       return true;
     },
     async pendingBatch(id, n) {

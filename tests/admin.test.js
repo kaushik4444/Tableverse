@@ -460,10 +460,24 @@ const ADMIN_POSTS = [
       assert.equal(sb.store.broadcasts.find((b) => b.id === stale.id).status, 'sending');
       await sb.store.finishBroadcast(fresh.id, fresh.owner);
     });
+    await test('a run silent for a day is closed without resending: its unsent recipients are recorded as failed', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Old run', body: 'Seven', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const old = await sb.store.claimNext();
+      const row = sb.store.broadcasts.find((b) => b.id === old.id);
+      row.leaseUntil = Date.now() - 1;
+      row.renewedAt = Date.now() - 25 * 3600 * 1000; // the run went quiet a day and an hour ago
+      let sent = 0;
+      assert.equal(await sb.store.claimNext(), null, 'nothing is resumed');
+      await worker(async () => { sent++; }).runOnce();
+      assert.equal(sent, 0, 'no mail goes out for the closed run');
+      assert.equal(row.status, 'sent');
+      assert.equal([...sb.store.broadcastRecipients.get(old.id).values()].filter((x) => x === 'failed').length, 6);
+    });
     await test('the broadcast history is owner-only and carries no message text', async () => {
       const r = await bOwner.b.get('/api/admin/broadcasts');
       assert.equal(r.status, 200);
-      assert.equal(r.json.items.length, 8);
+      assert.equal(r.json.items.length, 9);
       assert.ok(r.json.items.every((x) => !('body' in x)));
       assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
     });

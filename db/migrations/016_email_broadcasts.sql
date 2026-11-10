@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS email_broadcasts (
   lease_until TIMESTAMPTZ,
   -- the run that holds the broadcast: every write it makes checks this token, so a run whose lease ran out cannot write after a takeover
   lease_owner UUID,
+  -- when the holding run last renewed (or claimed) it. The provider keeps idempotency keys for 24 hours: a run that has been silent longer is closed, never resumed
+  renewed_at TIMESTAMPTZ,
   recipient_count INT NOT NULL DEFAULT 0,
   sent_count INT NOT NULL DEFAULT 0,
   failed_count INT NOT NULL DEFAULT 0,

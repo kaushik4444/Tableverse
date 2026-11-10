@@ -77,12 +77,32 @@ const LEASE = `NOW() + INTERVAL '5 minutes'`;
 
 
 /**
+ * A run that has been silent for a day may have sent mail whose idempotency key the provider no longer remembers, so resuming it
+ * could send twice. Such a run is closed instead: its unsent recipients are recorded as failed, and nothing more is sent.
+ */
+async function closeAbandoned() {
+  await db.withTransaction(async (c) => {
+    const stale = (await c.query(
+      `SELECT id FROM email_broadcasts WHERE status = 'sending' AND renewed_at < NOW() - INTERVAL '24 hours' FOR UPDATE SKIP LOCKED`
+    )).rows;
+    for (const { id } of stale) {
+      await c.query(`UPDATE email_broadcast_recipients SET state = 'failed' WHERE broadcast_id = $1 AND state = 'pending'`, [id]);
+      await c.query(
+        `UPDATE email_broadcasts SET status = 'sent', finished_at = NOW(), lease_until = NULL, lease_owner = NULL WHERE id = $1`,
+        [id]
+      );
+    }
+  });
+}
+
+/**
  * The next broadcast to send. A queued one, or a sending one whose lease has run out (its worker stopped). The lease is what keeps
  * two servers from sending the same broadcast: the row lock above ends with the statement, so the lease is the real guard.
  */
 async function claimNext() {
+  await closeAbandoned();
   const r = await db.query(
-    `UPDATE email_broadcasts SET status = 'sending', lease_until = ${LEASE}, lease_owner = gen_random_uuid()
+    `UPDATE email_broadcasts SET status = 'sending', lease_until = ${LEASE}, renewed_at = NOW(), lease_owner = gen_random_uuid()
       WHERE id = (SELECT id FROM email_broadcasts
                    WHERE status = 'queued' OR (status = 'sending' AND (lease_until IS NULL OR lease_until < NOW()))
                    ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
@@ -94,7 +114,7 @@ async function claimNext() {
 /** Extends the lease. Returns false when this run (owner) no longer holds the broadcast. */
 async function renewLease(broadcastId, owner) {
   const r = await db.query(
-    `UPDATE email_broadcasts SET lease_until = ${LEASE} WHERE id = $1 AND status = 'sending' AND lease_owner = $2`,
+    `UPDATE email_broadcasts SET lease_until = ${LEASE}, renewed_at = NOW() WHERE id = $1 AND status = 'sending' AND lease_owner = $2`,
     [broadcastId, owner]
   );
   return r.rowCount > 0;
