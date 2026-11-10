@@ -101,12 +101,24 @@ const PW = 'TestPass123!';
       await dbAdmin.unsuspendUser({ actorId: owner.id, targetId: u.id });
       assert.equal((await (await restoreOn(device)).get('/api/auth/session')).json.authenticated, false, 'the device was ended by the suspension');
     });
-    await test('ending every device (the path used by a password reset, sign-out everywhere and the owner sign-out) stops every device token', async () => {
+    await test('sign-out everywhere (through the route) ends every trusted device', async () => {
+      const u = await newUser('Everywhere');
+      const b1 = await login(u.email, true);
+      const d1 = b1.cookies.get('ct_device');
+      assert.equal((await b1.post('/api/auth/logout-all', {})).ok, true);
+      assert.equal((await (await restoreOn(d1)).get('/api/auth/session')).json.authenticated, false, 'the device no longer signs in');
+    });
+    await test('a password reset (through the routes) ends every trusted device; the new password signs in normally', async () => {
       const u = await newUser('Reset');
       const b1 = await login(u.email, true);
       const d1 = b1.cookies.get('ct_device');
-      await require('../db/auth').revokeDevicesForPlayer(u.id);
-      assert.equal((await (await restoreOn(d1)).get('/api/auth/session')).json.authenticated, false);
+      const anon = new Browser(srv.port); await anon.csrf();
+      const asked = await anon.post('/api/auth/forgot-password', { email: u.email });
+      assert.ok(asked.json.debug && asked.json.debug.resetToken, 'the test build hands out the reset token');
+      assert.equal((await anon.post('/api/auth/reset-password', { token: asked.json.debug.resetToken, newPassword: 'NewDevPass123!' })).ok, true);
+      assert.equal((await (await restoreOn(d1)).get('/api/auth/session')).json.authenticated, false, 'the device no longer signs in');
+      const fresh = new Browser(srv.port); await fresh.csrf();
+      assert.equal((await fresh.post('/api/auth/login', { email: u.email, password: 'NewDevPass123!' })).ok, true);
     });
     console.log(`${passed} device-trust checks passed`);
   } finally {
