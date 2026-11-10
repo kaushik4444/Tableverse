@@ -133,12 +133,14 @@ async function readSessionFromCookie(rawToken) {
  * session is revoked, and only then is the new one inserted. The partial unique index in migration 006 is the backstop:
  * even a code path that forgets this cannot leave two active sessions.
  */
-async function createSession(client, playerId, deviceId = null) {
+async function createSession(client, playerId, deviceId = null, ended = null) {
   const raw = newRawToken();
   const tokenHash = hashToken(raw);
   const ttlDays = sessionTtlDays();
   await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [playerId]);
-  await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL', [playerId]);
+  // `ended` (when given) collects the sessions this one retires, so their open sockets can be closed by hash
+  const retired = await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = $1 AND revoked_at IS NULL RETURNING player_id, token_hash', [playerId]);
+  if (ended) ended.push(...retired.rows);
   await client.query(
     'INSERT INTO auth_sessions (player_id, token_hash, expires_at, device_id) VALUES ($1, $2, NOW() + ($3::text || \' days\')::interval, $4)',
     [playerId, tokenHash, String(ttlDays), deviceId]
@@ -287,7 +289,7 @@ async function loginEmail({ email, password, rememberDevice = false, userAgent =
     // the new trusted device is issued under the same lock, so a reset, sign-out or suspension cannot slip in between;
     // the session is linked to it, so ending that device later ends this session too
     const device = rememberDevice ? await insertDevice(client, row.id, userAgent) : null;
-    const session = await createSession(client, row.id, device ? device.id : null);
+    const session = await createSession(client, row.id, device ? device.id : null, revoked);
     return { session, device: device ? device.raw : null, revoked: revoked.map((r) => ({ playerId: r.player_id, tokenHash: r.token_hash })) };
   });
   const result = makeSessionResult(row, token.session);
@@ -456,6 +458,22 @@ async function resetPassword({ token, newPassword }) {
   });
 }
 
+/** The answer for a player whose session a device restore has just started, from the player rather than the token (which a racing restore may already have retired). */
+async function sessionInfoForPlayer(playerId) {
+  const r = await db.query(
+    `SELECT id, username, display_name, avatar, is_anonymous, created_at, last_seen_at
+     FROM players WHERE id = $1 AND suspended_at IS NULL`,
+    [playerId]
+  );
+  if (!r.rows.length) return { authenticated: false, emailVerified: false, provider: null, email: null, player: null };
+  const player = r.rows[0];
+  const i = (await db.query(
+    `SELECT email, email_verified_at, provider FROM auth_identities WHERE player_id = $1 ORDER BY created_at ASC LIMIT 1`,
+    [player.id]
+  )).rows[0] || null;
+  return { authenticated: true, emailVerified: Boolean(i && i.email_verified_at), provider: i ? i.provider : null, email: i ? i.email : null, player };
+}
+
 async function sessionInfo(rawToken) {
   const player = await dbPlayers.authenticateToken(rawToken);
   if (!player || !db.hasDatabase()) {
@@ -543,8 +561,9 @@ async function restoreFromDevice(rawDevice) {
     );
     // two tabs restoring at the same moment: the last one to run keeps its session; the other tab's cookie is refused, and its
     // next request restores again from the same device
-    const token = await createSession(client, playerId, deviceId); // the older sessions of the account are retired here
-    return { token, playerId, device: rawDevice }; // the device token comes back so the cookie's lifetime is renewed too
+    const ended = [];
+    const token = await createSession(client, playerId, deviceId, ended); // the older sessions of the account are retired here
+    return { token, playerId, device: rawDevice, ended }; // the device token comes back so the cookie's lifetime is renewed too
   });
 }
 
@@ -643,5 +662,5 @@ module.exports = {
   revokeAllSessionsForCurrent,
   readSessionFromCookie,
   sessionInfo,
-  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, DEVICE_MAX_AGE_SECONDS,
+  deviceLabel, restoreFromDevice, touchDevice, endCurrentSession, forgetDevice, sessionInfoForPlayer, DEVICE_MAX_AGE_SECONDS,
 };
