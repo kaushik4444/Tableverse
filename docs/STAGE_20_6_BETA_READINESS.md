@@ -75,7 +75,8 @@ Before inviting the initial beta cohort, verify and record:
 - [ ] Cleanup remains disabled and the protected deletion environment remains in place.
 - [ ] One-instance operating model is retained; do not scale horizontally.
 - [ ] Match-result spool durability limitation is explicitly accepted for a limited beta or resolved before relying on match history as durable. The default spool uses `os.tmpdir()`; it can cover a process restart on the same machine but does not survive a Render redeploy onto a fresh instance.
-- [ ] Privacy notice, terms/rules, support contact and account/data deletion explanation are available and reviewed. None of these public-facing legal/support pages currently exists in the repository.
+- [ ] Privacy notice, terms/rules, support contact and account/data deletion explanation are available and reviewed. **Drafts now exist, not yet reviewed or published:** `docs/PRIVACY_NOTICE_DRAFT.md`, `docs/BETA_TERMS_DRAFT.md`, `docs/SUPPORT_AND_REPORTING.md` and `docs/ACCOUNT_DELETION_AND_RETENTION.md` (verified against the code, 2026-11-10). Still open: the owner's support contact, the legal review list in each draft, and the retention decisions for guests, chat reports and broadcast history. No public page is served by the app yet.
+- [ ] Match-result durability decision recorded: `docs/MATCH_RESULT_DURABILITY.md` recommends option A with conditions; the owner's A or B choice is not yet recorded.
 - [x] PR #85 (owner's block rule) is merged with CI green (`0207b31`);
 - [ ] A rollback path and person responsible for responding to beta reports are identified.
 
