@@ -13,6 +13,7 @@ const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/health',
 const ADMIN_POSTS = [
   ['/api/admin/roles', { playerId: 'p_00000000-0000-4000-8000-000000000001', role: 'admin' }],
   ['/api/admin/users/sign-out', { playerId: 'p_00000000-0000-4000-8000-000000000001' }],
+  ['/api/admin/users/resend-verification', { playerId: 'p_00000000-0000-4000-8000-000000000001' }],
   ['/api/admin/feedback/status', { id: 'p_00000000-0000-4000-8000-000000000001', status: 'read' }],
   ['/api/admin/announcements', { message: 'x', durationHours: 1 }],
   ['/api/admin/announcements/update', { id: 'p_00000000-0000-4000-8000-000000000001', message: 'y' }],
@@ -20,7 +21,8 @@ const ADMIN_POSTS = [
 ];
 
 (async () => {
-  const s = await start();
+  const mail = [];
+  const s = await start({ mail });
   try {
     const guest = await s.guest();
     const user = await s.login();
@@ -100,6 +102,30 @@ const ADMIN_POSTS = [
     await test('a player cannot make themselves admin or owner', async () => {
       for (const role of ['admin', 'owner']) assert.equal((await user.b.post('/api/admin/roles', { playerId: user.id, role })).status, 403);
       assert.equal(s.store.players.get(user.id).role, 'user');
+    });
+    await test('staff can resend the verification mail of an unverified account; the address stays server-side', async () => {
+      const pending = await s.login({ email: 'pending@example.com', verified: false });
+      const r = await admin.b.post('/api/admin/users/resend-verification', { playerId: pending.id });
+      assert.equal(r.status, 200);
+      assert.deepEqual(r.json, { ok: true, sent: true });
+      assert.ok(!JSON.stringify(r.json).includes('pending@example.com'), 'the response never carries the address');
+      assert.equal(mail.length, 1);
+      assert.equal(mail[0].email, 'pending@example.com');
+      assert.ok(s.store.audit.some((a) => a.action === 'user.verify_resend'));
+    });
+    await test('a verified account, or a player with no email, gets 409 and no mail', async () => {
+      const verified = await s.login({ email: 'done@example.com', verified: true });
+      const noEmail = await s.login({});
+      const before = mail.length;
+      assert.equal((await admin.b.post('/api/admin/users/resend-verification', { playerId: verified.id })).status, 409);
+      assert.equal((await admin.b.post('/api/admin/users/resend-verification', { playerId: noEmail.id })).status, 409);
+      assert.equal(mail.length, before);
+    });
+    await test('an ordinary player cannot trigger a verification mail', async () => {
+      const pending = await s.login({ email: 'victim@example.com', verified: false });
+      const before = mail.length;
+      assert.equal((await user.b.post('/api/admin/users/resend-verification', { playerId: pending.id })).status, 403);
+      assert.equal(mail.length, before);
     });
     await test('the owner can grant and revoke admin, and each change is audited', async () => {
       assert.equal((await owner.b.post('/api/admin/roles', { playerId: other.id, role: 'admin' })).json.changed, true);

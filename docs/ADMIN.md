@@ -88,15 +88,17 @@ Every state change in the console (role changes, sign-outs, feedback status, ann
 
 All under the session cookie. `POST` needs the `X-CSRF-Token` header. Staff = admin or owner.
 
-| Endpoint | Who |
-|---|---|
-| `GET /api/admin/me` | any signed-in account (says whether you are staff) |
 Overview charts (staff): a 7, 30 or 90-day range, active players per day and registrations per day as line charts. Each chart has a data table underneath. The counts come from the same counters as before: no names, addresses or messages.
 
 Logs (staff): `GET /api/admin/logs?level=&component=&event=&limit=` returns the recent lines of this server process since its last restart. Lines are redacted before they are kept (`lib/log.js`), the buffer is bounded (500) and in memory only. Render's log view keeps the full history; this tab does not replace it. The overview also counts chat reports (last 7 days and total) and feedback not yet read.
 
-| `GET /api/admin/overview?days=`, `/health`, `/users?q=&page=`, `/feedback?status=&page=`, `/announcements`, `/audit?page=` | staff |
-| `POST /api/admin/users/sign-out` | staff (admins only on ordinary players) |
+Resend verification (staff): `POST /api/admin/users/resend-verification` with `{playerId}` sends the verification email again to an account that has not verified yet. The address is read on the server and never returned to the browser. The response is `{ok, sent}`. A verified account or one without an email gets 409. Each account can be sent this at most 3 times an hour (`RL_ADMIN_RESEND_LIMIT`). The audit row `user.verify_resend` records the attempt, not the address. Sending to everyone at once is not built yet.
+
+| Endpoint | Who |
+|---|---|
+| `GET /api/admin/me` | any signed-in account (says whether you are staff) |
+| `GET /api/admin/overview?days=`, `/health`, `/users?q=&page=`, `/feedback?status=&page=`, `/announcements`, `/audit?page=`, `/logs` | staff |
+| `POST /api/admin/users/sign-out`, `/users/resend-verification` | staff (admins only on ordinary players) |
 | `POST /api/admin/roles` | owner |
 | `POST /api/admin/feedback/status`, `/announcements`, `/announcements/update`, `/announcements/end` | staff |
 | `GET /api/announcements`, `POST /api/announcements/dismiss`, `POST /api/feedback` | everyone / signed-in / everyone |

@@ -243,7 +243,7 @@ function start(opts = {}) {
     env,
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
-      env, store: dbAdmin, analytics, platform: adminPlatform, ctx,
+      env, store: dbAdmin, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender,
       onSignedOut: closeSignedOutSockets,
     }).routes,
     production,
