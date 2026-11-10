@@ -146,7 +146,7 @@
       const mine = v.land.map((l, k) => (l && l.owner === i ? k : -1)).filter((k) => k >= 0);
       const holdings = mine.length ? `<span class="pr-hold">${mine.map((k) => { const s = v.squares[k]; const m = v.land[k].mortgaged ? ' mort' : ''; return `<button type="button" class="pr-hold-b" data-pr="card" data-sq="${k}" aria-label="${esc(s.name)}: open card" title="${esc(s.name)}"><i aria-hidden="true" class="${s.group ? '' : 'plain'}${m}" style="${s.group ? 'background:' + v.groups[s.group].color : ''}"></i></button>`; }).join('')}</span>` : '';
       const keep = p.keeps ? ` · 🎟️${p.keeps}` : '';
-      return `<li data-vid="${esc(p.id)}" data-pid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most net worth">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>net worth ${coins(p.netWorth)} · ${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small>${holdings}</span><span class="pr-cash" title="Cash: coins in hand">${coins(p.cash)}</span></li>`;
+      return `<li data-vid="${esc(p.id)}" data-pid="${esc(p.id)}" class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}"><span class="pr-chip ${colour(v, i)}">${p.token}</span><span class="pr-pn"><b>${i === lead ? '<span class="crown" title="Most net worth">👑</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small><span class="pr-nw">net worth ${coins(p.netWorth)}</span> ·${owned} propert${owned === 1 ? 'y' : 'ies'}${keep} ${st}</small>${holdings}</span><span class="pr-cash" title="Cash: coins in hand">${coins(p.cash)}</span></li>`;
     }).join('')}</ul>`;
   }
 
@@ -282,7 +282,8 @@
   document.addEventListener('keydown', (e) => {
     if (ui.card == null) return;
     if (e.key === 'Escape') { e.preventDefault(); closeCard(); }
-    else if (e.key === 'Tab') { const x = document.querySelector('.pr-cardsheet [data-pr="closeCard"]'); if (x) { e.preventDefault(); x.focus(); } }
+    // only trap Tab while the card is on screen (an end-of-game sequence hides it with display: none)
+    else if (e.key === 'Tab') { const x = document.querySelector('.pr-cardsheet [data-pr="closeCard"]'); if (x && x.getClientRects().length) { e.preventDefault(); x.focus(); } }
   });
 
   function onClick(e) {

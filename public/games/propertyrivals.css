@@ -72,6 +72,17 @@
   .pr .pr-players li { padding: 5px 8px; gap: 6px; min-width: 0; }
   .pr .pr-pn { min-width: 0; }
   .pr .pr-pn b, .pr .pr-pn small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* each rival is a small grid: token | name and cash | net worth (full width) | holdings (full width), so net worth is never squeezed out */
+  .pr .pr-players li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 6px; row-gap: 2px; align-items: center; }
+  .pr .pr-players li > .pr-chip { grid-column: 1; grid-row: 1 / span 3; }
+  .pr .pr-pn { display: contents; }
+  .pr .pr-pn > b { grid-column: 2; grid-row: 1; min-width: 0; }
+  .pr .pr-players li > .pr-cash { grid-column: 3; grid-row: 1; }
+  .pr .pr-pn > small { grid-column: 2 / 4; grid-row: 2; min-width: 0; margin-right: -4px; padding-right: 4px; } /* the clip edge sits in the gutter so the coin is not cut */
+  .pr .pr-pn > .pr-hold { grid-column: 2 / 4; grid-row: 3; margin-top: 0; }
+  .pr .pr-pn .pr-nw { white-space: nowrap; }
+  /* at 320 px the column is too narrow for one line: the label and the coins may break onto two lines rather than leave the screen */
+  @media (max-width: 340px) { .pr .pr-pn .pr-nw { white-space: normal; } }
 }
 
 .pr .pr-board > * { min-height: 0; }

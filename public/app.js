@@ -2004,7 +2004,13 @@
       const cur = o.choices.find((c) => c.value === r.options[o.key]) || o.choices[0];
       return cur ? `<li><b>${esc(o.label)}</b>: ${esc(cur.label)}${cur.desc ? `<br><small class="hint">${esc(cur.desc)}</small>` : ''}</li>` : '';
     }).join('');
-    openModal('Game settings', `<p class="hint">Set by the host in the lobby. They cannot be changed during a game.</p><ul class="gs-list">${rows || '<li>Standard rules</li>'}</ul>`);
+    openModal('Game settings', `<p class="hint">Set by the host in the lobby. They cannot be changed during a game.</p><ul class="gs-list">${rows || '<li>Standard rules</li>'}</ul>`, (o) => {
+      // the dialog's only control is its close button: focus it, and keep Tab on it, so focus never reaches the game behind
+      const close = o.querySelector('[data-modal-close]');
+      if (!close) return;
+      close.focus();
+      o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
+    });
   }
 
   /** A chip in the top-right of every game showing the current settings in one line; tapping it opens the full list. */
