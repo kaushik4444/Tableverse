@@ -143,7 +143,8 @@
     const snd = window.CardTable.sound;
     const next = () => {
       const step = path.shift();
-      if (!step) { stopAnimation(); if (ui.root && ui.latest) render(ui.root, ui.latest, ui.ctx); return; }
+      // finish through the app's rerender, so the app-level chrome (settings chip, toolbar) is rebuilt too
+      if (!step) { stopAnimation(); if (ui.ctx && ui.latest) ui.ctx.rerender(); return; }
       if (ui.root) ui.root.querySelector('.sl').classList.toggle('sl-jumping', step.ms === JUMP_MS);
       ui.shown[e.by] = step.n; placeTokens();
       if (snd && step.ms === STEP_MS) snd.play('card');
