@@ -208,7 +208,7 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 1. Confirm the signs: sign-ins or changes the player did not make. The audit log shows admin actions only. The sessions table keeps each sign-in (its creation time and, for "keep me signed in", the device it came from) until it is purged, 7 to 30 days after it ends (`docs/ACCOUNT_DELETION_AND_RETENTION.md`), so look there quickly before it is removed.
 2. The owner suspends the account in the admin console (reason required). Suspension revokes all of the account's sessions and trusted devices and blocks sign-in (`POST /api/admin/users/suspend`, owner only). This is the step that signs the account out everywhere; no separate sign-out is needed. **The owner account itself cannot be suspended**: use "Compromised owner account" below.
 3. The owner may also sign the account out of every device with `POST /api/admin/users/sign-out`. This is owner-only (`checkSignOut` in `lib/adminPolicy.js`); admins cannot do it, even for ordinary players.
-4. The person behind the account resets the password through the unauthenticated e-mail reset, which stays available while the account is suspended. Check that the reset went to the right address. Whether a reset can be completed while the account is suspended was not verified here; the owner should test it before relying on this step.
+4. The person behind the account resets the password through the e-mail reset (`POST /api/auth/forgot-password`, then `reset-password`). Checked in code: the reset is not blocked by a suspension, and a suspended account still cannot sign in (`loginEmail` rechecks the suspension under the account lock). A reset works only for a verified address. Not yet tested on the live site: run it on a throwaway account before relying on this step. Check that the reset went to the right address.
 5. Record the time, the account id (not the e-mail address), what was seen and what was done, in the owner's private notes. Do not paste it into the repository, a chat or an issue.
 6. Do not delete the account as a response, because deletion removes the evidence.
 7. Owner decides whether to unsuspend, and whether to tell the player more.
@@ -259,21 +259,19 @@ Nobody else, and no automated job, may do these without the owner's explicit app
 
 The project owner is the decision-maker for every item in this section and for every incident that needs a decision. Owner contact: [OWNER: private contact address].
 
-## Cleanup safeguards (verified in code, 2026-11-10)
-Production cleanup stays disabled. Four layers must all hold before any deletion:
-1. Nothing in the server runs cleanup; `scripts/cleanup-unverified.js` and `scripts/cleanup-user-data.js` are dry runs unless `--execute` is given (`docs/DATA_CLEANUP.md`).
-2. The dry run refuses a database role that can write, and runs in a read-only transaction.
-3. Deletion needs `--execute` and `--confirm=<exact database name>` (and `--expect-host` for a remote host). The target is `CLEANUP_DATABASE_URL` only.
-4. The scheduled workflow (`.github/workflows/cleanup-unverified.yml`, daily at 03:17 UTC) is a dry run only. The deletion job needs a manual start, the repository variable `CLEANUP_EXECUTE` set to `true`, and approval in the `production-cleanup` environment. Check those settings on GitHub (manual). Owner-recorded: the production dry run reported zero eligible accounts.
+## Cleanup safeguards (checked against code, 2026-11-10)
+Production cleanup stays disabled. There are two scripts with **different** guards. Check which one a command uses.
 
-## Repository safety
-`main` is protected by a ruleset ("Protect-Main", GitHub > Settings > Rules > Rulesets) that requires a pull request and passing status checks before merge. **Status: enabled**, all five CI jobs required: `Build and test (Node 20)`, `Build and test (Node 22)`, `Browser layout and interaction checks`, `Production dependency audit`, `Build production Docker image`.
+**`scripts/cleanup-unverified.js`** removes unverified accounts older than 30 days. It is the only script the scheduled workflow and the deletion job run.
+1. Nothing in the server runs it. Without `--execute` it is a dry run.
+2. The dry run runs in a READ ONLY transaction and refuses a database role that is a superuser or has any write privilege (`db/unverifiedCleanup.js`, error `READONLY_ROLE_REQUIRED`).
+3. `--execute` refuses, and deletes nothing, when more accounts qualify than `--max` (default 1000, exit code 3). It has **no** `--confirm` or `--expect-host` guard: its only target is the URL in `DATABASE_URL`.
+4. The daily workflow (`.github/workflows/cleanup-unverified.yml`, 03:17 UTC) is a dry run only, with the read-only secret `CLEANUP_DRYRUN_DATABASE_URL`.
+5. The deletion job runs only when someone starts the workflow by hand with `execute=true` **and** the repository variable `CLEANUP_EXECUTE` is `true`, and only after a reviewer approves the `production-cleanup` environment. It uses `CLEANUP_DATABASE_URL`. Check the reviewer and the variable on GitHub (manual check M-5).
 
-## Abuse / rate limits
-Auth endpoints are rate limited per address and account in `auth_rate_limits`; WebSockets are limited per IP, per socket message rate, payload (8 KiB) and buffered bytes. Check logs for `slow down` closes and `too many connections` spikes.
+**`scripts/cleanup-user-data.js`** is manual and is not used by any workflow.
+1. It ignores `DATABASE_URL` and `.env` files; the target is `CLEANUP_DATABASE_URL` only.
+2. The dry run is the default. `--execute` also needs `--confirm=<exact database name>`, and `--expect-host` for a remote host (`db/cleanup.js`).
+3. Failures roll back the transaction.
 
-## Neon connection: TLS setting (`sslmode`)
-
-- Keep `?sslmode=require` (or `verify-full`) in the Neon URL. `db/poolConfig.js` rewrites `require`, `prefer` and `verify-ca` to `verify-full` at start-up, which is what they already mean: TLS with the certificate and host name checked. The connection is the same; only the library's deprecation warning goes away.
-- Do not change it to `disable`. In production a remote host whose URL has no `sslmode` at all is still forced to verified TLS.
-- A URL that also sets `ssl`, `sslrootcert` or similar, or `uselibpqcompat`, is passed on unchanged, so the warning can still appear for those. That is expected.
+Owner-recorded: the production dry run reported zero eligible accounts. The live values (the variable, the reviewer, the role of each secret) are not verifiable from the repository and stay manual checks.
