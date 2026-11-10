@@ -9,7 +9,7 @@ with `--execute` and the confirmation. The script was developed and tested only 
 
 ## 1. Every table in the database (from `db/migrations/001` to `015`)
 
-There are 22 tables and 21 foreign keys: 21 tables are emptied and `schema_migrations` is preserved. The list below is the
+There are 23 tables and 22 foreign keys: 22 tables are emptied and `schema_migrations` is preserved. The list below is the
 plan in `db/cleanup.js` (`PLAN`, `PRESERVE`, `EXPECTED_FKS`). The script re-discovers the live schema on every run and
 **refuses** if it finds a table or foreign key that is not in this list, a trigger, or a migration set that differs from
 this code version.
@@ -33,11 +33,14 @@ this code version.
 | 15 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` (deleted before it) |
 | 16 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `players` (CASCADE) |
 | 17 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `players` (CASCADE) |
-| 18 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
-| 19 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
-| 20 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
-| 21 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
+| 18 | `auth_devices` | Trusted devices for "keep me signed in on this device" (migration 018): hashed device tokens, browser and system label, dates | **Empty** | `players` (CASCADE) |
+| 19 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
+| 20 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
+| 21 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
+| 22 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
 | – | `schema_migrations` | Which migration files were applied | **PRESERVE, never touched** | none, not in the plan |
+
+**Migration 018 (keep me signed in on this device, Stage 20.9) adds one table**, `auth_devices`, emptied in the plan above.
 
 **Migration 013 (admin console, Stage 20.5) adds eight tables**, all of them emptied in the plan above:
 `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, `feedback`, `announcements`,
@@ -61,7 +64,7 @@ It never uses `TRUNCATE`, `DROP`, `ALTER`, `CREATE` or `CASCADE`.
 * **Dry run by default**: read-only transaction (`BEGIN READ ONLY`), always rolled back. Prints the row count of every table, breakdowns and a masked sample of the records.
 * **Two things are needed to delete**: `--execute` and `--confirm=<exact database name>`.
 * **The target is named on purpose**: `CLEANUP_DATABASE_URL` only. `DATABASE_URL` and `.env` files are ignored. A remote host must also be repeated with `--expect-host=<host>`. The connected `current_database()` must equal the URL's database. A running migration (advisory lock) blocks it.
-* **Expected state only**: same 22 tables (21 emptied and `schema_migrations`), same 21 foreign keys, no triggers, no other schema, and exactly the migrations in `db/migrations` applied. Anything else is refused with the list of differences.
+* **Expected state only**: same 23 tables (22 emptied and `schema_migrations`), same 22 foreign keys, no triggers, no other schema, and exactly the migrations in `db/migrations` applied. Anything else is refused with the list of differences.
 * **One transaction**: tables are locked (`SHARE ROW EXCLUSIVE`: readers keep working, writers wait), counted, deleted in the order above and checked; a schema and migration-history fingerprint taken before and after must be identical. Any error, mismatch or timeout rolls everything back (`lock_timeout` 10 s, `statement_timeout` 5 min).
 * **Nothing sensitive is printed**: emails are masked (`a***@example.com`), token hashes are never selected, chat-report message text and user-supplied details are excluded from samples, the connection password is never shown, and the snapshot file holds only structure digests and counts.
 
@@ -98,9 +101,9 @@ Exit codes: `0` done, `1` failed (rolled back), `2` refused (nothing changed).
 
 `--verify` (read-only) checks that:
 
-* every one of the 21 emptied tables is empty, and no legacy anonymous player remains;
+* every one of the 22 emptied tables is empty, and no legacy anonymous player remains;
 * `schema_migrations` lists exactly the repository's migrations and is byte-identical to the snapshot (versions and `applied_at`);
-* the schema fingerprint (tables, columns, indexes, constraints, triggers) equals the snapshot, and all 21 foreign keys exist;
+* the schema fingerprint (tables, columns, indexes, constraints, triggers) equals the snapshot, and all 22 foreign keys exist;
 * the application's own read paths work on the database (player stats query, username lookup, session lookup).
 
 Then do the manual end-to-end check: open the site, register a test account, verify the email, log in, join a table.
@@ -108,7 +111,7 @@ Then do the manual end-to-end check: open the site, register a test account, ver
 
 ## 6. Tests
 
-* `tests/cleanup.test.js` (no database): the plan covers exactly the tables the migrations create (22, including `analytics_batches`); order versus foreign keys; refusals (unknown table, trigger, extra / missing foreign key or migration, remote host, missing or wrong confirmation, `DATABASE_URL` fallback); the source contains no `TRUNCATE` / `DROP` / `ALTER` / `CASCADE`.
+* `tests/cleanup.test.js` (no database): the plan covers exactly the tables the migrations create (23, including `analytics_batches` and `auth_devices`); order versus foreign keys; refusals (unknown table, trigger, extra / missing foreign key or migration, remote host, missing or wrong confirmation, `DATABASE_URL` fallback); the source contains no `TRUNCATE` / `DROP` / `ALTER` / `CASCADE`.
 * `tests/cleanup.pg.test.js` (real PostgreSQL, throw-away database, needs `TEST_DATABASE_URL`): a dry run issues only read statements and leaves every table byte-identical; `--execute` without or with a wrong confirmation deletes nothing; wrong deletion orders are refused; errors after any delete, before commit and a lock timeout all roll back completely; the real execution empties the 21 tables in plan order (the seeded row counts are derived from the plan), keeps `schema_migrations` byte-identical and the schema fingerprint and foreign keys unchanged; `--verify` passes afterwards and fails on a database that still has data; an end-to-end CLI run (dry run, execute, verify); and the application then registers, verifies, logs in and reaches the lobby, and migrations report nothing pending.
 
 ```bash
@@ -142,7 +145,7 @@ the wrong URL is used.
 
 ### What is deleted with an account
 
-- The account's logins, tokens, sessions, recent tables, dismissals, friendships, friend requests, private-table
+- The account's logins, tokens, sessions, trusted devices, recent tables, dismissals, friendships, friend requests, private-table
   invitations and chat blocks are removed, in both directions where a relationship has two sides.
 - Reports made by a deleted reporter are removed (`reporter_id` cascades). Reports **against** a deleted account remain:
   migration 015 clears `reported_id` with `ON DELETE SET NULL` and preserves the server-captured

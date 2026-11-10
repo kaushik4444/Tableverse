@@ -236,3 +236,10 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - Narrow phones (≤400 px): toolbar gaps and an icon-only chip keep the title row on one line at 360 px (`game-ux.css`).
 - Tests: `tests/propertyrivals.test.js` (card figures from the rules), `tests/ui/propertyrivals-ui.js` (card, cash/net worth, keyboard), `tests/ui/game-settings-ui.js` (chip, focus, Space, all six games). Full `npm run test:ui` passes locally.
 - Status: merged into `main` as merge commit `2d04d77` (PR #87, closed 2026-11-10 02:13 UTC, head `a3a169d`). The docs and What's new follow-up is PR #95 (`docs/property-rivals-whats-new`); nothing else on this branch is pending.
+
+## Stage 20.9 — Keep me signed in on this device (branch `feat/remember-device`, PR #94)
+- Trusted devices: `auth_devices` (migration 018) holds hashed device tokens, a browser and system label, and expiry; the raw token is only in the `ct_device` cookie. Restore, login, sign-out, sign-out everywhere, password reset, suspension and cleanup all go through `db/auth.js` and `db/admin.js`.
+- Every change that starts or ends trust runs under the account lock (`players … FOR UPDATE`), in one transaction with the sessions it affects: login (issue and retire), restore, logout, sign-out everywhere, reset, suspension and owner sign-out.
+- Removed the unused unlocked revocation helpers; only the locked paths remain.
+- Cleanup: `auth_devices` is in the plan (23 tables, 22 foreign keys, 22 emptied; see `docs/DATA_CLEANUP.md`).
+- Tests: `tests/devices.pg.test.js` drives the real routes against PostgreSQL (in `npm run test:pg`, which CI runs with `--require`); no-database checks in `tests/cleanup.test.js`. Those PostgreSQL suites cannot run in the sandbox.

@@ -4,6 +4,7 @@ User-facing changes are listed first. Operational and internal implementation de
 
 ## Unreleased
 
+- Keep me signed in on this device: an optional tick on the sign-in form keeps this browser signed in for 30 days after its last visit. The browser's trust ends when you sign out, sign out everywhere, reset your password, or an owner suspends or signs out your account.
 - Property Rivals: tap a city in the player list to see its owner, buildings, rent now, the full rent table, and the mortgage, unmortgage and house costs.
 - Property Rivals: each player shows cash and net worth separately. The crown marks the player with the highest net worth, not the most cash.
 - Every game shows its current settings at the top right. Tap them for the full list with each choice explained.
