@@ -63,8 +63,11 @@ async function listBroadcasts({ page: p = 1 } = {}) {
   const total = (await db.query('SELECT COUNT(*)::int AS n FROM email_broadcasts')).rows[0].n;
   const r = await db.query(
     `SELECT b.id, b.created_at, b.audience, b.category, b.subject, b.status, b.recipient_count, b.finished_at,
-            (SELECT COUNT(*)::int FROM email_broadcast_recipients r WHERE r.broadcast_id = b.id AND r.state = 'sent') AS sent_count,
-            (SELECT COUNT(*)::int FROM email_broadcast_recipients r WHERE r.broadcast_id = b.id AND r.state = 'failed') AS failed_count,
+            -- a finished broadcast shows the totals saved when it finished: deleting a recipient's account later must not change them
+            CASE WHEN b.status = 'sent' THEN b.sent_count
+                 ELSE (SELECT COUNT(*)::int FROM email_broadcast_recipients r WHERE r.broadcast_id = b.id AND r.state = 'sent') END AS sent_count,
+            CASE WHEN b.status = 'sent' THEN b.failed_count
+                 ELSE (SELECT COUNT(*)::int FROM email_broadcast_recipients r WHERE r.broadcast_id = b.id AND r.state = 'failed') END AS failed_count,
             pl.username AS created_by
        FROM email_broadcasts b LEFT JOIN players pl ON pl.id = b.created_by
       ORDER BY b.created_at DESC, b.id LIMIT ${PAGE} OFFSET $1`,
@@ -88,7 +91,10 @@ async function closeAbandoned() {
     for (const { id } of stale) {
       await c.query(`UPDATE email_broadcast_recipients SET state = 'failed' WHERE broadcast_id = $1 AND state = 'pending'`, [id]);
       await c.query(
-        `UPDATE email_broadcasts SET status = 'sent', finished_at = NOW(), lease_until = NULL, lease_owner = NULL WHERE id = $1`,
+        `UPDATE email_broadcasts b SET status = 'sent', finished_at = NOW(), lease_until = NULL, lease_owner = NULL,
+                sent_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id AND state = 'sent'),
+                failed_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id AND state = 'failed')
+          WHERE b.id = $1`,
         [id]
       );
     }
@@ -185,7 +191,6 @@ async function requireLease(c, broadcastId, owner) {
 async function finishBroadcast(broadcastId, owner) {
   await db.query(
     `UPDATE email_broadcasts b SET status = 'sent', finished_at = NOW(), lease_until = NULL, lease_owner = NULL,
-            recipient_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id),
             sent_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id AND state = 'sent'),
             failed_count = (SELECT COUNT(*)::int FROM email_broadcast_recipients WHERE broadcast_id = b.id AND state = 'failed')
       WHERE b.id = $1 AND b.status = 'sending' AND b.lease_owner = $2`,

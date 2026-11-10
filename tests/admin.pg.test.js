@@ -492,6 +492,25 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(row.sent_count, expected);
       assert.ok(!('body' in row), 'the history carries no text');
     });
+    await test('a finished broadcast keeps its totals when a recipient deletes the account afterwards', async () => {
+      const ownerId = (await q("SELECT id FROM players WHERE role = 'owner'"))[0].id;
+      const gone = await mk('gone', { verified: true });
+      const expected = await count('all', 'account');
+      const id = (await dbBroadcast.queueBroadcast({ actorId: ownerId, audience: 'all', category: 'account', subject: 'Totals', body: 'Body', expectedCount: expected })).id;
+      const job = await dbBroadcast.claimNext();
+      assert.equal(job.id, id);
+      for (const r of await dbBroadcast.pendingBatch(job.id, 1000)) {
+        await dbBroadcast.markRecipient(job.id, r.player_id, r.player_id === gone ? 'failed' : 'sent', job.owner);
+      }
+      await dbBroadcast.finishBroadcast(job.id, job.owner);
+      const before = (await dbBroadcast.listBroadcasts()).items.find((x) => x.id === id);
+      assert.equal(before.failed_count, 1);
+      await q('DELETE FROM players WHERE id = $1', [gone]);
+      const after = (await dbBroadcast.listBroadcasts()).items.find((x) => x.id === id);
+      assert.equal(after.sent_count, before.sent_count, 'sent total is kept');
+      assert.equal(after.failed_count, before.failed_count, 'failed total is kept');
+      assert.equal(after.recipient_count, expected, 'the queued count is kept');
+    });
     await test('an opt-out from a promotion link takes effect at once and is not reversed by a second visit', async () => {
       const token = (await q("SELECT unsubscribe_token::text AS t FROM players WHERE username LIKE $1 LIMIT 1", [`bc${tag}v`]))[0].t;
       const before = await count('all', 'promo');

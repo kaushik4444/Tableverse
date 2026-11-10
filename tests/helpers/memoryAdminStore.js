@@ -140,7 +140,12 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       return { id, recipientCount: ids.length };
     },
     async listBroadcasts({ page: p = 1 } = {}) {
-      const items = broadcasts.slice().reverse().map(({ body, ...rest }) => ({ ...rest, created_by: players.get(rest.created_by)?.username || null }));
+      // as in the database: a finished broadcast shows its saved totals; a running one counts its recipients as they are now
+      const live = (id) => [...(broadcastRecipients.get(id) || new Map()).values()];
+      const items = broadcasts.slice().reverse().map(({ body, ...rest }) => {
+        const counts = rest.status === 'sent' ? {} : { sent_count: live(rest.id).filter((s) => s === 'sent').length, failed_count: live(rest.id).filter((s) => s === 'failed').length };
+        return { ...rest, ...counts, created_by: players.get(rest.created_by)?.username || null };
+      });
       return { total: items.length, pageSize: 25, items: items.slice((Math.max(1, Number(p) || 1) - 1) * 25, Math.max(1, Number(p) || 1) * 25) };
     },
     async claimNext() {
@@ -150,7 +155,8 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
         if (b.status === 'sending' && b.renewedAt && now - b.renewedAt > 24 * 3600 * 1000) {
           const m = broadcastRecipients.get(b.id) || new Map();
           for (const [pid, s] of m) if (s === 'pending') m.set(pid, 'failed');
-          Object.assign(b, { status: 'sent', finished_at: now, leaseUntil: null, leaseOwner: null });
+          const vals = [...m.values()];
+          Object.assign(b, { status: 'sent', finished_at: now, leaseUntil: null, leaseOwner: null, sent_count: vals.filter((s) => s === 'sent').length, failed_count: vals.filter((s) => s === 'failed').length });
         }
       }
       const b = broadcasts.find((x) => x.status === 'queued' || (x.status === 'sending' && (!x.leaseUntil || x.leaseUntil < now)));
@@ -210,7 +216,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       const b = broadcasts.find((x) => x.id === id);
       if (b.status !== 'sending' || b.leaseOwner !== owner) return;
       const m = [...(broadcastRecipients.get(id) || new Map()).values()];
-      Object.assign(b, { status: 'sent', finished_at: now(), recipient_count: m.length, sent_count: m.filter((s) => s === 'sent').length, failed_count: m.filter((s) => s === 'failed').length });
+      Object.assign(b, { status: 'sent', finished_at: now(), sent_count: m.filter((s) => s === 'sent').length, failed_count: m.filter((s) => s === 'failed').length });
     },
     async unsubscribe(token) {
       const p = [...players.values()].find((x) => x.unsubscribe_token === token);

@@ -473,6 +473,12 @@ const ADMIN_POSTS = [
       assert.equal(sent, 0, 'no mail goes out for the closed run');
       assert.equal(row.status, 'sent');
       assert.equal([...sb.store.broadcastRecipients.get(old.id).values()].filter((x) => x === 'failed').length, 6);
+      assert.equal(row.failed_count, 6, 'the closed run keeps its totals');
+      // a finished broadcast keeps its totals when its recipient rows later go (an account deleted after the send)
+      sb.store.broadcastRecipients.get(old.id).clear();
+      const listed = (await bOwner.b.get('/api/admin/broadcasts')).json.items.find((x) => x.id === old.id);
+      assert.equal(listed.failed_count, 6, 'the list still shows the saved total');
+      assert.equal(listed.sent_count, 0);
     });
     await test('a recipient whose first attempt was more than a day ago is not tried again: it is recorded as failed', async () => {
       const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Attempt', body: 'Eight', expectedCount: 6 }));
