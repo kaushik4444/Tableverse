@@ -52,7 +52,7 @@ We do not sell your data. The game page loads no third-party advertising or anal
 
 ## Promotional e-mail
 
-We do not send promotional e-mail during the beta. [OWNER: confirm.] Account e-mail (the verification and password-reset messages) is sent to the address you gave, whether or not it is verified, because it is needed to create and recover the account. The owner's broadcast e-mail is not used in the beta (Wave 1 sends none). If broadcasts are used later, they will go only to verified accounts, once the change proposed in the readiness document is approved and built. Any such message will have an unsubscribe link.
+We do not send promotional e-mail during the beta. [OWNER: confirm.] Three kinds of e-mail are sent to you. (1) The verification e-mail, sent to the address you gave when you register, and to an unverified address when you ask for it again. (2) The password-reset e-mail, sent only to a verified address. (3) Owner broadcasts, which are not used in Wave 1. If broadcasts are used later, they go only to verified accounts (proposed change C-C, not built). Account messages (1 and 2) carry no unsubscribe link, because they are not marketing. Promotional messages, if ever sent, carry an unsubscribe link that works in one click.
 
 ## How long we keep data
 

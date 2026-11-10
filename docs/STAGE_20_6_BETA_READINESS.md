@@ -78,7 +78,7 @@ Each change is described with its exact anchors. None is implemented or tested y
 **C-F. Cancel other unused reset links when one is used (optional security hardening).**
 - `db/auth.js` `resetPassword`: in the same transaction, mark every other unused `password_reset` token for that player as used.
 - Test: a second reset link stops working after the first is used.
-- Until this ships, the runbook's compromise procedure waits at least 30 minutes after the mailbox is secured (`docs/OPERATIONS_RUNBOOK.md`, step 3).
+- Until this ships, the runbook's compromise procedure keeps the account out of use for at least the live `AUTH_RESET_TTL_MIN` after the last reset e-mail sent before containment, then does a fresh reset (`docs/OPERATIONS_RUNBOOK.md`, step 3).
 
 **C-G. Cancel control for e-mail broadcasts (optional; only if broadcasts are ever used).** Broadcast statuses are `queued`, `sending` and `sent` (migration 016), and the worker resumes unfinished jobs after a restart, so there is no way in the app to stop one. The change would add a `cancelled` status and an owner-only cancel route. Not needed while Wave 1 sends no broadcasts.
 
