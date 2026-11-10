@@ -209,6 +209,22 @@ const PW = 'TestPass123!';
       assert.equal((await (await restoreOn(device)).get('/api/auth/session')).json.authenticated, false, 'the device no longer signs in');
       assert.equal(await activeSessions(u.id), 0, 'no session is left');
     });
+    await test('an expired trusted device signs nobody in', async () => {
+      const u = await newUser('Expired');
+      const b1 = await login(u.email, true);
+      const device = b1.cookies.get('ct_device');
+      await q("UPDATE auth_devices SET expires_at = NOW() - INTERVAL '1 minute' WHERE player_id = $1", [u.id]);
+      assert.equal((await (await restoreOn(device)).get('/api/auth/session')).json.authenticated, false);
+    });
+    await test('a restore renews the device for another 30 days (sliding expiry)', async () => {
+      const u = await newUser('Slide');
+      const b1 = await login(u.email, true);
+      const device = b1.cookies.get('ct_device');
+      await q("UPDATE auth_devices SET expires_at = NOW() + INTERVAL '1 day' WHERE player_id = $1", [u.id]);
+      await ageSessions(u.id);
+      assert.equal((await (await restoreOn(device)).get('/api/auth/session')).json.authenticated, true);
+      assert.equal((await q("SELECT expires_at > NOW() + INTERVAL '20 days' AS renewed FROM auth_devices WHERE player_id = $1", [u.id]))[0].renewed, true);
+    });
     console.log(`${passed} device-trust checks passed`);
   } finally {
     if (srv) await srv.close();
