@@ -14,12 +14,22 @@ async function until(fn, label, ms = 12000) { const t0 = Date.now(); for (;;) { 
 const def = games.get('wizard');
 const members = [{ id: 'a', name: 'Ann' }, { id: 'b', name: 'Bo' }].map((m) => ({ ...m, bot: false, avatar: '🧙', connected: true, ping: null, username: null }));
 const lobbyRoom = { code: 'ABCDEF', gameId: 'wizard', hostId: 'a', status: 'lobby', options: {}, visibility: 'public', seats: 4, min: def.seats.min, max: def.seats.max, seatLabels: null, deadline: null, now: Date.now(), spectators: [], members };
-const msgsFor = (id) => [welcome({ id, name: id === 'a' ? 'Ann' : 'Bo', games: games.list(), ice: [] }), { t: 'state', room: lobbyRoom, view: null }];
+const msgsFor = (id) => [welcome({ id, name: id === 'a' ? 'Ann' : 'Bo', games: games.list(), ice: [], voiceEnabled: true }),{ t: 'state', room: lobbyRoom, view: null }];
 
 (async () => {
   const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk() });
   const browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
   const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === 'voice' || m.t === 'rtc'));
+
+  await test('with voice switched off on the server, there are no microphone or speaker buttons', async () => {
+    const off = msgsFor('a').map((m) => (m.t === 'welcome' ? { ...m, voiceEnabled: false, turnStatus: 'off', ice: [] } : m));
+    const { page, ctx } = await scriptedPage(browser, { messages: off });
+    await page.goto(url + '/');
+    await page.waitForSelector('.code-card');
+    assert.equal(await page.locator('.vc-mic').count(), 0, 'no microphone button');
+    assert.equal(await page.locator('.vc-spk').count(), 0, 'no speaker button');
+    await ctx.close();
+  });
 
   await test('the lobby has a microphone and a speaker button; the mic joins voice and says so to the server', async () => {
     const { page, ctx } = await scriptedPage(browser, { messages: msgsFor('a') });
@@ -66,7 +76,7 @@ const msgsFor = (id) => [welcome({ id, name: id === 'a' ? 'Ann' : 'Bo', games: g
 
   await test('every game has the buttons in its toolbar, right after the reactions, before the menu', async () => {
     for (const id of ['wizard', 'gofish', 'ludo', 'snakesladders']) {
-      const msgs = tableMessages(id, [{ name: 'Ann' }, { name: 'Bo' }, { name: 'Cy' }, { name: 'Di' }]);
+      const msgs = tableMessages(id, [{ name: 'Ann' }, { name: 'Bo' }, { name: 'Cy' }, { name: 'Di' }]).map((m) => (m.t === 'welcome' ? { ...m, voiceEnabled: true } : m));
       const { page, ctx } = await scriptedPage(browser, { messages: msgs, viewport: { width: 360, height: 640 } });
       await page.goto(url + '/');
       await page.waitForSelector('.wz-top .row, .ludo-tools');
@@ -137,7 +147,7 @@ const msgsFor = (id) => [welcome({ id, name: id === 'a' ? 'Ann' : 'Bo', games: g
 
   await test('a spectator gets no voice buttons (watchers take a seat first)', async () => {
     const room = { ...lobbyRoom, members: [members[1]], spectators: [{ id: 'a', name: 'Ann', avatar: '🧙', connected: true, ping: null, username: null }] };
-    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ id: 'a', name: 'Ann', games: games.list(), ice: [] }), { t: 'state', room, view: null }] });
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ id: 'a', name: 'Ann', games: games.list(), ice: [], voiceEnabled: true }), { t: 'state', room, view: null }] });
     await page.goto(url + '/');
     await page.waitForSelector('.code-card');
     assert.equal(await page.locator('.vc-btn').count(), 0);

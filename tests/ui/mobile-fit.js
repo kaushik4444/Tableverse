@@ -23,7 +23,7 @@ function build(gameId, n, untilMine = false) {
   }
   const room = { code: 'ABCDEF', gameId, hostId: 'me', status: 'playing', options: {}, visibility: 'public', seats: n, min: def.seats.min, max: def.seats.max, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
     members: players.map((p) => ({ id: p.id, name: p.name, bot: false, avatar: p.avatar, connected: true })) };
-  return [welcome({ games: games.list() }), { t: 'state', room, view: g.view('me') }];
+  return [welcome({ games: games.list(), voiceEnabled: true }), { t: 'state', room, view: g.view('me') }];
 }
 
 let failed = 0;
