@@ -43,6 +43,7 @@ To run the service you asked for: signing you in, keeping your games and results
 
 - **Render**: hosts the application and its logs.
 - **Neon**: hosts the PostgreSQL database that holds account and game data.
+- **GitHub**: holds the source code and runs a scheduled cleanup workflow with database access (see `docs/ACCOUNT_DELETION_AND_RETENTION.md`).
 - **Resend**: delivers verification and password-reset e-mail, and owner-approved announcement e-mail.
 - **Metered**: relays voice traffic when a direct connection cannot be made.
 - **Google and Cloudflare**: STUN servers used during voice setup. They receive your network address.

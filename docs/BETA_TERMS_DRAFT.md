@@ -35,7 +35,11 @@ You agree not to:
 ## 4. Chat and user-generated content
 
 - Table chat and display names are user-generated content. You are responsible for what you post.
-- Players can **block** another account. A block hides that player's table chat and voice between you, and stops you inviting each other. You can still share a table. Details are in `docs/CHAT_MODERATION.md`.
+- Players can **block** another account. The effects differ by kind of communication and are not a complete privacy guarantee:
+  - **Chat is one way.** After you block someone, you stop seeing their table chat. They still see yours, and they are not told about the block.
+  - **Voice is two ways.** You and the blocked player cannot hear each other in table voice.
+  - You cannot invite each other or become friends, and you can still share a table, including one hosted by someone else. A host may keep a blocked player at their own table.
+  - Full rules are in `docs/CHAT_MODERATION.md`.
 - Players can **report** a message with a reason. A report is recorded for review. [OWNER: state how and by whom reports are reviewed. At present reports are recorded in the database and there is no review queue in the product.]
 - We may remove content, rename an account or suspend an account when we believe this terms document has been broken. There is no automatic action against anyone.
 

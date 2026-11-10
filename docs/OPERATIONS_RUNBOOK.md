@@ -206,9 +206,9 @@ Voice is peer to peer. With only STUN (the default), players on some mobile carr
 
 ## Suspected account compromise (added 2026-11-10)
 1. Confirm the signs: sign-ins or changes the player did not make. The audit log shows admin actions only. The sessions table keeps each sign-in (its creation time and, for "keep me signed in", the device it came from) until it is purged, 7 to 30 days after it ends (`docs/ACCOUNT_DELETION_AND_RETENTION.md`), so look there quickly before it is removed.
-2. The owner suspends the account in the admin console (reason required); suspension ends its sessions and blocks sign-in (`POST /api/admin/users/suspend`, owner only).
-3. The player signs out every device (**Sessions** in settings), or staff use "Sign out" on the account (`POST /api/admin/users/sign-out`; admins can do this for ordinary players only).
-4. The player resets the password by e-mail. Check that the reset went to the right address.
+2. The owner suspends the account in the admin console (reason required). Suspension revokes all of the account's sessions and trusted devices and blocks sign-in (`POST /api/admin/users/suspend`, owner only). This is the step that signs the account out everywhere; no separate sign-out is needed.
+3. The owner may also sign the account out of every device with `POST /api/admin/users/sign-out`. This is owner-only (`checkSignOut` in `lib/adminPolicy.js`); admins cannot do it, even for ordinary players.
+4. The person behind the account resets the password through the unauthenticated e-mail reset, which stays available while the account is suspended. Check that the reset went to the right address. Whether a reset can be completed while the account is suspended was not verified here; the owner should test it before relying on this step.
 5. Record the time, the account id (not the e-mail address), what was seen and what was done, in the owner's private notes. Do not paste it into the repository, a chat or an issue.
 6. Do not delete the account as a response, because deletion removes the evidence.
 7. Owner decides whether to unsuspend, and whether to tell the player more.
@@ -218,7 +218,11 @@ Secrets in use: `DATABASE_URL` (Neon), `RESEND_API_KEY`, `METERED_SECRET_KEY`, `
 1. Stop the spread: if a value was pasted into a chat, an issue, a commit or a log, treat it as exposed.
 2. **Tell the owner immediately.** Rotation of any production credential needs explicit owner approval; this repository does not rotate or revoke them.
 3. Where the value is in git history, the owner decides how to remove it. Do not force-push `main` without approval.
-4. After rotation (owner-run): update the value only in Render's secret environment, redeploy, and confirm `/readyz` and a voice test.
+4. After rotation (owner-run), update every store that holds the value and verify each consumer. Do not assume Render is the only place:
+   - Render's secret environment for the web service (`DATABASE_URL`, `RESEND_API_KEY`, `METERED_SECRET_KEY`, TURN values). Redeploy, then confirm `/readyz` and a voice test.
+   - GitHub repository secrets for the cleanup workflow (`.github/workflows/cleanup-unverified.yml`): `CLEANUP_DRYRUN_DATABASE_URL` (read-only dry run) and `CLEANUP_DATABASE_URL` (the gated deletion job, in the production-cleanup environment). If the database role changed, the dry-run job fails until its secret is updated, and the deletion job cannot run.
+   - Any local or shell copy the owner keeps.
+   Each of these updates is an owner action.
 5. Check the logs for the value and note the result. The Metered key is never logged by design (`lib/meteredTurn.js`).
 
 ## Decisions that always need explicit owner approval (added 2026-11-10)

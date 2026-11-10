@@ -33,16 +33,17 @@ Removed by the deletion itself or by foreign-key cascade (`ON DELETE CASCADE` in
 | Feedback text the account sent | kept, with the account link cleared (`ON DELETE SET NULL`). Feedback is not meant to hold personal data (the form says so) |
 | Admin audit entries the account made | kept, with the actor link cleared, for the audit period |
 | Finished matches the account played | **kept**: the seat's name becomes `Deleted player` and the link to the account is cleared, so other players' results and histories stay correct |
+| Live table chat the account sent (message text) | **not removed by deletion.** The author is shown as `Deleted player`, but the message text stays with its table in server memory while the table is open, and is shown to people who join that table later. Live chat is not written to the database and is gone when the table closes or the server restarts. A message someone reported is also kept as a report (above). Players must not put identifying information in chat, because deleting the account does not remove it |
 
 Not yet verified: whether an e-mail-broadcast recipient row is removed with the account (it is declared `ON DELETE CASCADE` in migration 016, but this was not tested end to end).
 
 ## Retention periods (automatic, as implemented)
 
-Housekeeping runs in the server (`server.js`, `db/auth.js` `purgeExpired`, `db/admin.js` `purge`).
+Housekeeping (`server.js`, `db/auth.js` `purgeExpired`, `db/admin.js` `purge`) runs once at startup and then every six hours. Its failures are logged and retried at the next run. The periods below are **purge-eligibility thresholds, not exact deletion deadlines**: a row may be kept longer if housekeeping has not run, and for sessions the rule is "expired more than 7 days ago, **or** revoked more than 30 days ago" (`db/auth.js`), so a revoked row can be removed less than 30 days after revocation. Do not rely on these as exact dates in a request or an incident.
 
 | Data | How long it is kept | Where set |
 |---|---|---|
-| Login sessions | 30 days from sign-in (`AUTH_SESSION_TTL_DAYS`); expired ones deleted 7 days later, revoked ones 30 days after revocation | `docs/SESSION_POLICY.md` |
+| Login sessions | 30 days from sign-in (`AUTH_SESSION_TTL_DAYS`); removed once expired for 7 days, or revoked (the OR rule above, so possibly sooner than 30 days after revocation) | `docs/SESSION_POLICY.md` |
 | Device logins ("keep me signed in") | deleted 30 days after expiry or revocation | `db/auth.js` |
 | Verification tokens | valid 24 hours (`AUTH_VERIFY_TTL_MIN`); deleted 7 days after expiry or use | `db/auth.js` |
 | Password-reset tokens | valid 30 minutes (`AUTH_RESET_TTL_MIN`); deleted 7 days after expiry or use | `db/auth.js` |
@@ -76,7 +77,7 @@ These are kept until the account is deleted or someone deletes them by hand. No 
 - **Resend**: sends verification, password-reset and (owner-approved) broadcast e-mail. Receives the address and the message.
 - **Metered**: TURN relay for voice. Players' network addresses and relayed voice traffic pass through it when a relay is used. Voice media is encrypted between the peers; the relay still carries it.
 - **Google and Cloudflare STUN servers** (`lib/voiceRelay.js`): receive the player's network address during voice setup.
-- **GitHub**: holds the source code only; no player data.
+- **GitHub**: holds the source code and runs the scheduled cleanup workflow (`.github/workflows/cleanup-unverified.yml`). That workflow holds two database credentials as repository secrets: a read-only one for the daily dry run (counts only), and one for the deletion job, which runs only when started by hand with `CLEANUP_EXECUTE=true` and an approval in the `production-cleanup` environment. Job summaries keep counts. The workflow is not meant to print individual player records, but a player's data is reachable by anyone with those secrets, so their boundary is part of this disclosure.
 
 ## Open items for the owner
 
