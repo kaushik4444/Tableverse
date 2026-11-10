@@ -91,6 +91,8 @@ All under the session cookie. `POST` needs the `X-CSRF-Token` header. Staff = ad
 | Endpoint | Who |
 |---|---|
 | `GET /api/admin/me` | any signed-in account (says whether you are staff) |
+Overview charts (staff): a 7, 30 or 90-day range, active players per day and registrations per day as line charts. Each chart has a data table underneath. The counts come from the same counters as before: no names, addresses or messages.
+
 | `GET /api/admin/overview?days=`, `/health`, `/users?q=&page=`, `/feedback?status=&page=`, `/announcements`, `/audit?page=` | staff |
 | `POST /api/admin/users/sign-out` | staff (admins only on ordinary players) |
 | `POST /api/admin/roles` | owner |

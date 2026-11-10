@@ -212,7 +212,7 @@ async function forgetActor(playerId) {
 
 async function overview({ days = 30 } = {}) {
   const n = Math.min(90, Math.max(1, Math.floor(Number(days)) || 30));
-  const [series, dims, active, accounts] = await Promise.all([
+  const [series, dims, active, accounts, activeDaily] = await Promise.all([
     db.query('SELECT day::text AS day, metric, SUM(total)::int AS total FROM analytics_daily WHERE day > CURRENT_DATE - $1::int GROUP BY day, metric ORDER BY day', [n]),
     db.query("SELECT metric, dim, SUM(total)::int AS total FROM analytics_daily WHERE day > CURRENT_DATE - $1::int AND metric IN ('game_started', 'game_finished', 'error') GROUP BY metric, dim ORDER BY total DESC LIMIT 60", [n]),
     db.query(`SELECT COUNT(DISTINCT actor) FILTER (WHERE day = CURRENT_DATE)::int AS dau,
@@ -221,8 +221,10 @@ async function overview({ days = 30 } = {}) {
     db.query(`SELECT COUNT(*) FILTER (WHERE NOT is_anonymous)::int AS registered,
                      COUNT(*) FILTER (WHERE NOT is_anonymous AND created_at > NOW() - INTERVAL '1 day')::int AS registered_24h,
                      COUNT(*) FILTER (WHERE role <> 'user')::int AS staff FROM players`),
+    // one row per player per day in analytics_active (a keyed hash, never an account id), so a count is distinct players that day
+    db.query('SELECT day::text AS day, COUNT(*)::int AS active FROM analytics_active WHERE day > CURRENT_DATE - $1::int GROUP BY day ORDER BY day', [n]),
   ]);
-  return { days: n, series: series.rows, dims: dims.rows, active: active.rows[0], accounts: accounts.rows[0] };
+  return { days: n, series: series.rows, dims: dims.rows, active: active.rows[0], accounts: accounts.rows[0], activeDaily: activeDaily.rows };
 }
 
 async function health() {

@@ -42,19 +42,57 @@
     ? `<div class="ad-bars">${rows.map((r) => { const max = Math.max(...rows.map((x) => x.total), 1); return `<div class="ad-bar"><span>${esc(r.name)}</span><i style="width:${Math.max(2, Math.round((r.total / max) * 100))}%"></i><span>${r.total}</span></div>`; }).join('')}</div>`
     : `<p class="ad-muted">${esc(empty)}</p>`;
   const spark = (values, label) => { const max = Math.max(...values, 1); return `<div class="ad-spark" role="img" aria-label="${esc(label)}">${values.map((v) => `<i style="height:${Math.round((v / max) * 100)}%" title="${v}"></i>`).join('')}</div>`; };
-  async function overview() {
+  /** A line chart as SVG with a data table under it (the chart is for sight, the table for screen readers and copying). */
+  const lineChart = (values, labels, label) => {
+    // null = not kept (outside the retention window): drawn as a gap, never as zero
+    const nums = values.map((v) => (v == null ? null : Number(v) || 0));
+    const known = nums.filter((v) => v !== null);
+    const w = 600; const h = 170; const pad = 30;
+    // an integer scale top of at least 2, so every tick label is a whole count at its true position
+    const top = Math.max(2, Math.ceil(Math.max(...known, 0)));
+    const max = top;
+    const n = nums.length;
+    const x = (i) => (n <= 1 ? pad : pad + (i * (w - 2 * pad)) / (n - 1));
+    const y = (v) => h - pad - (v / max) * (h - 2 * pad);
+    const grid = [0, Math.round(top / 2), top].map((tick) => {
+      const yy = y(tick).toFixed(1);
+      return `<line x1="${pad}" x2="${w - pad}" y1="${yy}" y2="${yy}" class="ad-grid-line"/><text x="${pad - 6}" y="${yy}" class="ad-axis" text-anchor="end" dominant-baseline="middle">${tick}</text>`;
+    }).join('');
+    const pts = nums.map((v, i) => (v === null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean).join(' ');
+    const dots = nums.map((v, i) => (v === null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" class="ad-dot"><title>${esc(labels[i] || '')}: ${v}</title></circle>`)).join('');
+    const first = esc(labels[0] || ''); const last = esc(labels[n - 1] || '');
+    const rows = nums.map((v, i) => `<tr><td>${esc(labels[i] || '')}</td><td>${v === null ? 'not kept' : v}</td></tr>`).join('');
+    return `<figure class="ad-chart"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${grid}<polyline points="${pts}" class="ad-line" fill="none"/>${dots}<text x="${pad}" y="${h - 6}" class="ad-axis">${first}</text><text x="${w - pad}" y="${h - 6}" class="ad-axis" text-anchor="end">${last}</text></svg><details><summary>${esc(label)}: data table</summary><table class="ad-t"><thead><tr><th>Day</th><th>${esc(label)}</th></tr></thead><tbody>${rows}</tbody></table></details></figure>`;
+  };
+  const RANGES = [7, 30, 90];
+
+  async function overview(days = 30) {
     const gen = state.gen;
-    const o = await api('/api/admin/overview?days=30');
+    const range = RANGES.includes(Number(days)) ? Number(days) : 30;
+    const o = await api(`/api/admin/overview?days=${range}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const t = (m) => o.totals[m] || 0;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
+    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
     main.innerHTML = `<h2>Overview <small class="ad-muted">last ${o.days} days</small></h2>
+      <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:12px">${rangeButtons}</div>
       <div class="ad-grid">${tile(o.active.dau, 'active today')}${tile(o.active.wau, 'active, 7 days')}${tile(o.active.mau, 'active, 30 days')}${tile(o.accounts.registered, 'registered accounts')}${tile(o.accounts.registered_24h, 'new in 24 hours')}${tile(t('registration'), 'registrations')}${tile(t('session'), 'sessions')}${tile(t('game_finished'), 'games finished')}${tile(t('error'), 'errors')}</div>
+      <h3>Active players per day</h3>${lineChart(o.activeDaily || [], o.labels || [], 'Active players')}
+      <h3>Registrations per day</h3>${lineChart(o.series.registration || (o.labels || []).map(() => 0), o.labels || [], 'Registrations')}
       <h3>Sessions per day</h3>${spark(o.series.session || [], 'Sessions per day')}
       <h3>Games finished per day</h3>${spark(o.series.game_finished || [], 'Games finished per day')}
       <h3>Popular games</h3>${bars(o.popularGames, 'No finished games yet.')}
       <h3>Errors by kind</h3>${bars(o.errors, 'No errors recorded.')}
       <p class="ad-muted">Counters only: no addresses, names or messages are recorded. Active users are counted from a keyed hash, never an account id. Detail rows are kept ${o.retention ? esc(o.retention.activeDays) : '35'} days, daily totals ${o.retention ? esc(o.retention.dailyDays) : '400'} days.</p>`;
+    // a new range makes every answer still on its way out of date: bump the view generation so only the latest one is drawn
+    // each click takes its own generation: an older request that fails later must not replace the current view
+    main.querySelectorAll('[data-days]').forEach((b) => {
+      b.onclick = () => {
+        state.gen += 1;
+        const mine = state.gen;
+        overview(Number(b.dataset.days)).catch((e) => { if (mine === state.gen) fail(e); });
+      };
+    });
   }
 
   // ---------------------------------------------------------------- users
@@ -186,7 +224,7 @@
     document.getElementById('pNext').onclick = () => audit(page + 1).catch(fail);
   }
 
-  const views = { overview, users: () => users(), feedback: () => feedback(), announcements, health, audit: () => audit() };
+  const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, audit: () => audit() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
