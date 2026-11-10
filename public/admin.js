@@ -289,7 +289,30 @@
     document.getElementById('pNext').onclick = () => audit(page + 1).catch(fail);
   }
 
-  const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, logs: (f) => logs(f), audit: () => audit() };
+  // Render history (owner only, Stage 20.8): Render's own log of this service for the last 24 hours, read on the server.
+  async function renderHistory(text = '') {
+    const gen = state.gen;
+    if (!document.getElementById('rHistWrap')) {
+      main.insertAdjacentHTML('beforeend', `<section class="ad-card" id="rHistWrap" aria-labelledby="rHead" style="margin-top:16px">
+        <h2 id="rHead">Render history <small class="ad-muted">last 24 hours</small></h2>
+        <form class="ad-search ad-row" id="rForm"><input name="text" maxlength="100" placeholder="Contains, e.g. error" aria-label="Filter Render lines" style="flex:1"><button class="ad-btn">Load</button></form>
+        <div id="rHist"><p class="ad-muted">Loading…</p></div></section>`);
+      document.getElementById('rForm').onsubmit = (e) => { e.preventDefault(); renderHistory(new FormData(e.target).get('text') || '').catch(() => {}); };
+    }
+    const out = document.getElementById('rHist');
+    try {
+      const r = await api('/api/admin/render-logs?' + new URLSearchParams({ text, limit: '100' }).toString());
+      if (gen !== state.gen) return;
+      if (!r.configured) { out.innerHTML = '<p class="ad-muted">Render history is not set up on this server. Set RENDER_API_KEY, RENDER_SERVICE_ID and RENDER_OWNER_ID in the Render service\'s environment.</p>'; return; }
+      if (r.error) { out.innerHTML = `<p class="ad-msg err">${esc(r.error)}</p>`; return; }
+      const rows = r.items.map((e) => `<tr><td data-l="Time">${esc(when(e.time))}</td><td data-l="Level"><span class="ad-pill ${e.level === 'error' ? 'danger' : e.level === 'warn' ? 'warn' : ''}">${esc(e.level)}</span></td><td data-l="Source">${esc(e.source)}</td><td data-l="Line" style="word-break:break-word">${esc(e.text)}</td></tr>`).join('');
+      out.innerHTML = rows
+        ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Time</th><th>Level</th><th>Source</th><th>Line</th></tr></thead><tbody>${rows}</tbody></table></div>${r.hasMore ? '<p class="ad-muted">More lines exist; narrow the filter to see them.</p>' : ''}`
+        : '<p class="ad-muted">No lines in the last 24 hours for this filter.</p>';
+    } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
+  }
+
+  const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { await logs(f); if (state.me.isOwner) await renderHistory(); }, audit: () => audit() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
