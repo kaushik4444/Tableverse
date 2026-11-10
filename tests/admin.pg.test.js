@@ -30,7 +30,8 @@ const OWNER_EMAIL = 'boss.admin@test.local';
     // the real sender, with a record of each verification mail (what it sends is unchanged)
     const mailed = [];
     const realSender = require('../lib/email').makeAuthEmailSender({ env: process.env, logger: quiet() });
-    const recordingSender = { ...realSender, sendVerification: async (o) => { mailed.push(o); return realSender.sendVerification(o); } };
+    // CI has no mail provider, so the real send can fail; the registration path ignores that the same way (deliver() logs it)
+    const recordingSender = { ...realSender, sendVerification: async (o) => { mailed.push(o); try { return await realSender.sendVerification(o); } catch { return null; } } };
     const fast = { emailSender: recordingSender, port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80], matchLog: quiet(), env: { ...process.env, ADMIN_OWNER_EMAIL: OWNER_EMAIL }, announcement: 'Legacy banner' };
     srv = await start(fast);
     let seq = 1;
