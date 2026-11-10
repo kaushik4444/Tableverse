@@ -58,6 +58,8 @@ const PW = 'TestPass123!';
       const u = await newUser('Auto');
       const first = await login(u.email, true);
       const device = first.cookies.get('ct_device');
+      // a restore only replaces a session that is older than the reuse window (two tabs), so this one is aged first
+      await q("UPDATE auth_sessions SET created_at = NOW() - INTERVAL '1 minute' WHERE player_id = $1", [u.id]);
       const again = await restoreOn(device);
       const me = await again.get('/api/auth/session');
       assert.equal(me.json.authenticated, true);
@@ -119,6 +121,72 @@ const PW = 'TestPass123!';
       assert.equal((await (await restoreOn(d1)).get('/api/auth/session')).json.authenticated, false, 'the device no longer signs in');
       const fresh = new Browser(srv.port); await fresh.csrf();
       assert.equal((await fresh.post('/api/auth/login', { email: u.email, password: 'NewDevPass123!' })).ok, true);
+    });
+    const activeSessions = async (playerId) => (await q('SELECT COUNT(*)::int AS n FROM auth_sessions WHERE player_id = $1 AND revoked_at IS NULL AND expires_at > NOW()', [playerId]))[0].n;
+    const ageSessions = (playerId) => q("UPDATE auth_sessions SET created_at = NOW() - INTERVAL '1 minute' WHERE player_id = $1", [playerId]);
+
+    await test('a session started from a trusted device is linked to that device', async () => {
+      const u = await newUser('Link');
+      await login(u.email, true);
+      assert.equal((await q('SELECT COUNT(*)::int AS n FROM auth_sessions s JOIN auth_devices d ON d.id = s.device_id WHERE s.player_id = $1', [u.id]))[0].n, 1);
+    });
+    await test('logging out from a stale tab ends a session that a restore started from the same device', async () => {
+      const u = await newUser('StaleOut');
+      const b1 = await login(u.email, true);
+      const device = b1.cookies.get('ct_device');
+      await ageSessions(u.id);
+      const restored = await restoreOn(device);
+      assert.equal((await restored.get('/api/auth/session')).json.authenticated, true, 'the restore signs in');
+      // b1 still holds its old, retired session cookie and the same device
+      assert.equal((await b1.post('/api/auth/logout', {})).ok, true);
+      assert.equal((await restored.get('/api/auth/session')).json.authenticated, false, 'the restored session ended with its device');
+      assert.equal(await activeSessions(u.id), 0);
+    });
+    await test('two tabs of one browser restoring at the same moment share one session, and the cookie that was set works', async () => {
+      const u = await newUser('TwoTabs');
+      const b1 = await login(u.email, true);
+      const device = b1.cookies.get('ct_device');
+      await ageSessions(u.id);
+      const tabA = await restoreOn(device);
+      const tabB = await restoreOn(device);
+      const [ra, rb] = await Promise.all([tabA.get('/api/auth/session'), tabB.get('/api/auth/session')]);
+      assert.equal(ra.json.authenticated, true, 'tab A is signed in');
+      assert.equal(rb.json.authenticated, true, 'tab B is signed in');
+      assert.equal(ra.json.player.id, u.id);
+      assert.equal(rb.json.player.id, u.id);
+      const setters = [tabA, tabB].filter((c) => c.cookies.has('ct_session'));
+      assert.equal(setters.length, 1, 'exactly one response issued the session cookie');
+      assert.equal((await setters[0].get('/api/auth/session')).json.authenticated, true, 'the cookie that was set still works');
+      assert.equal(await activeSessions(u.id), 1, 'one live session for the account');
+    });
+    await test('a restore right after another restore of the same device answers without issuing a second session', async () => {
+      const u = await newUser('Second');
+      const b1 = await login(u.email, true);
+      const device = b1.cookies.get('ct_device');
+      await ageSessions(u.id);
+      const first = await restoreOn(device);
+      assert.equal((await first.get('/api/auth/session')).json.authenticated, true);
+      const second = await restoreOn(device); // a second browser with only the device cookie, within the window
+      const r = await second.get('/api/auth/session');
+      assert.equal(r.json.authenticated, true);
+      assert.equal(r.json.player.id, u.id);
+      assert.equal(second.cookies.has('ct_session'), false, 'the reused session is not replaced, so no session cookie is set');
+      assert.equal(await activeSessions(u.id), 1);
+    });
+    await test('replaying a device token after a password reset does not end a fresh login on another browser', async () => {
+      const u = await newUser('Stale');
+      const b1 = await login(u.email, true);
+      const oldDevice = b1.cookies.get('ct_device');
+      const anon = new Browser(srv.port); await anon.csrf();
+      const asked = await anon.post('/api/auth/forgot-password', { email: u.email });
+      assert.equal((await anon.post('/api/auth/reset-password', { token: asked.json.debug.resetToken, newPassword: 'StaleReset123!' })).ok, true);
+      const fresh = new Browser(srv.port); await fresh.csrf();
+      assert.equal((await fresh.post('/api/auth/login', { email: u.email, password: 'StaleReset123!', rememberDevice: true })).ok, true);
+      // the stale browser replays its old device and session, and signs out
+      const stale = await restoreOn(oldDevice);
+      assert.equal((await stale.get('/api/auth/session')).json.authenticated, false, 'the old device no longer signs in');
+      assert.equal((await stale.post('/api/auth/logout', {})).ok, true);
+      assert.equal((await fresh.get('/api/auth/session')).json.authenticated, true, 'the fresh login is untouched');
     });
     console.log(`${passed} device-trust checks passed`);
   } finally {
