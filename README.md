@@ -14,7 +14,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 - **The Mind** (2–4): co-op, real-time ascending play with lives/stars and difficulty options.
 - **Ludo** (2–4): race your four tokens home on the classic cross board — roll a six to get out, send opponents back, finish by exact count. Two players sit opposite each other; optional bonus rolls for captures and getting home.
 - **Snakes and Ladders** (2–4): roll to race along a 10×10 path to square 100. Ladders lift you, snakes drop you. Optional exact roll to finish and roll again on a six.
-- **Property Rivals** (2–6): an original world-tour board game: buy cities, ports and utilities, collect rent, build houses and hotels, trade, auction and bankrupt your rivals. Options: game length, starting cash, auctions, Rest Stop jackpot.
+- **Property Rivals** (2–6): an original world-tour board game: buy cities, ports and utilities, collect rent, build houses and hotels, trade, auction and bankrupt your rivals. Tap a city in your holdings for its card: mortgage value, rent now and the full rent table, and house and hotel costs. Options: game length, starting cash, auctions, Rest Stop jackpot.
 - **Tic-Tac-Toe** and **Four in a Row** (2): two quick line games on one engine. Line up three on a 3×3 grid, or drop discs into a 7×6 grid and connect four. Four in a Row has a *Line length* option: choose five for a bigger 9×8 grid. Choose who starts; a bot fills the second seat.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
 
@@ -40,7 +40,16 @@ Tableverse is currently open for friend testing.
 - **Friends**: username search, requests (send, accept, decline, cancel), removal, online/offline, last seen, the game a friend is playing and a connection-quality (ping) badge.
 - **Private tables** (the default for new tables) with friend invitations, and **host tools** to hand over the table or remove people.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
+- **Game settings at a glance**: every game shows its current settings at the top right. Tap them for the full list with each choice explained. Settings are set by the host in the lobby and can't change during a game.
+- **Blocking**: a block hides the other player's table chat and voice, and stops invitations between you. A block never removes anyone from a table, so you can still share one.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
+
+## What's new — unreleased (Property Rivals cards, game settings, blocking)
+
+- **City cards.** In Property Rivals, tap a city in a player's holdings to see its owner, buildings, mortgage value, unmortgage cost, house or hotel cost, the rent right now and the full rent table.
+- **Cash and net worth.** Each rival in the player list shows cash (coins in hand) and net worth (cash plus properties) as separate figures. The crown marks the player with the highest net worth, not the most cash.
+- **Settings at the top right.** Every game shows its current settings in the title row. Tap them for the full list. Keyboard users can open them with Enter or Space; focus returns to the same control when the dialog closes.
+- **Blocking.** A block hides the blocked player's table chat and voice, and stops friend requests and table invitations between you. Table chat is one way: the blocker stops seeing the other player's messages, while the other player still sees yours. A blocked pair can now share a table, including one hosted by someone else.
 
 ## What's new in v0.14 — voice chat
 
