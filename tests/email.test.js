@@ -117,5 +117,19 @@ const ENV = { EMAIL_PROVIDER: 'resend', EMAIL_FROM: 'Tableverse <noreply@example
     assert.ok(sent[0].text.includes('verify-email.html?token=a%26b%3Dc%23d'), sent[0].text);
   });
 
+  await test('owner broadcasts: the provider gets the headers and the caller\'s idempotency key, and the address is never logged', async () => {
+    const sent = [];
+    const logs = [];
+    const sender = makeAuthEmailSender({ env: LIVE, logger: { log: (m) => logs.push(m), warn() {}, error: (m) => logs.push(m) }, fetch: async (url, o) => { sent.push({ headers: o.headers, body: JSON.parse(o.body) }); return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'bc_1' }) }; } });
+    const r = await sender.sendBroadcast({ to: 'fan@example.com', subject: 'Hi', html: '<p>x</p>', text: 'x', headers: { 'List-Unsubscribe': '<https://app.test/u?token=t>' }, idempotencyKey: 'broadcast:b1:p1' });
+    assert.equal(r.id, 'bc_1');
+    assert.equal(sent[0].headers['Idempotency-Key'], 'broadcast:b1:p1');
+    assert.deepEqual(sent[0].body.headers, { 'List-Unsubscribe': '<https://app.test/u?token=t>' });
+    assert.deepEqual(sent[0].body.to, ['fan@example.com']);
+    assert.ok(!logs.join('\n').includes('fan@example.com'), 'logs keep only a masked address');
+    await sender.sendBroadcast({ to: 'a@example.com', subject: 'S', html: '<p>x</p>', text: 'x', idempotencyKey: 'k' });
+    assert.equal(sent[1].body.headers, undefined, 'no headers key unless headers were given');
+  });
+
   console.log(`\n${passed} email adapter tests passed`);
 })();

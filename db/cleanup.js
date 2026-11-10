@@ -29,6 +29,8 @@ const PLAN = [
   { table: 'admin_audit_log', stores: 'Admin console audit log: who (account id) did what to which target, with small detail', references: ['players'] },
   { table: 'feedback', stores: 'Feedback sent by players: optional account id, category, message, status', references: ['players'] },
   { table: 'announcements', stores: 'Announcement banners (text, level, audience, schedule) and the admin who created them', references: ['players'] },
+  { table: 'email_broadcast_recipients', stores: 'Which accounts an owner e-mail broadcast was addressed to, and the delivery state for each', references: ['email_broadcasts', 'players'] },
+  { table: 'email_broadcasts', stores: 'Owner e-mail broadcasts: audience, kind, subject, message text, status and counts', references: ['players'] },
   { table: 'analytics_active', stores: 'Distinct active accounts per day as keyed hashes (no account ids)', references: [] },
   { table: 'analytics_batches', stores: 'Keys of applied analytics writes (random ids; no account or personal data)', references: [] },
   { table: 'analytics_meta', stores: 'Server-side analytics settings (the hashing salt; a new one is created on demand)', references: [] },
@@ -74,6 +76,9 @@ const EXPECTED_FKS = [
   { child: 'feedback', parent: 'players', onDelete: 'SET NULL' },
   { child: 'announcements', parent: 'players', onDelete: 'SET NULL' },
   { child: 'admin_audit_log', parent: 'players', onDelete: 'SET NULL' },
+  { child: 'email_broadcasts', parent: 'players', onDelete: 'SET NULL' },
+  { child: 'email_broadcast_recipients', parent: 'email_broadcasts', onDelete: 'CASCADE' },
+  { child: 'email_broadcast_recipients', parent: 'players', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'matches', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'players', onDelete: 'SET NULL' },
 ];

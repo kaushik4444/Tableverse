@@ -277,6 +277,295 @@ const ADMIN_POSTS = [
       assert.equal((await admin.b.get('/api/admin/overview')).status, 200);
     });
 
+    console.log('owner e-mail broadcasts (Stage 20.7)');
+    const { createBroadcastWorker } = require('../lib/broadcast');
+    const bmail = [];
+    const sb = await start({ broadcastMail: bmail }); // its own store and mail, so the counts below are exact
+    const bOwner = await sb.login({ role: 'owner', email: 'owner@b.test', verified: true });
+    const bAdmin = await sb.login({ role: 'admin', email: 'staff@b.test', verified: true });
+    const bVer = await sb.login({ email: 'verified@b.test', verified: true });
+    const bUnver = await sb.login({ email: 'pending@b.test', verified: false });
+    const bOpted = await sb.login({ email: 'opted@b.test', verified: true });
+    const bOld = await sb.login({ email: 'lapsed@b.test', verified: true });
+    const bGuest = await sb.login({});
+    sb.store.players.get(bOld.id).last_seen_at = new Date(sb.clock.t - 40 * 24 * 3600 * 1000);
+    sb.store.players.get(bVer.id).last_seen_at = new Date(sb.clock.t - 1 * 24 * 3600 * 1000);
+    const preview = (audience, category) => bOwner.b.get(`/api/admin/broadcasts/preview?audience=${audience}&category=${category}`);
+    const sendBody = (over = {}) => ({ audience: 'all', category: 'account', subject: 'Hello', body: 'A line', expectedCount: 0, ...over });
+    const worker = (deliver) => createBroadcastWorker({
+      store: sb.store, makeUnsubscribeUrl: (t) => 'https://app.test/api/email/unsubscribe?token=' + t, pauseMs: 0, gapMs: 0, retryDelays: [0, 0, 0], logger: { error() {} }, deliver,
+    });
+
+    await test('the broadcast tools are refused to admins, players and guests (403 / 401)', async () => {
+      assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
+      assert.equal((await bAdmin.b.get('/api/admin/broadcasts/preview?audience=all&category=account')).status, 403);
+      assert.equal((await bAdmin.b.post('/api/admin/broadcasts', sendBody())).status, 403);
+      assert.equal((await bVer.b.post('/api/admin/broadcasts', sendBody())).status, 403);
+      assert.equal((await (await sb.guest()).get('/api/admin/broadcasts')).status, 401, 'anonymous');
+      assert.equal((await bGuest.b.get('/api/admin/broadcasts')).status, 403, 'a signed-in player with no e-mail is still a player');
+      assert.equal(sb.queued.count, 0);
+    });
+    await test('the preview counts exactly the accounts each audience reaches, and never returns an address', async () => {
+      const count = async (a, c) => { const r = await preview(a, c); assert.equal(r.status, 200); assert.ok(!JSON.stringify(r.json).includes('@b.test')); return r.json.count; };
+      // accounts with an address: owner, admin, verified, pending (unverified), opted (verified), lapsed (verified, inactive); the guest has none
+      assert.equal(await count('all', 'account'), 6);
+      assert.equal(await count('verified', 'account'), 5);
+      assert.equal(await count('unverified', 'account'), 1);
+      assert.equal(await count('admins', 'account'), 2);
+      assert.equal(await count('players', 'account'), 4);
+      assert.equal(await count('inactive', 'account'), 1);
+      assert.equal(await count('all', 'promo'), 5, 'promotions skip unverified accounts');
+    });
+    await test('promotional mail is never offered to unverified accounts (400), in the preview and in a send', async () => {
+      assert.equal((await preview('unverified', 'promo')).status, 400);
+      assert.equal((await bOwner.b.post('/api/admin/broadcasts', sendBody({ audience: 'unverified', category: 'promo', expectedCount: 1 }))).status, 400);
+      assert.equal(sb.queued.count, 0);
+    });
+    await test('a send is refused (409) when the list changed since the owner looked at the count, and nothing is queued', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ expectedCount: 4 }));
+      assert.equal(r.status, 409);
+      assert.match(r.json.error, /recipients, not 4/);
+      assert.equal(sb.store.broadcasts.length, 0);
+    });
+    await test('an owner send is queued with its recipients fixed; the audit row keeps counts, never the message text', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ expectedCount: 6, body: 'Secret launch text' }));
+      assert.equal(r.status, 200);
+      assert.equal(r.json.recipientCount, 6);
+      assert.equal(sb.queued.count, 1, 'the sender is woken straight away');
+      const row = sb.store.broadcasts[0];
+      assert.equal(row.status, 'queued');
+      assert.equal(sb.store.broadcastRecipients.get(row.id).size, 6);
+      const entry = sb.store.audit.find((a) => a.action === 'broadcast.queue');
+      assert.ok(entry && entry.detail.recipients === 6 && entry.detail.audience === 'all');
+      assert.ok(!JSON.stringify(sb.store.audit).includes('Secret launch text'), 'the audit never keeps the message');
+    });
+    await test('an opt-out is honoured at once for promotions; the unsubscribe link needs no login and is answered the same for any token', async () => {
+      sb.store.players.get(bOpted.id).unsubscribe_token = '11111111-2222-4333-8444-555555555555';
+      const page = await fetch(`http://127.0.0.1:${sb.port}/api/email/unsubscribe?token=11111111-2222-4333-8444-555555555555`);
+      assert.equal(page.status, 200);
+      assert.match(await page.text(), /You are unsubscribed/);
+      assert.equal(sb.store.players.get(bOpted.id).opted_out, true);
+      assert.equal((await preview('all', 'promo')).json.count, 4, 'promotions now skip the opted-out account');
+      assert.equal((await preview('all', 'account')).json.count, 6, 'account mail is not affected by promotions opt-out');
+      for (const tok of ['nope', '00000000-0000-4000-8000-000000000000', '1%27%20OR%201%3D1']) {
+        const r = await fetch(`http://127.0.0.1:${sb.port}/api/email/unsubscribe?token=${encodeURIComponent(tok)}`);
+        assert.equal(r.status, 200, tok);
+        assert.match(await r.text(), /You are unsubscribed/);
+      }
+    });
+    await test('the sender delivers each recipient once, reads opt-outs at send time, and finishes the broadcast', async () => {
+      const sent = [];
+      sb.store.players.get(bOld.id).opted_out = true; // after queuing: account mail still goes, it is not promotional
+      const out = await worker(async (m) => sent.push(m)).runOnce();
+      assert.equal(out.done, true);
+      const row = sb.store.broadcasts[0];
+      assert.equal(row.status, 'sent');
+      assert.equal(row.sent_count, 6);
+      assert.equal(sent.length, 6, 'one delivery per recipient');
+      assert.equal(new Set(sent.map((m) => m.idempotencyKey)).size, 6, 'each delivery has its own idempotency key');
+      assert.ok(sent.every((m) => m.category === 'account' && m.unsubscribeUrl === null), 'account mail carries no unsubscribe link');
+      assert.equal((await worker(async () => {}).runOnce()).idle, true, 'nothing left to send, and nothing is sent twice');
+    });
+    await test('a promotional send skips unverified and opted-out recipients, links every mail to unsubscribe and escapes the text', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ category: 'promo', subject: 'Diwali offer', body: 'Lamps <3 & sweets', expectedCount: 3 }));
+      assert.equal(r.status, 200, JSON.stringify(r.json));
+      const sent = [];
+      await worker(async (m) => sent.push(m)).runOnce();
+      assert.deepEqual(sent.map((m) => m.to).sort(), ['owner@b.test', 'staff@b.test', 'verified@b.test']);
+      assert.ok(sent.every((m) => m.unsubscribeUrl && m.html.includes(m.unsubscribeUrl) && m.text.includes(m.unsubscribeUrl)), 'every promo mail has the link');
+      assert.ok(sent.every((m) => m.html.includes('Lamps &lt;3 &amp; sweets') && !m.html.includes('<3')), 'the owner text is escaped');
+    });
+    await test('a failed delivery is recorded as failed and the rest of the broadcast still goes out', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Release', body: 'New version', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      let calls = 0;
+      await worker(async (m) => { calls++; if (m.to === 'verified@b.test') throw new Error('provider 503'); }).runOnce();
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      assert.equal(row.status, 'sent');
+      assert.equal(row.failed_count, 1);
+      assert.equal(calls, 6);
+    });
+    await test('a rate-limited delivery is retried and sent once; only a refused address counts as failed', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Pace', body: 'Six', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const hits = new Map();
+      await worker(async (m) => {
+        const n = (hits.get(m.to) || 0) + 1; hits.set(m.to, n);
+        if (m.to === 'verified@b.test' && n <= 2) { const e = new Error('rate limited'); e.status = 429; throw e; }
+      }).runOnce();
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      assert.equal(row.status, 'sent');
+      assert.equal(row.failed_count, 0, 'the rate-limited mail went out after the retries');
+      assert.equal(hits.get('verified@b.test'), 3);
+    });
+    await test('a broadcast held by one run cannot be taken by another until its lease runs out', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Lease', body: 'One', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const first = await sb.store.claimNext();
+      assert.ok(first && first.id, 'the run claims the queued broadcast');
+      assert.equal(await sb.store.claimNext(), null, 'a second run gets nothing while the lease is held');
+      sb.store.broadcasts.find((b) => b.id === first.id).leaseUntil = Date.now() - 1; // the first run stopped
+      const again = await sb.store.claimNext();
+      assert.equal(again && again.id, first.id, 'an abandoned run is taken over');
+      await sb.store.finishBroadcast(first.id, first.owner);
+    });
+    await test('a database error while recording a delivered mail stops the run and is not recorded as a failed delivery', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Store', body: 'Two', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      const real = sb.store.markRecipient;
+      let broke = false;
+      sb.store.markRecipient = async (bid, pid, state, owner) => {
+        if (state === 'sent' && !broke) { broke = true; throw new Error('database unavailable'); }
+        return real(bid, pid, state, owner);
+      };
+      try {
+        await assert.rejects(worker(async () => {}).runOnce(), /database unavailable/);
+      } finally { sb.store.markRecipient = real; }
+      const states = [...sb.store.broadcastRecipients.get(row.id).values()];
+      assert.ok(!states.includes('failed'), 'the mail that went out is not recorded as failed');
+      assert.equal(row.status, 'sending', 'the run is left for a later attempt');
+      row.leaseUntil = Date.now() - 1;
+      await worker(async () => {}).runOnce(); // the retry finishes the broadcast
+      assert.equal(row.status, 'sent');
+      assert.equal(row.failed_count, 0);
+    });
+    await test('an opt-out that lands during a batch stops the promotional mail that has not gone out yet', async () => {
+      const count = (await preview('all', 'promo')).json.count;
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Mid batch', body: 'Four', category: 'promo', expectedCount: count }));
+      assert.equal(r.status, 200);
+      const saved = [...sb.store.players.values()].map((p) => [p, p.opted_out]);
+      let calls = 0;
+      try {
+        await worker(async (m) => {
+          calls++;
+          if (calls === 1) for (const p of sb.store.players.values()) if (p.email && p.email !== m.to) p.opted_out = true; // everyone else opts out now
+        }).runOnce();
+      } finally { for (const [p, v] of saved) p.opted_out = v; }
+      assert.equal(calls, 1, 'once the accounts have opted out, nothing else is sent');
+    });
+    await test('a run whose lease ran out is refused every write once another run has taken the broadcast', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Fence', body: 'Five', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const stale = await sb.store.claimNext();
+      sb.store.broadcasts.find((b) => b.id === stale.id).leaseUntil = Date.now() - 1; // the first run stalled
+      const fresh = await sb.store.claimNext();
+      assert.equal(fresh.id, stale.id);
+      assert.notEqual(fresh.owner, stale.owner);
+      const pid = [...sb.store.broadcastRecipients.get(stale.id).keys()][0];
+      await assert.rejects(sb.store.markRecipient(stale.id, pid, 'sent', stale.owner), (e) => e.code === 'LEASE_LOST');
+      assert.equal(sb.store.broadcastRecipients.get(stale.id).get(pid), 'pending', 'the stale run wrote nothing');
+      assert.equal(await sb.store.renewLease(stale.id, stale.owner), false);
+      await sb.store.finishBroadcast(stale.id, stale.owner); // the stale run cannot finish it either
+      assert.equal(sb.store.broadcasts.find((b) => b.id === stale.id).status, 'sending');
+      await sb.store.finishBroadcast(fresh.id, fresh.owner);
+    });
+    await test('a run silent for a day is closed without resending: its unsent recipients are recorded as failed', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Old run', body: 'Seven', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const old = await sb.store.claimNext();
+      const row = sb.store.broadcasts.find((b) => b.id === old.id);
+      row.leaseUntil = Date.now() - 1;
+      row.renewedAt = Date.now() - 25 * 3600 * 1000; // the run went quiet a day and an hour ago
+      let sent = 0;
+      assert.equal(await sb.store.claimNext(), null, 'nothing is resumed');
+      await worker(async () => { sent++; }).runOnce();
+      assert.equal(sent, 0, 'no mail goes out for the closed run');
+      assert.equal(row.status, 'sent');
+      assert.equal([...sb.store.broadcastRecipients.get(old.id).values()].filter((x) => x === 'failed').length, 6);
+      assert.equal(row.failed_count, 6, 'the closed run keeps its totals');
+      // a finished broadcast keeps its totals when its recipient rows later go (an account deleted after the send)
+      sb.store.broadcastRecipients.get(old.id).clear();
+      const listed = (await bOwner.b.get('/api/admin/broadcasts')).json.items.find((x) => x.id === old.id);
+      assert.equal(listed.failed_count, 6, 'the list still shows the saved total');
+      assert.equal(listed.sent_count, 0);
+    });
+    await test('a recipient whose first attempt was more than a day ago is not tried again: it is recorded as failed', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Attempt', body: 'Eight', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      const pid = [...sb.store.broadcastRecipients.get(row.id).keys()][0];
+      sb.store.broadcastAttempts.set(`${row.id}|${pid}`, Date.now() - 25 * 3600 * 1000);
+      const sentTo = [];
+      await worker(async (m) => { sentTo.push(m.playerId); }).runOnce();
+      assert.ok(!sentTo.includes(pid), 'the old attempt is not sent again');
+      assert.equal(sentTo.length, 5);
+      assert.equal(sb.store.broadcastRecipients.get(row.id).get(pid), 'failed');
+    });
+    await test('a provider that never answers is cut off: the run stops, frees its guard, and the recipient is retried later, not failed', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Stall', body: 'Nine', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      let seen = null;
+      const stalled = createBroadcastWorker({
+        store: sb.store, makeUnsubscribeUrl: () => null, pauseMs: 0, gapMs: 0, retryDelays: [0, 0, 0], logger: { error() {} },
+        deliverTimeoutMs: 30,
+        deliver: (m) => { seen = m; return new Promise((_, rej) => m.signal.addEventListener('abort', () => rej(new Error('aborted')))); },
+      });
+      await assert.rejects(stalled.runOnce(), (e) => e.code === 'DELIVERY_TIMEOUT');
+      assert.equal(stalled.isRunning(), false, 'the worker is free again, so the queue is not blocked');
+      assert.equal(seen.signal.aborted, true, 'the stalled request is cancelled');
+      assert.equal(sb.store.broadcastRecipients.get(row.id).get(seen.playerId), 'pending', 'an unanswered send is not recorded as failed');
+      // the lease is still held, so nothing else starts until it runs out
+      assert.equal(await sb.store.claimNext(), null);
+      // once the lease runs out, the same recipient is tried again with the same idempotency key, and the broadcast finishes
+      sb.store.broadcasts.find((b) => b.id === row.id).leaseUntil = Date.now() - 1;
+      const keys = [];
+      await worker(async (m) => { keys.push(m.idempotencyKey); }).runOnce();
+      assert.ok(keys.includes(`broadcast:${row.id}:${seen.playerId}`), 'retried with the same key');
+      assert.equal(row.status, 'sent');
+    });
+    // A send that was delivered but whose record could not be written: the run stops, and each later run that recovers the
+    // broadcast must keep the first attempt's time. A recovery that is not refreshed by the attempt never extends the window.
+    const unrecorded = async (subject) => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject, body: 'Ten', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      const firstSent = [];
+      const dbDown = { ...sb.store, markRecipient: async () => { throw new Error('database unavailable'); } };
+      const run1 = createBroadcastWorker({
+        store: dbDown, makeUnsubscribeUrl: () => null, pauseMs: 0, gapMs: 0, retryDelays: [0, 0, 0], logger: { error() {} },
+        deliver: async (m) => { firstSent.push({ playerId: m.playerId, key: m.idempotencyKey }); return undefined; },
+      });
+      await assert.rejects(run1.runOnce(), /database unavailable/);
+      assert.equal(firstSent.length, 1, 'the run stopped after the first delivery');
+      const { playerId, key } = firstSent[0];
+      const attemptKey = `${row.id}|${playerId}`;
+      sb.store.broadcasts.find((b) => b.id === row.id).leaseUntil = Date.now() - 1; // the run went quiet: its lease ran out
+      return { row, playerId, key, attemptKey };
+    };
+    await test('a recovered send inside the day reuses its idempotency key and keeps the first attempt time', async () => {
+      const { row, playerId, key, attemptKey } = await unrecorded('Recovered');
+      const firstAt = Date.now() - 2 * 3600 * 1000;
+      sb.store.broadcastAttempts.set(attemptKey, firstAt);
+      const sent = [];
+      await worker(async (m) => { sent.push({ playerId: m.playerId, key: m.idempotencyKey }); }).runOnce();
+      const again = sent.find((x) => x.playerId === playerId);
+      assert.ok(again, 'the recovered run tries the recipient');
+      assert.equal(again.key, key, 'the same key, so the provider drops the duplicate');
+      assert.equal(sb.store.broadcastAttempts.get(attemptKey), firstAt, 'the first attempt time is not moved');
+      assert.equal(row.status, 'sent');
+    });
+    await test('a recovered send after a day is not repeated, however many runs recover the broadcast', async () => {
+      const { row, playerId, attemptKey } = await unrecorded('Repeated');
+      sb.store.broadcastAttempts.set(attemptKey, Date.now() - 25 * 3600 * 1000);
+      const sentTo = [];
+      for (let i = 0; i < 2; i++) { // two recoveries in a row, each one renewing the broadcast's lease
+        sb.store.broadcasts.find((b) => b.id === row.id).leaseUntil = Date.now() - 1;
+        await worker(async (m) => { sentTo.push(m.playerId); }).runOnce();
+      }
+      assert.ok(!sentTo.includes(playerId), 'a day-old first attempt is never sent again');
+      assert.equal(sb.store.broadcastRecipients.get(row.id).get(playerId), 'failed');
+      assert.equal(row.status, 'sent');
+    });
+    await test('the broadcast history is owner-only and carries no message text', async () => {
+      const r = await bOwner.b.get('/api/admin/broadcasts');
+      assert.equal(r.status, 200);
+      assert.equal(r.json.items.length, 13);
+      assert.ok(r.json.items.every((x) => !('body' in x)));
+      assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
+    });
+    await sb.close();
     console.log('suspension and lookup (Stage 20.8)');
     await test('only the owner can suspend or lift a suspension; admins and players get 403 and change nothing', async () => {
       const victim = await s.login({ email: 'victim.susp@example.com', verified: true });

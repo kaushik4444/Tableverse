@@ -25,6 +25,10 @@ const api = (role) => ({
   'GET /api/admin/logs?level=&component=&event=&limit=100': () => ({ ok: true, held: 2, dropped: 0, capacity: 500, items: [{ time: '2026-11-08T08:00:00Z', level: 'error', component: 'db', event: 'db.pool_error', message: EVIL }, { time: '2026-11-08T07:00:00Z', level: 'info', component: 'app', event: 'server.started', port: 3000 }] }),
   'GET /api/admin/audit?page=1': () => ({ ok: true, total: 1, pageSize: 25, items: [{ id: 'x', at: '2026-11-08T08:00:00Z', actor: 'boss', action: 'role.grant_admin', target_type: 'player', target_id: 'abcdef1234', detail: { to: 'admin' } }] }),
   'POST /api/admin/announcements': () => ({ ok: true, announcement: { id: 'a2' } }),
+  'GET /api/admin/broadcasts': () => ({ ok: true, total: 1, pageSize: 25, items: [{ id: 'b1', created_at: '2026-11-08T08:00:00Z', audience: 'all', category: 'promo', subject: `${EVIL}`, status: 'sent', recipient_count: 6, sent_count: 5, failed_count: 1, created_by: 'boss' }] }),
+  'GET /api/admin/broadcasts/preview?audience=all&category=account': () => ({ ok: true, count: 6 }),
+  'GET /api/admin/broadcasts/preview?audience=verified&category=account': () => ({ ok: true, count: 5 }),
+  'POST /api/admin/broadcasts': () => ({ ok: true, id: 'b2', recipientCount: 6 }),
   'GET /api/admin/render-logs?text=&limit=100': () => ({ ok: true, configured: false, items: [] }),
   'GET /api/admin/users/lookup?username=ann': () => ({ ok: true, user: { id: 'u1', username: 'ann', display_name: 'Ann', role: 'user', verified: true, created_at: '2026-11-01T10:00:00Z', last_seen_at: '2026-11-08T09:00:00Z', suspended_at: '2026-11-09T09:00:00Z', suspended_reason: 'spam', active_sessions: 0 } }),
   'POST /api/admin/users/suspend': () => ({ ok: true, suspended: true, sessions: 1 }),
@@ -267,6 +271,51 @@ const api = (role) => ({
     await page.waitForSelector('[data-act="openFeedback"]');
     assert.equal(await page.locator('[data-act="openAdmin"]').count(), 0);
     await ctx.close(); server.close();
+  });
+
+  await test('e-mail: the tab is shown to the owner only, and the owner\'s history shows stored text as text', async () => {
+    const a = await open('admin'); await a.page.waitForSelector('#adTabs:not([hidden])');
+    assert.equal(await a.page.locator('[data-tab="email"]').isVisible(), false, 'admins do not see the e-mail tab');
+    await a.close();
+    const o = await open('owner'); await o.page.waitForSelector('#adTabs:not([hidden])');
+    assert.equal(await o.page.locator('[data-tab="email"]').isVisible(), true);
+    await tab(o.page, 'email'); await o.page.waitForSelector('#mailForm');
+    await o.page.waitForSelector('#mHistory table');
+    assert.equal(await o.page.locator('#mHistory img').count(), 0, 'no markup from a subject runs');
+    await o.close();
+  });
+  await test('e-mail: the send stays locked until the recipient count is checked and typed; changing the audience resets it', async () => {
+    const o = await open('owner'); await tab(o.page, 'email'); await o.page.waitForSelector('#mailForm');
+    assert.equal(await o.page.isDisabled('#mSend'), true, 'locked at first');
+    await o.page.fill('#mSub', 'Diwali offer'); await o.page.fill('#mBody', 'Happy Diwali from Tableverse');
+    assert.equal(await o.page.isDisabled('#mConfirm'), true, 'the confirmation waits for a check');
+    await o.page.click('#mCheck');
+    await o.page.waitForSelector('#mCount:has-text("6 recipients")');
+    assert.equal(await o.page.isDisabled('#mConfirm'), false);
+    assert.equal(await o.page.isDisabled('#mSend'), true, 'still locked until the count is typed');
+    await o.page.fill('#mConfirm', '5');
+    assert.equal(await o.page.isDisabled('#mSend'), true, 'a wrong count keeps it locked');
+    await o.page.fill('#mConfirm', '6');
+    assert.equal(await o.page.isDisabled('#mSend'), false);
+    await o.page.selectOption('#mAud', 'verified');
+    assert.equal(await o.page.isDisabled('#mSend'), true, 'a changed audience needs a new check');
+    assert.equal(await o.page.inputValue('#mConfirm'), '');
+    await o.close();
+  });
+  await test('e-mail: the queued send carries the count the owner confirmed; the form then clears', async () => {
+    const o = await open('owner'); await tab(o.page, 'email'); await o.page.waitForSelector('#mailForm');
+    await o.page.fill('#mSub', 'Release 2'); await o.page.fill('#mBody', 'New table themes are out');
+    await o.page.click('#mCheck'); await o.page.waitForSelector('#mCount:has-text("6 recipients")');
+    await o.page.fill('#mConfirm', '6');
+    await o.page.click('#mSend');
+    await o.page.waitForSelector('#mMsg:has-text("Queued for 6")');
+    const post = o.calls.find((c) => c.method === 'POST' && c.path === '/api/admin/broadcasts');
+    assert.ok(post, 'the POST was sent');
+    const body = JSON.parse(post.body);
+    assert.deepEqual([body.audience, body.category, body.expectedCount], ['all', 'account', 6]);
+    assert.equal(body.subject, 'Release 2');
+    assert.equal(await o.page.inputValue('#mSub'), '', 'the form is cleared after queuing');
+    await o.close();
   });
 
   await test('users: sign-out and suspension are owner only; an admin sees neither; lookup shows the state of an account', async () => {

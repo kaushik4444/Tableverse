@@ -65,4 +65,11 @@ button.ad-btn, .ad-btn { min-height: 40px; padding: 0 14px; border-radius: 10px;
 .ad-chart .ad-axis { fill: currentColor; font-size: 11px; opacity: .75; }
 .ad-chart details { margin-top: 6px; }
 
+/* Stage 20.7: owner e-mail form */
+.ad-form { display: grid; gap: 12px; max-width: 42rem; }
+.ad-form label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+.ad-form input, .ad-form select, .ad-form textarea { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: inherit; }
+.ad-form textarea { resize: vertical; }
+.ad-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+section.ad-card + section.ad-card { margin-top: 16px; }
 .ad-pill.danger { background: #3a1212; color: #ffb4b4; }

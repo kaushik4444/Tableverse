@@ -29,6 +29,7 @@ Most events are one JSON object per line (search by `"event"` in Render's log vi
 | `db.migration_failed` | error | a migration failed at start | `err` |
 | `health.db_unreachable` / `health.db_recovered` | warn / info | the first failed readiness probe, and recovery (not every probe) | `code`, `timeoutMs` |
 | `[email] delivery failed` / `sent` | error / info | a verification or reset e-mail | masked address (`a***@example.com`), provider status |
+| `[broadcast] delivery failed` / `not retried after 24 hours` / `promotional mail needs PUBLIC_APP_URL` | error | an owner e-mail broadcast | broadcast id only, never an address or message text |
 
 - **Request IDs.** Every HTTP response carries `X-Request-Id`. A plain ID sent by a proxy or client is kept; anything else is replaced. A 500 log line carries the same ID.
 - **Connection IDs.** `connId` ties together the WebSocket lines for one socket.

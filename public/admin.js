@@ -290,6 +290,109 @@
     document.getElementById('pNext').onclick = () => audit(page + 1).catch(fail);
   }
 
+  // ---------------------------------------------------------------- e-mail (owner only; the server checks every call again)
+  // The send is two steps: the owner checks the recipient count, then types that number. The server refuses the send if the list
+  // changed in between, so the count the owner confirmed is the count that goes out.
+  const AUDIENCE_LABELS = { all: 'Everyone with an address', verified: 'Verified accounts', unverified: 'Unverified accounts',
+    admins: 'Admins and the owner', players: 'Ordinary players', inactive: 'Inactive for 30 days or more' };
+  const KIND_LABELS = { account: 'Account e-mail (service notice; also reaches unverified accounts)', promo: 'Promotion or greeting (verified accounts that have not opted out; adds an unsubscribe link)' };
+  const STATUS_LABELS = { queued: 'Queued', sending: 'Sending', sent: 'Sent' };
+  async function emailTab() {
+    main.innerHTML = `
+      <section class="ad-card" aria-labelledby="mailHead">
+        <h2 id="mailHead">Send e-mail</h2>
+        <p class="ad-muted">Only the owner can send e-mail. Mail goes out in small batches after you queue it and cannot be recalled. The message text is not kept in the audit log.</p>
+        <form id="mailForm" class="ad-form" novalidate>
+          <label>Who receives it
+            <select id="mAud">${Object.keys(AUDIENCE_LABELS).map((k) => `<option value="${k}">${esc(AUDIENCE_LABELS[k])}</option>`).join('')}</select>
+          </label>
+          <label>Kind of e-mail
+            <select id="mCat">${Object.keys(KIND_LABELS).map((k) => `<option value="${k}">${esc(KIND_LABELS[k])}</option>`).join('')}</select>
+          </label>
+          <label>Subject <input id="mSub" maxlength="160" autocomplete="off"></label>
+          <label>Message <textarea id="mBody" maxlength="5000" rows="8"></textarea></label>
+          <div class="ad-row">
+            <button type="button" id="mCheck" class="ad-btn">Check recipients</button>
+            <span id="mCount" class="ad-muted" aria-live="polite"></span>
+          </div>
+          <label>Type the recipient count to confirm <input id="mConfirm" inputmode="numeric" autocomplete="off" disabled></label>
+          <div class="ad-row"><button type="submit" id="mSend" class="ad-btn" disabled>Queue the send</button></div>
+          <p id="mMsg" class="ad-msg" role="status"></p>
+        </form>
+      </section>
+      <section class="ad-card" aria-labelledby="sentHead">
+        <h2 id="sentHead">Sent</h2>
+        <div id="mHistory"><p class="ad-muted">Loading…</p></div>
+      </section>`;
+    const f = { aud: document.getElementById('mAud'), cat: document.getElementById('mCat'), sub: document.getElementById('mSub'),
+      body: document.getElementById('mBody'), check: document.getElementById('mCheck'), count: document.getElementById('mCount'),
+      confirm: document.getElementById('mConfirm'), send: document.getElementById('mSend'), form: document.getElementById('mailForm') };
+    let checked = null; // the count the owner just saw, for this audience and kind
+    let checkSeq = 0; // a preview answer counts only if the selection has not changed since it was asked for
+    let sending = false; // one submit at a time: the button's state alone is not a guard
+    const reset = () => { checkSeq++; checked = null; f.count.textContent = ''; f.confirm.value = ''; f.confirm.disabled = true; f.send.disabled = true; };
+    const ready = () => { f.send.disabled = sending || !(checked !== null && f.confirm.value.trim() === String(checked) && f.sub.value.trim() && f.body.value.trim()); };
+    f.aud.onchange = reset; f.cat.onchange = reset;
+    f.sub.oninput = ready; f.body.oninput = ready;
+    f.confirm.oninput = ready;
+    f.check.onclick = async () => {
+      say('mMsg', '', '');
+      const seq = ++checkSeq;
+      try {
+        const q = new URLSearchParams({ audience: f.aud.value, category: f.cat.value });
+        const out = await api('/api/admin/broadcasts/preview?' + q.toString());
+        if (seq !== checkSeq) return; // the audience or kind changed while this was pending: that count is not for the current selection
+        checked = out.count;
+        f.count.textContent = `${out.count} recipient${out.count === 1 ? '' : 's'} now`;
+        f.confirm.disabled = out.count === 0;
+        ready();
+      } catch (e) { if (seq !== checkSeq) return; reset(); say('mMsg', e.message, 'err'); }
+    };
+    f.form.onsubmit = async (e) => {
+      e.preventDefault();
+      if (sending || f.send.disabled) return;
+      sending = true; f.send.disabled = true;
+      try {
+        const out = await api('/api/admin/broadcasts', { audience: f.aud.value, category: f.cat.value, subject: f.sub.value, body: f.body.value, expectedCount: checked });
+        say('mMsg', `Queued for ${out.recipientCount} recipient${out.recipientCount === 1 ? '' : 's'}. It is sent in batches; the history below shows progress.`, 'ok');
+        f.sub.value = ''; f.body.value = ''; reset();
+        await history(1);
+      } catch (err) { say('mMsg', err.message, 'err'); }
+      finally { sending = false; ready(); }
+    };
+    await history(1);
+  }
+  // history: pages of 25 (newest first), and a refresh while anything is still queued or sending
+  let mailPage = 1;
+  let mailTimer = null;
+  async function history(page = mailPage) {
+    const box = document.getElementById('mHistory');
+    if (!box) return;
+    clearTimeout(mailTimer);
+    mailPage = page;
+    const o = await api('/api/admin/broadcasts?page=' + page);
+    const rows = o.items.map((b) => `<tr>
+        <td data-l="When">${esc(when(b.created_at))}</td>
+        <td data-l="Who">${esc(AUDIENCE_LABELS[b.audience] || b.audience)}</td>
+        <td data-l="Kind">${b.category === 'promo' ? 'Promotion' : 'Account'}</td>
+        <td data-l="Subject">${esc(b.subject)}</td>
+        <td data-l="Status">${esc(STATUS_LABELS[b.status] || b.status)}</td>
+        <td data-l="Recipients">${b.recipient_count}</td>
+        <td data-l="Sent / failed">${b.sent_count} / ${b.failed_count}</td>
+        <td data-l="By">${esc(b.created_by || '—')}</td></tr>`).join('');
+    const last = Math.max(1, Math.ceil(o.total / o.pageSize));
+    const nav = o.total > o.pageSize
+      ? `<div class="ad-row"><button type="button" class="ad-btn" id="mNewer" ${page <= 1 ? 'disabled' : ''}>Newer</button><span class="ad-muted">Page ${page} of ${last}</span><button type="button" class="ad-btn" id="mOlder" ${page >= last ? 'disabled' : ''}>Older</button></div>`
+      : '';
+    box.innerHTML = (o.items.length
+      ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Subject</th><th>Status</th><th>Recipients</th><th>Sent / failed</th><th>By</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : '<p class="ad-muted">Nothing has been sent yet.</p>') + nav;
+    box.querySelector('#mNewer')?.addEventListener('click', () => history(page - 1).catch(() => {}));
+    box.querySelector('#mOlder')?.addEventListener('click', () => history(page + 1).catch(() => {}));
+    // delivery runs in the background: keep the list current until every send has finished (the timer stops with the tab)
+    if (o.items.some((b) => b.status !== 'sent')) mailTimer = setTimeout(() => history(mailPage).catch(() => {}), 15000);
+  }
+
   // Render history (owner only, Stage 20.8): Render's own log of this service for the last 24 hours, read on the server.
   let renderSeq = 0; // each Render search has its own sequence: a slower, older search must not overwrite a newer one
   async function renderHistory(text = '') {
@@ -315,7 +418,7 @@
     } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen && seq === renderSeq) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
   }
 
-  const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit() };
+  const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
@@ -335,6 +438,8 @@
       if (!me.isAdmin) { main.innerHTML = '<p class="ad-msg err">This page is for administrators. <a href="/">Back to Tableverse</a></p>'; return; }
       state.me = me;
       who.textContent = me.isOwner ? 'Signed in as owner' : 'Signed in as admin';
+      const mailTab = tabs.querySelector('[data-tab="email"]');
+      if (mailTab) mailTab.hidden = !me.isOwner; // hidden for admins; the server refuses them anyway
       tabs.hidden = false;
       show('overview');
     } catch (e) {

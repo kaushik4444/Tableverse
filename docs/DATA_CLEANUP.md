@@ -20,29 +20,31 @@ this code version.
 | 2 | `admin_audit_log` | Admin console audit log: who (account id) did what to which target (migration 013) | **Empty** | `players` (SET NULL) |
 | 3 | `feedback` | Feedback sent by players: optional account id, category, message, status (migration 013) | **Empty** | `players` (SET NULL) |
 | 4 | `announcements` | Announcement banners (text, level, audience, schedule) and the admin who created them (migration 013) | **Empty** | `players` (SET NULL) |
-| 5 | `analytics_active` | Distinct active accounts per day as keyed hashes, no account ids (migration 013) | **Empty** | none |
-| 6 | `analytics_batches` | Keys of applied analytics writes: random ids, no account or personal data (migration 013) | **Empty** | none |
-| 7 | `analytics_meta` | Server-side analytics settings: the hashing salt, created on demand (migration 013) | **Empty** | none |
-| 8 | `analytics_daily` | Aggregate daily counters per metric and dimension, no personal data (migration 013) | **Empty** | none |
-| 9 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
-| 10 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
-| 11 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, optional reported account, reported-name snapshot, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
-| 12 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
-| 13 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
-| 14 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
-| 15 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` (deleted before it) |
-| 16 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `players` (CASCADE) |
-| 17 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `players` (CASCADE) |
-| 18 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
-| 19 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
-| 20 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
-| 21 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
+| 5 | `email_broadcast_recipients` | Which accounts an owner e-mail broadcast was addressed to, and the delivery state for each (migration 016) | **Empty** | `email_broadcasts`, `players` (CASCADE) |
+| 6 | `email_broadcasts` | Owner e-mail broadcasts: audience, kind, subject, message text, status and counts (migration 016) | **Empty** | `players` (SET NULL) |
+| 7 | `analytics_active` | Distinct active accounts per day as keyed hashes, no account ids (migration 013) | **Empty** | none |
+| 8 | `analytics_batches` | Keys of applied analytics writes: random ids, no account or personal data (migration 013) | **Empty** | none |
+| 9 | `analytics_meta` | Server-side analytics settings: the hashing salt, created on demand (migration 013) | **Empty** | none |
+| 10 | `analytics_daily` | Aggregate daily counters per metric and dimension, no personal data (migration 013) | **Empty** | none |
+| 11 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
+| 12 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
+| 13 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, optional reported account, reported-name snapshot, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
+| 14 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
+| 15 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
+| 16 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
+| 17 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` (deleted before it) |
+| 18 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `players` (CASCADE) |
+| 19 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `players` (CASCADE) |
+| 20 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
+| 21 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
+| 22 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
+| 23 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
 | – | `schema_migrations` | Which migration files were applied | **PRESERVE, never touched** | none, not in the plan |
 
 **Migration 013 (admin console, Stage 20.5) adds eight tables**, all of them emptied in the plan above:
 `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, `feedback`, `announcements`,
 `announcement_dismissals` and `admin_audit_log`. It also adds the column `players.role`, which needs no separate step.
-Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Migration 015 adds the reported-name snapshot and changes the moderation report foreign-key action. Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
+Migration 016 (owner e-mail broadcasts, Stage 20.7) adds two tables, `email_broadcasts` and `email_broadcast_recipients`, both emptied in the plan above, and two columns on `players` (`marketing_opt_out_at`, `unsubscribe_token`), which need no separate step. Migration 014 adds two columns and no tables: `announcements.revision` and `announcement_dismissals.dismissed_revision` (see [ADMIN.md](ADMIN.md)). Migration 015 adds the reported-name snapshot and changes the moderation report foreign-key action. Details and retention periods are in [ADMIN.md](ADMIN.md). The plan lives in `db/cleanup.js`; `tests/cleanup.test.js` fails
 until every table in the migrations is classified there, and this section must be updated with it.
 
 Player statistics are not stored anywhere: they are computed from `matches` / `match_participants`, so emptying those
