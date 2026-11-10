@@ -546,11 +546,7 @@ async function endCurrentSession({ sessionToken, deviceToken }) {
       [sessionHash, deviceHash]
     );
     for (const { player_id: id } of owners.rows) await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [id]);
-    // Every active session of the locked account(s), not only this one: a restore that committed while this request waited may have
-    // replaced the session this browser held. At most one session per account is active (ux_auth_sessions_one_active), so this
-    // ends exactly the session that is in use.
-    const ids = owners.rows.map((r) => r.player_id);
-    if (ids.length) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE player_id = ANY($1::uuid[]) AND revoked_at IS NULL', [ids]);
+    if (sessionHash) await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [sessionHash]);
     if (deviceHash) await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [deviceHash]);
     return owners.rows.length > 0;
   });
