@@ -48,13 +48,15 @@
     const nums = values.map((v) => (v == null ? null : Number(v) || 0));
     const known = nums.filter((v) => v !== null);
     const w = 600; const h = 170; const pad = 30;
-    const max = Math.max(...known, 1);
+    // an integer scale top of at least 2, so every tick label is a whole count at its true position
+    const top = Math.max(2, Math.ceil(Math.max(...known, 0)));
+    const max = top;
     const n = nums.length;
     const x = (i) => (n <= 1 ? pad : pad + (i * (w - 2 * pad)) / (n - 1));
     const y = (v) => h - pad - (v / max) * (h - 2 * pad);
-    const grid = [0, 0.5, 1].map((f) => {
-      const yy = (h - pad - f * (h - 2 * pad)).toFixed(1);
-      return `<line x1="${pad}" x2="${w - pad}" y1="${yy}" y2="${yy}" class="ad-grid-line"/><text x="${pad - 6}" y="${yy}" class="ad-axis" text-anchor="end" dominant-baseline="middle">${Math.round(f * max)}</text>`;
+    const grid = [0, Math.round(top / 2), top].map((tick) => {
+      const yy = y(tick).toFixed(1);
+      return `<line x1="${pad}" x2="${w - pad}" y1="${yy}" y2="${yy}" class="ad-grid-line"/><text x="${pad - 6}" y="${yy}" class="ad-axis" text-anchor="end" dominant-baseline="middle">${tick}</text>`;
     }).join('');
     const pts = nums.map((v, i) => (v === null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean).join(' ');
     const dots = nums.map((v, i) => (v === null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" class="ad-dot"><title>${esc(labels[i] || '')}: ${v}</title></circle>`)).join('');
@@ -83,7 +85,14 @@
       <h3>Errors by kind</h3>${bars(o.errors, 'No errors recorded.')}
       <p class="ad-muted">Counters only: no addresses, names or messages are recorded. Active users are counted from a keyed hash, never an account id. Detail rows are kept ${o.retention ? esc(o.retention.activeDays) : '35'} days, daily totals ${o.retention ? esc(o.retention.dailyDays) : '400'} days.</p>`;
     // a new range makes every answer still on its way out of date: bump the view generation so only the latest one is drawn
-    main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => { state.gen += 1; overview(Number(b.dataset.days)).catch(fail); }; });
+    // each click takes its own generation: an older request that fails later must not replace the current view
+    main.querySelectorAll('[data-days]').forEach((b) => {
+      b.onclick = () => {
+        state.gen += 1;
+        const mine = state.gen;
+        overview(Number(b.dataset.days)).catch((e) => { if (mine === state.gen) fail(e); });
+      };
+    });
   }
 
   // ---------------------------------------------------------------- users
