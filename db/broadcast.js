@@ -62,7 +62,9 @@ async function listBroadcasts({ page: p = 1 } = {}) {
   const offset = (Math.max(1, Math.floor(Number(p)) || 1) - 1) * PAGE;
   const total = (await db.query('SELECT COUNT(*)::int AS n FROM email_broadcasts')).rows[0].n;
   const r = await db.query(
-    `SELECT b.id, b.created_at, b.audience, b.category, b.subject, b.status, b.recipient_count, b.sent_count, b.failed_count, b.finished_at,
+    `SELECT b.id, b.created_at, b.audience, b.category, b.subject, b.status, b.recipient_count, b.finished_at,
+            (SELECT COUNT(*)::int FROM email_broadcast_recipients r WHERE r.broadcast_id = b.id AND r.state = 'sent') AS sent_count,
+            (SELECT COUNT(*)::int FROM email_broadcast_recipients r WHERE r.broadcast_id = b.id AND r.state = 'failed') AS failed_count,
             pl.username AS created_by
        FROM email_broadcasts b LEFT JOIN players pl ON pl.id = b.created_by
       ORDER BY b.created_at DESC, b.id LIMIT ${PAGE} OFFSET $1`,
@@ -129,18 +131,19 @@ async function currentRecipient(broadcastId, playerId) {
   return r.rows[0] || null;
 }
 
-/** Records one recipient's state, but only for the run that holds the broadcast. */
+/**
+ * Records one recipient's state, but only for the run that holds the broadcast. The broadcast row is locked (FOR SHARE) in the
+ * same transaction, so a takeover, which needs the row lock, waits for this write or skips the row: it cannot land in between.
+ */
 async function markRecipient(broadcastId, playerId, state, owner) {
-  const r = await db.query(
-    `UPDATE email_broadcast_recipients SET state = $3
-      WHERE broadcast_id = $1 AND player_id = $2
-        AND EXISTS (SELECT 1 FROM email_broadcasts b WHERE b.id = $1 AND b.status = 'sending' AND b.lease_owner = $4)`,
-    [broadcastId, playerId, state, owner]
-  );
-  if (r.rowCount === 0) {
-    const held = await db.query(`SELECT 1 FROM email_broadcasts WHERE id = $1 AND status = 'sending' AND lease_owner = $2`, [broadcastId, owner]);
+  await db.withTransaction(async (c) => {
+    const held = await c.query(
+      `SELECT 1 FROM email_broadcasts WHERE id = $1 AND status = 'sending' AND lease_owner = $2 FOR SHARE`,
+      [broadcastId, owner]
+    );
     if (!held.rows.length) throw new LeaseLostError();
-  }
+    await c.query('UPDATE email_broadcast_recipients SET state = $3 WHERE broadcast_id = $1 AND player_id = $2', [broadcastId, playerId, state]);
+  });
 }
 
 async function finishBroadcast(broadcastId, owner) {

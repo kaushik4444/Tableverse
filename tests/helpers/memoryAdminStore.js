@@ -25,7 +25,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       case 'unverified': return !p.verified;
       case 'admins': return p.role === 'admin' || p.role === 'owner';
       case 'players': return p.role === 'user';
-      case 'inactive': return now() - new Date(p.last_seen ?? now()) > INACTIVE_MS;
+      case 'inactive': return now() - new Date(p.last_seen_at ?? now()) > INACTIVE_MS;
       default: return false;
     }
   };

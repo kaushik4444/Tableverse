@@ -288,12 +288,12 @@ const ADMIN_POSTS = [
     const bOpted = await sb.login({ email: 'opted@b.test', verified: true });
     const bOld = await sb.login({ email: 'lapsed@b.test', verified: true });
     const bGuest = await sb.login({});
-    sb.store.players.get(bOld.id).last_seen = new Date(sb.clock.t - 40 * 24 * 3600 * 1000);
-    sb.store.players.get(bVer.id).last_seen = new Date(sb.clock.t - 1 * 24 * 3600 * 1000);
+    sb.store.players.get(bOld.id).last_seen_at = new Date(sb.clock.t - 40 * 24 * 3600 * 1000);
+    sb.store.players.get(bVer.id).last_seen_at = new Date(sb.clock.t - 1 * 24 * 3600 * 1000);
     const preview = (audience, category) => bOwner.b.get(`/api/admin/broadcasts/preview?audience=${audience}&category=${category}`);
     const sendBody = (over = {}) => ({ audience: 'all', category: 'account', subject: 'Hello', body: 'A line', expectedCount: 0, ...over });
     const worker = (deliver) => createBroadcastWorker({
-      store: sb.store, makeUnsubscribeUrl: (t) => 'https://app.test/api/email/unsubscribe?token=' + t, pauseMs: 0, logger: { error() {} }, deliver,
+      store: sb.store, makeUnsubscribeUrl: (t) => 'https://app.test/api/email/unsubscribe?token=' + t, pauseMs: 0, gapMs: 0, retryDelays: [0, 0, 0], logger: { error() {} }, deliver,
     });
 
     await test('the broadcast tools are refused to admins, players and guests (403 / 401)', async () => {
@@ -385,6 +385,19 @@ const ADMIN_POSTS = [
       assert.equal(row.failed_count, 1);
       assert.equal(calls, 6);
     });
+    await test('a rate-limited delivery is retried and sent once; only a refused address counts as failed', async () => {
+      const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Pace', body: 'Six', expectedCount: 6 }));
+      assert.equal(r.status, 200);
+      const hits = new Map();
+      await worker(async (m) => {
+        const n = (hits.get(m.to) || 0) + 1; hits.set(m.to, n);
+        if (m.to === 'verified@b.test' && n <= 2) { const e = new Error('rate limited'); e.status = 429; throw e; }
+      }).runOnce();
+      const row = sb.store.broadcasts[sb.store.broadcasts.length - 1];
+      assert.equal(row.status, 'sent');
+      assert.equal(row.failed_count, 0, 'the rate-limited mail went out after the retries');
+      assert.equal(hits.get('verified@b.test'), 3);
+    });
     await test('a broadcast held by one run cannot be taken by another until its lease runs out', async () => {
       const r = await bOwner.b.post('/api/admin/broadcasts', sendBody({ subject: 'Lease', body: 'One', expectedCount: 6 }));
       assert.equal(r.status, 200);
@@ -450,7 +463,7 @@ const ADMIN_POSTS = [
     await test('the broadcast history is owner-only and carries no message text', async () => {
       const r = await bOwner.b.get('/api/admin/broadcasts');
       assert.equal(r.status, 200);
-      assert.equal(r.json.items.length, 7);
+      assert.equal(r.json.items.length, 8);
       assert.ok(r.json.items.every((x) => !('body' in x)));
       assert.equal((await bAdmin.b.get('/api/admin/broadcasts')).status, 403);
     });

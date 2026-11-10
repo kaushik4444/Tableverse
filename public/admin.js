@@ -355,28 +355,41 @@
         const out = await api('/api/admin/broadcasts', { audience: f.aud.value, category: f.cat.value, subject: f.sub.value, body: f.body.value, expectedCount: checked });
         say('mMsg', `Queued for ${out.recipientCount} recipient${out.recipientCount === 1 ? '' : 's'}. It is sent in batches; the history below shows progress.`, 'ok');
         f.sub.value = ''; f.body.value = ''; reset();
-        await history();
+        await history(1);
       } catch (err) { say('mMsg', err.message, 'err'); }
       finally { sending = false; ready(); }
     };
-    await history();
+    await history(1);
   }
-  async function history() {
+  // history: pages of 25 (newest first), and a refresh while anything is still queued or sending
+  let mailPage = 1;
+  let mailTimer = null;
+  async function history(page = mailPage) {
     const box = document.getElementById('mHistory');
     if (!box) return;
-    const o = await api('/api/admin/broadcasts');
+    clearTimeout(mailTimer);
+    mailPage = page;
+    const o = await api('/api/admin/broadcasts?page=' + page);
     const rows = o.items.map((b) => `<tr>
-        <td data-label="When">${esc(when(b.created_at))}</td>
-        <td data-label="Who">${esc(AUDIENCE_LABELS[b.audience] || b.audience)}</td>
-        <td data-label="Kind">${b.category === 'promo' ? 'Promotion' : 'Account'}</td>
-        <td data-label="Subject">${esc(b.subject)}</td>
-        <td data-label="Status">${esc(STATUS_LABELS[b.status] || b.status)}</td>
-        <td data-label="Recipients">${b.recipient_count}</td>
-        <td data-label="Sent / failed">${b.sent_count} / ${b.failed_count}</td>
-        <td data-label="By">${esc(b.created_by || '—')}</td></tr>`).join('');
-    box.innerHTML = o.items.length
+        <td data-l="When">${esc(when(b.created_at))}</td>
+        <td data-l="Who">${esc(AUDIENCE_LABELS[b.audience] || b.audience)}</td>
+        <td data-l="Kind">${b.category === 'promo' ? 'Promotion' : 'Account'}</td>
+        <td data-l="Subject">${esc(b.subject)}</td>
+        <td data-l="Status">${esc(STATUS_LABELS[b.status] || b.status)}</td>
+        <td data-l="Recipients">${b.recipient_count}</td>
+        <td data-l="Sent / failed">${b.sent_count} / ${b.failed_count}</td>
+        <td data-l="By">${esc(b.created_by || '—')}</td></tr>`).join('');
+    const last = Math.max(1, Math.ceil(o.total / o.pageSize));
+    const nav = o.total > o.pageSize
+      ? `<div class="ad-row"><button type="button" class="ad-btn" id="mNewer" ${page <= 1 ? 'disabled' : ''}>Newer</button><span class="ad-muted">Page ${page} of ${last}</span><button type="button" class="ad-btn" id="mOlder" ${page >= last ? 'disabled' : ''}>Older</button></div>`
+      : '';
+    box.innerHTML = (o.items.length
       ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Subject</th><th>Status</th><th>Recipients</th><th>Sent / failed</th><th>By</th></tr></thead><tbody>${rows}</tbody></table></div>`
-      : '<p class="ad-muted">Nothing has been sent yet.</p>';
+      : '<p class="ad-muted">Nothing has been sent yet.</p>') + nav;
+    box.querySelector('#mNewer')?.addEventListener('click', () => history(page - 1).catch(() => {}));
+    box.querySelector('#mOlder')?.addEventListener('click', () => history(page + 1).catch(() => {}));
+    // delivery runs in the background: keep the list current until every send has finished (the timer stops with the tab)
+    if (o.items.some((b) => b.status !== 'sent')) mailTimer = setTimeout(() => history(mailPage).catch(() => {}), 15000);
   }
   const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, logs: (f) => logs(f), audit: () => audit(), email: () => emailTab() };
   function show(tab) {
