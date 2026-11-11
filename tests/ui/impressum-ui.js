@@ -35,14 +35,24 @@ async function assertVisibleAndClickable(page, selector, label) {
 (async () => {
   const sessionApi = { 'GET /api/auth/session': () => sessionOk(), 'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }) };
   const { server, url } = await serve(sessionApi);
+  const guestApi = {
+    'GET /api/auth/session': () => ({ ok: true, authenticated: false, requireEmailVerification: true, csrfToken: 'test-csrf' }),
+    'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }),
+    'GET /api/games': () => ({ ok: true, games: require('../../games').list(), tables: [], impressumPublished: true }),
+  };
+  const guest = await serve(guestApi);
   const browser = await chromium.launch();
   try {
     for (const vp of SIZES) {
       const size = `${vp.width}x${vp.height}`;
 
       await test(`signed out (${size}): the sign-in sheet has an Impressum link that is visible and opens the page`, async () => {
-        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [{ t: 'authRequired', message: 'Log in to play.', impressumPublished: true }] });
-        await page.goto(url + '/');
+        // A fresh visitor: no session and no welcome. The flag must arrive through /api/games (loadSnapshot), not the socket.
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [] });
+        await page.goto(guest.url + '/');
+        // the guest home footer shows the link only once /api/games has delivered the flag
+        await page.waitForSelector('.home-foot a[href="/impressum.html"]', { state: 'attached', timeout: 8000 });
+        await page.click('[data-act="create"]', { timeout: 5000 });
         await page.waitForSelector('#loginForm', { timeout: 8000 });
         await assertVisibleAndClickable(page, '#auth-overlay .auth-legal a[href="/impressum.html"]', 'sign-in sheet link');
         // WCAG AA for small text: the link must reach 4.5:1 against the darker stop of the sheet's dark gradient (#1d1c55)
@@ -125,6 +135,7 @@ async function assertVisibleAndClickable(page, selector, label) {
   } finally {
     await browser.close();
     server.close();
+    guest.server.close();
   }
   console.log(process.exitCode ? '\nimpressum UI: FAILED' : '\nimpressum UI: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -51,6 +51,7 @@ async function test(name, fn) {
       const app = await (await fetch(base + '/app.js')).text();
       assert.match(app, /class="hint auth-legal"><a href="\/impressum\.html">Impressum<\/a>/, 'sign-in sheet link');
       assert.match(app, /S\.impressumPublished = m\.impressumPublished === true/, 'client reads the server flag');
+      assert.match(app, /typeof out\.impressumPublished === 'boolean'\) S\.impressumPublished = out\.impressumPublished/, 'signed-out snapshot reads the flag');
       assert.match(app, /<footer class="home-foot">[\s\S]*S\.impressumPublished \? '<a href="\/impressum\.html">Impressum<\/a>' : ''[\s\S]*<\/footer>/, 'home footer link, only when published');
     });
 
@@ -69,6 +70,30 @@ async function test(name, fn) {
         assert.equal(res.status, 404);
         const body = await res.text();
         assert.doesNotMatch(body, /Impressum<\/h1>/);
+      } finally {
+        await off.close();
+      }
+    });
+
+    await test('publication off: encoded and dotted aliases of the page are not served either', async () => {
+      const off = await start({ port: 0, trustProxy: false, impressumPublished: false, matchLog: { log() {}, warn() {}, error() {} } });
+      try {
+        for (const p of ['/%2fimpressum.html', '/%2Fimpressum.html', '/x%2f..%2fimpressum.html', '/./impressum.html', '/a/../impressum.html', '/%2e%2e/impressum.html']) {
+          const res = await fetch(`http://127.0.0.1:${off.port}${p}`, { redirect: 'manual' });
+          const body = await res.text();
+          assert.notEqual(res.status, 200, p);
+          assert.doesNotMatch(body, /<h1>Impressum<\/h1>/, p);
+        }
+      } finally {
+        await off.close();
+      }
+    });
+
+    await test('/api/games tells signed-out visitors the publication state (off)', async () => {
+      const off = await start({ port: 0, trustProxy: false, impressumPublished: false, matchLog: { log() {}, warn() {}, error() {} } });
+      try {
+        const out = await (await fetch(`http://127.0.0.1:${off.port}/api/games`)).json();
+        assert.equal(out.impressumPublished, false);
       } finally {
         await off.close();
       }
