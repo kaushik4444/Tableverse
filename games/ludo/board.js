@@ -1,106 +1,81 @@
 'use strict';
-// The six-arm Ludo board for 5-6 players, as data on a hex grid (axial coordinates q, r).
+// The six-arm Ludo board for 5-6 players, laid out like the printed six-player boards.
 //
-// Six arms point out from the centre, 60 degrees apart. An arm is three hexes wide: its two side columns are the
-// track, and the middle column is the seat's home lane (five squares running in to the centre). The track is the outer
-// outline of the whole star, walked once round, so every track square has exactly two track neighbours. The arms
-// zip together near the centre; the outline runs around that zip, so no separate notch squares are needed.
-// Each seat starts on the middle square of its own arm's tip. Yards sit in the wedges between arms, outside the star.
-// The server and the browser both read this file's output (the browser gets it in the table view), so both agree.
+// A regular hexagon sits in the middle (the home). From each of its six edges an arm runs straight out: three squares
+// wide and six long, squares lined up with the arm. The arms point up, up-right, down-right, down, down-left and up-left.
+// An arm's middle column is that seat's home lane (five squares); the square at its tip is the seat's start, with an
+// arrow pointing in. The two outer columns are track. The track goes once round the outside of the star: out along an
+// arm's left column, across its start, back along its right column, then on to the next arm. A yard is the equilateral
+// triangle between two arms, with its point on a corner of the hexagon.
+// The server and the browser both use this file's output (the browser gets it in the table view), so they agree.
 
-const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]]; // the six hex neighbours, in order round the hex
-const ARM = 2; // distance of the first arm square from the centre (the centre holds the 7 hexes nearer than this)
-const TIP = ARM + 5; // distance of the tip from the centre: the home lane is the five squares before it
-const key = (q, r) => `${q},${r}`;
-const hexDist = (q, r) => (Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2;
+const SIDE = 3; // squares along each edge of the centre hexagon (and the width of an arm)
+const LEN = 6; // squares along each arm: five of home lane plus the start at the tip
+const APOTHEM = (SIDE * Math.sqrt(3)) / 2; // centre of the hexagon to the middle of an edge
+const rad = (deg) => (deg * Math.PI) / 180;
+const add = (p, q) => [p[0] + q[0], p[1] + q[1]];
+const mul = (p, s) => [p[0] * s, p[1] * s];
+const dir = (deg) => [Math.cos(rad(deg)), Math.sin(rad(deg))];
+const armDeg = (k) => -90 + 60 * k; // seat k's arm points up for seat 0 and runs clockwise (y points down)
 
-function build() {
-  // every square that belongs to the star, with its role
-  const solid = new Map();
-  for (let q = -TIP - 1; q <= TIP + 1; q++) for (let r = -TIP - 1; r <= TIP + 1; r++) {
-    if (hexDist(q, r) < ARM) solid.set(key(q, r), { q, r, role: 'centre' });
-  }
-  for (let k = 0; k < 6; k++) {
-    const d = DIRS[k], e = DIRS[(k + 1) % 6];
-    for (let s = ARM; s <= TIP; s++) for (const o of [-1, 0, 1]) {
-      const q = s * d[0] + o * e[0], r = s * d[1] + o * e[1];
-      const role = o !== 0 ? 'track' : s === TIP ? 'start' : 'lane';
-      solid.set(key(q, r), { q, r, role, seat: k, s, o });
-    }
-  }
-  // the outline: star squares with a neighbour outside the star
-  const outline = [...solid.values()].filter((c) => c.role !== 'centre' && DIRS.some(([dq, dr]) => !solid.has(key(c.q + dq, c.r + dr))));
-  const outSet = new Set(outline.map((c) => key(c.q, c.r)));
-  // walk the outline: at each square take the first unvisited outline neighbour, turning from the way we arrived
-  const start = outline.find((c) => c.role === 'start' && c.seat === 0);
-  const order = [];
-  const visited = new Set();
-  let cur = start, back = null;
-  while (cur) {
-    order.push(cur); visited.add(key(cur.q, cur.r));
-    const base = back === null ? 0 : (back + 4) % 6;
-    let nxt = null, dirUsed = null;
-    for (let t = 1; t <= 6 && !nxt; t++) {
-      const di = (base + t) % 6;
-      const k = key(cur.q + DIRS[di][0], cur.r + DIRS[di][1]);
-      if (outSet.has(k) && !visited.has(k)) { nxt = solid.get(k); dirUsed = di; }
-    }
-    if (!nxt) break;
-    back = (dirUsed + 3) % 6;
-    cur = nxt;
-  }
-  if (order.length !== outline.length) throw new Error(`ludo board: outline walk covered ${order.length} of ${outline.length}`);
-  const index = new Map(order.map((c, i) => [key(c.q, c.r), i]));
-  const starts = [];
-  for (let k = 0; k < 6; k++) starts.push(index.get(key(TIP * DIRS[k][0], TIP * DIRS[k][1])));
-  // each seat's home lane, from the square next to the track outwards to the centre; lane[0] sits beside the tip
-  const lanes = [];
-  for (let k = 0; k < 6; k++) {
-    const lane = [];
-    for (let s = TIP - 1; s >= ARM; s--) lane.push({ q: s * DIRS[k][0], r: s * DIRS[k][1] });
-    lanes.push(lane);
-  }
-  // the square the track reaches just before a seat's start must sit beside its home lane, so tokens turn in cleanly
-  return { order, starts, lanes, solid, outSet, index };
+// centre of the square at `row` (1 is next to the hexagon, LEN is the tip) and `col` (-1 left, 0 middle, +1 right) of arm k
+function cell(k, row, col) {
+  const a = dir(armDeg(k)), l = dir(armDeg(k) + 90);
+  return add(mul(a, APOTHEM + row - 0.5), mul(l, col));
 }
 
-const built = build();
-const TRACK = built.order.length;
-const STARTS = built.starts;
-// a hex's position in the browser: pointy-top hexes, with the whole board fitted to 100 x 100
-const pixel = (q, r) => [Math.sqrt(3) * (q + r / 2), 1.5 * r];
-const all = [...built.solid.values()].map((c) => pixel(c.q, c.r));
-const xs = all.map((p) => p[0]), ys = all.map((p) => p[1]);
-const scale = 92 / Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
-const at = (q, r) => { const p = pixel(q, r); return [50 + (p[0] - cx) * scale, 50 + (p[1] - cy) * scale]; };
-
-// the safe squares: each start, and the square four steps round the track after it (the star on the cross board is eight
-// steps after its start; this board is wider, so four steps round keeps the same feel)
+// the track in order: per arm, the left column outwards, the start, then the right column back in
+const rawTrack = []; // [x, y, arm]
+for (let k = 0; k < 6; k++) {
+  for (let row = 1; row <= LEN; row++) rawTrack.push([...cell(k, row, -1), k]);
+  rawTrack.push([...cell(k, LEN, 0), k]);
+  for (let row = LEN; row >= 1; row--) rawTrack.push([...cell(k, row, 1), k]);
+}
+const PER_ARM = rawTrack.length / 6; // 13
+const TRACK = rawTrack.length; // 78
+const STARTS = [0, 1, 2, 3, 4, 5].map((k) => k * PER_ARM + LEN);
+// safe squares: each start, and the third square up each arm's left column (the star on the printed board)
 const SAFE = new Set();
-for (const s of STARTS) { SAFE.add(s); SAFE.add((s + 4) % TRACK); }
+for (let k = 0; k < 6; k++) { SAFE.add(STARTS[k]); SAFE.add(k * PER_ARM + 2); }
+// each home lane, from the square beside the start in to the hexagon
+const rawLanes = [];
+for (let k = 0; k < 6; k++) { const lane = []; for (let row = LEN - 1; row >= 1; row--) lane.push([...cell(k, row, 0), k]); rawLanes.push(lane); }
+const corner = (k) => mul(dir(armDeg(k) + 30), SIDE); // the hexagon corner between arm k and arm k+1
+const yardTri = (k) => [corner(k), add(corner(k), mul(dir(armDeg(k)), LEN)), add(corner(k), mul(dir(armDeg(k + 1)), LEN))];
 
-// What the browser draws, in 100 x 100 board units. Sent once in the table view for 5-6 players.
-const PITCH = Math.sqrt(3) * scale; // the distance between neighbouring squares
-function boardView() {
-  const centre = [];
-  for (const c of built.solid.values()) if (c.role === 'centre') centre.push({ at: at(c.q, c.r), seat: DIRS.findIndex(([a, b]) => a === c.q && b === c.r) });
-  const yards = [];
-  for (let k = 0; k < 6; k++) {
-    const d = DIRS[k], e = DIRS[(k + 1) % 6];
-    yards.push(at(3 * (d[0] + e[0]), 3 * (d[1] + e[1]))); // the wedge clockwise from arm k, clear of the track
-  }
+// fit the whole board into 100 x 100 units
+const pts = [];
+for (const [x, y] of [...rawTrack, ...rawLanes.flat()]) pts.push([x, y]);
+for (let k = 0; k < 6; k++) pts.push(...yardTri(k), corner(k));
+const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+const width = Math.max(...xs) - Math.min(...xs) + 1.2, height = Math.max(...ys) - Math.min(...ys) + 1.2;
+const SCALE = 96 / Math.max(width, height); // units per square
+const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+const fit = (p) => [50 + (p[0] - cx) * SCALE, 50 + (p[1] - cy) * SCALE];
+const r2 = (n) => Math.round(n * 100) / 100;
+const out = (p) => fit(p).map(r2);
+
+function buildView() {
   return {
-    pitch: PITCH,
-    track: built.order.map((c) => at(c.q, c.r)),
+    size: r2(SCALE), // one square, in board units
+    track: rawTrack.map(([x, y, k]) => ({ p: out([x, y]), ang: armDeg(k) })),
     starts: STARTS,
-    lanes: built.lanes.map((l) => l.map((c) => at(c.q, c.r))),
-    centre, // the seven centre squares; seat k's own square is the one at its arm
-    yards,
     safe: [...SAFE],
+    lanes: rawLanes.map((lane) => lane.map(([x, y, k]) => ({ p: out([x, y]), ang: armDeg(k) }))),
+    hexagon: [0, 1, 2, 3, 4, 5].map((k) => out(corner(k))),
+    // the home triangle of each seat: the centre and the two hexagon corners either side of its arm
+    homes: [0, 1, 2, 3, 4, 5].map((k) => [out([0, 0]), out(corner((k + 5) % 6)), out(corner(k))]),
+    finished: [0, 1, 2, 3, 4, 5].map((k) => out(mul(dir(armDeg(k)), APOTHEM * 0.58))), // where a seat's home count sits
+    yards: [0, 1, 2, 3, 4, 5].map((k) => {
+      const tri = yardTri(k);
+      const c = mul(add(add(tri[0], tri[1]), tri[2]), 1 / 3);
+      const b = dir(armDeg(k) + 30), p = dir(armDeg(k) + 120);
+      const slot = (u, v) => out(add(c, add(mul(b, u), mul(p, v))));
+      return { tri: tri.map(out), c: out(c), r: r2(1.5 * SCALE), slots: [slot(-0.75, -0.75), slot(0.75, -0.75), slot(-0.75, 0.75), slot(0.75, 0.75)] };
+    }),
   };
 }
-let cachedView = null;
-const viewOfBoard = () => cachedView || (cachedView = boardView());
+let cached = null;
+const boardView = () => cached || (cached = buildView());
 
-module.exports = { DIRS, ARM, TIP, TRACK, STARTS, SAFE, order: built.order, lanes: built.lanes, index: built.index, at, pixel, boardView: viewOfBoard };
+module.exports = { SIDE, LEN, TRACK, STARTS, SAFE, PER_ARM, rawTrack, rawLanes, boardView };

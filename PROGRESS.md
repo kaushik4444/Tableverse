@@ -253,7 +253,7 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - Tests: `tests/admin.test.js` (audiences, recovery, day-old attempt never resent), `tests/email.test.js`, `tests/admin.pg.test.js`. PostgreSQL suites run in CI only.
 
 ## Player counts and win conditions (game expansion)
-- Ludo: 2-6 players. 2-4 keep the cross board (52-square ring). 5-6 use a six-arm hex-cell board (`games/ludo/board.js`): a 72-square track walked round the outline of the star, a start on each arm tip, five-square coloured home lanes to the centre, yards in the wedges, and the server sends the board to the browser. `GEOMETRY` in `games/ludo/engine.js`; the renderer picks the board from the player count (`geoFor` in `public/games/ludo.js`).
+- Ludo: 2-6 players. 2-4 keep the cross board (52-square ring). 5-6 use a six-arm board modelled on printed six-player boards (`games/ludo/board.js`): a centre hexagon with six 3x6 arms, a 78-square track, a start with an arrow on each arm tip, five-square coloured home lanes, triangular yards between the arms, and the server sends the board to the browser. `GEOMETRY` in `games/ludo/engine.js`; the renderer picks the board from the player count (`geoFor` in `public/games/ludo.js`).
 - Snakes and Ladders: 2-6 players (orange and purple tokens, wider token ring when five or six share a square).
 - Property Rivals: game length gains "First to 2,000 net worth" and "First to 3,000 net worth". Checked at the end of each turn; the richest player wins. The 30/60-round and last-player-standing options are unchanged.
 - Tests: `tests/ludo.test.js` (hexagon ring, renderer placement, bot playouts for 2-6), `tests/snakesladders.test.js` (2-6), `tests/propertyrivals.test.js` (net-worth goal).

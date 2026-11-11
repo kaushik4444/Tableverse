@@ -38,9 +38,9 @@
 .ludo-token.orange { --c: #f97316; --d: #c2410c; --l: #fed7aa; }
 .ludo-token.purple { --c: #a855f7; --d: #7e22ce; --l: #e9d5ff; }
 /* six-arm board: 60 squares around the ring, so the tokens are smaller than on the cross */
-.ludo-board.hex .ludo-token { width: 4.6%; }
-.ludo-board.hex .ludo-token.stacked { width: 3.8%; }
-.ludo-board.hex .ludo-token.done { width: 4%; }
+.ludo-board.hex .ludo-token { width: 4.3%; }
+.ludo-board.hex .ludo-token.stacked { width: 3.4%; }
+.ludo-board.hex .ludo-token.done { width: 3.6%; }
 /* move buttons under the hexagon board: full-size touch targets for each legal token */
 .ludo-picks { display: flex; flex-wrap: wrap; gap: 8px; }
 /* white badge, dark seat-coloured text: the dark shades all pass 4.5:1 on white, unlike white text on yellow or green */

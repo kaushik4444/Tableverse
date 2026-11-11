@@ -46,21 +46,18 @@
   };
 
   // ---- Six-arm board (5-6 players). The server sends the board (games/ludo/board.js): the track squares in order,
-  // each seat's start, its five home-lane squares, the centre squares and the yards, all in 100 x 100 units.
-  // Here it is only drawn; the same data drives the rules, so the two cannot disagree.
-  const hexGeo = (b) => {
-    const centreOf = (seat) => (b.centre.find((c) => c.seat === seat) || b.centre[0]).at;
-    return {
-      S: 100, fan: 100 / 15, track: b.track.length, lap: b.track.length - 1, finished: b.track.length + 4,
-      starts: b.starts, safe: new Set(b.safe),
-      where(seat, pos, t) {
-        if (pos === -1) { const y = b.yards[seat]; const o = [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]][t]; return [y[0] + o[0], y[1] + o[1]]; }
-        if (pos === this.finished) return centreOf(seat);
-        if (pos >= this.lap) return b.lanes[seat][pos - this.lap];
-        return b.track[(this.starts[seat] + pos) % this.track];
-      },
-    };
-  };
+  // each seat's start, its five home-lane squares, the hexagon, the home triangles and the yards, all in 100 x 100
+  // units. Here it is only drawn; the same data drives the rules, so the two cannot disagree.
+  const hexGeo = (b) => ({
+    S: 100, fan: 100 / 15, track: b.track.length, lap: b.track.length - 1, finished: b.track.length + 4,
+    starts: b.starts, safe: new Set(b.safe),
+    where(seat, pos, t) {
+      if (pos === -1) return b.yards[seat].slots[t];
+      if (pos === this.finished) return b.finished[seat];
+      if (pos >= this.lap) return b.lanes[seat][pos - this.lap].p;
+      return b.track[(this.starts[seat] + pos) % this.track].p;
+    },
+  });
   const CROSS_GEO = CROSS;
   const ringKey = (geo, seat, pos) => (pos >= 0 && pos < geo.lap ? 'r' + ((geo.starts[seat] + pos) % geo.track) : null);
 
@@ -158,29 +155,33 @@
 
   function hexSVG(b, seats) {
     const used = (k) => seats.includes(k);
-    const R = b.pitch / Math.sqrt(3); // circumradius of one square
-    const hexPts = ([x, y], size) => [0, 1, 2, 3, 4, 5].map((i) => {
-      const a = ((-90 + 60 * i) * Math.PI) / 180;
-      return `${(x + size * Math.cos(a)).toFixed(2)},${(y + size * Math.sin(a)).toFixed(2)}`;
-    }).join(' ');
-    const sq = (p, fill, extra = '') => `<polygon points="${hexPts(p, R * 0.94)}" fill="${fill}" stroke="#94a3b8" stroke-width="0.35" ${extra}/>`;
-    const star = (p, fill) => `<text x="${p[0].toFixed(2)}" y="${(p[1] + 1.1).toFixed(2)}" text-anchor="middle" font-size="2.6" fill="${fill}">★</text>`;
+    const f = (n) => n.toFixed(2);
+    const h = b.size * 0.47; // half a square, leaving a thin gap
+    // a square lined up with its arm: `ang` is the arm's direction, so the corners turn with it
+    const sq = ({ p, ang }, fill, stroke = '#94a3b8') => {
+      const a = (ang * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+      const pts = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([x, y]) => `${f(p[0] + x * c - y * s)},${f(p[1] + x * s + y * c)}`).join(' ');
+      return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="0.3" stroke-linejoin="round"/>`;
+    };
+    const mark = (p, ch, fill, size, rot = 0) => `<text x="${f(p[0])}" y="${f(p[1] + size * 0.36)}" text-anchor="middle" font-size="${size}" fill="${fill}" transform="rotate(${rot} ${f(p[0])} ${f(p[1])})">${ch}</text>`;
     const startSeat = (i) => b.starts.indexOf(i);
-    const centre = b.centre.map((c) => sq(c.at, c.seat >= 0 && used(c.seat) ? SEAT[c.seat].light : '#e2e8f0')).join('');
-    const track = b.track.map((p, i) => {
-      const k = startSeat(i);
-      let out = sq(p, k >= 0 ? (used(k) ? SEAT[k].hex : SEAT[k].light) : '#ffffff');
-      if (k >= 0) out += star(p, '#fff');
-      else if (b.safe.includes(i)) out += star(p, '#94a3b8');
-      return out;
-    }).join('');
-    const lanes = b.lanes.map((lane, k) => lane.map((p) => sq(p, used(k) ? SEAT[k].hex : '#e2e8f0')).join('')).join('');
     const yards = b.yards.map((y, k) => {
       const on = used(k);
-      const slots = [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]].map(([dx, dy]) => `<circle cx="${(y[0] + dx).toFixed(2)}" cy="${(y[1] + dy).toFixed(2)}" r="1.6" fill="${on ? SEAT[k].dark : '#cbd5e1'}" opacity="${on ? 0.22 : 0.5}"/>`).join('');
-      return `<g><rect x="${(y[0] - 7).toFixed(2)}" y="${(y[1] - 7).toFixed(2)}" width="14" height="14" rx="1.6" fill="${on ? SEAT[k].hex : '#cbd5e1'}"/><rect x="${(y[0] - 5.6).toFixed(2)}" y="${(y[1] - 5.6).toFixed(2)}" width="11.2" height="11.2" rx="1.2" fill="#fff" opacity="${on ? 0.95 : 0.6}"/>${slots}</g>`;
+      const holes = y.slots.map((q) => `<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(b.size * 0.4)}" fill="${on ? SEAT[k].dark : '#94a3b8'}" opacity="${on ? 0.3 : 0.4}"/>`).join('');
+      return `<g><polygon points="${y.tri.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="${on ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.4" stroke-linejoin="round"/><circle cx="${f(y.c[0])}" cy="${f(y.c[1])}" r="${f(y.r)}" fill="#fff" opacity="${on ? 0.92 : 0.6}"/>${holes}</g>`;
     }).join('');
-    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="2" fill="#fff"/>${centre}${track}${lanes}${yards}</svg>`;
+    const track = b.track.map((t, i) => {
+      const k = startSeat(i);
+      let out = sq(t, k >= 0 ? (used(k) ? SEAT[k].light : '#f1f5f9') : '#ffffff');
+      // an arrow at each start points in along the arm, towards the home
+      if (k >= 0) out += mark(t.p, '▲', used(k) ? SEAT[k].hex : '#94a3b8', b.size * 0.8, t.ang + 180 + 90);
+      else if (b.safe.includes(i)) out += mark(t.p, '★', '#94a3b8', b.size * 0.7);
+      return out;
+    }).join('');
+    const lanes = b.lanes.map((lane, k) => lane.map((t) => sq(t, used(k) ? SEAT[k].hex : '#e2e8f0', '#fff')).join('')).join('');
+    const homes = b.homes.map((tri, k) => `<polygon points="${tri.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
+    const hex = `<polygon points="${b.hexagon.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="#fff" stroke="#64748b" stroke-width="0.4" stroke-linejoin="round"/>`;
+    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="2" fill="#fff"/>${yards}${track}${lanes}${hex}${homes}<circle cx="50" cy="50" r="${f(b.size * 0.35)}" fill="#fff" opacity=".9"/></svg>`;
   }
 
   function boardSVG(v) {
