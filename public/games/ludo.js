@@ -333,8 +333,21 @@
     root.onclick = onClick;
   }
 
+  // Legal tokens have a larger invisible tap area, and near tokens overlap it, so a tap goes to the legal token whose centre is nearest the pointer.
+  function nearestLegal(el, e) {
+    if (!el.classList.contains('legal') || !(e.clientX || e.clientY)) return el;
+    let best = el; let bestD = Infinity;
+    e.currentTarget.querySelectorAll('.ludo-token.legal').forEach((c) => {
+      const r = c.getBoundingClientRect();
+      const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+      if (d < bestD) { bestD = d; best = c; }
+    });
+    return bestD <= 30 ? best : el;
+  }
+
   function onClick(e) {
-    const el = e.target.closest('[data-lt]');
+    let el = e.target.closest('[data-lt]');
+    if (el && el.classList.contains('ludo-token')) el = nearestLegal(el, e);
     if (!el || el.disabled) return;
     const v = ui.latest; const ctx = ui.ctx;
     if (!v || !ctx) return;
