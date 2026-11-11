@@ -27,6 +27,7 @@ function buildMatchRecord(room, game) {
         seat,
         score: Number.isFinite(r.score) ? Math.round(r.score) : 0,
         isWinner: Boolean(r.winner),
+        isDraw: Boolean(r.draw), // a draw is neither a win nor a loss
         isBot: Boolean(m.bot) && !leftEarly,
         leftEarly,
       };

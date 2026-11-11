@@ -115,8 +115,8 @@ const seatsOf = (players) => players.map((p) => ({ id: p.id, name: p.name, bot: 
     const second = await dbMatches.recordMatch(rec);
     assert.ok(first.matchId);
     assert.equal(second.duplicate, true);
-    assert.deepEqual(await dbMatches.getPlayerStats('00000000-0000-4000-8000-0000000000a1'), { played: 1, wins: 0, losses: 1 });
-    assert.deepEqual(await dbMatches.getPlayerStats('00000000-0000-4000-8000-0000000000a2'), { played: 0, wins: 0, losses: 0 }, 'a player who left is not credited');
+    assert.deepEqual(await dbMatches.getPlayerStats('00000000-0000-4000-8000-0000000000a1'), { played: 1, wins: 0, losses: 1, draws: 0 });
+    assert.deepEqual(await dbMatches.getPlayerStats('00000000-0000-4000-8000-0000000000a2'), { played: 0, wins: 0, losses: 0, draws: 0 }, 'a player who left is not credited');
   });
 
   console.log(`\n${passed} result tests passed`);
