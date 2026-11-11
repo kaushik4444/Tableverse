@@ -334,7 +334,7 @@ test('renderer: 5-6 players get the hexagon board, every token lands inside it',
   }
 });
 
-test('hexagon: legal moves are also offered as full-size buttons under the board', async () => {
+test('hexagon: no move buttons under the board; a legal token is marked on the board and the active home blinks', async () => {
   const reg = {};
   const cardTable = { esc: (x) => String(x), toast() {}, sound: { button: () => '' }, chat: { button: () => '' },
     toolbarSeed: (mid) => mid, register: (id, r) => { reg[id] = r; } };
@@ -345,13 +345,15 @@ test('hexagon: legal moves are also offered as full-size buttons under the board
   const v = E.viewFor(g, 'p0');
   const html = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
   reg.ludo.render(html, v, { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
-  for (const t of v.legalTokens) assert.ok(html.innerHTML.includes(`class="btn ludo-pick" data-lt="tok:${t}"`), `token ${t} has a move button`);
-  assert.ok(html.innerHTML.includes('Token 3: in the yard'), 'a button says where a yard token stands');
+  assert.ok(!html.innerHTML.includes('ludo-pick'), 'no yellow move buttons under the board');
+  for (const t of v.legalTokens) assert.ok(html.innerHTML.includes(`class="ludo-token`) && html.innerHTML.includes(`data-lt="tok:${t}"`), `token ${t} is tappable on the board`);
+  assert.ok(html.innerHTML.includes('ludo-turn-home'), 'the active player\'s home blinks');
   const five = E.createGame(people(4), {}, mulberry32(4));
   five.phase = 'moving'; five.turn = 0; five.dice = 6;
   const sq = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
   reg.ludo.render(sq, E.viewFor(five, 'p0'), { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
-  assert.ok(!sq.innerHTML.includes('ludo-pick'), 'the cross board does not need move buttons');
+  assert.ok(!sq.innerHTML.includes('ludo-pick'), 'the cross board has no move buttons either');
+  assert.ok(sq.innerHTML.includes('ludo-turn-home'), 'the cross board blinks the active home too');
 });
 
 test('geometry: a lap is 51 ring squares, then a 5-square home column, then home (56)', async () => {
