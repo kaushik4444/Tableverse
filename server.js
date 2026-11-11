@@ -405,7 +405,7 @@ function start(opts = {}) {
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
     if (rel === '/api/games') {
-      return sendJson(res, 200, { ok: true, games: games.list(), tables: publicTables(), announcement });
+      return sendJson(res, 200, { ok: true, games: games.list(), tables: publicTables(), announcement, impressumPublished: impressumOn });
     }
     if (rel.includes('\0')) {
       res.writeHead(400);
@@ -417,7 +417,8 @@ function start(opts = {}) {
       res.writeHead(403);
       return res.end();
     }
-    if (rel === '/impressum.html' && !impressumOn) {
+    // Checked on the normalized path, so encoded aliases (/%2fimpressum.html, /x%2f..%2fimpressum.html) cannot reach the file.
+    if (file === path.join(PUBLIC_DIR, 'impressum.html') && !impressumOn) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       return res.end('Not found');
     }
