@@ -23,6 +23,7 @@ const moderation = require('./lib/moderation');
 const { decideAccess } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
+const legalPages = require('./lib/legalPages');
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
@@ -97,6 +98,8 @@ function start(opts = {}) {
   const metered = opts.metered !== undefined ? opts.metered : meteredTurn.fromEnv(env, { log: opts.log || console, onReady: pushIceToAll, onChange: pushIceToAll });
   // Table voice is off unless VOICE_ENABLED=true (fail closed). While off, no TURN login or ICE list is handed out and voice messages are refused.
   const voiceOn = opts.voiceEnabled ?? voiceRelay.voiceEnabled(env);
+  // The Impressum is off unless LEGAL_IMPRESSUM_PUBLISHED=true (fail closed); see lib/legalPages.js.
+  const impressumOn = opts.impressumPublished ?? legalPages.impressumPublished(env);
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId, metered });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
@@ -413,6 +416,10 @@ function start(opts = {}) {
     if (!file.startsWith(PUBLIC_DIR + path.sep)) {
       res.writeHead(403);
       return res.end();
+    }
+    if (rel === '/impressum.html' && !impressumOn) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      return res.end('Not found');
     }
     const type = MIME[path.extname(file)] || 'application/octet-stream';
     staticFiles.load(file, type, (err, entry) => {
@@ -1580,7 +1587,7 @@ function start(opts = {}) {
     // accepted: anything a page can send can then never be mistaken for a session.
     const presentedToken = ws.cookieToken || null;
     if (!presentedToken) {
-      send(ws, { t: 'authRequired', message: 'Please log in to play.' });
+      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Please log in to play.' });
       return ws.close(1008, 'auth required');
     }
 
@@ -1619,7 +1626,7 @@ function start(opts = {}) {
     }
 
     if (!p) {
-      send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
 
@@ -1634,11 +1641,11 @@ function start(opts = {}) {
     // the authoritative PostgreSQL session state.
     if (!auth.authenticated) {
       tokens.delete(p.token);
-      send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
     if (dbPool.hasDatabase() && dbAuth.isEmailVerificationRequired(env) && !auth.emailVerified) {
-      send(ws, { t: 'authRequired', message: 'Please verify your email before entering the lobby.' });
+      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Please verify your email before entering the lobby.' });
       return ws.close(1008, 'email verification required');
     }
 
@@ -1651,7 +1658,7 @@ function start(opts = {}) {
     // The account may have been deleted, or its record dropped, while the checks above were pending. Only the player
     // record that is still registered on this server can be taken over.
     if (players.get(p.id) !== p) {
-      send(ws, { t: 'authRequired', message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
     if (p.ws && p.ws !== ws) {
@@ -1672,7 +1679,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, impressumPublished: impressumOn, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
@@ -1752,7 +1759,7 @@ function start(opts = {}) {
       const current = await dbPlayers.authenticateToken(ws.authToken);
       if (ws.revoked || ws.player !== p) return; // ended while the check was running
       if (!current || current.id !== p.id) {
-        send(ws, { t: 'authRequired', message: 'Your session has ended. Please log in again.' });
+        send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session has ended. Please log in again.' });
         revokeSocket(ws, 4001, 'session ended');
       }
     } catch (err) {
