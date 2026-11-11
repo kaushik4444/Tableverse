@@ -1,5 +1,5 @@
 /* Tableverse Snakes and Ladders: a 10x10 path board, ladders and snakes drawn over it, one token per player. */
-.sl { --sl-red: #e5484d; --sl-blue: #3b82f6; --sl-green: #22a35a; --sl-yellow: #e8b923; }
+.sl { --sl-red: #e5484d; --sl-blue: #3b82f6; --sl-green: #22a35a; --sl-yellow: #e8b923; --sl-orange: #f97316; --sl-purple: #a855f7; }
 .sl-feedback { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0 12px; padding: 9px 12px; border: 1px solid var(--panel-line); border-radius: 12px; background: var(--panel); font-size: 14px; text-align: center; }
 .sl-feedback.ladder { border-color: #5db37f; }
 .sl-feedback.snake { border-color: #e0837a; }
@@ -21,7 +21,7 @@
 .sl-token { position: absolute; z-index: 3; width: 5%; height: 5%; min-width: 14px; min-height: 14px; border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 2px 5px #0005; transition: left .42s ease-in-out, top .42s ease-in-out; }
 .sl-token.hop { animation: sl-hop .48s ease-out; }
 @keyframes sl-hop { 40% { margin-top: -1.8%; } }
-.sl-token.red { background: var(--sl-red); } .sl-token.blue { background: var(--sl-blue); } .sl-token.green { background: var(--sl-green); } .sl-token.yellow { background: var(--sl-yellow); }
+.sl-token.red { background: var(--sl-red); } .sl-token.blue { background: var(--sl-blue); } .sl-token.green { background: var(--sl-green); } .sl-token.yellow { background: var(--sl-yellow); } .sl-token.orange { background: var(--sl-orange); } .sl-token.purple { background: var(--sl-purple); }
 .sl-token.me { outline: 2px solid #111a; outline-offset: 1px; }
 .sl-token.turn { z-index: 4; box-shadow: 0 0 0 3px #fff, 0 0 12px 4px #19a66b99; }
 .sl-start-label { position: absolute; left: 2%; bottom: -8.6%; font-size: 11px; font-weight: 700; color: #6b6656; }
@@ -43,7 +43,7 @@
 .sl-pname small { font-weight: 500; color: var(--muted); }
 .sl-pos { color: var(--muted); font-size: 13px; }
 .sl-dot { width: 14px; height: 14px; border-radius: 50%; }
-.sl-dot.red { background: var(--sl-red); } .sl-dot.blue { background: var(--sl-blue); } .sl-dot.green { background: var(--sl-green); } .sl-dot.yellow { background: var(--sl-yellow); }
+.sl-dot.red { background: var(--sl-red); } .sl-dot.blue { background: var(--sl-blue); } .sl-dot.green { background: var(--sl-green); } .sl-dot.yellow { background: var(--sl-yellow); } .sl-dot.orange { background: var(--sl-orange); } .sl-dot.purple { background: var(--sl-purple); }
 .sl-final { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
 .sl-final li { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 10px; background: rgba(255,255,255,.06); }
 .sl-final li.win { background: rgba(255, 201, 77, .18); }

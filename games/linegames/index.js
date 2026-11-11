@@ -34,7 +34,7 @@ function make(variantId, meta) {
         autoAction: () => null,
         isOver: () => g.phase === 'gameOver',
         // a win scores 1, a draw 0.5 for both, a loss 0
-        results: () => g.players.map((_, i) => ({ score: g.winner === null ? 0.5 : g.winner === i ? 1 : 0, winner: g.winner === i })),
+        results: () => g.players.map((_, i) => ({ score: g.winner === null ? 0.5 : g.winner === i ? 1 : 0, winner: g.winner === i, draw: g.winner === null })),
       };
     },
   };

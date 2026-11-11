@@ -106,8 +106,15 @@ jobs:
       - name: Install Playwright for browser checks
         run: npm install --no-save playwright
 
+      # apt's package mirror can fail to resolve on the runner (a transient DNS error); retry the install, then fail the job.
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: |
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then exit 0; fi
+            echo "Chromium install attempt $attempt failed; retrying in 30s"
+            sleep 30
+          done
+          exit 1
 
       # One deterministic seed covers all games and six phone/tablet/desktop viewports.
       - name: Run browser UI checks

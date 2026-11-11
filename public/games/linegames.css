@@ -5,7 +5,9 @@
 .lg .lg-seat.turn { border-color: var(--gold, #f2c14e); }
 .lg .lg-seat.won { background: rgba(242, 193, 78, .2); }
 .lg .lg-who { display: grid; min-width: 0; } .lg .lg-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .lg .lg-who small { opacity: .75; }
-.lg .lg-mark .lg-piece { width: 28px; height: 28px; font-size: 20px; }
+/* the seat's mark is a fixed box: a big X or O on a tablet must not run into the name */
+.lg .lg-mark { flex: 0 0 auto; width: 36px; height: 36px; display: grid; place-items: center; overflow: hidden; }
+.lg .lg-mark .lg-piece, .lg .lg-mark .lg-piece.x, .lg .lg-mark .lg-piece.o { width: 100%; height: 100%; font-size: 26px; }
 /* pieces */
 .lg .lg-piece { display: inline-grid; place-items: center; width: 78%; height: 78%; border-radius: 50%; font-weight: 900; line-height: 1; }
 .lg .lg-piece.x, .lg .lg-piece.o { border-radius: 8px; background: transparent; font-size: clamp(28px, 12vw, 64px); }

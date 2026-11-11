@@ -96,6 +96,7 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .wz:has(.wz-bids) .pt:has(.pt-corner) { --pt-min:286px; } /* the trump corner needs the extra room */
   .tm .pt { --pt-min: 212px; }
   .wz:has(.t29-strip):has(.bidbox) .pt { --pt-min: 214px; } /* bidding in 29: the bid grid needs the room */
+  .wz:has(.wz-bids):has(.bidbox) .pt:has(.pt-corner) { --pt-min: 240px; } /* bidding in wizard: the bid panel and its hints need the room; the trump corner keeps most of its height */
   .tm-status, .wz-status { padding-block: 6px; }
   /* your turn to bid or bet: the panel already says what to do, so its status line and the bet-size chips give way */
   .wz-status:has(+ .bidbox), .wz-status:has(+ .pk-raise) { display: none; }

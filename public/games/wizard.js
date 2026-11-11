@@ -136,8 +136,8 @@
       for (let i = 0; i <= v.round; i++) {
         btns.push(`<button class="bidbtn ${ui.bid === i ? 'on' : ''}" aria-pressed="${ui.bid === i}" data-wz="pick" data-n="${i}" ${i === v.forbiddenBid ? 'disabled' : ''}>${i}</button>`);
       }
-      const note = v.forbiddenBid !== null ? `<div class="hint">Plus / Minus 1: as dealer you can’t bid ${v.forbiddenBid}, because the total would equal the number of tricks.</div>` : '';
-      const fsNote = v.foresight && v.foresight.length ? '<div class="hint">Foresight: you can’t see your own card, but you can see everyone else’s.</div>' : '';
+      const note = v.forbiddenBid !== null ? `<div class="hint">As dealer you can’t bid ${v.forbiddenBid}.</div>` : '';
+      const fsNote = v.foresight && v.foresight.length ? '<div class="hint">Foresight: you can’t see your own card.</div>' : '';
       return `<div class="bidbox"><div class="row" style="justify-content:space-between"><span class="label">Tricks you will win</span>
         <button class="btn small" data-wz="bid" ${ui.bid === null ? 'disabled' : ''}>${ui.bid === null ? 'Pick a number' : `Bid ${ui.bid}`}</button></div>
         <div class="bidgrid">${btns.join('')}</div>${note}${fsNote}</div>`;

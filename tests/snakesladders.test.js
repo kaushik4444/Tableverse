@@ -29,10 +29,10 @@ test('the board: 100 squares, every jump starts and ends on the board, no square
   assert.ok(!E.JUMPS[100] && !E.JUMPS[1]);
 });
 
-test('createGame: 2-4 players start off the board; other counts are refused', () => {
-  for (const n of [2, 3, 4]) { const g = E.createGame(people(n), {}, mulberry32(1)); assert.deepEqual(g.pos, Array(n).fill(0)); assert.equal(g.phase, 'playing'); assert.equal(g.turn, 0); }
+test('createGame: 2-6 players start off the board; other counts are refused', () => {
+  for (const n of [2, 3, 4, 5, 6]) { const g = E.createGame(people(n), {}, mulberry32(1)); assert.deepEqual(g.pos, Array(n).fill(0)); assert.equal(g.phase, 'playing'); assert.equal(g.turn, 0); }
   assert.throws(() => E.createGame(people(1), {}, Math.random));
-  assert.throws(() => E.createGame(people(5), {}, Math.random));
+  assert.throws(() => E.createGame(people(7), {}, Math.random));
 });
 
 test('a roll moves the player and passes the turn', () => {
@@ -181,7 +181,7 @@ test('bots: only the player to move has an action, and bots finish games for eve
   const g = game(2, {}, 1);
   assert.deepEqual(E.botAction(g, 'p0'), { type: 'roll' });
   assert.equal(E.botAction(g, 'p1'), null);
-  for (const n of [2, 3, 4]) {
+  for (const n of [2, 3, 4, 5, 6]) {
     for (const seed of [1, 2, 3]) {
       const G = plugin.create(people(n), {}, mulberry32(seed * 31 + n));
       let steps = 0;
@@ -195,12 +195,12 @@ test('bots: only the player to move has an action, and bots finish games for eve
   }
 });
 
-test('plugin: registered, 2-4 seats, time limit and both options, rules present', () => {
+test('plugin: registered, 2-6 seats, time limit and both options, rules present', () => {
   assert.equal(games.get('snakesladders'), plugin);
-  assert.deepEqual(plugin.seats, { min: 2, max: 4, default: 4 });
+  assert.deepEqual(plugin.seats, { min: 2, max: 6, default: 4 });
   assert.deepEqual(plugin.options.map((o) => o.key), ['exactFinish', 'sixAgain', 'timeLimit']);
   assert.ok(plugin.rules.length >= 4);
-  assert.deepEqual([0, 1, 2, 3].map((i) => plugin.seatLabel(i)), ['Red', 'Blue', 'Green', 'Yellow']);
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map((i) => plugin.seatLabel(i)), ['Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Purple']);
   const listed = games.list().find((x) => x.id === 'snakesladders');
   assert.ok(listed && listed.name === 'Snakes and Ladders');
 });

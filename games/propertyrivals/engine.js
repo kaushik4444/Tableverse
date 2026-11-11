@@ -7,7 +7,8 @@
  * lockup); then "manage" (build, sell, mortgage, trade) and end the turn. Doubles roll again; three doubles in a row
  * go to the lockup. In the lockup: pay a fine, use a card, or roll for doubles (a third failed try pays the fine).
  * Whoever owes more than they hold must raise cash (mortgage, sell buildings) or go bankrupt to their creditor.
- * The last player standing wins; the "short game" option ends after a set number of rounds on net worth.
+ * The last player standing wins. A "short game" ends after a set number of rounds, and a net-worth game ends at the
+ * end of the turn in which someone reaches the goal (2,000 or 3,000). Either way the richest player wins.
  */
 const B = require('./board');
 const pacing = require('../pacing');
@@ -27,6 +28,10 @@ function shuffled(n, rng) {
   return a;
 }
 
+// Game length choices: round limits, the net-worth goals, and 'off' (play until one player is left).
+const GAME_LENGTHS = ['off', '30', '60', 'nw2000', 'nw3000'];
+const NET_WORTH_GOALS = { nw2000: 2000, nw3000: 3000 };
+
 function createGame(players, options, rng = Math.random) {
   const n = players.length;
   if (n < 2 || n > 6) throw new Error('Property Rivals is for 2 to 6 players');
@@ -36,7 +41,7 @@ function createGame(players, options, rng = Math.random) {
     game: 'propertyrivals',
     n,
     rng,
-    options: { startCash, auction: o.auction !== false, jackpot: o.jackpot === true, rounds: ['30', '60'].includes(String(o.rounds)) ? String(o.rounds) : 'off' },
+    options: { startCash, auction: o.auction !== false, jackpot: o.jackpot === true, rounds: GAME_LENGTHS.includes(String(o.rounds)) ? String(o.rounds) : 'off', goal: NET_WORTH_GOALS[String(o.rounds)] || 0 },
     players: players.map((p, i) => ({ id: p.id, name: p.name, token: TOKENS[i], cash: startCash, pos: 0, inLockup: false, lockTries: 0, keeps: [], bankrupt: false, place: null })),
     land: B.SQUARES.map((s) => (B.buyable(s) ? { owner: -1, houses: 0, mortgaged: false } : null)),
     turn: 0,
@@ -168,15 +173,16 @@ function finish(g) {
   say(g, g.winner, 'won the game', 'win');
 }
 
-/** Pass the turn to the next player still in the game (counting rounds for the short game). */
+/** Pass the turn to the next player still in the game (counting rounds for the short game, and the net-worth goal). */
 function advance(g) {
   g.doubles = 0; g.again = false; g.trade = null;
+  if (g.options.goal && active(g).some((i) => netWorth(g, i) >= g.options.goal)) return finish(g);
   const prev = g.turn;
   let next = prev;
   do { next = (next + 1) % g.n; } while (g.players[next].bankrupt);
   if (next <= prev) {
     g.round++;
-    if (g.options.rounds !== 'off' && g.round > Number(g.options.rounds)) return finish(g);
+    if (/^\d+$/.test(g.options.rounds) && g.round > Number(g.options.rounds)) return finish(g);
   }
   g.turn = next;
   g.phase = 'roll';

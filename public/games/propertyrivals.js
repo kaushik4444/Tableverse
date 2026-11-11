@@ -87,7 +87,7 @@
     const jack = v.options.jackpot ? `<small>Rest Stop jackpot ${coins(v.jackpot)}</small>` : '';
     const cur = v.players[v.turn];
     const turn = v.phase !== 'gameOver' && cur ? `<div class="pr-turn ${colour(v, v.turn)}"><span class="pr-turntok">${cur.token}</span><b>${v.turn === v.me ? 'Your turn' : esc(cur.name) + '’s turn'}</b></div>` : '';
-    return `<div class="pr-mid">${turn}${dice}${newsHTML(v, walking, cardFresh)}<small>Round ${v.round}${v.options.rounds !== 'off' ? ' / ' + v.options.rounds : ''}</small>${jack}${card}</div>`;
+    return `<div class="pr-mid">${turn}${dice}${newsHTML(v, walking, cardFresh)}<small>Round ${v.round}${v.options.rounds !== 'off' ? (v.options.goal ? ' · first to ' + Number(v.options.goal).toLocaleString('en-GB') + ' net worth' : ' / ' + v.options.rounds) : ''}</small>${jack}${card}</div>`;
   }
 
   function guidance(v) {

@@ -21,6 +21,8 @@ module.exports = {
         { value: 'off', label: 'Until one player is left', desc: 'The classic game: it can take a very long time, and with cautious players it may never end.' },
         { value: '30', label: 'Short: 30 rounds', desc: 'After 30 rounds the richest player wins (cash, properties and buildings).' },
         { value: '60', label: 'Medium: 60 rounds', desc: 'After 60 rounds the richest player wins.' },
+        { value: 'nw2000', label: 'First to 2,000 net worth', desc: 'The game ends at the end of the turn in which someone reaches 2,000 net worth (cash, properties and buildings). The richest player wins.' },
+        { value: 'nw3000', label: 'First to 3,000 net worth', desc: 'The game ends at the end of the turn in which someone reaches 3,000 net worth (cash, properties and buildings). The richest player wins.' },
       ],
     },
     {
@@ -36,7 +38,7 @@ module.exports = {
     TIME_LIMIT_OPTION,
   ],
   rules: [
-    'Two to six players travel round a 40-square world tour. Everybody starts with the same coins (1,500 by default) and collects 200 every time they pass Start. The last player with money wins, or in a shorter game the richest player after the chosen number of rounds.',
+    'Two to six players travel round a 40-square world tour. Everybody starts with the same coins (1,500 by default) and collects 200 every time they pass Start. The last player with money wins. In a shorter game the richest player wins after the chosen number of rounds, and in a net-worth game the richest player wins once someone reaches the goal (2,000 or 3,000 net worth, checked at the end of each turn).',
     'Roll two dice and move. Landing on a free city, port or utility lets you buy it; if you do not, it is auctioned to everyone (when that option is on). Landing on someone else’s property means paying rent. Doubles let you roll again, but three doubles in a row send you to the lockup.',
     'Own every city of a colour and the rent on its bare cities doubles, and you may build: houses cost the amount on the colour (even building, up to four houses and then a hotel). Ports pay more the more ports their owner has. Utilities pay a multiple of your dice.',
     'Surprise and Community Fund squares draw a card. Taxes go to the bank. The lockup holds you until you pay 50, use a get-out card or roll doubles (a third failed try pays the fine).',
