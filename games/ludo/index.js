@@ -17,7 +17,7 @@ module.exports = {
       key: 'bonusRolls',
       type: 'select',
       label: 'Bonus rolls',
-      default: 'classic',
+      default: 'generous',
       choices: [
         { value: 'classic', label: 'Sixes only', desc: 'A six earns another roll. Three sixes in a row end your turn.' },
         { value: 'generous', label: 'Sixes, captures and home', desc: 'Capturing a token or getting one home also earns another roll.' },

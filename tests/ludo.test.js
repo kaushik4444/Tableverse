@@ -375,8 +375,8 @@ test('seats: two players sit opposite each other, colours follow the board clock
   assert.equal(E.absPos(two, 1, 0), 26, 'the second player of a two-player game enters at the opposite corner');
 });
 
-test('bonus rolls: captures and getting home earn another roll only in the generous variant', async () => {
-  for (const [mode, expectRoll] of [['classic', false], ['generous', true]]) {
+test('bonus rolls: a capture or getting home earns another roll by default; only "Sixes only" turns that off', async () => {
+  for (const [mode, expectRoll] of [['classic', false], ['generous', true], [undefined, true]]) {
     const g = E.createGame(people(2), { bonusRolls: mode }, mulberry32(1));
     readyAll(g);
     g.tokens[0] = [6, -1, -1, -1]; g.tokens[1] = [33, -1, -1, -1]; // p0 captures on abs 7
