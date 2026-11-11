@@ -808,6 +808,8 @@
         S.games = out.games || [];
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
+        // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
+        if (typeof out.impressumPublished === 'boolean') S.impressumPublished = out.impressumPublished;
       }
     } catch { /* offline: the home screen still renders, just without live data */ }
     render();
