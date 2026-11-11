@@ -116,6 +116,25 @@ async function assertVisibleAndClickable(page, selector, label) {
       });
     }
 
+    await test('publication off: a guest sees no Impressum link in the footer or on the sign-in sheet', async () => {
+      const off = await serve({
+        'GET /api/auth/session': () => ({ ok: true, authenticated: false, requireEmailVerification: true, csrfToken: 'test-csrf' }),
+        'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }),
+        'GET /api/games': () => ({ ok: true, games: require('../../games').list(), tables: [], impressumPublished: false }),
+      });
+      try {
+        const { page, ctx } = await scriptedPage(browser, { messages: [] });
+        await page.goto(off.url + '/');
+        await page.waitForSelector('[data-act="create"]', { timeout: 8000 });
+        await page.click('[data-act="create"]', { timeout: 5000 });
+        await page.waitForSelector('#loginForm', { timeout: 8000 });
+        assert.equal(await page.locator('a[href="/impressum.html"]').count(), 0, 'no Impressum link anywhere on the page');
+        await ctx.close();
+      } finally {
+        off.server.close();
+      }
+    });
+
     await test('publication off: no Impressum link in the home footer or the sign-in sheet', async () => {
       const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ id: 'me', name: 'Aarav', games: games.list(), impressumPublished: false }), { t: 'state', room: null, view: null }] });
       await page.goto(url + '/');
