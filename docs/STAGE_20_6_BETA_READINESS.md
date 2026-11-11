@@ -16,7 +16,7 @@
 | D-6 | Avoid non-essential broadcasts to **unverified** accounts during the beta. | Needs change C-C (not yet approved). Today the compose form defaults to every address. |
 | D-7 | Manual bug reports, account deletion requests and safety reports go to the support address. No moderation system or appeals workflow now; a simple manual process is documented. | `docs/SUPPORT_AND_REPORTING.md` (rewritten). |
 | D-8 | Match-result durability **Option A accepted**, with the limits and tester wording documented. | `docs/MATCH_RESULT_DURABILITY.md`. Testers must see the wording before they play. |
-| D-9 | No home address published. No legal identity or contact details invented. Drafts only; no claim of legal compliance or exemption. Legal review is not bought now. | Policy drafts stay unpublished. Open legal questions are listed in them and need the owner's approval. |
+| D-9 | No home address published. No legal identity or contact details invented. Drafts only; no claim of legal compliance or exemption. Legal review is not bought now. **Partly superseded (2026-11-11):** the owner has chosen to use their real legal name and home address in the Impressum (PR #101, Draft, unpublished). That is an owner decision; the details are kept out of Git. Everything else in D-9 stands. | Policy drafts stay unpublished. Open legal questions are listed in them and need the owner's approval. |
 | D-10 | **One owner/admin account only.** | Verified in code and checked by M-6. |
 
 ## 2. Facts checked against the code (2026-11-10)

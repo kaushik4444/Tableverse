@@ -1,6 +1,6 @@
 # Wave 1 launch readiness (updated 2026-11-11)
 
-**Verdict: NO-GO.** Wave 1 is a small, invite-only beta for adults. This is not a public launch. Do not declare GO until every applicable blocker below is resolved or explicitly accepted by the owner in writing.
+**Verdict: NO-GO.** Wave 1 is a small, invite-only beta for adults. This is not a public launch. Do not declare GO until every applicable blocker in section 7 is resolved. The owner may accept only the specific gaps the Stage 20.6 gate allows to be accepted (listed in section 8); live smoke tests and manual checks cannot be waived by general acceptance.
 
 Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the release gate).
 
@@ -102,7 +102,7 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 | Privacy Notice | Pending owner action | Draft only, unpublished. Approval needed (C-B) |
 | Beta Terms | Pending owner action | Draft only, unpublished. Approval needed (C-B) |
 | Support and reporting contact | Pending owner action | Placeholder (D-4). Not written into any document |
-| Impressum | Pending owner action | Implemented on Draft PR #101, not on `main`, not published. The owner has chosen to use their real legal name and home address on it. Those details are **not** recorded in Git |
+| Impressum | Pending owner action | Implemented on Draft PR #101, not on `main`, not published. The owner has chosen to use their real legal name and home address on it; this is an owner decision that supersedes the earlier D-9 position on home addresses (see STAGE_20_6 section 1). Those details are **not** recorded in Git |
 | Owner identity and contact details | Pending owner action | Owner supplies. Nothing is invented |
 | Remaining legal questions and risk acceptance | Pending owner action | The 14 questions in the privacy draft (O-6). Any remaining risk is accepted in writing by the owner before Wave 1 |
 
@@ -176,6 +176,12 @@ Test accounts must not be the testers' accounts. Record times and account ids, n
 
 ## 8. Go / no-go
 
-Wave 1 is GO only when every applicable item in sections 4 and 5 is verified or explicitly accepted by the owner, and section 7's blockers are cleared. Until then the verdict is **NO-GO**.
+Wave 1 is GO only when:
+
+- every applicable check in sections 4 and 5 is verified with evidence, and the live smoke tests and manual checks (S-, M- items) are recorded as run. These cannot be waived;
+- every blocker in section 7 is cleared;
+- the owner has accepted in writing only the gaps that the Stage 20.6 gate allows to be accepted: the direct-link fallback for policy text (C-B), the cleanup database-name gap (C-E), the existing-account 18+ question, and the remaining legal risk.
+
+Until then the verdict is **NO-GO**.
 
 Testers must see the Option A match-result wording (`docs/MATCH_RESULT_DURABILITY.md`) before they play.
