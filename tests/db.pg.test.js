@@ -495,8 +495,8 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       const legacy = (await x.query("INSERT INTO matches (room_code, game_id, seats) VALUES ('LEG001','wizard',2) RETURNING id")).rows[0].id;
       await x.query("INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot) VALUES ($1,$2,'Me',0,0,false,false)", [legacy, me]);
 
-      assert.deepEqual(await dbMatches.getPlayerStats(me), { played: 5, wins: 3, losses: 2 });
-      assert.deepEqual(await dbMatches.getPlayerStats(quitter), { played: 0, wins: 0, losses: 0 }, 'leaving early is not a loss');
+      assert.deepEqual(await dbMatches.getPlayerStats(me), { played: 5, wins: 3, losses: 2, draws: 0 });
+      assert.deepEqual(await dbMatches.getPlayerStats(quitter), { played: 0, wins: 0, losses: 0, draws: 0 }, 'leaving early is not a loss');
       const p = await dbMatches.getPlayerProfile(me, { memberSince: new Date(0) });
       assert.deepEqual([p.played, p.wins, p.losses, p.winRate], [5, 3, 2, 60]);
       const by = Object.fromEntries(p.perGame.map((g) => [g.gameId, g]));
@@ -508,7 +508,7 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       assert.equal(p.memberSince, new Date(0).toISOString());
     });
     await test('asking for the stats of something that is not an account id gives an empty record, not a database error', async () => {
-      assert.deepEqual(await dbMatches.getPlayerStats('sx'), { played: 0, wins: 0, losses: 0 });
+      assert.deepEqual(await dbMatches.getPlayerStats('sx'), { played: 0, wins: 0, losses: 0, draws: 0 });
       assert.equal((await dbMatches.getPlayerProfile('p_123')).played, 0);
     });
     await test('a database failure while reading stats is an error, not a misleading zero', async () => {
