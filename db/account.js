@@ -71,7 +71,7 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
   const pg = Math.min(Math.max(1, Math.floor(Number(page)) || 1), Math.max(1, pages));
   const r = await db.query(
     `SELECT * FROM (
-       SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.seats, mp.score, mp.is_winner, mp.left_early,
+       SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.seats, mp.score, mp.is_winner, mp.is_draw, mp.left_early,
          (SELECT COUNT(*)::int FROM match_participants x WHERE x.match_id = m.id AND x.is_bot = FALSE) AS humans
        FROM match_participants mp JOIN matches m ON m.id = mp.match_id
        WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
@@ -81,7 +81,7 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
     page: pg, pageSize: size, total, pages,
     items: r.rows.map((x) => ({
       gameId: x.game_id, finishedAt: iso(x.finished_at), seats: x.seats, humans: x.humans, score: x.score,
-      result: x.left_early ? 'left' : x.is_winner ? 'won' : 'lost', // 'left' is not counted in the statistics
+      result: x.left_early ? 'left' : x.is_draw ? 'draw' : x.is_winner ? 'won' : 'lost', // 'left' is not counted in the statistics; a draw is neither a win nor a loss
     })),
   };
 }

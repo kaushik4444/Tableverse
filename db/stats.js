@@ -57,7 +57,7 @@ function computeProfile(rows, { memberSince = null, recentCount = 10, metrics = 
     favouriteGame: perGame.length ? perGame[0].gameId : null, // most played; ties go to more wins
     perGame,
     streak: streakIn || { current, best },
-    recent: (recentIn || rows.slice(0, recentCount)).map((r) => ({ gameId: r.gameId, finishedAt: iso(r.finishedAt), won: Boolean(r.isWinner), score: Number.isFinite(r.score) ? r.score : null })),
+    recent: (recentIn || rows.slice(0, recentCount)).map((r) => ({ gameId: r.gameId, finishedAt: iso(r.finishedAt), won: Boolean(r.isWinner), draw: Boolean(r.isDraw), score: Number.isFinite(r.score) ? r.score : null })),
     lastPlayed: lastIn ? iso(lastIn) : rows.length && rows[0].finishedAt ? iso(rows[0].finishedAt) : null,
     memberSince: iso(memberSince),
   };

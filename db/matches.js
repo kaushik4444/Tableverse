@@ -166,7 +166,7 @@ async function pgProfile(playerId, memberSince) {
       ORDER BY m.id, mp.seat)`;
   const [grouped, recent, streaks] = await Promise.all([
     db.query(`${base} SELECT game_id, options, seats, is_winner, is_draw, score, COUNT(*)::int AS n FROM mine GROUP BY game_id, options, seats, is_winner, is_draw, score`, [playerId]),
-    db.query(`${base} SELECT game_id, finished_at, is_winner, score FROM mine ORDER BY finished_at DESC, id LIMIT 10`, [playerId]),
+    db.query(`${base} SELECT game_id, finished_at, is_winner, is_draw, score FROM mine ORDER BY finished_at DESC, id LIMIT 10`, [playerId]),
     db.query(`${base}, seq AS (
         SELECT is_winner, ROW_NUMBER() OVER (ORDER BY finished_at DESC, id) AS rn,
                ROW_NUMBER() OVER (PARTITION BY is_winner ORDER BY finished_at DESC, id) AS rk FROM mine)
@@ -181,7 +181,7 @@ async function pgProfile(playerId, memberSince) {
     metrics: gameStats,
     streak: { current: s.current, best: s.best },
     lastPlayed: s.last_played,
-    recent: recent.rows.map((r) => ({ gameId: r.game_id, finishedAt: r.finished_at, isWinner: r.is_winner, score: r.score })),
+    recent: recent.rows.map((r) => ({ gameId: r.game_id, finishedAt: r.finished_at, isWinner: r.is_winner, isDraw: r.is_draw, score: r.score })),
   });
 }
 
