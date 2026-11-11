@@ -148,16 +148,7 @@
       const slots = YARD0.map((p) => rot(p, k)).map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="0.78" fill="${active ? SEAT[k].dark : '#cbd5e1'}" opacity="${active ? 0.22 : 0.5}"/>`).join('');
       return `<g><rect class="${k === turnK ? 'ludo-turn-home' : ''}" x="${x - 3}" y="${y - 3}" width="6" height="6" rx="0.5" fill="${active ? SEAT[k].hex : '#cbd5e1'}"/><circle cx="${x}" cy="${y}" r="2.45" fill="#fff" opacity="${active ? 0.92 : 0.6}"/>${slots}</g>`;
     }).join('');
-    // each home triangle gets softly rounded corners (quadratic curves), like the squares
-    const roundTri = (pts, r) => {
-      const P = pts.split(' ').map((q) => q.split(',').map(Number));
-      const pull = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const t = Math.min(r / L, 0.5); return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; };
-      return P.map((cur, i) => {
-        const a = pull(cur, P[(i + 2) % 3]); const b = pull(cur, P[(i + 1) % 3]);
-        return `${i ? 'L' : 'M'}${a[0]},${a[1]} Q${cur[0]},${cur[1]} ${b[0]},${b[1]}`;
-      }).join(' ') + 'Z';
-    };
-    const tri = (pts, k) => `<path d="${roundTri(pts, 0.45)}" fill="${seats.includes(k) ? SEAT[k].hex : '#cbd5e1'}"/>`;
+    const tri = (pts, k) => `<path d="${softTriPath(pts.split(' '), 0.45)}" fill="${seats.includes(k) ? SEAT[k].hex : '#cbd5e1'}"/>`;
     const centre = `${tri('6,6 6,9 7.5,7.5', 0)}${tri('6,6 9,6 7.5,7.5', 1)}${tri('9,6 9,9 7.5,7.5', 2)}${tri('6,9 9,9 7.5,7.5', 3)}`;
     return `<svg class="ludo-svg" viewBox="0 0 15 15" aria-hidden="true" focusable="false"><rect width="15" height="15" rx="1.2" fill="#fff"/>${yards}${cells.join('')}${centre}<circle cx="7.5" cy="7.5" r="0.28" fill="#fff" opacity=".9"/></svg>`;
   }
