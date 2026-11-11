@@ -25,9 +25,9 @@ function serve(api = {}) {
       const handler = api[`${req.method} ${rel}`] || api[`${req.method} ${rel}${u.search}`];
       let body = '';
       req.on('data', (d) => (body += d));
-      req.on('end', () => {
+      req.on('end', async () => {
         calls.push({ method: req.method, path: rel + u.search, body });
-        let out = handler ? handler({ url: u, body }) : { ok: true };
+        let out = handler ? await handler({ url: u, body }) : { ok: true }; // handlers may be async (a test can hold a response)
         let status = 200;
         if (out && out.__status) { status = out.__status; out = out.body; }
         res.writeHead(status, { 'content-type': 'application/json' });

@@ -116,6 +116,31 @@ async function assertVisibleAndClickable(page, selector, label) {
       });
     }
 
+    await test('timing: a sign-in sheet opened before /api/games answers still gets the link once the flag arrives', async () => {
+      let release;
+      const gate = new Promise((r) => { release = r; });
+      const slow = await serve({
+        'GET /api/auth/session': () => sessionOk(),
+        'GET /api/auth/csrf': () => ({ csrfToken: 'test-csrf' }),
+        'GET /api/games': async () => { await gate; return { ok: true, games: require('../../games').list(), tables: [], impressumPublished: true }; },
+      });
+      try {
+        // authRequired opens the sheet at once and asks for a snapshot, whose answer (the flag) is still held back here
+        const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+        await page.goto(slow.url + '/');
+        await page.waitForSelector('#loginForm', { timeout: 8000 });
+        assert.equal(await page.locator('#auth-overlay .auth-legal a').count(), 0, 'sheet open before the flag: no link yet');
+        release();
+        await page.waitForSelector('#auth-overlay .auth-legal a[href="/impressum.html"]', { state: 'attached', timeout: 8000 });
+        await page.fill('#loginEmail', 'typed@example.com');
+        assert.equal(await page.inputValue('#loginEmail'), 'typed@example.com', 'typed input survives the update');
+        await ctx.close();
+      } finally {
+        release();
+        slow.server.close();
+      }
+    });
+
     await test('publication off: a guest sees no Impressum link in the footer or on the sign-in sheet', async () => {
       const off = await serve({
         'GET /api/auth/session': () => ({ ok: true, authenticated: false, requireEmailVerification: true, csrfToken: 'test-csrf' }),
