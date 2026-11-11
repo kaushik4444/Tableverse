@@ -224,7 +224,9 @@
       if (home && ui.isHex) return;
       const legal = !busy() && i === v.me && v.canMove && (v.legalTokens || []).includes(t);
       const what = pos === -1 ? `Bring token ${t + 1} out` : pos >= G.lap && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
-      const label = `${esc(p.name)}: ${what}`;
+      // the label also says where the token stands, the text the removed move list used to give
+      const at = pos === -1 ? 'in the yard' : pos >= G.lap ? `${G.finished - pos} steps from home` : `${pos + 1} squares along the track`;
+      const label = `${esc(p.name)}: ${what}, ${at}`;
       const moved = ui.plans.has(`${i}-${t}`);
       const pid = `${i}-${t}`;
       out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / G.S) * 100}%;top:${(y / G.S) * 100}%"><i></i></button>`);
