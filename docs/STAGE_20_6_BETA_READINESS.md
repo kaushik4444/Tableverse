@@ -1,6 +1,6 @@
-# Stage 20.6: invite-only beta readiness (updated 2026-11-10)
+# Stage 20.6: invite-only beta readiness (updated 2026-11-11)
 
-**Status: NOT A GO YET.** The server-side gaps for a signed-in, invited beta are closed on `main` (through PR #96). Before Wave 1, three small code changes need the owner's approval (C-A, C-B and C-D in section 3), the policy text needs approval, and several manual checks must be recorded on the live site. C-C is deferred, because Wave 1 sends no broadcasts.
+**Status: technical implementation complete; NOT A GO for Wave 1 yet.** The server-side gaps for a signed-in, invited beta are closed on `main` (through PR #106, merge commit `297acc4`). The 18+ confirmation (C-A, PR #98) and voice off by default (C-D, PR #99) are implemented and were verified on the live site by the owner. Still open before Wave 1: the policy text and its reachable pages (C-B, needs approval), the live smoke tests and manual checks in section 4, and the owner decisions in section 6. C-C is deferred, because Wave 1 sends no broadcasts. Policy pages (C-B) and the Impressum (PR #101, Draft) are not published.
 
 **Scope:** free, invite-only beta for friends and friends-of-friends. Signed-in players only. Adults aged 18 and over. One owner account and no other admin. No ads, payments or promotional e-mail campaigns. Nothing in this document authorises a production change, a secret change, a credential rotation, a cleanup run, a database change, a load test, a new admin account or a merge.
 
@@ -9,14 +9,14 @@
 | # | Decision (owner, 2026-11-10) | What it means for the work |
 |---|---|---|
 | D-1 | Beta is **signed-in only**. No guest play, no anonymous player creation. | Guest voice and guest TURN questions do not apply. Confirmed in code (section 2). |
-| D-2 | Audience is **18+**. A clear 18+ confirmation at registration, enforced on the server if feasible. **No full date of birth.** | Needs change C-A (not yet approved). |
-| D-3 | **Voice withheld** from the beta until the Metered HTTP 401 is fixed and cross-network voice is verified. Do not rotate or delete static TURN credentials. | Needs change C-D (not yet approved). Metered work is deferred. |
+| D-2 | Audience is **18+**. A clear 18+ confirmation at registration, enforced on the server if feasible. **No full date of birth.** | Implemented as C-A (PR #98). |
+| D-3 | **Voice withheld** from the beta until the Metered HTTP 401 is fixed and cross-network voice is verified. Do not rotate or delete static TURN credentials. | Implemented as C-D (PR #99): voice is off unless `VOICE_ENABLED` is exactly `true`. Metered work is deferred. |
 | D-4 | Support and privacy contact: the owner's existing secondary e-mail for Waves 1 and 2. | Placeholder until the owner provides the address. Not written into any document. |
 | D-5 | Free, invite-led, limited to friends and friends-of-friends. No ads, payments or promotional campaigns. | Promotional broadcasts are not planned for the beta. |
 | D-6 | Avoid non-essential broadcasts to **unverified** accounts during the beta. | Needs change C-C (not yet approved). Today the compose form defaults to every address. |
 | D-7 | Manual bug reports, account deletion requests and safety reports go to the support address. No moderation system or appeals workflow now; a simple manual process is documented. | `docs/SUPPORT_AND_REPORTING.md` (rewritten). |
 | D-8 | Match-result durability **Option A accepted**, with the limits and tester wording documented. | `docs/MATCH_RESULT_DURABILITY.md`. Testers must see the wording before they play. |
-| D-9 | No home address published. No legal identity or contact details invented. Drafts only; no claim of legal compliance or exemption. Legal review is not bought now. | Policy drafts stay unpublished. Open legal questions are listed in them and need the owner's approval. |
+| D-9 | No home address published. No legal identity or contact details invented. Drafts only; no claim of legal compliance or exemption. Legal review is not bought now. **Partly superseded (2026-11-11):** the owner has decided to use their real legal name and home address in the Impressum (PR #101, Draft, unpublished). This is an owner decision, not a legal approval: the Impressum text and its publication remain pending owner approval, and the details are kept out of Git. Everything else in D-9 stands. | Policy drafts stay unpublished. Open legal questions are listed in them and need the owner's approval. |
 | D-10 | **One owner/admin account only.** | Verified in code and checked by M-6. |
 
 ## 2. Facts checked against the code (2026-11-10)
@@ -26,9 +26,9 @@
 | Guest play does not exist | **Verified** | The socket answers "Please log in to play." (`server.js`, around line 1575). `createAnonymousPlayer` (`db/players.js`) has no caller outside its module and the memory store. |
 | Play needs a verified e-mail | **Verified** | `server.js` around line 1633 ("Please verify your email before entering the lobby"). |
 | Privacy, terms or support pages are reachable from the app | **Not so** | No link in `public/` (checked). Task C-B. |
-| An age question exists | **No** | Registration form (`public/app.js` lines 438–445): name, username, e-mail, password only. `registerEmail` (`db/auth.js` line 162) takes no age. Task C-A. |
+| An age question exists | **Yes** (since PR #98, 2026-11) | Registration form has a required unticked box, "I am 18 or older." (`public/app.js` line 445). `registerEmail` refuses without it (`db/auth.js` line 166) and stores only `adult_confirmed_at` (migration `020_adult_confirmation.sql`). No date of birth is stored. |
 | Account-category broadcasts reach unverified accounts | **Yes** | `db/broadcast.js` `recipientsFrom`: only `promo` requires a verified address. The compose form's first option, "Everyone with an address" (`public/admin.js` line 296), is preselected. Task C-C. |
-| Voice can pass the release gate on the static fallback | **No** | `server.js` `turnStatus()` reports Metered's state whenever Metered is configured, and `lib/voiceRelay.js` `iceExpiresAt` returns null for the static pair. The gate needs `turnStatus: ready` with a non-null expiry, which the 401 prevents. No voice switch exists in code. Task C-D. |
+| Voice can pass the release gate on the static fallback | **No, and voice is off** | `lib/voiceRelay.js` `voiceEnabled` returns true only for `VOICE_ENABLED=true` (fail closed). While off, `server.js` hands out no TURN login or ICE list and refuses voice messages, and `public/app.js` shows no voice button. `render.yaml` does not set `VOICE_ENABLED`, so the default is off. Metered's 401 is still unfixed and deferred. |
 | Chat reports can be reviewed in the console | **No** | The Feedback tab reads `feedback` rows only. There is no report list; the Overview shows a count. Reports are reviewed with the read-only query in `docs/CHAT_MODERATION.md`. |
 | The full-database cleanup command empties `chat_reports` | **As documented** (`docs/CHAT_MODERATION.md`) | Not re-traced end to end in this pass. It affects the retention decision (O-8 below). |
 | Durability behaviour as documented | **Verified** | Retry delays `[500, 1500, 4000, 10000, 20000]` ms; spool default `os.tmpdir()/tableverse-match-spool`; replay every 10 minutes; SIGTERM drain 15 s; `.failed` files; `[matches] NOT SAVED` log (`db/matchQueue.js`, `server.js`). Render restart behaviour is **not verified** (manual check M-3). |
@@ -37,11 +37,11 @@
 | Cleanup safeguards | **Verified per script**, corrected in the runbook | `cleanup-unverified.js` has a read-only dry run and a `--max` cap; `cleanup-user-data.js` has `--confirm` and `--expect-host`. The workflow uses only the first. |
 | Live production settings | **Not verifiable from the repository** | `render.yaml` sets `REQUIRE_EMAIL_VERIFICATION: "true"` and comments it as a temporary switch; `MATCH_SPOOL_DIR` is unset; GitHub variables and reviewers, and Render's secrets, are not visible here. Manual checks M-1 to M-9. |
 
-## 3. Proposed code changes (NOT implemented; approval needed)
+## 3. Code changes
 
-Each change is described with its exact anchors. None is implemented or tested yet. Each would go in its own small PR, after approval.
+C-A and C-D were approved and implemented in their own PRs with tests (PR #98 and PR #99). C-B, C-C, C-E, C-F and C-G are not implemented. Their descriptions below are the plans as they were proposed; where the built version differs, the status line says so.
 
-**C-A. 18+ confirmation at registration (D-2).**
+**C-A. 18+ confirmation at registration (D-2). IMPLEMENTED (PR #98). Production verified by the owner.** Built as: required checkbox "I am 18 or older."; the server refuses without it; migration **020** (not 017) adds `players.adult_confirmed_at`. The tests are in CI.
 - `public/app.js`, registration form (lines 438–445): add a required, unticked checkbox "I confirm I am 18 or older." Send `ageConfirmed: true` in the `postJson('/api/auth/register', …)` call (line 505).
 - `lib/authRoutes.js`, `POST /api/auth/register` (lines 217–220): refuse unless `body.ageConfirmed === true`, with 400 "You must confirm you are 18 or older to create an account."
 - Optional, recommended: migration 017 adds `players.age_confirmed_at TIMESTAMPTZ`, set at registration. It records that the confirmation was given, and stores no date of birth. Needs approval.
@@ -63,7 +63,7 @@ Each change is described with its exact anchors. None is implemented or tested y
 - Tests: the audience-count expectations in `tests/admin.pg.test.js` and the broadcast tests in `tests/admin.test.js` must change accordingly.
 - Operational alternative with no code change: always choose "Verified accounts" manually. Not recommended, because the default selects every address.
 
-**C-D. Withhold voice for the beta (D-3).**
+**C-D. Withhold voice for the beta (D-3). IMPLEMENTED (PR #99). Production verified by the owner.** Built as: `VOICE_ENABLED` fails closed (only the exact value `true` enables voice). The default is off, so `render.yaml` needs no change. The description below is the original plan.
 - A new setting `VOICE_ENABLED`, default on in code, set to `false` for the beta in `render.yaml` and in Render's environment (a Render change, so it needs approval).
 - `server.js`: the voice message handler (around line 1075) refuses when disabled; `voiceFor` (around line 700) returns an empty list; the welcome payload carries `voiceEnabled: false`.
 - `public/app.js` `voiceButtonsHTML` (line 250): returns nothing when `voiceEnabled` is false.
@@ -88,13 +88,13 @@ Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** o
 
 **Repository and deployment**
 - [x] Protect-Main requires the CI checks before merge (`docs/OPERATIONS_RUNBOOK.md`, "Repository safety"). Ruleset status checked live through the rulesets API on 2026-11-10: `Protect-Main` is active on the branch target.
-- [M] M-1: latest `main` deployed on Render; `/healthz` 200; `/readyz` 200 `ready` with `store: postgres`.
+- [M] M-1: latest `main` deployed on Render; `/healthz` 200; `/readyz` 200 with body `ready` (optionally followed by match-queue counts); `server.started` log shows `store: postgres`.
 - [M] M-3: `MATCH_SPOOL_DIR` unset as in `render.yaml`; Render's behaviour on a restart (same machine or fresh) checked in the dashboard.
 
 **Accounts and sessions**
 - [x] One active session per account; sign-out everywhere; suspension revokes sessions and devices (CI tests).
 - [ ] S-2 to S-5 on the live domain: sign-up, verification e-mail, verification link, login, logout, reset.
-- [ ] **C-A** 18+ confirmation approved, built and tested.
+- [x] **C-A** 18+ confirmation built, tested and live (PR #98; owner-confirmed).
 - [ ] **D-9 / C-B** policy text approved and reachable (or the owner accepts the direct-link fallback in writing).
 
 **Play and safety**
@@ -104,7 +104,7 @@ Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** o
 - [ ] S-9: a feedback item appears in the Feedback tab.
 
 **Voice**
-- [ ] **C-D** voice withheld: the voice button is absent, and a voice request is refused on the live site.
+- [x] **C-D** voice withheld: built and live (PR #99; owner-confirmed the disabled behaviour). Still to record: the S-12 check.
 - [x] A relayed two-way call worked once (owner's WebRTC dump).
 - Re-enabling voice is deferred (section 6).
 
@@ -132,7 +132,7 @@ Run on the live domain with two test accounts that are not testers. Record times
 
 | # | Check | Expected |
 |---|---|---|
-| S-1 | `/healthz`, `/readyz`, `server.started` in the logs | 200, 200 `ready`, `store: postgres` |
+| S-1 | `/healthz`, `/readyz`, `server.started` in the logs | 200, 200 `ready`, and `server.started` shows `store: postgres` |
 | S-2 | Sign up (after C-A) | Needs the 18+ tick; account created; verification e-mail arrives |
 | S-3 | Play before verifying | Refused with a verification message |
 | S-4 | Open the verification link; reuse it | Verified; second use refused |
@@ -141,7 +141,7 @@ Run on the live domain with two test accounts that are not testers. Record times
 | S-7 | Keep me signed in: sign in with the box ticked. In the browser's developer tools, delete **only** the `ct_session` cookie (keep `ct_device`), then reload | Signed in again, restored from the device cookie. Settings > Sessions > sign out of every device ends it, and the device cookie stops working |
 | S-8 | Chat: send, report, block | Report stored (checked with the read-only query); block hides chat and refuses invites |
 | S-9 | Feedback form, then the Feedback tab | Item listed as new |
-| S-10 | Owner console: Overview, Users lookup, Broadcasts preview (no send) | Loads for the owner; a second account gets 403 on `/api/admin/*` |
+| S-10 | Owner console: Overview, Users lookup, Broadcasts preview (no send) | Loads for the owner; a second account gets 403 on `GET /api/admin/overview` (`GET /api/admin/me` is not a test point: it returns 200 with `isAdmin: false` for any signed-in account, by design) |
 | S-11 | Deletion on a throwaway account | Removed; its match shows `Deleted player` |
 | S-12 | Voice (after C-D) | Voice button absent; voice request refused |
 | S-13 | Logs after the test | No `[matches] NOT SAVED`, no `process.crash`; `[stats]` present |
@@ -169,9 +169,9 @@ After each deploy, repeat S-1, S-6 and S-13.
 **Current verdict: NO-GO for Wave 1.** Blocking items are listed below. The list is a minimum: a go requires every item in section 4 that applies to the chosen setup to be marked [x], including the known gap in cleanup unless the owner accepts it in writing.
 
 **Launch blockers (must be done before the first invitation):**
-1. C-A approved and built: 18+ confirmation at registration, enforced on the server.
+1. ~~C-A approved and built~~ **Done (PR #98, owner-confirmed).**
 2. Owner rule recorded: no broadcasts during Wave 1. C-C (verified-only broadcasts) is deferred, so it is not a blocker.
-3. C-D approved and built, and `VOICE_ENABLED=false` set on Render after approval; voice verified off on the live site.
+3. ~~C-D approved and built~~ **Done (PR #99, owner-confirmed).** Voice is off by default; no Render change is needed.
 4. Policy text approved and reachable (C-B), or the owner accepts a direct-link fallback in writing.
 5. Smoke tests S-2 to S-6, S-8, S-9, S-11 and S-12 run on the live site with the results recorded.
 6. M-1, M-5, M-6 and M-7 recorded.
