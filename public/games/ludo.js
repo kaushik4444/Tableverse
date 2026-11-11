@@ -133,7 +133,7 @@
   function crossSVG(seats) {
     const G = CROSS;
     const cells = [];
-    const rect = (c, r, fill) => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.14" fill="${fill}" stroke="#94a3b8" stroke-width="0.05"/>`;
+    const rect = (c, r, fill) => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.3" fill="${fill}" stroke="#94a3b8" stroke-width="0.05"/>`;
     CROSS_RING.forEach(([c, r], i) => {
       const startSeat = G.starts.indexOf(i);
       const used = startSeat >= 0 && seats.includes(startSeat);
@@ -150,7 +150,7 @@
     }).join('');
     const tri = (pts, k) => `<polygon points="${pts}" fill="${seats.includes(k) ? SEAT[k].hex : '#cbd5e1'}"/>`;
     const centre = `${tri('6,6 6,9 7.5,7.5', 0)}${tri('6,6 9,6 7.5,7.5', 1)}${tri('9,6 9,9 7.5,7.5', 2)}${tri('6,9 9,9 7.5,7.5', 3)}`;
-    return `<svg class="ludo-svg" viewBox="0 0 15 15" aria-hidden="true" focusable="false"><rect width="15" height="15" rx="0.7" fill="#fff"/>${yards}${cells.join('')}${centre}<circle cx="7.5" cy="7.5" r="0.28" fill="#fff" opacity=".9"/></svg>`;
+    return `<svg class="ludo-svg" viewBox="0 0 15 15" aria-hidden="true" focusable="false"><rect width="15" height="15" rx="1.2" fill="#fff"/>${yards}${cells.join('')}${centre}<circle cx="7.5" cy="7.5" r="0.28" fill="#fff" opacity=".9"/></svg>`;
   }
 
   function hexSVG(b, seats) {
@@ -182,7 +182,7 @@
     const lanes = b.lanes.map((lane, k) => lane.map((t) => sq(t, used(k) ? SEAT[k].hex : '#e2e8f0', '#fff')).join('')).join('');
     const homes = b.homes.map((tri, k) => `<polygon points="${tri.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
     const hex = `<polygon points="${b.hexagon.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="#fff" stroke="#64748b" stroke-width="0.4" stroke-linejoin="round"/>`;
-    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="2" fill="#fff"/>${yards}${track}${lanes}${hex}${homes}<circle cx="50" cy="50" r="${f(b.size * 0.35)}" fill="#fff" opacity=".9"/></svg>`;
+    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="6" fill="#fff"/>${yards}${track}${lanes}${hex}${homes}<circle cx="50" cy="50" r="${f(b.size * 0.35)}" fill="#fff" opacity=".9"/></svg>`;
   }
 
   function boardSVG(v) {
