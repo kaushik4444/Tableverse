@@ -34,9 +34,9 @@ for (let k = 0; k < 6; k++) {
 const PER_ARM = rawTrack.length / 6; // 13
 const TRACK = rawTrack.length; // 78
 const STARTS = [0, 1, 2, 3, 4, 5].map((k) => k * PER_ARM + LEN);
-// safe squares: each start, and the third square up each arm's left column (the star on the printed board)
+// safe squares: each start, and the square five before it along the track (the star on the arm's left column)
 const SAFE = new Set();
-for (let k = 0; k < 6; k++) { SAFE.add(STARTS[k]); SAFE.add(k * PER_ARM + 2); }
+for (let k = 0; k < 6; k++) { SAFE.add(STARTS[k]); SAFE.add(STARTS[k] - 5); }
 // each home lane, from the square beside the start in to the hexagon
 const rawLanes = [];
 for (let k = 0; k < 6; k++) { const lane = []; for (let row = LEN - 1; row >= 1; row--) lane.push([...cell(k, row, 0), k]); rawLanes.push(lane); }

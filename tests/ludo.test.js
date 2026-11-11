@@ -471,7 +471,7 @@ test('six-arm board: 5-6 players share a 78-square track with a start on each ar
     assert.equal(g.players[n - 1].color, E.SEAT_COLORS[n - 1]);
     assert.equal(E.absPos(g, 1, 0), 19, 'the second seat enters on the second arm tip');
     assert.equal(E.absPos(g, 0, 76), 4, 'the seat walks 77 squares, ending just before its own start');
-    assert.ok(g.geo.safe.has(6) && g.geo.safe.has(2) && !g.geo.safe.has(1), 'safe squares: each start and the star on each arm');
+    assert.ok(g.geo.safe.has(6) && g.geo.safe.has(1) && !g.geo.safe.has(2) && g.geo.safe.size === 12, 'safe squares: each start and the square five before it');
   }
   const six = E.createGame(people(6), {}, mulberry32(3));
   six.phase = 'moving'; six.turn = 0; six.dice = 6;
