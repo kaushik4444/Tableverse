@@ -227,7 +227,7 @@
     }));
     if (ui.isHex) {
       v.players.forEach((p, i) => {
-        const done = p.tokens.filter((x) => x === G.finished).length;
+        const done = shownTokens[i].filter((x) => x === G.finished).length; // counted when the walk ends, not before
         if (!done) return;
         const c = G.where(seats[i], G.finished, 0);
         out.push(`<span class="ludo-home-count" style="left:${c[0]}%;top:${c[1]}%;--c:${SEAT[seats[i]].hex};--d:${SEAT[seats[i]].dark}" aria-label="${esc(p.name)}: ${done} of 4 home">${done}/4</span>`);
