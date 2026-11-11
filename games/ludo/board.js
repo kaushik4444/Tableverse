@@ -3,8 +3,9 @@
 //
 // A regular hexagon sits in the middle (the home). From each of its six edges an arm runs straight out: three squares
 // wide and six long, squares lined up with the arm. The arms point up, up-right, down-right, down, down-left and up-left.
-// An arm's middle column is that seat's home lane (five squares); the square at its tip is the seat's start, with an
-// arrow pointing in. The two outer columns are track. The track goes once round the outside of the star: out along an
+// An arm's middle column is that seat's home lane (five squares); the square at its tip carries an arrow pointing in
+// (a token turns into the lane there). The seat's start, where tokens enter, is the bottom square of the arm's right
+// column, coloured. The two outer columns are track. The track goes once round the outside of the star: out along an
 // arm's left column, across its start, back along its right column, then on to the next arm. A yard is the equilateral
 // triangle between two arms, with its point on a corner of the hexagon.
 // The server and the browser both use this file's output (the browser gets it in the table view), so they agree.
@@ -33,10 +34,10 @@ for (let k = 0; k < 6; k++) {
 }
 const PER_ARM = rawTrack.length / 6; // 13
 const TRACK = rawTrack.length; // 78
-const STARTS = [0, 1, 2, 3, 4, 5].map((k) => k * PER_ARM + LEN);
-// safe squares: each start, and the square five before it along the track (the star on the arm's left column)
+const STARTS = [0, 1, 2, 3, 4, 5].map((k) => k * PER_ARM + LEN + 1); // the bottom square of the arm's right column
+// safe squares: each start, and the third square from the bottom of the same right column (marked with a star)
 const SAFE = new Set();
-for (let k = 0; k < 6; k++) { SAFE.add(STARTS[k]); SAFE.add(STARTS[k] - 5); }
+for (let k = 0; k < 6; k++) { SAFE.add(STARTS[k]); SAFE.add(STARTS[k] + 2); }
 // each home lane, from the square beside the start in to the hexagon
 const rawLanes = [];
 for (let k = 0; k < 6; k++) { const lane = []; for (let row = LEN - 1; row >= 1; row--) lane.push([...cell(k, row, 0), k]); rawLanes.push(lane); }

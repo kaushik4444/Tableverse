@@ -172,10 +172,11 @@
     }).join('');
     const track = b.track.map((t, i) => {
       const k = startSeat(i);
-      let out = sq(t, k >= 0 ? (used(k) ? SEAT[k].light : '#f1f5f9') : '#ffffff');
-      // an arrow at each start points in along the arm, towards the home
-      if (k >= 0) out += mark(t.p, '▲', used(k) ? SEAT[k].hex : '#94a3b8', b.size * 0.8, t.ang + 180 + 90);
-      else if (b.safe.includes(i)) out += mark(t.p, '★', '#94a3b8', b.size * 0.7);
+      const exit = b.starts.indexOf((i + 1) % b.track.length); // the square just before a start sits at the arm's tip
+      let out = sq(t, k >= 0 ? (used(k) ? SEAT[k].hex : '#cbd5e1') : '#ffffff');
+      // the arrow at the tip of each arm points in along the home lane, towards the centre of the hexagon
+      if (exit >= 0) out += mark(t.p, '▲', used(exit) ? SEAT[exit].hex : '#94a3b8', b.size * 0.8, t.ang + 180 + 90);
+      else if (b.safe.includes(i)) out += mark(t.p, '★', k >= 0 ? '#fff' : '#94a3b8', b.size * 0.7);
       return out;
     }).join('');
     const lanes = b.lanes.map((lane, k) => lane.map((t) => sq(t, used(k) ? SEAT[k].hex : '#e2e8f0', '#fff')).join('')).join('');
