@@ -798,6 +798,15 @@
   }
 
   /** Home data for visitors (no socket): the public games list, the live table directory and the site announcement. */
+  // A sign-in sheet that was already open when the flag arrived gets the link added (or removed) in place, so typed input survives.
+  function syncImpressumLink() {
+    const sheet = document.querySelector('#auth-overlay .sheet');
+    if (!sheet) return;
+    const link = sheet.querySelector('.auth-legal');
+    if (S.impressumPublished && !link) sheet.insertAdjacentHTML('beforeend', '<p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>');
+    else if (!S.impressumPublished && link) link.remove();
+  }
+
   async function loadSnapshot() {
     S.guest = true;
     S.rejoin = []; // a stale "your game is waiting" banner must not survive into guest browsing
@@ -810,6 +819,7 @@
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
         // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
         if (typeof out.impressumPublished === 'boolean') S.impressumPublished = out.impressumPublished;
+        syncImpressumLink();
       }
     } catch { /* offline: the home screen still renders, just without live data */ }
     render();
