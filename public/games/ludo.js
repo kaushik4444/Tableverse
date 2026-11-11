@@ -172,7 +172,7 @@
     }).join('');
     const track = b.track.map((t, i) => {
       const k = startSeat(i);
-      const exit = b.starts.indexOf((i + 1) % b.track.length); // the square just before a start sits at the arm's tip
+      const exit = b.starts.indexOf((i + 2) % b.track.length); // the arm's tip is two squares before its start
       let out = sq(t, k >= 0 ? (used(k) ? SEAT[k].hex : '#cbd5e1') : '#ffffff');
       // the arrow at the tip of each arm points in along the home lane, towards the centre of the hexagon
       if (exit >= 0) out += mark(t.p, '▲', used(exit) ? SEAT[exit].hex : '#94a3b8', b.size * 0.8, t.ang + 180 + 90);

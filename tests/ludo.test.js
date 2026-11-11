@@ -469,14 +469,14 @@ test('six-arm board: 5-6 players share a 78-square track with a start on each ar
     assert.equal(g.geo.track, 78); assert.equal(g.geo.lap, 77); assert.equal(g.geo.finished, 82);
     assert.deepEqual(g.players.map((p) => p.seat), [0, 1, 2, 3, 4, 5].slice(0, n));
     assert.equal(g.players[n - 1].color, E.SEAT_COLORS[n - 1]);
-    assert.equal(E.absPos(g, 1, 0), 20, 'the second seat enters on the second arm tip');
-    assert.equal(E.absPos(g, 0, 76), 5, 'the seat walks 77 squares, ending just before its own start');
-    assert.ok(g.geo.safe.has(7) && g.geo.safe.has(9) && !g.geo.safe.has(8) && !g.geo.safe.has(6) && g.geo.safe.size === 12, 'safe squares: each start and the starred square two after it');
+    assert.equal(E.absPos(g, 1, 0), 21, 'the second seat enters on the second arm tip');
+    assert.equal(E.absPos(g, 0, 76), 6, 'the seat walks 77 squares, ending just before its own start');
+    assert.ok(g.geo.safe.has(8) && g.geo.safe.has(3) && !g.geo.safe.has(9) && !g.geo.safe.has(6) && g.geo.safe.size === 12, 'safe squares: each start and the star on the other column');
   }
   const six = E.createGame(people(6), {}, mulberry32(3));
   six.phase = 'moving'; six.turn = 0; six.dice = 6;
   six.tokens[0][0] = 0; six.tokens[0][1] = 2;
-  // seat 0 lands on absolute square 13; seat 1 starts at 20, so its token at relative position 71 sits on absolute square 12
+  // seat 0 lands on absolute square 14; seat 1 starts at 21, so its token at relative position 71 sits on absolute square 12
   six.tokens[1][0] = 71;
   const r = E.applyAction(six, six.players[0].id, { type: 'move', token: 0 });
   assert.ok(r.ok, 'move ok');

@@ -42,7 +42,7 @@ module.exports = {
     '2-6 players, four tokens each. Everyone starts with all tokens in their yard. Two to four players use a cross-shaped board; five or six use a six-arm board, with a colour on each arm.',
     'Roll a six to bring a token out onto your starting square. A six also earns another roll.',
     'Move your tokens clockwise around the board by the number rolled. After a full lap your token turns into its own coloured home column and must reach the centre by exact count.',
-    'Land on an opponent\'s token on a non-safe square and send it back to its yard. Safe squares protect from capture: the starts, plus the marked spots (on the cross, eight steps after each start; on the six-arm board, each start and the starred square two steps after it).',
+    'Land on an opponent\'s token on a non-safe square and send it back to its yard. Safe squares protect from capture: the starts, plus the marked spots (on the cross, eight steps after each start; on the six-arm board, each start and the star on every arm).',
     'Three sixes in a row end your turn. First player to get all four tokens home wins.',
   ],
 

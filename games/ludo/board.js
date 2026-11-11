@@ -4,8 +4,8 @@
 // A regular hexagon sits in the middle (the home). From each of its six edges an arm runs straight out: three squares
 // wide and six long, squares lined up with the arm. The arms point up, up-right, down-right, down, down-left and up-left.
 // An arm's middle column is that seat's home lane (five squares); the square at its tip carries an arrow pointing in
-// (a token turns into the lane there). The seat's start, where tokens enter, is the bottom square of the arm's right
-// column, coloured. The two outer columns are track. The track goes once round the outside of the star: out along an
+// (a token turns into the lane there). The seat's start, where tokens enter, is the coloured second square from the tip in
+// the arm's other column, and the third square from the tip in the first column carries the star. The two outer columns are track. The track goes once round the outside of the star: out along an
 // arm's left column, across its start, back along its right column, then on to the next arm. A yard is the equilateral
 // triangle between two arms, with its point on a corner of the hexagon.
 // The server and the browser both use this file's output (the browser gets it in the table view), so they agree.
@@ -34,10 +34,10 @@ for (let k = 0; k < 6; k++) {
 }
 const PER_ARM = rawTrack.length / 6; // 13
 const TRACK = rawTrack.length; // 78
-const STARTS = [0, 1, 2, 3, 4, 5].map((k) => k * PER_ARM + LEN + 1); // the bottom square of the arm's right column
-// safe squares: each start, and the third square from the bottom of the same right column (marked with a star)
+const STARTS = [0, 1, 2, 3, 4, 5].map((k) => k * PER_ARM + LEN + 2); // second square from the tip in the arm's far column
+// safe squares: each start, and the starred third square from the tip in the arm's other column
 const SAFE = new Set();
-for (let k = 0; k < 6; k++) { SAFE.add(STARTS[k]); SAFE.add(STARTS[k] + 2); }
+for (let k = 0; k < 6; k++) { SAFE.add(STARTS[k]); SAFE.add(k * PER_ARM + 3); }
 // each home lane, from the square beside the start in to the hexagon
 const rawLanes = [];
 for (let k = 0; k < 6; k++) { const lane = []; for (let row = LEN - 1; row >= 1; row--) lane.push([...cell(k, row, 0), k]); rawLanes.push(lane); }
