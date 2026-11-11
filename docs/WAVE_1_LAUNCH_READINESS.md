@@ -165,7 +165,7 @@ Test accounts must not be the testers' accounts. Record times and account ids, n
 
 **Technical work**
 1. Live smoke tests in section 5, after the deployed commit is confirmed.
-2. Re-check `/healthz` and `/readyz` and the logs (S-1, S-13) after any deploy.
+2. After any deploy, repeat S-1, S-6 and S-13 (as in STAGE_20_6 section 5): health endpoints and logs, and a short game with its results in both histories. Do not reuse gameplay evidence from an earlier deployment.
 3. Optional before Wave 1: C-E (database-name confirmation for the cleanup job), unless the owner accepts the gap.
 4. Update PR #101 against the newer `main` if the Impressum is to be published. Do not merge it without approval.
 
