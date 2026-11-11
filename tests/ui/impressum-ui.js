@@ -41,7 +41,7 @@ async function assertVisibleAndClickable(page, selector, label) {
       const size = `${vp.width}x${vp.height}`;
 
       await test(`signed out (${size}): the sign-in sheet has an Impressum link that is visible and opens the page`, async () => {
-        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [{ t: 'authRequired', message: 'Log in to play.', impressumPublished: true }] });
         await page.goto(url + '/');
         await page.waitForSelector('#loginForm', { timeout: 8000 });
         await assertVisibleAndClickable(page, '#auth-overlay .auth-legal a[href="/impressum.html"]', 'sign-in sheet link');
@@ -60,7 +60,7 @@ async function assertVisibleAndClickable(page, selector, label) {
       });
 
       await test(`signed in (${size}): the home footer has an Impressum link that is visible and opens the page`, async () => {
-        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room: null, view: null }] });
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list(), impressumPublished: true }), { t: 'state', room: null, view: null }] });
         await page.goto(url + '/');
         await page.waitForSelector('.home-foot', { timeout: 8000 });
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -78,7 +78,7 @@ async function assertVisibleAndClickable(page, selector, label) {
           { id: 'p1', name: 'Bo', bot: false, avatar: '🧙', connected: true, ping: null, username: null },
         ];
         const room = { code: 'ABCDEF', gameId: 'wizard', hostId: 'me', status: 'lobby', options: {}, visibility: 'public', seats: 4, min: def.seats.min, max: def.seats.max, seatLabels: null, deadline: null, now: Date.now(), spectators: [], members };
-        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room, view: null }] });
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list(), impressumPublished: true }), { t: 'state', room, view: null }] });
         await page.goto(url + '/');
         await page.waitForSelector('.start-bar button', { timeout: 8000 });
         await assertVisibleAndClickable(page, '.start-bar button', 'Start game');
@@ -86,7 +86,7 @@ async function assertVisibleAndClickable(page, selector, label) {
       });
 
       await test(`(${size}): no fixed footer is rendered, and no visible clickable fixed element sits over the home page`, async () => {
-        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room: null, view: null }] });
+        const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list(), impressumPublished: true }), { t: 'state', room: null, view: null }] });
         await page.goto(url + '/');
         await page.waitForSelector('.home-foot', { timeout: 8000 });
         const fixed = await page.evaluate(() => {
@@ -106,8 +106,16 @@ async function assertVisibleAndClickable(page, selector, label) {
       });
     }
 
+    await test('publication off: no Impressum link in the home footer or the sign-in sheet', async () => {
+      const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ id: 'me', name: 'Aarav', games: games.list(), impressumPublished: false }), { t: 'state', room: null, view: null }] });
+      await page.goto(url + '/');
+      await page.waitForSelector('.home-foot', { timeout: 8000 });
+      assert.equal(await page.locator('.home-foot a[href="/impressum.html"]').count(), 0, 'footer link hidden');
+      await ctx.close();
+    });
+
     await test('the Impressum loads directly with no session, and the page has no sign-in sheet', async () => {
-      const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+      const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.', impressumPublished: true }] });
       const res = await page.goto(url + '/impressum.html');
       assert.equal(res.status(), 200);
       assert.equal(await page.locator('#auth-overlay').count(), 0);
