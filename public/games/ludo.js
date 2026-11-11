@@ -153,6 +153,16 @@
     return `<svg class="ludo-svg" viewBox="0 0 15 15" aria-hidden="true" focusable="false"><rect width="15" height="15" rx="1.2" fill="#fff"/>${yards}${cells.join('')}${centre}<circle cx="7.5" cy="7.5" r="0.28" fill="#fff" opacity=".9"/></svg>`;
   }
 
+  // a triangle with its three corners softly rounded (quadratic curves), the same softness as the squares
+  function softTriPath(pts, r) {
+    const P = pts.map((q) => (Array.isArray(q) ? q : q.split(',').map(Number)));
+    const pull = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]); const t = Math.min(r / L, 0.5); return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; };
+    return P.map((cur, i) => {
+      const a = pull(cur, P[(i + P.length - 1) % P.length]); const b = pull(cur, P[(i + 1) % P.length]);
+      return `${i ? 'L' : 'M'}${a[0]},${a[1]} Q${cur[0]},${cur[1]} ${b[0]},${b[1]}`;
+    }).join(' ') + 'Z';
+  }
+
   function hexSVG(b, seats, turnK = -1) {
     const used = (k) => seats.includes(k);
     const f = (n) => n.toFixed(2);
@@ -168,7 +178,7 @@
     const yards = b.yards.map((y, k) => {
       const on = used(k);
       const holes = y.slots.map((q) => `<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(b.size * 0.4)}" fill="${on ? SEAT[k].dark : '#94a3b8'}" opacity="${on ? 0.3 : 0.4}"/>`).join('');
-      return `<g><polygon points="${y.tri.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="${on ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.4" stroke-linejoin="round"/><circle cx="${f(y.c[0])}" cy="${f(y.c[1])}" r="${f(y.r)}" fill="#fff" opacity="${on ? 0.92 : 0.6}"/>${holes}</g>`;
+      return `<g><path d="${softTriPath(y.tri, 3)}" fill="${on ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.4" stroke-linejoin="round"/><circle cx="${f(y.c[0])}" cy="${f(y.c[1])}" r="${f(y.r)}" fill="#fff" opacity="${on ? 0.92 : 0.6}"/>${holes}</g>`;
     }).join('');
     const track = b.track.map((t, i) => {
       const k = startSeat(i);
@@ -180,7 +190,7 @@
       return out;
     }).join('');
     const lanes = b.lanes.map((lane, k) => lane.map((t) => sq(t, used(k) ? SEAT[k].hex : '#e2e8f0', '#fff')).join('')).join('');
-    const homes = b.homes.map((tri, k) => `<polygon class="${k === turnK ? 'ludo-turn-home' : ''}" points="${tri.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
+    const homes = b.homes.map((tri, k) => `<path class="${k === turnK ? 'ludo-turn-home' : ''}" d="${softTriPath(tri, 3)}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
     const hex = `<polygon points="${b.hexagon.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="#fff" stroke="#64748b" stroke-width="0.4" stroke-linejoin="round"/>`;
     return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="6" fill="#fff"/>${yards}${track}${lanes}${hex}${homes}<circle cx="50" cy="50" r="${f(b.size * 0.35)}" fill="#fff" opacity=".9"/></svg>`;
   }
