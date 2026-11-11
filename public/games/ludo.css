@@ -25,7 +25,7 @@
 
 /* board */
 /* softer corners, and a toned-down colour grade for the whole board (board and tokens) */
-.ludo-board { position: relative; width: 100%; max-width: min(100%, 78vh, 680px); margin-inline: auto; aspect-ratio: 1; border-radius: 22px; background: #fff; box-shadow: 0 10px 34px rgba(0, 0, 0, .45), 0 0 0 5px rgba(255, 255, 255, .92); filter: saturate(.72); }
+.ludo-board { position: relative; width: 100%; max-width: min(100%, 78vh, 680px); margin-inline: auto; aspect-ratio: 1; border-radius: 22px; background: #fff; box-shadow: 0 10px 34px rgba(0, 0, 0, .45), 0 0 0 5px rgba(255, 255, 255, .92); filter: saturate(.86); }
 .ludo-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: 18px; }
 .ludo-tokens { position: absolute; inset: 0; pointer-events: none; }
 
