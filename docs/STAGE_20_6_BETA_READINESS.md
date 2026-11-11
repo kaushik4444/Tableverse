@@ -1,6 +1,8 @@
-# Stage 20.6: invite-only beta readiness (updated 2026-11-10)
+# Stage 20.6: invite-only beta readiness (updated 2026-11-11)
 
-**Status: NOT A GO YET.** The server-side gaps for a signed-in, invited beta are closed on `main` (through PR #96). Before Wave 1, three small code changes need the owner's approval (C-A, C-B and C-D in section 3), the policy text needs approval, and several manual checks must be recorded on the live site. C-C is deferred, because Wave 1 sends no broadcasts.
+**Technical implementation of Stage 20.6: closed by the owner, 2026-11-11.** Current `main` is `ead20c1` (PR #103 merged). The 18+ confirmation (C-A, PR #98) and the voice switch (C-D, PR #99) are merged and their production behaviour is owner-confirmed. Migration 020 is applied in production.
+
+**Wave 1 verdict: NO-GO.** Launch blockers remain (section 7): the policy pages (C-B) are not built or approved, the live smoke tests are not all recorded, and the owner decisions in section 6 are open. C-C is deferred, because Wave 1 sends no broadcasts. PR #101 (Impressum) is an open Draft and is not part of `main`. See `docs/WAVE_1_LAUNCH_READINESS.md` for the full checklist.
 
 **Scope:** free, invite-only beta for friends and friends-of-friends. Signed-in players only. Adults aged 18 and over. One owner account and no other admin. No ads, payments or promotional e-mail campaigns. Nothing in this document authorises a production change, a secret change, a credential rotation, a cleanup run, a database change, a load test, a new admin account or a merge.
 
@@ -37,11 +39,21 @@
 | Cleanup safeguards | **Verified per script**, corrected in the runbook | `cleanup-unverified.js` has a read-only dry run and a `--max` cap; `cleanup-user-data.js` has `--confirm` and `--expect-host`. The workflow uses only the first. |
 | Live production settings | **Not verifiable from the repository** | `render.yaml` sets `REQUIRE_EMAIL_VERIFICATION: "true"` and comments it as a temporary switch; `MATCH_SPOOL_DIR` is unset; GitHub variables and reviewers, and Render's secrets, are not visible here. Manual checks M-1 to M-9. |
 
-## 3. Proposed code changes (NOT implemented; approval needed)
+## 3. Code changes: status
 
-Each change is described with its exact anchors. None is implemented or tested yet. Each would go in its own small PR, after approval.
+Status key: **Implemented and merged** = on `main`, tested in CI; **Production verified** = the owner confirmed the behaviour on the live site; **Deferred**; **Pending owner approval**. The descriptions below were the proposals; where the status line says "implemented", the merged code follows the proposal except where noted.
 
-**C-A. 18+ confirmation at registration (D-2).**
+| Change | Status | Evidence |
+|---|---|---|
+| C-A 18+ confirmation | Implemented and merged (PR #98, `bd575c9`); production verified (owner confirmed live 18+ registration) | `registerEmail` rejects unless `adultConfirmed === true`; migration `020_adult_confirmation.sql`; checkbox in `public/app.js` |
+| C-B policy pages | Pending owner approval; not built. `public/privacy.html`, `terms.html` and `support.html` do not exist on `main`. Impressum exists only in PR #101 (Draft) | `ls public` on `main` |
+| C-C verified-only broadcasts | Deferred (Wave 1 sends no broadcasts) | Section 7 |
+| C-D voice withheld | Implemented and merged (PR #99, `14d46a0`); production verified (owner confirmed voice disabled live) | `VOICE_ENABLED` must be exactly `"true"` to enable voice (`tests/voice-flag.test.js`); `render.yaml` does not set it, so code default is off |
+| C-E, C-F, C-G | Optional; not started | Section 3 below |
+
+The detailed proposals follow for reference.
+
+**C-A. 18+ confirmation at registration (D-2).** [Implemented: PR #98.]
 - `public/app.js`, registration form (lines 438–445): add a required, unticked checkbox "I confirm I am 18 or older." Send `ageConfirmed: true` in the `postJson('/api/auth/register', …)` call (line 505).
 - `lib/authRoutes.js`, `POST /api/auth/register` (lines 217–220): refuse unless `body.ageConfirmed === true`, with 400 "You must confirm you are 18 or older to create an account."
 - Optional, recommended: migration 017 adds `players.age_confirmed_at TIMESTAMPTZ`, set at registration. It records that the confirmation was given, and stores no date of birth. Needs approval.
@@ -49,7 +61,7 @@ Each change is described with its exact anchors. None is implemented or tested y
 - Limits to state in the notice: this is a self-declaration, not age verification.
 - Decision for the owner: existing test accounts never confirmed. Confirm that each of them is 18 or over, or accept that they stay as they are.
 
-**C-B. Policy pages before sign-up (D-4, D-9; C-1 in the earlier plan).**
+**C-B. Policy pages before sign-up (D-4, D-9; C-1 in the earlier plan). [Pending owner approval; not built.]**
 - After the owner approves the final wording: three static pages (`public/privacy.html`, `public/terms.html`, `public/support.html`) built from the approved text, not the drafts.
 - Link them from the registration sheet (`public/app.js` around line 438) and from the home screen footer. The existing static handler serves them; no route changes.
 - Until this ships, the fallback is a direct link to the approved text in the invitation message, if the owner accepts that.
@@ -63,7 +75,7 @@ Each change is described with its exact anchors. None is implemented or tested y
 - Tests: the audience-count expectations in `tests/admin.pg.test.js` and the broadcast tests in `tests/admin.test.js` must change accordingly.
 - Operational alternative with no code change: always choose "Verified accounts" manually. Not recommended, because the default selects every address.
 
-**C-D. Withhold voice for the beta (D-3).**
+**C-D. Withhold voice for the beta (D-3). [Implemented: PR #99; production verified.]**
 - A new setting `VOICE_ENABLED`, default on in code, set to `false` for the beta in `render.yaml` and in Render's environment (a Render change, so it needs approval).
 - `server.js`: the voice message handler (around line 1075) refuses when disabled; `voiceFor` (around line 700) returns an empty list; the welcome payload carries `voiceEnabled: false`.
 - `public/app.js` `voiceButtonsHTML` (line 250): returns nothing when `voiceEnabled` is false.
@@ -88,13 +100,15 @@ Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** o
 
 **Repository and deployment**
 - [x] Protect-Main requires the CI checks before merge (`docs/OPERATIONS_RUNBOOK.md`, "Repository safety"). Ruleset status checked live through the rulesets API on 2026-11-10: `Protect-Main` is active on the branch target.
-- [M] M-1: latest `main` deployed on Render; `/healthz` 200; `/readyz` 200 `ready` with `store: postgres`.
+- [x] Migration 020 (`020_adult_confirmation.sql`) applied to production and verified (owner-confirmed).
+- [x] Render deployment, `/healthz` and `/readyz` confirmed by the owner after PRs #98 and #99.
+- [M] M-1 for the current `main` (`ead20c1`): not verified. The sandbox cannot reach Render or the live site (403 from the proxy), so the owner must confirm that the latest `main` is deployed.
 - [M] M-3: `MATCH_SPOOL_DIR` unset as in `render.yaml`; Render's behaviour on a restart (same machine or fresh) checked in the dashboard.
 
 **Accounts and sessions**
 - [x] One active session per account; sign-out everywhere; suspension revokes sessions and devices (CI tests).
 - [ ] S-2 to S-5 on the live domain: sign-up, verification e-mail, verification link, login, logout, reset.
-- [ ] **C-A** 18+ confirmation approved, built and tested.
+- [x] **C-A** 18+ confirmation: implemented (PR #98), tested in CI, production verified by the owner. Existing accounts with no confirmation: see section 6 (open).
 - [ ] **D-9 / C-B** policy text approved and reachable (or the owner accepts the direct-link fallback in writing).
 
 **Play and safety**
@@ -104,7 +118,7 @@ Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** o
 - [ ] S-9: a feedback item appears in the Feedback tab.
 
 **Voice**
-- [ ] **C-D** voice withheld: the voice button is absent, and a voice request is refused on the live site.
+- [x] **C-D** voice withheld: implemented (PR #99); production verified by the owner (voice disabled on the live site).
 - [x] A relayed two-way call worked once (owner's WebRTC dump).
 - Re-enabling voice is deferred (section 6).
 
@@ -169,15 +183,17 @@ After each deploy, repeat S-1, S-6 and S-13.
 **Current verdict: NO-GO for Wave 1.** Blocking items are listed below. The list is a minimum: a go requires every item in section 4 that applies to the chosen setup to be marked [x], including the known gap in cleanup unless the owner accepts it in writing.
 
 **Launch blockers (must be done before the first invitation):**
-1. C-A approved and built: 18+ confirmation at registration, enforced on the server.
+1. ~~C-A approved and built~~: done (PR #98, production verified). Open follow-up: existing accounts with no confirmation (section 6).
 2. Owner rule recorded: no broadcasts during Wave 1. C-C (verified-only broadcasts) is deferred, so it is not a blocker.
-3. C-D approved and built, and `VOICE_ENABLED=false` set on Render after approval; voice verified off on the live site.
+3. ~~C-D approved and built~~: done (PR #99, production verified). Voice stays off; re-enabling is deferred (section 8).
 4. Policy text approved and reachable (C-B), or the owner accepts a direct-link fallback in writing.
 5. Smoke tests S-2 to S-6, S-8, S-9, S-11 and S-12 run on the live site with the results recorded.
 6. M-1, M-5, M-6 and M-7 recorded.
 7. Tester wording from `docs/MATCH_RESULT_DURABILITY.md` included in the invitation.
 
-**Recommendation:** approve C-A, C-B and C-D, let them ship as three small PRs with tests, record the live checks, and then go for a small Wave 1 of invited accounts. Hold any public launch until the legal questions in D-9 are settled.
+**Recommendation:** C-A and C-D are shipped and verified. Remaining work before a small Wave 1: approve and publish the policy text (C-B; PR #101 holds the Impressum as a Draft), record the live smoke tests, and settle the owner decisions in section 6. Hold any public launch until the legal questions in D-9 are settled.
+
+**Owner decision recorded (2026-11-11):** the Impressum will use the owner's real legal name and home address. These details are not written into this repository. PR #101 keeps its placeholders unfilled until the owner supplies them.
 
 ## 8. Deferred until after Wave 1
 
