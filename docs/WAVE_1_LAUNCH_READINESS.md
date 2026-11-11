@@ -113,7 +113,6 @@ No policy text is published, and no personal placeholder is filled, by this revi
 | ID | Check | Status |
 |---|---|---|
 | M-1 | Latest `main` deployed; `/healthz` 200; `/readyz` 200 `ready`, `store: postgres` | Health owner-confirmed; deployed commit pending owner action |
-| M-2 | (not in the Stage 20.6 list as a separate item) | Not applicable |
 | M-3 | Render restart behaviour; `MATCH_SPOOL_DIR` unset | Pending owner action |
 | M-4 | Uptime monitor (optional) | Deferred |
 | M-5 | Cleanup environment reviewer; `CLEANUP_EXECUTE` not `true`; read-only dry-run role | Pending owner action |
