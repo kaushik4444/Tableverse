@@ -223,7 +223,8 @@
       // on the six-arm board finished tokens are counted in a badge in the centre, not stacked on top of each other
       if (home && ui.isHex) return;
       const legal = !busy() && i === v.me && v.canMove && (v.legalTokens || []).includes(t);
-      const label = pos === -1 ? `Bring token ${t + 1} out` : pos >= G.lap && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
+      const what = pos === -1 ? `Bring token ${t + 1} out` : pos >= G.lap && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
+      const label = `${esc(p.name)}: ${what}`;
       const moved = ui.plans.has(`${i}-${t}`);
       const pid = `${i}-${t}`;
       out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / G.S) * 100}%;top:${(y / G.S) * 100}%"><i></i></button>`);
