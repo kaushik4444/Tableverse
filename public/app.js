@@ -2037,6 +2037,9 @@
     // Space on the focused chip opens the settings; it must not reach the document-level Space shortcuts (The Mind plays a card on Space)
     chip.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
     // In the title row, at its right end: the shared toolbar keeps exactly its own buttons, and no extra row is added.
+    // On the right of the shared toolbar, just before the "more" menu, so it sits with the other controls on every game.
+    const more = $app.querySelector('.tb-more-wrap');
+    if (more && more.parentElement) { more.parentElement.insertBefore(chip, more); return; }
     const title = $app.querySelector('.wz-top > .wz-round');
     if (title) { title.classList.add('gs-host'); title.after(chip); }
     else { chip.classList.add('gs-float'); $app.prepend(chip); }
