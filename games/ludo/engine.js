@@ -171,7 +171,8 @@ function createGame(playerList, options = {}, rng = Math.random) {
     n,
     geo: geometryFor(n),
     players: playerList.map((p, i) => ({ id: p.id, name: p.name, seat: SEATS_FOR[n][i], color: SEAT_COLORS[SEATS_FOR[n][i]] })),
-    bonus: options.bonusRolls === 'generous' ? 'generous' : 'classic',
+    // Default: a six, a capture or a token reaching home each earn another roll. 'classic' keeps only the six.
+    bonus: options.bonusRolls === 'classic' ? 'classic' : 'generous',
     lastMove: null,
     rng,
     tokens: playerList.map(() => Array.from({ length: TOKENS }, () => -1)),

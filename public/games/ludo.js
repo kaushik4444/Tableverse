@@ -130,10 +130,10 @@
     ui.myTurnWas = v.myTurn;
   }
 
-  function crossSVG(seats) {
+  function crossSVG(seats, turnK = -1) {
     const G = CROSS;
     const cells = [];
-    const rect = (c, r, fill) => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.14" fill="${fill}" stroke="#94a3b8" stroke-width="0.05"/>`;
+    const rect = (c, r, fill) => `<rect x="${c + 0.04}" y="${r + 0.04}" width="0.92" height="0.92" rx="0.3" fill="${fill}" stroke="#94a3b8" stroke-width="0.05"/>`;
     CROSS_RING.forEach(([c, r], i) => {
       const startSeat = G.starts.indexOf(i);
       const used = startSeat >= 0 && seats.includes(startSeat);
@@ -146,14 +146,14 @@
       const active = seats.includes(k);
       const [x, y] = rot([3, 3], k);
       const slots = YARD0.map((p) => rot(p, k)).map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="0.78" fill="${active ? SEAT[k].dark : '#cbd5e1'}" opacity="${active ? 0.22 : 0.5}"/>`).join('');
-      return `<g><rect x="${x - 3}" y="${y - 3}" width="6" height="6" rx="0.5" fill="${active ? SEAT[k].hex : '#cbd5e1'}"/><circle cx="${x}" cy="${y}" r="2.45" fill="#fff" opacity="${active ? 0.92 : 0.6}"/>${slots}</g>`;
+      return `<g><rect class="${k === turnK ? 'ludo-turn-home' : ''}" x="${x - 3}" y="${y - 3}" width="6" height="6" rx="0.5" fill="${active ? SEAT[k].hex : '#cbd5e1'}"/><circle cx="${x}" cy="${y}" r="2.45" fill="#fff" opacity="${active ? 0.92 : 0.6}"/>${slots}</g>`;
     }).join('');
     const tri = (pts, k) => `<polygon points="${pts}" fill="${seats.includes(k) ? SEAT[k].hex : '#cbd5e1'}"/>`;
     const centre = `${tri('6,6 6,9 7.5,7.5', 0)}${tri('6,6 9,6 7.5,7.5', 1)}${tri('9,6 9,9 7.5,7.5', 2)}${tri('6,9 9,9 7.5,7.5', 3)}`;
-    return `<svg class="ludo-svg" viewBox="0 0 15 15" aria-hidden="true" focusable="false"><rect width="15" height="15" rx="0.7" fill="#fff"/>${yards}${cells.join('')}${centre}<circle cx="7.5" cy="7.5" r="0.28" fill="#fff" opacity=".9"/></svg>`;
+    return `<svg class="ludo-svg" viewBox="0 0 15 15" aria-hidden="true" focusable="false"><rect width="15" height="15" rx="1.2" fill="#fff"/>${yards}${cells.join('')}${centre}<circle cx="7.5" cy="7.5" r="0.28" fill="#fff" opacity=".9"/></svg>`;
   }
 
-  function hexSVG(b, seats) {
+  function hexSVG(b, seats, turnK = -1) {
     const used = (k) => seats.includes(k);
     const f = (n) => n.toFixed(2);
     const h = b.size * 0.47; // half a square, leaving a thin gap
@@ -180,14 +180,17 @@
       return out;
     }).join('');
     const lanes = b.lanes.map((lane, k) => lane.map((t) => sq(t, used(k) ? SEAT[k].hex : '#e2e8f0', '#fff')).join('')).join('');
-    const homes = b.homes.map((tri, k) => `<polygon points="${tri.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
+    const homes = b.homes.map((tri, k) => `<polygon class="${k === turnK ? 'ludo-turn-home' : ''}" points="${tri.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
     const hex = `<polygon points="${b.hexagon.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="#fff" stroke="#64748b" stroke-width="0.4" stroke-linejoin="round"/>`;
-    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="2" fill="#fff"/>${yards}${track}${lanes}${hex}${homes}<circle cx="50" cy="50" r="${f(b.size * 0.35)}" fill="#fff" opacity=".9"/></svg>`;
+    return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="6" fill="#fff"/>${yards}${track}${lanes}${hex}${homes}<circle cx="50" cy="50" r="${f(b.size * 0.35)}" fill="#fff" opacity=".9"/></svg>`;
   }
 
   function boardSVG(v) {
     const seats = seatsFor(v.n);
-    return v.board ? hexSVG(v.board, seats) : crossSVG(seats);
+    // whose turn it is: that seat's home blinks, so the board shows the turn without glowing tokens
+    const p = v.players && v.players[v.turn];
+    const turnK = v.phase === 'gameOver' || !p ? -1 : (Number.isInteger(p.seat) ? p.seat : seats[v.turn]);
+    return v.board ? hexSVG(v.board, seats, turnK) : crossSVG(seats, turnK);
   }
 
   function tokensHTML(v) {
@@ -220,7 +223,10 @@
       // on the six-arm board finished tokens are counted in a badge in the centre, not stacked on top of each other
       if (home && ui.isHex) return;
       const legal = !busy() && i === v.me && v.canMove && (v.legalTokens || []).includes(t);
-      const label = pos === -1 ? `Bring token ${t + 1} out` : pos >= G.lap && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
+      const what = pos === -1 ? `Bring token ${t + 1} out` : pos >= G.lap && !home ? `Move home-column token ${t + 1}` : `Move token ${t + 1}`;
+      // the label also says where the token stands, the text the removed move list used to give
+      const at = pos === -1 ? 'in the yard' : pos >= G.lap ? `${G.finished - pos} steps from home` : `${pos + 1} squares along the track`;
+      const label = `${esc(p.name)}: ${what}, ${at}`;
       const moved = ui.plans.has(`${i}-${t}`);
       const pid = `${i}-${t}`;
       out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / G.S) * 100}%;top:${(y / G.S) * 100}%"><i></i></button>`);
@@ -238,14 +244,6 @@
 
   /* On the hexagon the squares are close together, so the tokens cannot each have a large touch target on the board.
    * These buttons list the legal moves with full-size targets. */
-  function pickHTML(v) {
-    if (!ui.isHex || !v.canMove) return '';
-    const me = v.players[v.me];
-    // each button says where its token stands, so it can be matched with a piece on the board
-    const where = (pos) => (pos === -1 ? 'in the yard' : pos >= ui.geo.lap ? `${ui.geo.finished - pos} steps from home` : `${pos + 1} squares along the track`);
-    return `<div class="ludo-picks" role="group" aria-label="Legal moves">${(v.legalTokens || []).map((t) => `<button type="button" class="btn ludo-pick" data-lt="tok:${t}" ${busy() ? 'disabled' : ''}>Token ${t + 1}: ${where(me.tokens[t])}</button>`).join('')}</div>`;
-  }
-
   function dieHTML(d, rolling) {
     const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
     const on = new Set(PIPS[d] || []);
@@ -313,7 +311,7 @@
     root.innerHTML = `<section class="ludo ${v.phase === 'gameOver' ? 'over' : ''}">
       <div class="wz-top"><div class="wz-round"><b>Ludo</b><span class="label"> · ${v.players.length} players</span></div>${CardTable.toolbarSeed('<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>', 'lt', 'ludo-tools')}</div>
       <div class="ludo-layout">
-        <div class="ludo-main">${barHTML(v)}<div class="ludo-board ${ui.isHex ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v)}<div class="ludo-tokens">${tokensHTML(v)}</div></div>${pickHTML(v)}</div>
+        <div class="ludo-main">${barHTML(v)}<div class="ludo-board ${ui.isHex ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v)}<div class="ludo-tokens">${tokensHTML(v)}</div></div></div>
         <aside class="ludo-side">${playersHTML(v)}${endHTML(v, ctx)}</aside>
       </div>
     </section>`;
@@ -333,8 +331,21 @@
     root.onclick = onClick;
   }
 
+  // Legal tokens have a larger invisible tap area, and near tokens overlap it, so a tap goes to the legal token whose centre is nearest the pointer.
+  function nearestLegal(el, e) {
+    if (!el.classList.contains('legal') || !(e.clientX || e.clientY)) return el;
+    let best = el; let bestD = Infinity;
+    e.currentTarget.querySelectorAll('.ludo-token.legal').forEach((c) => {
+      const r = c.getBoundingClientRect();
+      const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+      if (d < bestD) { bestD = d; best = c; }
+    });
+    return bestD <= 30 ? best : el;
+  }
+
   function onClick(e) {
-    const el = e.target.closest('[data-lt]');
+    let el = e.target.closest('[data-lt]');
+    if (el && el.classList.contains('ludo-token')) el = nearestLegal(el, e);
     if (!el || el.disabled) return;
     const v = ui.latest; const ctx = ui.ctx;
     if (!v || !ctx) return;

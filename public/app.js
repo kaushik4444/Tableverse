@@ -1504,7 +1504,7 @@
   const emptyState = (icon, title, text) => `<div class="empty"><span class="empty-ico" aria-hidden="true">${icon}</span><b>${esc(title)}</b><p>${esc(text)}</p></div>`;
   const loadingBlock = (text = 'Loading…') => `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>${esc(text)}</div>`;
   const errorBlock = (text, retryAct) => `<div class="error-block" role="alert"><p>${esc(text)}</p>${retryAct ? `<button type="button" class="btn ghost small" data-act="${retryAct}">Try again</button>` : ''}</div>`;
-  const RESULT_LABEL = { won: 'Won', lost: 'Lost', left: 'Left early' };
+  const RESULT_LABEL = { won: 'Won', lost: 'Lost', draw: 'Draw', left: 'Left early' };
 
   async function getJson(url) {
     const r = await fetch(url, { credentials: 'same-origin' });
@@ -2037,6 +2037,9 @@
     // Space on the focused chip opens the settings; it must not reach the document-level Space shortcuts (The Mind plays a card on Space)
     chip.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
     // In the title row, at its right end: the shared toolbar keeps exactly its own buttons, and no extra row is added.
+    // On the right of the shared toolbar, just before the "more" menu, so it sits with the other controls on every game.
+    const more = $app.querySelector('.tb-more-wrap');
+    if (more && more.parentElement) { more.parentElement.insertBefore(chip, more); return; }
     const title = $app.querySelector('.wz-top > .wz-round');
     if (title) { title.classList.add('gs-host'); title.after(chip); }
     else { chip.classList.add('gs-float'); $app.prepend(chip); }
@@ -2135,7 +2138,7 @@
       const meta = statsGame(g.gameId);
       return `<div class="stat-game"><span class="stat-game-name">${esc(meta.icon || '🎴')} ${esc(meta.name)}${KIND_NOTE[g.kind] ? ` <small class="stat-kind" title="${esc(KIND_NOTE[g.kind])}">${g.kind === 'coop' ? 'co-op' : 'teams'}</small>` : ''}</span><span class="stat-game-rec">${g.wins}W · ${g.losses}L</span><span class="stat-bar" aria-hidden="true"><i style="width:${g.winRate || 0}%"></i></span><span class="stat-game-pct">${g.winRate}%</span>${g.best !== null && g.bestLabel ? `<span class="stat-game-best">${esc(g.bestLabel)}: <b>${esc(g.bestText)}</b></span>` : ''}</div>`;
     }).join('');
-    const recent = s.recent.map((r) => `<span class="stat-chip ${r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${esc(statsGame(r.gameId).icon || '🎴')}<b>${r.won ? 'W' : 'L'}</b></span>`).join('');
+    const recent = s.recent.map((r) => `<span class="stat-chip ${r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${esc(statsGame(r.gameId).icon || '🎴')}<b>${r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
     return `
       <div class="stat-grid">
         ${tile('Games played', s.played)}

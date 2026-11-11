@@ -95,7 +95,8 @@ async function lobbyCheck(browser, url) {
           menu: [...document.querySelectorAll('.tb-pop button')].map((b) => b.dataset.act || '').join(',') };
       });
       assert.ok(r.mainEnd <= r.vh, `${gameId}: the main play area ends at ${r.mainEnd}px but the screen is ${r.vh}px`);
-      assert.equal(r.direct, 'chat,emotes,mic,speaker,more,other', `${gameId}: toolbar is chat, reactions, mic, speaker, more, leave (${r.direct})`);
+      // the right-hand toolbar: chat, reactions, mic, speaker, the game-settings chip ("other"), more, leave
+      assert.equal(r.direct, 'chat,emotes,mic,speaker,other,more,other', `${gameId}: toolbar is chat, reactions, mic, speaker, settings, more, leave (${r.direct})`);
       if (gameId === 'gofish') assert.doesNotMatch(r.menu, /activityLog/, 'gofish: no log, it would show what others asked for');
       else assert.match(r.menu, /activityLog/, `${gameId}: the log lives in the more menu`);
       assert.ok(r.leaveLast, `${gameId}: leave is the last button on the bar`);

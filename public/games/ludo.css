@@ -24,12 +24,13 @@
 @keyframes ludo-roll { 0% { transform: rotate(-200deg) scale(.7); } 60% { transform: rotate(18deg) scale(1.12); } 100% { transform: none; } }
 
 /* board */
-.ludo-board { position: relative; width: 100%; max-width: min(100%, 78vh, 680px); margin-inline: auto; aspect-ratio: 1; border-radius: 16px; background: #fff; box-shadow: 0 10px 34px rgba(0, 0, 0, .45), 0 0 0 5px rgba(255, 255, 255, .92); }
-.ludo-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: 12px; }
+/* softer corners, and a toned-down colour grade for the whole board (board and tokens) */
+.ludo-board { position: relative; width: 100%; max-width: min(100%, 78vh, 680px); margin-inline: auto; aspect-ratio: 1; border-radius: 22px; background: #fff; box-shadow: 0 10px 34px rgba(0, 0, 0, .45), 0 0 0 5px rgba(255, 255, 255, .92); filter: saturate(.86); }
+.ludo-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: 18px; }
 .ludo-tokens { position: absolute; inset: 0; pointer-events: none; }
 
 /* tokens: glossy coins that glide between squares */
-.ludo-token { --c: #ef4444; --d: #b91c1c; --l: #fecaca; pointer-events: auto; position: absolute; width: 6.6%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; transform: translate(-50%, -50%); cursor: default; background: radial-gradient(circle at 34% 28%, var(--l) 0 10%, var(--c) 46%, var(--d) 100%); box-shadow: 0 0 0 .2em rgba(255, 255, 255, .98), 0 0 0 .42em var(--d), 0 .45em .7em rgba(0, 0, 0, .5), inset 0 -.2em .35em rgba(0, 0, 0, .3), inset 0 .15em .2em rgba(255, 255, 255, .55); transition: left .36s ease-in-out, top .36s ease-in-out, transform .2s; z-index: 2; }
+.ludo-token { --c: #ef4444; --d: #b91c1c; --l: #fecaca; pointer-events: auto; position: absolute; width: 3.3%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; transform: translate(-50%, -50%); cursor: default; background: radial-gradient(circle at 34% 28%, var(--l) 0 10%, var(--c) 46%, var(--d) 100%); box-shadow: 0 0 0 .2em rgba(255, 255, 255, .98), 0 0 0 .42em var(--d), 0 .45em .7em rgba(0, 0, 0, .5), inset 0 -.2em .35em rgba(0, 0, 0, .3), inset 0 .15em .2em rgba(255, 255, 255, .55); transition: left .36s ease-in-out, top .36s ease-in-out, transform .2s; z-index: 2; }
 .ludo-token i { position: absolute; inset: 24%; border-radius: 50%; background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, .85), rgba(255, 255, 255, .2) 70%); box-shadow: inset 0 0 0 .1em rgba(255, 255, 255, .55); }
 .ludo-token.red { --c: #ef4444; --d: #991b1b; --l: #fecaca; }
 .ludo-token.green { --c: #22c55e; --d: #166534; --l: #bbf7d0; }
@@ -37,23 +38,27 @@
 .ludo-token.blue { --c: #3b82f6; --d: #1e40af; --l: #bfdbfe; }
 .ludo-token.orange { --c: #f97316; --d: #c2410c; --l: #fed7aa; }
 .ludo-token.purple { --c: #a855f7; --d: #7e22ce; --l: #e9d5ff; }
-/* six-arm board: 60 squares around the ring, so the tokens are smaller than on the cross */
-.ludo-board.hex .ludo-token { width: 4.3%; }
-.ludo-board.hex .ludo-token.stacked { width: 3.4%; }
-.ludo-board.hex .ludo-token.done { width: 3.6%; }
+/* six-arm board: 78 squares around the ring, so the tokens are smaller than on the cross */
+.ludo-board.hex .ludo-token { width: 2.15%; }
+.ludo-board.hex .ludo-token.stacked { width: 1.7%; }
+.ludo-board.hex .ludo-token.done { width: 1.8%; }
+/* a legal token is still easy to tap at half size: an invisible 18px margin makes the target about 44px */
+.ludo-token.legal::after { content: ''; position: absolute; inset: -18px; border-radius: 50%; }
 /* move buttons under the hexagon board: full-size touch targets for each legal token */
 .ludo-picks { display: flex; flex-wrap: wrap; gap: 8px; }
 /* white badge, dark seat-coloured text: the dark shades all pass 4.5:1 on white, unlike white text on yellow or green */
 .ludo-home-count { position: absolute; z-index: 4; width: 5.6%; aspect-ratio: 1; transform: translate(-50%, -50%); display: grid; place-items: center; border-radius: 50%; background: #fff; color: var(--d); border: 2px solid var(--c); font-size: clamp(9px, 2.2vw, 13px); font-weight: 700; pointer-events: none; }
 .ludo-pick { min-height: 44px; min-width: 44px; }
-.ludo-token.stacked { width: 5.2%; }
-.ludo-token.done { width: 4.4%; opacity: .95; }
+.ludo-token.stacked { width: 2.6%; }
+.ludo-token.done { width: 2.2%; opacity: .95; }
 .ludo-token:disabled { opacity: 1; }
 .ludo-token.legal { cursor: pointer; z-index: 6; touch-action: manipulation; }
-.ludo-token.legal::before { content: ''; position: absolute; inset: -22%; border-radius: 50%; border: .2em solid #fff; box-shadow: 0 0 .9em .2em rgba(255, 255, 255, .85); animation: ludo-ring 1.1s ease-in-out infinite; }
+.ludo-token.legal::before { content: ''; position: absolute; inset: -22%; border-radius: 50%; border: .2em solid #fff; }
 .ludo-token.legal:hover { transform: translate(-50%, -50%) scale(1.14); }
 .ludo-token:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
-@keyframes ludo-ring { 0%, 100% { opacity: 1; } 50% { opacity: .35; } } /* the ring pulses, the token itself stays still so it is easy to tap */
+/* the active player's home blinks to show whose turn it is; legal tokens get a plain white ring, no glow */
+.ludo-turn-home { animation: ludo-home-blink 1s steps(2, start) infinite; }
+@keyframes ludo-home-blink { 50% { opacity: .15; } }
 
 /* players */
 .ludo-players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -91,11 +96,9 @@
   .ludo-board { max-width: min(100%, calc(100dvh - 270px)); box-shadow: 0 6px 22px rgba(0, 0, 0, .4), 0 0 0 3px rgba(255, 255, 255, .92); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ludo-token, .ludo-token.legal::before, .ludo-die.rolling { animation: none; transition: none; }
+  .ludo-token, .ludo-die.rolling, .ludo-turn-home { animation: none; transition: none; }
 }
 
-.ludo-token.legal { animation: ludo-bob .9s ease-in-out infinite; }
-@keyframes ludo-bob { 50% { margin-top: -.5%; } }
 
 /* A token that is walking hops from square to square */
 .ludo-token.moved { z-index: 7; animation: ludo-hop .4s ease-out infinite; }

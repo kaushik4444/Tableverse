@@ -35,21 +35,23 @@ class MemoryMatchStore {
   async getPlayerStats(playerId) {
     let played = 0;
     let wins = 0;
+    let draws = 0;
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
       if (part && !part.leftEarly && !part.isBot) {
         played++;
         if (part.isWinner) wins++;
+        if (part.isDraw) draws++;
       }
     }
-    return { played, wins, losses: played - wins };
+    return { played, wins, draws, losses: played - wins - draws };
   }
 
   async getPlayerRows(playerId) {
     const rows = [];
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
-      if (part && !part.leftEarly && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: m.recordedAt, isWinner: part.isWinner, score: part.score, options: m.options || {}, seats: m.seats });
+      if (part && !part.leftEarly && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: m.recordedAt, isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
     }
     return rows.sort((a, b) => b.finishedAt - a.finishedAt);
   }
@@ -92,8 +94,8 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
       }
       const gone = isUuid(p.playerId) && !accountId && !p.isBot;
       await client.query(
-        `INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot, left_early)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot, left_early, is_draw)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           matchId,
           accountId,
@@ -103,6 +105,7 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
           Boolean(p.isWinner),
           Boolean(p.isBot),
           Boolean(p.leftEarly),
+          Boolean(p.isDraw),
         ]
       );
     }
@@ -118,20 +121,21 @@ async function getPlayerStats(playerId) {
   if (!db.hasDatabase()) {
     return memoryStore.getPlayerStats(playerId);
   }
-  if (!isUuid(playerId)) return { played: 0, wins: 0, losses: 0 }; // not an account id: no rows, and no invalid-uuid error
+  if (!isUuid(playerId)) return { played: 0, wins: 0, losses: 0, draws: 0 }; // not an account id: no rows, and no invalid-uuid error
 
   const res = await db.query(
     `SELECT
        COUNT(*)::int AS played,
        COUNT(*) FILTER (WHERE mp.is_winner = TRUE)::int AS wins,
-       COUNT(*) FILTER (WHERE mp.is_winner = FALSE)::int AS losses
+       COUNT(*) FILTER (WHERE mp.is_winner = FALSE AND mp.is_draw = FALSE)::int AS losses,
+       COUNT(*) FILTER (WHERE mp.is_draw = TRUE)::int AS draws
      FROM match_participants mp
      JOIN matches m ON m.id = mp.match_id
      WHERE mp.player_id = $1 AND mp.left_early = FALSE AND mp.is_bot = FALSE AND m.match_key IS NOT NULL`, // match_key IS NULL: written before results were reported, winners are unknown
     [playerId]
   );
   const row = res.rows[0];
-  return { played: row ? row.played : 0, wins: row ? row.wins : 0, losses: row ? row.losses : 0 };
+  return { played: row ? row.played : 0, wins: row ? row.wins : 0, losses: row ? row.losses : 0, draws: row ? row.draws : 0 };
 }
 
 /**
@@ -156,13 +160,13 @@ async function getPlayerProfile(playerId, { memberSince = null } = {}) {
  */
 async function pgProfile(playerId, memberSince) {
   const base = `WITH mine AS (
-      SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.options, m.seats, mp.is_winner, mp.score
+      SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.options, m.seats, mp.is_winner, mp.is_draw, mp.score
       FROM match_participants mp JOIN matches m ON m.id = mp.match_id
       WHERE mp.player_id = $1 AND mp.left_early = FALSE AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
       ORDER BY m.id, mp.seat)`;
   const [grouped, recent, streaks] = await Promise.all([
-    db.query(`${base} SELECT game_id, options, seats, is_winner, score, COUNT(*)::int AS n FROM mine GROUP BY game_id, options, seats, is_winner, score`, [playerId]),
-    db.query(`${base} SELECT game_id, finished_at, is_winner, score FROM mine ORDER BY finished_at DESC, id LIMIT 10`, [playerId]),
+    db.query(`${base} SELECT game_id, options, seats, is_winner, is_draw, score, COUNT(*)::int AS n FROM mine GROUP BY game_id, options, seats, is_winner, is_draw, score`, [playerId]),
+    db.query(`${base} SELECT game_id, finished_at, is_winner, is_draw, score FROM mine ORDER BY finished_at DESC, id LIMIT 10`, [playerId]),
     db.query(`${base}, seq AS (
         SELECT is_winner, ROW_NUMBER() OVER (ORDER BY finished_at DESC, id) AS rn,
                ROW_NUMBER() OVER (PARTITION BY is_winner ORDER BY finished_at DESC, id) AS rk FROM mine)
@@ -170,14 +174,14 @@ async function pgProfile(playerId, memberSince) {
              COALESCE((SELECT MAX(c) FROM (SELECT COUNT(*) AS c FROM seq WHERE is_winner GROUP BY rn - rk) x), 0)::int AS best,
              (SELECT MAX(finished_at) FROM mine) AS last_played`, [playerId]),
   ]);
-  const rows = grouped.rows.map((r) => ({ gameId: r.game_id, isWinner: r.is_winner, score: r.score, options: r.options || {}, seats: r.seats, n: r.n }));
+  const rows = grouped.rows.map((r) => ({ gameId: r.game_id, isWinner: r.is_winner, isDraw: r.is_draw, score: r.score, options: r.options || {}, seats: r.seats, n: r.n }));
   const s = streaks.rows[0] || { current: 0, best: 0, last_played: null };
   return computeProfile(rows, {
     memberSince,
     metrics: gameStats,
     streak: { current: s.current, best: s.best },
     lastPlayed: s.last_played,
-    recent: recent.rows.map((r) => ({ gameId: r.game_id, finishedAt: r.finished_at, isWinner: r.is_winner, score: r.score })),
+    recent: recent.rows.map((r) => ({ gameId: r.game_id, finishedAt: r.finished_at, isWinner: r.is_winner, isDraw: r.is_draw, score: r.score })),
   });
 }
 

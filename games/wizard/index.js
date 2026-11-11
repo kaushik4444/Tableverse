@@ -21,7 +21,7 @@ module.exports = {
       key: 'variant',
       type: 'select',
       label: 'Variant',
-      default: 'none',
+      default: 'plusminus',
       choices: [
         { value: 'none', label: 'None', desc: 'Standard bidding, one player after another.' },
         { value: 'plusminus', label: 'Plus / Minus 1', desc: 'The total of all bids may not equal the number of tricks, so somebody always has to miss. The dealer bids last and may not make the total match.' },
@@ -34,7 +34,7 @@ module.exports = {
       type: 'boolean',
       label: 'Foresight',
       desc: 'In round 1, when each player has only one card, you cannot see your own card. You see everyone else’s instead, and bid from that.',
-      default: false,
+      default: true,
     },
     {
       key: 'length',
