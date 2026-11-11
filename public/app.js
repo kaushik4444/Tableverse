@@ -446,7 +446,7 @@
           <button class="btn big" type="submit">Create account</button>
         </form>
       `}
-      <p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>
+      ${S.impressumPublished ? '<p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>' : ''}
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     document.body.appendChild(overlay);
@@ -930,6 +930,7 @@
     switch (m.t) {
       case 'welcome': {
         S.id = m.id;
+        S.impressumPublished = m.impressumPublished === true; // the server decides (LEGAL_IMPRESSUM_PUBLISHED); no link while it is off
         S.token = '';
         S.guest = false;
         S.games = m.games;
@@ -965,6 +966,7 @@
         break;
       }
       case 'authRequired':
+        S.impressumPublished = m.impressumPublished === true; // signed-out sheet has no welcome, so the flag rides on this message too
         S.signingIn = false;
         hideBusy();
         clearClientSession();
@@ -1981,7 +1983,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button> · '}<a href="/impressum.html">Impressum</a></footer>
+      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}${S.guest || !S.impressumPublished ? '' : ' · '}${S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''}</footer>
     </main>`;
   }
 
