@@ -8,13 +8,13 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 
 | Item | Evidence |
 |---|---|
-| Latest `main` | `ead20c14fc7922371b665375f118139a60ccca96` (PR #103 merge), verified by fetching `origin/main` on 2026-11-11 |
-| CI on `ead20c14` | All five check runs completed successfully: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Build production Docker image, Production dependency audit |
-| Recently merged | #100 Ludo 5–6 players, Snakes and Ladders 2–6, Property Rivals goal; #102 Ludo improvements and settings toolbar; #103 Ludo visual refinements and 320px mobile layout |
+| Latest `main` | `297acc4ee2b34c28fe15dd2a13450bb4ac7a1dce` (PR #106 squash merge: Chromium install retry), verified by fetching `origin/main` on 2026-11-11 |
+| CI on `297acc4` | Not yet checked on the main push. The same `ci.yml` content passed on PR #106 (head `f9c1e87`, browser job included). Previous main `ead20c14`: all five check runs completed successfully: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Build production Docker image, Production dependency audit |
+| Recently merged | #106 CI Chromium install retry (`297acc4`); #100 Ludo 5–6 players, Snakes and Ladders 2–6, Property Rivals goal; #102 Ludo improvements and settings toolbar; #103 Ludo visual refinements and 320px mobile layout |
 | PR #101 (Impressum) | Open, **Draft**, head `8ed927a`, base `14d46a0`. Not on `main`, not published. Needs updating against the newer `main` before any merge. Not touched by this review |
 | Production | https://playtableverse.com; Render service https://game-fmy4.onrender.com |
-| Render deployed commit | **Could not be verified from this review.** No dashboard access in this session. Owner to confirm that the deployed commit is `ead20c14` or record the one that is live |
-| Previous baseline | `14d46a0` is superseded by `ead20c14` and is not the launch baseline |
+| Render deployed commit | **Could not be verified from this review.** No dashboard access in this session. Owner to confirm that the deployed commit is `297acc4` (or later) or record the one that is live |
+| Previous baseline | `14d46a0` is superseded by `297acc4` and is not the launch baseline |
 
 ## 2. Status key
 
@@ -102,7 +102,7 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 | Privacy Notice | Pending owner action | Draft only, unpublished. Approval needed (C-B) |
 | Beta Terms | Pending owner action | Draft only, unpublished. Approval needed (C-B) |
 | Support and reporting contact | Pending owner action | Placeholder (D-4). Not written into any document |
-| Impressum | Pending owner action | Implemented on Draft PR #101, not on `main`, not published. The owner has chosen to use their real legal name and home address on it; this is an owner decision that supersedes the earlier D-9 position on home addresses (see STAGE_20_6 section 1). Those details are **not** recorded in Git |
+| Impressum | Pending owner action | Implemented on Draft PR #101, not on `main`, not published. The owner has decided to use their real legal name and home address on it (owner decision, 2026-11-11). This is **not** a legal approval: the Impressum text, its placeholders and its publication stay pending owner approval, and PR #101 stays Draft. Those details are **not** recorded in Git |
 | Owner identity and contact details | Pending owner action | Owner supplies. Nothing is invented |
 | Remaining legal questions and risk acceptance | Pending owner action | The 14 questions in the privacy draft (O-6). Any remaining risk is accepted in writing by the owner before Wave 1 |
 
@@ -156,7 +156,7 @@ Test accounts must not be the testers' accounts. Record times and account ids, n
 ## 7. Blockers, grouped
 
 **Owner action**
-1. Confirm the deployed Render commit is `ead20c14` (or record the live one).
+1. Confirm the deployed Render commit is `297acc4` or later (or record the live one).
 2. Provide the support address and response target (O-7), and approve the policy text (O-4, O-6, O-10).
 3. Decide report retention (O-8) and the daily review checkpoint (O-9).
 4. Decide the existing-account 18+ question (STAGE_20_6 C-A) and accept or approve the cleanup database-name gap (STAGE_20_6 C-E).
