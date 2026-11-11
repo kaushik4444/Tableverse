@@ -190,7 +190,7 @@
       return out;
     }).join('');
     const lanes = b.lanes.map((lane, k) => lane.map((t) => sq(t, used(k) ? SEAT[k].hex : '#e2e8f0', '#fff')).join('')).join('');
-    const homes = b.homes.map((tri, k) => `<path class="${k === turnK ? 'ludo-turn-home' : ''}" d="${softTriPath(tri, 1.2)}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
+    const homes = b.homes.map((tri, k) => `<path class="${k === turnK ? 'ludo-turn-home' : ''}" d="${softTriPath(tri, 3)}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
     const hex = `<polygon points="${b.hexagon.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="#fff" stroke="#64748b" stroke-width="0.4" stroke-linejoin="round"/>`;
     return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="6" fill="#fff"/>${yards}${track}${lanes}${hex}${homes}<circle cx="50" cy="50" r="${f(b.size * 0.35)}" fill="#fff" opacity=".9"/></svg>`;
   }
