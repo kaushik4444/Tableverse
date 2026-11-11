@@ -141,12 +141,12 @@
       if (G.safe.has(i) && startSeat < 0) cells.push(`<text x="${c + 0.5}" y="${r + 0.72}" text-anchor="middle" font-size="0.62" fill="#94a3b8">★</text>`);
       if (startSeat >= 0) cells.push(`<text x="${c + 0.5}" y="${r + 0.72}" text-anchor="middle" font-size="0.62" fill="#fff">★</text>`);
     });
-    for (let k = 0; k < 4; k++) crossLane(k).forEach(([c, r]) => cells.push(rect(c, r, seats.includes(k) ? SEAT[k].light : '#f1f5f9')));
+    for (let k = 0; k < 4; k++) crossLane(k).forEach(([c, r]) => cells.push(rect(c, r, seats.includes(k) ? SEAT[k].hex : '#e2e8f0')));
     const yards = [0, 1, 2, 3].map((k) => {
       const active = seats.includes(k);
       const [x, y] = rot([3, 3], k);
       const slots = YARD0.map((p) => rot(p, k)).map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="0.78" fill="${active ? SEAT[k].dark : '#cbd5e1'}" opacity="${active ? 0.22 : 0.5}"/>`).join('');
-      return `<g><rect x="${x - 3}" y="${y - 3}" width="6" height="6" rx="0.5" fill="${active ? SEAT[k].hex : '#cbd5e1'}"/><rect x="${x - 2.4}" y="${y - 2.4}" width="4.8" height="4.8" rx="0.45" fill="#fff" opacity="${active ? 0.92 : 0.6}"/>${slots}</g>`;
+      return `<g><rect x="${x - 3}" y="${y - 3}" width="6" height="6" rx="0.5" fill="${active ? SEAT[k].hex : '#cbd5e1'}"/><circle cx="${x}" cy="${y}" r="2.45" fill="#fff" opacity="${active ? 0.92 : 0.6}"/>${slots}</g>`;
     }).join('');
     const tri = (pts, k) => `<polygon points="${pts}" fill="${seats.includes(k) ? SEAT[k].hex : '#cbd5e1'}"/>`;
     const centre = `${tri('6,6 6,9 7.5,7.5', 0)}${tri('6,6 9,6 7.5,7.5', 1)}${tri('9,6 9,9 7.5,7.5', 2)}${tri('6,9 9,9 7.5,7.5', 3)}`;
