@@ -44,7 +44,7 @@ async function registerAndVerify(port, { email, username, password = 'TestPass12
   const browser = new Browser(port);
   await browser.csrf();
   const handle = ((username || String(displayName || 'player').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 18) || 'player') + Math.floor(Math.random() * 100000)).slice(0, 24);
-  const reg = await browser.post('/api/auth/register', { email, username: handle, password, displayName, avatar });
+  const reg = await browser.post('/api/auth/register', { adultConfirmed: true, email, username: handle, password, displayName, avatar });
   if (reg.status === 503 && /requires PostgreSQL/i.test(reg.json.error || '')) {
     const dbPlayers = require('../../db/players');
     const created = await dbPlayers.createAnonymousPlayer({ displayName, avatar });

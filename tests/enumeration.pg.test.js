@@ -41,13 +41,13 @@ const PW = 'TestPass123!';
 
       // a first, real account for the taken address
       const owner = new Browser(srv.port); await owner.csrf();
-      const first = await owner.post('/api/auth/register', { email: taken, username: `owner${Date.now() % 1000000}`, password: PW, displayName: 'Owner' });
+      const first = await owner.post('/api/auth/register', { adultConfirmed: true, email: taken, username: `owner${Date.now() % 1000000}`, password: PW, displayName: 'Owner' });
       assert.equal(first.status, 201, JSON.stringify(first.json));
       const shapeNew = Object.keys(first.json).sort();
 
       await test('registration of a taken address answers exactly like a new one, without revealing it', async () => {
         const attacker = new Browser(srv.port); await attacker.csrf();
-        const again = await attacker.post('/api/auth/register', { email: taken, username: `probe${Date.now() % 1000000}`, password: PW, displayName: 'Probe' });
+        const again = await attacker.post('/api/auth/register', { adultConfirmed: true, email: taken, username: `probe${Date.now() % 1000000}`, password: PW, displayName: 'Probe' });
         assert.equal(again.status, 201, JSON.stringify(again.json));
         assert.deepEqual(Object.keys(again.json).sort(), shapeNew, 'same keys for a taken address');
         assert.equal(again.json.player, null);
@@ -63,7 +63,7 @@ const PW = 'TestPass123!';
         const before = (await q('SELECT COUNT(*)::int AS n FROM auth_identities WHERE provider_user_id = $1', [taken]))[0].n;
         const probeName = `probe2${Date.now() % 1000000}`;
         const attacker = new Browser(srv.port); await attacker.csrf();
-        const r = await attacker.post('/api/auth/register', { email: taken, username: probeName, password: PW, displayName: 'Probe' });
+        const r = await attacker.post('/api/auth/register', { adultConfirmed: true, email: taken, username: probeName, password: PW, displayName: 'Probe' });
         assert.equal(r.status, 201);
         assert.equal(before, (await q('SELECT COUNT(*)::int AS n FROM auth_identities WHERE provider_user_id = $1', [taken]))[0].n);
         assert.equal((await q('SELECT COUNT(*)::int AS n FROM players WHERE LOWER(username) = $1', [probeName]))[0].n, 0, 'no player row for the probe');
@@ -71,7 +71,7 @@ const PW = 'TestPass123!';
 
       await test('registration of a free address sends a verification email and sets no session', async () => {
         const b = new Browser(srv.port); await b.csrf();
-        const r = await b.post('/api/auth/register', { email: freshAddr, username: `new${Date.now() % 1000000}`, password: PW, displayName: 'New' });
+        const r = await b.post('/api/auth/register', { adultConfirmed: true, email: freshAddr, username: `new${Date.now() % 1000000}`, password: PW, displayName: 'New' });
         assert.equal(r.status, 201, JSON.stringify(r.json));
         assert.deepEqual(Object.keys(r.json).sort(), shapeNew, 'same keys as the taken-address answer');
         assert.equal(r.setCookie.some((c) => c.startsWith('ct_session=')), false, 'registration sets no ct_session, even for a new account');
@@ -128,7 +128,7 @@ const PW = 'TestPass123!';
         try {
           const email = `drain.${Date.now()}@test.local`;
           const b2 = new Browser(s2.port); await b2.csrf();
-          await b2.post('/api/auth/register', { email, username: `drain${Date.now() % 1000000}`, password: PW, displayName: 'Drain' });
+          await b2.post('/api/auth/register', { adultConfirmed: true, email, username: `drain${Date.now() % 1000000}`, password: PW, displayName: 'Drain' });
           const [firstToken] = slowMail.verifyTokens;
 
           // Answers must come back while the send is still blocked.

@@ -30,7 +30,7 @@ async function register({ emailTaken }) {
     };
     return fn(client);
   };
-  const result = await dbAuth.registerEmail({ email: 'someone@test.local', username: 'newplayer', password: 'TestPass123!', displayName: 'New', avatar: '🧙' });
+  const result = await dbAuth.registerEmail({ adultConfirmed: true, email: 'someone@test.local', username: 'newplayer', password: 'TestPass123!', displayName: 'New', avatar: '🧙' });
   return { result, statements };
 }
 

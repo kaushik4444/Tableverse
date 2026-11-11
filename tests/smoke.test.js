@@ -88,7 +88,7 @@ function client(port, name, token) {
     const email = `u.${Date.now()}@test.local`;
     const regRes = await fetch(`http://127.0.0.1:${port}/api/auth/register`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password: 'TestPass123!', displayName: 'Unverified' }),
+      body: JSON.stringify({ email, password: 'TestPass123!', displayName: 'Unverified', adultConfirmed: true }),
     });
     if (regRes.ok) {
       // registration issues no session; an unverified player logs in (allowed) and gets a session to test with

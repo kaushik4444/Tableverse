@@ -51,7 +51,7 @@ function socket(port, cookie) {
   try {
     process.env.DATABASE_URL = t.url;
     const { start } = require('../server');
-    srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80], matchLog: quiet() });
+    srv = await start({ port: 0, trustProxy: false, env: { ...process.env, VOICE_ENABLED: 'true' }, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80], matchLog: quiet() });
     let seq = 1;
     const newUser = async (tag) => {
       const n = seq++;

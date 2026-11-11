@@ -283,7 +283,7 @@ function cookieSocket(port, cookie) {
         const b = new Browser(prod.port); await b.csrf();
         const email = `prod.${authSeq++}@test.local`;
         mail.failNext = 1;
-        const reg = await b.post('/api/auth/register', { email, username: `prod${Date.now() % 1000000}`, password: PW, displayName: 'Prod' });
+        const reg = await b.post('/api/auth/register', { adultConfirmed: true, email, username: `prod${Date.now() % 1000000}`, password: PW, displayName: 'Prod' });
         assert.equal(reg.status, 201, JSON.stringify(reg.json));
         assert.equal(reg.json.emailSent, false);
         assert.match(reg.json.message, /could not be sent/);
@@ -293,7 +293,7 @@ function cookieSocket(port, cookie) {
 
         // the account exists and can get a new link
         // a taken address gets the same 201 answer as a new one, creates nothing, and the owner is notified instead
-        const again = await b.post('/api/auth/register', { email, username: `prodx${Date.now() % 1000000}`, password: PW, displayName: 'Prod' });
+        const again = await b.post('/api/auth/register', { adultConfirmed: true, email, username: `prodx${Date.now() % 1000000}`, password: PW, displayName: 'Prod' });
         assert.equal(again.status, 201, JSON.stringify(again.json));
         assert.equal(again.json.player, null);
         assert.deepEqual(mail.notices, [email], 'the owner is told about the attempt');
@@ -340,7 +340,7 @@ function cookieSocket(port, cookie) {
         const b = new Browser(optional.port); await b.csrf();
         const email = `optional.${authSeq++}@test.local`;
         mail.failNext = 1;
-        const reg = await b.post('/api/auth/register', { email, username: `optional${Date.now() % 1000000}`, password: PW, displayName: 'Optional' });
+        const reg = await b.post('/api/auth/register', { adultConfirmed: true, email, username: `optional${Date.now() % 1000000}`, password: PW, displayName: 'Optional' });
         assert.equal(reg.status, 201, JSON.stringify(reg.json));
         assert.equal(reg.json.requiresVerification, false);
         assert.equal(reg.json.emailVerificationRequired, false, 'register response exposes policy mode, not just account state');
@@ -396,7 +396,7 @@ function cookieSocket(port, cookie) {
         // Use a separate browser so creating another account does not replace b's verified session cookie.
         const uv = new Browser(optional.port); await uv.csrf();
         const unverifiedEmail = `optional.unverified.${authSeq++}@test.local`;
-        const regUnverified = await uv.post('/api/auth/register', { email: unverifiedEmail, username: `optuv${Date.now() % 1000000}`, password: PW, displayName: 'Optional UV' });
+        const regUnverified = await uv.post('/api/auth/register', { adultConfirmed: true, email: unverifiedEmail, username: `optuv${Date.now() % 1000000}`, password: PW, displayName: 'Optional UV' });
         assert.equal(regUnverified.status, 201);
         assert.equal(regUnverified.json.player, null);
         const forgot = await uv.post('/api/auth/forgot-password', { email: unverifiedEmail });
@@ -411,7 +411,7 @@ function cookieSocket(port, cookie) {
         try {
           const rb = new Browser(required.port); await rb.csrf();
           const remail = `required.${authSeq++}@test.local`;
-          const rreg = await rb.post('/api/auth/register', { email: remail, username: `required${Date.now() % 1000000}`, password: PW, displayName: 'Required' });
+          const rreg = await rb.post('/api/auth/register', { adultConfirmed: true, email: remail, username: `required${Date.now() % 1000000}`, password: PW, displayName: 'Required' });
           assert.equal(rreg.status, 201, JSON.stringify(rreg.json));
           assert.equal(rreg.json.player, null);
           assert.match(rreg.json.message, /after verifying, log in/i, 'required mode registration message tells the player to verify, then log in');
@@ -466,7 +466,7 @@ function cookieSocket(port, cookie) {
         try {
           const ob = new Browser(freshOptional.port); await ob.csrf();
           const oe = `fresh.optional.${authSeq++}@test.local`;
-          const reg = await ob.post('/api/auth/register', { email: oe, username: `fo${Date.now() % 1000000}`, password: PW, displayName: 'FreshOpt' });
+          const reg = await ob.post('/api/auth/register', { adultConfirmed: true, email: oe, username: `fo${Date.now() % 1000000}`, password: PW, displayName: 'FreshOpt' });
           assert.equal(reg.status, 201, JSON.stringify(reg.json));
           assert.equal(ob.cookies.has('ct_session'), false, 'registration issues no session, even in optional mode');
           await ob.must('/api/auth/login', { email: oe, password: PW });
