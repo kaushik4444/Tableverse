@@ -421,3 +421,6 @@ button.card { cursor: pointer; }
 .standin { font-size: 15px; line-height: 1; padding: 2px 3px; border-radius: 999px; background: rgba(8, 9, 30, .92); border: 1px solid var(--gold, #f2c14e); box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
 .pseat .av .standin { position: absolute; right: -6px; bottom: -4px; z-index: 4; font-size: calc(var(--av) * .36); }
 li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-size: 12px; padding: 1px 3px; }
+
+/* 360px phones and narrower: played cards are smaller so they clear the neighbouring name plates */
+@media (max-width: 360px) { .pt-card { --cw: 44px; } }
