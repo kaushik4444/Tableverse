@@ -6,7 +6,7 @@
   /** shown[i] is where player i's token is drawn right now; it walks square by square towards the real position. */
   const ui = { ctx: null, latest: null, root: null, roomCode: null, seq: null, rollSeq: null, tumble: false, shown: [], timer: null, animating: false };
   const shownPos = (v, i) => (ui.shown[i] === undefined ? v.players[i].pos : ui.shown[i]);
-  const HEX = { red: '#e5484d', blue: '#3b82f6', green: '#22a35a', yellow: '#e8b923' };
+  const HEX = { red: '#e5484d', blue: '#3b82f6', green: '#22a35a', yellow: '#e8b923', orange: '#f97316', purple: '#a855f7' };
   const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 
   /** Centre of square n (1..100) in percent of the board; 0 is the start area below the bottom-left corner. Rows alternate direction. */
@@ -21,7 +21,8 @@
   function offset(slot, count) {
     if (count <= 1) return [0, 0];
     const a = (slot / count) * Math.PI * 2 - Math.PI / 2;
-    return [Math.cos(a) * 2.6, Math.sin(a) * 2.6];
+    const r = count > 4 ? 3.2 : 2.6; // six tokens need a wider ring so none sits on another
+    return [Math.cos(a) * r, Math.sin(a) * r];
   }
 
   function squares() {

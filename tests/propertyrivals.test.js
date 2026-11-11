@@ -271,6 +271,22 @@ test('the game ends: last player standing, or the richest after the chosen numbe
   must(open, 2, { type: 'endTurn' }); assert.equal(open.phase, 'roll'); assert.equal(open.round, 30);
 });
 
+test('net-worth goal: the game ends at the end of the turn in which someone reaches it; the richest wins', () => {
+  const g = game(2, { rounds: 'nw2000' });
+  assert.deepEqual([g.options.rounds, g.options.goal], ['nw2000', 2000]);
+  assert.deepEqual([game(2, { rounds: 'nw3000' }).options.goal, game(2, { rounds: '60' }).options.goal], [3000, 0]);
+  g.round = 200; g.turn = 0; g.phase = 'manage'; g.players[0].cash = 1999;
+  must(g, 0, { type: 'endTurn' });
+  assert.equal(g.phase, 'roll', 'short of the goal: play on, however many rounds pass');
+  g.round = 200; g.turn = 0; g.phase = 'manage'; g.players[0].cash = 1900; g.players[1].cash = 2400;
+  must(g, 0, { type: 'endTurn' });
+  assert.equal(g.phase, 'gameOver', 'someone reached 2,000 net worth');
+  assert.equal(g.winner, 1, 'the richest player wins');
+  const t = game(3, { rounds: 'nw3000' }); t.turn = 2; t.phase = 'manage'; t.players[0].cash = 2999;
+  must(t, 2, { type: 'endTurn' });
+  assert.equal(t.phase, 'roll', 'a goal of 3,000 is not reached at 2,999');
+});
+
 test('the view: public table, per-player options, no deck order, spectators get no controls', () => {
   const g = game(3); own(g, 0, 1, 3);
   const mine = A.viewFor(g, 'p0'); const other = A.viewFor(g, 'p1'); const spec = A.viewFor(g, 'stranger');

@@ -25,8 +25,8 @@ const alwaysSix = () => 0.999999; // forces dice = 6
 
 console.log('engine');
 
-test('createGame: 2-4 players, 4 tokens each in the yard, phase ready', async () => {
-  for (const n of [2, 3, 4]) {
+test('createGame: 2-6 players, 4 tokens each in the yard, phase ready', async () => {
+  for (const n of [2, 3, 4, 5, 6]) {
     const g = E.createGame(people(n), {}, mulberry32(1));
     assert.equal(g.n, n);
     assert.equal(g.phase, 'ready');
@@ -38,7 +38,7 @@ test('createGame: 2-4 players, 4 tokens each in the yard, phase ready', async ()
     assert.equal(g.winner, null);
   }
   assert.throws(() => E.createGame(people(1), {}, mulberry32(1)));
-  assert.throws(() => E.createGame(people(5), {}, mulberry32(1)));
+  assert.throws(() => E.createGame(people(7), {}, mulberry32(1)));
 });
 
 test('roll gives 1-6, six earns another roll, non-six passes the turn', async () => {
@@ -313,6 +313,47 @@ test('renderer exposes clickable own yard, track and home tokens only when legal
   assert.ok(!root.innerHTML.includes('tok:4'), 'opponent tokens cannot be selected');
 });
 
+test('renderer: 5-6 players get the hexagon board, every token lands inside it', async () => {
+  const reg = {};
+  const cardTable = { esc: (x) => String(x), toast() {}, sound: { button: () => '' }, chat: { button: () => '' },
+    toolbarSeed: (mid) => mid, register: (id, r) => { reg[id] = r; } };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/games/ludo.js'), 'utf8'), { window: { CardTable: cardTable, innerWidth: 900 }, CardTable: cardTable });
+  const registered = reg.ludo;
+  for (const n of [4, 5, 6]) {
+    const g = E.createGame(people(n), {}, mulberry32(9));
+    const v = E.viewFor(g, 'p0');
+    v.players.forEach((p) => { p.tokens = [-1, 0, g.geo.lap - 1, g.geo.finished]; });
+    const html = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
+    registered.render(html, v, { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
+    assert.equal(html.innerHTML.includes('ludo-board hex'), n >= 5, `${n} players: hexagon only for 5-6`);
+    const left = [...html.innerHTML.matchAll(/class="ludo-token [^"]*"[^>]*style="left:([-\d.]+)%;top:([-\d.]+)%"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    const hex = n >= 5;
+    assert.equal(left.length, hex ? n * 3 : n * 4, 'the six-arm board counts a finished token in a badge; the cross keeps every token');
+    assert.equal((html.innerHTML.match(/ludo-home-count/g) || []).length, hex ? n : 0, 'one home badge per player on the six-arm board');
+    assert.ok(left.every(([x, y]) => x >= 0 && x <= 100 && y >= 0 && y <= 100), 'tokens sit on the board');
+  }
+});
+
+test('hexagon: legal moves are also offered as full-size buttons under the board', async () => {
+  const reg = {};
+  const cardTable = { esc: (x) => String(x), toast() {}, sound: { button: () => '' }, chat: { button: () => '' },
+    toolbarSeed: (mid) => mid, register: (id, r) => { reg[id] = r; } };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/games/ludo.js'), 'utf8'), { window: { CardTable: cardTable, innerWidth: 900 }, CardTable: cardTable });
+  const g = E.createGame(people(6), {}, mulberry32(4));
+  g.phase = 'moving'; g.turn = 0; g.dice = 6;
+  g.tokens[0] = [0, 2, -1, -1];
+  const v = E.viewFor(g, 'p0');
+  const html = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
+  reg.ludo.render(html, v, { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
+  for (const t of v.legalTokens) assert.ok(html.innerHTML.includes(`class="btn ludo-pick" data-lt="tok:${t}"`), `token ${t} has a move button`);
+  assert.ok(html.innerHTML.includes('Token 3: in the yard'), 'a button says where a yard token stands');
+  const five = E.createGame(people(4), {}, mulberry32(4));
+  five.phase = 'moving'; five.turn = 0; five.dice = 6;
+  const sq = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
+  reg.ludo.render(sq, E.viewFor(five, 'p0'), { isHost: false, act() {}, showRules() {}, rematch() {}, leave() {} });
+  assert.ok(!sq.innerHTML.includes('ludo-pick'), 'the cross board does not need move buttons');
+});
+
 test('geometry: a lap is 51 ring squares, then a 5-square home column, then home (56)', async () => {
   assert.equal(E.LAP, 51); assert.equal(E.HOME_COL, 5); assert.equal(E.FINISHED, 56);
   const g = E.createGame(people(2), {}, mulberry32(1));
@@ -406,8 +447,49 @@ test('plugin: create/view/act/awaiting/botAction/results wiring', async () => {
   assert.ok(res.every((r) => Number.isFinite(r.score) && typeof r.winner === 'boolean'));
 });
 
-test('playOut: full bot-only game finishes for 2, 3 and 4 players', async () => {
-  for (const n of [2, 3, 4]) {
+test('six-arm board data: the track is one closed loop of neighbouring squares, and each home lane starts beside the square before its start', () => {
+  const B = require('../games/ludo/board');
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const ring = B.rawTrack;
+  assert.equal(ring.length, B.TRACK);
+  ring.forEach((c, i) => assert.ok(d(c, ring[(i + 1) % ring.length]) < 1.5, `square ${i} is next to the following one`));
+  assert.equal(new Set(ring.map((c) => c[0].toFixed(3) + ',' + c[1].toFixed(3))).size, ring.length, 'no square is used twice');
+  B.STARTS.forEach((s, k) => {
+    assert.ok(d(ring[(s - 1 + B.TRACK) % B.TRACK], B.rawLanes[k][0]) < 1.5, `seat ${k}: the square before its start sits beside its home lane`);
+    assert.equal(B.rawLanes[k].length, 5, 'five home-lane squares');
+  });
+  const v = B.boardView();
+  assert.equal(v.track.length, 78); assert.equal(v.yards.length, 6); assert.equal(v.homes.length, 6);
+  assert.ok(JSON.stringify(v).length < 8000, 'the view stays small');
+});
+
+test('six-arm board: 5-6 players share a 78-square track with a start on each arm tip', async () => {
+  for (const n of [5, 6]) {
+    const g = E.createGame(people(n), {}, mulberry32(7));
+    assert.equal(g.geo.track, 78); assert.equal(g.geo.lap, 77); assert.equal(g.geo.finished, 82);
+    assert.deepEqual(g.players.map((p) => p.seat), [0, 1, 2, 3, 4, 5].slice(0, n));
+    assert.equal(g.players[n - 1].color, E.SEAT_COLORS[n - 1]);
+    assert.equal(E.absPos(g, 1, 0), 21, 'the second seat enters on the second arm tip');
+    assert.equal(E.absPos(g, 0, 76), 6, 'the seat walks 77 squares, ending just before its own start');
+    assert.ok(g.geo.safe.has(8) && g.geo.safe.has(3) && !g.geo.safe.has(9) && !g.geo.safe.has(6) && g.geo.safe.size === 12, 'safe squares: each start and the star on the other column');
+  }
+  const six = E.createGame(people(6), {}, mulberry32(3));
+  six.phase = 'moving'; six.turn = 0; six.dice = 6;
+  six.tokens[0][0] = 0; six.tokens[0][1] = 2;
+  // seat 0 lands on absolute square 14; seat 1 starts at 21, so its token at relative position 71 sits on absolute square 12
+  six.tokens[1][0] = 71;
+  const r = E.applyAction(six, six.players[0].id, { type: 'move', token: 0 });
+  assert.ok(r.ok, 'move ok');
+  assert.equal(six.tokens[0][0], 6, 'seat 0 moves six squares');
+  assert.equal(six.tokens[1][0], -1, 'the opponent on that hexagon square is sent back to its yard');
+  assert.ok(six.log.some((e) => e.kind === 'capture'), 'the capture is logged');
+  assert.equal(E.newPosFor(six, 0, 76, 1), 77, 'the last ring square before home');
+  assert.equal(E.newPosFor(six, 0, 77, 5), 82, 'exactly home from the last ring square');
+  assert.equal(E.newPosFor(six, 0, 77, 6), null, 'overshoot is illegal');
+});
+
+test('playOut: full bot-only game finishes for 2 to 6 players', async () => {
+  for (const n of [2, 3, 4, 5, 6]) {
     const players = people(n);
     const g = plugin.create(players, {}, mulberry32(100 + n));
     let steps = 0;
@@ -429,7 +511,7 @@ test('playOut: full bot-only game finishes for 2, 3 and 4 players', async () => 
     assert.equal(winners.length, 1, 'exactly one winner');
     assert.equal(winners[0].score, n, 'winner scores n (first place)');
     const scores = res.map((r) => r.score).sort((a, b) => a - b);
-    assert.deepEqual(scores, [1, 2, 3, 4].slice(0, n), 'scores are 1..n by placement');
+    assert.deepEqual(scores, Array.from({ length: n }, (_, i) => i + 1), 'scores are 1..n by placement');
     assert.ok(res.some((r) => r.score === 1), 'last place scores 1');
   }
 });
