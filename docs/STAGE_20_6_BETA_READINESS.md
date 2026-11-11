@@ -88,7 +88,7 @@ Status key: **[x]** verified (in code, CI or owner-recorded evidence), **[ ]** o
 
 **Repository and deployment**
 - [x] Protect-Main requires the CI checks before merge (`docs/OPERATIONS_RUNBOOK.md`, "Repository safety"). Ruleset status checked live through the rulesets API on 2026-11-10: `Protect-Main` is active on the branch target.
-- [M] M-1: latest `main` deployed on Render; `/healthz` 200; `/readyz` 200 `ready` with `store: postgres`.
+- [M] M-1: latest `main` deployed on Render; `/healthz` 200; `/readyz` 200 with body `ready` (optionally followed by match-queue counts); `server.started` log shows `store: postgres`.
 - [M] M-3: `MATCH_SPOOL_DIR` unset as in `render.yaml`; Render's behaviour on a restart (same machine or fresh) checked in the dashboard.
 
 **Accounts and sessions**
@@ -132,7 +132,7 @@ Run on the live domain with two test accounts that are not testers. Record times
 
 | # | Check | Expected |
 |---|---|---|
-| S-1 | `/healthz`, `/readyz`, `server.started` in the logs | 200, 200 `ready`, `store: postgres` |
+| S-1 | `/healthz`, `/readyz`, `server.started` in the logs | 200, 200 `ready`, and `server.started` shows `store: postgres` |
 | S-2 | Sign up (after C-A) | Needs the 18+ tick; account created; verification e-mail arrives |
 | S-3 | Play before verifying | Refused with a verification message |
 | S-4 | Open the verification link; reuse it | Verified; second use refused |
@@ -141,7 +141,7 @@ Run on the live domain with two test accounts that are not testers. Record times
 | S-7 | Keep me signed in: sign in with the box ticked. In the browser's developer tools, delete **only** the `ct_session` cookie (keep `ct_device`), then reload | Signed in again, restored from the device cookie. Settings > Sessions > sign out of every device ends it, and the device cookie stops working |
 | S-8 | Chat: send, report, block | Report stored (checked with the read-only query); block hides chat and refuses invites |
 | S-9 | Feedback form, then the Feedback tab | Item listed as new |
-| S-10 | Owner console: Overview, Users lookup, Broadcasts preview (no send) | Loads for the owner; a second account gets 403 on `/api/admin/*` |
+| S-10 | Owner console: Overview, Users lookup, Broadcasts preview (no send) | Loads for the owner; a second account gets 403 on `GET /api/admin/overview` (`GET /api/admin/me` is not a test point: it returns 200 with `isAdmin: false` for any signed-in account, by design) |
 | S-11 | Deletion on a throwaway account | Removed; its match shows `Deleted player` |
 | S-12 | Voice (after C-D) | Voice button absent; voice request refused |
 | S-13 | Logs after the test | No `[matches] NOT SAVED`, no `process.crash`; `[stats]` present |

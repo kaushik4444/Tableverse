@@ -112,7 +112,7 @@ No policy text is published, and no personal placeholder is filled, by this revi
 
 | ID | Check | Status |
 |---|---|---|
-| M-1 | Latest `main` deployed; `/healthz` 200; `/readyz` 200 `ready`, `store: postgres` | Health owner-confirmed; deployed commit pending owner action |
+| M-1 | Latest `main` deployed; `/healthz` 200; `/readyz` 200 `ready`; `server.started` shows `store: postgres` | Health owner-confirmed; deployed commit pending owner action |
 | M-3 | Render restart behaviour; `MATCH_SPOOL_DIR` unset | Pending owner action |
 | M-4 | Uptime monitor (optional) | Deferred |
 | M-5 | Cleanup environment reviewer; `CLEANUP_EXECUTE` not `true`; read-only dry-run role | Pending owner action |
@@ -130,7 +130,7 @@ No policy text is published, and no personal placeholder is filled, by this revi
 | S-7 | Keep me signed in | Pending owner action |
 | S-8 | Chat report stored; block hides chat | Pending owner action |
 | S-9 | Feedback appears in the Feedback tab | Pending owner action |
-| S-10 | Owner console; a second account gets 403 | Pending owner action |
+| S-10 | Owner console; a second account gets 403 on `GET /api/admin/overview` (not `/api/admin/me`, which returns 200 with `isAdmin: false` by design) | Pending owner action |
 | S-11 | Deletion on a throwaway account | Pending owner action |
 | S-12 | Voice button absent; voice request refused | Owner-confirmed behaviour; record on the live site |
 | S-13 | Logs clean after the test | Pending owner action |
