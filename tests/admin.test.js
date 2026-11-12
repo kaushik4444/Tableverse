@@ -146,6 +146,7 @@ const ADMIN_POSTS = [
       assert.equal(r.json.returning.newPerDay[6], 2, 'the last label is today and carries the day that was returned');
       assert.equal(r.json.returning.daily, undefined, 'only the per-day arrays are sent');
       assert.deepEqual(s.store.insightsCalls.at(-1), { days: '7', tz: 'Asia/Kolkata' });
+      assert.equal(r.json.countryEngagement.minPlayers, 10); assert.equal(r.json.countryEngagement.rows[0].country, 'DE');
       const bare = await admin.b.get('/api/admin/insights');
       assert.equal(bare.json.days, 30);
       assert.equal(s.store.insightsCalls.at(-1).tz, 'UTC', 'UTC unless a zone is asked for');
