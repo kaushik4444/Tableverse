@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Beta guide for testers
+    url: https://github.com/kaushik4444/tableverse/blob/main/docs/BETA_ONBOARDING.md
+    about: How to sign up, what to try first and how to report problems.
+  - name: Safety or security problem (private, not a public issue)
+    url: https://github.com/kaushik4444/tableverse/blob/main/docs/SUPPORT_AND_REPORTING.md#how-to-report-a-security-or-privacy-problem
+    about: Account compromise, someone's private information, or a vulnerability. Write to the support address in this guide. Do not open a public issue.
