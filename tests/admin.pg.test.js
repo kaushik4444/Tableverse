@@ -91,6 +91,9 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(list.total >= 3 && list.sort === 'games');
       assert.equal((await ps.listPlayers({ q: 'zzz-no-such', sort: 'drop table players' })).total, 0);
       assert.equal((await ps.listPlayers({ sort: 'drop table players' })).sort, 'seen', 'an unknown sort falls back and never reaches the SQL');
+      // a page number that is not a whole number (or is absurdly large) must never reach PostgreSQL as an invalid OFFSET
+      for (const bad of ['Infinity', '1e30', 'abc', -4]) assert.equal((await ps.listPlayers({ sort: 'games', page: bad })).players.length, Math.min(25, (await ps.listPlayers({ sort: 'games' })).players.length), `page ${bad} falls back to the first page`);
+      assert.equal((await ps.listPlayers({ sort: 'seen', page: '99999999' })).players.length, 0, 'a huge page is capped and simply returns no rows');
       const before = (await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'player.view'"))[0].n;
       const prof = await ps.playerProfile({ username: a.username || (await q('SELECT username FROM players WHERE id = $1', [a.id]))[0].username, actorId: staff.id });
       assert.equal(prof.totals.games, 4); assert.equal(prof.totals.rated, 3); assert.equal(prof.totals.losses, 1, 'a draw is neither a win nor a loss, and an unrecorded result is not a loss'); assert.ok(prof.totals.activeDays >= 1 && prof.totals.activeDays <= 2, 'one day (two if the test ran across midnight UTC)');

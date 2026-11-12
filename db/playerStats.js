@@ -12,7 +12,10 @@ const db = require('./pool');
 const PAGE = 25;
 const ZONES = ['UTC', 'Europe/Berlin', 'Asia/Kolkata'];
 const clampZone = (z) => (ZONES.includes(z) ? z : 'UTC');
-const page = (p) => Math.max(0, (Math.floor(Number(p)) || 1) - 1);
+// A page number from the request, bounded: anything not a whole number from 1 to MAX_PAGE falls back to the first page, so no
+// value (Infinity, 1e30, text) can become an invalid OFFSET.
+const MAX_PAGE = 10000;
+const page = (p) => { const n = Math.floor(Number(p)); return Number.isSafeInteger(n) && n >= 1 ? Math.min(n, MAX_PAGE) - 1 : 0; };
 const like = (q) => `%${String(q).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 const num = (v) => Number(v) || 0;
 const round1 = (v) => Math.round(num(v) * 10) / 10;
@@ -49,6 +52,10 @@ const STATS = `
      WHERE mp.player_id = p.id AND NOT mp.is_bot
   ) s ON TRUE`;
 
+// Sorts by an account field need only the displayed page's statistics, so the page is chosen first and then joined. Sorts by a
+// statistic need every player's figures before they can be ordered, so they keep the full aggregation.
+const ACCOUNT_SORTS = new Set(['seen', 'joined']);
+
 async function listPlayers({ q = '', sort = 'seen', page: pg = 1 } = {}) {
   const term = String(q || '').trim().slice(0, 40);
   const key = clampSort(sort);
@@ -56,15 +63,16 @@ async function listPlayers({ q = '', sort = 'seen', page: pg = 1 } = {}) {
   let where = 'WHERE p.is_anonymous = FALSE AND p.username IS NOT NULL';
   if (term) { args.push(like(term)); where += ` AND (p.username ILIKE $1 ESCAPE '\\' OR p.display_name ILIKE $1 ESCAPE '\\')`; }
   const total = (await db.query(`SELECT COUNT(*)::int AS n FROM players p ${where}`, args)).rows[0].n;
-  const r = await db.query(
-    `SELECT p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
+  const offset = `LIMIT ${PAGE} OFFSET $${args.length + 1}`;
+  const cols = `SELECT p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
             COALESCE(s.games, 0) AS games, COALESCE(s.rated, 0) AS rated, COALESCE(s.wins, 0) AS wins, COALESCE(s.draws, 0) AS draws,
-            COALESCE(s.left_early, 0) AS left_early, COALESCE(s.minutes, 0) AS minutes, s.last_game
-       FROM players p ${STATS} ${where}
-      ORDER BY ${SORTS[key]}, p.username
-      LIMIT ${PAGE} OFFSET $${args.length + 1}`,
-    [...args, page(pg) * PAGE]
-  );
+            COALESCE(s.left_early, 0) AS left_early, COALESCE(s.minutes, 0) AS minutes, s.last_game`;
+  const r = ACCOUNT_SORTS.has(key)
+    ? await db.query(
+      `${cols} FROM (SELECT p.* FROM players p ${where} ORDER BY ${SORTS[key]}, p.username ${offset}) p ${STATS}
+        ORDER BY ${SORTS[key]}, p.username`,
+      [...args, page(pg) * PAGE])
+    : await db.query(`${cols} FROM players p ${STATS} ${where} ORDER BY ${SORTS[key]}, p.username ${offset}`, [...args, page(pg) * PAGE]);
   return {
     total, pageSize: PAGE, sort: key,
     players: r.rows.map((x) => ({ username: x.username, displayName: x.display_name, country: x.country || null, role: x.role, joinedAt: x.created_at, lastSeenAt: x.last_seen_at,
