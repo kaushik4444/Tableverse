@@ -1,7 +1,7 @@
 'use strict';
 // The seat-order statistics: expected share by seat count, binomial z-score, sample floor and flag threshold.
 const assert = require('node:assert/strict');
-const { computeSeatBalance, MIN_GAMES, Z_FLAG } = require('../lib/seatBalance');
+const { computeSeatBalance, MIN_GAMES, Z_FLAG, SINGLE_WINNER_GAMES } = require('../lib/seatBalance');
 
 assert.equal(MIN_GAMES, 30);
 assert.equal(Z_FLAG, 3);
@@ -18,6 +18,11 @@ assert.equal(lucky.flagged, true, 'a large z-score over enough games is flagged'
 assert.equal(small.enoughGames, false);
 assert.equal(small.flagged, false, 'a small sample is never flagged');
 assert.equal(small.expectedRate, 25, 'a four-seat game expects a quarter each');
+// a seat that wins far less than its share is not flagged (only over-winning is)
+const [under] = computeSeatBalance([{ game_id: 'ludo', seats: 2, seat: 0, games: 100, wins: 10 }]);
+assert.equal(under.z, -8);
+assert.equal(under.flagged, false, 'a seat that wins far less than its share is not flagged');
+assert.ok(SINGLE_WINNER_GAMES.includes('ludo') && !SINGLE_WINNER_GAMES.includes('themind'), 'cooperative games are left out');
 assert.deepEqual(computeSeatBalance([{ game_id: 'x', seats: 2, seat: 0, games: 0, wins: 0 }])[0].winRate, 0, 'no games gives no rate');
 console.log('  ok  seat-order check: expected share, z-score, sample floor and flag');
 console.log('seat-balance: 1 passed');

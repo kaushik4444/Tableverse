@@ -656,32 +656,37 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(day7.daily.every((r) => r.day > new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)), 'every bucket is inside the 7 days');
       assert.equal(day7.daily.filter((r) => r.day === new Date().toISOString().slice(0, 10)).length, 1, 'today has one bucket');
     });
-    await test('seat-order check: counts finished games per seat, leaves out a player who left early, and the SQL runs', async () => {
+    await test('seat-order check: counts decisive single-winner games per seat; leavers, legacy matches and other games are left out', async () => {
       const { seatBalance } = require('../db/seatBalance');
       const a = await newUser('Sta'); const b = await newUser('Stb');
-      // four finished games on a game id of its own: seat 1 wins three, seat 2 wins one; seat 2 left early in one game
-      const games = [
-        { s1: true, s2: false, left2: false },
-        { s1: true, s2: false, left2: false },
-        { s1: true, s2: false, left2: true },
-        { s1: false, s2: true, left2: false },
-      ];
-      for (const g of games) {
-        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at)
-                            VALUES (gen_random_uuid(), 'SEAT', 'seatprobe', 2, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour') RETURNING id`))[0].id;
-        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,0,$4,false,false,false)', [m, a.id, 'x', g.s1]);
-        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,1,$4,false,$5,false)', [m, b.id, 'y', g.s2, g.left2]);
+      const seatRow = (out, seat) => out.rows.find((r) => r.gameId === 'ludo' && r.seats === 2 && r.seat === seat) || { games: 0, wins: 0 };
+      const before = await seatBalance({ days: 30 });
+      const insertMatch = async (game, matchKey) => (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at)
+                            VALUES ($1, 'SEAT', $2, 2, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour') RETURNING id`, [matchKey, game]))[0].id;
+      const seat = (m, player, s, won, leftEarly = false) => q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,$5,false,$6,false)', [m, player.id, 'x', s, won, leftEarly]);
+      // four Ludo games: seat 1 wins three, seat 2 wins one; seat 2 left early in one of the games where it did not win
+      const results = [[true, false, false], [true, false, false], [true, false, true], [false, true, false]];
+      for (const [s1, s2, left2] of results) {
+        const m = await insertMatch('ludo', (await q(`SELECT gen_random_uuid()::text AS k`))[0].k);
+        await seat(m, a, 0, s1); await seat(m, b, 1, s2, left2);
       }
-      const out = await seatBalance({ days: 30 });
-      const seat0 = out.rows.find((r) => r.gameId === 'seatprobe' && r.seat === 0);
-      const seat1 = out.rows.find((r) => r.gameId === 'seatprobe' && r.seat === 1);
-      assert.equal(seat0.games, 4); assert.equal(seat0.wins, 3);
-      assert.equal(seat1.games, 3, 'the game the player left early is not counted');
-      assert.equal(seat1.wins, 1);
-      assert.equal(seat0.enoughGames, false, 'four games is too few to judge');
-      assert.equal(seat0.flagged, false);
-      assert.equal(seat0.expectedRate, 50);
+      // a legacy match with no match key (winners not known) and a Mind game (cooperative): neither may count
+      const legacy = await insertMatch('ludo', null); await seat(legacy, a, 0, false); await seat(legacy, b, 1, false);
+      const coop = await insertMatch('themind', (await q(`SELECT gen_random_uuid()::text AS k`))[0].k); await seat(coop, a, 0, true); await seat(coop, b, 1, true);
+      const after = await seatBalance({ days: 30 });
+      const d0 = seatRow(after, 0).games - seatRow(before, 0).games;
+      const w0 = seatRow(after, 0).wins - seatRow(before, 0).wins;
+      const d1 = seatRow(after, 1).games - seatRow(before, 1).games;
+      const w1 = seatRow(after, 1).wins - seatRow(before, 1).wins;
+      assert.equal(d0, 4, 'seat 1 played four decisive games');
+      assert.equal(w0, 3, 'and won three');
+      assert.equal(d1, 3, 'seat 2 is counted in three: the game it left early is not');
+      assert.equal(w1, 1);
+      const mind = (out) => out.rows.filter((r) => r.gameId === 'themind').reduce((n, r) => n + r.games, 0);
+      assert.equal(mind(after), mind(before), 'the cooperative game adds nothing');
+      assert.equal(seatRow(after, 0).flagged, false, 'four games is too few to flag');
     });
+
     // last: this check stops the server, so it must run after every check that needs it
     await test('real traffic is counted: registrations and logins reach the table when the server shuts down (final flush)', async () => {
       await newUser('Ned');
