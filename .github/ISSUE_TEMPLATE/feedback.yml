@@ -1,0 +1,90 @@
+name: Feedback (beta)
+description: Tell us how the beta felt. Not a bug.
+title: "[Feedback] "
+labels: ["feedback", "beta", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This issue is public.** Never include a password, your email address or a link from an email.
+        Found something broken? Use the **Bug report** form. Safety or security problem? Write privately to the support address in the [beta guide](https://github.com/kaushik4444/tableverse/blob/main/docs/SUPPORT_AND_REPORTING.md#how-to-report-a-security-or-privacy-problem).
+        Score each topic from 1 (poor) to 5 (great). Skip anything you did not try.
+  - type: input
+    id: games
+    attributes:
+      label: Game(s) you played
+      placeholder: "Example: Ludo and Property Rivals"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: "Example: iPhone 14, Safari"
+    validations:
+      required: true
+  - type: dropdown
+    id: region
+    attributes:
+      label: Country
+      options:
+        - India
+        - Germany
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: usability
+    attributes:
+      label: Usability - was it easy to find and understand things?
+      options: ["5 - great", "4", "3", "2", "1 - poor", "Did not try"]
+    validations:
+      required: true
+  - type: dropdown
+    id: mobile
+    attributes:
+      label: Mobile experience - did it fit the screen and respond to touch?
+      options: ["5 - great", "4", "3", "2", "1 - poor", "Did not try"]
+    validations:
+      required: true
+  - type: dropdown
+    id: fairness
+    attributes:
+      label: Game fairness - dice, cards, turns, scores
+      options: ["5 - great", "4", "3", "2", "1 - poor", "Did not try"]
+    validations:
+      required: true
+  - type: dropdown
+    id: performance
+    attributes:
+      label: Performance - was it quick and smooth?
+      options: ["5 - great", "4", "3", "2", "1 - poor", "Did not try"]
+    validations:
+      required: true
+  - type: dropdown
+    id: reliability
+    attributes:
+      label: Reliability - disconnects, crashes, lost games
+      options: ["5 - great", "4", "3", "2", "1 - poor", "Did not try"]
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Tell us more about any score of 3 or lower
+      description: What happened, and in which game or screen?
+  - type: textarea
+    id: best
+    attributes:
+      label: What did you like most?
+  - type: textarea
+    id: change
+    attributes:
+      label: What is the one thing you would change first?
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before you send
+      options:
+        - label: I removed passwords, email addresses and links from my message.
+          required: true
