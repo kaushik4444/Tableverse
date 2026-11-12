@@ -88,7 +88,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
        SELECT COUNT(*)::int AS size,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day = f.first_day + 1))::int AS d1,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day BETWEEN f.first_day + 1 AND f.first_day + 7))::int AS d7
-         FROM firsts f WHERE f.first_day > ${TODAY} - $1::int AND f.first_day <= ${TODAY} - 7`),
+         FROM firsts f WHERE f.first_day > ${TODAY} - ($1::int + 7) AND f.first_day <= ${TODAY} - 7`),
     // 7. the most active signed-in players in the window, with the hour (in the chosen zone) they most often start playing
     q(`WITH h AS (${HUMANS} AND ${IN_WINDOW})
        SELECT pl.username, pl.display_name, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE h.is_winner)::int AS wins,
