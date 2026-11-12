@@ -114,6 +114,17 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     playerCalls: [],
     reportCalls: [],
     // the real SQL is in db/reportQueue.js (tests/admin.pg.test.js); this records the request and returns a fixed answer
+    seatCalls: [],
+    async seatBalance(opts = {}) {
+      this.seatCalls.push(opts);
+      return { days: 30, minGames: 30, rows: [{ gameId: 'ludo', seats: 2, seat: 0, games: 40, wins: 26, winRate: 65, expectedRate: 50, z: 2.53, enoughGames: true, flagged: false }] };
+    },
+    funnelCalls: [],
+    async funnel(opts = {}) {
+      this.funnelCalls.push(opts);
+      const daily = [{ day: '2026-11-07', signups: 4, played: 3, returned: 1 }, { day: '2026-11-08', signups: 2, played: 2, returned: 0 }];
+      return { days: 30, totals: { signups: 6, played: 5, returned: 1 }, daily };
+    },
     async listReports(opts = {}) {
       this.reportCalls.push(opts);
       return { total: 1, pageSize: 25, recentDays: 30, items: [{ id: 'r1', reason: 'threats', severity: 'high', details: '', message: 'hello', room: 'ABCD', createdAt: '2026-11-08T08:00:00Z', reporter: 'ann', reported: 'bob', reportedSuspended: false, reportedTotal: 2, reportedRecent: 1 }] };

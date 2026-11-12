@@ -170,9 +170,42 @@
       <p class="ad-muted">Only players who chose a country on their profile are counted, so this is not everyone. Countries with fewer than ${(o.countryEngagement && o.countryEngagement.minPlayers) || 10} players are grouped, or hidden, so no single player can be picked out.</p>
       <h3>Most active players</h3>${top ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Played</th><th>Usual hour</th></tr></thead><tbody>${top}</tbody></table>` : '<p class="ad-muted">No signed-in players yet.</p>'}
       <p class="ad-muted">Signed-in players only: guests and bots are left out. Figures come from finished games; nothing personal beyond the public username is shown.</p>`;
+    main.insertAdjacentHTML('beforeend', '<h3>Signup funnel</h3><div id="funnel"><p class="ad-muted">Loading…</p></div><h3>Seat order check</h3><div id="seatBalance"><p class="ad-muted">Loading…</p></div>');
+    loadFunnel(range);
+    loadSeatBalance(range);
     const again = (d, z) => { sel.days = d; sel.tz = z; state.gen += 1; const mine = state.gen; insights(d, z).catch((e) => { if (mine === state.gen) fail(e); }); };
     main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => again(Number(b.dataset.days), sel.tz); });
     main.querySelectorAll('[data-zone]').forEach((b) => { b.onclick = () => again(sel.days, b.dataset.zone); });
+  }
+
+  // Signup funnel: signed-up accounts, those that played a first game, and those that came back on a later day. Counts only.
+  async function loadFunnel(range) {
+    const gen = state.gen;
+    const f = await api(`/api/admin/funnel?days=${range}`).catch(() => null);
+    const el = document.getElementById('funnel');
+    if (!el || gen !== state.gen) return;
+    if (!f) { el.innerHTML = '<p class="ad-muted">The funnel could not be loaded.</p>'; return; }
+    const t = f.totals;
+    const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
+    el.innerHTML = `<div class="ad-grid">${tile(t.signups, 'signed up')}${tile(pctText(t.played, t.signups), 'played a first game')}${tile(pctText(t.returned, t.signups), 'came back on a later day')}</div>
+      <p class="ad-muted">Accounts that signed up in the last ${f.days} days, by UTC day. "Came back" means a game on a later day than their first, so the newest signups have had less time to return.
+      <a class="ad-btn" href="/api/admin/funnel.csv?days=${f.days}" download>Download CSV</a></p>`;
+  }
+
+  // Seat-order check: does one seat win more often than the share chance gives it? Only flagged with enough games and a large z-score.
+  async function loadSeatBalance(range) {
+    const gen = state.gen;
+    const sb = await api(`/api/admin/seat-balance?days=${range}`).catch(() => null);
+    const el = document.getElementById('seatBalance');
+    if (!el || gen !== state.gen) return;
+    if (!sb) { el.innerHTML = '<p class="ad-muted">The seat check could not be loaded.</p>'; return; }
+    if (!sb.rows.length) { el.innerHTML = '<p class="ad-muted">No finished games with seats in this range.</p>'; return; }
+    // only more wins than the chance share is flagged; fewer wins is shown as not flagged, not as chance
+    const note = (r) => (!r.enoughGames ? `not enough games yet (${sb.minGames} needed)` : r.flagged ? 'worth a look: more wins than chance' : 'not flagged for excess wins');
+    el.innerHTML = `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Seats</th><th>Seat</th><th>Games</th><th>Win rate</th><th>Chance share</th><th>z</th><th>Note</th></tr></thead><tbody>${
+      sb.rows.map((r) => `<tr class="${r.flagged ? 'ad-flag' : ''}"><td data-l="Game">${esc(r.gameId)}</td><td data-l="Seats">${esc(r.seats)}</td><td data-l="Seat">${esc(r.seat + 1)}</td><td data-l="Games">${esc(r.games)}</td><td data-l="Win rate">${esc(r.winRate)}%</td><td data-l="Chance share">${esc(r.expectedRate)}%</td><td data-l="z">${esc(r.z)}</td><td data-l="Note">${esc(note(r))}</td></tr>`).join('')
+    }</tbody></table></div>
+      <p class="ad-muted">Counts finished games, leaving out players who left early. A seat is flagged only with at least ${sb.minGames} games and a z-score of 3 or more, and checking several seats at once makes a chance flag more likely, so a flag is a prompt to look, not proof.</p>`;
   }
 
   // ---------------------------------------------------------------- players (directory and per-player stats)

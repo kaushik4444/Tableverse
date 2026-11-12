@@ -1,5 +1,5 @@
 /* Admin console (Stage 20.5). Mobile first; no external resources. */
-:root { --felt-1: #153228; --felt-2: #071510; --bg: #071510; --surface: rgba(255,255,255,.04); --line: rgba(255,255,255,.12); --text: #f0fdf4; --muted: #86efac; --accent: #fbbf24; --accent-ink: #1e1100; --chart: #34d399; --warn: #fbbf24; --ok: #34d399; --bad: #f87171; --radius: 16px; color-scheme: dark; }
+:root { --felt-1: #153228; --felt-2: #071510; --bg: #071510; --surface: rgba(255,255,255,.04); --line: rgba(255,255,255,.12); --text: #f0fdf4; --muted: #86efac; --accent: #fbbf24; --accent-ink: #1e1100; --chart: #34d399; --warn: #fbbf24; --ok: #34d399; --bad: #f87171; --radius: 16px; --serif: 'Inter', system-ui, -apple-system, sans-serif; --sans: system-ui, -apple-system, "Segoe UI", sans-serif; color-scheme: dark; }
 /* The console follows the game's felt-and-gold look (public/style.css) in one theme, so it reads as part of the same product. */
 * { box-sizing: border-box; }
 html { background: var(--bg); }
@@ -13,11 +13,12 @@ body { margin: 0; min-height: 100vh; background: radial-gradient(1000px 600px at
 .ad-tabs button[aria-selected="true"] { background: linear-gradient(135deg, #ffd978, #ffb13d); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
 .ad-main { padding: 16px; max-width: 1000px; margin: 0 auto; }
 .ad-muted { color: var(--muted); }
+h1, h2, h3 { font-family: var(--serif); font-weight: 800; letter-spacing: -.02em; }
 h2 { margin: 0 0 12px; font-size: 20px; }
 h3 { margin: 20px 0 8px; font-size: 16px; }
 .ad-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .ad-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
-.ad-card b { display: block; font-size: 26px; line-height: 1.1; }
+.ad-card b { display: block; font-family: var(--serif); font-weight: 800; letter-spacing: -.02em; font-size: 26px; line-height: 1.1; }
 .ad-card small { color: var(--muted); }
 .ad-bars { display: grid; gap: 6px; margin: 8px 0 16px; }
 .ad-bar { display: grid; grid-template-columns: minmax(70px, 130px) 1fr 52px; gap: 8px; align-items: center; font-size: 13px; }
@@ -29,6 +30,7 @@ table.ad-t { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ad-t th, .ad-t td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .ad-t th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .ad-scroll { overflow-x: auto; }
+.ad-t tr.ad-flag td { font-weight: 600; }
 .ad-list { display: grid; gap: 10px; }
 button.ad-btn, .ad-btn { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .ad-btn.primary { background: linear-gradient(135deg, #ffd978, #ffb13d); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
