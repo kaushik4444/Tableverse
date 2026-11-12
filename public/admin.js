@@ -86,6 +86,7 @@
       <h3>Sessions per day</h3>${spark(o.series.session || [], 'Sessions per day')}
       <h3>Games finished per day</h3>${spark(o.series.game_finished || [], 'Games finished per day')}
       <h3>Popular games</h3>${bars(o.popularGames, 'No finished games yet.')}
+      <h3>Errors per day</h3>${lineChart(o.series.error || (o.labels || []).map(() => 0), o.labels || [], 'Errors')}
       <h3>Errors by kind</h3>${bars(o.errors, 'No errors recorded.')}
       <p class="ad-muted">Counters only: no addresses, names or messages are recorded. Active users are counted from a keyed hash, never an account id. Detail rows are kept ${o.retention ? esc(o.retention.activeDays) : '35'} days, daily totals ${o.retention ? esc(o.retention.dailyDays) : '400'} days.</p>`;
     startLive();

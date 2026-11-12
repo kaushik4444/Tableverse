@@ -160,6 +160,11 @@ const ADMIN_POSTS = [
       assert.equal(r.json.items[0].severity, 'high');
       assert.ok(!JSON.stringify(r.json).match(/email|token|password|ip|address/i), 'no address, token or secret in the answer');
     });
+    await test('overview: the error series always has one value per day, even before any error is recorded', async () => {
+      const r = await admin.b.get('/api/admin/overview?days=7');
+      assert.equal(r.status, 200);
+      assert.equal(r.json.series.error.length, r.json.labels.length);
+    });
     await test('player directory: staff only; sort and search are passed on; opening a profile is audited', async () => {
       assert.equal((await user.b.get('/api/admin/players')).status, 403);
       assert.equal((await user.b.get('/api/admin/players/profile?username=ann')).status, 403);
