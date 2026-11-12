@@ -160,8 +160,8 @@ const ADMIN_POSTS = [
       assert.ok(!JSON.stringify(r.json).match(/email|token|password|ip/i), 'no address, token or secret in the answer');
       const target = [...s.store.players.values()].find((x) => x.username && !x.is_anonymous);
       const before = s.store.audit.length;
-      const p = await admin.b.get('/api/admin/players/profile?username=' + target.username + '&tz=Europe/Berlin');
-      assert.equal(p.status, 200); assert.equal(p.json.zone, 'Europe/Berlin'); assert.equal(p.json.hourly.length, 24);
+      const p = await admin.b.get('/api/admin/players/profile?username=' + target.username);
+      assert.equal(p.status, 200); assert.equal(p.json.hourly['Europe/Berlin'].length, 24, 'all three zones in one answer, so a zone switch needs no second view');
       assert.equal(s.store.audit.length, before + 1, 'one audit row for the view');
       assert.equal(s.store.audit.at(-1).action, 'player.view');
       assert.equal((await admin.b.get('/api/admin/players/profile?username=nobody_here')).json.player, null);

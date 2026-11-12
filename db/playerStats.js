@@ -65,10 +65,9 @@ async function listPlayers({ q = '', sort = 'seen', page: pg = 1 } = {}) {
 }
 
 /** One player's full profile. `actorId` gets an audit row ("player.view") in the same transaction as the read. */
-async function playerProfile({ username, actorId, tz = 'UTC' }) {
+async function playerProfile({ username, actorId }) {
   const u = String(username || '').trim().toLowerCase();
   if (!/^[a-z0-9_]{3,24}$/.test(u)) return { player: null };
-  const zone = clampZone(tz);
   return db.withTransaction(async (c) => {
     const base = (await c.query(
       `SELECT p.id, p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
@@ -76,7 +75,7 @@ async function playerProfile({ username, actorId, tz = 'UTC' }) {
          FROM players p WHERE p.username = $1 AND p.is_anonymous = FALSE LIMIT 1`, [u])).rows[0];
     if (!base) return { player: null };
     const id = base.id;
-    const [total, perGame, hours, recent, days] = await Promise.all([
+    const [total, perGame, recent, days, ...hours] = await Promise.all([
       c.query(`SELECT COUNT(*)::int AS games, COUNT(*) FILTER (WHERE mp.is_winner)::int AS wins, COUNT(*) FILTER (WHERE mp.is_draw)::int AS draws,
                       COUNT(*) FILTER (WHERE mp.left_early)::int AS left_early,
                       COALESCE(SUM(CASE WHEN mp.left_early THEN 0 ELSE EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) END) / 60.0, 0)::float AS minutes,
@@ -87,26 +86,26 @@ async function playerProfile({ username, actorId, tz = 'UTC' }) {
                       COALESCE(SUM(CASE WHEN mp.left_early THEN 0 ELSE EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) END) / 60.0, 0)::float AS minutes
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot
                 GROUP BY m.game_id ORDER BY games DESC, m.game_id`, [id]),
-      c.query(`SELECT EXTRACT(HOUR FROM m.started_at AT TIME ZONE $2::text)::int AS hour, COUNT(*)::int AS games
-                 FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot GROUP BY 1`, [id, zone]),
       c.query(`SELECT m.game_id, m.finished_at, m.seats, mp.is_winner, mp.is_draw, mp.left_early,
                       (EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) / 60.0)::float AS minutes
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot
                 ORDER BY m.finished_at DESC, m.id LIMIT 15`, [id]),
       c.query(`SELECT COUNT(DISTINCT (m.started_at AT TIME ZONE 'UTC')::date)::int AS days
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot`, [id]),
+      // games started per hour of the day, once per supported zone, so the console can switch zones without asking (and auditing) again
+      ...ZONES.map((z) => c.query(`SELECT EXTRACT(HOUR FROM m.started_at AT TIME ZONE $2::text)::int AS hour, COUNT(*)::int AS games
+                 FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot GROUP BY 1`, [id, z])),
     ]);
     if (actorId) {
       await c.query('INSERT INTO admin_audit_log (actor_id, action, target_type, target_id, detail) VALUES ($1, $2, $3, $4, $5::jsonb)',
         [actorId, 'player.view', 'player', String(id).slice(0, 64), '{}']);
     }
     const t = total.rows[0] || {};
-    const hourly = Array(24).fill(0);
-    for (const r of hours.rows) hourly[r.hour] = r.games;
+    const hourly = {};
+    ZONES.forEach((z, i) => { hourly[z] = Array(24).fill(0); for (const r of hours[i].rows) hourly[z][r.hour] = r.games; });
     const games = num(t.games);
     const decided = games - num(t.draws);
     return {
-      zone,
       player: {
         username: base.username, displayName: base.display_name, country: base.country || null, role: base.role, verified: Boolean(base.verified),
         joinedAt: base.created_at, lastSeenAt: base.last_seen_at, suspended: Boolean(base.suspended_at),

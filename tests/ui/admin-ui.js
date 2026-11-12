@@ -20,12 +20,20 @@ const insightsFixture = (days, zone) => ({ ok: true, days, zone, labels: ['2026-
   returning: { activePlayers: 9, newPlayers: 5, returningPlayers: 4, newPerDay: [2, 3, 0], returningPerDay: [0, 1, 3], cohort: { size: 4, d1: 2, d7: 3 } },
   countries: [{ country: 'DE', players: 5 }, { country: 'IN', players: 3 }, { country: null, players: 1 }],
   top: [{ username: 'ann', displayName: 'Ann', games: 14, wins: 6, minutes: 130, peakHour: 20 }] });
+const playersFixture = (sort) => ({ ok: true, total: 1, pageSize: 25, sort, players: [{ username: 'ann', displayName: 'Ann', country: 'DE', role: 'user', joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: '2026-11-08T09:00:00Z', suspended: false, games: 14, wins: 6, draws: 1, leftEarly: 2, minutes: 130, lastGameAt: '2026-11-08T08:00:00Z' }] });
 const api = (role) => ({
   'GET /api/auth/csrf': () => ({ ok: true, csrfToken: 'tok' }),
   'GET /api/admin/me': () => ({ ok: true, role, isAdmin: role !== 'user', isOwner: role === 'owner' }),
   'GET /api/admin/insights?days=7&tz=UTC': () => insightsFixture(7, 'UTC'),
   'GET /api/admin/insights?days=30&tz=UTC': () => insightsFixture(30, 'UTC'),
   'GET /api/admin/insights?days=7&tz=Asia%2FKolkata': () => insightsFixture(7, 'Asia/Kolkata'),
+  'GET /api/admin/players?q=&sort=seen&page=1': () => playersFixture('seen'),
+  'GET /api/admin/players?q=&sort=games&page=1': () => playersFixture('games'),
+  'GET /api/admin/players/profile?username=ann': () => ({ ok: true, player: { username: 'ann', displayName: 'Ann', country: 'DE', role: 'user', verified: true, joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: '2026-11-08T09:00:00Z', suspended: false },
+    totals: { games: 14, wins: 6, draws: 1, losses: 7, leftEarly: 2, minutes: 130, activeDays: 5, firstGameAt: '2026-11-02T10:00:00Z', lastGameAt: '2026-11-08T08:00:00Z' },
+    perGame: [{ gameId: 'ludo', games: 10, wins: 4, draws: 0, leftEarly: 2, minutes: 120 }],
+    hourly: { UTC: Array.from({ length: 24 }, (_, h) => (h === 19 ? 9 : 0)), 'Europe/Berlin': Array.from({ length: 24 }, (_, h) => (h === 20 ? 9 : 0)), 'Asia/Kolkata': Array.from({ length: 24 }, (_, h) => (h === 0 ? 9 : 0)) },
+    recent: [{ gameId: 'ludo', at: '2026-11-08T08:00:00Z', seats: 4, won: true, draw: false, leftEarly: false, minutes: 22 }] }),
   'GET /api/admin/overview?days=30': () => ({ ok: true, days: 30, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
   'GET /api/admin/overview?days=7': () => ({ ok: true, days: 7, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
   'GET /api/admin/users?q=&page=1': () => ({ ok: true, total: 3, pageSize: 25, users: [U({ id: 'u1', display_name: EVIL }), U({ id: 'u2', username: 'bob', display_name: 'Bob', role: 'admin' }), U({ id: 'u3', username: 'own', display_name: 'Owner', role: 'owner' })] }),
@@ -164,10 +172,33 @@ const api = (role) => ({
     assert.deepEqual(s.errors, []);
     await s.close();
   });
+  await test('players: the directory lists registered players, sorts, opens a profile with a per-game table, and switches zone without asking again', async () => {
+    const s = await open('admin');
+    await s.page.waitForSelector('.ad-grid');
+    await tab(s.page, 'players');
+    await s.page.waitForSelector('[data-view="ann"]');
+    assert.match(await s.page.textContent('#adMain'), /1 registered/);
+    await s.page.click('[data-sort="games"]');
+    await s.page.waitForSelector('[data-sort="games"][aria-pressed="true"]');
+    await s.page.click('[data-view="ann"]');
+    await s.page.waitForSelector('#pBack');
+    const text = await s.page.textContent('#adMain');
+    assert.match(text, /Germany/); assert.match(text, /ludo/); assert.match(text, /Usually starts around 19:00/);
+    const asked = () => s.calls.filter((c) => /players\/profile/.test(c.path)).length;
+    const before = asked();
+    await s.page.click('[data-zone="Europe/Berlin"]');
+    await s.page.waitForFunction(() => /around 20:00/.test(document.getElementById('adMain').textContent));
+    assert.equal(asked(), before, 'a zone switch redraws from the same answer, so it is not audited again');
+    assert.equal(await s.page.locator('.ad-col').count(), 24);
+    await s.page.click('#pBack');
+    await s.page.waitForSelector('[data-view="ann"]');
+    assert.deepEqual(s.errors, []);
+    await s.close();
+  });
   await test('on a 360px phone no tab scrolls sideways and tap targets are at least 40px', async () => {
     const s = await open('owner', { width: 360, height: 740 });
     await s.page.waitForSelector('.ad-grid');
-    for (const name of ['overview', 'insights', 'users', 'feedback', 'announcements', 'health', 'audit']) {
+    for (const name of ['overview', 'insights', 'players', 'users', 'feedback', 'announcements', 'health', 'audit']) {
       await tab(s.page, name); await sleep(150);
       const over = await s.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       assert.ok(over <= 1, `${name} overflows by ${over}px`);

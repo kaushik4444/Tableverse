@@ -101,13 +101,13 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       this.playerCalls.push(opts);
       return { total: 1, pageSize: 25, sort: opts.sort || 'seen', players: [{ username: 'ann', displayName: 'Ann', country: 'DE', role: 'user', joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: '2026-11-08T09:00:00Z', suspended: false, games: 14, wins: 6, draws: 1, leftEarly: 2, minutes: 130, lastGameAt: '2026-11-08T08:00:00Z' }] };
     },
-    async playerProfile({ username, actorId, tz = 'UTC' }) {
+    async playerProfile({ username, actorId }) {
       const p = [...players.values()].find((x) => x.username === String(username || '').toLowerCase() && !x.is_anonymous);
       if (!p) return { player: null };
       log(actorId, 'player.view', 'player', p.id);
-      return { zone: tz, player: { username: p.username, displayName: p.display_name, country: null, role: p.role, verified: true, joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: null, suspended: false },
+      return { player: { username: p.username, displayName: p.display_name, country: null, role: p.role, verified: true, joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: null, suspended: false },
         totals: { games: 14, wins: 6, draws: 1, losses: 7, leftEarly: 2, minutes: 130, activeDays: 5, firstGameAt: '2026-11-02T10:00:00Z', lastGameAt: '2026-11-08T08:00:00Z' },
-        perGame: [{ gameId: 'ludo', games: 10, wins: 4, draws: 0, leftEarly: 2, minutes: 120 }], hourly: Array.from({ length: 24 }, (_, h) => (h === 20 ? 9 : 0)),
+        perGame: [{ gameId: 'ludo', games: 10, wins: 4, draws: 0, leftEarly: 2, minutes: 120 }], hourly: { 'UTC': Array.from({ length: 24 }, (_, h) => (h === 19 ? 9 : 0)), 'Europe/Berlin': Array.from({ length: 24 }, (_, h) => (h === 20 ? 9 : 0)), 'Asia/Kolkata': Array.from({ length: 24 }, (_, h) => (h === 0 ? 9 : 0)) },
         recent: [{ gameId: 'ludo', at: '2026-11-08T08:00:00Z', seats: 4, won: true, draw: false, leftEarly: false, minutes: 22 }] };
     },
     playerCalls: [],

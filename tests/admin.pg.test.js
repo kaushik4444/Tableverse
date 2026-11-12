@@ -67,6 +67,36 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).days, 30, 'an unknown range falls back to 30 days');
       assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).zone, 'UTC', 'an unknown zone falls back to UTC');
     });
+    await test('player directory: totals, sorting, search, per-game stats and an audit row on opening a profile (no address or token in the answer)', async () => {
+      const ps = require('../db/playerStats');
+      const a = await newUser('Pda'); const b = await newUser('Pdb'); const staff = await newUser('Pds');
+      const mk = async (game, mins, parts) => {
+        const m = (await q(`INSERT INTO matches (room_code, game_id, seats, started_at, finished_at) VALUES ('PDR1', $1, $2, NOW() - ($3::int * INTERVAL '1 minute') - INTERVAL '5 minutes', NOW() - INTERVAL '5 minutes') RETURNING id`, [game, parts.length, mins]))[0].id;
+        for (const [i, [pid, win, bot, left, draw]] of parts.entries()) await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [m, pid, 'x', i, win, bot, left, draw]);
+      };
+      await mk('ludo', 20, [[a.id, true, false, false, false], [b.id, false, false, true, false], [null, false, true, false, false]]);
+      await mk('tictactoe', 3, [[a.id, false, false, false, true], [b.id, false, false, false, true]]);
+      await mk('ludo', 10, [[a.id, false, false, false, false], [b.id, true, false, false, false]]);
+      const list = await ps.listPlayers({ q: 'pd', sort: 'games' });
+      const ra = list.players.find((p) => p.displayName === 'Pda');
+      assert.equal(ra.games, 3); assert.equal(ra.wins, 1); assert.equal(ra.draws, 1); assert.equal(ra.leftEarly, 0);
+      assert.equal(ra.minutes, 33, 'time played adds the lengths of the games the player stayed to the end of');
+      const rb = list.players.find((p) => p.displayName === 'Pdb');
+      assert.equal(rb.leftEarly, 1); assert.equal(rb.minutes, 13, 'the game b left early is not time played');
+      assert.ok(list.total >= 3 && list.sort === 'games');
+      assert.equal((await ps.listPlayers({ q: 'zzz-no-such', sort: 'drop table players' })).total, 0);
+      assert.equal((await ps.listPlayers({ sort: 'drop table players' })).sort, 'seen', 'an unknown sort falls back and never reaches the SQL');
+      const before = (await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'player.view'"))[0].n;
+      const prof = await ps.playerProfile({ username: a.username || (await q('SELECT username FROM players WHERE id = $1', [a.id]))[0].username, actorId: staff.id });
+      assert.equal(prof.totals.games, 3); assert.equal(prof.totals.losses, 1, 'a draw is neither a win nor a loss'); assert.ok(prof.totals.activeDays >= 1 && prof.totals.activeDays <= 2, 'one day (two if the test ran across midnight UTC)');
+      assert.equal(prof.perGame.find((g) => g.gameId === 'ludo').games, 2);
+      assert.equal(prof.recent.length, 3); assert.ok(new Date(prof.recent[0].at) >= new Date(prof.recent[2].at), 'latest game first');
+      assert.deepEqual(Object.keys(prof.hourly).sort(), ['Asia/Kolkata', 'Europe/Berlin', 'UTC']);
+      assert.equal(prof.hourly.UTC.reduce((n, v) => n + v, 0), 3);
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'player.view'"))[0].n, before + 1);
+      assert.ok(!/@|token|password|hash/i.test(JSON.stringify(prof)), 'no e-mail address, token or hash in the profile');
+      assert.deepEqual(await ps.playerProfile({ username: 'no_such_player', actorId: staff.id }), { player: null });
+    });
     console.log('schema');
     await test('migration 013 is applied and the database allows exactly one owner and only known roles', async () => {
       assert.ok((await q("SELECT 1 FROM schema_migrations WHERE version = '013_admin_console.sql'")).length === 1);
