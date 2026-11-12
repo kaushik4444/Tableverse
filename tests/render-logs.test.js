@@ -65,10 +65,11 @@ console.log('render history (Stage 20.8)');
     assert.equal(out.items.length, 4);
     assert.ok(!JSON.stringify(out).includes('9f8e7d6c5b4a3210zz'), 'a bare Render-style key is masked too');
     assert.ok(!JSON.stringify(out).includes('hunter2') && !JSON.stringify(out).includes('abc.def.ghi123'), 'secrets are masked');
-    assert.equal(out.items[0].level, 'error', 'failed is an error');
-    assert.equal(out.items[0].source, 'app');
-    assert.equal(out.items[1].level, 'warn', 'a label wins and is lowercased');
-    assert.equal(out.items[2].level, 'info');
+    // newest first: the 09:03 line is first and the 09:00 line is last
+    assert.equal(out.items[3].level, 'error', 'failed is an error');
+    assert.equal(out.items[3].source, 'app');
+    assert.equal(out.items[2].level, 'warn', 'a label wins and is lowercased');
+    assert.equal(out.items[1].level, 'info');
     assert.equal(out.hasMore, true);
     assert.ok(!JSON.stringify(out).includes(KEY));
     assert.equal(guessLevel('all good'), 'info');
