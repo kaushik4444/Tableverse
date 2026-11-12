@@ -21,7 +21,11 @@ const insightsFixture = (days, zone) => ({ ok: true, days, zone, labels: ['2026-
   countries: [{ country: 'DE', players: 5 }, { country: 'IN', players: 3 }, { country: null, players: 1 }],
   top: [{ username: 'ann', displayName: 'Ann', games: 14, wins: 6, minutes: 130, peakHour: 20 }] });
 const playersFixture = (sort, total = 1) => ({ ok: true, total, pageSize: 25, sort, players: [{ username: 'ann', displayName: 'Ann', country: 'DE', role: 'user', joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: '2026-11-08T09:00:00Z', suspended: false, games: 14, rated: 11, wins: 6, draws: 1, leftEarly: 2, minutes: 130, lastGameAt: '2026-11-08T08:00:00Z' }] });
+// the Right now figures: a test changes these between refreshes; `fail` makes the next answer an error
+const live = { players: 3, tables: 1, sockets: 4, fail: false };
+const liveFixture = () => (live.fail ? { __status: 500, body: { ok: false } } : { ok: true, at: new Date().toISOString(), players: live.players, tables: live.tables, sockets: live.sockets });
 const api = (role) => ({
+  'GET /api/admin/live': () => liveFixture(),
   'GET /api/auth/csrf': () => ({ ok: true, csrfToken: 'tok' }),
   'GET /api/admin/me': () => ({ ok: true, role, isAdmin: role !== 'user', isOwner: role === 'owner' }),
   'GET /api/admin/insights?days=7&tz=UTC': () => insightsFixture(7, 'UTC'),
@@ -159,6 +163,46 @@ const api = (role) => ({
     assert.equal(body.endsAt, expectEnd, 'end is the selected instant');
     assert.ok(!('durationHours' in body), 'no preset duration is sent');
     await s.close();
+  });
+  await test('Right now: figures show, refresh every 15 seconds, one loop after a range change, stop on a tab change, and say so on an error', async () => {
+    live.players = 3; live.tables = 1; live.sockets = 4; live.fail = false;
+    const { server, url, calls } = await serve(api('admin'));
+    const ctx = await browser.newContext({ viewport: { width: 1100, height: 800 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.clock.install();
+    await page.goto(url + '/admin.html');
+    const first = () => page.locator('#liveNow .ad-card b').first().textContent();
+    const liveCalls = () => calls.filter((c) => /\/api\/admin\/live/.test(c.path)).length;
+    await until(async () => (await first()) === '3', 'the first figures');
+    live.players = 5;
+    await page.clock.runFor(15000);
+    await until(async () => (await first()) === '5', 'figures refreshed after 15 seconds');
+    // a range change draws the overview again and starts one loop; the old loop must not keep polling beside it
+    await page.click('[data-days="7"]');
+    await until(() => calls.some((c) => /overview\?days=7/.test(c.path)), 'the 7-day range is requested');
+    await page.waitForSelector('[data-days="7"][aria-pressed="true"]');
+    await until(async () => (await first()) === '5', 'figures shown after the redraw');
+    const mark = liveCalls();
+    await page.clock.runFor(15000);
+    await sleep(400);
+    assert.equal(liveCalls() - mark, 1, 'exactly one refresh per 15 seconds after the redraw');
+    // a tab change takes the block off the page and the polling stops
+    await tab(page, 'users');
+    await page.waitForFunction(() => !document.getElementById('liveNow'));
+    const left = liveCalls();
+    await page.clock.runFor(60000);
+    await sleep(400);
+    assert.equal(liveCalls(), left, 'no refresh once Overview is left');
+    // back on Overview, a failed refresh says so instead of showing old figures
+    await tab(page, 'overview');
+    await page.waitForSelector('#liveNow .ad-card b');
+    live.fail = true;
+    await page.clock.runFor(15000);
+    await until(async () => (await page.textContent('#liveNow')).includes('could not load right now'), 'the error message');
+    assert.deepEqual(errors, []);
+    await ctx.close(); server.close();
   });
   await test('insights shows the figures, a heatmap with a table fallback, and the range and zone buttons ask again', async () => {
     const s = await open('admin');
