@@ -458,6 +458,8 @@ module.exports = {
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, lookupUser, isOwner,
   addCounters, addActive, forgetActor, overview, health,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
+  listPlayers: (opts) => require('./playerStats').listPlayers(opts), // the player directory (read-only)
+  playerProfile: (opts) => require('./playerStats').playerProfile(opts), // one player's stats; writes a player.view audit row
   createFeedback, listFeedback, setFeedbackStatus,
   createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissed,
   listAudit, purge, audit,

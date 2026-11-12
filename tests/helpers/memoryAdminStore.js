@@ -96,6 +96,22 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       return { days: [7, 30, 90].includes(Number(days)) ? Number(days) : 30, zone: tz, games: [], heat: [], countries: [{ country: 'DE', players: 2 }, { country: null, players: 1 }], playtime: { players: 0, totalMinutes: 0, avgMinutes: 0, medianMinutes: 0, buckets: [0, 0, 0, 0, 0] },
         returning: { activePlayers: 0, newPlayers: 2, returningPlayers: 1, daily: [{ day: '2026-11-08', newPlayers: 2, returningPlayers: 1 }], cohort: { size: 0, d1: 0, d7: 0 } }, top: [] };
     },
+    // the real SQL is in db/playerStats.js (tests/admin.pg.test.js); these record the request and return fixed answers
+    async listPlayers(opts = {}) {
+      this.playerCalls.push(opts);
+      return { total: 1, pageSize: 25, sort: opts.sort || 'seen', players: [{ username: 'ann', displayName: 'Ann', country: 'DE', role: 'user', joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: '2026-11-08T09:00:00Z', suspended: false, games: 14, rated: 11, wins: 6, draws: 1, leftEarly: 2, minutes: 130, lastGameAt: '2026-11-08T08:00:00Z' }] };
+    },
+    async playerProfile({ username, actorId }) {
+      const p = [...players.values()].find((x) => x.username === String(username || '').toLowerCase() && !x.is_anonymous);
+      if (!p) return { player: null };
+      log(actorId, 'player.view', 'player', p.id);
+      return { player: { username: p.username, displayName: p.display_name, country: null, role: p.role, verified: true, joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: null, suspended: false },
+        totals: { games: 14, rated: 11, wins: 6, draws: 1, losses: 4, leftEarly: 2, minutes: 130, activeDays: 5, firstGameAt: '2026-11-02T10:00:00Z', lastGameAt: '2026-11-08T08:00:00Z' },
+        perGame: [{ gameId: 'ludo', games: 10, rated: 7, wins: 4, draws: 0, leftEarly: 2, minutes: 120 }], hourly: { 'UTC': Array.from({ length: 24 }, (_, h) => (h === 19 ? 9 : 0)), 'Europe/Berlin': Array.from({ length: 24 }, (_, h) => (h === 20 ? 9 : 0)), 'Asia/Kolkata': Array.from({ length: 24 }, (_, h) => (h === 0 ? 9 : 0)) },
+        recent: [{ gameId: 'ludo', at: '2026-11-08T08:00:00Z', seats: 4, won: true, draw: false, leftEarly: false, unknown: false, minutes: 22 },
+          { gameId: 'ludo', at: '2026-11-07T08:00:00Z', seats: 4, won: false, draw: false, leftEarly: false, unknown: true, minutes: 18 }] };
+    },
+    playerCalls: [],
     insightsCalls: [],
     async health() { return { dbMs: 1, migrations: 13, feedback_new: feedback.filter((f) => f.status === 'new').length, analytics_rows: 0 }; },
     async createFeedback({ playerId, category, message }) { st.check(); const row = { id: crypto.randomUUID(), player_id: playerId, category, message, status: 'new', created_at: now() }; feedback.push(row); return { id: row.id }; },
