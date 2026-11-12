@@ -9,9 +9,9 @@ Sources checked: `lib/adminRoutes.js` (routes), `lib/adminPolicy.js` (roles), `d
 | Need | Status | What exists | Gap |
 |---|---|---|---|
 | Active players and tables | Partly | Health tab: rooms, players and sockets, from `server.js` `adminPlatform()` | Live numbers are per process only; there is no history |
-| WebSocket health | Partly | Socket count; `ws.socket_error` and related lines in Logs | No disconnect, slow-consumer or rate-limit counters on the panel |
+| WebSocket health | Partly | Socket count (Health tab); `ws.socket_error` lines in Logs | No disconnect counts: the close handler (`server.js`, `ws.on('close')`) only detaches the player, and nothing counts disconnects, slow consumers or rate-limit closes |
 | Server uptime, memory, Node version | Done | Health tab (`uptimeSec`, `memoryMb`, `node`, `mode`) | none |
-| Errors | Partly | Analytics `error` counter by code (stored); Logs tab (in memory, 500 lines) | No error trend chart; the counter is not on the Overview |
+| Errors | Partly | Overview: an errors tile and "Errors by kind" from the stored `error` counters; Logs tab (in memory, 500 lines) | No error trend over time |
 | Database performance | Minimal | Health tab: round-trip time (`dbMs`), migration count | No pool statistics, no slow-query view |
 | Deployment status | Missing | Nothing shows the running commit | Render sets `RENDER_GIT_COMMIT`; not read or shown |
 | Render history | Optional | Owner-only Render log view, off until `RENDER_` settings are set | Needs owner configuration |
@@ -21,13 +21,15 @@ Sources checked: `lib/adminRoutes.js` (routes), `lib/adminPolicy.js` (roles), `d
 | Need | Status | What exists |
 |---|---|---|
 | DAU, WAU, MAU | Done | Overview tiles, from distinct hashed accounts per day (35-day retention) |
-| D1 and D7 retention | Done | Insights, cohort of new players (`db/insights.js`) |
-| D30 retention | Missing | Easy to add to the same query; needs no new data |
+| D1 retention | Done | Insights: new players who return on exactly the next day (`db/insights.js`, cohort query) |
+| Return within a week | Done | Insights: players who return on any of days 1–7. This is cumulative, not exact-day D7 retention |
+| D7 retention (exact day 7) | Missing | The cohort query can compute it the same way as D1 |
+| D30 retention | Missing | Easy to add to the same cohort query; needs no new data |
 | Sessions | Partly | `session` counter (one per WebSocket connection, so reconnects count again) |
 | Games played, games started | Done | `game_started` and `game_finished` counters, per game |
-| Completion rate | Missing | Derivable as finished / started per game, but not shown. The counters are not tied to a player |
+| Completion rate | Done | Insights: "finished of started" per game, from the `game_started` and `game_finished` counters (not tied to a player) |
 | Abandonment | Partly | Leave rate per game in Insights (games a player left early) |
-| Game duration | Done | Average and median minutes per game, play-time buckets in Insights |
+| Game duration | Partly | Average minutes per game (Insights). The median and play-time buckets are per player, not per game; a median per game is missing |
 
 ## 3. India vs Germany
 
@@ -69,8 +71,8 @@ Each item is one small PR with tests and a doc update. Nothing here needs a new 
 
 1. **Moderation queue, read-only (no migration).** A staff list of chat reports, newest first, with the reason, the reported account's report count, and whether the account is already suspended. Covered by the existing `tests/moderation*.js`. Highest value for the daily review the beta requires.
 2. **Report resolution (migration 023).** Adds `status` (open, dismissed, actioned), `resolved_at`, `resolved_by` and a short note; staff can change status, every change is audited. Owner approval needed for the migration.
-3. **Deployment and operations panel.** Show the running commit (`RENDER_GIT_COMMIT`) and the process start time on the Health tab; add the WebSocket disconnect counts that the server already logs. Read-only.
-4. **Retention and completion.** Add D30 to the cohort query, and a completion rate per game (finished / started) to the Insights tab. Uses existing data only.
+3. **Deployment and operations panel.** Show the running commit (`RENDER_GIT_COMMIT`) and the process start time on the Health tab. Add WebSocket disconnect counting (a counter by close reason, shown on the Health tab): this is new instrumentation in `server.js`, not something the server already exposes.
+4. **Retention and game length.** Add exact-day D7 and D30 retention to the cohort query, and a median minutes-per-game figure to the per-game table. Uses existing data only. (Completion rate is already shown.)
 5. **Country engagement with a minimum sample.** Per-country games per player, D1 and average minutes, with any country below 10 players hidden. The note must say that the figures cover only players who chose a country.
 6. **Two-factor readiness (owner decision first).** Choose between TOTP with a new dependency and a pure-Node implementation, and decide whether it is required or optional for admins. Needs owner approval before any code.
 7. **Re-authentication for owner actions.** Requires a design decision with item 6.
