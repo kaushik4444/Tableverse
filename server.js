@@ -30,7 +30,7 @@ const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
 const { debugTokensEnabled, assertSafeDebugConfig } = require('./lib/debugTokens');
 const { createReadinessCheck } = require('./lib/health');
-const { createAnalytics } = require('./lib/analytics');
+const { createAnalytics, lengthBucket } = require('./lib/analytics');
 const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
 const { createBroadcastWorker } = require('./lib/broadcast');
@@ -1794,8 +1794,14 @@ function start(opts = {}) {
 
   wss.on('connection', (ws, req) => {
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
-    ws.once('close', (code) => socketCloses.record(code));
+    const openedAt = Date.now();
+    ws.once('close', (code) => {
+      socketCloses.record(code);
+      const bucket = lengthBucket((Date.now() - openedAt) / 1000); // null for health checks and flapping reconnects
+      if (bucket) analytics.track('session_len', bucket);
+    });
     analytics.track('session'); // one count per socket; no address or identity is recorded
+    analytics.track('session_hour', String(new Date(openedAt).getUTCHours()).padStart(2, '0')); // when people connect, by UTC hour
     ws.ip = clientIp(req);
     ws.cookieToken = authRoutes.readSessionToken(req);
     const open = (socketsByIp.get(ws.ip) || 0) + 1;

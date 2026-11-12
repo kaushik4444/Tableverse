@@ -165,6 +165,22 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       const tenth = await newUser('Cxt'); await q("UPDATE players SET country = 'NL' WHERE id = $1", [tenth.id]); await add(tenth.id, false, 11);
       assert.equal((await cs.countryEngagement({ days: 7 })).rows.find((r) => r.country === 'NL').players, 10);
     });
+    await test('session stats: hour and visit-length counters are summed over the window, in the chosen zone, and ignore other metrics and junk dims', async () => {
+      const ss = require('../db/sessionStats');
+      await q("DELETE FROM analytics_daily WHERE metric IN ('session_hour', 'session_len')");
+      const put = (metric, dim, total, ago = 0) => q("INSERT INTO analytics_daily (day, metric, dim, total) VALUES ((NOW() AT TIME ZONE 'UTC')::date - $4::int, $1, $2, $3)", [metric, dim, total, ago]);
+      await put('session_hour', '19', 6); await put('session_hour', '19', 4, 1); await put('session_hour', '03', 2, 2); await put('session_hour', '99', 50); await put('session_hour', '19', 100, 40);
+      await put('session_len', '5_15m', 7); await put('session_len', 'gt60m', 1); await put('session_len', 'bogus', 9); await put('session', '', 500);
+      const utc = await ss.sessionStats({ days: 7, tz: 'UTC' });
+      assert.equal(utc.byHour[19], 10, 'two days of hour 19 inside the window, the 40-day-old row and the junk hour 99 left out');
+      assert.equal(utc.byHour[3], 2); assert.equal(utc.byHour.reduce((a, b) => a + b, 0), 12);
+      assert.equal(utc.length.find((l) => l.name === '5–15 min').total, 7); assert.equal(utc.length.find((l) => l.name === 'over 1 h').total, 1);
+      assert.equal(utc.length.reduce((a, l) => a + l.total, 0), 8, 'an unknown bucket is not shown');
+      const de = await ss.sessionStats({ days: 7, tz: 'Europe/Berlin', now: new Date('2026-11-12T12:00:00Z') });
+      assert.equal(de.byHour[20], 10, 'winter time in Germany is one hour later');
+      assert.equal((await ss.sessionStats({ days: 7, tz: 'Mars/Base' })).zone, 'UTC');
+      assert.equal((await ss.sessionStats({ days: 5 })).byHour[19], 10, 'an unknown range falls back to 30 days, which still leaves the 40-day-old row out');
+    });
     console.log('schema');
     await test('migration 013 is applied and the database allows exactly one owner and only known roles', async () => {
       assert.ok((await q("SELECT 1 FROM schema_migrations WHERE version = '013_admin_console.sql'")).length === 1);

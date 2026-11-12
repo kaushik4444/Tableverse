@@ -18,6 +18,7 @@ const insightsFixture = (days, zone) => ({ ok: true, days, zone, labels: ['2026-
   heat: [{ dow: 5, hour: 20, matches: 4, playerGames: 11 }, { dow: 6, hour: 21, matches: 3, playerGames: 7 }],
   playtime: { players: 9, totalMinutes: 310, avgMinutes: 34.4, medianMinutes: 22, buckets: [2, 3, 2, 1, 1] },
   returning: { activePlayers: 9, newPlayers: 5, returningPlayers: 4, newPerDay: [2, 3, 0], returningPerDay: [0, 1, 3], cohort: { size: 4, d1: 2, d7: 3 } },
+  visits: { zone, byHour: Array.from({ length: 24 }, (_, h) => (h === 19 ? 30 : 1)), length: [{ name: 'under 1 min', total: 5 }, { name: '1–5 min', total: 9 }, { name: '5–15 min', total: 7 }, { name: '15–60 min', total: 4 }, { name: 'over 1 h', total: 1 }] },
   countryEngagement: { minPlayers: 10, rows: [{ country: 'DE', players: 12, gamesPerPlayer: 4.5, minutesPerPlayer: 38.2, leftEarlyPct: 8, daysPerPlayer: 2.1 }] },
   countries: [{ country: 'DE', players: 5 }, { country: 'IN', players: 3 }, { country: null, players: 1 }],
   top: [{ username: 'ann', displayName: 'Ann', games: 14, wins: 6, minutes: 130, peakHour: 20 }] });
@@ -211,7 +212,7 @@ const api = (role) => ({
     await tab(s.page, 'insights');
     await s.page.waitForSelector('.ad-heat');
     const text = await s.page.textContent('#adMain');
-    assert.match(text, /Insights/); assert.match(text, /ludo/); assert.match(text, /Busiest hour overall: 20:00/); assert.match(text, /@ann/); assert.match(text, /Germany/); assert.match(text, /Not set/); assert.match(text, /How players from each country play/); assert.match(text, /not everyone/);
+    assert.match(text, /Insights/); assert.match(text, /ludo/); assert.match(text, /Busiest hour overall: 20:00/); assert.match(text, /@ann/); assert.match(text, /Germany/); assert.match(text, /Not set/); assert.match(text, /When people open the site/); assert.match(text, /Busiest around 19:00/); assert.match(text, /How long a visit lasts/); assert.match(text, /5–15 min/); assert.match(text, /How players from each country play/); assert.match(text, /not everyone/);
     assert.equal(await s.page.locator('.ad-hc').count(), 168, 'seven days of 24 hours');
     await s.page.click('[data-days="7"]');
     await s.page.click('[data-zone="Asia/Kolkata"]');
