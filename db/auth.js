@@ -1,5 +1,6 @@
 'use strict';
 const crypto = require('crypto');
+const passwordPolicy = require('../public/password-policy');
 const db = require('./pool');
 const dbPlayers = require('./players');
 const argon2 = require('@node-rs/argon2');
@@ -164,7 +165,8 @@ async function registerEmail({ email, username, password, displayName, avatar, a
   if (!isEmail(email)) throw new AuthError('Please enter a valid email address.');
   // The beta is for adults only. Only an explicit true counts; no date of birth is asked for or stored.
   if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
-  if (typeof password !== 'string' || password.length < 8 || password.length > 200) throw new AuthError('Password must be 8-200 characters.');
+  const weak = passwordPolicy.check(password, { email, username });
+  if (weak) throw new AuthError(weak, 400);
 
   const e = normEmail(email);
   const u = normUsername(username);
@@ -403,7 +405,8 @@ async function requestPasswordReset({ email }) {
 
 async function resetPassword({ token, newPassword }) {
   if (!db.hasDatabase()) throw new AuthError('Email authentication requires PostgreSQL (set DATABASE_URL).', 503);
-  if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 200) throw new AuthError('Password must be 8-200 characters.');
+  const weak = passwordPolicy.check(newPassword);
+  if (weak) throw new AuthError(weak, 400);
   if (!token || typeof token !== 'string') throw new AuthError('Invalid reset token.');
 
   const tokenHash = hashToken(token);

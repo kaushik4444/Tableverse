@@ -442,7 +442,8 @@
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
           ${authPolicyHintHTML()}
-          <input id="registerPassword" type="password" required minlength="8" placeholder="Password (8+ characters)" autocomplete="new-password">
+          <input id="registerPassword" type="password" required minlength="10" placeholder="Password (10+ characters)" autocomplete="new-password" aria-describedby="registerPwHint">
+          <small id="registerPwHint" class="hint" aria-live="polite">Use an uppercase letter, a lowercase letter, a number and a symbol.</small>
           <label class="auth-check"><input id="registerAdult" type="checkbox" required> I am 18 or older.</label>
           <button class="btn big" type="submit">Create account</button>
         </form>
@@ -1167,7 +1168,7 @@
   if (location.pathname.endsWith('/reset-password.html') && verifyToken) {
     // a real form (hidden password field, confirmation) instead of window.prompt, which shows the password in plain text
     loadSnapshot();
-    openModal('Choose a new password', `<form id="resetForm" class="auth-form"><input id="resetPw" type="password" minlength="8" required placeholder="New password (8+ characters)" autocomplete="new-password"><input id="resetPw2" type="password" minlength="8" required placeholder="Repeat the password" autocomplete="new-password"><p id="resetMsg" class="auth-msg" role="status" hidden></p><button class="btn big" type="submit">Update password</button></form>`, (o) => {
+    openModal('Choose a new password', `<form id="resetForm" class="auth-form"><input id="resetPw" type="password" minlength="10" required placeholder="New password (10+ characters)" autocomplete="new-password"><input id="resetPw2" type="password" minlength="8" required placeholder="Repeat the password" autocomplete="new-password"><p id="resetMsg" class="auth-msg" role="status" hidden></p><button class="btn big" type="submit">Update password</button></form>`, (o) => {
       o.querySelector('#resetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = o.querySelector('#resetMsg');

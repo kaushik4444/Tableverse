@@ -30,6 +30,7 @@ async function scenario({ search = '?token=secret-token', fetch }) {
     location,
     history: { replaceState: (...a) => historyCalls.push(a) },
     URLSearchParams,
+    TvPassword: require('../public/password-policy'),
     fetch,
     console: { log() {}, error() {}, warn() {} }, // the script must not log anything
   };
@@ -56,18 +57,18 @@ async function main() {
   console.log('reset submission');
   const posts = [];
   const done = await scenario({ fetch: csrfOr(async (url, options) => { posts.push({ url, options }); return response(200, { ok: true }); }) });
-  done.elements.resetPassword.value = 'NewPassword1';
-  done.elements.resetConfirm.value = 'NewPassword1';
+  done.elements.resetPassword.value = 'Fresh-Secret-12';
+  done.elements.resetConfirm.value = 'Fresh-Secret-12';
   await submit(done.elements.resetForm);
   const post = posts.find((p) => p.url === '/api/auth/reset-password');
   assert.ok(post, 'the reset endpoint is called');
   assert.equal(post.options.headers['X-CSRF-Token'], 'csrf-value');
-  assert.deepEqual(JSON.parse(post.options.body), { token: 'secret-token', newPassword: 'NewPassword1' });
+  assert.deepEqual(JSON.parse(post.options.body), { token: 'secret-token', newPassword: 'Fresh-Secret-12' });
   assert.equal(done.elements.resetDoneSection.hidden, false);
   assert.equal(done.elements.resetPassword.value, '');
 
   const mismatch = await scenario({ fetch: csrfOr(async () => { throw new Error('must not post'); }) });
-  mismatch.elements.resetPassword.value = 'NewPassword1';
+  mismatch.elements.resetPassword.value = 'Fresh-Secret-12';
   mismatch.elements.resetConfirm.value = 'Different1';
   await submit(mismatch.elements.resetForm);
   assert.match(mismatch.elements.resetMsg.textContent, /do not match/);
@@ -76,40 +77,45 @@ async function main() {
   short.elements.resetPassword.value = 'abc';
   short.elements.resetConfirm.value = 'abc';
   await submit(short.elements.resetForm);
-  assert.match(short.elements.resetMsg.textContent, /at least 8/);
+  assert.match(short.elements.resetMsg.textContent, /at least 10/);
+  const weak = await scenario({ fetch: csrfOr(async () => { throw new Error('must not post'); }) });
+  weak.elements.resetPassword.value = 'longenoughbutweak';
+  weak.elements.resetConfirm.value = 'longenoughbutweak';
+  await submit(weak.elements.resetForm);
+  assert.match(weak.elements.resetMsg.textContent, /an uppercase letter, a number, a symbol/, 'a long password still needs every kind of character');
 
   console.log('dead links and retryable errors');
   const expired = await scenario({ fetch: csrfOr(async () => response(400, { ok: false, error: 'This reset link has expired.' })) });
-  expired.elements.resetPassword.value = 'NewPassword1';
-  expired.elements.resetConfirm.value = 'NewPassword1';
+  expired.elements.resetPassword.value = 'Fresh-Secret-12';
+  expired.elements.resetConfirm.value = 'Fresh-Secret-12';
   await submit(expired.elements.resetForm);
   assert.equal(expired.elements.resetNewLinkSection.hidden, false, 'an expired link offers a new one');
   assert.match(expired.elements.newLinkMsg.textContent, /expired/);
 
   const used = await scenario({ fetch: csrfOr(async () => response(400, { ok: false, error: 'This reset link has already been used.' })) });
-  used.elements.resetPassword.value = 'NewPassword1';
-  used.elements.resetConfirm.value = 'NewPassword1';
+  used.elements.resetPassword.value = 'Fresh-Secret-12';
+  used.elements.resetConfirm.value = 'Fresh-Secret-12';
   await submit(used.elements.resetForm);
   assert.equal(used.elements.resetNewLinkSection.hidden, false);
 
   const limited = await scenario({ fetch: csrfOr(async () => response(429, { ok: false, error: 'Too many requests.' })) });
-  limited.elements.resetPassword.value = 'NewPassword1';
-  limited.elements.resetConfirm.value = 'NewPassword1';
+  limited.elements.resetPassword.value = 'Fresh-Secret-12';
+  limited.elements.resetConfirm.value = 'Fresh-Secret-12';
   await submit(limited.elements.resetForm);
   assert.equal(limited.elements.resetNewLinkSection.hidden, true, 'a rate limit keeps the form');
   assert.match(limited.elements.resetMsg.textContent, /too many attempts/i);
   assert.equal(limited.elements.resetSubmit.disabled, false);
 
   const server = await scenario({ fetch: csrfOr(async () => response(503, { ok: false, error: 'x' })) });
-  server.elements.resetPassword.value = 'NewPassword1';
-  server.elements.resetConfirm.value = 'NewPassword1';
+  server.elements.resetPassword.value = 'Fresh-Secret-12';
+  server.elements.resetConfirm.value = 'Fresh-Secret-12';
   await submit(server.elements.resetForm);
   assert.match(server.elements.resetMsg.textContent, /temporarily unavailable/);
   assert.equal(server.elements.resetNewLinkSection.hidden, true);
 
   const offline = await scenario({ fetch: async () => { throw new Error('offline'); } });
-  offline.elements.resetPassword.value = 'NewPassword1';
-  offline.elements.resetConfirm.value = 'NewPassword1';
+  offline.elements.resetPassword.value = 'Fresh-Secret-12';
+  offline.elements.resetConfirm.value = 'Fresh-Secret-12';
   await submit(offline.elements.resetForm);
   assert.match(offline.elements.resetMsg.textContent, /could not reach the server/i);
   assert.ok(!offline.elements.resetMsg.textContent.includes('secret-token'));
