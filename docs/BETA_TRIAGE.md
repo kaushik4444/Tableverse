@@ -58,7 +58,7 @@ Notes for the call:
 
 Reports about account compromise, someone's private information, abuse in chat or a possible vulnerability arrive by **private** email or as a **chat report**, not as a public issue (`docs/SUPPORT_AND_REPORTING.md`). They are read first. They are P0 until you have decided otherwise. If a tester posts personal details in a public issue by mistake, **edit the text out of the issue and its edit history** (the "..." menu on the issue, then "Edit", then delete the earlier versions from "edited") and tell them. Never copy such details into another place.
 
-Chat reports have their own daily review in `docs/CHAT_MODERATION.md`. They are not a replacement for this list.
+Chat reports have their own daily review, described in "Manual process (beta)", step 2, of `docs/SUPPORT_AND_REPORTING.md`: every report after a saved checkpoint, oldest first, in pages of 50. Do not use the short query in `docs/CHAT_MODERATION.md` as the review, because it returns only the newest 50 and can leave older safety reports unread. This list is not a replacement for that review.
 
 ## Saved searches
 
