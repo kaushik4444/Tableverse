@@ -358,7 +358,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.country = undefined; sessionGen += 1; S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -1912,7 +1912,9 @@
           const cbtn = e.target.querySelector('button[type=submit]');
           cbtn.disabled = true;
           try {
+            const mineGen = sessionGen;
             const out = await withBusy('Saving your country…', () => postJson('/api/me/country', { country: o.querySelector('#profileCountry').value }));
+            if (mineGen !== sessionGen) return; // another account signed in meanwhile: this answer is not theirs
             S.country = out.country || '';
             if (S.profile && S.profile.data && S.profile.data.profile) S.profile.data.profile.country = out.country;
             cmsg.textContent = out.country ? 'Country saved.' : 'Country cleared.';
