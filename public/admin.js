@@ -170,9 +170,25 @@
       <p class="ad-muted">Only players who chose a country on their profile are counted, so this is not everyone. Countries with fewer than ${(o.countryEngagement && o.countryEngagement.minPlayers) || 10} players are grouped, or hidden, so no single player can be picked out.</p>
       <h3>Most active players</h3>${top ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Played</th><th>Usual hour</th></tr></thead><tbody>${top}</tbody></table>` : '<p class="ad-muted">No signed-in players yet.</p>'}
       <p class="ad-muted">Signed-in players only: guests and bots are left out. Figures come from finished games; nothing personal beyond the public username is shown.</p>`;
+    main.insertAdjacentHTML('beforeend', '<h3>Signup funnel</h3><div id="funnel"><p class="ad-muted">Loading…</p></div>');
+    loadFunnel(range);
     const again = (d, z) => { sel.days = d; sel.tz = z; state.gen += 1; const mine = state.gen; insights(d, z).catch((e) => { if (mine === state.gen) fail(e); }); };
     main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => again(Number(b.dataset.days), sel.tz); });
     main.querySelectorAll('[data-zone]').forEach((b) => { b.onclick = () => again(sel.days, b.dataset.zone); });
+  }
+
+  // Signup funnel: signed-up accounts, those that played a first game, and those that came back on a later day. Counts only.
+  async function loadFunnel(range) {
+    const gen = state.gen;
+    const f = await api(`/api/admin/funnel?days=${range}`).catch(() => null);
+    const el = document.getElementById('funnel');
+    if (!el || gen !== state.gen) return;
+    if (!f) { el.innerHTML = '<p class="ad-muted">The funnel could not be loaded.</p>'; return; }
+    const t = f.totals;
+    const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
+    el.innerHTML = `<div class="ad-grid">${tile(t.signups, 'signed up')}${tile(pctText(t.played, t.signups), 'played a first game')}${tile(pctText(t.returned, t.signups), 'came back on a later day')}</div>
+      <p class="ad-muted">Accounts that signed up in the last ${f.days} days, by UTC day. "Came back" means a game on a later day than their first, so the newest signups have had less time to return.
+      <a class="ad-btn" href="/api/admin/funnel.csv?days=${f.days}" download>Download CSV</a></p>`;
   }
 
   // ---------------------------------------------------------------- players (directory and per-player stats)
