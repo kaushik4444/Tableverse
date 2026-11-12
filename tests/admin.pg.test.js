@@ -70,31 +70,39 @@ const OWNER_EMAIL = 'boss.admin@test.local';
     await test('player directory: totals, sorting, search, per-game stats and an audit row on opening a profile (no address or token in the answer)', async () => {
       const ps = require('../db/playerStats');
       const a = await newUser('Pda'); const b = await newUser('Pdb'); const staff = await newUser('Pds');
-      const mk = async (game, mins, parts) => {
-        const m = (await q(`INSERT INTO matches (room_code, game_id, seats, started_at, finished_at) VALUES ('PDR1', $1, $2, NOW() - ($3::int * INTERVAL '1 minute') - INTERVAL '5 minutes', NOW() - INTERVAL '5 minutes') RETURNING id`, [game, parts.length, mins]))[0].id;
+      // key = null is a match written before results were reported (winners unknown); match_key is a UUID column
+      const mk = async (game, mins, parts, key = require('node:crypto').randomUUID()) => {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at) VALUES ($4, 'PDR1', $1, $2, NOW() - ($3::int * INTERVAL '1 minute') - INTERVAL '5 minutes', NOW() - INTERVAL '5 minutes') RETURNING id`, [game, parts.length, mins, key]))[0].id;
         for (const [i, [pid, win, bot, left, draw]] of parts.entries()) await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [m, pid, 'x', i, win, bot, left, draw]);
       };
-      await mk('ludo', 20, [[a.id, true, false, false, false], [b.id, false, false, true, false], [null, false, true, false, false]]);
+      // b left early and a bot took the seat and won: that win sits on b's row and must not count for b
+      await mk('ludo', 20, [[a.id, true, false, false, false], [b.id, true, false, true, false], [null, false, true, false, false]]);
       await mk('tictactoe', 3, [[a.id, false, false, false, true], [b.id, false, false, false, true]]);
       await mk('ludo', 10, [[a.id, false, false, false, false], [b.id, true, false, false, false]]);
+      // a match from before results were reported (no match key): played, but nobody's win or loss is known
+      await mk('ludo', 7, [[a.id, false, false, false, false], [b.id, false, false, false, false]], null);
       const list = await ps.listPlayers({ q: 'pd', sort: 'games' });
       const ra = list.players.find((p) => p.displayName === 'Pda');
-      assert.equal(ra.games, 3); assert.equal(ra.wins, 1); assert.equal(ra.draws, 1); assert.equal(ra.leftEarly, 0);
-      assert.equal(ra.minutes, 33, 'time played adds the lengths of the games the player stayed to the end of');
+      assert.equal(ra.games, 4); assert.equal(ra.rated, 3, 'the match with no recorded result is a game played, not a rated one'); assert.equal(ra.wins, 1); assert.equal(ra.draws, 1); assert.equal(ra.leftEarly, 0);
+      assert.equal(ra.minutes, 40, 'time played adds the lengths of the games the player stayed to the end of');
       const rb = list.players.find((p) => p.displayName === 'Pdb');
-      assert.equal(rb.leftEarly, 1); assert.equal(rb.minutes, 13, 'the game b left early is not time played');
+      assert.equal(rb.leftEarly, 1); assert.equal(rb.minutes, 20, 'the game b left early is not time played');
+      assert.equal(rb.wins, 1, 'a bot win on the seat b left is not b\'s win'); assert.equal(rb.rated, 2);
       assert.ok(list.total >= 3 && list.sort === 'games');
       assert.equal((await ps.listPlayers({ q: 'zzz-no-such', sort: 'drop table players' })).total, 0);
       assert.equal((await ps.listPlayers({ sort: 'drop table players' })).sort, 'seen', 'an unknown sort falls back and never reaches the SQL');
       const before = (await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'player.view'"))[0].n;
       const prof = await ps.playerProfile({ username: a.username || (await q('SELECT username FROM players WHERE id = $1', [a.id]))[0].username, actorId: staff.id });
-      assert.equal(prof.totals.games, 3); assert.equal(prof.totals.losses, 1, 'a draw is neither a win nor a loss'); assert.ok(prof.totals.activeDays >= 1 && prof.totals.activeDays <= 2, 'one day (two if the test ran across midnight UTC)');
-      assert.equal(prof.perGame.find((g) => g.gameId === 'ludo').games, 2);
-      assert.equal(prof.recent.length, 3); assert.ok(new Date(prof.recent[0].at) >= new Date(prof.recent[2].at), 'latest game first');
+      assert.equal(prof.totals.games, 4); assert.equal(prof.totals.rated, 3); assert.equal(prof.totals.losses, 1, 'a draw is neither a win nor a loss, and an unrecorded result is not a loss'); assert.ok(prof.totals.activeDays >= 1 && prof.totals.activeDays <= 2, 'one day (two if the test ran across midnight UTC)');
+      assert.equal(prof.perGame.find((g) => g.gameId === 'ludo').games, 3); assert.equal(prof.perGame.find((g) => g.gameId === 'ludo').rated, 2);
+      assert.equal(prof.recent.length, 4); assert.equal(prof.recent.filter((r) => r.unknown).length, 1, 'the match with no recorded result is marked unknown'); assert.ok(prof.recent.filter((r) => r.unknown).every((r) => !r.won && !r.draw), 'and is never shown as a win'); assert.ok(new Date(prof.recent[0].at) >= new Date(prof.recent[3].at), 'latest game first');
       assert.deepEqual(Object.keys(prof.hourly).sort(), ['Asia/Kolkata', 'Europe/Berlin', 'UTC']);
-      assert.equal(prof.hourly.UTC.reduce((n, v) => n + v, 0), 3);
+      assert.equal(prof.hourly.UTC.reduce((n, v) => n + v, 0), 4);
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'player.view'"))[0].n, before + 1);
       assert.ok(!/@|token|password|hash/i.test(JSON.stringify(prof)), 'no e-mail address, token or hash in the profile');
+      const profB = await ps.playerProfile({ username: (await q('SELECT username FROM players WHERE id = $1', [b.id]))[0].username });
+      assert.equal(profB.totals.wins, 1, 'b\'s profile: the bot\'s win on the seat b left is not counted'); assert.equal(profB.totals.leftEarly, 1);
+      assert.equal(profB.recent.find((r) => r.leftEarly).won, false, 'the left-early game is not shown as a win');
       assert.deepEqual(await ps.playerProfile({ username: 'no_such_player', actorId: staff.id }), { player: null });
     });
     console.log('schema');

@@ -28,15 +28,23 @@ const SORTS = {
 };
 const clampSort = (s) => (Object.hasOwn(SORTS, s) ? s : 'seen');
 
+// A game has a RATED result for a player only if the player stayed to the end and the match was recorded with results.
+// Same rule as the player's own history and stats (db/matches.js): a bot that took over a seat can carry a win on the
+// departed player's row, and matches written before results were reported (match_key IS NULL) have unknown winners.
+// Neither may count as a win, a draw or a loss. They still count as games played and as games left early.
+const RATED = '(NOT mp.left_early AND m.match_key IS NOT NULL)';
+const COUNTS = `
+  COUNT(*)::int AS games,
+  COUNT(*) FILTER (WHERE ${RATED})::int AS rated,
+  COUNT(*) FILTER (WHERE ${RATED} AND mp.is_winner)::int AS wins,
+  COUNT(*) FILTER (WHERE ${RATED} AND mp.is_draw)::int AS draws,
+  COUNT(*) FILTER (WHERE mp.left_early)::int AS left_early,
+  COALESCE(SUM(CASE WHEN mp.left_early THEN 0 ELSE EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) END) / 60.0, 0)::float AS minutes`;
+
 // one row per registered player with all-time figures from finished games (a player with no games still gets a row)
 const STATS = `
   LEFT JOIN LATERAL (
-    SELECT COUNT(*)::int AS games,
-           COUNT(*) FILTER (WHERE mp.is_winner)::int AS wins,
-           COUNT(*) FILTER (WHERE mp.is_draw)::int AS draws,
-           COUNT(*) FILTER (WHERE mp.left_early)::int AS left_early,
-           COALESCE(SUM(CASE WHEN mp.left_early THEN 0 ELSE EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) END) / 60.0, 0)::float AS minutes,
-           MAX(m.finished_at) AS last_game
+    SELECT ${COUNTS}, MAX(m.finished_at) AS last_game
       FROM match_participants mp JOIN matches m ON m.id = mp.match_id
      WHERE mp.player_id = p.id AND NOT mp.is_bot
   ) s ON TRUE`;
@@ -50,7 +58,7 @@ async function listPlayers({ q = '', sort = 'seen', page: pg = 1 } = {}) {
   const total = (await db.query(`SELECT COUNT(*)::int AS n FROM players p ${where}`, args)).rows[0].n;
   const r = await db.query(
     `SELECT p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
-            COALESCE(s.games, 0) AS games, COALESCE(s.wins, 0) AS wins, COALESCE(s.draws, 0) AS draws,
+            COALESCE(s.games, 0) AS games, COALESCE(s.rated, 0) AS rated, COALESCE(s.wins, 0) AS wins, COALESCE(s.draws, 0) AS draws,
             COALESCE(s.left_early, 0) AS left_early, COALESCE(s.minutes, 0) AS minutes, s.last_game
        FROM players p ${STATS} ${where}
       ORDER BY ${SORTS[key]}, p.username
@@ -60,7 +68,7 @@ async function listPlayers({ q = '', sort = 'seen', page: pg = 1 } = {}) {
   return {
     total, pageSize: PAGE, sort: key,
     players: r.rows.map((x) => ({ username: x.username, displayName: x.display_name, country: x.country || null, role: x.role, joinedAt: x.created_at, lastSeenAt: x.last_seen_at,
-      suspended: Boolean(x.suspended_at), games: num(x.games), wins: num(x.wins), draws: num(x.draws), leftEarly: num(x.left_early), minutes: round1(x.minutes), lastGameAt: x.last_game })),
+      suspended: Boolean(x.suspended_at), games: num(x.games), rated: num(x.rated), wins: num(x.wins), draws: num(x.draws), leftEarly: num(x.left_early), minutes: round1(x.minutes), lastGameAt: x.last_game })),
   };
 }
 
@@ -76,17 +84,12 @@ async function playerProfile({ username, actorId }) {
     if (!base) return { player: null };
     const id = base.id;
     const [total, perGame, recent, days, ...hours] = await Promise.all([
-      c.query(`SELECT COUNT(*)::int AS games, COUNT(*) FILTER (WHERE mp.is_winner)::int AS wins, COUNT(*) FILTER (WHERE mp.is_draw)::int AS draws,
-                      COUNT(*) FILTER (WHERE mp.left_early)::int AS left_early,
-                      COALESCE(SUM(CASE WHEN mp.left_early THEN 0 ELSE EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) END) / 60.0, 0)::float AS minutes,
-                      MIN(m.started_at) AS first_game, MAX(m.finished_at) AS last_game
+      c.query(`SELECT ${COUNTS}, MIN(m.started_at) AS first_game, MAX(m.finished_at) AS last_game
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot`, [id]),
-      c.query(`SELECT m.game_id, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE mp.is_winner)::int AS wins, COUNT(*) FILTER (WHERE mp.is_draw)::int AS draws,
-                      COUNT(*) FILTER (WHERE mp.left_early)::int AS left_early,
-                      COALESCE(SUM(CASE WHEN mp.left_early THEN 0 ELSE EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) END) / 60.0, 0)::float AS minutes
+      c.query(`SELECT m.game_id, ${COUNTS}
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot
                 GROUP BY m.game_id ORDER BY games DESC, m.game_id`, [id]),
-      c.query(`SELECT m.game_id, m.finished_at, m.seats, mp.is_winner, mp.is_draw, mp.left_early,
+      c.query(`SELECT m.game_id, m.finished_at, m.seats, (${RATED} AND mp.is_winner) AS is_winner, (${RATED} AND mp.is_draw) AS is_draw, mp.left_early, (m.match_key IS NULL) AS unknown,
                       (EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) / 60.0)::float AS minutes
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot
                 ORDER BY m.finished_at DESC, m.id LIMIT 15`, [id]),
@@ -104,19 +107,19 @@ async function playerProfile({ username, actorId }) {
     const hourly = {};
     ZONES.forEach((z, i) => { hourly[z] = Array(24).fill(0); for (const r of hours[i].rows) hourly[z][r.hour] = r.games; });
     const games = num(t.games);
-    const decided = games - num(t.draws);
+    const rated = num(t.rated);
     return {
       player: {
         username: base.username, displayName: base.display_name, country: base.country || null, role: base.role, verified: Boolean(base.verified),
         joinedAt: base.created_at, lastSeenAt: base.last_seen_at, suspended: Boolean(base.suspended_at),
       },
       totals: {
-        games, wins: num(t.wins), draws: num(t.draws), losses: Math.max(0, decided - num(t.wins)), leftEarly: num(t.left_early),
+        games, rated, wins: num(t.wins), draws: num(t.draws), losses: Math.max(0, rated - num(t.wins) - num(t.draws)), leftEarly: num(t.left_early),
         minutes: round1(t.minutes), activeDays: num(days.rows[0] && days.rows[0].days), firstGameAt: t.first_game || null, lastGameAt: t.last_game || null,
       },
-      perGame: perGame.rows.map((r) => ({ gameId: r.game_id, games: r.games, wins: r.wins, draws: r.draws, leftEarly: r.left_early, minutes: round1(r.minutes) })),
+      perGame: perGame.rows.map((r) => ({ gameId: r.game_id, games: r.games, rated: r.rated, wins: r.wins, draws: r.draws, leftEarly: r.left_early, minutes: round1(r.minutes) })),
       hourly,
-      recent: recent.rows.map((r) => ({ gameId: r.game_id, at: r.finished_at, seats: r.seats, won: r.is_winner, draw: r.is_draw, leftEarly: r.left_early, minutes: round1(r.minutes) })),
+      recent: recent.rows.map((r) => ({ gameId: r.game_id, at: r.finished_at, seats: r.seats, won: r.is_winner, draw: r.is_draw, leftEarly: r.left_early, unknown: Boolean(r.unknown), minutes: round1(r.minutes) })),
     };
   });
 }
