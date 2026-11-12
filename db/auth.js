@@ -165,12 +165,12 @@ async function registerEmail({ email, username, password, displayName, avatar, a
   if (!isEmail(email)) throw new AuthError('Please enter a valid email address.');
   // The beta is for adults only. Only an explicit true counts; no date of birth is asked for or stored.
   if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
-  const weak = passwordPolicy.check(password, { email, username });
-  if (weak) throw new AuthError(weak, 400);
-
   const e = normEmail(email);
   const u = normUsername(username);
   if (!isUsername(u)) throw new AuthError('Username must be 3-24 chars: lowercase letters, numbers, underscore.');
+  // checked against the values that will be stored (trimmed, lowercased), so surrounding spaces cannot slip a name past the rule
+  const weak = passwordPolicy.check(password, { email: e, username: u });
+  if (weak) throw new AuthError(weak, 400);
 
   const pwHash = await hashPassword(password);
 
@@ -448,6 +448,10 @@ async function resetPassword({ token, newPassword }) {
     if (!use.rows.length) await reasonFor(client); // spent or expired while the account lock was waiting
 
     const t = use.rows[0];
+    // the owner is known now: the password may not contain their username or e-mail name. Throwing rolls the token back to unused.
+    const owner = await client.query('SELECT username FROM players WHERE id = $1', [t.player_id]);
+    const clash = passwordPolicy.check(newPassword, { email: t.email, username: owner.rows[0] && owner.rows[0].username });
+    if (clash) throw new AuthError(clash, 400);
     const identity = await client.query(
       `UPDATE auth_identities
        SET password_hash = $1

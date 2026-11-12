@@ -29,4 +29,9 @@ test('too long and not-a-string are refused', () => {
   assert.match(P.check('Aa1!' + 'x'.repeat(200)), /at most 200/);
   assert.equal(P.check(undefined), 'Enter a password.'); assert.equal(P.check(12345678901), 'Enter a password.');
 });
+test('the identity parts the server checks are the normalised ones (what is stored)', () => {
+  // the server trims and lowercases before it calls check(); the rule itself compares case-insensitively
+  assert.match(P.check('Sunshine99!ok', { username: 'sunshine99' }), /username/);
+  assert.match(P.check('Zx-ANNABEL-7a', { email: 'annabel@example.com' }), /e-mail/);
+});
 console.log(`${passed} password policy tests passed`);
