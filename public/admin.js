@@ -78,6 +78,8 @@
     const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
     main.innerHTML = `<h2>Overview <small class="ad-muted">last ${o.days} days</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:12px">${rangeButtons}</div>
+      <h3>Right now <small class="ad-muted">updates every 15 seconds</small></h3>
+      <div class="ad-grid" id="liveNow" aria-live="off"><div class="ad-card"><b>…</b><small>loading</small></div></div>
       <div class="ad-grid">${tile(o.active.dau, 'active today')}${tile(o.active.wau, 'active, 7 days')}${tile(o.active.mau, 'active, 30 days')}${tile(o.accounts.registered, 'registered accounts')}${tile(o.accounts.registered_24h, 'new in 24 hours')}${tile(t('registration'), 'registrations')}${tile(t('session'), 'sessions')}${tile(t('game_finished'), 'games finished')}${tile(t('error'), 'errors')}${tile(q.feedback_new || 0, 'feedback to read')}${tile(q.reports7d || 0, 'chat reports, 7 days')}${tile(q.reports_total || 0, 'chat reports, all time')}</div>
       <h3>Active players per day</h3>${lineChart(o.activeDaily || [], o.labels || [], 'Active players')}
       <h3>Registrations per day</h3>${lineChart(o.series.registration || (o.labels || []).map(() => 0), o.labels || [], 'Registrations')}
@@ -86,6 +88,7 @@
       <h3>Popular games</h3>${bars(o.popularGames, 'No finished games yet.')}
       <h3>Errors by kind</h3>${bars(o.errors, 'No errors recorded.')}
       <p class="ad-muted">Counters only: no addresses, names or messages are recorded. Active users are counted from a keyed hash, never an account id. Detail rows are kept ${o.retention ? esc(o.retention.activeDays) : '35'} days, daily totals ${o.retention ? esc(o.retention.dailyDays) : '400'} days.</p>`;
+    startLive();
     // a new range makes every answer still on its way out of date: bump the view generation so only the latest one is drawn
     // each click takes its own generation: an older request that fails later must not replace the current view
     main.querySelectorAll('[data-days]').forEach((b) => {
@@ -430,6 +433,27 @@
       <h3>Deployment and connections</h3><div class="ad-grid">${tile(p.deployedCommit || 'not set', 'deployed commit')}${tile(p.startedAt ? when(p.startedAt) : '—', 'process started')}${tile(p.socketCloses ? p.socketCloses.normal : '—', 'normal closes (since start)')}${tile(p.socketCloses ? p.socketCloses.replaced : '—', 'replaced by the app (since start)')}${tile(p.socketCloses ? p.socketCloses.lost : '—', 'lost or dropped (since start)', p.socketCloses && p.socketCloses.lost ? 'ad-pill warn' : '')}</div>
       <h3>Analytics</h3><div class="ad-grid">${tile(h.analytics.enabled ? 'on' : 'off', 'collection')}${tile(h.analytics.buffered ?? 0, 'counters waiting to be saved')}${tile(h.analytics.failures ?? 0, 'failed saves', h.analytics.failures ? 'ad-pill warn' : '')}${tile(h.analytics.dropped ?? 0, 'dropped counts')}</div>
       <p class="ad-muted">${esc(p.mode === 'postgres' ? 'Running on PostgreSQL.' : 'Running in memory mode.')} Node ${esc(p.node || '')}. ${p.shuttingDown ? 'The server is shutting down.' : ''} ${h.analytics.lastErrorCode ? 'Last analytics error code: ' + esc(h.analytics.lastErrorCode) : ''}</p>`;
+  }
+  // The live block refreshes itself while it is on the page. Each overview draw starts one loop with a new token; an older loop
+  // stops at its next tick, and a loop also stops once its block has left the page.
+  let liveToken = 0;
+  function startLive() {
+    const token = ++liveToken;
+    const tick = async () => {
+      if (token !== liveToken || !document.getElementById('liveNow')) return;
+      try {
+        const l = await api('/api/admin/live');
+        const el = document.getElementById('liveNow');
+        if (token !== liveToken || !el) return;
+        const t = (n, label) => `<div class="ad-card"><b>${esc(n ?? '—')}</b><small>${esc(label)}</small></div>`;
+        el.innerHTML = t(l.players, 'players connected') + t(l.tables, 'tables open') + t(l.sockets, 'open connections') + t(hh(new Date(l.at).getHours()), 'server time');
+      } catch (e) {
+        const el = document.getElementById('liveNow');
+        if (el && token === liveToken) el.innerHTML = '<div class="ad-card"><b>—</b><small>could not load right now</small></div>';
+      }
+      setTimeout(tick, 15000);
+    };
+    tick();
   }
   async function audit(page = 1) {
     const gen = state.gen;
