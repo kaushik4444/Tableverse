@@ -157,7 +157,7 @@
       <h3>When people open the site</h3>${hourColumns({ [o.zone]: (o.visits && o.visits.byHour) || Array(24).fill(0) }, o.zone, 'connections')}
       <p class="ad-muted">Connections per hour of the day, from counters only (no account or device). Uses today's offset for ${esc(o.zone)}. Counting started when this feature shipped, so earlier days are empty.</p>
       <h3>How long a visit lasts</h3>${bars(((o.visits && o.visits.length) || []), 'No visits counted yet.')}
-      <p class="ad-muted">A visit is one connection, so a reconnect starts a new visit. Connections under 3 seconds are not counted.</p>
+      <p class="ad-muted">A visit is one connection, so a reconnect starts a new visit. Connections under 3 seconds are not counted, and a visit is counted when it ends, under the hour it opened in.</p>
       <h3>How each game goes</h3>${g.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Avg length</th><th>Median length</th><th>Avg seats</th><th>Left early</th><th>With a leaver</th><th>Drawn</th><th>Finished of started</th></tr></thead><tbody>${gameRows}</tbody></table>` : '<p class="ad-muted">No games yet.</p>'}
       <h3>New and returning players</h3>${stackBars(o.returning.newPerDay, o.returning.returningPerDay, o.labels, 'New', 'Returning')}
       <p class="ad-muted">Next-day, one-week and day-7 return use players whose first game was between ${o.days + 7} and 7 days ago (${c.size} players), so each has had a full week to come back. Day-30 return uses players whose first game was between ${o.days + 30} and 30 days ago (${c.size30} players).</p>

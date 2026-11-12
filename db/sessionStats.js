@@ -5,7 +5,7 @@
  * Both come from aggregate counters written by the game server (`session_hour`, `session_len` in analytics_daily): a count per
  * UTC hour of the day and a count per visit-length bucket. No account, address or device is attached to either counter.
  * A visit is one WebSocket connection, so a reconnect starts a new visit; connections shorter than 3 seconds (health checks,
- * flapping reconnects) are not counted.
+ * flapping reconnects) are in neither counter. A visit is counted when it ends, under the UTC hour it opened in.
  */
 const db = require('./pool');
 const { lengthBucket } = require('../lib/analytics');
@@ -25,16 +25,21 @@ function zoneOffsetMinutes(zone, at = new Date()) {
   return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] || 0)) : 0;
 }
 
-/** 24 UTC-hour counts shifted into a zone. Half-hour zones (India) put each UTC hour half in two hours: the count is split evenly. */
+/** 24 UTC-hour counts shifted into a zone. Half-hour zones (India) split each UTC hour across two local hours; whole counts are
+ *  handed out by largest remainder, so the total never changes (one visit stays one visit). */
 function shiftHours(utc, offsetMinutes) {
-  const out = Array(24).fill(0);
+  const exact = Array(24).fill(0);
   utc.forEach((v, h) => {
-    const start = h * 60 + offsetMinutes; // minutes since local midnight of the first half-hour edge
-    const first = Math.floor(start / 60); const frac = ((start % 60) + 60) % 60 / 60;
+    const start = h * 60 + offsetMinutes;
+    const first = Math.floor(start / 60); const frac = (((start % 60) + 60) % 60) / 60;
     const a = ((first % 24) + 24) % 24; const b = (a + 1) % 24;
-    out[a] += v * (1 - frac); out[b] += v * frac;
+    exact[a] += v * (1 - frac); exact[b] += v * frac;
   });
-  return out.map((v) => Math.round(v));
+  const out = exact.map(Math.floor);
+  let left = Math.round(utc.reduce((x, y) => x + y, 0)) - out.reduce((x, y) => x + y, 0);
+  const order = exact.map((v, i) => [v - Math.floor(v), i]).sort((p, q) => (q[0] - p[0]) || (p[1] - q[1]));
+  for (const [, i] of order) { if (left <= 0) break; out[i] += 1; left -= 1; }
+  return out;
 }
 
 async function sessionStats({ days = 30, tz = 'UTC', now = new Date() } = {}) {

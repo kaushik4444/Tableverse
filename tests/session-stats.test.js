@@ -28,6 +28,14 @@ const hours = (map) => { const a = Array(24).fill(0); for (const [h, v] of Objec
     const out = shiftHours(hours({ 10: 10 }), 330);
     assert.equal(out[15], 5); assert.equal(out[16], 5); assert.equal(out.reduce((a, b) => a + b, 0), 10);
   });
+  await test('an odd count never grows or shrinks when shifted (one visit stays one visit)', () => {
+    for (const off of [0, 60, 120, 330, -300]) for (const n of [1, 3, 7, 11]) {
+      const out = shiftHours(hours({ 10: n }), off);
+      assert.equal(out.reduce((a, b) => a + b, 0), n, `${n} visits at offset ${off}`);
+    }
+    const one = shiftHours(hours({ 10: 1 }), 330);
+    assert.equal(one.filter((v) => v === 1).length, 1, 'the single visit lands in exactly one local hour');
+  });
   await test('the server may count the two new metrics, and an unknown one is still ignored', async () => {
     assert.ok(METRICS.includes('session_hour') && METRICS.includes('session_len'));
     const rows = []; const a = createAnalytics({ store: { addCounters: async (r) => { rows.push(...r); }, addActive: async () => {} }, log: { warn() {}, error() {}, log() {} } });
