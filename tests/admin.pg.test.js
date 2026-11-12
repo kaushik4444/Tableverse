@@ -632,6 +632,29 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(await audits(), start, 'looking at the figures is not an export');
       await fn.funnel({ days: 30, actorId: staff.id, exporting: true });
       assert.equal(await audits(), start + 1, 'a CSV download is written to the audit log');
+      // the edges, one step at a time, each with an exact expected change
+      const snap = async (d) => (await fn.funnel({ days: d })).totals;
+      const diff = (x, y) => ({ signups: y.signups - x.signups, played: y.played - x.played, returned: y.returned - x.returned });
+      const w0 = await snap(7); const m0 = await snap(30);
+      // 1. a guest with a game today: the guest is in neither range
+      const guestId = (await q(`INSERT INTO players (id, username, display_name, is_anonymous) VALUES (gen_random_uuid(), $1, 'Guest', true) RETURNING id`, [`gfn${seq++}`]))[0].id;
+      await game({ id: guestId }, new Date().toISOString());
+      assert.deepEqual(diff(w0, await snap(7)), { signups: 0, played: 0, returned: 0 }, 'a guest adds nothing to the 7-day figures');
+      assert.deepEqual(diff(m0, await snap(30)), { signups: 0, played: 0, returned: 0 }, 'a guest adds nothing to the 30-day figures');
+      // 2. a registered account from 10 days ago, with a game 10 days ago: in 30 days, not in 7
+      const old = await newUser('Fno');
+      await q(`UPDATE players SET created_at = NOW() - INTERVAL '10 days' WHERE id = $1`, [old.id]);
+      await game(old, new Date(Date.now() - 10 * 86400000).toISOString());
+      const w1 = await snap(7); const m1 = await snap(30);
+      assert.deepEqual(diff(w0, w1), { signups: 0, played: 0, returned: 0 }, 'an account from 10 days ago is outside the 7-day range');
+      assert.deepEqual(diff(m0, m1), { signups: 1, played: 1, returned: 0 }, 'and inside the 30-day range, once');
+      // 3. a registered account from today with a game today: in both ranges
+      const today = await newUser('Fnt');
+      await game(today, new Date().toISOString());
+      assert.deepEqual(diff(w1, await snap(7)), { signups: 1, played: 1, returned: 0 }, 'today\'s account counts in the 7-day range');
+      const day7 = await fn.funnel({ days: 7 });
+      assert.ok(day7.daily.every((r) => r.day > new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)), 'every bucket is inside the 7 days');
+      assert.equal(day7.daily.filter((r) => r.day === new Date().toISOString().slice(0, 10)).length, 1, 'today has one bucket');
     });
     // last: this check stops the server, so it must run after every check that needs it
     await test('real traffic is counted: registrations and logins reach the table when the server shuts down (final flush)', async () => {
