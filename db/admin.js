@@ -458,6 +458,7 @@ module.exports = {
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, lookupUser, isOwner,
   addCounters, addActive, forgetActor, overview, health,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
+  countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   listPlayers: (opts) => require('./playerStats').listPlayers(opts), // the player directory (read-only)
   playerProfile: (opts) => require('./playerStats').playerProfile(opts), // one player's stats; writes a player.view audit row
   listReports: (opts) => require('./reportQueue').listReports(opts), // chat report queue (read-only); writes a reports.view audit row

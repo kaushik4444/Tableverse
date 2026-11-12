@@ -132,6 +132,23 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(profB.recent.find((r) => r.leftEarly).won, false, 'the left-early game is not shown as a win');
       assert.deepEqual(await ps.playerProfile({ username: 'no_such_player', actorId: staff.id }), { player: null });
     });
+    await test('country engagement: only countries with ten players show, and bots, guests and players without a country never count', async () => {
+      const cs = require('../db/countryStats');
+      const crowd = []; for (let i = 0; i < 10; i += 1) crowd.push(await newUser('Ce' + i));
+      for (const u of crowd) await q("UPDATE players SET country = 'DE' WHERE id = $1", [u.id]);
+      const lone = await newUser('Cef'); await q("UPDATE players SET country = 'FR' WHERE id = $1", [lone.id]);
+      const none = await newUser('Cen');
+      const m = (await q("INSERT INTO matches (room_code, game_id, seats, started_at, finished_at) VALUES ('CEN1', 'ludo', 13, NOW() - INTERVAL '40 minutes', NOW() - INTERVAL '20 minutes') RETURNING id"))[0].id;
+      const all = [...crowd, lone, none];
+      for (const [i, u] of all.entries()) await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,FALSE,FALSE,$5,FALSE)', [m, u.id, 'x', i, i === 0]);
+      await q("INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1, NULL, 'bot', 20, FALSE, TRUE, FALSE, FALSE)", [m]);
+      const out = await cs.countryEngagement({ days: 7 });
+      assert.equal(out.minPlayers, 10);
+      const de = out.rows.find((r) => r.country === 'DE');
+      assert.ok(de.players >= 10 && de.players <= 12, 'the ten new players, plus any earlier test player who also chose DE'); assert.ok(de.gamesPerPlayer >= 1 && de.leftEarlyPct >= 1, 'the one leave is counted');
+      assert.equal(out.rows.find((r) => r.country === 'FR'), undefined, 'one French player is never shown');
+      assert.equal(out.rows.find((r) => r.country === null), undefined, 'and one small country does not make an "other" line');
+    });
     console.log('schema');
     await test('migration 013 is applied and the database allows exactly one owner and only known roles', async () => {
       assert.ok((await q("SELECT 1 FROM schema_migrations WHERE version = '013_admin_console.sql'")).length === 1);
