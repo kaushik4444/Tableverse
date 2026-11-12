@@ -112,6 +112,12 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
           { gameId: 'ludo', at: '2026-11-07T08:00:00Z', seats: 4, won: false, draw: false, leftEarly: false, unknown: true, minutes: 18 }] };
     },
     playerCalls: [],
+    reportCalls: [],
+    // the real SQL is in db/reportQueue.js (tests/admin.pg.test.js); this records the request and returns a fixed answer
+    async listReports(opts = {}) {
+      this.reportCalls.push(opts);
+      return { total: 1, pageSize: 25, recentDays: 30, items: [{ id: 'r1', reason: 'threats', severity: 'high', details: '', message: 'hello', room: 'ABCD', createdAt: '2026-11-08T08:00:00Z', reporter: 'ann', reported: 'bob', reportedSuspended: false, reportedTotal: 2, reportedRecent: 1 }] };
+    },
     insightsCalls: [],
     async health() { return { dbMs: 1, migrations: 13, feedback_new: feedback.filter((f) => f.status === 'new').length, analytics_rows: 0 }; },
     async createFeedback({ playerId, category, message }) { st.check(); const row = { id: crypto.randomUUID(), player_id: playerId, category, message, status: 'new', created_at: now() }; feedback.push(row); return { id: row.id }; },

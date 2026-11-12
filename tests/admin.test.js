@@ -150,6 +150,14 @@ const ADMIN_POSTS = [
       assert.equal(bare.json.days, 30);
       assert.equal(s.store.insightsCalls.at(-1).tz, 'UTC', 'UTC unless a zone is asked for');
     });
+    await test('report queue: staff only, page passed on, and the answer carries no e-mail, address or token', async () => {
+      assert.equal((await user.b.get('/api/admin/reports')).status, 403, 'an ordinary account gets nothing');
+      const r = await admin.b.get('/api/admin/reports?page=2');
+      assert.equal(r.status, 200);
+      assert.deepEqual(s.store.reportCalls.at(-1).page, '2');
+      assert.equal(r.json.items[0].severity, 'high');
+      assert.ok(!JSON.stringify(r.json).match(/email|token|password|ip|address/i), 'no address, token or secret in the answer');
+    });
     await test('player directory: staff only; sort and search are passed on; opening a profile is audited', async () => {
       assert.equal((await user.b.get('/api/admin/players')).status, 403);
       assert.equal((await user.b.get('/api/admin/players/profile?username=ann')).status, 403);

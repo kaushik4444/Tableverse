@@ -339,6 +339,23 @@
     main.querySelectorAll('[data-fid]').forEach((b) => { b.onclick = async () => { try { await api('/api/admin/feedback/status', { id: b.dataset.fid, status: b.dataset.st }); await feedback(status, page); } catch (e) { say('fMsg', e.message, 'err'); } }; });
   }
 
+  // ---------------------------------------------------------------- chat reports (read-only queue)
+  const SEV_LABEL = { high: 'high', medium: 'medium', low: 'low' };
+  async function reports(page = 1) {
+    const gen = state.gen;
+    const o = await api(`/api/admin/reports?page=${page}`);
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    const items = o.items.map((r) => `<div class="ad-card"><div class="ad-row"><span class="ad-pill ${r.severity === 'high' ? 'bad' : r.severity === 'medium' ? 'warn' : ''}">${esc(SEV_LABEL[r.severity] || r.severity)}</span><span class="ad-pill">${esc(r.reason)}</span>${r.reportedSuspended ? '<span class="ad-pill danger">suspended</span>' : ''}<small class="ad-muted">${esc(when(r.createdAt))} · room ${esc(r.room)}</small></div>
+      <p><b>${esc(r.reported)}</b> reported by <b>${esc(r.reporter || 'a deleted account')}</b> · reported ${r.reportedTotal} time${r.reportedTotal === 1 ? '' : 's'} in all, ${r.reportedRecent} in the last ${o.recentDays} days</p>
+      <blockquote class="ad-muted" style="margin:6px 0">${esc(r.message)}</blockquote>${r.details ? `<p class="ad-muted">Note from the reporter: ${esc(r.details)}</p>` : ''}</div>`).join('');
+    main.innerHTML = `<h2>Chat reports <small class="ad-muted">${o.total} in total</small></h2>
+      <p class="ad-muted">Read-only. Reports are listed newest first; the severity is set by the reason given. Opening this list is recorded in the audit log. Resolving reports comes later.</p>
+      <div class="ad-list">${items || '<p class="ad-muted">No chat reports.</p>'}</div>
+      <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="rPrev" ${page <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${page}</span><button class="ad-btn" id="rNext" ${page * o.pageSize >= o.total ? 'disabled' : ''}>Next</button></div>`;
+    document.getElementById('rPrev').onclick = () => reports(page - 1).catch(fail);
+    document.getElementById('rNext').onclick = () => reports(page + 1).catch(fail);
+  }
+
   // ---------------------------------------------------------------- announcements
   const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
   async function announcements() {
@@ -552,7 +569,7 @@
     } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen && seq === renderSeq) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
   }
 
-  const views = { overview: () => overview(), insights: () => insights(), players: () => players(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
+  const views = { overview: () => overview(), insights: () => insights(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
