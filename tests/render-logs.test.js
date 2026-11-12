@@ -32,6 +32,12 @@ console.log('render history (Stage 20.8)');
     assert.equal(f.calls.length, 0);
   });
 
+  await test('lines come back newest first even when Render answers oldest first', async () => {
+    const f = fakeFetch({ logs: [{ timestamp: '2026-11-10T09:00:00Z', message: 'a' }, { timestamp: '2026-11-10T09:30:00Z', message: 'b' }, { timestamp: '2026-11-10T09:10:00Z', message: 'c' }] });
+    const out = await createRenderLogs({ env: ENV, fetchImpl: f.fn, now: fixedNow }).recent();
+    assert.deepEqual(out.items.map((i) => i.text), ['b', 'c', 'a']);
+  });
+
   await test('the request names the owner and the service, reads backwards over the last 24 hours, and sends the key only in the header', async () => {
     const f = fakeFetch({ logs: [] });
     await createRenderLogs({ env: ENV, fetchImpl: f.fn, now: fixedNow }).recent({ text: 'error', limit: 20 });
@@ -59,10 +65,11 @@ console.log('render history (Stage 20.8)');
     assert.equal(out.items.length, 4);
     assert.ok(!JSON.stringify(out).includes('9f8e7d6c5b4a3210zz'), 'a bare Render-style key is masked too');
     assert.ok(!JSON.stringify(out).includes('hunter2') && !JSON.stringify(out).includes('abc.def.ghi123'), 'secrets are masked');
-    assert.equal(out.items[0].level, 'error', 'failed is an error');
-    assert.equal(out.items[0].source, 'app');
-    assert.equal(out.items[1].level, 'warn', 'a label wins and is lowercased');
-    assert.equal(out.items[2].level, 'info');
+    // newest first: the 09:03 line is first and the 09:00 line is last
+    assert.equal(out.items[3].level, 'error', 'failed is an error');
+    assert.equal(out.items[3].source, 'app');
+    assert.equal(out.items[2].level, 'warn', 'a label wins and is lowercased');
+    assert.equal(out.items[1].level, 'info');
     assert.equal(out.hasMore, true);
     assert.ok(!JSON.stringify(out).includes(KEY));
     assert.equal(guessLevel('all good'), 'info');
