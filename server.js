@@ -271,13 +271,13 @@ function start(opts = {}) {
   };
   const trackError = (code) => analytics.track('error', code);
   // Operations panel: when this process started, which commit Render built it from, and how sockets have closed since
-  const serverStartedAt = new Date().toISOString();
   const deployedCommit = String(env.RENDER_GIT_COMMIT || '').slice(0, 12) || null; // the injected config, as the rest of start() reads it
   const socketCloses = createCloseCounter();
   const adminPlatform = () => ({
     uptimeSec: Math.round(process.uptime()), node: process.version, memoryMb: Math.round(process.memoryUsage().rss / 1048576),
     mode: dbPool.hasDatabase() ? 'postgres' : 'memory', rooms: rooms.size, players: players.size, sockets: wss.clients.size, shuttingDown,
-    startedAt: serverStartedAt, deployedCommit, socketCloses: socketCloses.stats(),
+    // derived from uptime, so the start time and the uptime describe the same lifetime even if start() ran earlier
+    startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(), deployedCommit, socketCloses: socketCloses.stats(),
   });
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   const authRoutes = createAuthRoutes({
