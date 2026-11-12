@@ -119,6 +119,8 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       return { total: 1, pageSize: 25, recentDays: 30, items: [{ id: 'r1', reason: 'threats', severity: 'high', details: '', message: 'hello', room: 'ABCD', createdAt: '2026-11-08T08:00:00Z', reporter: 'ann', reported: 'bob', reportedSuspended: false, reportedTotal: 2, reportedRecent: 1 }] };
     },
     async countryEngagement() { return { minPlayers: 10, rows: [{ country: 'DE', players: 12, gamesPerPlayer: 4.5, minutesPerPlayer: 38.2, leftEarlyPct: 8, daysPerPlayer: 2.1 }] }; },
+    async sessionStats({ days, tz }) { this.sessionCalls.push({ days, tz }); return { zone: tz, byHour: Array.from({ length: 24 }, (_, h) => (h === 19 ? 30 : h === 20 ? 22 : 1)), length: [{ name: 'under 1 min', total: 5 }, { name: '1–5 min', total: 9 }, { name: '5–15 min', total: 7 }, { name: '15–60 min', total: 4 }, { name: 'over 1 h', total: 1 }] }; },
+    sessionCalls: [],
     insightsCalls: [],
     async health() { return { dbMs: 1, migrations: 13, feedback_new: feedback.filter((f) => f.status === 'new').length, analytics_rows: 0 }; },
     async createFeedback({ playerId, category, message }) { st.check(); const row = { id: crypto.randomUUID(), player_id: playerId, category, message, status: 'new', created_at: now() }; feedback.push(row); return { id: row.id }; },

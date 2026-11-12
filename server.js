@@ -30,7 +30,7 @@ const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
 const { debugTokensEnabled, assertSafeDebugConfig } = require('./lib/debugTokens');
 const { createReadinessCheck } = require('./lib/health');
-const { createAnalytics } = require('./lib/analytics');
+const { createAnalytics, lengthBucket } = require('./lib/analytics');
 const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
 const { createBroadcastWorker } = require('./lib/broadcast');
@@ -1794,7 +1794,15 @@ function start(opts = {}) {
 
   wss.on('connection', (ws, req) => {
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
-    ws.once('close', (code) => socketCloses.record(code));
+    const openedAt = Date.now();
+    ws.once('close', (code) => {
+      socketCloses.record(code);
+      const bucket = lengthBucket((Date.now() - openedAt) / 1000); // null for health checks and flapping reconnects
+      if (bucket) {
+        analytics.track('session_len', bucket);
+        analytics.track('session_hour', String(new Date(openedAt).getUTCHours()).padStart(2, '0')); // the hour the visit opened in (UTC)
+      }
+    });
     analytics.track('session'); // one count per socket; no address or identity is recorded
     ws.ip = clientIp(req);
     ws.cookieToken = authRoutes.readSessionToken(req);
@@ -1984,13 +1992,13 @@ function start(opts = {}) {
       clearTimeout(timer);
       await Promise.all([matchDrain, authRoutes.drainDeliveries(Math.max(0, deadline - Date.now()))]);
     }
-    await analytics.close(2000); // last counters: always attempted, and shutdown waits at most 2 s for them
     if (metered) metered.stop();
     matchQueue.close();
     for (const room of rooms.values()) clearTimeout(room.timer);
     await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
     for (const ws of wss.clients) ws.terminate();
     await new Promise((resolve) => wss.close(resolve));
+    await analytics.close(2000); // last counters, after the sockets are gone so their visit lengths are in: shutdown waits at most 2 s for them
     await httpClosed;
   }
 

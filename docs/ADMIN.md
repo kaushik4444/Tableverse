@@ -145,3 +145,7 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 - Multi-instance: the 15 s banner cache is per instance (fine for one Render instance; at most 15 s of delay across several).
 - Analytics counts a session per WebSocket connection, so a reconnecting player counts again.
 - The PostgreSQL suites (`tests/admin.pg.test.js`, the `test:pg` run) are the authority for the database parts. They are wired into `npm run test:pg` and CI; see PROGRESS.md for what has been run locally and what has not.
+
+## Visits by hour and visit length (Insights)
+
+The game server counts, per day, how many connections opened in each UTC hour (`session_hour`) and how long each connection lasted, in five buckets (`session_len`: under 1 min, 1-5, 5-15, 15-60, over 1 h). Both are aggregate counters in `analytics_daily` (kept 400 days like the others); no account, address or device is attached. A visit is one WebSocket connection, so a reconnect is a new visit, and connections shorter than 3 seconds (health checks, flapping) are in neither counter. A visit is counted when it ends, under the UTC hour it opened in. The console shows the hour counts in the chosen zone using that zone's offset today. Counting starts when this feature is deployed.
