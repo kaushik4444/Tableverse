@@ -17,7 +17,7 @@
 </head>
 <body>
   <main>
-    <!-- DRAFT: details filled by the owner; legal review and approval still pending. Remove this comment and the banner only after approval. -->
+    <!-- DRAFT: legal review and approval still pending. Remove this comment and the banner only after approval. The owner's details are not in Git: the server fills the IMPRESSUM_NAME, IMPRESSUM_ADDRESS and IMPRESSUM_EMAIL placeholders from Render environment variables when publication is on. -->
     <p class="draft">Entwurf. Noch nicht rechtlich geprüft und nicht freigegeben.</p>
 
     <h1>Impressum</h1>
@@ -25,11 +25,11 @@
     <p>Angaben gemäß § 5 DDG</p>
 
     <h2>Diensteanbieter und verantwortliche Person</h2>
-    <p>Kaushik Goud Chandapet</p>
-    <p>Bruno-Baum-Straße 46, 12685 Berlin, Deutschland</p>
+    <p>{{IMPRESSUM_NAME}}</p>
+    <p>{{IMPRESSUM_ADDRESS}}</p>
 
     <h2>Kontakt</h2>
-    <p>E-Mail: chandapetkaushik96@gmail.com</p>
+    <p>E-Mail: {{IMPRESSUM_EMAIL}}</p>
 
     <p>Stand: 12.11.2026</p>
   </main>
