@@ -114,6 +114,11 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     playerCalls: [],
     reportCalls: [],
     // the real SQL is in db/reportQueue.js (tests/admin.pg.test.js); this records the request and returns a fixed answer
+    seatCalls: [],
+    async seatBalance(opts = {}) {
+      this.seatCalls.push(opts);
+      return { days: 30, minGames: 30, rows: [{ gameId: 'ludo', seats: 2, seat: 0, games: 40, wins: 26, winRate: 65, expectedRate: 50, z: 2.53, enoughGames: true, flagged: false }] };
+    },
     funnelCalls: [],
     async funnel(opts = {}) {
       this.funnelCalls.push(opts);

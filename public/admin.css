@@ -29,6 +29,7 @@ table.ad-t { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ad-t th, .ad-t td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .ad-t th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .ad-scroll { overflow-x: auto; }
+.ad-t tr.ad-flag td { font-weight: 600; }
 .ad-list { display: grid; gap: 10px; }
 button.ad-btn, .ad-btn { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .ad-btn.primary { background: linear-gradient(135deg, #ffd978, #ffb13d); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
