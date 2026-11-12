@@ -9,7 +9,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 
-const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/insights', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
+const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/insights', '/api/admin/players', '/api/admin/players/profile?username=ann', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
 const ADMIN_POSTS = [
   ['/api/admin/roles', { playerId: 'p_00000000-0000-4000-8000-000000000001', role: 'admin' }],
   ['/api/admin/users/sign-out', { playerId: 'p_00000000-0000-4000-8000-000000000001' }],
@@ -149,6 +149,22 @@ const ADMIN_POSTS = [
       const bare = await admin.b.get('/api/admin/insights');
       assert.equal(bare.json.days, 30);
       assert.equal(s.store.insightsCalls.at(-1).tz, 'UTC', 'UTC unless a zone is asked for');
+    });
+    await test('player directory: staff only; sort and search are passed on; opening a profile is audited', async () => {
+      assert.equal((await user.b.get('/api/admin/players')).status, 403);
+      assert.equal((await user.b.get('/api/admin/players/profile?username=ann')).status, 403);
+      const r = await admin.b.get('/api/admin/players?q=an&sort=games&page=2');
+      assert.equal(r.status, 200);
+      assert.deepEqual(s.store.playerCalls.at(-1), { q: 'an', sort: 'games', page: '2' });
+      assert.equal(r.json.players[0].username, 'ann');
+      assert.ok(!JSON.stringify(r.json).match(/email|token|password|ip/i), 'no address, token or secret in the answer');
+      const target = [...s.store.players.values()].find((x) => x.username && !x.is_anonymous);
+      const before = s.store.audit.length;
+      const p = await admin.b.get('/api/admin/players/profile?username=' + target.username + '&tz=Europe/Berlin');
+      assert.equal(p.status, 200); assert.equal(p.json.zone, 'Europe/Berlin'); assert.equal(p.json.hourly.length, 24);
+      assert.equal(s.store.audit.length, before + 1, 'one audit row for the view');
+      assert.equal(s.store.audit.at(-1).action, 'player.view');
+      assert.equal((await admin.b.get('/api/admin/players/profile?username=nobody_here')).json.player, null);
     });
     await test('the owner can grant and revoke admin, and each change is audited', async () => {
       assert.equal((await owner.b.post('/api/admin/roles', { playerId: other.id, role: 'admin' })).json.changed, true);
