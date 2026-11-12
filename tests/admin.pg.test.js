@@ -533,9 +533,11 @@ const OWNER_EMAIL = 'boss.admin@test.local';
         await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,0,false,false,false,false)', [m, player, 'x']);
       };
       const before = await cohort();
-      const dee = await newUser('Rda'); const aya = await newUser('Rdb'); const bob = await newUser('Rdc'); const cyra = await newUser('Rdd');
-      // first game 9 days ago, back the next day: in the D1 and D7 cohort
-      await mk(dee.id, 'ludo', ago(9), 15); await mk(dee.id, 'ludo', ago(8), 15);
+      const dee = await newUser('Rda'); const aya = await newUser('Rdb'); const bob = await newUser('Rdc'); const cyra = await newUser('Rdd'); const eel = await newUser('Rde');
+      // first game 9 days ago, back the next day and again on exactly day 7: in the D1 and D7 cohort
+      await mk(dee.id, 'ludo', ago(9), 15); await mk(dee.id, 'ludo', ago(8), 15); await mk(dee.id, 'ludo', ago(2), 15);
+      // first game 12 days ago, back the next day only: in the D1 and D7 cohort, but not on exactly day 7
+      await mk(eel.id, 'ludo', ago(12), 15); await mk(eel.id, 'ludo', ago(11), 15);
       // first game 33 days ago, back exactly on day 7 (26 days ago) and exactly on day 30 (3 days ago)
       await mk(aya.id, 'ludo', ago(33), 15); await mk(aya.id, 'ludo', ago(26), 15); await mk(aya.id, 'ludo', ago(3), 15);
       // first game 33 days ago, back only the next day: in the D30 cohort, not an exact-day return
@@ -544,10 +546,10 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       await mk(cyra.id, 'ludo', ago(35), 15); await mk(cyra.id, 'ludo', ago(5), 15);
       const after = await cohort();
       const delta = (k) => after[k] - before[k];
-      assert.equal(delta('size'), 1, 'one new player in the D1 and D7 cohort');
-      assert.equal(delta('d1'), 1, 'and that player came back the next day');
-      assert.equal(delta('d7'), 1, 'and within the week');
-      assert.equal(delta('d7Exact'), 0, 'but not on exactly day 7');
+      assert.equal(delta('size'), 2, 'two new players in the D1 and D7 cohort');
+      assert.equal(delta('d1'), 2, 'both came back the next day');
+      assert.equal(delta('d7'), 2, 'and both came back within the week');
+      assert.equal(delta('d7Exact'), 1, 'one of them came back on exactly day 7');
       assert.equal(delta('size30'), 3, 'three new players in the D30 cohort');
       assert.equal(delta('d30Exact'), 2, 'two of them came back on exactly day 30');
       // median of the lengths 10, 15, 15, 20, 60 is 15; the average is 24
