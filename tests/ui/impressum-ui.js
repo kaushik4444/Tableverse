@@ -130,10 +130,10 @@ async function assertVisibleAndClickable(page, selector, label) {
         await page.goto(slow.url + '/');
         await page.waitForSelector('#loginForm', { timeout: 8000 });
         assert.equal(await page.locator('#auth-overlay .auth-legal a').count(), 0, 'sheet open before the flag: no link yet');
+        await page.fill('#loginEmail', 'typed@example.com'); // typed before the flag arrives
         release();
         await page.waitForSelector('#auth-overlay .auth-legal a[href="/impressum.html"]', { state: 'attached', timeout: 8000 });
-        await page.fill('#loginEmail', 'typed@example.com');
-        assert.equal(await page.inputValue('#loginEmail'), 'typed@example.com', 'typed input survives the update');
+        assert.equal(await page.inputValue('#loginEmail'), 'typed@example.com', 'input typed before the update survives it');
         await ctx.close();
       } finally {
         release();
