@@ -178,7 +178,7 @@
   };
   const playerSel = { q: '', sort: 'seen', page: 1, tz: 'UTC' };
 
-  async function players(q = playerSel.q, sort = playerSel.sort, pageNo = 1) {
+  async function players(q = playerSel.q, sort = playerSel.sort, pageNo = playerSel.page) {
     const gen = state.gen;
     Object.assign(playerSel, { q, sort, page: pageNo });
     const o = await api(`/api/admin/players?q=${encodeURIComponent(q)}&sort=${encodeURIComponent(sort)}&page=${pageNo}`);
@@ -186,14 +186,14 @@
     const pages = Math.max(1, Math.ceil(o.total / o.pageSize));
     const sortButtons = SORTS.map(([k, n]) => `<button class="ad-btn ${k === o.sort ? 'primary' : ''}" data-sort="${k}" aria-pressed="${k === o.sort}">${n}</button>`).join('');
     const rows = o.players.map((p) => `<tr><td data-l="Player"><b>${esc(p.displayName)}</b><br><small class="ad-muted">@${esc(p.username)}${p.country ? ' · ' + esc(countryName(p.country)) : ''}</small>${p.suspended ? ' <span class="ad-pill danger">suspended</span>' : ''}</td>
-      <td data-l="Games">${p.games}</td><td data-l="Wins">${p.wins}</td><td data-l="Win rate">${pctText(p.wins, p.games - p.draws)}</td><td data-l="Left early">${pctText(p.leftEarly, p.games)}</td><td data-l="Played">${mins(p.minutes)}</td>
+      <td data-l="Games">${p.games}</td><td data-l="Wins">${p.wins}</td><td data-l="Win rate">${pctText(p.wins, p.rated - p.draws)}</td><td data-l="Left early">${pctText(p.leftEarly, p.games)}</td><td data-l="Played">${mins(p.minutes)}</td>
       <td data-l="Last seen">${esc(when(p.lastSeenAt))}</td><td><button class="ad-btn" data-view="${esc(p.username)}" aria-label="Open the profile of ${esc(p.username)}">Open</button></td></tr>`).join('');
     main.innerHTML = `<h2>Players <small class="ad-muted">${o.total} registered</small></h2>
       <form class="ad-search ad-row" id="pForm"><input name="q" value="${esc(q)}" placeholder="Search username or name" maxlength="40" aria-label="Search players" style="flex:1"><button class="ad-btn primary" type="submit">Search</button></form>
       <div class="ad-row" role="group" aria-label="Sort by" style="margin:8px 0 12px">${sortButtons}</div>
       ${o.players.length ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Win rate</th><th>Left early</th><th>Played</th><th>Last seen</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="ad-muted">No players match.</p>'}
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="pPrev" ${pageNo <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${pageNo} of ${pages}</span><button class="ad-btn" id="pNext" ${pageNo >= pages ? 'disabled' : ''}>Next</button></div>
-      <p class="ad-muted">Registered players only. Win rate leaves out drawn games; time played leaves out games a player left early. Opening a profile is recorded in the audit log.</p>`;
+      <p class="ad-muted">Registered players only. Wins and win rate count only games with a recorded result that the player stayed to the end of, and leave out draws; time played leaves out games a player left early. Opening a profile is recorded in the audit log.</p>`;
     const go = (a, b, c) => { state.gen += 1; const mine = state.gen; players(a, b, c).catch((e) => { if (mine === state.gen) fail(e); }); };
     document.getElementById('pForm').onsubmit = (e) => { e.preventDefault(); go(new FormData(e.target).get('q') || '', o.sort, 1); };
     main.querySelectorAll('[data-sort]').forEach((b) => { b.onclick = () => go(q, b.dataset.sort, 1); });
@@ -212,12 +212,12 @@
     o.zone = zone;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
     const zoneButtons = ZONES.map(([z, n]) => `<button class="ad-btn ${z === o.zone ? 'primary' : ''}" data-zone="${z}" aria-pressed="${z === o.zone}">${n}</button>`).join('');
-    const perGame = o.perGame.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Games">${g.games}</td><td data-l="Wins">${g.wins}</td><td data-l="Win rate">${pctText(g.wins, g.games - g.draws)}</td><td data-l="Drawn">${g.draws}</td><td data-l="Left early">${g.leftEarly}</td><td data-l="Played">${mins(g.minutes)}</td></tr>`).join('');
-    const recent = o.recent.map((r) => `<tr><td data-l="When">${esc(when(r.at))}</td><td data-l="Game">${esc(r.gameId)}</td><td data-l="Seats">${r.seats}</td><td data-l="Result">${r.leftEarly ? 'left early' : r.draw ? 'draw' : r.won ? 'won' : 'lost'}</td><td data-l="Length">${mins(r.minutes)}</td></tr>`).join('');
+    const perGame = o.perGame.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Games">${g.games}</td><td data-l="Wins">${g.wins}</td><td data-l="Win rate">${pctText(g.wins, g.rated - g.draws)}</td><td data-l="Drawn">${g.draws}</td><td data-l="Left early">${g.leftEarly}</td><td data-l="Played">${mins(g.minutes)}</td></tr>`).join('');
+    const recent = o.recent.map((r) => `<tr><td data-l="When">${esc(when(r.at))}</td><td data-l="Game">${esc(r.gameId)}</td><td data-l="Seats">${r.seats}</td><td data-l="Result">${r.leftEarly ? 'left early' : r.unknown ? 'result not recorded' : r.draw ? 'draw' : r.won ? 'won' : 'lost'}</td><td data-l="Length">${mins(r.minutes)}</td></tr>`).join('');
     main.innerHTML = `<div class="ad-row"><button class="ad-btn" id="pBack">Back to players</button></div>
       <h2>${esc(p.displayName)} <small class="ad-muted">@${esc(p.username)}</small></h2>
       <p class="ad-muted">${p.country ? esc(countryName(p.country)) + ' · ' : ''}Role: ${esc(p.role)} · ${p.verified ? 'verified' : 'not verified'} · Joined ${esc(when(p.joinedAt))} · Last seen ${esc(when(p.lastSeenAt))}${p.suspended ? ' · <b>suspended</b>' : ''}</p>
-      <div class="ad-grid">${tile(t.games, 'games played')}${tile(t.wins, 'wins')}${tile(pctText(t.wins, t.games - t.draws), 'win rate (draws left out)')}${tile(t.draws, 'draws')}${tile(pctText(t.leftEarly, t.games), 'games left early')}${tile(mins(t.minutes), 'time played')}${tile(t.activeDays, 'days played')}</div>
+      <div class="ad-grid">${tile(t.games, 'games played')}${tile(t.wins, 'wins')}${tile(pctText(t.wins, t.rated - t.draws), 'win rate (draws left out)')}${tile(t.draws, 'draws')}${tile(pctText(t.leftEarly, t.games), 'games left early')}${tile(mins(t.minutes), 'time played')}${tile(t.activeDays, 'days played')}</div>
       <p class="ad-muted">First game ${esc(when(t.firstGameAt))} · latest game ${esc(when(t.lastGameAt))}</p>
       <h3>When this player plays</h3><div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:8px">${zoneButtons}</div>${hourColumns(o.hourly, o.zone)}
       <h3>By game</h3>${o.perGame.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Games</th><th>Wins</th><th>Win rate</th><th>Drawn</th><th>Left early</th><th>Played</th></tr></thead><tbody>${perGame}</tbody></table>` : '<p class="ad-muted">No finished games yet.</p>'}
