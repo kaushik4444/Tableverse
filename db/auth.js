@@ -647,6 +647,7 @@ async function purgeExpired() {
 }
 
 module.exports = {
+  hashPassword, // exported for the local seed script (lib/devSeed.js) only
   verifyPassword,
   AuthError,
   normEmail,
