@@ -75,13 +75,16 @@ const OWNER_EMAIL = 'boss.admin@test.local';
                                                VALUES ($1, $2, 'Bad', 'RPQ1', gen_random_uuid(), $3, $4, '')`, [who, bad.id, text, reason]);
       await report(rep.id, 'threats', 'a threatening line');
       await report(staff.id, 'spam', 'a spam line');
+      // one report older than the 30-day window: it counts all time but not in the recent figure
+      await q(`INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason, details, created_at)
+               VALUES ($1, $2, 'Bad', 'RPQ1', gen_random_uuid(), 'an old line', 'harassment', '', NOW() - INTERVAL '45 days')`, [rep.id, bad.id]);
       const page = await rq.listReports({ page: 1, actorId: staff.id });
       const threat = page.items.find((r) => r.reason === 'threats' && r.message === 'a threatening line');
       assert.ok(threat, 'the threat report is listed');
       assert.equal(threat.severity, 'high', 'threats are high severity');
       assert.equal(threat.reportedSuspended, true, 'the suspension is shown');
-      assert.equal(threat.reportedTotal, 2, 'the account has two reports in all');
-      assert.equal(threat.reportedRecent, 2, 'and two in the last 30 days');
+      assert.equal(threat.reportedTotal, 3, 'the account has three reports in all');
+      assert.equal(threat.reportedRecent, 2, 'and two in the last 30 days (the 45-day-old report is left out)');
       assert.equal(threat.reporter, rep.player.username, 'the reporter username is shown to staff');
       assert.equal(threat.reported, bad.player.username, 'the reported username is shown');
       assert.ok(!Object.keys(threat).some((k) => /email|ip|token/i.test(k)), 'no address or token fields');
