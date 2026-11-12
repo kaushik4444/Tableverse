@@ -137,6 +137,18 @@ async function test(name, fn) {
       }
     });
 
+    await test('the published flag reported to clients is on only when the details are complete', async () => {
+      const partial = { ...process.env, ...DETAILS };
+      delete partial.IMPRESSUM_ADDRESS;
+      const srvPartial = await start({ port: 0, trustProxy: false, impressumPublished: true, env: partial, matchLog: { log() {}, warn() {}, error() {} } });
+      try {
+        const out = await (await fetch(`http://127.0.0.1:${srvPartial.port}/api/games`)).json();
+        assert.equal(out.impressumPublished, false, 'no link may point at a page that cannot be served');
+      } finally {
+        await srvPartial.close();
+      }
+    });
+
     await test('renderer escapes values and refuses a missing value', () => {
       const tpl = '<p>{{IMPRESSUM_NAME}}</p><p>{{IMPRESSUM_ADDRESS}}</p><p>{{IMPRESSUM_EMAIL}}</p>';
       const out = renderImpressum(tpl, { IMPRESSUM_NAME: 'A <script>x</script>', IMPRESSUM_ADDRESS: 'B & C', IMPRESSUM_EMAIL: 'e@example.invalid' });
