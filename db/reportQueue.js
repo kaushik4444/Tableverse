@@ -24,11 +24,14 @@ async function listReports({ page: pg = 1, actorId = null } = {}) {
     const total = (await c.query('SELECT COUNT(*)::int AS n FROM chat_reports')).rows[0].n;
     const r = await c.query(
       `SELECT r.id, r.reason, r.details, r.message_text, r.room_code, r.created_at,
-              r.reported_display_name, rep.username AS reporter_username,
+              r.reported_display_name, rep.username AS reporter_username, rep.is_anonymous AS reporter_guest,
               rd.username AS reported_username, (rd.suspended_at IS NOT NULL) AS reported_suspended,
-              (SELECT COUNT(*) FROM chat_reports x WHERE x.reported_id = r.reported_id)::int AS reported_total,
-              (SELECT COUNT(*) FROM chat_reports x WHERE x.reported_id = r.reported_id
-                 AND x.created_at > NOW() - ($1::int * INTERVAL '1 day'))::int AS reported_recent
+              -- a deleted reported account leaves reported_id NULL (migration 015): its counts are unknown, not zero
+              CASE WHEN r.reported_id IS NULL THEN NULL ELSE
+                (SELECT COUNT(*) FROM chat_reports x WHERE x.reported_id = r.reported_id)::int END AS reported_total,
+              CASE WHEN r.reported_id IS NULL THEN NULL ELSE
+                (SELECT COUNT(*) FROM chat_reports x WHERE x.reported_id = r.reported_id
+                   AND x.created_at > NOW() - ($1::int * INTERVAL '1 day'))::int END AS reported_recent
          FROM chat_reports r
          LEFT JOIN players rep ON rep.id = r.reporter_id
          LEFT JOIN players rd ON rd.id = r.reported_id
@@ -44,9 +47,12 @@ async function listReports({ page: pg = 1, actorId = null } = {}) {
       total, pageSize: PAGE, recentDays: RECENT_DAYS,
       items: r.rows.map((x) => ({
         id: x.id, reason: x.reason, severity: SEVERITY[x.reason] || 'low', details: x.details || '', message: x.message_text,
-        room: x.room_code, createdAt: x.created_at, reporter: x.reporter_username || null,
+        room: x.room_code, createdAt: x.created_at,
+        // guests have no username; a reporter with no row left is not shown as a guest
+        reporter: x.reporter_username || (x.reporter_guest ? 'a guest' : null),
         reported: x.reported_username || x.reported_display_name || 'Deleted player', reportedSuspended: Boolean(x.reported_suspended),
-        reportedTotal: num(x.reported_total), reportedRecent: num(x.reported_recent),
+        reportedTotal: x.reported_total == null ? null : num(x.reported_total),
+        reportedRecent: x.reported_recent == null ? null : num(x.reported_recent),
       })),
     };
   });
