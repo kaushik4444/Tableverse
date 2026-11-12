@@ -10,11 +10,14 @@ const num = (v) => Number(v) || 0;
 async function funnel({ days = 30, actorId = null, exporting = false } = {}) {
   const n = clampDays(days);
   const rows = (await db.query(
+    // whole UTC days: today and the n-1 days before it, so every bucket is a full day whatever the time of day
     `WITH s AS (SELECT id, (created_at AT TIME ZONE 'UTC')::date AS signup_day
-                  FROM players WHERE NOT is_anonymous AND created_at > NOW() - ($1::int * INTERVAL '1 day')),
-          g AS (SELECT p.player_id, COUNT(DISTINCT (m.started_at AT TIME ZONE 'UTC')::date) AS days
-                  FROM match_participants p JOIN matches m ON m.id = p.match_id
-                 WHERE p.player_id IS NOT NULL AND NOT p.is_bot GROUP BY p.player_id)
+                  FROM players WHERE NOT is_anonymous
+                   AND (created_at AT TIME ZONE 'UTC')::date > (NOW() AT TIME ZONE 'UTC')::date - $1::int),
+          g AS (SELECT s.id AS player_id, COUNT(DISTINCT (m.started_at AT TIME ZONE 'UTC')::date) AS days
+                  FROM s JOIN match_participants p ON p.player_id = s.id AND NOT p.is_bot
+                  JOIN matches m ON m.id = p.match_id
+                 GROUP BY s.id)
      SELECT s.signup_day::text AS day, COUNT(*)::int AS signups,
             COUNT(g.player_id)::int AS played, COUNT(*) FILTER (WHERE g.days >= 2)::int AS returned
        FROM s LEFT JOIN g ON g.player_id = s.id
