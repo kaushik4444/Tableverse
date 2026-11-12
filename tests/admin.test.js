@@ -9,7 +9,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 
-const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
+const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/insights', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
 const ADMIN_POSTS = [
   ['/api/admin/roles', { playerId: 'p_00000000-0000-4000-8000-000000000001', role: 'admin' }],
   ['/api/admin/users/sign-out', { playerId: 'p_00000000-0000-4000-8000-000000000001' }],
@@ -137,6 +137,18 @@ const ADMIN_POSTS = [
         for (let i = 0; i < 4; i++) assert.equal((await admin3.b.post('/api/admin/users/resend-verification', { playerId: peer.id })).status, 403);
         assert.equal((await owner3.b.post('/api/admin/users/resend-verification', { playerId: peer.id })).status, 200);
       } finally { await s3.close(); }
+    });
+    await test('insights: staff get the figures with one label per day, and the range and zone are passed on', async () => {
+      const r = await admin.b.get('/api/admin/insights?days=7&tz=Asia/Kolkata');
+      assert.equal(r.status, 200);
+      assert.equal(r.json.labels.length, 7);
+      assert.equal(r.json.returning.newPerDay.length, 7);
+      assert.equal(r.json.returning.newPerDay[6], 2, 'the last label is today and carries the day that was returned');
+      assert.equal(r.json.returning.daily, undefined, 'only the per-day arrays are sent');
+      assert.deepEqual(s.store.insightsCalls.at(-1), { days: '7', tz: 'Asia/Kolkata' });
+      const bare = await admin.b.get('/api/admin/insights');
+      assert.equal(bare.json.days, 30);
+      assert.equal(s.store.insightsCalls.at(-1).tz, 'UTC', 'UTC unless a zone is asked for');
     });
     await test('the owner can grant and revoke admin, and each change is audited', async () => {
       assert.equal((await owner.b.post('/api/admin/roles', { playerId: other.id, role: 'admin' })).json.changed, true);

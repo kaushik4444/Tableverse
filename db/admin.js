@@ -457,6 +457,7 @@ module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, lookupUser, isOwner,
   addCounters, addActive, forgetActor, overview, health,
+  insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   createFeedback, listFeedback, setFeedbackStatus,
   createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissed,
   listAudit, purge, audit,
