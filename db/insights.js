@@ -38,6 +38,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     // 1. what is played: finished matches per game, how long they last, how many seats, and how often a game ends with a leaver or a draw
     q(`SELECT m.game_id, COUNT(*)::int AS matches,
               COALESCE(AVG(EXTRACT(EPOCH FROM (m.finished_at - m.started_at))) / 60.0, 0)::float AS avg_minutes,
+              COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) / 60.0), 0)::float AS median_minutes,
               COALESCE(AVG(m.seats), 0)::float AS avg_seats,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM match_participants x WHERE x.match_id = m.id AND x.left_early AND x.player_id IS NOT NULL AND NOT x.is_bot AND EXISTS (SELECT 1 FROM players xp WHERE xp.id = x.player_id AND NOT xp.is_anonymous)))::int AS with_leaver,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM match_participants x WHERE x.match_id = m.id AND x.is_draw))::int AS draws
@@ -78,17 +79,26 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
        SELECT d.day::text AS day, COUNT(*) FILTER (WHERE f.first_day = d.day)::int AS new_players,
               COUNT(*) FILTER (WHERE f.first_day < d.day)::int AS returning_players
          FROM d JOIN firsts f ON f.player_id = d.player_id WHERE d.day > ${TODAY} - $1::int GROUP BY d.day ORDER BY d.day`),
-    // 6. did they come back: players whose first game was at least a week ago, and whether they played again the next day / within a week
+    // 6. did they come back: players whose first game was long enough ago for the day to have passed.
+    //    Next day (D1), within a week (D7 window), and on exactly day 7 and exactly day 30 (D7 exact, D30 exact).
+    //    The D1 / D7 cohort is the players whose first game was 7 or more days ago and within the range; the D30 cohort is 30 or more days ago.
     q(`WITH firsts AS (SELECT p.player_id, (MIN(m.started_at) AT TIME ZONE 'UTC')::date AS first_day
                          FROM match_participants p JOIN matches m ON m.id = p.match_id
                         WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN} GROUP BY p.player_id),
             d AS (SELECT DISTINCT p.player_id, (m.started_at AT TIME ZONE 'UTC')::date AS day
                     FROM match_participants p JOIN matches m ON m.id = p.match_id
                    WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN})
-       SELECT COUNT(*)::int AS size,
-              COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day = f.first_day + 1))::int AS d1,
-              COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day BETWEEN f.first_day + 1 AND f.first_day + 7))::int AS d7
-         FROM firsts f WHERE f.first_day > ${TODAY} - ($1::int + 7) AND f.first_day <= ${TODAY} - 7`),
+       SELECT COUNT(*) FILTER (WHERE f.first_day > ${TODAY} - ($1::int + 7) AND f.first_day <= ${TODAY} - 7)::int AS size,
+              COUNT(*) FILTER (WHERE f.first_day > ${TODAY} - ($1::int + 7) AND f.first_day <= ${TODAY} - 7
+                AND EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day = f.first_day + 1))::int AS d1,
+              COUNT(*) FILTER (WHERE f.first_day > ${TODAY} - ($1::int + 7) AND f.first_day <= ${TODAY} - 7
+                AND EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day BETWEEN f.first_day + 1 AND f.first_day + 7))::int AS d7,
+              COUNT(*) FILTER (WHERE f.first_day > ${TODAY} - ($1::int + 7) AND f.first_day <= ${TODAY} - 7
+                AND EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day = f.first_day + 7))::int AS d7_exact,
+              COUNT(*) FILTER (WHERE f.first_day > ${TODAY} - ($1::int + 30) AND f.first_day <= ${TODAY} - 30)::int AS size30,
+              COUNT(*) FILTER (WHERE f.first_day > ${TODAY} - ($1::int + 30) AND f.first_day <= ${TODAY} - 30
+                AND EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day = f.first_day + 30))::int AS d30_exact
+         FROM firsts f WHERE f.first_day > ${TODAY} - ($1::int + 30) AND f.first_day <= ${TODAY} - 7`),
     // 7. the most active signed-in players in the window, with the hour (in the chosen zone) they most often start playing
     q(`WITH h AS (${HUMANS} AND ${IN_WINDOW})
        SELECT pl.username, pl.display_name, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE h.is_winner)::int AS wins,
@@ -113,7 +123,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
   const byGame = new Map(games.rows.map((r) => [r.game_id, r]));
   const gameRows = [...gameIds].map((id) => {
     const g = byGame.get(id) || {}; const l = leaveBy.get(id) || {};
-    return { gameId: id, matches: num(g.matches), avgMinutes: round1(g.avg_minutes), avgSeats: round1(g.avg_seats), withLeaver: num(g.with_leaver), draws: num(g.draws),
+    return { gameId: id, matches: num(g.matches), avgMinutes: round1(g.avg_minutes), medianMinutes: round1(g.median_minutes), avgSeats: round1(g.avg_seats), withLeaver: num(g.with_leaver), draws: num(g.draws),
       humans: num(l.humans), leftEarly: num(l.left_early), started: started.get(id) || 0, finished: finished.get(id) || 0 };
   }).sort((a, b) => (b.matches - a.matches) || (b.started - a.started) || a.gameId.localeCompare(b.gameId));
 
@@ -128,7 +138,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     playtime: { players: num(pt.players), totalMinutes: round1(pt.total_minutes), avgMinutes: round1(pt.avg_minutes), medianMinutes: round1(pt.median_minutes),
       buckets: [num(pt.b_lt10), num(pt.b_10_30), num(pt.b_30_60), num(pt.b_60_180), num(pt.b_180)] },
     returning: { activePlayers: num(pt.players), newPlayers, returningPlayers: num(pt.multi_day), daily: daily.rows.map((r) => ({ day: r.day, newPlayers: r.new_players, returningPlayers: r.returning_players })),
-      cohort: { size: num(c.size), d1: num(c.d1), d7: num(c.d7) } },
+      cohort: { size: num(c.size), d1: num(c.d1), d7: num(c.d7), d7Exact: num(c.d7_exact), size30: num(c.size30), d30Exact: num(c.d30_exact) } },
     countries: countries.rows.map((r) => ({ country: r.country, players: r.players })),
     top: top.rows.map((r) => ({ username: r.username, displayName: r.display_name, games: r.games, wins: r.wins, minutes: round1(r.minutes), peakHour: r.peak_hour })),
   };
