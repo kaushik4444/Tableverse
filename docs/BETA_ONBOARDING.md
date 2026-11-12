@@ -15,20 +15,27 @@ Thank you for helping test Tableverse, a free site for playing table games with 
 
 **Beta link:** [BETA LINK: owner to add]
 
+## Before you play: please read
+
+This is a beta. A game in progress is not kept if the server restarts or is updated, and the table ends. A finished game is saved to our database, and it appears in your history. In rare cases a finished game may not be saved, for example if the server is replaced while the save is still pending. If a game you finished is missing from your history, tell us the time and the table code, and we will look at the server logs. Please do not rely on Tableverse as the only record of anything important.
+
 ## Get started in 5 minutes
 
 1. **Open the beta link** on your phone or computer. Any recent browser works (Chrome, Safari, Firefox, Edge).
 2. **Sign up.** Tap **Sign up**, choose a display name and a username, enter your email and a password, and confirm that you are 18 or over.
 3. **Verify your email.** Open the message we send you and tap the link. If it has not arrived after a few minutes, check the spam folder, then use **Resend verification email** on the login screen.
-4. **Pick a game** on the home screen and tap **Create table**. Empty seats are filled by bots, so you can play alone to try a game.
-5. **Invite friends.** Share the 6-letter table code (or the invitation) with them. They sign up, tap **Join**, enter the code and choose **Join as player**.
+4. **Pick a game** on the home screen and tap **Create table**. You are the host, and the table opens as a lobby.
+5. **Play alone against bots:** tap **Start game**. Empty seats are filled by bots when you start, and the button shows how many.
+6. **Play with friends.** New tables are **private**: only friends who have an accepted invitation can enter, and a table code alone is not enough. There are two ways:
+   - **Easiest:** as host, tap **Make public**. Your friends then tap **Join**, enter the 6-letter table code and choose **Join as player** (or pick the table under **Open tables**). Tap **Start game** when everyone is seated. You can tap **Make private** again afterwards.
+   - **Keep it private:** first become friends (one of you taps **Add friend**, the other accepts the request), then invite your friend from the table. They accept the invitation and join.
 
 ## Please try these in your first session
 
 - [ ] Sign up and verify your email.
 - [ ] Play one full game against bots from start to finish.
-- [ ] Play one game with a friend, using a table code.
-- [ ] Close the page in the middle of a game, open it again and tap **Rejoin** on the home screen.
+- [ ] Play one game with a friend (make the table public, or become friends first).
+- [ ] Close the page for a few seconds in the middle of a game, open it again and tap **Rejoin** on the home screen.
 - [ ] Play on a phone, in portrait, and check that you can read everything and tap every button.
 - [ ] Open the table chat, and find the **Report** and **Block** buttons on a message.
 
@@ -36,7 +43,7 @@ You do not have to do them all. Anything you try helps.
 
 ## If something goes wrong
 
-- **The page looks stuck:** reload it. If you were at a table, tap **Rejoin** on the home screen.
+- **The page looks stuck:** reload it. If you were at a table, tap **Rejoin** on the home screen. Rejoin works after a short disconnect. If the server was restarted or updated, the table is gone: create a new table.
 - **You were signed out:** log in again. If you signed in on another device, the older one is signed out on purpose.
 - **Still broken:** report it (below). A short report is much better than none.
 
