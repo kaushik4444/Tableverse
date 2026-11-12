@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Impressum — Tableverse</title>
+  <style>
+    body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1d1d1f; background: #fff; }
+    main { max-width: 680px; margin: 0 auto; padding: 24px 16px 96px; }
+    h1 { font-size: 26px; margin: 0 0 16px; }
+    h2 { font-size: 18px; margin: 24px 0 8px; }
+    p, li { margin: 0 0 8px; }
+    .draft { background: #fff7d6; border: 1px solid #e0c35c; padding: 8px 12px; border-radius: 8px; font-size: 14px; }
+    a { color: #0d3b2c; }
+  </style>
+</head>
+<body>
+  <main>
+    <!-- DRAFT: legal review and approval still pending. Remove this comment and the banner only after approval. The owner's details are not in Git: the server fills the IMPRESSUM_NAME, IMPRESSUM_ADDRESS and IMPRESSUM_EMAIL placeholders from Render environment variables when publication is on. -->
+    <p class="draft">Entwurf. Noch nicht rechtlich geprüft und nicht freigegeben.</p>
+
+    <h1>Impressum</h1>
+
+    <p>Angaben gemäß § 5 DDG</p>
+
+    <h2>Diensteanbieter und verantwortliche Person</h2>
+    <p>{{IMPRESSUM_NAME}}</p>
+    <p>{{IMPRESSUM_ADDRESS}}</p>
+
+    <h2>Kontakt</h2>
+    <p>E-Mail: {{IMPRESSUM_EMAIL}}</p>
+
+    <p>Stand: 12.11.2026</p>
+  </main>
+</body>
+</html>

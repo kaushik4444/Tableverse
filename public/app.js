@@ -446,6 +446,7 @@
           <button class="btn big" type="submit">Create account</button>
         </form>
       `}
+      ${S.impressumPublished ? '<p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>' : ''}
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     document.body.appendChild(overlay);
@@ -797,6 +798,15 @@
   }
 
   /** Home data for visitors (no socket): the public games list, the live table directory and the site announcement. */
+  // A sign-in sheet that was already open when the flag arrived gets the link added (or removed) in place, so typed input survives.
+  function syncImpressumLink() {
+    const sheet = document.querySelector('#auth-overlay .sheet');
+    if (!sheet) return;
+    const link = sheet.querySelector('.auth-legal');
+    if (S.impressumPublished && !link) sheet.insertAdjacentHTML('beforeend', '<p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>');
+    else if (!S.impressumPublished && link) link.remove();
+  }
+
   async function loadSnapshot() {
     S.guest = true;
     S.rejoin = []; // a stale "your game is waiting" banner must not survive into guest browsing
@@ -807,6 +817,9 @@
         S.games = out.games || [];
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
+        // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
+        if (typeof out.impressumPublished === 'boolean') S.impressumPublished = out.impressumPublished;
+        syncImpressumLink();
       }
     } catch { /* offline: the home screen still renders, just without live data */ }
     render();
@@ -929,6 +942,7 @@
     switch (m.t) {
       case 'welcome': {
         S.id = m.id;
+        S.impressumPublished = m.impressumPublished === true; // the server decides (LEGAL_IMPRESSUM_PUBLISHED); no link while it is off
         S.token = '';
         S.guest = false;
         S.games = m.games;
@@ -964,6 +978,7 @@
         break;
       }
       case 'authRequired':
+        S.impressumPublished = m.impressumPublished === true; // signed-out sheet has no welcome, so the flag rides on this message too
         S.signingIn = false;
         hideBusy();
         clearClientSession();
@@ -1980,7 +1995,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}</footer>
+      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}${S.guest || !S.impressumPublished ? '' : ' · '}${S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''}</footer>
     </main>`;
   }
 
