@@ -609,6 +609,42 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(await dbBroadcast.unsubscribe(token), true, 'a second visit is harmless');
       assert.equal(await dbBroadcast.unsubscribe('00000000-0000-4000-8000-000000000000'), false, 'an unknown token changes nothing');
     });
+    await test('insights: exact-day returns on day 7 and day 30, and the median length per game', async () => {
+      const ins = require('../db/insights');
+      const DAY = 86400000;
+      const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
+      const cohort = async () => (await ins.insights({ days: 7, tz: 'UTC' })).returning.cohort;
+      const mk = async (player, game, at, mins) => {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at)
+                            VALUES (gen_random_uuid(), 'RET1', $1, 2, $2::timestamptz, $2::timestamptz + make_interval(mins => $3)) RETURNING id`, [game, at, mins]))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,0,false,false,false,false)', [m, player, 'x']);
+      };
+      const before = await cohort();
+      const dee = await newUser('Rda'); const aya = await newUser('Rdb'); const bob = await newUser('Rdc'); const cyra = await newUser('Rdd');
+      // first game 9 days ago, back the next day: in the D1 and D7 cohort
+      await mk(dee.id, 'ludo', ago(9), 15); await mk(dee.id, 'ludo', ago(8), 15);
+      // first game 33 days ago, back exactly on day 7 (26 days ago) and exactly on day 30 (3 days ago)
+      await mk(aya.id, 'ludo', ago(33), 15); await mk(aya.id, 'ludo', ago(26), 15); await mk(aya.id, 'ludo', ago(3), 15);
+      // first game 33 days ago, back only the next day: in the D30 cohort, not an exact-day return
+      await mk(bob.id, 'ludo', ago(33), 15); await mk(bob.id, 'ludo', ago(32), 15);
+      // first game 35 days ago, back exactly on day 30 (5 days ago)
+      await mk(cyra.id, 'ludo', ago(35), 15); await mk(cyra.id, 'ludo', ago(5), 15);
+      const after = await cohort();
+      const delta = (k) => after[k] - before[k];
+      assert.equal(delta('size'), 1, 'one new player in the D1 and D7 cohort');
+      assert.equal(delta('d1'), 1, 'and that player came back the next day');
+      assert.equal(delta('d7'), 1, 'and within the week');
+      assert.equal(delta('d7Exact'), 0, 'but not on exactly day 7');
+      assert.equal(delta('size30'), 3, 'three new players in the D30 cohort');
+      assert.equal(delta('d30Exact'), 2, 'two of them came back on exactly day 30');
+      // median of the lengths 10, 15, 15, 20, 60 is 15; the average is 24
+      const lengths = [[dee.id, 10], [aya.id, 20], [bob.id, 60], [cyra.id, 15], [aya.id, 15]];
+      for (const [i, [player, mins]] of lengths.entries()) await mk(player, 'medianprobe', ago(1 + i * 0.1), mins);
+      const game = (await ins.insights({ days: 7, tz: 'UTC' })).games.find((g) => g.gameId === 'medianprobe');
+      assert.equal(game.matches, 5);
+      assert.equal(game.medianMinutes, 15, 'the median is 15 minutes');
+      assert.equal(game.avgMinutes, 24, 'and the average is 24');
+    });
     console.log(`${passed} admin PostgreSQL checks passed`);
   } finally {
     if (srvB) await srvB.close();
