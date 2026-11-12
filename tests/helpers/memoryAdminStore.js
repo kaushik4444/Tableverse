@@ -93,7 +93,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     // the real SQL is in db/insights.js (tests/admin.pg.test.js); this records what the route asked for and returns a fixed answer
     async insights({ days = 30, tz = 'UTC' } = {}) {
       this.insightsCalls.push({ days, tz });
-      return { days: [7, 30, 90].includes(Number(days)) ? Number(days) : 30, zone: tz, games: [], heat: [], playtime: { players: 0, totalMinutes: 0, avgMinutes: 0, medianMinutes: 0, buckets: [0, 0, 0, 0, 0] },
+      return { days: [7, 30, 90].includes(Number(days)) ? Number(days) : 30, zone: tz, games: [], heat: [], countries: [{ country: 'DE', players: 2 }, { country: null, players: 1 }], playtime: { players: 0, totalMinutes: 0, avgMinutes: 0, medianMinutes: 0, buckets: [0, 0, 0, 0, 0] },
         returning: { activePlayers: 0, newPlayers: 2, returningPlayers: 1, daily: [{ day: '2026-11-08', newPlayers: 2, returningPlayers: 1 }], cohort: { size: 0, d1: 0, d7: 0 } }, top: [] };
     },
     insightsCalls: [],

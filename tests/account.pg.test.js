@@ -112,6 +112,19 @@ function socket(port, cookie) {
       await q('DELETE FROM players WHERE id = $1', [id]);
     });
 
+    await test('country: optional, chosen from the ISO list, normalised, cleared with an empty value, CSRF protected, shown in the own profile', async () => {
+      const u = await newUser('Cty', 'Country One');
+      const post = (country, opts) => u.browser.post('/api/me/country', { country }, opts);
+      assert.equal((await post('XX')).status, 400, 'not a country');
+      assert.equal((await post('Germany')).status, 400);
+      assert.equal((await post('IN', { csrf: false })).status, 403);
+      const ok = await post(' de ');
+      assert.equal(ok.status, 200); assert.equal(ok.json.country, 'DE');
+      assert.equal((await u.browser.get('/api/me/profile')).json.profile.country, 'DE');
+      assert.equal((await post('')).json.country, null, 'an empty value clears it');
+      assert.equal((await u.browser.get('/api/me/profile')).json.profile.country, null);
+    });
+
     await test('display names: validated on the server, cleaned, CSRF protected, and visible to new sockets', async () => {
       const u = await newUser('Namer', 'Namer One');
       const post = (name, opts) => u.browser.post('/api/me/display-name', { displayName: name }, opts);

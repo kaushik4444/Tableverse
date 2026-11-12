@@ -122,7 +122,7 @@ async function listUsers({ q = '', page: p = 1 } = {}) {
   const args = term ? [like(term)] : [];
   const total = (await db.query(`SELECT COUNT(*)::int AS n FROM players ${where}`, args)).rows[0].n;
   const r = await db.query(
-    `SELECT p.id, p.username, p.display_name, p.role, p.is_anonymous, p.created_at, p.last_seen_at, p.suspended_at,
+    `SELECT p.id, p.username, p.display_name, p.role, p.is_anonymous, p.country, p.created_at, p.last_seen_at, p.suspended_at,
             EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified
        FROM players p ${where}
       ORDER BY p.created_at DESC, p.id
@@ -193,7 +193,7 @@ async function lookupUser({ username }) {
   const u = String(username || '').trim().toLowerCase();
   if (!/^[a-z0-9_]{3,24}$/.test(u)) return { user: null };
   const r = await db.query(
-    `SELECT p.id, p.username, p.display_name, p.role, p.created_at, p.last_seen_at, p.suspended_at, p.suspended_reason,
+    `SELECT p.id, p.username, p.display_name, p.role, p.country, p.created_at, p.last_seen_at, p.suspended_at, p.suspended_reason,
             EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified,
             (SELECT COUNT(*)::int FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW()) AS active_sessions
        FROM players p

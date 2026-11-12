@@ -1848,6 +1848,23 @@
     render();
   }
 
+  /** Optional country, chosen by the player and visible only to them and to the site's staff. Names come from the browser in the player's language. */
+  function countryForm() {
+    const codes = (window.TvCountries && window.TvCountries.CODES) || [];
+    let names = null;
+    try { names = new Intl.DisplayNames([navigator.language || 'en'], { type: 'region' }); } catch { names = null; }
+    const label = (c) => { try { return (names && names.of(c)) || c; } catch { return c; } };
+    const cur = (S.profile && S.profile.data && S.profile.data.profile && S.profile.data.profile.country) || '';
+    const opts = codes.map((c) => ({ c, n: label(c) })).sort((x, y) => x.n.localeCompare(y.n)).map((o) => `<option value="${o.c}" ${o.c === cur ? 'selected' : ''}>${esc(o.n)}</option>`).join('');
+    return `<form id="countryForm" class="auth-form" style="margin-top:10px">
+          <label class="label" for="profileCountry">Country (optional)</label>
+          <select id="profileCountry"><option value="">Not set</option>${opts}</select>
+          <small class="hint" style="text-align:left">Only you and the site's staff can see this. It helps us see where players come from.</small>
+          <p id="countryMsg" class="auth-msg" role="alert" hidden></p>
+          <button class="btn" type="submit">Save country</button>
+        </form>`;
+  }
+
   function openEditProfileDialog() {
     const body = () => {
       const name = S.named ? S.name : '';
@@ -1860,7 +1877,8 @@
           <button class="btn" type="submit">Save name</button>
         </form>
         <span class="label" style="margin-top:6px">Avatar</span>
-        <div class="av-picks">${picks}</div>`;
+        <div class="av-picks">${picks}</div>
+        ${S.guest ? '' : countryForm()}`;
     };
     openModal('Edit profile', body(), (o) => {
       modalActions.pickAvatar = async (el) => {
@@ -1870,6 +1888,23 @@
         o.querySelector('#profileName').value = keep;
       };
       o.addEventListener('submit', async (e) => {
+        if (e.target.id === 'countryForm') {
+          e.preventDefault();
+          const cmsg = o.querySelector('#countryMsg');
+          const cbtn = e.target.querySelector('button[type=submit]');
+          cbtn.disabled = true;
+          try {
+            const out = await withBusy('Saving your country…', () => postJson('/api/me/country', { country: o.querySelector('#profileCountry').value }));
+            if (S.profile && S.profile.data && S.profile.data.profile) S.profile.data.profile.country = out.country;
+            cmsg.textContent = out.country ? 'Country saved.' : 'Country cleared.';
+            cmsg.hidden = false;
+          } catch (err) {
+            cmsg.textContent = err.message || 'Could not save the country.';
+            cmsg.hidden = false;
+          }
+          cbtn.disabled = false;
+          return;
+        }
         if (e.target.id !== 'nameForm') return;
         e.preventDefault();
         const msg = o.querySelector('#nameMsg');

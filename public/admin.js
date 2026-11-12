@@ -7,6 +7,7 @@
   const who = document.getElementById('adWho');
   const state = { me: null, tab: 'overview', csrf: '', gen: 0 }; // gen: which view is current; answers for an older view are dropped
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const countryName = (c) => { if (!c) return ''; try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(c) || c; } catch { return c; } };
   const when = (v) => (v ? new Date(v).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
   async function csrf(force) {
@@ -155,6 +156,8 @@
       <p class="ad-muted">Next-day and one-week return use players whose first game was between ${o.days + 7} and 7 days ago, so each has had a full week to come back (${c.size} players).</p>
       <h3>Time spent playing</h3>${bars(buckets.map((name, i) => ({ name, total: pt.buckets[i] })), 'No play yet.')}
       <p class="ad-muted">Median ${mins(pt.medianMinutes)}, total ${mins(pt.totalMinutes)}. Players per time bucket; games a player left early are not counted as time.</p>
+      <h3>Where players are from</h3>${bars((o.countries || []).map((r) => ({ name: r.country ? countryName(r.country) : 'Not set', total: r.players })), 'No players yet.')}
+      <p class="ad-muted">Players who played in this range, by the country they chose on their profile.</p>
       <h3>Most active players</h3>${top ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Played</th><th>Usual hour</th></tr></thead><tbody>${top}</tbody></table>` : '<p class="ad-muted">No signed-in players yet.</p>'}
       <p class="ad-muted">Signed-in players only: guests and bots are left out. Figures come from finished games; nothing personal beyond the public username is shown.</p>`;
     const again = (d, z) => { sel.days = d; sel.tz = z; state.gen += 1; const mine = state.gen; insights(d, z).catch((e) => { if (mine === state.gen) fail(e); }); };
@@ -209,7 +212,7 @@
       if (!u.verified && !u.is_anonymous && (u.role === 'user' || (u.role === 'admin' && owner))) acts.push(`<button class="ad-btn" data-rv="${esc(u.id)}">Resend verification</button>`);
       if (owner && u.role === 'user' && !u.is_anonymous) acts.push(`<button class="ad-btn" data-role="admin" data-id="${esc(u.id)}">Make admin</button>`);
       if (owner && u.role === 'admin') acts.push(`<button class="ad-btn danger" data-role="user" data-id="${esc(u.id)}">Remove admin</button>`);
-      return `<tr><td data-l="Player"><b>${esc(u.display_name)}</b><br><small class="ad-muted">${u.username ? '@' + esc(u.username) : 'guest'}</small></td><td data-l="Role"><span class="ad-pill ${esc(u.role)}">${esc(u.role)}</span>${u.suspended_at ? ' <span class="ad-pill danger">suspended</span>' : ''}</td><td data-l="Verified">${u.verified ? 'yes' : 'no'}</td><td data-l="Joined">${esc(when(u.created_at))}</td><td data-l="Last seen">${esc(when(u.last_seen_at))}</td><td data-l="">${staff && !owner ? '' : `<div class="ad-row">${acts.join('')}</div>`}</td></tr>`;
+      return `<tr><td data-l="Player"><b>${esc(u.display_name)}</b><br><small class="ad-muted">${u.username ? '@' + esc(u.username) : 'guest'}${u.country ? ' · ' + esc(countryName(u.country)) : ''}</small></td><td data-l="Role"><span class="ad-pill ${esc(u.role)}">${esc(u.role)}</span>${u.suspended_at ? ' <span class="ad-pill danger">suspended</span>' : ''}</td><td data-l="Verified">${u.verified ? 'yes' : 'no'}</td><td data-l="Joined">${esc(when(u.created_at))}</td><td data-l="Last seen">${esc(when(u.last_seen_at))}</td><td data-l="">${staff && !owner ? '' : `<div class="ad-row">${acts.join('')}</div>`}</td></tr>`;
     }).join('');
     const pages = Math.max(1, Math.ceil(o.total / o.pageSize));
     main.innerHTML = `<h2>Users <small class="ad-muted">${o.total}</small></h2>
@@ -234,7 +237,7 @@
         if (!r.user) { out.innerHTML = '<p class="ad-muted">No account with that username.</p>'; return; }
         const x = r.user;
         out.innerHTML = `<div class="ad-card"><b>${esc(x.display_name)}</b> <small class="ad-muted">@${esc(x.username)}</small>
-          <p>Role: ${esc(x.role)} · Verified: ${x.verified ? 'yes' : 'no'} · Joined ${esc(when(x.created_at))} · Last seen ${esc(when(x.last_seen_at))}</p>
+          <p>Country: ${x.country ? esc(countryName(x.country)) : 'not set'} · Role: ${esc(x.role)} · Verified: ${x.verified ? 'yes' : 'no'} · Joined ${esc(when(x.created_at))} · Last seen ${esc(when(x.last_seen_at))}</p>
           <p>Active sessions: ${x.active_sessions}${x.suspended_at ? ` · <b>Suspended</b> since ${esc(when(x.suspended_at))}${x.suspended_reason ? ': ' + esc(x.suspended_reason) : ''}` : ''}</p></div>`;
       } catch (err) { if (seq === lookupSeq) out.innerHTML = `<p class="ad-msg err">${esc(err.message)}</p>`; }
     };
