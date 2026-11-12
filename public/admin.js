@@ -118,17 +118,21 @@
     if (!max) return '<p class="ad-muted">No finished games in this range yet.</p>';
     const cells = grid.map((row, d) => `<span class="ad-hl">${DAYS[d]}</span>${row.map((v, h) => `<i class="ad-hc" style="--k:${(v / max).toFixed(2)}" title="${DAYS[d]} ${hh(h)}: ${v} player-games"></i>`).join('')}`).join('');
     const axis = '<span></span>' + [0, 3, 6, 9, 12, 15, 18, 21].map((h) => `<span class="ad-hx" style="grid-column:${h + 2}/span 3">${hh(h)}</span>`).join('');
+    const all = heat.slice().sort((x, y) => (x.dow - y.dow) || (x.hour - y.hour));
     const best = heat.slice().sort((x, y) => y.playerGames - x.playerGames).slice(0, 5);
     const byHour = Array(24).fill(0); heat.forEach((c) => { byHour[c.hour] += c.playerGames; });
     const peak = byHour.indexOf(Math.max(...byHour));
     return `<div class="ad-heat" role="img" aria-label="Player-games by weekday and hour, ${esc(zone)}">${axis}${cells}</div>
       <p class="ad-muted">Busiest hour overall: <b>${hh(peak)}–${hh((peak + 1) % 24)}</b> (${esc(zone)}). Darker is busier.</p>
-      <details><summary>Busiest five slots</summary><table class="ad-t"><thead><tr><th>Slot</th><th>Games started</th><th>Player-games</th></tr></thead><tbody>${best.map((c) => `<tr><td>${DAYS[c.dow]} ${hh(c.hour)}</td><td>${c.matches}</td><td>${c.playerGames}</td></tr>`).join('')}</tbody></table></details>`;
+      <p class="ad-muted">Busiest slots: ${best.map((c) => `${DAYS[c.dow]} ${hh(c.hour)} (${c.playerGames})`).join(', ')}.</p>
+      <details><summary>All hours as a table</summary><table class="ad-t"><thead><tr><th>Slot</th><th>Games started</th><th>Player-games</th></tr></thead><tbody>${all.map((c) => `<tr><td>${DAYS[c.dow]} ${hh(c.hour)}</td><td>${c.matches}</td><td>${c.playerGames}</td></tr>`).join('')}</tbody></table></details>`;
   };
 
+  const sel = { days: 30, tz: 'UTC' }; // the range and zone the admin chose last, even if that answer has not arrived yet
   async function insights(days = 30, tz = 'UTC') {
     const gen = state.gen;
     const range = RANGES.includes(Number(days)) ? Number(days) : 30;
+    sel.days = range; sel.tz = tz;
     const o = await api(`/api/admin/insights?days=${range}&tz=${encodeURIComponent(tz)}`);
     if (gen !== state.gen) return;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
@@ -153,9 +157,9 @@
       <p class="ad-muted">Median ${mins(pt.medianMinutes)}, total ${mins(pt.totalMinutes)}. Players per time bucket; games a player left early are not counted as time.</p>
       <h3>Most active players</h3>${top ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Played</th><th>Usual hour</th></tr></thead><tbody>${top}</tbody></table>` : '<p class="ad-muted">No signed-in players yet.</p>'}
       <p class="ad-muted">Signed-in players only: guests and bots are left out. Figures come from finished games; nothing personal beyond the public username is shown.</p>`;
-    const again = (d, z) => { state.gen += 1; const mine = state.gen; insights(d, z).catch((e) => { if (mine === state.gen) fail(e); }); };
-    main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => again(Number(b.dataset.days), o.zone); });
-    main.querySelectorAll('[data-zone]').forEach((b) => { b.onclick = () => again(range, b.dataset.zone); });
+    const again = (d, z) => { sel.days = d; sel.tz = z; state.gen += 1; const mine = state.gen; insights(d, z).catch((e) => { if (mine === state.gen) fail(e); }); };
+    main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => again(Number(b.dataset.days), sel.tz); });
+    main.querySelectorAll('[data-zone]').forEach((b) => { b.onclick = () => again(sel.days, b.dataset.zone); });
   }
 
   // ---------------------------------------------------------------- logs

@@ -4,7 +4,7 @@
  *
  * Everything here is derived from rows the app already keeps (matches, match_participants, players and the aggregate
  * analytics counters). Nothing new is stored, and no e-mail address, network address or token is ever selected.
- * Bots and guests are left out of every player figure (a guest has no account id on the match row).
+ * Bots and guests (including anonymous accounts) are left out of every player figure.
  * Times are UTC: the console converts them to the viewer's chosen zone.
  */
 const db = require('./pool');
@@ -15,13 +15,16 @@ const clampDays = (d) => { const n = Math.floor(Number(d)); return WINDOWS.inclu
 const ZONES = ['UTC', 'Europe/Berlin', 'Asia/Kolkata'];
 const clampZone = (z) => (ZONES.includes(z) ? z : 'UTC');
 
+// anonymous (guest) accounts also have a player id, so a signed-in player is a participant whose account is not anonymous
+const SIGNED_IN = 'EXISTS (SELECT 1 FROM players sp WHERE sp.id = p.player_id AND NOT sp.is_anonymous)';
+const TODAY = "(NOW() AT TIME ZONE 'UTC')::date";
 // one row per human, signed-in player in a finished match that ended inside the window
 const HUMANS = `
   SELECT p.player_id, p.is_winner, p.is_draw, p.left_early, m.id AS match_id, m.game_id, m.started_at,
          EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) AS secs
     FROM match_participants p
     JOIN matches m ON m.id = p.match_id
-   WHERE p.player_id IS NOT NULL AND NOT p.is_bot`;
+   WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN}`;
 const IN_WINDOW = "m.finished_at > NOW() - ($1::int * INTERVAL '1 day')";
 
 const num = (v) => Number(v) || 0;
@@ -43,12 +46,12 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     // 2. leaving: human seats that were filled, and how many of those players left before the end
     q(`SELECT m.game_id, COUNT(*)::int AS humans, COUNT(*) FILTER (WHERE p.left_early)::int AS left_early
          FROM match_participants p JOIN matches m ON m.id = p.match_id
-        WHERE NOT p.is_bot AND ${IN_WINDOW} GROUP BY m.game_id`),
+        WHERE NOT p.is_bot AND p.player_id IS NOT NULL AND ${SIGNED_IN} AND ${IN_WINDOW} GROUP BY m.game_id`),
     // 3. when: games started per weekday and hour in the chosen zone, and the players in them
     q(`SELECT EXTRACT(DOW FROM m.started_at AT TIME ZONE $2::text)::int AS dow,
               EXTRACT(HOUR FROM m.started_at AT TIME ZONE $2::text)::int AS hour,
               COUNT(DISTINCT m.id)::int AS matches,
-              COUNT(p.id) FILTER (WHERE NOT p.is_bot)::int AS player_games
+              COUNT(p.id) FILTER (WHERE NOT p.is_bot AND p.player_id IS NOT NULL AND ${SIGNED_IN})::int AS player_games
          FROM matches m LEFT JOIN match_participants p ON p.match_id = m.id
         WHERE ${IN_WINDOW} GROUP BY 1, 2`, [n, zone]),
     // 4. time spent playing: per player, the length of the games they stayed to the end of
@@ -70,22 +73,22 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     // 5. new and returning players per day (a player's first game anywhere decides "new")
     q(`WITH firsts AS (SELECT p.player_id, (MIN(m.started_at) AT TIME ZONE 'UTC')::date AS first_day
                          FROM match_participants p JOIN matches m ON m.id = p.match_id
-                        WHERE p.player_id IS NOT NULL AND NOT p.is_bot GROUP BY p.player_id),
+                        WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN} GROUP BY p.player_id),
             d AS (SELECT DISTINCT player_id, (started_at AT TIME ZONE 'UTC')::date AS day FROM (${HUMANS} AND ${IN_WINDOW}) w)
        SELECT d.day::text AS day, COUNT(*) FILTER (WHERE f.first_day = d.day)::int AS new_players,
               COUNT(*) FILTER (WHERE f.first_day < d.day)::int AS returning_players
-         FROM d JOIN firsts f ON f.player_id = d.player_id GROUP BY d.day ORDER BY d.day`),
+         FROM d JOIN firsts f ON f.player_id = d.player_id WHERE d.day > ${TODAY} - $1::int GROUP BY d.day ORDER BY d.day`),
     // 6. did they come back: players whose first game was at least a week ago, and whether they played again the next day / within a week
     q(`WITH firsts AS (SELECT p.player_id, (MIN(m.started_at) AT TIME ZONE 'UTC')::date AS first_day
                          FROM match_participants p JOIN matches m ON m.id = p.match_id
-                        WHERE p.player_id IS NOT NULL AND NOT p.is_bot GROUP BY p.player_id),
+                        WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN} GROUP BY p.player_id),
             d AS (SELECT DISTINCT p.player_id, (m.started_at AT TIME ZONE 'UTC')::date AS day
                     FROM match_participants p JOIN matches m ON m.id = p.match_id
-                   WHERE p.player_id IS NOT NULL AND NOT p.is_bot)
+                   WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN})
        SELECT COUNT(*)::int AS size,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day = f.first_day + 1))::int AS d1,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day BETWEEN f.first_day + 1 AND f.first_day + 7))::int AS d7
-         FROM firsts f WHERE f.first_day >= CURRENT_DATE - $1::int AND f.first_day <= CURRENT_DATE - 7`),
+         FROM firsts f WHERE f.first_day >= ${TODAY} - $1::int AND f.first_day <= ${TODAY} - 7`),
     // 7. the most active signed-in players in the window, with the hour (in the chosen zone) they most often start playing
     q(`WITH h AS (${HUMANS} AND ${IN_WINDOW})
        SELECT pl.username, pl.display_name, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE h.is_winner)::int AS wins,
@@ -96,7 +99,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
         GROUP BY pl.id, pl.username, pl.display_name ORDER BY games DESC, minutes DESC, pl.username LIMIT 10`, [n, zone]),
     // 8. how games end overall: started against finished (counters, so games nobody finished are included)
     q(`SELECT metric, dim, SUM(total)::int AS total FROM analytics_daily
-        WHERE day > CURRENT_DATE - $1::int AND metric IN ('game_started', 'game_finished') GROUP BY metric, dim`),
+        WHERE day > ${TODAY} - $1::int AND metric IN ('game_started', 'game_finished') GROUP BY metric, dim`),
   ]);
 
   const leaveBy = new Map(leavers.rows.map((r) => [r.game_id, r]));
