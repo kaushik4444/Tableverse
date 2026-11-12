@@ -626,3 +626,6 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .check-row .hint { margin-left: 4px; }
+
+/* a form hint that is now an error (for example a password that is too weak) */
+.hint.bad { color: #fca5a5; }
