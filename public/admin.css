@@ -73,3 +73,15 @@ button.ad-btn, .ad-btn { min-height: 40px; padding: 0 14px; border-radius: 10px;
 .ad-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 section.ad-card + section.ad-card { margin-top: 16px; }
 .ad-pill.danger { background: #3a1212; color: #ffb4b4; }
+
+/* insights */
+.ad-heat{display:grid;grid-template-columns:34px repeat(24,minmax(0,1fr));gap:2px;margin:8px 0;align-items:center}
+.ad-hl,.ad-hx{font-size:11px;color:var(--muted)}
+.ad-hc{aspect-ratio:1;border-radius:3px;background:rgba(91,155,255,calc(.08 + var(--k) * .92))}
+.ad-stack{display:flex;align-items:flex-end;gap:2px;height:140px}
+.ad-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.ad-col i,.ad-key{display:block;background:var(--accent)}
+.ad-col i.r,.ad-key.r{background:#34d399}
+.ad-key{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.ad-key.r{margin-left:10px}
+.ad-chart details{margin-top:6px}
