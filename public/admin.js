@@ -446,7 +446,8 @@
         const el = document.getElementById('liveNow');
         if (token !== liveToken || !el) return;
         const t = (n, label) => `<div class="ad-card"><b>${esc(n ?? '—')}</b><small>${esc(label)}</small></div>`;
-        el.innerHTML = t(l.players, 'players connected') + t(l.tables, 'tables open') + t(l.sockets, 'open connections') + t(hh(new Date(l.at).getHours()), 'server time');
+        const sampled = new Date(l.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        el.innerHTML = t(l.players, 'players connected') + t(l.tables, 'tables open') + t(l.sockets, 'open connections') + t(sampled, 'sampled at, your local time');
       } catch (e) {
         const el = document.getElementById('liveNow');
         if (el && token === liveToken) el.innerHTML = '<div class="ad-card"><b>—</b><small>could not load right now</small></div>';
