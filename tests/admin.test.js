@@ -9,7 +9,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 
-const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/live', '/api/admin/funnel', '/api/admin/funnel.csv', '/api/admin/insights', '/api/admin/players', '/api/admin/players/profile?username=ann', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
+const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/live', '/api/admin/funnel', '/api/admin/funnel.csv', '/api/admin/seat-balance', '/api/admin/insights', '/api/admin/players', '/api/admin/players/profile?username=ann', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
 const ADMIN_POSTS = [
   ['/api/admin/roles', { playerId: 'p_00000000-0000-4000-8000-000000000001', role: 'admin' }],
   ['/api/admin/users/sign-out', { playerId: 'p_00000000-0000-4000-8000-000000000001' }],
@@ -184,6 +184,14 @@ const ADMIN_POSTS = [
       const r = await admin.b.get('/api/admin/overview?days=7');
       assert.equal(r.status, 200);
       assert.equal(r.json.series.error.length, r.json.labels.length);
+    });
+    await test('seat-order check: staff only, the days are passed on, and the answer names no player', async () => {
+      assert.equal((await user.b.get('/api/admin/seat-balance')).status, 403);
+      const r = await admin.b.get('/api/admin/seat-balance?days=14');
+      assert.equal(r.status, 200);
+      assert.equal(s.store.seatCalls.at(-1).days, '14');
+      assert.equal(r.json.rows[0].seat, 0);
+      assert.ok(!JSON.stringify(r.json).match(/email|token|username|player/i), 'counts only');
     });
     await test('player directory: staff only; sort and search are passed on; opening a profile is audited', async () => {
       assert.equal((await user.b.get('/api/admin/players')).status, 403);

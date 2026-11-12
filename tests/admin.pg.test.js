@@ -656,6 +656,32 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(day7.daily.every((r) => r.day > new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)), 'every bucket is inside the 7 days');
       assert.equal(day7.daily.filter((r) => r.day === new Date().toISOString().slice(0, 10)).length, 1, 'today has one bucket');
     });
+    await test('seat-order check: counts finished games per seat, leaves out a player who left early, and the SQL runs', async () => {
+      const { seatBalance } = require('../db/seatBalance');
+      const a = await newUser('Sta'); const b = await newUser('Stb');
+      // four finished games on a game id of its own: seat 1 wins three, seat 2 wins one; seat 2 left early in one game
+      const games = [
+        { s1: true, s2: false, left2: false },
+        { s1: true, s2: false, left2: false },
+        { s1: true, s2: false, left2: true },
+        { s1: false, s2: true, left2: false },
+      ];
+      for (const g of games) {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at)
+                            VALUES (gen_random_uuid(), 'SEAT', 'seatprobe', 2, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour') RETURNING id`))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,0,$4,false,false,false)', [m, a.id, 'x', g.s1]);
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,1,$4,false,$5,false)', [m, b.id, 'y', g.s2, g.left2]);
+      }
+      const out = await seatBalance({ days: 30 });
+      const seat0 = out.rows.find((r) => r.gameId === 'seatprobe' && r.seat === 0);
+      const seat1 = out.rows.find((r) => r.gameId === 'seatprobe' && r.seat === 1);
+      assert.equal(seat0.games, 4); assert.equal(seat0.wins, 3);
+      assert.equal(seat1.games, 3, 'the game the player left early is not counted');
+      assert.equal(seat1.wins, 1);
+      assert.equal(seat0.enoughGames, false, 'four games is too few to judge');
+      assert.equal(seat0.flagged, false);
+      assert.equal(seat0.expectedRate, 50);
+    });
     // last: this check stops the server, so it must run after every check that needs it
     await test('real traffic is counted: registrations and logins reach the table when the server shuts down (final flush)', async () => {
       await newUser('Ned');

@@ -464,6 +464,7 @@ module.exports = {
   playerProfile: (opts) => require('./playerStats').playerProfile(opts), // one player's stats; writes a player.view audit row
   listReports: (opts) => require('./reportQueue').listReports(opts), // chat report queue (read-only); writes a reports.view audit row
   funnel: (opts) => require('./funnel').funnel(opts), // signup funnel; a CSV export writes a funnel.export audit row
+  seatBalance: (opts) => require('./seatBalance').seatBalance(opts), // seat-order win check (read-only)
   createFeedback, listFeedback, setFeedbackStatus,
   createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissed,
   listAudit, purge, audit,

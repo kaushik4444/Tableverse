@@ -31,6 +31,8 @@ const api = (role) => ({
   'GET /api/admin/live': () => liveFixture(),
   'GET /api/admin/funnel?days=30': () => funnelFixture(30),
   'GET /api/admin/funnel?days=7': () => funnelFixture(7),
+  'GET /api/admin/seat-balance?days=7': () => ({ ok: true, days: 7, minGames: 30, rows: [] }),
+  'GET /api/admin/seat-balance?days=30': () => ({ ok: true, days: 30, minGames: 30, rows: [{ gameId: 'ludo', seats: 2, seat: 0, games: 40, wins: 26, winRate: 65, expectedRate: 50, z: 2.53, enoughGames: true, flagged: false }, { gameId: 'snakesladders', seats: 4, seat: 1, games: 45, wins: 27, winRate: 60, expectedRate: 25, z: 4.2, enoughGames: true, flagged: true }] }),
   'GET /api/auth/csrf': () => ({ ok: true, csrfToken: 'tok' }),
   'GET /api/admin/me': () => ({ ok: true, role, isAdmin: role !== 'user', isOwner: role === 'owner' }),
   'GET /api/admin/insights?days=7&tz=UTC': () => insightsFixture(7, 'UTC'),
@@ -216,6 +218,9 @@ const api = (role) => ({
     const text = await s.page.textContent('#funnel');
     assert.ok(text.includes('signed up') && text.includes('played a first game') && text.includes('came back on a later day'));
     assert.equal(await s.page.getAttribute('#funnel a[download]', 'href'), '/api/admin/funnel.csv?days=30');
+    await s.page.waitForSelector('#seatBalance table');
+    assert.equal(await s.page.locator('#seatBalance tr.ad-flag').count(), 1, 'only the lopsided seat is flagged');
+    assert.ok((await s.page.textContent('#seatBalance')).includes('worth a look'));
     assert.deepEqual(s.errors, []);
     await s.close();
   });
