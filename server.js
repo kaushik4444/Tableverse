@@ -99,7 +99,8 @@ function start(opts = {}) {
   // Table voice is off unless VOICE_ENABLED=true (fail closed). While off, no TURN login or ICE list is handed out and voice messages are refused.
   const voiceOn = opts.voiceEnabled ?? voiceRelay.voiceEnabled(env);
   // The Impressum is off unless LEGAL_IMPRESSUM_PUBLISHED=true (fail closed); see lib/legalPages.js.
-  const impressumOn = opts.impressumPublished ?? legalPages.impressumPublished(env);
+  // Reported as on only when the page can actually be rendered (flag on and every detail set), so the links never point at a 404.
+  const impressumOn = (opts.impressumPublished ?? legalPages.impressumPublished(env)) && legalPages.detailsComplete(env);
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId, metered });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
