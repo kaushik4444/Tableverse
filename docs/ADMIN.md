@@ -80,6 +80,10 @@ How it behaves (covered by `tests/announcements.test.js`, `tests/admin.pg.test.j
 
 Everyone (guests included) can send feedback from the account menu or `POST /api/feedback` (CSRF-protected, 1000 characters, rate limited per address and per account). The account is taken from the session, never from the request. Staff triage it on the **Feedback** tab (new / read / resolved).
 
+## Chat report queue (read-only)
+
+The **Reports** tab lists every chat report, newest first, 25 per page. For each report it shows the reason, a severity fixed by the reason (threats and sexual content high, harassment and hate medium, spam and other low), the message copy kept with the report, the room, the reporter's and the reported account's usernames, whether the reported account is suspended, and how often that account has been reported (all time, and in the last 30 days). A reported account that has been deleted shows its last recorded display name. No e-mail address, network address or token is selected. Each time the queue is opened, one `reports.view` row is written to the audit log; it holds no report content. Resolving reports is not built yet.
+
 ## Suspension and lookup (Stage 20.8)
 
 - **Suspend** (owner only, ordinary registered accounts only; never the owner, an admin, a guest or the owner's own account): the account's sessions end at once, its open connections close, and sign-in is refused with "This account is suspended." Existing sessions stop working because every session check also requires the account not to be suspended. The reason is optional, kept to 200 characters, cleaned of line breaks, and stored on the account and in the audit log. Staff who can use the lookup, and staff who can read the audit log, can see the reason, so it must not hold anything confidential.
@@ -123,6 +127,7 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 | `POST /api/admin/users/sign-out` | owner |
 | `POST /api/admin/users/suspend`, `/users/unsuspend` | owner (ordinary registered accounts only) |
 | `GET /api/admin/users/lookup?username=` | staff (read-only; never an address, network address or token) |
+| `GET /api/admin/reports?page=` | staff (read-only chat report queue; opening it is audited as `reports.view`) |
 | `POST /api/admin/users/resend-verification` | staff (admins only on ordinary players) |
 | `POST /api/admin/roles` | owner |
 | `GET /api/admin/broadcasts`, `GET /api/admin/broadcasts/preview?audience=&category=`, `POST /api/admin/broadcasts` (`{audience, category, subject, body, expectedCount}`) | owner |

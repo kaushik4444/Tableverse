@@ -460,6 +460,7 @@ module.exports = {
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   listPlayers: (opts) => require('./playerStats').listPlayers(opts), // the player directory (read-only)
   playerProfile: (opts) => require('./playerStats').playerProfile(opts), // one player's stats; writes a player.view audit row
+  listReports: (opts) => require('./reportQueue').listReports(opts), // chat report queue (read-only); writes a reports.view audit row
   createFeedback, listFeedback, setFeedbackStatus,
   createAnnouncement, listAnnouncements, updateAnnouncement, endAnnouncement, listLiveAnnouncements, dismissAnnouncement, listDismissed,
   listAudit, purge, audit,
