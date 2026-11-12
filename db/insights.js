@@ -39,7 +39,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     q(`SELECT m.game_id, COUNT(*)::int AS matches,
               COALESCE(AVG(EXTRACT(EPOCH FROM (m.finished_at - m.started_at))) / 60.0, 0)::float AS avg_minutes,
               COALESCE(AVG(m.seats), 0)::float AS avg_seats,
-              COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM match_participants x WHERE x.match_id = m.id AND x.left_early))::int AS with_leaver,
+              COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM match_participants x WHERE x.match_id = m.id AND x.left_early AND x.player_id IS NOT NULL AND NOT x.is_bot AND EXISTS (SELECT 1 FROM players xp WHERE xp.id = x.player_id AND NOT xp.is_anonymous)))::int AS with_leaver,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM match_participants x WHERE x.match_id = m.id AND x.is_draw))::int AS draws
          FROM matches m WHERE ${IN_WINDOW}
         GROUP BY m.game_id ORDER BY matches DESC, m.game_id`),
@@ -74,7 +74,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     q(`WITH firsts AS (SELECT p.player_id, (MIN(m.started_at) AT TIME ZONE 'UTC')::date AS first_day
                          FROM match_participants p JOIN matches m ON m.id = p.match_id
                         WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN} GROUP BY p.player_id),
-            d AS (SELECT DISTINCT player_id, (started_at AT TIME ZONE 'UTC')::date AS day FROM (${HUMANS} AND ${IN_WINDOW}) w)
+            d AS (SELECT DISTINCT player_id, (started_at AT TIME ZONE 'UTC')::date AS day FROM (${HUMANS} AND m.started_at >= ${TODAY} - ($1::int - 1)) w)
        SELECT d.day::text AS day, COUNT(*) FILTER (WHERE f.first_day = d.day)::int AS new_players,
               COUNT(*) FILTER (WHERE f.first_day < d.day)::int AS returning_players
          FROM d JOIN firsts f ON f.player_id = d.player_id WHERE d.day > ${TODAY} - $1::int GROUP BY d.day ORDER BY d.day`),
@@ -88,7 +88,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
        SELECT COUNT(*)::int AS size,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day = f.first_day + 1))::int AS d1,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day BETWEEN f.first_day + 1 AND f.first_day + 7))::int AS d7
-         FROM firsts f WHERE f.first_day >= ${TODAY} - $1::int AND f.first_day <= ${TODAY} - 7`),
+         FROM firsts f WHERE f.first_day > ${TODAY} - $1::int AND f.first_day <= ${TODAY} - 7`),
     // 7. the most active signed-in players in the window, with the hour (in the chosen zone) they most often start playing
     q(`WITH h AS (${HUMANS} AND ${IN_WINDOW})
        SELECT pl.username, pl.display_name, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE h.is_winner)::int AS wins,
