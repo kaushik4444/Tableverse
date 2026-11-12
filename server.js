@@ -418,9 +418,21 @@ function start(opts = {}) {
       return res.end();
     }
     // Checked on the normalized path, so encoded aliases (/%2fimpressum.html, /x%2f..%2fimpressum.html) cannot reach the file.
-    if (file === path.join(PUBLIC_DIR, 'impressum.html') && !impressumOn) {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      return res.end('Not found');
+    // The raw template is never sent: it is served only when published and fully filled from env (fail closed).
+    if (file === path.join(PUBLIC_DIR, 'impressum.html')) {
+      if (!impressumOn) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        return res.end('Not found');
+      }
+      return fs.readFile(file, 'utf8', (err, template) => {
+        const html = err ? null : legalPages.renderImpressum(template, env);
+        if (!html) {
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          return res.end('Not found');
+        }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
+        res.end(html);
+      });
     }
     const type = MIME[path.extname(file)] || 'application/octet-stream';
     staticFiles.load(file, type, (err, entry) => {
