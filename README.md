@@ -128,7 +128,7 @@ Ludo shipped in v0.8 and is playable now (2–4 players).
 Tableverse uses PostgreSQL (Neon, Supabase, or self-hosted) for accounts, sessions, and match history.
 
 - `DATABASE_URL` configures persistent storage.
-- If `DATABASE_URL` is omitted and `NODE_ENV` is not `production`, the app uses in-memory storage.
+- If `DATABASE_URL` is omitted and `NODE_ENV` is not `production`, the app uses in-memory storage. That supports **guest play only**: e-mail registration and login answer 503 without PostgreSQL. For local accounts see [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md).
 - In production, startup is strict: missing/unreachable DB or failed migration aborts boot. A slow first connection (for example Neon waking from scale-to-zero) is retried for up to 45 s, connection errors only; `DB_STARTUP_WAIT_MS` changes that limit (`0` = one attempt). See the operations runbook.
 - Migrations live in `db/migrations/` and run transactionally under an advisory lock.
 - `/healthz` = process liveness; `/readyz` includes database readiness.
@@ -182,6 +182,8 @@ The application-level safeguards and remaining launch requirements are tracked i
 
 ```bash
 npm start            # http://localhost:3000 (in-memory store without DATABASE_URL)
+npm run dev          # local development: loads .env.local, local database only (see docs/LOCAL_DEVELOPMENT.md)
+npm run dev:seed -- --email me@local.test --username me --owner   # create a local test account (+ admin)
 npm run build        # syntax-checks server, client, libraries and tests
 npm test             # all suites (PostgreSQL suites skip without TEST_DATABASE_URL)
 npm run test:ui      # Playwright layout/behaviour tests (skips when Playwright is missing)
