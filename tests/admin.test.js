@@ -146,6 +146,8 @@ const ADMIN_POSTS = [
       assert.equal(r.json.returning.newPerDay[6], 2, 'the last label is today and carries the day that was returned');
       assert.equal(r.json.returning.daily, undefined, 'only the per-day arrays are sent');
       assert.deepEqual(s.store.insightsCalls.at(-1), { days: '7', tz: 'Asia/Kolkata' });
+      assert.equal(r.json.countryEngagement.minPlayers, 10); assert.equal(r.json.countryEngagement.rows[0].country, 'DE');
+      assert.equal(r.json.visits.byHour.length, 24); assert.deepEqual(s.store.sessionCalls.at(-1), { days: 7, tz: 'Asia/Kolkata' }, 'the clamped range and zone go to the counters');
       const bare = await admin.b.get('/api/admin/insights');
       assert.equal(bare.json.days, 30);
       assert.equal(s.store.insightsCalls.at(-1).tz, 'UTC', 'UTC unless a zone is asked for');
@@ -177,6 +179,11 @@ const ADMIN_POSTS = [
       assert.equal(text.split('\r\n')[1], '2026-11-07,4,3,1');
       assert.ok(!/email|token|password|@/i.test(text), 'the export carries no address, token or name');
       assert.equal(s.store.funnelCalls.at(-1).exporting, true, 'the download is recorded for the audit log');
+    });
+    await test('overview: the error series always has one value per day, even before any error is recorded', async () => {
+      const r = await admin.b.get('/api/admin/overview?days=7');
+      assert.equal(r.status, 200);
+      assert.equal(r.json.series.error.length, r.json.labels.length);
     });
     await test('player directory: staff only; sort and search are passed on; opening a profile is audited', async () => {
       assert.equal((await user.b.get('/api/admin/players')).status, 403);

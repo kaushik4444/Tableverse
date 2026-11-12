@@ -132,6 +132,55 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(profB.recent.find((r) => r.leftEarly).won, false, 'the left-early game is not shown as a win');
       assert.deepEqual(await ps.playerProfile({ username: 'no_such_player', actorId: staff.id }), { player: null });
     });
+    await test('country engagement: only countries with ten players show, and bots, guests and players without a country never count', async () => {
+      const cs = require('../db/countryStats');
+      const crowd = []; for (let i = 0; i < 10; i += 1) crowd.push(await newUser('Ce' + i));
+      for (const u of crowd) await q("UPDATE players SET country = 'DE' WHERE id = $1", [u.id]);
+      const lone = await newUser('Cef'); await q("UPDATE players SET country = 'FR' WHERE id = $1", [lone.id]);
+      const none = await newUser('Cen');
+      const m = (await q("INSERT INTO matches (room_code, game_id, seats, started_at, finished_at) VALUES ('CEN1', 'ludo', 13, NOW() - INTERVAL '40 minutes', NOW() - INTERVAL '20 minutes') RETURNING id"))[0].id;
+      const all = [...crowd, lone, none];
+      for (const [i, u] of all.entries()) await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,FALSE,FALSE,$5,FALSE)', [m, u.id, 'x', i, i === 0]);
+      await q("INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1, NULL, 'bot', 20, FALSE, TRUE, FALSE, FALSE)", [m]);
+      const out = await cs.countryEngagement({ days: 7 });
+      assert.equal(out.minPlayers, 10);
+      const de = out.rows.find((r) => r.country === 'DE');
+      assert.ok(de.players >= 10 && de.players <= 12, 'the ten new players, plus any earlier test player who also chose DE'); assert.ok(de.gamesPerPlayer >= 1 && de.leftEarlyPct >= 1, 'the one leave is counted');
+      assert.equal(out.rows.find((r) => r.country === 'FR'), undefined, 'one French player is never shown');
+      assert.equal(out.rows.find((r) => r.country === null), undefined, 'and one small country does not make an "other" line');
+    });
+    await test('country engagement: an anonymous account and a bot linked to a country-selected account do not count towards the ten', async () => {
+      const cs = require('../db/countryStats');
+      const nine = []; for (let i = 0; i < 9; i += 1) nine.push(await newUser('Cx' + i));
+      for (const u of nine) await q("UPDATE players SET country = 'NL' WHERE id = $1", [u.id]);
+      const anon = (await q("INSERT INTO players (display_name, avatar, is_anonymous, country) VALUES ('Guesty', 'a', TRUE, 'NL') RETURNING id"))[0].id;
+      const botLinked = await newUser('Cxb'); await q("UPDATE players SET country = 'NL' WHERE id = $1", [botLinked.id]);
+      const m = (await q("INSERT INTO matches (room_code, game_id, seats, started_at, finished_at) VALUES ('CEN2', 'ludo', 11, NOW() - INTERVAL '40 minutes', NOW() - INTERVAL '20 minutes') RETURNING id"))[0].id;
+      const add = (pid, bot, seat) => q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,FALSE,$5,FALSE,FALSE)', [m, pid, 'x', seat, bot]);
+      for (const [i, u] of nine.entries()) await add(u.id, false, i);
+      await add(anon, false, 9); await add(botLinked.id, true, 10);
+      const out = await cs.countryEngagement({ days: 7 });
+      assert.equal(out.rows.find((r) => r.country === 'NL'), undefined, 'nine real players stay below the minimum: the anonymous account and the bot seat are not counted');
+      // and with the real tenth player the country appears, with exactly ten
+      const tenth = await newUser('Cxt'); await q("UPDATE players SET country = 'NL' WHERE id = $1", [tenth.id]); await add(tenth.id, false, 11);
+      assert.equal((await cs.countryEngagement({ days: 7 })).rows.find((r) => r.country === 'NL').players, 10);
+    });
+    await test('session stats: hour and visit-length counters are summed over the window, in the chosen zone, and ignore other metrics and junk dims', async () => {
+      const ss = require('../db/sessionStats');
+      await q("DELETE FROM analytics_daily WHERE metric IN ('session_hour', 'session_len')");
+      const put = (metric, dim, total, ago = 0) => q("INSERT INTO analytics_daily (day, metric, dim, total) VALUES ((NOW() AT TIME ZONE 'UTC')::date - $4::int, $1, $2, $3)", [metric, dim, total, ago]);
+      await put('session_hour', '19', 6); await put('session_hour', '19', 4, 1); await put('session_hour', '03', 2, 2); await put('session_hour', '99', 50); await put('session_hour', '19', 100, 40);
+      await put('session_len', '5_15m', 7); await put('session_len', 'gt60m', 1); await put('session_len', 'bogus', 9); await put('session', '', 500);
+      const utc = await ss.sessionStats({ days: 7, tz: 'UTC' });
+      assert.equal(utc.byHour[19], 10, 'two days of hour 19 inside the window, the 40-day-old row and the junk hour 99 left out');
+      assert.equal(utc.byHour[3], 2); assert.equal(utc.byHour.reduce((a, b) => a + b, 0), 12);
+      assert.equal(utc.length.find((l) => l.name === '5–15 min').total, 7); assert.equal(utc.length.find((l) => l.name === 'over 1 h').total, 1);
+      assert.equal(utc.length.reduce((a, l) => a + l.total, 0), 8, 'an unknown bucket is not shown');
+      const de = await ss.sessionStats({ days: 7, tz: 'Europe/Berlin', now: new Date('2026-11-12T12:00:00Z') });
+      assert.equal(de.byHour[20], 10, 'winter time in Germany is one hour later');
+      assert.equal((await ss.sessionStats({ days: 7, tz: 'Mars/Base' })).zone, 'UTC');
+      assert.equal((await ss.sessionStats({ days: 5 })).byHour[19], 10, 'an unknown range falls back to 30 days, which still leaves the 40-day-old row out');
+    });
     console.log('schema');
     await test('migration 013 is applied and the database allows exactly one owner and only known roles', async () => {
       assert.ok((await q("SELECT 1 FROM schema_migrations WHERE version = '013_admin_console.sql'")).length === 1);

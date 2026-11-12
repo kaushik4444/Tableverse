@@ -86,6 +86,7 @@
       <h3>Sessions per day</h3>${spark(o.series.session || [], 'Sessions per day')}
       <h3>Games finished per day</h3>${spark(o.series.game_finished || [], 'Games finished per day')}
       <h3>Popular games</h3>${bars(o.popularGames, 'No finished games yet.')}
+      <h3>Errors per day</h3>${lineChart(o.series.error || (o.labels || []).map(() => 0), o.labels || [], 'Errors')}
       <h3>Errors by kind</h3>${bars(o.errors, 'No errors recorded.')}
       <p class="ad-muted">Counters only: no addresses, names or messages are recorded. Active users are counted from a keyed hash, never an account id. Detail rows are kept ${o.retention ? esc(o.retention.activeDays) : '35'} days, daily totals ${o.retention ? esc(o.retention.dailyDays) : '400'} days.</p>`;
     startLive();
@@ -154,6 +155,10 @@
       <div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:12px">${zoneButtons}</div>
       <div class="ad-grid">${tile(matches, 'games finished')}${tile(g.filter((r) => r.matches).length, 'different games played')}${tile(pt.players, 'signed-in players')}${tile(mins(pt.avgMinutes), 'avg play time per player')}${tile(pctText(left, humans), 'players who left early')}${tile(pctText(c.d1, c.size), 'came back next day')}${tile(pctText(c.d7, c.size), 'came back within a week')}${tile(pctText(c.d7Exact, c.size), 'back on day 7 exactly')}${tile(pctText(c.d30Exact, c.size30), 'back on day 30 exactly')}</div>
       <h3>When people play</h3>${heatmap(o.heat || [], o.zone)}
+      <h3>When people open the site</h3>${hourColumns({ [o.zone]: (o.visits && o.visits.byHour) || Array(24).fill(0) }, o.zone, 'connections')}
+      <p class="ad-muted">Connections per hour of the day, from counters only (no account or device). Uses today's offset for ${esc(o.zone)}. Counting started when this feature shipped, so earlier days are empty.</p>
+      <h3>How long a visit lasts</h3>${bars(((o.visits && o.visits.length) || []), 'No visits counted yet.')}
+      <p class="ad-muted">A visit is one connection, so a reconnect starts a new visit. Connections under 3 seconds are not counted, and a visit is counted when it ends, under the hour it opened in.</p>
       <h3>How each game goes</h3>${g.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Avg length</th><th>Median length</th><th>Avg seats</th><th>Left early</th><th>With a leaver</th><th>Drawn</th><th>Finished of started</th></tr></thead><tbody>${gameRows}</tbody></table>` : '<p class="ad-muted">No games yet.</p>'}
       <h3>New and returning players</h3>${stackBars(o.returning.newPerDay, o.returning.returningPerDay, o.labels, 'New', 'Returning')}
       <p class="ad-muted">Next-day, one-week and day-7 return use players whose first game was between ${o.days + 7} and 7 days ago (${c.size} players), so each has had a full week to come back. Day-30 return uses players whose first game was between ${o.days + 30} and 30 days ago (${c.size30} players).</p>
@@ -161,6 +166,8 @@
       <p class="ad-muted">Median ${mins(pt.medianMinutes)}, total ${mins(pt.totalMinutes)}. Players per time bucket; games a player left early are not counted as time.</p>
       <h3>Where players are from</h3>${bars((o.countries || []).map((r) => ({ name: r.country ? countryName(r.country) : 'Not set', total: r.players })), 'No players yet.')}
       <p class="ad-muted">Players who played in this range, by the country they chose on their profile.</p>
+      <h3>How players from each country play</h3>${(o.countryEngagement && o.countryEngagement.rows.length) ? `<table class="ad-t stack"><thead><tr><th>Country</th><th>Players</th><th>Games each</th><th>Minutes each</th><th>Days each</th><th>Games left early</th></tr></thead><tbody>${o.countryEngagement.rows.map((r) => `<tr><td data-l="Country">${r.country ? esc(countryName(r.country)) : 'Other countries'}</td><td data-l="Players">${r.players}</td><td data-l="Games each">${r.gamesPerPlayer}</td><td data-l="Minutes each">${r.minutesPerPlayer}</td><td data-l="Days each">${r.daysPerPlayer}</td><td data-l="Games left early">${r.leftEarlyPct === null ? '—' : r.leftEarlyPct + '%'}</td></tr>`).join('')}</tbody></table>` : `<p class="ad-muted">Not enough data yet: a country is shown once at least ${(o.countryEngagement && o.countryEngagement.minPlayers) || 10} players who chose it have played in this range.</p>`}
+      <p class="ad-muted">Only players who chose a country on their profile are counted, so this is not everyone. Countries with fewer than ${(o.countryEngagement && o.countryEngagement.minPlayers) || 10} players are grouped, or hidden, so no single player can be picked out.</p>
       <h3>Most active players</h3>${top ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Played</th><th>Usual hour</th></tr></thead><tbody>${top}</tbody></table>` : '<p class="ad-muted">No signed-in players yet.</p>'}
       <p class="ad-muted">Signed-in players only: guests and bots are left out. Figures come from finished games; nothing personal beyond the public username is shown.</p>`;
     main.insertAdjacentHTML('beforeend', '<h3>Signup funnel</h3><div id="funnel"><p class="ad-muted">Loading…</p></div>');
@@ -186,14 +193,14 @@
 
   // ---------------------------------------------------------------- players (directory and per-player stats)
   const SORTS = [['seen', 'Last seen'], ['joined', 'Newest'], ['games', 'Games'], ['wins', 'Wins'], ['minutes', 'Time played'], ['leaving', 'Left early']];
-  const hourColumns = (hourly, zone) => {
+  const hourColumns = (hourly, zone, noun = 'games') => {
     hourly = hourly[zone] || hourly.UTC;
     const max = Math.max(...hourly, 1);
-    const cols = hourly.map((v, h) => `<div class="ad-col" title="${hh(h)}: ${v} games"><i class="n" style="height:${(v / max) * 100}%"></i></div>`).join('');
+    const cols = hourly.map((v, h) => `<div class="ad-col" title="${hh(h)}: ${v} ${noun}"><i class="n" style="height:${(v / max) * 100}%"></i></div>`).join('');
     const peak = hourly.indexOf(Math.max(...hourly));
-    return `<figure class="ad-chart"><div class="ad-stack" role="img" aria-label="Games started per hour of the day, ${esc(zone)}">${cols}</div>
-      <p class="ad-muted">${Math.max(...hourly) ? `Usually starts around <b>${hh(peak)}</b>` : 'No games yet'} (${esc(zone)}). Left is midnight, right is 23:00.</p>
-      <details><summary>Data table</summary><table class="ad-t"><thead><tr><th>Hour</th><th>Games</th></tr></thead><tbody>${hourly.map((v, h) => `<tr><td>${hh(h)}</td><td>${v}</td></tr>`).join('')}</tbody></table></details></figure>`;
+    return `<figure class="ad-chart"><div class="ad-stack" role="img" aria-label="${noun === 'games' ? 'Games started' : 'Connections'} per hour of the day, ${esc(zone)}">${cols}</div>
+      <p class="ad-muted">${Math.max(...hourly) ? `${noun === 'games' ? 'Usually starts around' : 'Busiest around'} <b>${hh(peak)}</b>` : 'No games yet'} (${esc(zone)}). Left is midnight, right is 23:00.</p>
+      <details><summary>Data table</summary><table class="ad-t"><thead><tr><th>Hour</th><th>${noun === 'games' ? 'Games' : 'Connections'}</th></tr></thead><tbody>${hourly.map((v, h) => `<tr><td>${hh(h)}</td><td>${v}</td></tr>`).join('')}</tbody></table></details></figure>`;
   };
   const playerSel = { q: '', sort: 'seen', page: 1, tz: 'UTC' };
 
