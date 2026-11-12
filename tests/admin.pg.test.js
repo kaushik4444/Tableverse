@@ -149,6 +149,22 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(out.rows.find((r) => r.country === 'FR'), undefined, 'one French player is never shown');
       assert.equal(out.rows.find((r) => r.country === null), undefined, 'and one small country does not make an "other" line');
     });
+    await test('country engagement: an anonymous account and a bot linked to a country-selected account do not count towards the ten', async () => {
+      const cs = require('../db/countryStats');
+      const nine = []; for (let i = 0; i < 9; i += 1) nine.push(await newUser('Cx' + i));
+      for (const u of nine) await q("UPDATE players SET country = 'NL' WHERE id = $1", [u.id]);
+      const anon = (await q("INSERT INTO players (display_name, avatar, is_anonymous, country) VALUES ('Guesty', 'a', TRUE, 'NL') RETURNING id"))[0].id;
+      const botLinked = await newUser('Cxb'); await q("UPDATE players SET country = 'NL' WHERE id = $1", [botLinked.id]);
+      const m = (await q("INSERT INTO matches (room_code, game_id, seats, started_at, finished_at) VALUES ('CEN2', 'ludo', 11, NOW() - INTERVAL '40 minutes', NOW() - INTERVAL '20 minutes') RETURNING id"))[0].id;
+      const add = (pid, bot, seat) => q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,FALSE,$5,FALSE,FALSE)', [m, pid, 'x', seat, bot]);
+      for (const [i, u] of nine.entries()) await add(u.id, false, i);
+      await add(anon, false, 9); await add(botLinked.id, true, 10);
+      const out = await cs.countryEngagement({ days: 7 });
+      assert.equal(out.rows.find((r) => r.country === 'NL'), undefined, 'nine real players stay below the minimum: the anonymous account and the bot seat are not counted');
+      // and with the real tenth player the country appears, with exactly ten
+      const tenth = await newUser('Cxt'); await q("UPDATE players SET country = 'NL' WHERE id = $1", [tenth.id]); await add(tenth.id, false, 11);
+      assert.equal((await cs.countryEngagement({ days: 7 })).rows.find((r) => r.country === 'NL').players, 10);
+    });
     console.log('schema');
     await test('migration 013 is applied and the database allows exactly one owner and only known roles', async () => {
       assert.ok((await q("SELECT 1 FROM schema_migrations WHERE version = '013_admin_console.sql'")).length === 1);
