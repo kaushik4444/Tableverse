@@ -96,6 +96,68 @@
     });
   }
 
+  // ---------------------------------------------------------------- insights
+  const ZONES = [['UTC', 'UTC'], ['Europe/Berlin', 'Germany'], ['Asia/Kolkata', 'India']];
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
+  const pctText = (a, b) => { const p = pct(a, b); return p === null ? '—' : p + '%'; };
+  const hh = (h) => String(h).padStart(2, '0') + ':00';
+  const mins = (m) => (m >= 120 ? (m / 60).toFixed(1) + ' h' : Math.round(m) + ' min');
+  const stackBars = (a, b, labels, la, lb) => {
+    const max = Math.max(...a.map((v, i) => v + b[i]), 1);
+    const cols = a.map((v, i) => `<div class="ad-col" title="${esc(labels[i])}: ${v} new, ${b[i]} returning"><i class="r" style="height:${(b[i] / max) * 100}%"></i><i class="n" style="height:${(v / max) * 100}%"></i></div>`).join('');
+    const rows = a.map((v, i) => `<tr><td>${esc(labels[i])}</td><td>${v}</td><td>${b[i]}</td></tr>`).join('');
+    return `<figure class="ad-chart"><div class="ad-stack" role="img" aria-label="${esc(la)} and ${esc(lb)} players per day">${cols}</div>
+      <p class="ad-muted"><span class="ad-key n"></span>${esc(la)} <span class="ad-key r"></span>${esc(lb)} (a player counts once a day)</p>
+      <details><summary>Data table</summary><table class="ad-t"><thead><tr><th>Day</th><th>${esc(la)}</th><th>${esc(lb)}</th></tr></thead><tbody>${rows}</tbody></table></details></figure>`;
+  };
+  const heatmap = (heat, zone) => {
+    const grid = Array.from({ length: 7 }, () => Array(24).fill(0));
+    heat.forEach((c) => { grid[c.dow][c.hour] = c.playerGames; });
+    const max = Math.max(...grid.flat(), 0);
+    if (!max) return '<p class="ad-muted">No finished games in this range yet.</p>';
+    const cells = grid.map((row, d) => `<span class="ad-hl">${DAYS[d]}</span>${row.map((v, h) => `<i class="ad-hc" style="--k:${(v / max).toFixed(2)}" title="${DAYS[d]} ${hh(h)}: ${v} player-games"></i>`).join('')}`).join('');
+    const axis = '<span></span>' + [0, 3, 6, 9, 12, 15, 18, 21].map((h) => `<span class="ad-hx" style="grid-column:${h + 2}/span 3">${hh(h)}</span>`).join('');
+    const best = heat.slice().sort((x, y) => y.playerGames - x.playerGames).slice(0, 5);
+    const byHour = Array(24).fill(0); heat.forEach((c) => { byHour[c.hour] += c.playerGames; });
+    const peak = byHour.indexOf(Math.max(...byHour));
+    return `<div class="ad-heat" role="img" aria-label="Player-games by weekday and hour, ${esc(zone)}">${axis}${cells}</div>
+      <p class="ad-muted">Busiest hour overall: <b>${hh(peak)}–${hh((peak + 1) % 24)}</b> (${esc(zone)}). Darker is busier.</p>
+      <details><summary>Busiest five slots</summary><table class="ad-t"><thead><tr><th>Slot</th><th>Games started</th><th>Player-games</th></tr></thead><tbody>${best.map((c) => `<tr><td>${DAYS[c.dow]} ${hh(c.hour)}</td><td>${c.matches}</td><td>${c.playerGames}</td></tr>`).join('')}</tbody></table></details>`;
+  };
+
+  async function insights(days = 30, tz = 'UTC') {
+    const gen = state.gen;
+    const range = RANGES.includes(Number(days)) ? Number(days) : 30;
+    const o = await api(`/api/admin/insights?days=${range}&tz=${encodeURIComponent(tz)}`);
+    if (gen !== state.gen) return;
+    const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
+    const g = o.games || [];
+    const sum = (k) => g.reduce((a, r) => a + r[k], 0);
+    const matches = sum('matches'); const humans = sum('humans'); const left = sum('leftEarly');
+    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
+    const zoneButtons = ZONES.map(([z, n]) => `<button class="ad-btn ${z === o.zone ? 'primary' : ''}" data-zone="${z}" aria-pressed="${z === o.zone}">${n}</button>`).join('');
+    const gameRows = g.map((r) => `<tr><td data-l="Game">${esc(r.gameId)}</td><td data-l="Finished">${r.matches}</td><td data-l="Avg length">${mins(r.avgMinutes)}</td><td data-l="Avg seats">${r.avgSeats}</td><td data-l="Left early">${pctText(r.leftEarly, r.humans)}</td><td data-l="With a leaver">${pctText(r.withLeaver, r.matches)}</td><td data-l="Drawn">${pctText(r.draws, r.matches)}</td><td data-l="Finished of started">${pctText(r.finished, r.started)}</td></tr>`).join('');
+    const pt = o.playtime; const buckets = ['under 10 min', '10–30 min', '30–60 min', '1–3 h', '3 h +'];
+    const top = (o.top || []).map((r) => `<tr><td data-l="Player">${esc(r.displayName || r.username)} <span class="ad-muted">@${esc(r.username)}</span></td><td data-l="Games">${r.games}</td><td data-l="Wins">${r.wins}</td><td data-l="Played">${mins(r.minutes)}</td><td data-l="Usual hour">${r.peakHour == null ? '—' : hh(r.peakHour)}</td></tr>`).join('');
+    const c = o.returning.cohort;
+    main.innerHTML = `<h2>Insights <small class="ad-muted">last ${o.days} days, ${esc(o.zone)}</small></h2>
+      <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:8px">${rangeButtons}</div>
+      <div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:12px">${zoneButtons}</div>
+      <div class="ad-grid">${tile(matches, 'games finished')}${tile(g.filter((r) => r.matches).length, 'different games played')}${tile(pt.players, 'signed-in players')}${tile(mins(pt.avgMinutes), 'avg play time per player')}${tile(pctText(left, humans), 'players who left early')}${tile(pctText(c.d1, c.size), 'came back next day')}${tile(pctText(c.d7, c.size), 'came back within a week')}</div>
+      <h3>When people play</h3>${heatmap(o.heat || [], o.zone)}
+      <h3>How each game goes</h3>${g.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Avg length</th><th>Avg seats</th><th>Left early</th><th>With a leaver</th><th>Drawn</th><th>Finished of started</th></tr></thead><tbody>${gameRows}</tbody></table>` : '<p class="ad-muted">No games yet.</p>'}
+      <h3>New and returning players</h3>${stackBars(o.returning.newPerDay, o.returning.returningPerDay, o.labels, 'New', 'Returning')}
+      <p class="ad-muted">Next-day and one-week return use players whose first game was at least 7 days ago (${c.size} in range).</p>
+      <h3>Time spent playing</h3>${bars(buckets.map((name, i) => ({ name, total: pt.buckets[i] })), 'No play yet.')}
+      <p class="ad-muted">Median ${mins(pt.medianMinutes)}, total ${mins(pt.totalMinutes)}. Players per time bucket; games a player left early are not counted as time.</p>
+      <h3>Most active players</h3>${top ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Played</th><th>Usual hour</th></tr></thead><tbody>${top}</tbody></table>` : '<p class="ad-muted">No signed-in players yet.</p>'}
+      <p class="ad-muted">Signed-in players only: guests and bots are left out. Figures come from finished games; nothing personal beyond the public username is shown.</p>`;
+    const again = (d, z) => { state.gen += 1; const mine = state.gen; insights(d, z).catch((e) => { if (mine === state.gen) fail(e); }); };
+    main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => again(Number(b.dataset.days), o.zone); });
+    main.querySelectorAll('[data-zone]').forEach((b) => { b.onclick = () => again(range, b.dataset.zone); });
+  }
+
   // ---------------------------------------------------------------- logs
   /** Recent lines of this process: already redacted by lib/log.js, never shown raw beyond what the server kept. */
   async function logs(filters = {}) {
@@ -418,7 +480,7 @@
     } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen && seq === renderSeq) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
   }
 
-  const views = { overview: () => overview(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
+  const views = { overview: () => overview(), insights: () => insights(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
