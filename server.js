@@ -272,7 +272,7 @@ function start(opts = {}) {
   const trackError = (code) => analytics.track('error', code);
   // Operations panel: when this process started, which commit Render built it from, and how sockets have closed since
   const serverStartedAt = new Date().toISOString();
-  const deployedCommit = (process.env.RENDER_GIT_COMMIT || '').slice(0, 12) || null;
+  const deployedCommit = String(env.RENDER_GIT_COMMIT || '').slice(0, 12) || null; // the injected config, as the rest of start() reads it
   const socketCloses = createCloseCounter();
   const adminPlatform = () => ({
     uptimeSec: Math.round(process.uptime()), node: process.version, memoryMb: Math.round(process.memoryUsage().rss / 1048576),
@@ -1791,6 +1791,8 @@ function start(opts = {}) {
   }
 
   wss.on('connection', (ws, req) => {
+    // counted before admission, so a socket the per-IP limit turns away is still in the close counts
+    ws.once('close', (code) => socketCloses.record(code));
     analytics.track('session'); // one count per socket; no address or identity is recorded
     ws.ip = clientIp(req);
     ws.cookieToken = authRoutes.readSessionToken(req);
@@ -1867,8 +1869,7 @@ function start(opts = {}) {
       // (act, chat, leave...) is looked at, exactly as when every handler was synchronous. Bound the waiting queue too.
       enqueueSocketMessage(ws, run, maxQueuedMessages);
     });
-    ws.on('close', (code) => {
-      socketCloses.record(code);
+    ws.on('close', () => {
       const p = ws.player;
       if (!p || p.ws !== ws) return;
       detachSocket(p);
