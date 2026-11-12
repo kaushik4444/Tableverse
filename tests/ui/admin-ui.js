@@ -220,7 +220,7 @@ const api = (role) => ({
     assert.equal(await s.page.getAttribute('#funnel a[download]', 'href'), '/api/admin/funnel.csv?days=30');
     await s.page.waitForSelector('#seatBalance table');
     assert.equal(await s.page.locator('#seatBalance tr.ad-flag').count(), 1, 'only the lopsided seat is flagged');
-    assert.ok((await s.page.textContent('#seatBalance')).includes('worth a look'));
+    assert.ok((await s.page.textContent('#seatBalance')).includes('worth a look: more wins than chance'));
     assert.deepEqual(s.errors, []);
     await s.close();
   });

@@ -200,7 +200,8 @@
     if (!el || gen !== state.gen) return;
     if (!sb) { el.innerHTML = '<p class="ad-muted">The seat check could not be loaded.</p>'; return; }
     if (!sb.rows.length) { el.innerHTML = '<p class="ad-muted">No finished games with seats in this range.</p>'; return; }
-    const note = (r) => (!r.enoughGames ? `not enough games yet (${sb.minGames} needed)` : r.flagged ? 'worth a look' : 'in line with chance');
+    // only more wins than the chance share is flagged; fewer wins is shown as not flagged, not as chance
+    const note = (r) => (!r.enoughGames ? `not enough games yet (${sb.minGames} needed)` : r.flagged ? 'worth a look: more wins than chance' : 'not flagged for excess wins');
     el.innerHTML = `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Seats</th><th>Seat</th><th>Games</th><th>Win rate</th><th>Chance share</th><th>z</th><th>Note</th></tr></thead><tbody>${
       sb.rows.map((r) => `<tr class="${r.flagged ? 'ad-flag' : ''}"><td data-l="Game">${esc(r.gameId)}</td><td data-l="Seats">${esc(r.seats)}</td><td data-l="Seat">${esc(r.seat + 1)}</td><td data-l="Games">${esc(r.games)}</td><td data-l="Win rate">${esc(r.winRate)}%</td><td data-l="Chance share">${esc(r.expectedRate)}%</td><td data-l="z">${esc(r.z)}</td><td data-l="Note">${esc(note(r))}</td></tr>`).join('')
     }</tbody></table></div>
