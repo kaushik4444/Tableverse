@@ -78,6 +78,8 @@
     const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
     main.innerHTML = `<h2>Overview <small class="ad-muted">last ${o.days} days</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:12px">${rangeButtons}</div>
+      <h3>Right now <small class="ad-muted">updates every 15 seconds</small></h3>
+      <div class="ad-grid" id="liveNow" aria-live="off"><div class="ad-card"><b>…</b><small>loading</small></div></div>
       <div class="ad-grid">${tile(o.active.dau, 'active today')}${tile(o.active.wau, 'active, 7 days')}${tile(o.active.mau, 'active, 30 days')}${tile(o.accounts.registered, 'registered accounts')}${tile(o.accounts.registered_24h, 'new in 24 hours')}${tile(t('registration'), 'registrations')}${tile(t('session'), 'sessions')}${tile(t('game_finished'), 'games finished')}${tile(t('error'), 'errors')}${tile(q.feedback_new || 0, 'feedback to read')}${tile(q.reports7d || 0, 'chat reports, 7 days')}${tile(q.reports_total || 0, 'chat reports, all time')}</div>
       <h3>Active players per day</h3>${lineChart(o.activeDaily || [], o.labels || [], 'Active players')}
       <h3>Registrations per day</h3>${lineChart(o.series.registration || (o.labels || []).map(() => 0), o.labels || [], 'Registrations')}
@@ -86,6 +88,7 @@
       <h3>Popular games</h3>${bars(o.popularGames, 'No finished games yet.')}
       <h3>Errors by kind</h3>${bars(o.errors, 'No errors recorded.')}
       <p class="ad-muted">Counters only: no addresses, names or messages are recorded. Active users are counted from a keyed hash, never an account id. Detail rows are kept ${o.retention ? esc(o.retention.activeDays) : '35'} days, daily totals ${o.retention ? esc(o.retention.dailyDays) : '400'} days.</p>`;
+    startLive();
     // a new range makes every answer still on its way out of date: bump the view generation so only the latest one is drawn
     // each click takes its own generation: an older request that fails later must not replace the current view
     main.querySelectorAll('[data-days]').forEach((b) => {
@@ -142,18 +145,18 @@
     const matches = sum('matches'); const humans = sum('humans'); const left = sum('leftEarly');
     const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
     const zoneButtons = ZONES.map(([z, n]) => `<button class="ad-btn ${z === o.zone ? 'primary' : ''}" data-zone="${z}" aria-pressed="${z === o.zone}">${n}</button>`).join('');
-    const gameRows = g.map((r) => `<tr><td data-l="Game">${esc(r.gameId)}</td><td data-l="Finished">${r.matches}</td><td data-l="Avg length">${mins(r.avgMinutes)}</td><td data-l="Avg seats">${r.avgSeats}</td><td data-l="Left early">${pctText(r.leftEarly, r.humans)}</td><td data-l="With a leaver">${pctText(r.withLeaver, r.matches)}</td><td data-l="Drawn">${pctText(r.draws, r.matches)}</td><td data-l="Finished of started">${pctText(r.finished, r.started)}</td></tr>`).join('');
+    const gameRows = g.map((r) => `<tr><td data-l="Game">${esc(r.gameId)}</td><td data-l="Finished">${r.matches}</td><td data-l="Avg length">${mins(r.avgMinutes)}</td><td data-l="Median length">${mins(r.medianMinutes)}</td><td data-l="Avg seats">${r.avgSeats}</td><td data-l="Left early">${pctText(r.leftEarly, r.humans)}</td><td data-l="With a leaver">${pctText(r.withLeaver, r.matches)}</td><td data-l="Drawn">${pctText(r.draws, r.matches)}</td><td data-l="Finished of started">${pctText(r.finished, r.started)}</td></tr>`).join('');
     const pt = o.playtime; const buckets = ['under 10 min', '10–30 min', '30–60 min', '1–3 h', '3 h +'];
     const top = (o.top || []).map((r) => `<tr><td data-l="Player">${esc(r.displayName || r.username)} <span class="ad-muted">@${esc(r.username)}</span></td><td data-l="Games">${r.games}</td><td data-l="Wins">${r.wins}</td><td data-l="Played">${mins(r.minutes)}</td><td data-l="Usual hour">${r.peakHour == null ? '—' : hh(r.peakHour)}</td></tr>`).join('');
     const c = o.returning.cohort;
     main.innerHTML = `<h2>Insights <small class="ad-muted">last ${o.days} days, ${esc(o.zone)}</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:8px">${rangeButtons}</div>
       <div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:12px">${zoneButtons}</div>
-      <div class="ad-grid">${tile(matches, 'games finished')}${tile(g.filter((r) => r.matches).length, 'different games played')}${tile(pt.players, 'signed-in players')}${tile(mins(pt.avgMinutes), 'avg play time per player')}${tile(pctText(left, humans), 'players who left early')}${tile(pctText(c.d1, c.size), 'came back next day')}${tile(pctText(c.d7, c.size), 'came back within a week')}</div>
+      <div class="ad-grid">${tile(matches, 'games finished')}${tile(g.filter((r) => r.matches).length, 'different games played')}${tile(pt.players, 'signed-in players')}${tile(mins(pt.avgMinutes), 'avg play time per player')}${tile(pctText(left, humans), 'players who left early')}${tile(pctText(c.d1, c.size), 'came back next day')}${tile(pctText(c.d7, c.size), 'came back within a week')}${tile(pctText(c.d7Exact, c.size), 'back on day 7 exactly')}${tile(pctText(c.d30Exact, c.size30), 'back on day 30 exactly')}</div>
       <h3>When people play</h3>${heatmap(o.heat || [], o.zone)}
-      <h3>How each game goes</h3>${g.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Avg length</th><th>Avg seats</th><th>Left early</th><th>With a leaver</th><th>Drawn</th><th>Finished of started</th></tr></thead><tbody>${gameRows}</tbody></table>` : '<p class="ad-muted">No games yet.</p>'}
+      <h3>How each game goes</h3>${g.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Avg length</th><th>Median length</th><th>Avg seats</th><th>Left early</th><th>With a leaver</th><th>Drawn</th><th>Finished of started</th></tr></thead><tbody>${gameRows}</tbody></table>` : '<p class="ad-muted">No games yet.</p>'}
       <h3>New and returning players</h3>${stackBars(o.returning.newPerDay, o.returning.returningPerDay, o.labels, 'New', 'Returning')}
-      <p class="ad-muted">Next-day and one-week return use players whose first game was between ${o.days + 7} and 7 days ago, so each has had a full week to come back (${c.size} players).</p>
+      <p class="ad-muted">Next-day, one-week and day-7 return use players whose first game was between ${o.days + 7} and 7 days ago (${c.size} players), so each has had a full week to come back. Day-30 return uses players whose first game was between ${o.days + 30} and 30 days ago (${c.size30} players).</p>
       <h3>Time spent playing</h3>${bars(buckets.map((name, i) => ({ name, total: pt.buckets[i] })), 'No play yet.')}
       <p class="ad-muted">Median ${mins(pt.medianMinutes)}, total ${mins(pt.totalMinutes)}. Players per time bucket; games a player left early are not counted as time.</p>
       <h3>Where players are from</h3>${bars((o.countries || []).map((r) => ({ name: r.country ? countryName(r.country) : 'Not set', total: r.players })), 'No players yet.')}
@@ -163,6 +166,70 @@
     const again = (d, z) => { sel.days = d; sel.tz = z; state.gen += 1; const mine = state.gen; insights(d, z).catch((e) => { if (mine === state.gen) fail(e); }); };
     main.querySelectorAll('[data-days]').forEach((b) => { b.onclick = () => again(Number(b.dataset.days), sel.tz); });
     main.querySelectorAll('[data-zone]').forEach((b) => { b.onclick = () => again(sel.days, b.dataset.zone); });
+  }
+
+  // ---------------------------------------------------------------- players (directory and per-player stats)
+  const SORTS = [['seen', 'Last seen'], ['joined', 'Newest'], ['games', 'Games'], ['wins', 'Wins'], ['minutes', 'Time played'], ['leaving', 'Left early']];
+  const hourColumns = (hourly, zone) => {
+    hourly = hourly[zone] || hourly.UTC;
+    const max = Math.max(...hourly, 1);
+    const cols = hourly.map((v, h) => `<div class="ad-col" title="${hh(h)}: ${v} games"><i class="n" style="height:${(v / max) * 100}%"></i></div>`).join('');
+    const peak = hourly.indexOf(Math.max(...hourly));
+    return `<figure class="ad-chart"><div class="ad-stack" role="img" aria-label="Games started per hour of the day, ${esc(zone)}">${cols}</div>
+      <p class="ad-muted">${Math.max(...hourly) ? `Usually starts around <b>${hh(peak)}</b>` : 'No games yet'} (${esc(zone)}). Left is midnight, right is 23:00.</p>
+      <details><summary>Data table</summary><table class="ad-t"><thead><tr><th>Hour</th><th>Games</th></tr></thead><tbody>${hourly.map((v, h) => `<tr><td>${hh(h)}</td><td>${v}</td></tr>`).join('')}</tbody></table></details></figure>`;
+  };
+  const playerSel = { q: '', sort: 'seen', page: 1, tz: 'UTC' };
+
+  async function players(q = playerSel.q, sort = playerSel.sort, pageNo = playerSel.page) {
+    const gen = state.gen;
+    Object.assign(playerSel, { q, sort, page: pageNo });
+    const o = await api(`/api/admin/players?q=${encodeURIComponent(q)}&sort=${encodeURIComponent(sort)}&page=${pageNo}`);
+    if (gen !== state.gen) return;
+    const pages = Math.max(1, Math.ceil(o.total / o.pageSize));
+    const sortButtons = SORTS.map(([k, n]) => `<button class="ad-btn ${k === o.sort ? 'primary' : ''}" data-sort="${k}" aria-pressed="${k === o.sort}">${n}</button>`).join('');
+    const rows = o.players.map((p) => `<tr><td data-l="Player"><b>${esc(p.displayName)}</b><br><small class="ad-muted">@${esc(p.username)}${p.country ? ' · ' + esc(countryName(p.country)) : ''}</small>${p.suspended ? ' <span class="ad-pill danger">suspended</span>' : ''}</td>
+      <td data-l="Games">${p.games}</td><td data-l="Wins">${p.wins}</td><td data-l="Win rate">${pctText(p.wins, p.rated - p.draws)}</td><td data-l="Left early">${pctText(p.leftEarly, p.games)}</td><td data-l="Played">${mins(p.minutes)}</td>
+      <td data-l="Last seen">${esc(when(p.lastSeenAt))}</td><td><button class="ad-btn" data-view="${esc(p.username)}" aria-label="Open the profile of ${esc(p.username)}">Open</button></td></tr>`).join('');
+    main.innerHTML = `<h2>Players <small class="ad-muted">${o.total} registered</small></h2>
+      <form class="ad-search ad-row" id="pForm"><input name="q" value="${esc(q)}" placeholder="Search username or name" maxlength="40" aria-label="Search players" style="flex:1"><button class="ad-btn primary" type="submit">Search</button></form>
+      <div class="ad-row" role="group" aria-label="Sort by" style="margin:8px 0 12px">${sortButtons}</div>
+      ${o.players.length ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Win rate</th><th>Left early</th><th>Played</th><th>Last seen</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="ad-muted">No players match.</p>'}
+      <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="pPrev" ${pageNo <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${pageNo} of ${pages}</span><button class="ad-btn" id="pNext" ${pageNo >= pages ? 'disabled' : ''}>Next</button></div>
+      <p class="ad-muted">Registered players only. Wins and win rate count only games with a recorded result that the player stayed to the end of, and leave out draws; time played leaves out games a player left early. Opening a profile is recorded in the audit log.</p>`;
+    const go = (a, b, c) => { state.gen += 1; const mine = state.gen; players(a, b, c).catch((e) => { if (mine === state.gen) fail(e); }); };
+    document.getElementById('pForm').onsubmit = (e) => { e.preventDefault(); go(new FormData(e.target).get('q') || '', o.sort, 1); };
+    main.querySelectorAll('[data-sort]').forEach((b) => { b.onclick = () => go(q, b.dataset.sort, 1); });
+    document.getElementById('pPrev').onclick = () => go(q, o.sort, pageNo - 1);
+    document.getElementById('pNext').onclick = () => go(q, o.sort, pageNo + 1);
+    main.querySelectorAll('[data-view]').forEach((b) => { b.onclick = () => { state.gen += 1; const mine = state.gen; playerProfile(b.dataset.view, 'UTC').catch((e) => { if (mine === state.gen) fail(e); }); }; });
+  }
+
+  async function playerProfile(username, tz = 'UTC') {
+    const gen = state.gen;
+    const o = await api(`/api/admin/players/profile?username=${encodeURIComponent(username)}`);
+    if (gen !== state.gen) return;
+    if (!o.player) { main.innerHTML = '<p class="ad-muted">No registered player with that username.</p><button class="ad-btn" id="pBack">Back to players</button>'; document.getElementById('pBack').onclick = () => { state.gen += 1; players().catch(fail); }; return; }
+    const p = o.player; const t = o.totals;
+    const draw = (zone) => {
+    o.zone = zone;
+    const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
+    const zoneButtons = ZONES.map(([z, n]) => `<button class="ad-btn ${z === o.zone ? 'primary' : ''}" data-zone="${z}" aria-pressed="${z === o.zone}">${n}</button>`).join('');
+    const perGame = o.perGame.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Games">${g.games}</td><td data-l="Wins">${g.wins}</td><td data-l="Win rate">${pctText(g.wins, g.rated - g.draws)}</td><td data-l="Drawn">${g.draws}</td><td data-l="Left early">${g.leftEarly}</td><td data-l="Played">${mins(g.minutes)}</td></tr>`).join('');
+    const recent = o.recent.map((r) => `<tr><td data-l="When">${esc(when(r.at))}</td><td data-l="Game">${esc(r.gameId)}</td><td data-l="Seats">${r.seats}</td><td data-l="Result">${r.leftEarly ? 'left early' : r.unknown ? 'result not recorded' : r.draw ? 'draw' : r.won ? 'won' : 'lost'}</td><td data-l="Length">${mins(r.minutes)}</td></tr>`).join('');
+    main.innerHTML = `<div class="ad-row"><button class="ad-btn" id="pBack">Back to players</button></div>
+      <h2>${esc(p.displayName)} <small class="ad-muted">@${esc(p.username)}</small></h2>
+      <p class="ad-muted">${p.country ? esc(countryName(p.country)) + ' · ' : ''}Role: ${esc(p.role)} · ${p.verified ? 'verified' : 'not verified'} · Joined ${esc(when(p.joinedAt))} · Last seen ${esc(when(p.lastSeenAt))}${p.suspended ? ' · <b>suspended</b>' : ''}</p>
+      <div class="ad-grid">${tile(t.games, 'games played')}${tile(t.wins, 'wins')}${tile(pctText(t.wins, t.rated - t.draws), 'win rate (draws left out)')}${tile(t.draws, 'draws')}${tile(pctText(t.leftEarly, t.games), 'games left early')}${tile(mins(t.minutes), 'time played')}${tile(t.activeDays, 'days played')}</div>
+      <p class="ad-muted">First game ${esc(when(t.firstGameAt))} · latest game ${esc(when(t.lastGameAt))}</p>
+      <h3>When this player plays</h3><div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:8px">${zoneButtons}</div>${hourColumns(o.hourly, o.zone)}
+      <h3>By game</h3>${o.perGame.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Games</th><th>Wins</th><th>Win rate</th><th>Drawn</th><th>Left early</th><th>Played</th></tr></thead><tbody>${perGame}</tbody></table>` : '<p class="ad-muted">No finished games yet.</p>'}
+      <h3>Latest games</h3>${o.recent.length ? `<table class="ad-t stack"><thead><tr><th>When</th><th>Game</th><th>Seats</th><th>Result</th><th>Length</th></tr></thead><tbody>${recent}</tbody></table>` : '<p class="ad-muted">No finished games yet.</p>'}
+      <p class="ad-muted">Opening this profile was recorded in the audit log. No e-mail address, network address or chat message is shown.</p>`;
+    document.getElementById('pBack').onclick = () => { state.gen += 1; const mine = state.gen; players().catch((e) => { if (mine === state.gen) fail(e); }); };
+    main.querySelectorAll('[data-zone]').forEach((b) => { b.onclick = () => draw(b.dataset.zone); });
+    };
+    draw(tz);
   }
 
   // ---------------------------------------------------------------- logs
@@ -275,6 +342,25 @@
     main.querySelectorAll('[data-fid]').forEach((b) => { b.onclick = async () => { try { await api('/api/admin/feedback/status', { id: b.dataset.fid, status: b.dataset.st }); await feedback(status, page); } catch (e) { say('fMsg', e.message, 'err'); } }; });
   }
 
+  // ---------------------------------------------------------------- chat reports (read-only queue)
+  const SEV_LABEL = { high: 'high', medium: 'medium', low: 'low' };
+  async function reports(page = 1) {
+    const gen = state.gen;
+    const o = await api(`/api/admin/reports?page=${page}`);
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    const items = o.items.map((r) => `<div class="ad-card"><div class="ad-row"><span class="ad-pill ${r.severity === 'high' ? 'bad' : r.severity === 'medium' ? 'warn' : ''}">${esc(SEV_LABEL[r.severity] || r.severity)}</span><span class="ad-pill">${esc(r.reason)}</span>${r.reportedSuspended ? '<span class="ad-pill danger">suspended</span>' : ''}<small class="ad-muted">${esc(when(r.createdAt))} · room ${esc(r.room)}</small></div>
+      <p><b>${esc(r.reported)}</b> reported by <b>${esc(r.reporter || 'an account no longer on record')}</b> · ${r.reportedTotal == null ? 'report counts unavailable: the reported account was deleted' : `reported ${r.reportedTotal} time${r.reportedTotal === 1 ? '' : 's'} in all, ${r.reportedRecent} in the last ${o.recentDays} days`}</p>
+      <blockquote class="ad-muted" style="margin:6px 0">${esc(r.message)}</blockquote>${r.details ? `<p class="ad-muted">Note from the reporter: ${esc(r.details)}</p>` : ''}</div>`).join('');
+    main.innerHTML = `<h2>Chat reports <small class="ad-muted">${o.total} in total</small></h2>
+      <p class="ad-muted">Read-only. Reports are listed newest first; the severity is set by the reason given. Opening this list is recorded in the audit log. Resolving reports comes later.</p>
+      <div class="ad-list">${items || '<p class="ad-muted">No chat reports.</p>'}</div>
+      <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="rPrev" ${page <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${page}</span><button class="ad-btn" id="rNext" ${page * o.pageSize >= o.total ? 'disabled' : ''}>Next</button></div>`;
+    // each click takes a new generation, so an older page request that finishes late cannot overwrite the page on screen
+    const go = (p) => { state.gen += 1; const mine = state.gen; reports(p).catch((e) => { if (mine === state.gen) fail(e); }); };
+    document.getElementById('rPrev').onclick = () => go(page - 1);
+    document.getElementById('rNext').onclick = () => go(page + 1);
+  }
+
   // ---------------------------------------------------------------- announcements
   const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
   async function announcements() {
@@ -344,8 +430,31 @@
     const up = p.uptimeSec != null ? `${Math.floor(p.uptimeSec / 3600)}h ${Math.floor((p.uptimeSec % 3600) / 60)}m` : '—';
     main.innerHTML = `<h2>Platform health</h2><div class="ad-grid">
       ${tile(h.db.ok ? 'OK' : 'DOWN', 'database', h.db.ok ? '' : 'ad-pill bad')}${tile(h.db.dbMs != null ? h.db.dbMs + ' ms' : '—', 'database round trip')}${tile(up, 'uptime')}${tile(p.sockets ?? '—', 'open connections')}${tile(p.players ?? '—', 'players on this server')}${tile(p.rooms ?? '—', 'tables')}${tile(p.memoryMb != null ? p.memoryMb + ' MB' : '—', 'memory')}${tile(h.db.feedback_new ?? '—', 'new feedback')}${tile(h.db.migrations ?? '—', 'migrations applied')}</div>
+      <h3>Deployment and connections</h3><div class="ad-grid">${tile(p.deployedCommit || 'not set', 'deployed commit')}${tile(p.startedAt ? when(p.startedAt) : '—', 'process started')}${tile(p.socketCloses ? p.socketCloses.normal : '—', 'normal closes (since start)')}${tile(p.socketCloses ? p.socketCloses.replaced : '—', 'replaced by the app (since start)')}${tile(p.socketCloses ? p.socketCloses.lost : '—', 'lost or dropped (since start)', p.socketCloses && p.socketCloses.lost ? 'ad-pill warn' : '')}</div>
       <h3>Analytics</h3><div class="ad-grid">${tile(h.analytics.enabled ? 'on' : 'off', 'collection')}${tile(h.analytics.buffered ?? 0, 'counters waiting to be saved')}${tile(h.analytics.failures ?? 0, 'failed saves', h.analytics.failures ? 'ad-pill warn' : '')}${tile(h.analytics.dropped ?? 0, 'dropped counts')}</div>
       <p class="ad-muted">${esc(p.mode === 'postgres' ? 'Running on PostgreSQL.' : 'Running in memory mode.')} Node ${esc(p.node || '')}. ${p.shuttingDown ? 'The server is shutting down.' : ''} ${h.analytics.lastErrorCode ? 'Last analytics error code: ' + esc(h.analytics.lastErrorCode) : ''}</p>`;
+  }
+  // The live block refreshes itself while it is on the page. Each overview draw starts one loop with a new token; an older loop
+  // stops at its next tick, and a loop also stops once its block has left the page.
+  let liveToken = 0;
+  function startLive() {
+    const token = ++liveToken;
+    const tick = async () => {
+      if (token !== liveToken || !document.getElementById('liveNow')) return;
+      try {
+        const l = await api('/api/admin/live');
+        const el = document.getElementById('liveNow');
+        if (token !== liveToken || !el) return;
+        const t = (n, label) => `<div class="ad-card"><b>${esc(n ?? '—')}</b><small>${esc(label)}</small></div>`;
+        const sampled = new Date(l.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        el.innerHTML = t(l.players, 'players connected') + t(l.tables, 'tables open') + t(l.sockets, 'open connections') + t(sampled, 'sampled at, your local time');
+      } catch (e) {
+        const el = document.getElementById('liveNow');
+        if (el && token === liveToken) el.innerHTML = '<div class="ad-card"><b>—</b><small>could not load right now</small></div>';
+      }
+      setTimeout(tick, 15000);
+    };
+    tick();
   }
   async function audit(page = 1) {
     const gen = state.gen;
@@ -488,7 +597,7 @@
     } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen && seq === renderSeq) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
   }
 
-  const views = { overview: () => overview(), insights: () => insights(), users: () => users(), feedback: () => feedback(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
+  const views = { overview: () => overview(), insights: () => insights(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive

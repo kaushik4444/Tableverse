@@ -67,6 +67,71 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).days, 30, 'an unknown range falls back to 30 days');
       assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).zone, 'UTC', 'an unknown zone falls back to UTC');
     });
+    await test('report queue: counts, severity, suspension, a deleted reporter, and an audit row on opening it', async () => {
+      const rq = require('../db/reportQueue');
+      const rep = await newUser('Rpa'); const bad = await newUser('Rpb'); const staff = await newUser('Rps');
+      await q("UPDATE players SET suspended_at = NOW() WHERE id = $1", [bad.id]);
+      const report = (who, reason, text) => q(`INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason, details)
+                                               VALUES ($1, $2, 'Bad', 'RPQ1', gen_random_uuid(), $3, $4, '')`, [who, bad.id, text, reason]);
+      await report(rep.id, 'threats', 'a threatening line');
+      await report(staff.id, 'spam', 'a spam line');
+      // one report older than the 30-day window: it counts all time but not in the recent figure
+      await q(`INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason, details, created_at)
+               VALUES ($1, $2, 'Bad', 'RPQ1', gen_random_uuid(), 'an old line', 'harassment', '', NOW() - INTERVAL '45 days')`, [rep.id, bad.id]);
+      const page = await rq.listReports({ page: 1, actorId: staff.id });
+      const threat = page.items.find((r) => r.reason === 'threats' && r.message === 'a threatening line');
+      assert.ok(threat, 'the threat report is listed');
+      assert.equal(threat.severity, 'high', 'threats are high severity');
+      assert.equal(threat.reportedSuspended, true, 'the suspension is shown');
+      assert.equal(threat.reportedTotal, 3, 'the account has three reports in all');
+      assert.equal(threat.reportedRecent, 2, 'and two in the last 30 days (the 45-day-old report is left out)');
+      assert.equal(threat.reporter, rep.player.username, 'the reporter username is shown to staff');
+      assert.equal(threat.reported, bad.player.username, 'the reported username is shown');
+      assert.ok(!Object.keys(threat).some((k) => /email|ip|token/i.test(k)), 'no address or token fields');
+      const audit = await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'reports.view' AND actor_id = $1", [staff.id]);
+      assert.equal(audit[0].n, 1, 'only the call with an actor writes a reports.view row');
+    });
+    await test('player directory: totals, sorting, search, per-game stats and an audit row on opening a profile (no address or token in the answer)', async () => {
+      const ps = require('../db/playerStats');
+      const a = await newUser('Pda'); const b = await newUser('Pdb'); const staff = await newUser('Pds');
+      // key = null is a match written before results were reported (winners unknown); match_key is a UUID column
+      const mk = async (game, mins, parts, key = require('node:crypto').randomUUID()) => {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at) VALUES ($4, 'PDR1', $1, $2, NOW() - ($3::int * INTERVAL '1 minute') - INTERVAL '5 minutes', NOW() - INTERVAL '5 minutes') RETURNING id`, [game, parts.length, mins, key]))[0].id;
+        for (const [i, [pid, win, bot, left, draw]] of parts.entries()) await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [m, pid, 'x', i, win, bot, left, draw]);
+      };
+      // b left early and a bot took the seat and won: that win sits on b's row and must not count for b
+      await mk('ludo', 20, [[a.id, true, false, false, false], [b.id, true, false, true, false], [null, false, true, false, false]]);
+      await mk('tictactoe', 3, [[a.id, false, false, false, true], [b.id, false, false, false, true]]);
+      await mk('ludo', 10, [[a.id, false, false, false, false], [b.id, true, false, false, false]]);
+      // a match from before results were reported (no match key): played, but nobody's win or loss is known
+      await mk('ludo', 7, [[a.id, false, false, false, false], [b.id, false, false, false, false]], null);
+      const list = await ps.listPlayers({ q: 'pd', sort: 'games' });
+      const ra = list.players.find((p) => p.displayName === 'Pda');
+      assert.equal(ra.games, 4); assert.equal(ra.rated, 3, 'the match with no recorded result is a game played, not a rated one'); assert.equal(ra.wins, 1); assert.equal(ra.draws, 1); assert.equal(ra.leftEarly, 0);
+      assert.equal(ra.minutes, 40, 'time played adds the lengths of the games the player stayed to the end of');
+      const rb = list.players.find((p) => p.displayName === 'Pdb');
+      assert.equal(rb.leftEarly, 1); assert.equal(rb.minutes, 20, 'the game b left early is not time played');
+      assert.equal(rb.wins, 1, 'a bot win on the seat b left is not b\'s win'); assert.equal(rb.rated, 2);
+      assert.ok(list.total >= 3 && list.sort === 'games');
+      assert.equal((await ps.listPlayers({ q: 'zzz-no-such', sort: 'drop table players' })).total, 0);
+      assert.equal((await ps.listPlayers({ sort: 'drop table players' })).sort, 'seen', 'an unknown sort falls back and never reaches the SQL');
+      // a page number that is not a whole number (or is absurdly large) must never reach PostgreSQL as an invalid OFFSET
+      for (const bad of ['Infinity', '1e30', 'abc', -4]) assert.equal((await ps.listPlayers({ sort: 'games', page: bad })).players.length, Math.min(25, (await ps.listPlayers({ sort: 'games' })).players.length), `page ${bad} falls back to the first page`);
+      assert.equal((await ps.listPlayers({ sort: 'seen', page: '99999999' })).players.length, 0, 'a huge page is capped and simply returns no rows');
+      const before = (await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'player.view'"))[0].n;
+      const prof = await ps.playerProfile({ username: a.username || (await q('SELECT username FROM players WHERE id = $1', [a.id]))[0].username, actorId: staff.id });
+      assert.equal(prof.totals.games, 4); assert.equal(prof.totals.rated, 3); assert.equal(prof.totals.losses, 1, 'a draw is neither a win nor a loss, and an unrecorded result is not a loss'); assert.ok(prof.totals.activeDays >= 1 && prof.totals.activeDays <= 2, 'one day (two if the test ran across midnight UTC)');
+      assert.equal(prof.perGame.find((g) => g.gameId === 'ludo').games, 3); assert.equal(prof.perGame.find((g) => g.gameId === 'ludo').rated, 2);
+      assert.equal(prof.recent.length, 4); assert.equal(prof.recent.filter((r) => r.unknown).length, 1, 'the match with no recorded result is marked unknown'); assert.ok(prof.recent.filter((r) => r.unknown).every((r) => !r.won && !r.draw), 'and is never shown as a win'); assert.ok(new Date(prof.recent[0].at) >= new Date(prof.recent[3].at), 'latest game first');
+      assert.deepEqual(Object.keys(prof.hourly).sort(), ['Asia/Kolkata', 'Europe/Berlin', 'UTC']);
+      assert.equal(prof.hourly.UTC.reduce((n, v) => n + v, 0), 4);
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'player.view'"))[0].n, before + 1);
+      assert.ok(!/@|token|password|hash/i.test(JSON.stringify(prof)), 'no e-mail address, token or hash in the profile');
+      const profB = await ps.playerProfile({ username: (await q('SELECT username FROM players WHERE id = $1', [b.id]))[0].username });
+      assert.equal(profB.totals.wins, 1, 'b\'s profile: the bot\'s win on the seat b left is not counted'); assert.equal(profB.totals.leftEarly, 1);
+      assert.equal(profB.recent.find((r) => r.leftEarly).won, false, 'the left-early game is not shown as a win');
+      assert.deepEqual(await ps.playerProfile({ username: 'no_such_player', actorId: staff.id }), { player: null });
+    });
     console.log('schema');
     await test('migration 013 is applied and the database allows exactly one owner and only known roles', async () => {
       assert.ok((await q("SELECT 1 FROM schema_migrations WHERE version = '013_admin_console.sql'")).length === 1);
@@ -456,6 +521,44 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await boss().browser.post('/api/admin/users/unsuspend', { playerId: v.id })).status, 200);
       const again = new Browser(srv.port); await again.csrf();
       assert.equal((await again.post('/api/auth/login', { email: v.email, password: PW })).ok, true, 'sign-in works after the suspension is lifted');
+    });
+    await test('insights: exact-day returns on day 7 and day 30, and the median length per game', async () => {
+      const ins = require('../db/insights');
+      const DAY = 86400000;
+      const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
+      const cohort = async () => (await ins.insights({ days: 7, tz: 'UTC' })).returning.cohort;
+      const mk = async (player, game, at, mins) => {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at)
+                            VALUES (gen_random_uuid(), 'RET1', $1, 2, $2::timestamptz, $2::timestamptz + make_interval(mins => $3)) RETURNING id`, [game, at, mins]))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,0,false,false,false,false)', [m, player, 'x']);
+      };
+      const before = await cohort();
+      const dee = await newUser('Rda'); const aya = await newUser('Rdb'); const bob = await newUser('Rdc'); const cyra = await newUser('Rdd'); const eel = await newUser('Rde');
+      // first game 9 days ago, back the next day and again on exactly day 7: in the D1 and D7 cohort
+      await mk(dee.id, 'ludo', ago(9), 15); await mk(dee.id, 'ludo', ago(8), 15); await mk(dee.id, 'ludo', ago(2), 15);
+      // first game 12 days ago, back the next day only: in the D1 and D7 cohort, but not on exactly day 7
+      await mk(eel.id, 'ludo', ago(12), 15); await mk(eel.id, 'ludo', ago(11), 15);
+      // first game 33 days ago, back exactly on day 7 (26 days ago) and exactly on day 30 (3 days ago)
+      await mk(aya.id, 'ludo', ago(33), 15); await mk(aya.id, 'ludo', ago(26), 15); await mk(aya.id, 'ludo', ago(3), 15);
+      // first game 33 days ago, back only the next day: in the D30 cohort, not an exact-day return
+      await mk(bob.id, 'ludo', ago(33), 15); await mk(bob.id, 'ludo', ago(32), 15);
+      // first game 35 days ago, back exactly on day 30 (5 days ago)
+      await mk(cyra.id, 'ludo', ago(35), 15); await mk(cyra.id, 'ludo', ago(5), 15);
+      const after = await cohort();
+      const delta = (k) => after[k] - before[k];
+      assert.equal(delta('size'), 2, 'two new players in the D1 and D7 cohort');
+      assert.equal(delta('d1'), 2, 'both came back the next day');
+      assert.equal(delta('d7'), 2, 'and both came back within the week');
+      assert.equal(delta('d7Exact'), 1, 'one of them came back on exactly day 7');
+      assert.equal(delta('size30'), 3, 'three new players in the D30 cohort');
+      assert.equal(delta('d30Exact'), 2, 'two of them came back on exactly day 30');
+      // median of the lengths 10, 15, 15, 20, 60 is 15; the average is 24
+      const lengths = [[dee.id, 10], [aya.id, 20], [bob.id, 60], [cyra.id, 15], [aya.id, 15]];
+      for (const [i, [player, mins]] of lengths.entries()) await mk(player, 'medianprobe', ago(1 + i * 0.1), mins);
+      const game = (await ins.insights({ days: 7, tz: 'UTC' })).games.find((g) => g.gameId === 'medianprobe');
+      assert.equal(game.matches, 5);
+      assert.equal(game.medianMinutes, 15, 'the median is 15 minutes');
+      assert.equal(game.avgMinutes, 24, 'and the average is 24');
     });
     // last: this check stops the server, so it must run after every check that needs it
     await test('real traffic is counted: registrations and logins reach the table when the server shuts down (final flush)', async () => {

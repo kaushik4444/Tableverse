@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
+const { createCloseCounter } = require('./lib/closeCounter');
 const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
@@ -269,9 +270,16 @@ function start(opts = {}) {
     analytics.active(p.id); // the store keeps a keyed hash, not the id
   };
   const trackError = (code) => analytics.track('error', code);
+  // Operations panel: when this process started, which commit Render built it from, and how sockets have closed since
+  const deployedCommit = String(env.RENDER_GIT_COMMIT || '').slice(0, 12) || null; // the injected config, as the rest of start() reads it
+  const socketCloses = createCloseCounter();
   const adminPlatform = () => ({
     uptimeSec: Math.round(process.uptime()), node: process.version, memoryMb: Math.round(process.memoryUsage().rss / 1048576),
     mode: dbPool.hasDatabase() ? 'postgres' : 'memory', rooms: rooms.size, players: players.size, sockets: wss.clients.size, shuttingDown,
+    // derived from uptime, so the start time and the uptime describe the same lifetime even if start() ran earlier
+    startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(), deployedCommit, socketCloses: socketCloses.stats(),
+    // players with a live socket right now; `players` above also counts records kept after a disconnect
+    playersConnected: [...players.values()].filter((p) => p.connected).length,
   });
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   const authRoutes = createAuthRoutes({
@@ -1785,6 +1793,8 @@ function start(opts = {}) {
   }
 
   wss.on('connection', (ws, req) => {
+    // counted before admission, so a socket the per-IP limit turns away is still in the close counts
+    ws.once('close', (code) => socketCloses.record(code));
     analytics.track('session'); // one count per socket; no address or identity is recorded
     ws.ip = clientIp(req);
     ws.cookieToken = authRoutes.readSessionToken(req);
