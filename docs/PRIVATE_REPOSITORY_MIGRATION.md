@@ -64,6 +64,9 @@ this is harmless (everything merges to `main`); it matters if `development` is u
   limited to selected repositories, so the repository must be in its "Repository access" list; and a repository that was public and
   became private may leave the connection misconfigured and disrupt GitHub deploys, in which case the service's Git credentials are
   re-selected in the service settings.
+- The application itself calls Render's API at run time for the admin console's log history (`lib/renderLogs.js`, with `RENDER_API_KEY`,
+  `RENDER_SERVICE_ID`, `RENDER_OWNER_ID` set on Render). That is a Render-to-Render call and does not involve GitHub, so repository
+  visibility does not affect it.
 - **Neon** and **Resend**: not connected to GitHub in the repository (no workflow or file refers to them except through runtime
   environment variables on Render). Unaffected.
 - **Copilot code review**: configured by the rulesets, not by a file in the repository. **Owner must check** that the Copilot plan
