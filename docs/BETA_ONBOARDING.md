@@ -23,7 +23,7 @@ This is a beta. A game in progress is not kept if the server restarts or is upda
 
 1. **Open the beta link** on your phone or computer. Any recent browser works (Chrome, Safari, Firefox, Edge).
 2. **Sign up.** Tap **Sign up**, choose a display name and a username, enter your email and a password, and confirm that you are 18 or over.
-3. **Verify your email.** Open the message we send you and tap the link. If it has not arrived after a few minutes, check the spam folder, then use **Resend verification email** on the login screen.
+3. **Verify your email, then sign in.** Open the message we send you and tap the link. When the page says your email is verified, tap **Sign in to Tableverse** and log in with your email and password: verifying does not sign you in. If the message has not arrived after a few minutes, check the spam folder, then use **Resend verification email** on the login screen.
 4. **Pick a game** on the home screen and tap **Create table**. You are the host, and the table opens as a lobby.
 5. **Play alone against bots:** tap **Start game**. Empty seats are filled by bots when you start, and the button shows how many.
 6. **Play with friends.** New tables are **private**: only friends who have an accepted invitation can enter, and a table code alone is not enough. There are two ways:
