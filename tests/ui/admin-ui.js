@@ -24,8 +24,11 @@ const playersFixture = (sort, total = 1) => ({ ok: true, total, pageSize: 25, so
 // the Right now figures: a test changes these between refreshes; `fail` makes the next answer an error
 const live = { players: 3, tables: 1, sockets: 4, fail: false };
 const liveFixture = () => (live.fail ? { __status: 500, body: { ok: false } } : { ok: true, at: new Date().toISOString(), players: live.players, tables: live.tables, sockets: live.sockets });
+const funnelFixture = (days) => ({ ok: true, days, totals: { signups: 6, played: 5, returned: 1 }, daily: [{ day: '2026-11-07', signups: 4, played: 3, returned: 1 }] });
 const api = (role) => ({
   'GET /api/admin/live': () => liveFixture(),
+  'GET /api/admin/funnel?days=30': () => funnelFixture(30),
+  'GET /api/admin/funnel?days=7': () => funnelFixture(7),
   'GET /api/auth/csrf': () => ({ ok: true, csrfToken: 'tok' }),
   'GET /api/admin/me': () => ({ ok: true, role, isAdmin: role !== 'user', isOwner: role === 'owner' }),
   'GET /api/admin/insights?days=7&tz=UTC': () => insightsFixture(7, 'UTC'),
@@ -203,6 +206,16 @@ const api = (role) => ({
     await until(async () => (await page.textContent('#liveNow')).includes('could not load right now'), 'the error message');
     assert.deepEqual(errors, []);
     await ctx.close(); server.close();
+  });
+  await test('signup funnel: the Insights tab shows the three stages and a CSV link for the range', async () => {
+    const s = await open('admin');
+    await tab(s.page, 'insights');
+    await s.page.waitForSelector('#funnel .ad-card');
+    const text = await s.page.textContent('#funnel');
+    assert.ok(text.includes('signed up') && text.includes('played a first game') && text.includes('came back on a later day'));
+    assert.equal(await s.page.getAttribute('#funnel a[download]', 'href'), '/api/admin/funnel.csv?days=30');
+    assert.deepEqual(s.errors, []);
+    await s.close();
   });
   await test('insights shows the figures, a heatmap with a table fallback, and the range and zone buttons ask again', async () => {
     const s = await open('admin');

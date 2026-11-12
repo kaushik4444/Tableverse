@@ -9,7 +9,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 
-const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/live', '/api/admin/insights', '/api/admin/players', '/api/admin/players/profile?username=ann', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
+const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/live', '/api/admin/funnel', '/api/admin/funnel.csv', '/api/admin/insights', '/api/admin/players', '/api/admin/players/profile?username=ann', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
 const ADMIN_POSTS = [
   ['/api/admin/roles', { playerId: 'p_00000000-0000-4000-8000-000000000001', role: 'admin' }],
   ['/api/admin/users/sign-out', { playerId: 'p_00000000-0000-4000-8000-000000000001' }],
@@ -157,6 +157,26 @@ const ADMIN_POSTS = [
       assert.deepEqual(s.store.reportCalls.at(-1).page, '2');
       assert.equal(r.json.items[0].severity, 'high');
       assert.ok(!JSON.stringify(r.json).match(/email|token|password|ip|address/i), 'no address, token or secret in the answer');
+    });
+    await test('signup funnel: staff only; the days are passed on; the CSV is a download of plain numbers and marks the export', async () => {
+      assert.equal((await user.b.get('/api/admin/funnel')).status, 403);
+      const j = await admin.b.get('/api/admin/funnel?days=7');
+      assert.equal(j.status, 200);
+      assert.equal(s.store.funnelCalls.at(-1).days, '7');
+      assert.equal(s.store.funnelCalls.at(-1).exporting, undefined, 'the page view is not an export');
+      assert.equal(j.json.totals.signups, 6);
+      const base = `http://127.0.0.1:${s.port}`;
+      const denied = await fetch(`${base}/api/admin/funnel.csv?days=7`, { headers: { cookie: user.b.cookieHeader } });
+      assert.equal(denied.status, 403, 'an ordinary account cannot download it');
+      const res = await fetch(`${base}/api/admin/funnel.csv?days=7`, { headers: { cookie: admin.b.cookieHeader } });
+      assert.equal(res.status, 200);
+      assert.match(res.headers.get('content-type'), /^text\/csv/);
+      assert.match(res.headers.get('content-disposition'), /attachment; filename="signup-funnel-30-days\.csv"/, 'the store reports the range it used');
+      const text = await res.text();
+      assert.equal(text.split('\r\n')[0], 'day,signups,played_first_game,returned_on_a_later_day');
+      assert.equal(text.split('\r\n')[1], '2026-11-07,4,3,1');
+      assert.ok(!/email|token|password|@/i.test(text), 'the export carries no address, token or name');
+      assert.equal(s.store.funnelCalls.at(-1).exporting, true, 'the download is recorded for the audit log');
     });
     await test('player directory: staff only; sort and search are passed on; opening a profile is audited', async () => {
       assert.equal((await user.b.get('/api/admin/players')).status, 403);

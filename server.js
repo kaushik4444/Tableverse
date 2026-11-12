@@ -221,6 +221,14 @@ function start(opts = {}) {
     res.writeHead(status);
     res.end(JSON.stringify(body));
   };
+  // a file to save (the CSV exports): same security headers, never cached, and offered as a download
+  const sendText = (res, status, contentType, filename, text) => {
+    setCommonHeaders(res, contentType);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.writeHead(status);
+    res.end(text);
+  };
 
   const includeDebugTokens = debugTokensEnabled(env); // only tests receive raw tokens in responses (they are not browsers)
   const emailSender = opts.emailSender || makeAuthEmailSender({ env, logger: opts.log || console });
@@ -293,6 +301,7 @@ function start(opts = {}) {
     trustProxy,
     emailSender,
     sendJson,
+    sendText,
     readJsonBody,
     avatars: AVATARS,
     log: opts.log || console,

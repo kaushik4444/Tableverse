@@ -27,13 +27,14 @@ async function start({ env = {}, analytics = null, store: given = null, clock = 
     sendBroadcast: async (m) => { broadcastMail.push(m); },
   };
   const sendJson = (res, status, body) => { res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.writeHead(status); res.end(JSON.stringify(body)); };
+  const sendText = (res, status, contentType, filename, text) => { res.setHeader('Content-Type', contentType); res.setHeader('Cache-Control', 'no-store'); res.setHeader('Content-Disposition', `attachment; filename="${filename}"`); res.writeHead(status); res.end(text); };
   const readJsonBody = (req) => new Promise((resolve, reject) => {
     let text = '';
     req.on('data', (c) => { text += c; if (text.length > 65536) reject(new Error('payload too large')); });
     req.on('end', () => { try { resolve(text ? JSON.parse(text) : {}); } catch { reject(new Error('invalid json')); } });
   });
   const routes = createAuthRoutes({
-    env: e, production: false, trustProxy: false, emailSender: {}, sendJson, readJsonBody, log: { error() {}, warn() {}, log() {} },
+    env: e, production: false, trustProxy: false, emailSender: {}, sendJson, sendText, readJsonBody, log: { error() {}, warn() {}, log() {} },
     extraRoutes: (ctx) => createAdminRoutes({ env: e, store, analytics, now, ctx, platform: () => ({ rooms: 0 }), idPattern: /^(p_)?[0-9a-f-]{36}$/i, // in-memory players have p_<uuid> ids; production uses plain UUIDs
        auth, emailSender, onSignedOut: (o) => signedOutCalls.push(o),
        onBroadcastQueued: () => { queued.count++; }, makeUnsubscribeUrl: (t) => 'https://app.test/api/email/unsubscribe?token=' + t }).routes,

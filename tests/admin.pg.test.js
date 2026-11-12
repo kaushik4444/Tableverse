@@ -560,6 +560,30 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(game.medianMinutes, 15, 'the median is 15 minutes');
       assert.equal(game.avgMinutes, 24, 'and the average is 24');
     });
+    await test('signup funnel: signups, first games and later returns are counted; only a CSV download is audited', async () => {
+      const fn = require('../db/funnel');
+      const before = (await fn.funnel({ days: 30 })).totals;
+      const a = await newUser('Fna'); const b = await newUser('Fnb'); const c = await newUser('Fnc'); const staff = await newUser('Fns');
+      const game = async (player, at) => {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at)
+                            VALUES (gen_random_uuid(), 'FUN1', 'ludo', 2, $1::timestamptz, $1::timestamptz + INTERVAL '5 minutes') RETURNING id`, [at]))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,0,false,false,false,false)', [m, player.id, 'x']);
+      };
+      // a: signed up and played on two different days; b: played once; c: never played
+      await game(a, new Date(Date.now() - 86400000).toISOString()); await game(a, new Date().toISOString()); await game(b, new Date().toISOString());
+      const after = await fn.funnel({ days: 30 });
+      const delta = (k) => after.totals[k] - before[k];
+      assert.equal(delta('signups'), 4, 'the four new accounts signed up (the staff account too)');
+      assert.equal(delta('played'), 2, 'two of them played a game');
+      assert.equal(delta('returned'), 1, 'and one came back on a later day');
+      assert.ok(after.daily.every((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)), 'days are dates');
+      const audits = async () => (await q("SELECT COUNT(*)::int AS n FROM admin_audit_log WHERE action = 'funnel.export'"))[0].n;
+      const start = await audits();
+      await fn.funnel({ days: 30 });
+      assert.equal(await audits(), start, 'looking at the figures is not an export');
+      await fn.funnel({ days: 30, actorId: staff.id, exporting: true });
+      assert.equal(await audits(), start + 1, 'a CSV download is written to the audit log');
+    });
     // last: this check stops the server, so it must run after every check that needs it
     await test('real traffic is counted: registrations and logins reach the table when the server shuts down (final flush)', async () => {
       await newUser('Ned');
