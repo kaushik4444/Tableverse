@@ -60,7 +60,7 @@ Moderators currently review reports with manual queries, as `docs/CHAT_MODERATIO
 | Audit logging | Done | `admin_audit_log` in the same transaction as each change; player profile views are audited (#112) |
 | Audit viewing | Done | Audit log tab (staff) |
 | Two-factor readiness | Missing | No second factor for any admin; `docs/ADMIN.md` lists it as a limit |
-| Re-authentication for owner actions | Missing | Owner actions use the normal session only |
+| Re-authentication for owner actions | Not found | No re-authentication step in the admin code; owner actions use the normal session |
 | Owner transfer | By design | Operator action on the database, not in the UI |
 
 ## Prioritised plan
