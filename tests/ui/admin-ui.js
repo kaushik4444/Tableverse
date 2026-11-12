@@ -13,9 +13,18 @@ async function until(fn, label, ms = 8000) { const t0 = Date.now(); for (;;) { c
 
 const EVIL = '<img src=x onerror="window.__xss=1"> <b>bold</b>';
 const U = (o) => ({ id: 'u1', username: 'ann', display_name: 'Ann', role: 'user', is_anonymous: false, verified: true, created_at: '2026-11-01T10:00:00Z', last_seen_at: '2026-11-08T09:00:00Z', ...o });
+const insightsFixture = (days, zone) => ({ ok: true, days, zone, labels: ['2026-11-08', '2026-11-09', '2026-11-10'],
+  games: [{ gameId: 'ludo', matches: 12, avgMinutes: 21.4, avgSeats: 3.2, withLeaver: 3, draws: 0, humans: 30, leftEarly: 4, started: 16, finished: 12 }, { gameId: 'tictactoe', matches: 5, avgMinutes: 2.1, avgSeats: 2, withLeaver: 0, draws: 2, humans: 10, leftEarly: 0, started: 5, finished: 5 }],
+  heat: [{ dow: 5, hour: 20, matches: 4, playerGames: 11 }, { dow: 6, hour: 21, matches: 3, playerGames: 7 }],
+  playtime: { players: 9, totalMinutes: 310, avgMinutes: 34.4, medianMinutes: 22, buckets: [2, 3, 2, 1, 1] },
+  returning: { activePlayers: 9, newPlayers: 5, returningPlayers: 4, newPerDay: [2, 3, 0], returningPerDay: [0, 1, 3], cohort: { size: 4, d1: 2, d7: 3 } },
+  top: [{ username: 'ann', displayName: 'Ann', games: 14, wins: 6, minutes: 130, peakHour: 20 }] });
 const api = (role) => ({
   'GET /api/auth/csrf': () => ({ ok: true, csrfToken: 'tok' }),
   'GET /api/admin/me': () => ({ ok: true, role, isAdmin: role !== 'user', isOwner: role === 'owner' }),
+  'GET /api/admin/insights?days=7&tz=UTC': () => insightsFixture(7, 'UTC'),
+  'GET /api/admin/insights?days=30&tz=UTC': () => insightsFixture(30, 'UTC'),
+  'GET /api/admin/insights?days=7&tz=Asia%2FKolkata': () => insightsFixture(7, 'Asia/Kolkata'),
   'GET /api/admin/overview?days=30': () => ({ ok: true, days: 30, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
   'GET /api/admin/overview?days=7': () => ({ ok: true, days: 7, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
   'GET /api/admin/users?q=&page=1': () => ({ ok: true, total: 3, pageSize: 25, users: [U({ id: 'u1', display_name: EVIL }), U({ id: 'u2', username: 'bob', display_name: 'Bob', role: 'admin' }), U({ id: 'u3', username: 'own', display_name: 'Owner', role: 'owner' })] }),
@@ -139,10 +148,25 @@ const api = (role) => ({
     assert.ok(!('durationHours' in body), 'no preset duration is sent');
     await s.close();
   });
+  await test('insights shows the figures, a heatmap with a table fallback, and the range and zone buttons ask again', async () => {
+    const s = await open('admin');
+    await s.page.waitForSelector('.ad-grid');
+    await tab(s.page, 'insights');
+    await s.page.waitForSelector('.ad-heat');
+    const text = await s.page.textContent('#adMain');
+    assert.match(text, /Insights/); assert.match(text, /ludo/); assert.match(text, /Busiest hour overall: 20:00/); assert.match(text, /@ann/);
+    assert.equal(await s.page.locator('.ad-hc').count(), 168, 'seven days of 24 hours');
+    await s.page.click('[data-days="7"]');
+    await s.page.click('[data-zone="Asia/Kolkata"]');
+    await until(() => s.calls.some((c) => /insights\?days=7&tz=Asia%2FKolkata/.test(c.path)), 'range and zone are sent');
+    await s.page.waitForSelector('[data-zone="Asia/Kolkata"][aria-pressed="true"]');
+    assert.deepEqual(s.errors, []);
+    await s.close();
+  });
   await test('on a 360px phone no tab scrolls sideways and tap targets are at least 40px', async () => {
     const s = await open('owner', { width: 360, height: 740 });
     await s.page.waitForSelector('.ad-grid');
-    for (const name of ['overview', 'users', 'feedback', 'announcements', 'health', 'audit']) {
+    for (const name of ['overview', 'insights', 'users', 'feedback', 'announcements', 'health', 'audit']) {
       await tab(s.page, name); await sleep(150);
       const over = await s.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       assert.ok(over <= 1, `${name} overflows by ${over}px`);

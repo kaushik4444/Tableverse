@@ -90,6 +90,13 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       return { email: t.email };
     },
     async overview({ days = 30 } = {}) { return { days, series: [], dims: [], active: { dau: 0, wau: 0, mau: 0 }, accounts: { registered: players.size, registered_24h: 0, staff: 0 } }; },
+    // the real SQL is in db/insights.js (tests/admin.pg.test.js); this records what the route asked for and returns a fixed answer
+    async insights({ days = 30, tz = 'UTC' } = {}) {
+      this.insightsCalls.push({ days, tz });
+      return { days: [7, 30, 90].includes(Number(days)) ? Number(days) : 30, zone: tz, games: [], heat: [], playtime: { players: 0, totalMinutes: 0, avgMinutes: 0, medianMinutes: 0, buckets: [0, 0, 0, 0, 0] },
+        returning: { activePlayers: 0, newPlayers: 2, returningPlayers: 1, daily: [{ day: '2026-11-08', newPlayers: 2, returningPlayers: 1 }], cohort: { size: 0, d1: 0, d7: 0 } }, top: [] };
+    },
+    insightsCalls: [],
     async health() { return { dbMs: 1, migrations: 13, feedback_new: feedback.filter((f) => f.status === 'new').length, analytics_rows: 0 }; },
     async createFeedback({ playerId, category, message }) { st.check(); const row = { id: crypto.randomUUID(), player_id: playerId, category, message, status: 'new', created_at: now() }; feedback.push(row); return { id: row.id }; },
     async listFeedback() { return { total: feedback.length, pageSize: 25, items: feedback.slice() }; },

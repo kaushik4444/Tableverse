@@ -42,6 +42,29 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       return { ...u, email: e, id: me.id };
     };
 
+    console.log('insights');
+    await test('insights: the SQL runs on a real database and counts humans, leavers, draws, new and returning players', async () => {
+      const ins = require('../db/insights');
+      const a = await newUser('Ia'); const b = await newUser('Ib');
+      const mk = async (game, startAgo, mins, parts) => {
+        const m = (await q(`INSERT INTO matches (room_code, game_id, seats, started_at, finished_at) VALUES ('INS1', $1, $2, NOW() - ($3::int * INTERVAL '1 minute'), NOW() - (($3::int - $4::int) * INTERVAL '1 minute')) RETURNING id`, [game, parts.length, startAgo, mins]))[0].id;
+        for (const [i, [pid, win, bot, left, draw]] of parts.entries()) await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [m, pid, 'x', i, win, bot, left, draw]);
+      };
+      await mk('ludo', 60 * 24 * 2, 20, [[a.id, true, false, false, false], [b.id, false, false, true, false], [null, false, true, false, false]]);
+      await mk('tictactoe', 60, 3, [[a.id, false, false, false, true], [b.id, false, false, false, true]]);
+      const o = await ins.insights({ days: 7, tz: 'Asia/Kolkata' });
+      assert.equal(o.days, 7); assert.equal(o.zone, 'Asia/Kolkata');
+      const ludo = o.games.find((g) => g.gameId === 'ludo'); const ttt = o.games.find((g) => g.gameId === 'tictactoe');
+      assert.equal(ludo.matches, 1); assert.equal(ludo.humans, 2, 'the bot is not counted'); assert.equal(ludo.leftEarly, 1); assert.equal(ludo.withLeaver, 1);
+      assert.equal(ttt.draws, 1);
+      assert.ok(o.heat.length >= 1 && o.heat.every((c) => c.dow >= 0 && c.dow <= 6 && c.hour >= 0 && c.hour <= 23));
+      assert.equal(o.playtime.players, 2);
+      assert.equal(o.returning.daily.reduce((n, r) => n + r.newPlayers, 0), 2, 'both players were new in their first game');
+      assert.equal(o.returning.daily.reduce((n, r) => n + r.returningPlayers, 0), 2, 'and both came back for the second game');
+      assert.ok(o.top.length === 2 && o.top.every((r) => r.username));
+      assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).days, 30, 'an unknown range falls back to 30 days');
+      assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).zone, 'UTC', 'an unknown zone falls back to UTC');
+    });
     console.log('schema');
     await test('migration 013 is applied and the database allows exactly one owner and only known roles', async () => {
       assert.ok((await q("SELECT 1 FROM schema_migrations WHERE version = '013_admin_console.sql'")).length === 1);
