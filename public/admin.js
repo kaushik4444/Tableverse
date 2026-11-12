@@ -61,7 +61,7 @@
     const pts = nums.map((v, i) => (v === null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean).join(' ');
     const dots = nums.map((v, i) => (v === null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" class="ad-dot"><title>${esc(labels[i] || '')}: ${v}</title></circle>`)).join('');
     const first = esc(labels[0] || ''); const last = esc(labels[n - 1] || '');
-    const rows = nums.map((v, i) => `<tr><td>${esc(labels[i] || '')}</td><td>${v === null ? 'not kept' : v}</td></tr>`).join('');
+    const rows = nums.map((v, i) => `<tr><td>${esc(labels[i] || '')}</td><td>${v === null ? 'not kept' : v}</td></tr>`).reverse().join('');
     return `<figure class="ad-chart"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${grid}<polyline points="${pts}" class="ad-line" fill="none"/>${dots}<text x="${pad}" y="${h - 6}" class="ad-axis">${first}</text><text x="${w - pad}" y="${h - 6}" class="ad-axis" text-anchor="end">${last}</text></svg><details><summary>${esc(label)}: data table</summary><table class="ad-t"><thead><tr><th>Day</th><th>${esc(label)}</th></tr></thead><tbody>${rows}</tbody></table></details></figure>`;
   };
   const RANGES = [7, 30, 90];
@@ -106,7 +106,7 @@
   const stackBars = (a, b, labels, la, lb) => {
     const max = Math.max(...a.map((v, i) => v + b[i]), 1);
     const cols = a.map((v, i) => `<div class="ad-col" title="${esc(labels[i])}: ${v} new, ${b[i]} returning"><i class="r" style="height:${(b[i] / max) * 100}%"></i><i class="n" style="height:${(v / max) * 100}%"></i></div>`).join('');
-    const rows = a.map((v, i) => `<tr><td>${esc(labels[i])}</td><td>${v}</td><td>${b[i]}</td></tr>`).join('');
+    const rows = a.map((v, i) => `<tr><td>${esc(labels[i])}</td><td>${v}</td><td>${b[i]}</td></tr>`).reverse().join('');
     return `<figure class="ad-chart"><div class="ad-stack" role="img" aria-label="${esc(la)} and ${esc(lb)} players per day">${cols}</div>
       <p class="ad-muted"><span class="ad-key n"></span>${esc(la)} <span class="ad-key r"></span>${esc(lb)} (a player counts once a day)</p>
       <details><summary>Data table</summary><table class="ad-t"><thead><tr><th>Day</th><th>${esc(la)}</th><th>${esc(lb)}</th></tr></thead><tbody>${rows}</tbody></table></details></figure>`;
@@ -169,7 +169,8 @@
     const f = { level: filters.level || '', component: filters.component || '', event: filters.event || '' };
     const o = await api(`/api/admin/logs?${new URLSearchParams({ ...f, limit: '100' }).toString()}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
-    const rows = o.items.map((e) => {
+    const newestFirst = (o.items || []).slice().sort((x, y) => (Date.parse(y.time) || 0) - (Date.parse(x.time) || 0));
+    const rows = newestFirst.map((e) => {
       const { time, level, component, event, ...rest } = e;
       const details = JSON.stringify(rest).slice(0, 300);
       return `<tr><td data-l="Time">${esc(when(time))}</td><td data-l="Level"><span class="ad-pill ${level === 'error' ? 'danger' : level === 'warn' ? 'warn' : ''}">${esc(level)}</span></td><td data-l="Component">${esc(component)}</td><td data-l="Event">${esc(event)}</td><td data-l="Details"><code>${esc(details === '{}' ? '' : details)}</code></td></tr>`;

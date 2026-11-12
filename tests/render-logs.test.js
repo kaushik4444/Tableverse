@@ -32,6 +32,12 @@ console.log('render history (Stage 20.8)');
     assert.equal(f.calls.length, 0);
   });
 
+  await test('lines come back newest first even when Render answers oldest first', async () => {
+    const f = fakeFetch({ logs: [{ timestamp: '2026-11-10T09:00:00Z', message: 'a' }, { timestamp: '2026-11-10T09:30:00Z', message: 'b' }, { timestamp: '2026-11-10T09:10:00Z', message: 'c' }] });
+    const out = await createRenderLogs({ env: ENV, fetchImpl: f.fn, now: fixedNow }).recent();
+    assert.deepEqual(out.items.map((i) => i.text), ['b', 'c', 'a']);
+  });
+
   await test('the request names the owner and the service, reads backwards over the last 24 hours, and sends the key only in the header', async () => {
     const f = fakeFetch({ logs: [] });
     await createRenderLogs({ env: ENV, fetchImpl: f.fn, now: fixedNow }).recent({ text: 'error', limit: 20 });
