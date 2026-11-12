@@ -17,6 +17,7 @@
   const $banner = document.getElementById('banner');
   const $toasts = document.getElementById('toasts');
 
+  let sessionGen = 0; // bumped when the signed-in account changes, so an answer for the previous account is dropped
   const S = {
     id: null,
     token: '', // short-lived websocket auth credential (never persisted)
@@ -357,7 +358,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.country = undefined; S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.country = undefined; sessionGen += 1; S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -1893,7 +1894,9 @@
         if (again && pickedCountry !== null) again.value = pickedCountry;
       };
       if (!S.guest && S.country === undefined) {
+        const mineGen = sessionGen;
         getJson('/api/me/profile').then((me) => {
+          if (mineGen !== sessionGen) return; // another account signed in meanwhile
           S.country = (me && me.profile && me.profile.country) || '';
           const sel = o.querySelector('#profileCountry');
           if (!sel || !sel.disabled) return; // closed, or already usable
