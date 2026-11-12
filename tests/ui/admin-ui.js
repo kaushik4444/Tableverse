@@ -43,8 +43,8 @@ const api = (role) => ({
     hourly: { UTC: Array.from({ length: 24 }, (_, h) => (h === 19 ? 9 : 0)), 'Europe/Berlin': Array.from({ length: 24 }, (_, h) => (h === 20 ? 9 : 0)), 'Asia/Kolkata': Array.from({ length: 24 }, (_, h) => (h === 0 ? 9 : 0)) },
     recent: [{ gameId: 'ludo', at: '2026-11-08T08:00:00Z', seats: 4, won: true, draw: false, leftEarly: false, unknown: false, minutes: 22 },
       { gameId: 'ludo', at: '2026-11-07T08:00:00Z', seats: 4, won: false, draw: false, leftEarly: false, unknown: true, minutes: 18 }] }),
-  'GET /api/admin/overview?days=30': () => ({ ok: true, days: 30, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
-  'GET /api/admin/overview?days=7': () => ({ ok: true, days: 7, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
+  'GET /api/admin/overview?days=30': () => ({ ok: true, days: 30, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { error: [0, 2, 1], session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
+  'GET /api/admin/overview?days=7': () => ({ ok: true, days: 7, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { error: [0, 2, 1], session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
   'GET /api/admin/users?q=&page=1': () => ({ ok: true, total: 3, pageSize: 25, users: [U({ id: 'u1', display_name: EVIL }), U({ id: 'u2', username: 'bob', display_name: 'Bob', role: 'admin' }), U({ id: 'u3', username: 'own', display_name: 'Owner', role: 'owner' })] }),
   'GET /api/admin/feedback?status=&page=1': () => ({ ok: true, total: 1, pageSize: 25, items: [{ id: 'f1', category: 'bug', status: 'new', message: EVIL, created_at: '2026-11-08T08:00:00Z', username: null }] }),
   'GET /api/admin/announcements': () => ({ ok: true, limits: { maxMessage: 200, maxDays: 90 }, items: [{ id: 'a1', message: EVIL, level: 'info', audience: 'all', status: 'live', starts_at: '2026-11-08T08:00:00Z', ends_at: '2026-11-09T08:00:00Z', ended_at: null }] }),
@@ -94,11 +94,11 @@ const api = (role) => ({
     assert.deepEqual(s.errors, []);
     await s.close();
   });
-  await test('the overview draws two charts with data tables, and the range buttons ask for that range', async () => {
+  await test('the overview draws three line charts with data tables, and the range buttons ask for that range', async () => {
     const s = await open('admin');
     await s.page.waitForSelector('.ad-grid');
-    assert.equal(await s.page.locator('.ad-chart svg').count(), 2, 'active players and registrations');
-    assert.equal(await s.page.locator('.ad-chart table').count(), 2, 'each chart has its data table');
+    assert.equal(await s.page.locator('.ad-chart svg').count(), 3, 'active players, registrations and errors');
+    assert.equal(await s.page.locator('.ad-chart table').count(), 3, 'each chart has its data table');
     assert.equal(await s.page.locator('[data-days="30"][aria-pressed="true"]').count(), 1, '30 days is the default');
     await s.page.click('[data-days="7"]');
     await until(() => s.calls.some((c) => /overview\?days=7/.test(c.path)), 'the 7-day range is requested');
@@ -219,6 +219,13 @@ const api = (role) => ({
     await until(() => s.calls.some((c) => /insights\?days=7&tz=Asia%2FKolkata/.test(c.path)), 'range and zone are sent');
     await s.page.waitForSelector('[data-zone="Asia/Kolkata"][aria-pressed="true"]');
     assert.deepEqual(s.errors, []);
+    await s.close();
+  });
+  await test('overview charts errors per day next to the errors by kind', async () => {
+    const s = await open('admin');
+    await s.page.waitForSelector('.ad-grid');
+    const text = await s.page.textContent('#adMain');
+    assert.match(text, /Errors per day/); assert.match(text, /Errors by kind/);
     await s.close();
   });
   await test('players: the directory lists registered players, sorts, opens a profile with a per-game table, and switches zone without asking again', async () => {
