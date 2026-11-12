@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
+const { createCloseCounter } = require('./lib/closeCounter');
 const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
@@ -269,9 +270,14 @@ function start(opts = {}) {
     analytics.active(p.id); // the store keeps a keyed hash, not the id
   };
   const trackError = (code) => analytics.track('error', code);
+  // Operations panel: when this process started, which commit Render built it from, and how sockets have closed since
+  const serverStartedAt = new Date().toISOString();
+  const deployedCommit = (process.env.RENDER_GIT_COMMIT || '').slice(0, 12) || null;
+  const socketCloses = createCloseCounter();
   const adminPlatform = () => ({
     uptimeSec: Math.round(process.uptime()), node: process.version, memoryMb: Math.round(process.memoryUsage().rss / 1048576),
     mode: dbPool.hasDatabase() ? 'postgres' : 'memory', rooms: rooms.size, players: players.size, sockets: wss.clients.size, shuttingDown,
+    startedAt: serverStartedAt, deployedCommit, socketCloses: socketCloses.stats(),
   });
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   const authRoutes = createAuthRoutes({
@@ -1861,7 +1867,8 @@ function start(opts = {}) {
       // (act, chat, leave...) is looked at, exactly as when every handler was synchronous. Bound the waiting queue too.
       enqueueSocketMessage(ws, run, maxQueuedMessages);
     });
-    ws.on('close', () => {
+    ws.on('close', (code) => {
+      socketCloses.record(code);
       const p = ws.player;
       if (!p || p.ws !== ws) return;
       detachSocket(p);
