@@ -34,7 +34,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
   const n = clampDays(days);
   const zone = clampZone(tz);
   const q = (sql, args = [n]) => db.query(sql, args);
-  const [games, leavers, heat, playtime, daily, cohort, top, counters] = await Promise.all([
+  const [games, leavers, heat, playtime, daily, cohort, top, counters, countries] = await Promise.all([
     // 1. what is played: finished matches per game, how long they last, how many seats, and how often a game ends with a leaver or a draw
     q(`SELECT m.game_id, COUNT(*)::int AS matches,
               COALESCE(AVG(EXTRACT(EPOCH FROM (m.finished_at - m.started_at))) / 60.0, 0)::float AS avg_minutes,
@@ -100,6 +100,10 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     // 8. how games end overall: started against finished (counters, so games nobody finished are included)
     q(`SELECT metric, dim, SUM(total)::int AS total FROM analytics_daily
         WHERE day > ${TODAY} - $1::int AND metric IN ('game_started', 'game_finished') GROUP BY metric, dim`),
+    // 9. where the players who played in the window say they are from (the player's own choice; NULL = not set)
+    q(`WITH h AS (${HUMANS} AND ${IN_WINDOW})
+       SELECT pl.country, COUNT(DISTINCT h.player_id)::int AS players FROM h JOIN players pl ON pl.id = h.player_id
+        GROUP BY pl.country ORDER BY players DESC, pl.country NULLS LAST`),
   ]);
 
   const leaveBy = new Map(leavers.rows.map((r) => [r.game_id, r]));
@@ -125,6 +129,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
       buckets: [num(pt.b_lt10), num(pt.b_10_30), num(pt.b_30_60), num(pt.b_60_180), num(pt.b_180)] },
     returning: { activePlayers: num(pt.players), newPlayers, returningPlayers: num(pt.multi_day), daily: daily.rows.map((r) => ({ day: r.day, newPlayers: r.new_players, returningPlayers: r.returning_players })),
       cohort: { size: num(c.size), d1: num(c.d1), d7: num(c.d7) } },
+    countries: countries.rows.map((r) => ({ country: r.country, players: r.players })),
     top: top.rows.map((r) => ({ username: r.username, displayName: r.display_name, games: r.games, wins: r.wins, minutes: round1(r.minutes), peakHour: r.peak_hour })),
   };
 }

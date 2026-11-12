@@ -17,6 +17,7 @@
   const $banner = document.getElementById('banner');
   const $toasts = document.getElementById('toasts');
 
+  let sessionGen = 0; // bumped when the signed-in account changes, so an answer for the previous account is dropped
   const S = {
     id: null,
     token: '', // short-lived websocket auth credential (never persisted)
@@ -357,7 +358,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -1848,6 +1849,24 @@
     render();
   }
 
+  /** Optional country, chosen by the player and visible only to them and to the site's staff. Names come from the browser in the player's language. */
+  function countryForm() {
+    const codes = (window.TvCountries && window.TvCountries.CODES) || [];
+    let names = null;
+    try { names = new Intl.DisplayNames([navigator.language || 'en'], { type: 'region' }); } catch { names = null; }
+    const label = (c) => { try { return (names && names.of(c)) || c; } catch { return c; } };
+    const loaded = S.country !== undefined;
+    const cur = S.country || '';
+    const opts = codes.map((c) => ({ c, n: label(c) })).sort((x, y) => x.n.localeCompare(y.n)).map((o) => `<option value="${o.c}" ${o.c === cur ? 'selected' : ''}>${esc(o.n)}</option>`).join('');
+    return `<form id="countryForm" class="auth-form" style="margin-top:10px">
+          <label class="label" for="profileCountry">Country (optional)</label>
+          <select id="profileCountry" ${loaded ? '' : 'disabled'}><option value="">${loaded ? 'Not set' : 'Loading…'}</option>${opts}</select>
+          <small class="hint" style="text-align:left">Only you and the site's staff can see this. It helps us see where players come from.</small>
+          <p id="countryMsg" class="auth-msg" role="alert" hidden></p>
+          <button class="btn" type="submit" ${loaded ? '' : 'disabled'}>Save country</button>
+        </form>`;
+  }
+
   function openEditProfileDialog() {
     const body = () => {
       const name = S.named ? S.name : '';
@@ -1860,16 +1879,53 @@
           <button class="btn" type="submit">Save name</button>
         </form>
         <span class="label" style="margin-top:6px">Avatar</span>
-        <div class="av-picks">${picks}</div>`;
+        <div class="av-picks">${picks}</div>
+        ${S.guest ? '' : countryForm()}`;
     };
     openModal('Edit profile', body(), (o) => {
       modalActions.pickAvatar = async (el) => {
         await changeAvatar(el.dataset.a);
         const keep = o.querySelector('#profileName').value;
+        const keepCountry = o.querySelector('#profileCountry');
+        const pickedCountry = keepCountry && !keepCountry.disabled ? keepCountry.value : null;
         o.querySelector('.modal-body').innerHTML = body();
         o.querySelector('#profileName').value = keep;
+        const again = o.querySelector('#profileCountry');
+        if (again && pickedCountry !== null) again.value = pickedCountry;
       };
+      if (!S.guest && S.country === undefined) {
+        const mineGen = sessionGen;
+        getJson('/api/me/profile').then((me) => {
+          if (mineGen !== sessionGen) return; // another account signed in meanwhile
+          S.country = (me && me.profile && me.profile.country) || '';
+          const sel = o.querySelector('#profileCountry');
+          if (!sel || !sel.disabled) return; // closed, or already usable
+          const name = o.querySelector('#profileName').value;
+          o.querySelector('.modal-body').innerHTML = body();
+          o.querySelector('#profileName').value = name;
+        }).catch(() => { const m = o.querySelector('#countryMsg'); if (m) { m.textContent = 'Could not load your country. Close this window and try again.'; m.hidden = false; } });
+      }
       o.addEventListener('submit', async (e) => {
+        if (e.target.id === 'countryForm') {
+          e.preventDefault();
+          const cmsg = o.querySelector('#countryMsg');
+          const cbtn = e.target.querySelector('button[type=submit]');
+          cbtn.disabled = true;
+          try {
+            const mineGen = sessionGen;
+            const out = await withBusy('Saving your country…', () => postJson('/api/me/country', { country: o.querySelector('#profileCountry').value }));
+            if (mineGen !== sessionGen) return; // another account signed in meanwhile: this answer is not theirs
+            S.country = out.country || '';
+            if (S.profile && S.profile.data && S.profile.data.profile) S.profile.data.profile.country = out.country;
+            cmsg.textContent = out.country ? 'Country saved.' : 'Country cleared.';
+            cmsg.hidden = false;
+          } catch (err) {
+            cmsg.textContent = err.message || 'Could not save the country.';
+            cmsg.hidden = false;
+          }
+          cbtn.disabled = false;
+          return;
+        }
         if (e.target.id !== 'nameForm') return;
         e.preventDefault();
         const msg = o.querySelector('#nameMsg');

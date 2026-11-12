@@ -28,12 +28,12 @@ const iso = (d) => (d ? new Date(d).toISOString() : null);
 async function getOwnProfile(playerId) {
   need();
   const r = await db.query(
-    `SELECT p.id, p.username, p.display_name, p.avatar, p.created_at, i.email, i.email_verified_at
+    `SELECT p.id, p.username, p.display_name, p.avatar, p.country, p.created_at, i.email, i.email_verified_at
      FROM players p LEFT JOIN auth_identities i ON i.player_id = p.id AND i.provider = 'email'
      WHERE p.id = $1 LIMIT 1`, [playerId]);
   const row = r.rows[0];
   if (!row) throw new AuthError('Account not found.', 404);
-  return { id: row.id, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), email: row.email || null, emailVerified: Boolean(row.email_verified_at) };
+  return { id: row.id, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), country: row.country || null, email: row.email || null, emailVerified: Boolean(row.email_verified_at) };
 }
 
 async function updateDisplayName(playerId, rawName) {
@@ -42,6 +42,16 @@ async function updateDisplayName(playerId, rawName) {
   const r = await db.query('UPDATE players SET display_name = $2 WHERE id = $1 RETURNING display_name', [playerId, name]);
   if (!r.rows.length) throw new AuthError('Account not found.', 404);
   return { displayName: r.rows[0].display_name };
+}
+
+/** The country is the player's own choice from the ISO list ('' clears it). It is never guessed from an address. */
+async function updateCountry(playerId, raw) {
+  need();
+  const code = String(raw == null ? '' : raw).trim().toUpperCase();
+  if (code && !require('../public/countries').isCountry(code)) throw new AuthError('Choose a country from the list.', 400);
+  const r = await db.query('UPDATE players SET country = $2 WHERE id = $1 RETURNING country', [playerId, code || null]);
+  if (!r.rows.length) throw new AuthError('Account not found.', 404);
+  return { country: r.rows[0].country || null };
 }
 
 /** The profile picture is one of the server's fixed avatars (anything else is a 400); only the signed-in player can change their own. */
@@ -183,4 +193,4 @@ async function updatePresence(playerId) {
   await db.query('UPDATE players SET last_seen_at = NOW() WHERE id = $1', [playerId]);
 }
 
-module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, getOwnProfile, updateDisplayName, updateAvatar, getHistory, getPublicProfile, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };
+module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };

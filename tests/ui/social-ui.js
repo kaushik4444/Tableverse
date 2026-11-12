@@ -28,6 +28,7 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     'GET /api/me/friends/search': () => { searchCalls++; return searchCalls === 1 ? { ok: true, players: [{ id: 'p9', username: 'evie', display_name: 'Evie', avatar: '🦊' }] } : { __status: 500, body: { ok: false, error: 'Search is busy.' } }; },
     'GET /api/players/ann': () => ({ ok: true, profile: { username: 'ann', displayName: 'Ann', avatar: '🦊', joinedAt: '2026-02-02T00:00:00Z', played: 12, wins: 5, winRate: 41.7 } }),
     'GET /api/auth/session': () => sessionOk(),
+    'POST /api/me/country': ({ body }) => { const c = JSON.parse(body).country; profile.profile.country = c || null; return { ok: true, country: c || null }; },
     'GET /api/me/profile': () => profile,
     'GET /api/me/history?page=1': () => ({ ok: true, items: [], total: 0, page: 1, pages: 1, pageSize: 10 }),
     'GET /api/players/zedd': () => ({ ok: true, profile: { username: 'zedd', displayName: 'Zed', avatar: '🧙', joinedAt: '2026-02-02T00:00:00Z', played: 0, wins: 0, winRate: null } }),
@@ -62,6 +63,26 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     assert.ok(post, 'the choice was sent to the API');
     assert.equal(JSON.parse(post.body).avatar, '🦊');
     assert.equal(await page.$eval('#modal-overlay .av-pick.on', (el) => el.dataset.a), '🦊', 'the dialog marks the saved choice');
+    await ctx.close();
+  });
+
+  await test('country: the saved value is loaded into the dialog, survives an avatar redraw, and saving sends the choice', async () => {
+    profile.profile.country = 'IN';
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs });
+    await page.goto(url + '/#profile');
+    await page.waitForSelector('.pp-head .avatar');
+    await page.click('[data-act="editProfile"]');
+    await page.waitForSelector('#profileCountry:not([disabled])');
+    assert.equal(await page.$eval('#profileCountry', (el) => el.value), 'IN', 'the saved country is shown, not "Not set"');
+    await page.selectOption('#profileCountry', 'DE');
+    await page.click('#modal-overlay .av-pick[data-a="🦊"]');
+    await page.waitForSelector('#modal-overlay .av-pick.on');
+    assert.equal(await page.$eval('#profileCountry', (el) => el.value), 'DE', 'a redraw keeps the unsaved choice');
+    const before = calls.length;
+    await page.click('#countryForm button[type=submit]');
+    await page.waitForFunction(() => /Country saved/.test(document.getElementById('countryMsg').textContent));
+    assert.equal(JSON.parse(calls.slice(before).find((c) => c.path === '/api/me/country').body).country, 'DE');
+    profile.profile.country = null;
     await ctx.close();
   });
 
