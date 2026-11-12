@@ -5,7 +5,7 @@ Status: **draft for the Wave 1 friends-and-family beta.** Free tools only: GitHu
 ## The flow
 
 ```
-report  ->  needs-triage  ->  priority label  ->  fix (PR "Fixes #N")  ->  check on the live site  ->  close
+report  ->  needs-triage  ->  priority label  ->  fix (PR that says "Refs #N")  ->  check on the live site  ->  close by hand
 ```
 
 1. **Intake.** Testers report in one of three ways (see `docs/BETA_ONBOARDING.md`):
@@ -13,8 +13,8 @@ report  ->  needs-triage  ->  priority label  ->  fix (PR "Fixes #N")  ->  check
    - **In-app Send feedback.** The owner reads these in the admin console's Feedback tab and, for anything that needs work, opens a GitHub issue with the same form, in their own words. **Do not paste an email address or a link from a message into a public issue.**
    - **Private safety or security report** to the support address. These never become public issues. Handle them first (see "Safety and security" below).
 2. **Triage** (daily, about 10 minutes): open the `needs-triage` list, give each issue one priority label (P0 to P3), add a topic label if it fits, and remove `needs-triage`. If you cannot tell what happened, add `needs-info`, ask one clear question, and come back in two days.
-3. **Fix.** Fix P0 and P1 first. Name the pull request "Fixes #N" so the issue closes on merge.
-4. **Verify.** After the deploy, repeat the reporter's steps on the live site, then close the issue with one line saying what was checked. Ask the reporter to confirm if it was a P0 or P1.
+3. **Fix.** Fix P0 and P1 first. In the pull request description, write "Refs #N" (not "Fixes" or "Closes"), so the issue stays open until it has been checked on the live site.
+4. **Verify.** After the deploy, repeat the reporter's steps on the live site, then close the issue by hand with one line saying what was checked. Ask the reporter to confirm if it was a P0 or P1.
 5. **Weekly review** (about 15 minutes): see "Weekly check".
 
 ## Labels
