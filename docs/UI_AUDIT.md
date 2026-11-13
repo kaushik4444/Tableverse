@@ -6,7 +6,7 @@ Status of the Phase 4 layout audit, as of `development` at `fe1cab2` (PR #144 me
 
 | Check | Command | Scope | Result |
 | --- | --- | --- | --- |
-| Table game layout audit | `node tests/ui/game-audit.js` | 18 game setups (games at their seat counts), six sizes (320×568, 360×640, 390×844, 667×375, 768×1024, 1280×800), four moments each (start, early, late, over) | 0 errors, 160 warnings (see below) |
+| Table game layout audit | `node tests/ui/game-audit.js` | 21 game setups (games at their seat counts; Ludo at 2, 4 and 6 players was added in this pass), six sizes (320×568, 360×640, 390×844, 667×375, 768×1024, 1280×800), four moments each (start, early, late, over) | 0 errors, 172 warnings (see below) |
 | Trump indicator regression (29) | `node tests/ui/twentynine-trump-ui.js` | 29 bidding, bidder's turn, choosing trump, and hidden / secret / revealed trump, six sizes | 35 passed, 0 failed, 1 exempt case |
 | Phone fit (360×640) | `node tests/ui/mobile-fit.js` | 10 games, your-turn controls kept on screen | 15 passed, 0 failed |
 | Wizard layout | `node tests/ui/wizard-layout.js` | Wizard, 29, poker and the others, six sizes | all viewports ok (one flaky page-load on tic-tac-toe in an earlier run; passed on re-run) |
@@ -20,9 +20,10 @@ Warnings are not failures. The table below groups them and says whether each is 
 | Warning | Where | Status |
 | --- | --- | --- |
 | Hand ends below the screen | Wizard 3 players and 29 at 320×568 (hand ends at 652 of 568) | Known limit. Short screens (SE-class) cannot fit the table, hand and buttons together without changing the game layout. Not changed in this pass. |
-| Main button needs scrolling | Landscape 667×375 (roll, ask, ready) and 320×568 (Ready) | Expected on landscape and very short screens. Buttons are reachable by scrolling. |
+| Main button needs scrolling | Landscape 667×375 (roll, ask, ready), 320×568 (Ready) and Ludo's Roll dice at 320×568 | Expected on landscape and very short screens. Buttons are reachable by scrolling. |
 | Bid button below the fold | Wizard 3 players at 320×568 and 667×375 | Same short-screen limit as above. |
 | Open property cards under 30px | Property Rivals at 1280×800 (desktop, mouse) | Measured at 1280×800 with touch disabled in the emulation. That does not show the controls are unusable by touch: a tablet or touchscreen laptop can use this width. Touch coverage here is unverified. To fix later if this width needs touch use. |
+| Ludo token tap targets | Ludo at 320×568 (late game): token move targets are about 8–10px | Not changed. Tokens are board pieces; enlarging them changes the play area and needs owner approval. Touch use on the smallest phone is limited until then. |
 | Clipped sr-only text | 29 at phone sizes | False positive. The screen-reader text is clipped on purpose. The audit now skips `.sr-only` (this pass). |
 
 ## Fixed in this pass
