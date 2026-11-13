@@ -183,7 +183,7 @@ The application-level safeguards and remaining launch requirements are tracked i
 ```bash
 npm start            # http://localhost:3000 (in-memory store without DATABASE_URL)
 npm run dev          # local development: loads .env.local, local database only (see docs/LOCAL_DEVELOPMENT.md)
-npm run dev:seed -- --email me@local.test --username me --owner   # create a local test account (+ admin)
+npm run dev:seed -- --email me@local.test --username localme --owner   # create a local test account (+ admin)
 npm run build        # syntax-checks server, client, libraries and tests
 npm test             # all suites (PostgreSQL suites skip without TEST_DATABASE_URL)
 npm run test:ui      # Playwright layout/behaviour tests (skips when Playwright is missing)

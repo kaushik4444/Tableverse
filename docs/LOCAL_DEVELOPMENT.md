@@ -38,7 +38,7 @@ matches the command above.
 ## Create a test account (and a local admin)
 
 ```bash
-npm run dev:seed -- --email me@local.test --username me --owner
+npm run dev:seed -- --email me@local.test --username localme --owner
 ```
 
 It runs the database migrations, creates a verified account and prints a **generated password once**:
@@ -46,7 +46,7 @@ It runs the database migrations, creates a verified account and prints a **gener
 ```
 Created local test account
   e-mail:    me@local.test
-  username:  me
+  username:  localme
   role:      owner
   password:  Kf7!qWm2#zPb9-Xr4Tc_   (shown once; it is not stored anywhere readable)
 ```
@@ -64,8 +64,9 @@ npm run dev
 
 Open <http://localhost:3000>, choose **Log in**, and use the e-mail and password from the seed command.
 
-`npm run dev` loads `.env.local`, makes e-mail verification optional, and starts the server. Use it instead of `npm start`:
-`npm start` does not read `.env.local`.
+`npm run dev` loads `.env.local`, checks the database, makes e-mail verification optional, and starts the server with only that
+checked environment. Use it for local work. `npm start` outside production also reads `.env.local` (and `.env`) without those
+checks, so prefer `npm run dev`. In production (`NODE_ENV=production`) no file is read at all.
 
 ## Open the admin console locally
 
