@@ -1,4 +1,7 @@
 'use strict';
+// The server never reads a .env file itself. `npm run dev` loads .env.local with its database checks and passes only that
+// checked environment on; production never reads a file. (Ops scripts that use db/pool keep their existing .env behaviour.)
+process.env.TABLEVERSE_SKIP_DOTENV = '1';
 const http = require('http');
 const fs = require('fs');
 const path = require('path');

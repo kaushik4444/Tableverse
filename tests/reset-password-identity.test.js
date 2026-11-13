@@ -15,7 +15,7 @@ async function test(name, fn) {
 const original = { hasDatabase: db.hasDatabase, withTransaction: db.withTransaction };
 
 /** Runs resetPassword against a scripted client. identityRowCount is what the identity UPDATE reports. */
-async function runReset(identityRowCount) {
+async function runReset(identityRowCount, { ownerName = null, newPassword = 'NewPass123!', email = 'user@example.test' } = {}) {
   const statements = [];
   const outcome = { committed: false, rolledBack: false };
   db.hasDatabase = () => true;
@@ -25,7 +25,8 @@ async function runReset(identityRowCount) {
         const head = sql.trim().split(/\s+/).slice(0, 2).join(' ');
         statements.push(head);
         if (/SELECT player_id FROM auth_email_tokens/.test(sql)) return { rows: [{ player_id: 'player-1' }], rowCount: 1 };
-        if (/UPDATE auth_email_tokens/.test(sql)) return { rows: [{ player_id: 'player-1', email: 'user@example.test' }], rowCount: 1 };
+        if (/UPDATE auth_email_tokens/.test(sql)) return { rows: [{ player_id: 'player-1', email }], rowCount: 1 };
+        if (/SELECT username FROM players/.test(sql)) return { rows: ownerName ? [{ username: ownerName }] : [], rowCount: ownerName ? 1 : 0 };
         if (/UPDATE auth_identities/.test(sql)) return { rows: [], rowCount: identityRowCount };
         return { rows: [], rowCount: 1 };
       },
@@ -40,7 +41,7 @@ async function runReset(identityRowCount) {
     }
   };
   try {
-    const result = await dbAuth.resetPassword({ token: 'a-reset-token-for-tests', newPassword: 'NewPass123!' });
+    const result = await dbAuth.resetPassword({ token: 'a-reset-token-for-tests', newPassword });
     return { result, statements, outcome };
   } catch (err) {
     return { error: err, statements, outcome };
@@ -49,6 +50,28 @@ async function runReset(identityRowCount) {
 
 (async () => {
   console.log('password reset identity check');
+
+  await test('a reset to a password that contains the account username is refused, and the token stays unused', async () => {
+    const run = await runReset(1, { ownerName: 'sunshine99', newPassword: 'Sunshine99!ok' });
+    assert.ok(run.error, 'resetPassword must fail');
+    assert.equal(run.error.status, 400);
+    assert.match(run.error.message, /username/);
+    assert.equal(run.outcome.rolledBack, true, 'the token update is rolled back with it');
+    assert.equal(run.statements.includes('UPDATE auth_identities'), false, 'the password is never written');
+  });
+
+  await test('a reset to a password that contains the first part of the e-mail address is refused', async () => {
+    const run = await runReset(1, { ownerName: 'carol', newPassword: 'Zx-user-7Aqrtv', email: 'user@example.test' });
+    assert.ok(run.error, 'resetPassword must fail');
+    assert.match(run.error.message, /e-mail/);
+    assert.equal(run.statements.includes('UPDATE auth_identities'), false);
+  });
+
+  await test('a reset that does not contain the username or e-mail name goes through', async () => {
+    const run = await runReset(1, { ownerName: 'carol', newPassword: 'Blue Tractor 42' });
+    assert.equal(run.error, undefined);
+    assert.equal(run.outcome.committed, true);
+  });
 
   await test('an identity row that did not change rejects the reset and rolls everything back', async () => {
     const run = await runReset(0);

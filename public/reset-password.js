@@ -65,11 +65,18 @@
   show(formSection);
   $('resetTitle').focus();
 
+  resetPassword.addEventListener('input', () => {
+    const need = globalThis.TvPassword ? globalThis.TvPassword.missing(resetPassword.value) : [];
+    const note = document.getElementById('resetNeeds');
+    if (note) note.textContent = resetPassword.value && need.length ? `Still needed: ${need.join(', ')}.` : '';
+  });
+
   resetForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     resetMsg.hidden = false;
     const password = resetPassword.value;
-    if (password.length < 8) { resetMsg.textContent = 'Use at least 8 characters.'; return; }
+    const weak = globalThis.TvPassword ? globalThis.TvPassword.check(password) : (password.length < 10 ? 'Use at least 10 characters.' : null);
+    if (weak) { resetMsg.textContent = weak; return; }
     if (password !== resetConfirm.value) { resetMsg.textContent = 'The two passwords do not match.'; return; }
     resetSubmit.disabled = true;
     resetMsg.textContent = 'Updating…';

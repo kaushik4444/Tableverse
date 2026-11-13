@@ -442,7 +442,8 @@
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
           ${authPolicyHintHTML()}
-          <input id="registerPassword" type="password" required minlength="8" placeholder="Password (8+ characters)" autocomplete="new-password">
+          <input id="registerPassword" type="password" required minlength="10" placeholder="Password (10+ characters)" autocomplete="new-password" aria-describedby="registerPwHint">
+          <small id="registerPwHint" class="hint" aria-live="polite">Use an uppercase letter, a lowercase letter, a number and a symbol.</small>
           <label class="auth-check"><input id="registerAdult" type="checkbox" required> I am 18 or older.</label>
           <button class="btn big" type="submit">Create account</button>
         </form>
@@ -454,11 +455,27 @@
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');
     if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
     if (!loginOn) {
+      // The hint is wired once, when the sheet opens, so it follows the password, the e-mail and the username in any order.
+      // It uses the same check as the server (public/password-policy.js), so it cannot say "Looks good." for a refused password.
+      const pwInput = document.getElementById('registerPassword');
+      const pwHint = document.getElementById('registerPwHint');
+      const emailInput = document.getElementById('registerEmail');
       const u = document.getElementById('registerUsername');
+      const trimmed = (el) => String((el && el.value) || '').trim().toLowerCase();
+      const updateHint = () => {
+        if (!pwInput || !pwHint || !window.TvPassword) return;
+        const h = window.TvPassword.hint(pwInput.value, { email: trimmed(emailInput), username: trimmed(u) });
+        pwHint.classList.toggle('bad', h.bad);
+        pwHint.textContent = h.text;
+      };
+      if (pwInput) pwInput.addEventListener('input', updateHint);
+      if (emailInput) emailInput.addEventListener('input', updateHint);
+      updateHint();
       if (u) u.addEventListener('input', async () => {
-        const hint = document.getElementById('registerUsernameHint');
-        const value = String(u.value || '').trim().toLowerCase();
+        const value = trimmed(u);
         u.value = value;
+        updateHint();
+        const hint = document.getElementById('registerUsernameHint');
         if (!hint) return;
         if (!value) { hint.textContent = ''; return; }
         if (!/^[a-z0-9_]{3,24}$/.test(value)) { hint.textContent = 'Use 3-24 chars: lowercase letters, numbers, underscore.'; return; }
@@ -1121,6 +1138,9 @@
       const email = (document.getElementById('registerEmail') || {}).value;
       const password = (document.getElementById('registerPassword') || {}).value;
       const adultConfirmed = Boolean((document.getElementById('registerAdult') || {}).checked);
+      // check the password here first, so a weak one is explained without the sheet being rebuilt and the fields emptied
+      const weakPw = window.TvPassword && window.TvPassword.check(password, { email: String(email || '').trim().toLowerCase(), username });
+      if (weakPw) { const hint = document.getElementById('registerPwHint'); if (hint) { hint.textContent = weakPw; hint.classList.add('bad'); } const pwEl = document.getElementById('registerPassword'); if (pwEl) pwEl.focus(); return; }
       try {
         await doRegister(name, username, email, password, adultConfirmed);
       } catch (err) {
@@ -1167,7 +1187,7 @@
   if (location.pathname.endsWith('/reset-password.html') && verifyToken) {
     // a real form (hidden password field, confirmation) instead of window.prompt, which shows the password in plain text
     loadSnapshot();
-    openModal('Choose a new password', `<form id="resetForm" class="auth-form"><input id="resetPw" type="password" minlength="8" required placeholder="New password (8+ characters)" autocomplete="new-password"><input id="resetPw2" type="password" minlength="8" required placeholder="Repeat the password" autocomplete="new-password"><p id="resetMsg" class="auth-msg" role="status" hidden></p><button class="btn big" type="submit">Update password</button></form>`, (o) => {
+    openModal('Choose a new password', `<form id="resetForm" class="auth-form"><input id="resetPw" type="password" minlength="10" required placeholder="New password (10+ characters)" autocomplete="new-password"><input id="resetPw2" type="password" minlength="8" required placeholder="Repeat the password" autocomplete="new-password"><p id="resetMsg" class="auth-msg" role="status" hidden></p><button class="btn big" type="submit">Update password</button></form>`, (o) => {
       o.querySelector('#resetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = o.querySelector('#resetMsg');
