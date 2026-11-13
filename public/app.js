@@ -1378,7 +1378,13 @@
     // While loading, the body has no buttons, so keep keyboard focus in the dialog on its Close control.
     if (loading) { const x = document.querySelector('#modal-overlay [data-modal-close][aria-label="Close"]'); if (x) x.focus(); }
     if (loading) {
-      const done = () => { if (S.card && S.card.pid === pid) { S.card.loading = false; drawCard(); } };
+      // Redraw only into this card's own dialog: if it was closed (or replaced by another dialog) while loading, leave it alone.
+      const done = () => {
+        if (!S.card || S.card.pid !== pid) return;
+        S.card.loading = false;
+        const body = document.querySelector('#modal-overlay .modal-body');
+        if (body && body.dataset.card === pid) drawCard();
+      };
       getJson(`/api/players/${encodeURIComponent(person.username)}`)
         .then((d) => { if (S.card && S.card.pid === pid) S.card.profile = d.profile; })
         .catch(() => { /* the card works without the numbers */ })
@@ -1840,7 +1846,10 @@
       const p = S.card && S.card.last;
       if (!p || !p.username) return;
       if (!S.room) { closeModal(); openPage('player', p.username); return; }
-      openModal('Leave game', `<p class="hint">Open ${esc(p.name)}’s profile? This leaves the game: a bot takes your seat, and you can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
+      // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
+      const seatedInGame = S.room.status === 'playing' && !isSpectator();
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' : 'This leaves the table.';
+      openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
     },
     cardProfileConfirm: () => {
       const p = S.card && S.card.last;
