@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * `npm run dev:seed -- --email me@local.test --username me [--owner] [--reset-password] [--name "My Name"]`
+ * `npm run dev:seed -- --email me@local.test --username localme [--owner] [--reset-password] [--name "My Name"]`
  * Creates a verified local test account with a generated password (printed once) and optionally makes it the local owner
  * (admin console). Runs the migrations first. Local PostgreSQL only; see docs/LOCAL_DEVELOPMENT.md.
  */
@@ -20,9 +20,10 @@ const val = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : un
     for (const [k, v] of Object.entries(file)) if (env[k] === undefined) env[k] = v;
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   Object.assign(process.env, env); // db/pool reads DATABASE_URL from process.env
+  process.env.TABLEVERSE_SKIP_DOTENV = '1'; // db/pool must not read a .env file: only the environment checked below is used
   assertSafeDevEnv(process.env); // before anything connects
   if (flag('--help') || !val('--email') || !val('--username')) {
-    console.log('usage: npm run dev:seed -- --email me@local.test --username me [--owner] [--reset-password] [--name "My Name"]');
+    console.log('usage: npm run dev:seed -- --email me@local.test --username localme [--owner] [--reset-password] [--name "My Name"]');
     process.exit(flag('--help') ? 0 : 2);
   }
   const db = require('../db/pool');

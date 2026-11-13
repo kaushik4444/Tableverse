@@ -20,6 +20,8 @@ try {
 } catch (e) { if (e.code !== 'ENOENT') { console.error('Could not read .env.local:', e.message); process.exit(1); } }
 for (const [k, v] of Object.entries(devDefaults(env))) if (env[k] === undefined || env[k] === '') env[k] = v;
 env.NODE_ENV = env.NODE_ENV || 'development';
+// the server must use only the environment checked above, never read a .env file itself (db/pool.js)
+env.TABLEVERSE_SKIP_DOTENV = '1';
 
 try {
   const url = assertSafeDevEnv(env);

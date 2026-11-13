@@ -44,4 +44,12 @@ test('e-mail verification is optional locally unless set, and an explicit value 
   assert.deepEqual(devDefaults({}), { REQUIRE_EMAIL_VERIFICATION: 'false' });
   assert.deepEqual(devDefaults({ REQUIRE_EMAIL_VERIFICATION: 'true' }), { REQUIRE_EMAIL_VERIFICATION: 'true' });
 });
+test('a host or hostaddr query parameter is refused: it would override the host the check sees', () => {
+  refused({ DATABASE_URL: 'postgres://u:p@localhost/db?host=ep-x.eu-central-1.aws.neon.tech' }, /host or hostaddr/);
+  refused({ DATABASE_URL: 'postgres://u:p@127.0.0.1/db?hostaddr=203.0.113.9' }, /host or hostaddr/);
+  refused({ DATABASE_URL: 'postgres://u:p@localhost/db?host=/var/run/postgresql' }, /host or hostaddr/);
+});
+test('several hosts in one URL are refused, so only the one checked host can be used', () => {
+  assert.throws(() => assertSafeDevEnv({ DATABASE_URL: 'postgres://u:p@localhost:5432,ep-x.eu-central-1.aws.neon.tech:5432/db' }), DevEnvError);
+});
 console.log(`${passed} local development tests passed`);
