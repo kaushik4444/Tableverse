@@ -46,6 +46,9 @@ function messagesFor(g) {
 // Every phase in which the 29 trump is relevant. The first state is bidding (no trump yet); the others come from play.
 const STATES = [
   { label: 'bidding', done: (v) => v.phase === 'bidding' },
+  // On your own bid on a short phone the status line gives way to the bid panel (game-ux.css). No trump is set during bidding (the
+  // indicator would only read "–"), and a bid box copy would push the cards below the fold, so the bidder's short-phone view is exempt.
+  { label: 'bidding, your bid', done: (v) => v.phase === 'bidding' && v.myTurn, skipOn: (vp) => vp.width <= 520 && vp.height <= 700 },
   { label: 'choosing trump', done: (v) => v.phase === 'chooseTrump' },
   { label: 'playing', done: (v) => v.phase === 'playing' && v.trumpSuit },
 ];
@@ -58,20 +61,25 @@ const STATES = [
       const g = playTo('twentynine', st.done);
       if (!st.done(g.view('me'), g)) { await test(`reaches the ${st.label} phase`, async () => { throw new Error('the engine did not reach ' + st.label); }); continue; }
       for (const vp of VIEWPORTS) {
+        if (st.skipOn && st.skipOn(vp)) { console.log(`  skip  ${st.label}: the Trump indicator is on screen at ${vp.name} (exempt, see the note on the state)`); continue; }
         await test(`${st.label}: the Trump indicator is on screen at ${vp.name}`, async () => {
           const { page, ctx } = await scriptedPage(browser, { viewport: { width: vp.width, height: vp.height }, messages: messagesFor(g) });
           try {
             await page.goto(url + '/');
             await page.waitForSelector('.wz-top', { timeout: 8000 });
-            // One indicator is shown at any width: the header copy (.wz-trump) or, on phones, the score-strip copy (.t29-mini-trump).
-            const shown = await page.evaluate(() => [...document.querySelectorAll('.wz-trump, .t29-mini-trump')]
+            // Every Trump copy: the header (.wz-trump), the score-strip or bid-box copy on phones (.t29-mini-trump) and the table corner (.t29-corner-trump).
+            const shown = await page.evaluate(() => [...document.querySelectorAll('.wz-trump, .t29-mini-trump, .t29-corner-trump')]
               .filter((e) => e.getClientRects().length && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden')
               .map((e) => ({ box: e.getBoundingClientRect().toJSON(), text: e.innerText })));
-            assert.equal(shown.length, 1, `exactly one Trump indicator is shown (found ${shown.length})`);
-            const [{ box, text }] = shown;
-            assert.ok(box.width > 0 && box.height > 0, 'the Trump indicator has a size');
-            assert.ok(box.x >= 0 && box.x + box.width <= vp.width + 1, `the Trump indicator leaves the screen (${Math.round(box.x)}..${Math.round(box.x + box.width)} of ${vp.width})`);
-            assert.match(text, /trump/i, 'the indicator names the trump; it shows ' + JSON.stringify(text)); // rendered text is upper-cased by CSS
+            // Phones show exactly one copy (no duplicate); wider screens keep the header and corner copies, so there only one is required.
+            if (vp.width <= 520) assert.equal(shown.length, 1, `exactly one Trump indicator is shown on a phone (found ${shown.length})`);
+            else assert.ok(shown.length >= 1, 'a Trump indicator is shown');
+            for (const { box, text } of shown) {
+              assert.ok(box.width > 0 && box.height > 0, 'the Trump indicator has a size');
+              assert.ok(box.x >= 0 && box.x + box.width <= vp.width + 1, `the Trump indicator leaves the screen sideways (${Math.round(box.x)}..${Math.round(box.x + box.width)} of ${vp.width})`);
+              assert.ok(box.y >= 0 && box.y + box.height <= vp.height + 1, `the Trump indicator is below the fold (y ${Math.round(box.y)}..${Math.round(box.y + box.height)} of ${vp.height})`);
+              assert.match(text, /trump/i, 'the indicator names the trump; it shows ' + JSON.stringify(text)); // rendered text is upper-cased by CSS
+            }
           } finally { await ctx.close(); }
         });
       }

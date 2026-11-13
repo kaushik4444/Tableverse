@@ -100,7 +100,8 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .tm-status, .wz-status { padding-block: 6px; }
   /* your turn to bid or bet: the panel already says what to do, so its status line and the bet-size chips give way */
   .wz-status:has(+ .bidbox), .wz-status:has(+ .pk-raise) { display: none; }
-  .bidbox .t29-mini-trump { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; } /* 29 chooser: the trump shows here while the status line is hidden */
+  .bidbox .t29-mini-trump { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+  .bidbox .t29-hint { display: none; } /* the buttons already show only the suits you hold; keeps the label on one line with the trump */ /* 29 chooser: the trump shows here while the status line is hidden */
   .pk-sizes { display: none; }
   .bidbox { padding: 8px 10px; gap: 6px; }
   .wz { gap: 4px; }

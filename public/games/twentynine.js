@@ -18,7 +18,7 @@
     const pts = c.pts ? `<span class="cpts" title="${c.pts} point${c.pts > 1 ? 's' : ''}">${c.pts}</span>` : '';
     return `<${tag} class="card ${s.cls} ${cls}" aria-label="${esc(c.rank + ' of ' + s.name)}${c.pts ? ', ' + c.pts + ' points' : ''}" ${attrs}><span class="rk">${esc(c.rank)}<i>${s.sym}</i></span><span class="pip">${s.sym}</span>${pts}<span class="rk br">${esc(c.rank)}<i>${s.sym}</i></span></${tag}>`;
   }
-  const suitPill = (s) => `<span class="pill ${SUITS[s].cls}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</span>`;
+  const suitPill = (s) =>`<span class="pill ${SUITS[s].cls}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</span>`;
   const teamOf = (i) => i % 2;
   // Spectators have no seat (me = -1): treat Team A as "us".
   const myTeam = (v) => (v.me >= 0 ? teamOf(v.me) : 0);
@@ -80,7 +80,7 @@
 
   // The trump as a compact strip item, shown on phones only (CSS). The header copy is hidden there so the hand keeps its place.
   function miniTrumpHTML(v) {
-    if (v.trumpSuit) return `<span class="label">Trump</span><b class="${SUITS[v.trumpSuit].cls}">${SUITS[v.trumpSuit].sym}</b>${v.trumpRevealed ? '' : '<small>🔒</small>'}`;
+    if (v.trumpSuit) return `<span class="label">Trump</span><span class="pill ${SUITS[v.trumpSuit].cls}"><b>${SUITS[v.trumpSuit].sym}</b></span>${v.trumpRevealed ? '' : '<small>🔒</small>'}`;
     if (v.trumpSet) return '<span class="label">Trump</span><b>🔒</b>';
     return '<span class="label">Trump</span><b>–</b>';
   }
@@ -106,8 +106,9 @@
 
   function cornerHTML(v) {
     let h;
-    if (v.trumpSuit) h = `Trump${v.trumpRevealed ? '' : ' (secret)'}<br>${suitPill(v.trumpSuit)}`;
-    else if (v.trumpSet) h = 'Trump<br><b>🔒 hidden</b>';
+    // The trump part is its own span: on phones the strip or bid box shows the trump, so the corner keeps only the bid (table.css).
+    if (v.trumpSuit) h = `<span class="t29-corner-trump">Trump${v.trumpRevealed ? '' : ' (secret)'}<br>${suitPill(v.trumpSuit)}</span>`;
+    else if (v.trumpSet) h = '<span class="t29-corner-trump">Trump<br><b>🔒 hidden</b></span>';
     else h = v.phase === 'bidding' ? 'Bidding…' : 'Choosing trump…';
     if (v.highBidder >= 0 && v.phase !== 'bidding') h += `<br>Bid <b>${v.highBid}</b> · ${esc(v.players[v.highBidder].name)}`;
     return `<div class="cap">${h}</div>`;
@@ -142,7 +143,7 @@
     if (v.phase === 'chooseTrump' && v.myTurn) {
       const mine = [...new Set(v.hand.map((c) => c.suit))];
       // The status line is hidden while this box follows it (game-ux.css), so the phone copy of the trump indicator goes here.
-      return `<div class="bidbox"><div class="t29-mini-trump">${miniTrumpHTML(v)}</div><div class="label">Choose trump (only suits you hold)</div><div class="bidgrid">${mine
+      return `<div class="bidbox"><div class="label"><span class="t29-mini-trump">${miniTrumpHTML(v)}</span> Choose trump<span class="t29-hint"> (only suits you hold)</span></div><div class="bidgrid">${mine
         .map((s) => `<button class="suitbtn ${SUITS[s].cls}" data-t9="trump" data-s="${s}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</button>`)
         .join('')}</div></div>`;
     }
