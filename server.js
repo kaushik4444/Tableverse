@@ -8,6 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { createCloseCounter } = require('./lib/closeCounter');
+const { seatPlayers } = require('./lib/seatOrder');
 const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
@@ -1493,8 +1494,10 @@ function start(opts = {}) {
       if (!room) return;
       const def = games.get(room.gameId);
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
+      // Players sit in the order they joined, unless the host turned on the game's shuffle option.
+      const offered = def.options.some((o) => o.key === 'shuffleSeats');
       room.game = def.create(
-        room.members.map((m) => ({ id: m.id, name: m.name })),
+        seatPlayers(room.members, { shuffle: Boolean(room.options && room.options.shuffleSeats), offered }),
         room.options,
         Math.random
       );
