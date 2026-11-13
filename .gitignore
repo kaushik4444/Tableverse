@@ -13,3 +13,22 @@ backups/
 *.dump
 *.dump.partial
 *.dump.sha256
+
+# Other environment files, keys, certificates and credential files (the .example templates stay tracked)
+.env.*
+!.env.example
+!.env.local.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+credentials.json
+.npmrc
+
+# Hand-made or copied backups and dumps
+*.bak
+*.backup
+backup*.sql
+*-dump.sql
+db-dump*
