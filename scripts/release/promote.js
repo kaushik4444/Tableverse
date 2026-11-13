@@ -21,6 +21,13 @@ const RELEASE_HOUR = 2; // 02:00 Europe/Berlin
 const REQUIRED_RULE_TYPES = ['required_status_checks', 'pull_request', 'non_fast_forward', 'deletion', 'copilot_code_review'];
 const GOOD_CONCLUSIONS = new Set(['success', 'skipped', 'neutral']);
 
+/** The calendar date (YYYY-MM-DD) in Europe/Berlin at the given instant. */
+function berlinDate(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const get = (t) => parts.find((p) => p.type === t).value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
 /** The hour (0-23) in Europe/Berlin at the given instant. */
 function berlinHour(date) {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', hourCycle: 'h23' }).formatToParts(date);
@@ -92,8 +99,9 @@ async function checkHealth(baseUrl, fetchFn, { attempts = 10, intervalMs = 30000
   let last = 'no check ran';
   for (let i = 0; i < attempts; i += 1) {
     try {
-      const live = await fetchFn(`${baseUrl}/healthz`);
-      const ready = await fetchFn(`${baseUrl}/readyz`);
+      const deadline = () => AbortSignal.timeout(10000); // covers the response body too
+      const live = await fetchFn(`${baseUrl}/healthz`, { signal: deadline() });
+      const ready = await fetchFn(`${baseUrl}/readyz`, { signal: deadline() });
       const readyBody = (await ready.text()).trim();
       const ok = live.status === 200 && ready.status === 200 && readyBody.startsWith('ready');
       last = `healthz ${live.status}, readyz ${ready.status} "${readyBody.slice(0, 20)}"`;
@@ -159,7 +167,13 @@ function latestRuns(runs) {
 
 async function prState(client, owner, name, number) {
   const pr = (await client.call('GET', `/pulls/${number}`)).data;
-  const runs = latestRuns((await client.call('GET', `/commits/${pr.head.sha}/check-runs?per_page=100`)).data.check_runs);
+  const all = [];
+  for (let page = 1; ; page += 1) {
+    const got = (await client.call('GET', `/commits/${pr.head.sha}/check-runs?per_page=100&page=${page}`)).data;
+    all.push(...got.check_runs);
+    if (got.check_runs.length < 100 || all.length >= got.total_count) break; // a short page is the last one
+  }
+  const runs = latestRuns(all);
   const checks = runs.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion }));
   const copilot = runs.find((r) => r.name === COPILOT_CHECK);
   const threadsData = (await client.graphql(
@@ -176,6 +190,7 @@ async function prState(client, owner, name, number) {
 async function main({ env = process.env, fetchFn = fetch, now = new Date(), git = { mergeTreeOf, gitOutput }, sleep } = {}) {
   const repo = env.GITHUB_REPOSITORY;
   const dryRun = env.DRY_RUN === 'true';
+  const today = berlinDate(now);
   // squash is the default. 'merge' keeps development's history in main; see docs/RELEASES.md "Squash history".
   const mergeMethod = env.RELEASE_MERGE_METHOD === 'merge' ? 'merge' : 'squash';
   const scheduled = env.GITHUB_EVENT_NAME === 'schedule';
@@ -189,6 +204,11 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   const devSha = git.gitOutput(['rev-parse', 'origin/development']);
   const mainSha = git.gitOutput(['rev-parse', 'origin/main']);
   const mergeTree = git.mergeTreeOf('origin/main', 'origin/development');
+  const done = (await client.call('GET', `/git/matching-refs/tags/release-${today}-`)).data;
+  if (done.length > 0) {
+    say(`Skipped: today's release already happened (${done.map((t) => t.ref.replace('refs/tags/', '')).join(', ')}). One release per Berlin day.`);
+    return finish('skip', summary, { action: 'skip', reasons: [] });
+  }
   const g = await gather(client, { repo, git });
   const base = { frozen: env.RELEASE_FREEZE === 'true', scheduled, berlinHour: berlinHour(now), devTree, mainTree, mergeTree, openPrs: g.openPrs, rules: g.rules, pr: null };
 
@@ -229,9 +249,19 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
     say(`DRY RUN: all gates pass on PR #${prNumber}; would ${mergeMethod} ${fresh.head_sha.slice(0, 7)}.`);
     return finish('dry-run', summary, decision);
   }
+  if (!env.PRODUCTION_URL) {
+    say('Blocked: the PRODUCTION_URL repository variable is not set, so the health check has no target. Nothing was merged.');
+    return finish('block', summary, decision);
+  }
   const merged = (await client.call('PUT', `/pulls/${prNumber}/merge`, { merge_method: mergeMethod, sha: fresh.head_sha, commit_title: 'Daily release: development to main' })).data;
   say(`Merged PR #${prNumber} as ${merged.sha.slice(0, 7)}.`);
-  const tag = `release-${now.toISOString().slice(0, 10)}-${merged.sha.slice(0, 7)}`;
+  const tag = `release-${today}-${merged.sha.slice(0, 7)}`;
+  const mergedTree = (await client.call('GET', `/git/commits/${merged.sha}`)).data.tree.sha;
+  if (mergedTree !== devTree) {
+    say(`RELEASE MISMATCH: main is now ${merged.sha.slice(0, 7)}, whose tree differs from the checked development tree. Something else changed main during the run. Investigate before the next release (docs/RELEASES.md).`);
+    log(`::error::Release ${merged.sha.slice(0, 7)} does not match the checked development tree`);
+    return finish('mismatch', summary, decision, 1);
+  }
   await client.call('POST', '/git/refs', { ref: `refs/tags/${tag}`, sha: merged.sha });
   say(`Tagged ${tag}.`);
   const health = await checkHealth(env.PRODUCTION_URL, fetchFn, sleep ? { sleep } : {});
