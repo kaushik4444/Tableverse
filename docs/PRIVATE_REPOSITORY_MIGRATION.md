@@ -17,12 +17,12 @@ site keeps running. What can break is everything that *reads the repository afte
 | Area | Expected effect | Risk |
 |---|---|---|
 | Running production site | None | none |
-| Render auto-deploy from `main` | Should continue, **if** the Render GitHub app can see the repository; Render documents that a repo that changes from public to private can leave the connection misconfigured | **Medium: test it (section 6)** |
+| Render auto-deploy from `main` | Should continue, **if** the Render GitHub app can see the repository; Render documents that a repo that changes from public to private can leave the connection misconfigured | **Medium: test it (section 5.3, items 2–4)** |
 | GitHub Actions (CI) | Keeps working, but private repositories use the plan's included compute allowance instead of being free | **Medium: cost and quota** |
 | Required checks and branch rulesets | **Rulesets are available for private repositories only on GitHub Pro, Team or Enterprise Cloud**; on GitHub Free they stop being enforced | **High if the owner is on GitHub Free** |
 | Copilot code review (requested automatically by both rulesets) | Needs a Copilot plan that covers private repositories; without it, review coverage is lost (it does not by itself block merges) | **Owner must check** |
 | Claude Code (this agent) | Needs authorized access to the private repository | Low if the GitHub connection is authorized |
-| Public forks, Pages, public links | None found for forks and Pages; the application has no GitHub links, but the issue template and beta guide do (section 2.3) | Low; **check the tester access route** |
+| Public forks, Pages, public links | No forks or Pages found; 1 star (lost on privatization); the application has no GitHub links, but the issue template and beta guide do (section 2.3) | Low; **check the tester access route** |
 | Already-published history | Stays exposed (see section 4) | Informational |
 
 ## 2. What was checked
@@ -134,7 +134,7 @@ private stops new access but cannot recall copies. Before the change:
 ### 5.2 The change (owner, by hand)
 
 GitHub → repository → Settings → General → Danger Zone → **Change repository visibility** → **Make private**, then confirm.
-(GitHub warns that forks, stars, watchers and Pages are affected; there are none here.)
+(GitHub warns that forks, stars, watchers and Pages are affected. When checked, the repository had no forks and no Pages, but it had **1 star** (GitHub API `stargazers_count`), which is lost when the repository is made private. Recheck stars and watchers before confirming.)
 
 ### 5.3 After changing visibility (owner, in this order)
 
@@ -145,13 +145,11 @@ GitHub → repository → Settings → General → Danger Zone → **Change repo
       start `npm start`, health check `/healthz` passing, deploy "Live". If it fails to fetch the repository: Render → Settings →
       Build & Deploy → re-select the Git credentials/repository (Render's documented fix).
 4. [ ] **Auto-deploy**: after the next merge to `main`, a new deploy starts by itself within a minute or two.
-5. [ ] **Production check** (no login needed): open `https://<your-service>/healthz` (body `ok`) and `/readyz` (body starts with `ready`; both return HTTP 200 when healthy), the home page loads, a guest can create
-      a table, and a registered player can sign in. (Cookie and database behaviour are unchanged by repository visibility.)
+5. [ ] **Production check**: open `https://<your-service>/healthz` (body `ok`) and `/readyz` (body starts with `ready`; both return HTTP 200 when healthy) and load the home page. Then sign in with a verified account and create a table: table creation requires a session and, when email verification is enabled, a verified account. A signed-out visitor cannot create a table, so do not use a guest for this check, and a registered player must be able to sign in. (Cookie and database behaviour are unchanged by repository visibility.)
 6. [ ] **CI**: open a pull request (a docs-only change is enough). All five required checks appear and pass; Copilot review runs.
 7. [ ] **Rulesets**: Settings → Rules shows `Protect-Main` and `Protect-Development` as **Active** (not "not enforced"). Try the
       protection: a direct push to `main` is refused.
-8. [ ] **Actions usage**: Settings → Billing → Usage shows the included allowance being consumed; set a spending limit of $0 if you
-      do not want to be billed beyond it.
+8. [ ] **Actions usage**: Settings → Billing → Usage shows the included allowance being consumed. To stop extra billing, create an Actions-scoped budget of $0 with **"Stop usage when budget limit is reached"** enabled. Without that setting, exceeding the budget only sends alerts and usage continues.
 9. [ ] **Scheduled cleanup dry-run**: Actions → "Unverified account cleanup" → run workflow (dry-run). It still finds
       `CLEANUP_DRYRUN_DATABASE_URL` and reports a count. (Never run the execute job as a test.)
 10. [ ] **Claude Code and Copilot**: a new pull request receives a Copilot review; Claude Code can fetch and push a branch.
