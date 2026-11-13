@@ -8,6 +8,7 @@ const path = require('node:path');
 const WebSocket = require('ws');
 const { visibilityForNewTable } = require('../lib/roomAccess');
 const { start } = require('../server');
+const { registerAndVerify, sessionSocket } = require('./helpers/auth');
 
 let passed = 0;
 const done = (name) => { passed += 1; console.log('  ok  ' + name); };
@@ -42,14 +43,17 @@ done('the Create table button asks for a public table');
 
 // 3. Over the socket: what the server stores, and what another player sees in the open-tables list
 async function guest(port, name) {
-  const c = { msgs: [], room: null, tables: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`) };
+  // Without PostgreSQL this is an anonymous player with a session token, presented the way a browser does (ct_session cookie).
+  const { token } = await registerAndVerify(port, { displayName: name, username: name });
+  const c = { msgs: [], room: null, tables: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (message) => c.ws.send(JSON.stringify(message));
   c.wait = (predicate, label) => until(() => predicate(c), label);
   c.ws.on('message', (raw) => {
     const message = JSON.parse(raw);
     c.msgs.push(message);
     if (message.t === 'state') c.room = message.room;
-    if (message.t === 'tables') c.tables = message.tables || [];
+    // The directory arrives in welcome as well as in later tables messages.
+    if (message.t === 'welcome' || message.t === 'tables') c.tables = message.tables || [];
   });
   await new Promise((resolve, reject) => { c.ws.once('open', resolve); c.ws.once('error', reject); });
   c.send({ t: 'hello', name });
