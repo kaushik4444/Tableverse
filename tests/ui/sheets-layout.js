@@ -37,15 +37,27 @@ async function assertSheetFits(page, sheetSel, label) {
     if (!sheet) return { missing: true };
     const overlay = sheet.closest('.overlay') || sheet;
     const b = sheet.getBoundingClientRect();
-    const scrolls = [sheet, overlay].some((e) => /auto|scroll/.test(getComputedStyle(e).overflowY));
-    return { missing: false, x: b.x, right: b.right, top: b.top, bottom: b.bottom, vw: innerWidth, vh: innerHeight, scrolls,
+    const scroller = [sheet, overlay].find((e) => /auto|scroll/.test(getComputedStyle(e).overflowY)) || null;
+    // The controls are what a player needs, so judge their real positions, not only the sheet's border box: a sheet can fit its
+    // box while its lower buttons are clipped by overflow:hidden.
+    const controls = [...sheet.querySelectorAll('button, input, select, textarea, a[href]')]
+      .filter((c) => c.offsetParent !== null && getComputedStyle(c).visibility !== 'hidden');
+    const bottoms = controls.map((c) => c.getBoundingClientRect().bottom);
+    const tops = controls.map((c) => c.getBoundingClientRect().top);
+    return { missing: false, x: b.x, right: b.right, vw: innerWidth, vh: innerHeight,
+      controlsCount: controls.length,
+      lowest: bottoms.length ? Math.max(...bottoms) : 0, highest: tops.length ? Math.min(...tops) : 0,
+      scrollerReaches: scroller ? scroller.scrollHeight > scroller.clientHeight + 1 : false,
+      clipped: scroller === null && sheet.scrollHeight > sheet.clientHeight + 1,
       pageScrollsSideways: document.documentElement.scrollWidth > innerWidth + 1 };
   }, sheetSel);
   assert.equal(r.missing, false, `${label}: the sheet is on screen`);
   assert.ok(r.x >= -1 && r.right <= r.vw + 1, `${label}: the sheet fits the width (${Math.round(r.x)}..${Math.round(r.right)} of ${r.vw})`);
   assert.equal(r.pageScrollsSideways, false, `${label}: the page does not scroll sideways`);
-  const tall = r.top < -1 || r.bottom > r.vh + 1;
-  assert.ok(!tall || r.scrolls, `${label}: a sheet taller than the screen scrolls (top ${Math.round(r.top)}, bottom ${Math.round(r.bottom)} of ${r.vh})`);
+  assert.ok(r.controlsCount > 0, `${label}: the sheet has controls`);
+  const reachable = r.lowest <= r.vh + 1 && r.highest >= -1;
+  assert.ok(reachable || r.scrollerReaches, `${label}: every control can be reached (lowest ${Math.round(r.lowest)}, highest ${Math.round(r.highest)} of ${r.vh}; a scrolling sheet is needed when they do not fit)`);
+  assert.equal(r.clipped, false, `${label}: the sheet does not clip its content (no hidden overflow)`);
 }
 
 (async () => {
@@ -59,7 +71,8 @@ async function assertSheetFits(page, sheetSel, label) {
       const viewport = { width: vp.width, height: vp.height };
       const at = vp.name;
 
-      // Logged-out home: the Log in and Feedback controls in the topbar.
+      // Logged-out home: the Log in and Feedback controls in the topbar. The topbar is stressed with wider letter-spacing, so
+      // a wider fallback font on a runner cannot push the bar past the screen without this failing.
       for (const [label, finder, sheet] of [
         ['login sheet', "(d) => d.querySelector('[data-act=\"showLogin\"]')", '.auth-sheet'],
         ['feedback dialog', "(d) => d.querySelector('[data-act=\"openFeedback\"]')", '.modal-sheet'],
@@ -69,6 +82,7 @@ async function assertSheetFits(page, sheetSel, label) {
           try {
             await page.goto(guest.url + '/');
             await page.waitForSelector('.topbar', { timeout: 8000 });
+            await page.addStyleTag({ content: '.topbar, .topbar * { letter-spacing: .08em !important; }' });
             if (!(await tap(page, finder))) return SKIP;
             await page.waitForSelector(sheet, { timeout: 4000 });
             await page.waitForTimeout(150);
@@ -100,8 +114,16 @@ async function assertSheetFits(page, sheetSel, label) {
           try {
             await page.goto(member.url + '/');
             await page.waitForSelector('.wz-top', { timeout: 8000 });
-            if (label === 'leave confirmation') { if (!(await tap(page, "(d) => d.querySelector('[data-act=\"toggleTools\"]')"))) return SKIP; await page.waitForTimeout(150); }
-            if (!(await tap(page, finder))) return SKIP;
+            if (label === 'game log') {
+              // The log button sits in the More menu. Open it with a real click, then click the log button the way a player does
+              // (Playwright checks visibility and that nothing covers it). A missing control fails here rather than skipping.
+              await page.locator('[data-act="toggleTools"]').click({ timeout: 4000 });
+              await page.waitForTimeout(150);
+              await page.locator('[data-act="activityLog"]').click({ timeout: 4000 });
+            } else {
+              if (label === 'leave confirmation') { if (!(await tap(page, "(d) => d.querySelector('[data-act=\"toggleTools\"]')"))) return SKIP; await page.waitForTimeout(150); }
+              if (!(await tap(page, finder))) return SKIP;
+            }
             await page.waitForSelector(sheet, { timeout: 4000 });
             await page.waitForTimeout(150);
             await assertSheetFits(page, sheet, `${label} at ${at}`);
