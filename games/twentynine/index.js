@@ -16,6 +16,13 @@ module.exports = {
   seatLabel: (i) => (i % 2 === 0 ? 'Team A' : 'Team B'),
   options: [
     {
+      key: 'shuffleSeats',
+      type: 'boolean',
+      label: 'Shuffle seats',
+      desc: 'Shuffle the seating when the game starts, which also changes the teams. Off: players sit in the order they joined, and partners sit opposite.',
+      default: false,
+    },
+    {
       key: 'target',
       type: 'select',
       label: 'Play until',
