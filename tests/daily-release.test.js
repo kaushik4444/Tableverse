@@ -132,6 +132,64 @@ const base = (over = {}) => ({
     assert.equal(r.outcome, 'released');
     assert.ok(calls.some((c) => c.startsWith('POST https://api.github.com/repos/kaushik4444/Tableverse/git/refs') || c.includes('/git/refs')));
   });
+  await test('a head that moves between the gate check and the merge is not merged', async () => {
+    const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
+    let prReads = 0;
+    const merges = [];
+    const fakeFetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
+      if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([{ ...pr }]);
+      if (url.endsWith('/pulls/130') && method === 'GET') { prReads += 1; return json(prReads === 1 ? pr : { ...pr, head: { ...pr.head, sha: 'newpush9' } }); }
+      if (url.endsWith('/commits/abc1234/check-runs?per_page=100') || url.endsWith('/commits/newpush9/check-runs?per_page=100')) return json({ check_runs: greenChecks() });
+      if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
+      if (url.endsWith('/merge') && method === 'PUT') { merges.push(url); return json({ sha: 'x' }); }
+      throw new Error('unexpected ' + method + ' ' + url);
+    };
+    const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule' };
+    const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    assert.equal(r.outcome, 'block');
+    assert.equal(merges.length, 0, 'nothing is merged when the head moved');
+  });
+  await test('the open release PR is looked up by head and base, so a later page cannot hide it', async () => {
+    const seen = [];
+    const fakeFetch = async (url) => {
+      seen.push(url);
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data) });
+      if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([]);
+      throw new Error('unexpected ' + url);
+    };
+    const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', DRY_RUN: 'true' };
+    await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    assert.ok(seen.some((u) => u.includes('head=kaushik4444%3Adevelopment') || u.includes('head=kaushik4444:development')), 'the request filters by head');
+  });
+  await test('the merge method is squash by default and merge only when the owner sets RELEASE_MERGE_METHOD=merge', async () => {
+    const methods = [];
+    for (const extra of [{}, { RELEASE_MERGE_METHOD: 'merge' }]) {
+      const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
+      const fakeFetch = async (url, opts = {}) => {
+        const method = opts.method || 'GET';
+        const json = (data, status = 200) => ({ status, ok: status < 300, text: async () => JSON.stringify(data), json: async () => data });
+        if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+        if (url.includes('/pulls?state=open')) return json([pr]);
+        if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
+        if (url.endsWith('/check-runs?per_page=100')) return json({ check_runs: greenChecks() });
+        if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
+        if (url.endsWith('/merge') && method === 'PUT') { methods.push(JSON.parse(opts.body).merge_method); return json({ sha: 'fff0001' }); }
+        if (url.endsWith('/git/refs')) return json({}, 201);
+        if (url.endsWith('/healthz')) return { status: 200, ok: true, text: async () => 'ok' };
+        if (url.endsWith('/readyz')) return { status: 200, ok: true, text: async () => 'ready' };
+        throw new Error('unexpected ' + method + ' ' + url);
+      };
+      const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
+      await main({ env: { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test', ...extra }, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    }
+    assert.deepEqual(methods, ['squash', 'merge']);
+  });
   await test('a duplicate run after the release finds no changes and does nothing', async () => {
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule' };
     const fakeFetch = async (url) => {

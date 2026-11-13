@@ -15,7 +15,7 @@ changes from `development` to `main`.
    tags the release `release-YYYY-MM-DD-<sha>`, and checks production health.
 5. Otherwise it leaves the PR open, writes the reasons to the run summary and as warnings, and stops. The next day tries again.
 
-The merge is a normal squash merge through the GitHub API. GitHub still enforces the rulesets (five required checks, the Copilot
+The merge is a squash merge through the GitHub API (the default; see *Squash history* below). GitHub still enforces the rulesets (five required checks, the Copilot
 rule, conversation resolution). The workflow never uses an admin bypass, never force-pushes, and never approves its own PR.
 
 ## The gates
@@ -36,6 +36,21 @@ A release proceeds only when all of these hold on the PR head:
 
 A successful CI run alone is not enough: the workflow checks the Copilot review and the conversations separately.
 
+## Squash history (owner decision needed)
+
+A squash merge puts one new commit on `main`. That commit is **not** an ancestor of `development`, so Git's three-way merge
+does not know that the released lines are already in `main`. In practice:
+
+- The first release works. A later edit on `development` to a line that the last release changed conflicts with `main` when the
+  next release is computed. The gate then **blocks** (it never forces a release), and GitHub would show the same conflict on the
+  PR.
+- Resolving it needs a person: the conflict is between two valid versions of a line.
+
+The fix that avoids this entirely is to let releases keep history: allow **merge commits** in the repository settings
+(Settings → General → Pull Requests) and set the repository variable `RELEASE_MERGE_METHOD=merge`. Then `main` contains
+`development`'s commits and every later release merges cleanly. **This changes the approved squash policy and needs your decision.**
+Until then, the default stays squash and a conflict is reported in the run summary.
+
 ## Owner settings
 
 These cannot be set from the repository, and the workflow depends on them:
@@ -44,7 +59,9 @@ These cannot be set from the repository, and the workflow depends on them:
    Without it, the release PR cannot be opened.
 2. **Settings → Secrets and variables → Actions → Variables**: add `PRODUCTION_URL` (the Render service URL, for example
    `https://tableverse.example.com`, with no trailing slash). The post-release health check needs it.
-3. **Copilot review on bot PRs (verify once):** Copilot's review runs on pull requests, but a PR opened by the workflow's
+3. **Squash history:** decide between squash (default, conflicts can block a later release; see above) and merge commits
+   (`RELEASE_MERGE_METHOD=merge`, requires merge commits to be allowed in the repository settings).
+4. **Copilot review on bot PRs (verify once):** Copilot's review runs on pull requests, but a PR opened by the workflow's
    `GITHUB_TOKEN` may not trigger it. If the Copilot check never appears on the release PR, every release is blocked with the
    message "Copilot review has not run on this PR head". Check the first release PR: if Copilot does not run, the owner decides
    between requesting Copilot review by hand on that PR each day or adding a GitHub App token. No personal access token is used or
@@ -111,6 +128,7 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js`: the 18 scenarios (no changes, eligible, failed CI, incomplete Copilot review,
-unresolved conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health
-streaks, the full flow with the merge pinned to the verified head, and a duplicate run after a release).
+`npm test` runs `tests/daily-release.test.js` (21 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
+conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health streaks, the
+full flow with the merge pinned to the verified head, a head that moves before the merge, the head-filtered PR lookup, the merge
+method switch, and a duplicate run after a release.

@@ -52,4 +52,5 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
           RELEASE_FREEZE: ${{ vars.RELEASE_FREEZE }}
           PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+          RELEASE_MERGE_METHOD: ${{ vars.RELEASE_MERGE_METHOD }}
         run: node scripts/release/promote.js

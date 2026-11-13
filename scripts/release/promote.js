@@ -45,7 +45,7 @@ function decide(state) {
     return { action: 'skip', reasons: [`Scheduled run at ${String(state.berlinHour).padStart(2, '0')}:xx Berlin time; releases run in the 02:xx slot only.`] };
   }
   if (state.mergeTree === null) {
-    return { action: 'block', reasons: ['main and development cannot be merged cleanly (conflict). Resolve it through the hotfix procedure in docs/RELEASES.md.'] };
+    return { action: 'block', reasons: ['main and development conflict. Squash releases leave main out of development\'s history, so an edit to a line the last release changed conflicts. This needs an owner decision (docs/RELEASES.md, "Squash history"); the release is not forced.'] };
   }
   if (state.mergeTree !== state.devTree) {
     return { action: 'block', reasons: ['main has changes that development does not have. Bring them into development first (docs/RELEASES.md, hotfix procedure); a release now would undo them.'] };
@@ -141,7 +141,7 @@ async function gather(client, { repo, git }) {
   const [owner, name] = repo.split('/');
   const rulesOf = async (branch) => (await client.call('GET', `/rules/branches/${branch}?per_page=100`)).data.map((r) => r.type);
   const rules = { main: await rulesOf('main'), development: await rulesOf('development') };
-  const openPrs = (await client.call('GET', '/pulls?state=open&base=main&per_page=100')).data
+  const openPrs = (await client.call('GET', `/pulls?state=open&base=main&head=${encodeURIComponent(owner)}:development&per_page=100`)).data
     .filter((p) => p.head.ref === 'development' && p.head.repo && p.head.repo.full_name === repo)
     .map((p) => ({ number: p.number, head: p.head.ref, base: p.base.ref }));
   return { rules, openPrs, owner, name, git };
@@ -166,6 +166,8 @@ async function prState(client, owner, name, number) {
 async function main({ env = process.env, fetchFn = fetch, now = new Date(), git = { mergeTreeOf, gitOutput }, sleep } = {}) {
   const repo = env.GITHUB_REPOSITORY;
   const dryRun = env.DRY_RUN === 'true';
+  // squash is the default. 'merge' keeps development's history in main; see docs/RELEASES.md "Squash history".
+  const mergeMethod = env.RELEASE_MERGE_METHOD === 'merge' ? 'merge' : 'squash';
   const scheduled = env.GITHUB_EVENT_NAME === 'schedule';
   const client = makeClient({ token: env.GITHUB_TOKEN, repo, fetchFn });
   const log = (msg) => console.log(msg);
@@ -180,7 +182,8 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   const base = { frozen: env.RELEASE_FREEZE === 'true', scheduled, berlinHour: berlinHour(now), devTree, mainTree, mergeTree, openPrs: g.openPrs, rules: g.rules, pr: null };
 
   let prNumber = g.openPrs.length === 1 ? g.openPrs[0].number : null;
-  let decision = decide({ ...base, pr: prNumber ? await prState(client, g.owner, g.name, prNumber) : null });
+  let lastState = prNumber ? await prState(client, g.owner, g.name, prNumber) : null;
+  let decision = decide({ ...base, pr: lastState });
   if (decision.action === 'create') {
     if (dryRun) {
       say('DRY RUN: would open a release PR from development to main.');
@@ -189,7 +192,8 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
     const created = (await client.call('POST', '/pulls', { title: 'Daily release: development to main', head: 'development', base: 'main', body: 'Opened by the daily release workflow. Merged automatically once every gate passes (docs/RELEASES.md).' })).data;
     prNumber = created.number;
     say(`Opened release PR #${prNumber}.`);
-    decision = decide({ ...base, openPrs: [{ number: prNumber, head: 'development', base: 'main' }], pr: await prState(client, g.owner, g.name, prNumber) });
+    lastState = await prState(client, g.owner, g.name, prNumber);
+    decision = decide({ ...base, openPrs: [{ number: prNumber, head: 'development', base: 'main' }], pr: lastState });
   }
   if (decision.action !== 'merge') {
     for (const r of decision.reasons) {
@@ -198,13 +202,18 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
     }
     return finish(decision.action, summary, decision);
   }
-  // every gate passed on this PR head; the merge is pinned to that head, so a later push cannot be merged by mistake
-  const state = await prState(client, g.owner, g.name, prNumber);
+  // Every gate passed on lastState. Read the PR again: the merge goes ahead only if the same head still passes.
+  const fresh = await prState(client, g.owner, g.name, prNumber);
+  const again = decide({ ...base, openPrs: [{ number: prNumber, head: 'development', base: 'main' }], pr: fresh });
+  if (fresh.head_sha !== lastState.head_sha || again.action !== 'merge') {
+    say(`Blocked: PR #${prNumber} changed while the gates were checked (${lastState.head_sha.slice(0, 7)} -> ${fresh.head_sha.slice(0, 7)}). The next run checks again.`);
+    return finish('block', summary, again);
+  }
   if (dryRun) {
-    say(`DRY RUN: all gates pass on PR #${prNumber}; would squash-merge ${state.head_sha.slice(0, 7)}.`);
+    say(`DRY RUN: all gates pass on PR #${prNumber}; would ${mergeMethod} ${fresh.head_sha.slice(0, 7)}.`);
     return finish('dry-run', summary, decision);
   }
-  const merged = (await client.call('PUT', `/pulls/${prNumber}/merge`, { merge_method: 'squash', sha: state.head_sha, commit_title: 'Daily release: development to main' })).data;
+  const merged = (await client.call('PUT', `/pulls/${prNumber}/merge`, { merge_method: mergeMethod, sha: fresh.head_sha, commit_title: 'Daily release: development to main' })).data;
   say(`Merged PR #${prNumber} as ${merged.sha.slice(0, 7)}.`);
   const tag = `release-${now.toISOString().slice(0, 10)}-${merged.sha.slice(0, 7)}`;
   await client.call('POST', '/git/refs', { ref: `refs/tags/${tag}`, sha: merged.sha });
