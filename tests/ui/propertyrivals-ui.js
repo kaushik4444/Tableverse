@@ -180,6 +180,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
 
   await test('the current game settings show at the top right of a game; tapping them lists each setting', async () => {
     const { page, ctx } = await open(tableMessages('propertyrivals', four, { roomExtra: { options: { rounds: '30', startCash: '1500', auction: true, jackpot: false } } }));
+    await page.click('.tb-more-btn');
     const chip = page.locator('.gs-chip');
     assert.equal(await chip.count(), 1);
     assert.match(await chip.getAttribute('aria-label'), /Game settings: .*Short: 30 rounds.*1,500 coins/);

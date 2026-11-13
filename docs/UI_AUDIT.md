@@ -6,7 +6,7 @@ Status of the Phase 4 layout audit, as of `development` at `f582fbd` (PR #144 me
 
 | Check | Command | Scope | Result |
 | --- | --- | --- | --- |
-| Table game layout audit | `node tests/ui/game-audit.js` | 18 game setups (games at their seat counts), six sizes (320×568, 360×640, 390×844, 667×375, 768×1024, 1280×800), four moments each (start, early, late, over) | 0 errors, 160 warnings (see below) |
+| Table game layout audit | `node tests/ui/game-audit.js` | 21 game setups (games at their seat counts; Ludo at 2, 4 and 6 players was added in this pass), six sizes (320×568, 360×640, 390×844, 667×375, 768×1024, 1280×800), four moments each (start, early, late, over) | 0 errors, 172 warnings (see below) |
 | Trump indicator regression (29) | `node tests/ui/twentynine-trump-ui.js` | 29 bidding, bidder's turn, choosing trump, and hidden / secret / revealed trump, six sizes | 35 passed, 0 failed, 1 exempt case |
 | Phone fit (360×640) | `node tests/ui/mobile-fit.js` | 10 games, your-turn controls kept on screen | 15 passed, 0 failed |
 | Wizard layout | `node tests/ui/wizard-layout.js` | Wizard, 29, poker and the others, six sizes | all viewports ok (one flaky page-load on tic-tac-toe in an earlier run; passed on re-run) |
@@ -23,9 +23,10 @@ Warnings are not failures. The table below groups them and says whether each is 
 | Warning | Where | Status |
 | --- | --- | --- |
 | Hand ends below the screen | Wizard 3 players and 29 at 320×568 (hand ends at 652 of 568) | Known limit. Short screens (SE-class) cannot fit the table, hand and buttons together without changing the game layout. Not changed in this pass. |
-| Main button needs scrolling | Landscape 667×375 (roll, ask, ready) and 320×568 (Ready) | Expected on landscape and very short screens. Buttons are reachable by scrolling. |
+| Main button needs scrolling | Landscape 667×375 (roll, ask, ready), 320×568 (Ready) and Ludo's Roll dice at 320×568 | Expected on landscape and very short screens. Buttons are reachable by scrolling. |
 | Bid button below the fold | Wizard 3 players at 320×568 and 667×375 | Same short-screen limit as above. |
 | Open property cards under 30px | Property Rivals at 1280×800 (desktop, mouse) | Measured at 1280×800 with touch disabled in the emulation. That does not show the controls are unusable by touch: a tablet or touchscreen laptop can use this width. Touch coverage here is unverified. To fix later if this width needs touch use. |
+| Ludo token tap targets | Ludo at 320×568 (late game): the drawn coin is about 10px | Measurement limitation. The audit measures the drawn token box, which excludes the invisible 18px hit area (`.ludo-token.legal::after`). The audit does not measure overlapping legal areas, so it keeps the conservative warning. `tests/ui/ludo-token-tap-ui.js` checks a 14px touchscreen tap on an isolated legal token at 320, 360 and 390px. It does not cover neighbouring legal tokens, so touch usability with close tokens is unverified. The coin is not changed. |
 | Clipped sr-only text | 29 at phone sizes | False positive. The screen-reader text is clipped on purpose. The audit now skips `.sr-only` (this pass). |
 | Ludo tokens about 8–10px to tap (2-player late game at 320×568) | Ludo legal tokens, measured on the drawn token box | Measurement limit, not a touch failure. A legal token has an invisible 18px area (`.ludo-token.legal::after`, about 44px across). `tests/ui/ludo-token-tap-ui.js` taps 14px from a legal token's centre with a touchscreen tap at 320, 360 and 390px and checks that the same token receives the move. The audit still reports the drawn box as a warning. |
 
@@ -39,9 +40,9 @@ Warnings are not failures. The table below groups them and says whether each is 
 
 - Real iOS Safari and Android Chrome devices were not available. All layouts were checked in Chromium emulation at the sizes above. A real iPhone 15 check remains a manual step.
 - Admin: only the public admin page shell is checked (no sideways scroll at 360 and 390). The signed-in admin screens (staff views, moderation, audit trail) are not laid out-tested.
-- Modals: covered by `sheets-layout.js`: login, feedback, what's new, game log, leave confirmation. Not covered, so unverified: join or spectate choice, edit profile, settings, delete account, game settings, player card, make host, remove player, remove friend, password reset and the report dialog.
+- Modals: covered by `sheets-layout.js`: login, feedback, what's new, game log, leave confirmation. Covered by `overlays-layout.js`: the How-to-play dialog from a home card and from the lobby header, and the table's More menu, at six sizes (320×568 to 1280×800; each box stays on screen, its close control is reachable and every menu item is on screen). Not covered, so unverified: the How-to-play dialog opened inside a table in progress (each game wires its own button), join or spectate choice, edit profile, settings, delete account, game settings, player card, make host, remove player, remove friend, password reset and the report dialog.
 - Lobby: `sheets-layout.js` checks no sideways scroll at 360 and the host's start control; `mobile-fit.js` checks compact height at 390. Lobby options and the invitation list are not covered at 360.
-- Existing checks cover only part of the menus and lobby. `mobile-fit.js` checks a private Wizard lobby at 390×844 (the lobby check) and runs the in-game fit loops at 360×640; it also opens and closes the table's More menu. `touch-targets-ui.js` measures the home page controls and selected toolbar controls. Modals (confirmation dialogs, invitations, reports) are not exercised by any audit: their coverage is unverified.
+- Existing checks cover only part of the menus and lobby. `mobile-fit.js` checks a private Wizard lobby at 390×844 (the lobby check) and runs the in-game fit loops at 360×640. `overlays-layout.js` covers the More menu's items at six sizes. `touch-targets-ui.js` measures the home page controls and selected toolbar controls. Confirmation dialogs other than leave (covered by `sheets-layout.js`), invitations and reports are not exercised by any audit: their coverage is unverified.
 
 ## Next steps
 
