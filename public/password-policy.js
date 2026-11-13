@@ -1,7 +1,10 @@
 /* The password rule for new passwords (sign-up and reset). One file for the browser and the server so they cannot drift.
-   A password needs: 10 to 200 characters, an uppercase letter, a lowercase letter, a number and a symbol; it may not contain
-   the username, the first part of the e-mail address, or an obvious word such as "password". Existing passwords still work to
-   sign in: the rule applies only when a password is chosen. */
+   A password needs: 10 to 200 characters (code points, so an emoji counts once), an uppercase letter, a lowercase letter, a
+   number and a symbol; it may not contain the username, the first part of the e-mail address, or an obvious word such as
+   "password". Exceptions, on purpose: the username is only matched when it has at least 3 characters and the e-mail part only
+   when it has at least 4, so a short name does not refuse ordinary passwords (for example "ann" would refuse any password
+   containing those letters). Existing passwords still work to sign in: the rule applies only when a password is chosen.
+   Input fields must allow up to 2 UTF-16 units per character (maxlength="400"), since the browser counts UTF-16 units. */
 (function (root) {
   const MIN = 10;
   const MAX = 200;
@@ -26,7 +29,7 @@
   /** null when the password is acceptable, otherwise a message that says what to change. */
   function check(pw, { email = '', username = '' } = {}) {
     if (typeof pw !== 'string') return 'Enter a password.';
-    if (pw.length > MAX) return `Use at most ${MAX} characters.`;
+    if ([...pw].length > MAX) return `Use at most ${MAX} characters.`;
     const need = missing(pw);
     if (need.length) return `Your password needs ${need.join(', ')}.`;
     const low = pw.toLowerCase();

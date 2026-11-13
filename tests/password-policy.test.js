@@ -25,6 +25,10 @@ test('it may not contain the username or the first part of the e-mail', () => {
   assert.match(P.check('Zx-annabel-7A', { email: 'Annabel@example.com' }), /e-mail/);
   assert.equal(P.check('Zx-ann-7Aqrtv', { email: 'ann@example.com' }), null, 'a short name part (under four letters) is not matched');
 });
+test('the length limit counts characters, not UTF-16 units: 100 emoji plus the kinds fit, 197 do not', () => {
+  assert.equal(P.check('Aa1!' + '\u{1F600}'.repeat(100)), null, '104 characters is accepted');
+  assert.match(P.check('Aa1!' + '\u{1F600}'.repeat(197)), /at most 200/, '201 characters is refused');
+});
 test('too long and not-a-string are refused', () => {
   assert.match(P.check('Aa1!' + 'x'.repeat(200)), /at most 200/);
   assert.equal(P.check(undefined), 'Enter a password.'); assert.equal(P.check(12345678901), 'Enter a password.');
