@@ -128,7 +128,8 @@ const SIZES = [
       } else {
         if (getComputedStyle(wz).overflowX === 'hidden') out.problems.push('.wz hides horizontal overflow (overflow-x: hidden) instead of preventing it');
       }
-      if (!document.querySelector('.game-supporting-details')) out.problems.push('collapsed game log/rules are not available below the play surface');
+      // How to play and the game log are in the ⋯ menu, not at the bottom of the screen
+      if (document.querySelector('.game-supporting-details')) out.problems.push('the bottom panel is back: How to play and the game log belong in the ⋯ menu');
       if (game === 'ludo') {
         if (document.querySelector('.ludo-header')) out.problems.push('Ludo duplicates the game title/description inside the play surface');
         if (document.querySelector('.ludo-hint')) out.problems.push('Ludo repeats How to play inline instead of using the shared collapsed rules');

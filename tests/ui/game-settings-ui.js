@@ -1,5 +1,5 @@
 'use strict';
-// The current game settings appear at the top right of every game, and tapping them lists each setting with its choice.
+// The current game settings are in the ⋯ menu (top right) of every game, and opening them lists each setting with its choice.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk } = require('./harness');
 const { chromium } = loadPlaywright();
@@ -15,6 +15,9 @@ const four = [{ name: 'Aarav' }, { name: 'Bo' }, { name: 'Charlotte' }, { name: 
     try {
       const { page, ctx } = await scriptedPage(browser, { messages: tableMessages(gameId, four) });
       await page.goto(url + '/');
+      // the settings live in the ⋯ menu (top right): open it, then the item
+      await page.waitForSelector('.tb-more-btn', { timeout: 8000 });
+      await page.click('.tb-more-btn');
       await page.waitForSelector('.gs-chip', { timeout: 8000 });
       const label = await page.getAttribute('.gs-chip', 'aria-label');
       assert.match(label, /^Game settings: /, gameId);
@@ -29,8 +32,10 @@ const four = [{ name: 'Aarav' }, { name: 'Bo' }, { name: 'Charlotte' }, { name: 
       // closing returns focus to the settings chip
       await page.keyboard.press('Escape');
       await page.waitForTimeout(50);
-      assert.ok(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('gs-chip')), gameId + ' returns focus to the chip on close');
+      assert.ok(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('tb-more-btn')), gameId + ' returns focus to the ⋯ button on close');
       // Space on the focused chip opens the settings, and does not fall through to a game's Space shortcut
+      await page.click('.tb-more-btn');
+      await page.focus('.gs-chip');
       await page.keyboard.press('Space');
       await page.waitForSelector('.gs-list', { timeout: 2000 });
       assert.ok(await page.isVisible('.gs-list'), gameId + ' opens settings with Space on the chip');

@@ -1725,7 +1725,7 @@
   const WHATS_NEW_VERSION = '2026-11-property-cards-settings';
   const WHATS_NEW = [
     ['🏙️', 'Property Rivals: city cards', 'Tap a city in a player’s holdings to see its mortgage value, the rent right now and the full rent table, and what houses and hotels cost. Each rival shows cash and net worth; the crown follows net worth.'],
-    ['⚙️', 'Game settings at a glance', 'Every game shows its current settings at the top right. Tap them for the full list with each choice explained.'],
+    ['⚙️', 'Game settings at a glance', 'Open ⋯ at the top right and choose Game settings for the full list, with each choice explained.'],
     ['🎙️', 'Talk at the table — voice chat', 'Tap the microphone to join voice and talk with everyone at your table, in the lobby or during a game. Tap it again to mute yourself. Use the speaker to listen without speaking or silence table audio. A mic marks people in voice and a green ring shows who is speaking. Voice supports up to 8 people. Allow microphone access when your browser asks; a headset helps prevent echo.', 'voice'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
@@ -1773,6 +1773,15 @@
     const chat = bar.querySelector('.chat-btn');
     const emote = bar.querySelector('[data-act="emotes"]');
     const extras = [...bar.querySelectorAll('button')].filter((b) => b !== leave && b !== chat && b !== emote);
+    // How to play lives in the ⋯ menu for every game. A game that already has its own rules entry keeps it.
+    if (S.room && !extras.some((b) => b.dataset.act === 'rules' || /rules|how to play/i.test(b.textContent || ''))) {
+      const rb = document.createElement('button');
+      rb.type = 'button'; rb.className = 'btn ghost small'; rb.dataset.act = 'rules'; rb.dataset.game = S.room.gameId;
+      rb.setAttribute('aria-label', 'How to play'); rb.textContent = '📖 How to play';
+      // Space on a focused button must not reach the document-level Space shortcuts (The Mind plays a card on Space)
+      rb.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
+      extras.push(rb);
+    }
     // Go Fish has no log: it would show what other players asked for
     if (!bar.closest('.gf') && !extras.some((b) => b.dataset.act === 'activityLog')) {
       const log = document.createElement('button');
@@ -2110,7 +2119,8 @@
       close.focus();
       o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
       // when it closes, focus returns to the settings chip; the chip is looked up at close time because a redraw may have replaced it
-      modalOnClose = () => { const chip = document.querySelector('.gs-chip'); if (chip) chip.focus(); };
+      // the ⋯ button is the visible control that opened the menu; the settings item lives inside the (now hidden) menu
+      modalOnClose = () => { const more = document.querySelector('.tb-more-btn') || document.querySelector('.gs-chip'); if (more) more.focus(); };
     });
   }
 
@@ -2126,8 +2136,13 @@
     chip.innerHTML = `<span aria-hidden="true">⚙</span> <span class="gs-sum">${esc(summary)}</span>`;
     // Space on the focused chip opens the settings; it must not reach the document-level Space shortcuts (The Mind plays a card on Space)
     chip.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
-    // In the title row, at its right end: the shared toolbar keeps exactly its own buttons, and no extra row is added.
-    // On the right of the shared toolbar, just before the "more" menu, so it sits with the other controls on every game.
+    // Game settings live in the ⋯ menu (top right), not in the top bar. The menu item is a plain button with the summary.
+    const pop = $app.querySelector('.tb-pop');
+    if (pop) {
+      chip.className = 'btn ghost small gs-chip gs-menu-item'; chip.textContent = '⚙ Game settings';
+      const sub = document.createElement('small'); sub.className = 'gs-menu-sum'; sub.textContent = summary;
+      chip.appendChild(sub); pop.appendChild(chip); return;
+    }
     const more = $app.querySelector('.tb-more-wrap');
     if (more && more.parentElement) { more.parentElement.insertBefore(chip, more); return; }
     const title = $app.querySelector('.wz-top > .wz-round');
@@ -2321,15 +2336,6 @@
     refreshVoiceUI();
     endFlow();
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
-    const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
-    const gameInfo = gameMeta(S.room.gameId);
-    if (surface && gameInfo) {
-      const log = S.room.gameId === 'gofish' ? [] : (S.view.log || []).slice(-12).reverse(); // Go Fish has no log: it would reveal what others asked for
-      const supporting = document.createElement('section');
-      supporting.className = 'game-supporting-details';
-      supporting.innerHTML = `${log.length ? `<details class="game-info-panel"><summary>📜 Game log <span>${S.view.log.length} plays</span></summary><ol>${log.map((e) => `<li><span>${esc(logLine(e))}</span></li>`).join('')}</ol></details>` : ''}${(gameInfo.rules || []).length ? `<details class="game-info-panel"><summary>📖 How to play</summary>${gameInfo.rules.map((rule) => `<p>${esc(rule)}</p>`).join('')}</details>` : ''}`;
-      if (supporting.innerHTML) surface.appendChild(supporting);
-    }
     const bar = $app.querySelector('.wz-status');
     if (bar) bar.insertAdjacentHTML('beforeend', '<span class="ct-timer" hidden></span>');
     updateTimer();
