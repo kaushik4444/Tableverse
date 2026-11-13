@@ -80,9 +80,15 @@
 
   // The trump as a compact strip item, shown on phones only (CSS). The header copy is hidden there so the hand keeps its place.
   function miniTrumpHTML(v) {
-    if (v.trumpSuit) return `<span class="label">Trump</span><span class="pill ${SUITS[v.trumpSuit].cls}"><b>${SUITS[v.trumpSuit].sym}</b></span>${v.trumpRevealed ? '' : '<small>🔒</small>'}`;
-    if (v.trumpSet) return '<span class="label">Trump</span><b>🔒</b>';
-    return '<span class="label">Trump</span><b>–</b>';
+    // The symbols are hidden from assistive tech; the sr-only text says the suit and state, which the header and corner copies (hidden on phones) would otherwise say.
+    const visible = (inner) => `<span aria-hidden="true">${inner}</span>`;
+    const sr = (text) => `<span class="sr-only">${text}</span>`;
+    if (v.trumpSuit) {
+      const s = SUITS[v.trumpSuit];
+      return `<span class="label">Trump</span>${visible(`<span class="pill ${s.cls}"><b>${s.sym}</b></span>${v.trumpRevealed ? '' : '<small>🔒</small>'}`)}${sr(`: ${s.name}${v.trumpRevealed ? '' : ', secret'}`)}`;
+    }
+    if (v.trumpSet) return `<span class="label">Trump</span>${visible('<b>🔒</b>')}${sr(': chosen, hidden')}`;
+    return `<span class="label">Trump</span>${visible('<b>–</b>')}${sr(': not chosen yet')}`;
   }
 
   function scoreStrip(v) {
