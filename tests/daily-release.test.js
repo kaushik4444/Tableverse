@@ -241,6 +241,24 @@ const base = (over = {}) => ({
     const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-10-25T01:30:00Z'), git, sleep: async () => {} });
     assert.equal(r.outcome, 'dry-run');
   });
+  await test('an endless closed-PR list stops the run instead of reading an incomplete scan as no release', async () => {
+    let calls = 0;
+    const fakeFetch = async (url, opts = {}) => {
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
+      if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) {
+        calls += 1;
+        return json(Array.from({ length: 100 }, (_, i) => ({ number: i, merged_at: null, head: { ref: 'feature', repo: { full_name: 'kaushik4444/Tableverse' } } })));
+      }
+      throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
+    };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
+    await assert.rejects(
+      main({ env, fetchFn: fakeFetch, now: new Date('2026-10-25T01:30:00Z'), git: { gitOutput: () => 'T1', mergeTreeOf: () => 'T1' }, sleep: async () => {} }),
+      /refusing to release without a complete scan/,
+    );
+    assert.equal(calls, 50);
+  });
   await test('no PRODUCTION_URL: the release is blocked before anything is merged', async () => {
     const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
     const merges = [];

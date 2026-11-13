@@ -143,8 +143,8 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js` (28 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
+`npm test` runs `tests/daily-release.test.js` (31 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
 conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
-method switch, a duplicate run after a release, the second scheduled run on the same Berlin day, a missing `PRODUCTION_URL`
+method switch, a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
 (blocked before the merge), a content mismatch after the merge (no tag), and check runs beyond the first page.

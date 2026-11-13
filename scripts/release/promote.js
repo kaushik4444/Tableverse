@@ -188,17 +188,21 @@ async function prState(client, owner, name, number) {
 }
 
 // Release PRs merged to main from this repository's development branch on the given Berlin date. Scoped by head owner
-// (as gather() does), filtered to this repository's own head, and paginated so no page can hide a release.
+// (as gather() does), filtered to this repository's own head, and paginated to the last page. If the scan limit is
+// reached the run stops: an incomplete scan must never be read as "no release today".
+const MAX_RELEASE_SCAN_PAGES = 50;
 async function releasesMergedOn(client, repo, day) {
   const [owner] = repo.split('/');
   const found = [];
-  for (let page = 1; page <= 10; page += 1) {
+  for (let page = 1; ; page += 1) {
+    if (page > MAX_RELEASE_SCAN_PAGES) {
+      throw new Error(`Release lookup stopped after ${MAX_RELEASE_SCAN_PAGES} pages; refusing to release without a complete scan.`);
+    }
     const batch = (await client.call('GET', `/pulls?state=closed&base=main&head=${encodeURIComponent(owner)}:development&per_page=100&page=${page}`)).data;
     found.push(...batch.filter((p) => p.merged_at && p.head.ref === 'development' && p.head.repo && p.head.repo.full_name === repo
       && berlinDate(new Date(p.merged_at)) === day));
-    if (batch.length < 100) break;
+    if (batch.length < 100) return found;
   }
-  return found;
 }
 
 async function main({ env = process.env, fetchFn = fetch, now = new Date(), git = { mergeTreeOf, gitOutput }, sleep } = {}) {
