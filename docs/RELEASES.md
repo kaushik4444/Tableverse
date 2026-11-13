@@ -57,6 +57,18 @@ parent, and the next release's three-way merge sees the shared history, so relea
 - Merge commits must be allowed in the repository settings (Settings → General → Pull Requests). If they are not, the merge is
   refused and the release is blocked: nothing reaches `main`.
 
+### Current state: one owner decision needed
+
+`main` and `development` have the same content, but `main` does not yet have `development`'s history for the release files
+(`scripts/release/promote.js`, `tests/daily-release.test.js`, `docs/RELEASES.md`, `.gitignore`). `main` received those files through
+squash and tree-only commits (#130, #134, #135). Since then `development` changed them again (#137), so a three-way merge of the
+two branches conflicts. The release gate reports this as a merge conflict and **blocks** the release: no release PR is opened and
+nothing reaches `main`. This is the safe outcome, but releases stop until the next step is done.
+
+The one-time fix is a merge commit on `main` whose parents are `main` and `development`, with `development`'s tree (Git's
+`merge -s ours`). It changes no runtime code: the only differences are the five files above. It goes through a PR into `main`,
+which needs the owner's approval. Once it is merged, every later merge-commit release merges cleanly.
+
 ## Owner checklist
 
 ### Already in the repository (code, nothing to do)
