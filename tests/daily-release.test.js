@@ -396,8 +396,12 @@ const base = (over = {}) => ({
     const path = require('node:path');
     const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'release', 'promote.js'), 'utf8');
     const runbook = fs.readFileSync(path.join(__dirname, '..', 'docs', 'RELEASES.md'), 'utf8');
-    const sections = [...source.matchAll(/docs\/RELEASES\.md,?\s+"([^"]+)"/g)].map((m) => m[1]);
-    assert.ok(sections.length >= 2, 'promote.js names at least two runbook sections');
+    // Both orders: docs/RELEASES.md, "Section" and "Section" in docs/RELEASES.md
+    const sections = [...new Set([
+      ...[...source.matchAll(/docs\/RELEASES\.md,?\s+"([^"]+)"/g)].map((m) => m[1]),
+      ...[...source.matchAll(/"([^"]+)"\s+in\s+docs\/RELEASES\.md/g)].map((m) => m[1]),
+    ])];
+    assert.ok(sections.length >= 2, `promote.js names at least two runbook sections (found ${sections.length})`);
     for (const section of sections) {
       assert.match(runbook, new RegExp(`^#{2,4} ${section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'), `missing runbook heading "${section}"`);
     }
