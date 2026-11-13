@@ -66,7 +66,6 @@
     bellOpen: false, // the notifications dropdown in the top bar
     toolsOpen: false, // the "more" menu in a game's toolbar
     wnSeen: store.get('ct_wn_seen') || '', // the last What's new version this person opened
-    createVisibility: 'private',
     sessionListOpen: store.get('ct_sessions_open') !== '0',
     guest: false, // true when the home screen is the public snapshot (no socket, no session)
     signingIn: false, // logged in on the server, waiting for the socket's welcome: the top bar shows the profile and taps are blocked
