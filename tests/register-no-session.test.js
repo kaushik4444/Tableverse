@@ -14,8 +14,7 @@ async function test(name, fn) {
 const original = { hasDatabase: db.hasDatabase, withTransaction: db.withTransaction, query: db.query };
 
 /** Runs registerEmail with the given address already taken (or not) and returns every statement it ran. */
-async function register({ emailTaken }) {
-  const statements = [];
+async function register({ emailTaken, email = 'someone@test.local', username = 'newplayer', password = 'TestPass123!', statements = [] }) {
   db.hasDatabase = () => true;
   db.query = async () => ({ rows: [], rowCount: 0 });
   db.withTransaction = async (fn) => {
@@ -30,8 +29,18 @@ async function register({ emailTaken }) {
     };
     return fn(client);
   };
-  const result = await dbAuth.registerEmail({ adultConfirmed: true, email: 'someone@test.local', username: 'newplayer', password: 'TestPass123!', displayName: 'New', avatar: '🧙' });
+  const result = await dbAuth.registerEmail({ adultConfirmed: true, email, username, password, displayName: 'New', avatar: '🧙' });
   return { result, statements };
+}
+
+/** Like register(), but reports the refusal instead of throwing, so the test can check the message and the statements. */
+async function attempt(options) {
+  const statements = []; // kept on the error path too, so a write before the refusal would be seen
+  try {
+    return await register({ ...options, statements });
+  } catch (err) {
+    return { error: err, statements };
+  }
 }
 
 (async () => {
@@ -60,6 +69,29 @@ async function register({ emailTaken }) {
       assert.equal(pick(fresh).includes('token'), false);
       assert.equal(pick(taken).includes('token'), false);
     });
+    await test('a padded username is checked as stored, so a password containing it is refused before anything is written', async () => {
+      const run = await attempt({ emailTaken: false, username: ' Sunshine99 ', password: 'Sunshine99!ok' });
+      assert.ok(run.error, 'registration must fail');
+      assert.equal(run.error.status, 400);
+      assert.match(run.error.message, /username/);
+      assert.equal(run.statements.some((s) => /INSERT INTO players/.test(s)), false, 'no account is created');
+    });
+
+    await test('a padded, mixed-case e-mail is checked as stored, so a password containing its first part is refused', async () => {
+      const run = await attempt({ emailTaken: false, email: ' Annabel@Example.com ', username: 'carol', password: 'Zx-annabel-7A' });
+      assert.ok(run.error, 'registration must fail');
+      assert.equal(run.error.status, 400);
+      assert.match(run.error.message, /e-mail/);
+      assert.equal(run.statements.some((s) => /INSERT INTO players/.test(s)), false, 'no account is created');
+    });
+
+    await test('a padded username and e-mail with an acceptable password still register, storing the normalised values', async () => {
+      const run = await attempt({ emailTaken: false, email: ' Annabel@Example.com ', username: ' Carol ', password: 'Blue Tractor 42' });
+      assert.equal(run.error, undefined);
+      assert.equal(run.result.verifyToken !== undefined, true);
+      assert.equal(run.statements.some((s) => /INSERT INTO players/.test(s)), true);
+    });
+
   } finally {
     db.hasDatabase = original.hasDatabase;
     db.withTransaction = original.withTransaction;
