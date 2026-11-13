@@ -126,7 +126,8 @@ function inPage() {
       const r = el.getBoundingClientRect();
       if (Math.min(r.width, r.height) < 30) add('WARN', 'tap-target', `${label(el)} is ${Math.round(r.width)}x${Math.round(r.height)}`);
     }
-    if (el.matches('button, .pt-seat .nm, .wz-status span, h1, h2, h3, b') && el.scrollWidth > el.clientWidth + 2 && /(hidden|clip)/.test(getComputedStyle(el).overflowX) && getComputedStyle(el).textOverflow !== 'ellipsis') add('WARN', 'clipped-text', `${label(el)} text is cut (${el.scrollWidth} > ${el.clientWidth})`);
+    // .sr-only text is clipped on purpose (it is read by screen readers only), so it is not a cut-off
+    if (el.matches('button, .pt-seat .nm, .wz-status span, h1, h2, h3, b') && !el.classList.contains('sr-only') && el.scrollWidth > el.clientWidth + 2 && /(hidden|clip)/.test(getComputedStyle(el).overflowX) && getComputedStyle(el).textOverflow !== 'ellipsis') add('WARN', 'clipped-text', `${label(el)} text is cut (${el.scrollWidth} > ${el.clientWidth})`);
   }
   // hand cards
   const hand = [...document.querySelectorAll('.hand .card')].filter(visible);
