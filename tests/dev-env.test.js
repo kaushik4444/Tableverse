@@ -22,7 +22,7 @@ test('a database on this machine is accepted, and no database at all is allowed 
   assert.equal(assertSafeDevEnv({}), null);
 });
 test('managed and production-like hosts are refused, even with the remote switch', () => {
-  for (const host of ['ep-cool-123.eu-central-1.aws.neon.tech', 'dpg-abc.frankfurt-postgres.render.com', 'db.abc.supabase.co', 'x.rds.amazonaws.com']) {
+  for (const host of ['ep-cool-123.eu-central-1.aws.neon.tech', 'dpg-abc.frankfurt-postgres.render.com', 'db.abc.supabase.co', 'x.rds.amazonaws.com', 'ep-cool-123.eu-central-1.aws.neon.tech.', 'db.abc.supabase.co.']) {
     refused({ DATABASE_URL: `postgres://u:p@${host}/db` }, /managed/);
     refused({ DATABASE_URL: `postgres://u:p@${host}/db`, ALLOW_REMOTE_DEV_DB: '1' }, /managed/);
   }
