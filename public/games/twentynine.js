@@ -60,6 +60,8 @@
         return v.myTurn ? `Your bid: ${v.minBid} to ${v.maxBid}, or pass` : `${name(v.turn)} is bidding…`;
       case 'chooseTrump':
         return v.myTurn ? 'You won the bid. Choose your trump suit (kept secret).' : `${name(v.highBidder)} is choosing trump…`;
+      case 'challenge':
+        return v.myTurn ? (v.multiplier === 1 ? 'Double the bid, or accept it.' : 'Redouble, or accept.') : `${name(v.turn)} is deciding on the double…`;
       case 'playing':
         if (v.myTurn) {
           if (v.canReveal) return 'You can’t follow suit. Show the trump, or discard.';
@@ -149,6 +151,12 @@
   }
 
   function controlsHTML(v) {
+    if (v.phase === 'challenge' && v.myTurn) {
+      const doubling = v.multiplier === 1;
+      return `<div class="bidbox"><div class="label">${doubling ? 'Double the bid? Doubled hands count twice.' : 'Redouble? Redoubled hands count four times.'}</div>
+        <div class="row" style="gap:6px"><button class="btn ghost small" data-t9="accept">Accept</button>
+        <button class="btn small" data-t9="${doubling ? 'double' : 'redouble'}">${doubling ? 'Double (×2)' : 'Redouble (×4)'}</button></div></div>`;
+    }
     if (v.phase === 'chooseTrump' && v.myTurn) {
       const mine = [...new Set(v.hand.map((c) => c.suit))];
       // The status line is hidden while this box follows it (game-ux.css), so the phone copy of the trump indicator goes here.
@@ -250,7 +258,7 @@
     root.innerHTML = `
     <div class="wz t29" style="--cw:${z.cw}px;--tcw:${z.tcw}px;--cw0:${z.cw}px">
       <div class="wz-top">
-        <div class="wz-round"><b>Hand ${v.handNo}</b><span class="label"> · to ${v.options.target}</span></div>
+        <div class="wz-round"><b>Hand ${v.handNo}</b><span class="label"> · to ${v.options.target}${v.multiplier > 1 ? ` · ×${v.multiplier}` : ''}</span></div>
         <div class="wz-trump">${trumpHTML(v)}</div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-t9="scores">Scores</button>', 't9')}
       </div>
@@ -258,7 +266,7 @@
       ${tableHTML(v, ctx)}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><div class="t29-mini-trump">${miniTrumpHTML(v)}</div><span>${statusText(v)}</span>
         ${v.canReveal ? '<button class="btn small" data-t9="reveal">Show trump</button>' : ''}
-        ${v.canDeclareMarriage ? '<button class="btn small" data-t9="marriage">Declare K–Q (+4)</button>' : ''}
+        ${v.canDeclareMarriage ? `<button class="btn small" data-t9="marriage">${v.options.marriageBid ? 'Declare K–Q (changes bid)' : 'Declare K–Q (+4)'}</button>` : ''}
         ${canPlay ? '<button class="btn small" data-t9="play">Play</button>' : ''}</div>
       ${controlsHTML(v)}
       <div class="hand"><div class="hand-in">${handHTML(v, z)}</div></div>
@@ -325,6 +333,11 @@
         break;
       case 'marriage':
         ctx.act({ type: 'marriage' });
+        break;
+      case 'double':
+      case 'redouble':
+      case 'accept':
+        ctx.act({ type: el.dataset.t9 });
         break;
       case 'pick':
         ui.bid = Number(el.dataset.n);

@@ -47,6 +47,13 @@ module.exports = {
       desc: 'Instead of +4 hand points, a King–Queen marriage changes the bid. If the bidding team declares it, the bid drops by 4 (never below 15). If the other team declares it, the bid rises by 4.',
       default: false,
     },
+    {
+      key: 'doubleChallenge',
+      type: 'boolean',
+      label: 'Double and redouble',
+      desc: 'After trump is chosen, the other team may double the bid, which doubles the hand’s game points. The bidding team may then redouble, which makes them four times. Either side can accept instead.',
+      default: false,
+    },
     TIME_LIMIT_OPTION,
   ],
   rules: [
@@ -56,7 +63,7 @@ module.exports = {
     'The highest bidder secretly picks the trump suit (one they hold). Four more cards are then dealt to each player, and the bidder leads the first trick.',
     'Play 8 tricks and follow the lead suit if you can. If you cannot follow, you may ask to see the trump: it is then shown to everyone and you must play a trump card if you have one. Until it is shown, trump cards played as discards do not count as trump.',
     'Trump marriage (K–Q): after trump has been revealed and your team has won at least one trick, declare the King and Queen of trump while it is your turn to add 4 points to your team’s hand total (or, with the Marriage changes the bid setting, change the bid by 4). It can be declared once per hand.',
-    'The bidding team needs at least as many points as it bid. Make it and the team scores +1 game point, miss it and it scores −1. The first team to reach the target wins (or the other team wins if one team falls to minus the target). Game settings can change these: All 29 doubles the win, Double loss below half, and Marriage changes the bid.',
+    'The bidding team needs at least as many points as it bid. Make it and the team scores +1 game point, miss it and it scores −1. The first team to reach the target wins (or the other team wins if one team falls to minus the target). Game settings can change these: All 29 doubles the win, Double loss below half, Marriage changes the bid, and Double and redouble, which lets the other team double a bid before play (×2), and the bidding team redouble (×4).',
   ],
 
   create(players, options, rng) {
