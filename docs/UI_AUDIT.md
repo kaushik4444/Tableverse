@@ -26,9 +26,8 @@ Warnings are not failures. The table below groups them and says whether each is 
 | Main button needs scrolling | Landscape 667×375 (roll, ask, ready), 320×568 (Ready) and Ludo's Roll dice at 320×568 | Expected on landscape and very short screens. Buttons are reachable by scrolling. |
 | Bid button below the fold | Wizard 3 players at 320×568 and 667×375 | Same short-screen limit as above. |
 | Open property cards under 30px | Property Rivals at 1280×800 (desktop, mouse) | Measured at 1280×800 with touch disabled in the emulation. That does not show the controls are unusable by touch: a tablet or touchscreen laptop can use this width. Touch coverage here is unverified. To fix later if this width needs touch use. |
-| Ludo token tap targets | Ludo at 320×568 (late game): the coin is about 10px | Not a problem. A legal token is tapped through an invisible hit area (`.ludo-token.legal::after`, 18px outside each side), about 46px across. The audit now measures that area for legal tokens only. The coin is not changed. |
+| Ludo token tap targets | Ludo at 320×568 (late game): the drawn coin is about 10px | Not a touch failure. A legal token is tapped through an invisible hit area (`.ludo-token.legal::after`, 18px outside each side), about 44px across. The audit measures that area for legal tokens. `tests/ui/ludo-token-tap-ui.js` taps 14px from a legal token's centre with a touchscreen tap at 320, 360 and 390px and checks that the same token receives the move. The coin is not changed. |
 | Clipped sr-only text | 29 at phone sizes | False positive. The screen-reader text is clipped on purpose. The audit now skips `.sr-only` (this pass). |
-| Ludo tokens about 8–10px to tap (2-player late game at 320×568) | Ludo legal tokens, measured on the drawn token box | Measurement limit, not a touch failure. A legal token has an invisible 18px area (`.ludo-token.legal::after`, about 44px across). `tests/ui/ludo-token-tap-ui.js` taps 14px from a legal token's centre with a touchscreen tap at 320, 360 and 390px and checks that the same token receives the move. The audit still reports the drawn box as a warning. |
 
 ## Fixed in this pass
 
