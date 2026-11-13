@@ -27,6 +27,7 @@ Warnings are not failures. The table below groups them and says whether each is 
 | Bid button below the fold | Wizard 3 players at 320×568 and 667×375 | Same short-screen limit as above. |
 | Open property cards under 30px | Property Rivals at 1280×800 (desktop, mouse) | Measured at 1280×800 with touch disabled in the emulation. That does not show the controls are unusable by touch: a tablet or touchscreen laptop can use this width. Touch coverage here is unverified. To fix later if this width needs touch use. |
 | Clipped sr-only text | 29 at phone sizes | False positive. The screen-reader text is clipped on purpose. The audit now skips `.sr-only` (this pass). |
+| Ludo tokens about 8–10px to tap (2-player late game at 320×568) | Ludo legal tokens, measured on the drawn token box | Measurement limit, not a touch failure. A legal token has an invisible 18px area (`.ludo-token.legal::after`, about 44px across). `tests/ui/ludo-token-tap-ui.js` taps 14px from a legal token's centre with a touchscreen tap at 320, 360 and 390px and checks that the same token receives the move. The audit still reports the drawn box as a warning. |
 
 ## Fixed in this pass
 
