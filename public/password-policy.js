@@ -38,6 +38,17 @@
     return null;
   }
 
-  const api = { MIN, MAX, missing, check };
+  /** What the sign-up sheet shows under the password field, from the password and the identity typed so far.
+   *  { text, bad }: "Looks good." only when check() accepts the password, so the hint never approves a password the server would refuse. */
+  function hint(pw, { email = '', username = '' } = {}) {
+    if (!pw) return { text: 'Use an uppercase letter, a lowercase letter, a number and a symbol.', bad: false };
+    const need = missing(pw);
+    if (need.length) return { text: `Still needed: ${need.join(', ')}.`, bad: false };
+    const problem = check(pw, { email, username });
+    if (problem) return { text: problem, bad: true };
+    return { text: 'Looks good.', bad: false };
+  }
+
+  const api = { MIN, MAX, missing, check, hint };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.TvPassword = api;
 })(typeof window !== 'undefined' ? window : globalThis);

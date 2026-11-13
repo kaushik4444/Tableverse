@@ -34,4 +34,19 @@ test('the identity parts the server checks are the normalised ones (what is stor
   assert.match(P.check('Sunshine99!ok', { username: 'sunshine99' }), /username/);
   assert.match(P.check('Zx-ANNABEL-7a', { email: 'annabel@example.com' }), /e-mail/);
 });
+
+// The sign-up hint: it must never say "Looks good." for a password the server would refuse.
+test('the hint asks for what is missing, then explains a refusal, and says "Looks good." only for an accepted password', () => {
+  assert.deepEqual(P.hint(''), { text: 'Use an uppercase letter, a lowercase letter, a number and a symbol.', bad: false });
+  assert.match(P.hint('alllowercase1!').text, /Still needed: an uppercase letter/);
+  assert.deepEqual(P.hint('TestPass123!', { username: 'ann', email: 'ann@x.test' }), { text: 'Looks good.', bad: false });
+  // every character kind is present, but the password is refused: the hint must say so
+  const obvious = P.hint('MyPassword123!', { username: 'ann', email: 'ann@x.test' });
+  assert.equal(obvious.bad, true, 'a refused password is marked bad, not "Looks good."');
+  assert.match(obvious.text, /obvious/);
+  const named = P.hint('Zx-annabel-7A', { username: 'carol', email: 'annabel@x.test' });
+  assert.equal(named.bad, true);
+  assert.match(named.text, /e-mail/);
+  assert.notEqual(P.hint('Sunshine99!ok', { username: 'sunshine99' }).text, 'Looks good.');
+});
 console.log(`${passed} password policy tests passed`);
