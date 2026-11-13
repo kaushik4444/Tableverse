@@ -177,6 +177,7 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   const devTree = git.gitOutput(['rev-parse', 'origin/development^{tree}']);
   const mainTree = git.gitOutput(['rev-parse', 'origin/main^{tree}']);
   const devSha = git.gitOutput(['rev-parse', 'origin/development']);
+  const mainSha = git.gitOutput(['rev-parse', 'origin/main']);
   const mergeTree = git.mergeTreeOf('origin/main', 'origin/development');
   const g = await gather(client, { repo, git });
   const base = { frozen: env.RELEASE_FREEZE === 'true', scheduled, berlinHour: berlinHour(now), devTree, mainTree, mergeTree, openPrs: g.openPrs, rules: g.rules, pr: null };
@@ -205,8 +206,13 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   // Every gate passed on lastState. Read the PR again: the merge goes ahead only if the same head still passes.
   const fresh = await prState(client, g.owner, g.name, prNumber);
   const again = decide({ ...base, openPrs: [{ number: prNumber, head: 'development', base: 'main' }], pr: fresh });
-  if (fresh.head_sha !== lastState.head_sha || again.action !== 'merge') {
-    say(`Blocked: PR #${prNumber} changed while the gates were checked (${lastState.head_sha.slice(0, 7)} -> ${fresh.head_sha.slice(0, 7)}). The next run checks again.`);
+  // The gates used the snapshot of both branches taken at the start. Merge only if neither branch moved since then,
+  // and the PR head is that same development commit.
+  const liveDev = (await client.call('GET', '/git/ref/heads/development')).data.object.sha;
+  const liveMain = (await client.call('GET', '/git/ref/heads/main')).data.object.sha;
+  const snapshotMoved = liveDev !== devSha || liveMain !== mainSha || fresh.head_sha !== devSha;
+  if (snapshotMoved || fresh.head_sha !== lastState.head_sha || again.action !== 'merge') {
+    say(`Blocked: a branch or the PR moved while the gates were checked (development ${String(devSha).slice(0, 7)} -> ${liveDev.slice(0, 7)}, main ${String(mainSha).slice(0, 7)} -> ${liveMain.slice(0, 7)}, PR head ${fresh.head_sha.slice(0, 7)}). Nothing was merged; the next run checks again.`);
     return finish('block', summary, again);
   }
   if (dryRun) {
