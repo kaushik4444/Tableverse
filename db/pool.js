@@ -37,7 +37,10 @@ function loadEnv() {
 }
 
 // Tests must never pick up a developer's real DATABASE_URL from a .env file (that is how test rows end up in production).
-if (process.env.NODE_ENV !== 'test' && !process.env.TABLEVERSE_SKIP_DOTENV) loadEnv();
+// Production never reads a file: its configuration comes only from the platform. server.js, scripts/dev.js and
+// scripts/dev-seed.js set TABLEVERSE_SKIP_DOTENV=1, so the server and the checked dev tools use only the environment they
+// validated. Other ops scripts keep reading .env outside production.
+if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'production' && !process.env.TABLEVERSE_SKIP_DOTENV) loadEnv();
 
 let pg;
 try {
