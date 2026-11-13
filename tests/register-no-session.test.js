@@ -14,8 +14,7 @@ async function test(name, fn) {
 const original = { hasDatabase: db.hasDatabase, withTransaction: db.withTransaction, query: db.query };
 
 /** Runs registerEmail with the given address already taken (or not) and returns every statement it ran. */
-async function register({ emailTaken, email = 'someone@test.local', username = 'newplayer', password = 'TestPass123!' }) {
-  const statements = [];
+async function register({ emailTaken, email = 'someone@test.local', username = 'newplayer', password = 'TestPass123!', statements = [] }) {
   db.hasDatabase = () => true;
   db.query = async () => ({ rows: [], rowCount: 0 });
   db.withTransaction = async (fn) => {
@@ -36,10 +35,11 @@ async function register({ emailTaken, email = 'someone@test.local', username = '
 
 /** Like register(), but reports the refusal instead of throwing, so the test can check the message and the statements. */
 async function attempt(options) {
+  const statements = []; // kept on the error path too, so a write before the refusal would be seen
   try {
-    return await register(options);
+    return await register({ ...options, statements });
   } catch (err) {
-    return { error: err, statements: [] };
+    return { error: err, statements };
   }
 }
 
