@@ -8,6 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { createCloseCounter } = require('./lib/closeCounter');
+const { seatPlayers } = require('./lib/seatOrder');
 const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
@@ -797,8 +798,9 @@ function start(opts = {}) {
   function outcomeOf(room, g) {
     let results = null;
     try { results = typeof g.results === 'function' ? g.results() : null; } catch { results = null; }
-    const winners = Array.isArray(results) && results.length === room.members.length
-      ? room.members.filter((m, i) => results[i] && results[i].winner).map((m) => ({ id: m.id, name: m.name }))
+    const seated = room.seated || room.members;
+    const winners = Array.isArray(results) && results.length === seated.length
+      ? seated.filter((m, i) => results[i] && results[i].winner).map((m) => ({ id: m.id, name: m.name }))
       : [];
     return { winners, at: Date.now() };
   }
@@ -1493,11 +1495,12 @@ function start(opts = {}) {
       if (!room) return;
       const def = games.get(room.gameId);
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
-      room.game = def.create(
-        room.members.map((m) => ({ id: m.id, name: m.name })),
-        room.options,
-        Math.random
-      );
+      // Players sit in the order they joined, unless the host turned on the game's shuffle option.
+      const offered = def.options.some((o) => o.key === 'shuffleSeats');
+      const seats = seatPlayers(room.members, { shuffle: Boolean(room.options && room.options.shuffleSeats), offered });
+      room.game = def.create(seats, room.options, Math.random);
+      // The member in each seat, in game order. Results are indexed by seat, so they are matched to people through this list.
+      room.seated = seats.map((s) => room.members.find((m) => m.id === s.id)).filter(Boolean);
       if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
       else pacing.setScale(room.game, botScale);
       room.status = 'playing';
