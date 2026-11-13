@@ -36,13 +36,24 @@ async function readOverlay(page, sel) {
       const q = b.getBoundingClientRect();
       return { label: (b.getAttribute('aria-label') || b.textContent || '').trim().slice(0, 22), w: q.width, h: q.height, l: q.left, r: q.right, t: q.top, b: q.bottom };
     });
-    return { fits, scrolls, btns, sideways: document.documentElement.scrollWidth > innerWidth + 1, vw: innerWidth, vh: innerHeight };
+    const contentFits = el.scrollHeight <= el.clientHeight + 2;
+    return { fits, scrolls, contentFits, box: { l: r.left, r: r.right, t: r.top, b: r.bottom }, btns, sideways: document.documentElement.scrollWidth > innerWidth + 1, vw: innerWidth, vh: innerHeight };
   }, sel);
 }
 
-function assertOnScreen(info, what) {
+function assertOnScreen(info, what, { menu = false } = {}) {
   assert.equal(info.sideways, false, `${what}: the page does not scroll sideways`);
-  assert.ok(info.fits || info.scrolls, `${what}: fits the screen, or scrolls inside itself`);
+  // The container's own edges must be on screen, always. Scrolling can only move its contents, not its edges.
+  assert.ok(info.fits, `${what}: the box itself is on screen (${Math.round(info.box.t)}..${Math.round(info.box.b)} of ${info.vh}px)`);
+  if (!info.contentFits) assert.ok(info.scrolls, `${what}: content taller than the box must scroll inside it`);
+  if (menu) {
+    assert.ok(info.btns.length > 0, `${what}: the menu has controls`);
+    for (const b of info.btns) {
+      const inView = b.l >= -1 && b.r <= info.vw + 1 && b.t >= -1 && b.b <= info.vh + 1;
+      const inBox = b.l >= info.box.l - 1 && b.r <= info.box.r + 1 && b.t >= info.box.t - 1 && b.b <= info.box.b + 1;
+      assert.ok(inView && inBox, `${what}: "${b.label}" is fully on screen and inside the menu`);
+    }
+  }
 }
 
 // A dialog that scrolls inside itself is fine if its close control can be scrolled into view (the path a user takes).
@@ -67,7 +78,7 @@ async function openAndCheck(browser, url, vp, { messages, trigger, overlay, read
     await page.waitForTimeout(300);
     const info = await readOverlay(page, overlay);
     assert.ok(info, `${what} opens`);
-    assertOnScreen(info, what);
+    assertOnScreen(info, what, { menu: overlay === '.tb-pop' });
     if (overlay.includes('sheet')) {
       const c = await closeReachable(page, overlay);
       assert.ok(c.found, `${what}: has a close control`);
