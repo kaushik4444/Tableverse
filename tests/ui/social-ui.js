@@ -237,10 +237,13 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
       await page.waitForSelector('[data-modal-act="cardProfileConfirm"]');
       assert.equal(ctx.pages().length, 1, 'no new tab');
       await page.click('[data-modal-act="cardProfileConfirm"]');
+      await page.waitForFunction(() => (window.__sent || []).some((m) => m.t === 'leave'));
+      // The server confirms the leave; only then does the profile open, and the table must not come back over it.
+      await page.evaluate(() => window.__push({ t: 'left' }));
       await page.waitForFunction(() => location.hash === '#u/ann');
       assert.equal(ctx.pages().length, 1, 'the profile opens in this tab');
-      const sent = await page.evaluate(() => window.__sent);
-      assert.ok(sent.some((m) => m.t === 'leave'), 'the table is left before the profile opens');
+      assert.equal(await page.$('.pseat'), null, 'the table is gone');
+      await page.waitForFunction(() => /Ann/.test(document.querySelector('#app, main, body').textContent || ''));
     } finally { await ctx.close(); }
   });
 

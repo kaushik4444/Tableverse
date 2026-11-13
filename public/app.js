@@ -1099,6 +1099,8 @@
         S.unread = 0;
         closeChat();
         wasMyTurn = false;
+        // A profile asked for from a table opens only now: the table is gone, so the page can show.
+        if (S.pendingPage) { const pending = S.pendingPage; S.pendingPage = null; openPage(pending.page, pending.arg); break; }
         setHash('');
         render();
         break;
@@ -1371,6 +1373,8 @@
     const loading = Boolean(person.username && !person.bot);
     S.card = { pid, profile: null, busy: false, error: '', last: person, loading };
     drawCard();
+    // While loading, the body has no buttons, so keep keyboard focus in the dialog on its Close control.
+    if (loading) { const x = document.querySelector('#modal-overlay [data-modal-close][aria-label="Close"]'); if (x) x.focus(); }
     if (loading) {
       const done = () => { if (S.card && S.card.pid === pid) { S.card.loading = false; drawCard(); } };
       getJson(`/api/players/${encodeURIComponent(person.username)}`)
@@ -1831,8 +1835,9 @@
       const p = S.card && S.card.last;
       closeModal();
       if (!p || !p.username) return;
+      // The page opens when the server confirms the leave ('left'); opening it now would be undone by that message.
+      S.pendingPage = { page: 'player', arg: p.username };
       send({ t: 'leave' });
-      openPage('player', p.username);
     },
     // Blocking is account-level and works the same from a table as from chat: the blocked person is hidden from table
     // chat and table voice in both directions. The block itself is sent to the server by the player's id.
