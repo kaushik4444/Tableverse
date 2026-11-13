@@ -2422,7 +2422,8 @@
     create: (el) => {
       if (!authed()) return gateLogin(() => actions.create(el));
       const game = el.dataset.game;
-      send({ t: 'create', gameId: game, visibility: 'private', name: S.name || undefined, avatar: S.avatar || undefined });
+      // New tables are public by default. The host can make the table private from the table screen (Make private).
+      send({ t: 'create', gameId: game, visibility: 'public', name: S.name || undefined, avatar: S.avatar || undefined });
     },
     toggleVisibility: () => {
       const cur = S.room && S.room.visibility;

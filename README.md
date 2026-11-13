@@ -38,7 +38,7 @@ Tableverse is currently open for friend testing.
 - Auth sheet that resumes the action a visitor originally tapped after login.
 - Account menu (Profile, Settings, What's New, logout controls), a profile page (`#profile`; public pages at `#u/<username>`) and tap-a-player cards at the table.
 - **Friends**: username search, requests (send, accept, decline, cancel), removal, online/offline, last seen, the game a friend is playing and a connection-quality (ping) badge.
-- **Private tables** (the default for new tables) with friend invitations, and **host tools** to hand over the table or remove people.
+- **Public and private tables.** New tables are public and listed in the open tables; a host can make a table private, and private tables open with friend invitations, and **host tools** to hand over the table or remove people.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - **Game settings at a glance**: every game shows its current settings at the top right. Tap them for the full list with each choice explained. Settings are set by the host in the lobby and can't change during a game.
 - **Keep me signed in on this device**: optional at sign-in. The browser stays signed in for 30 days after its last visit. It ends on sign-out, sign-out everywhere, a password reset, or a suspension.
@@ -48,6 +48,7 @@ Tableverse is currently open for friend testing.
 
 ## What's new — unreleased (Property Rivals cards, game settings, blocking)
 
+- **Public tables by default.** A new table is public and appears in the open tables. While the table is still in its lobby, the host can make it private with **Make private** on the table screen; the server refuses the change once a game has started. Tables that already exist keep their current setting.
 - **City cards.** In Property Rivals, tap a city in a player's holdings to see its owner, buildings, mortgage value, unmortgage cost, house or hotel cost, the rent right now and the full rent table.
 - **Cash and net worth.** Each rival in the player list shows cash (coins in hand) and net worth (cash plus properties) as separate figures. The crown marks the player with the highest net worth, not the most cash.
 - **Settings at the top right.** Every game shows its current settings in the title row. Tap them for the full list. Keyboard users can open them with Enter or Space; focus returns to the same control when the dialog closes.

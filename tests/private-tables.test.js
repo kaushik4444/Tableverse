@@ -54,7 +54,7 @@ function wsClient(port, token) {
     const b = await user('Invitee');
     const stranger = await user('Stranger');
 
-    a.client.send({ t: 'create', gameId: 'wizard' });
+    a.client.send({ t: 'create', gameId: 'wizard', visibility: 'private' }); // private is now asked for explicitly (new tables default to public)
     await a.client.wait((c) => c.room && c.room.status === 'lobby', 'private room created');
     const code = a.client.room.code;
     // no PostgreSQL: the memory-mode players have no cookie session and the social API is unavailable either way
