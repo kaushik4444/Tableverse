@@ -4,6 +4,8 @@ User-facing changes are listed first. Operational and internal implementation de
 
 ## Unreleased
 
+- New game tables are public by default, so they appear in the open tables. Choose private when you create a table, or use **Make private** in the lobby. The change applies to new tables only; tables already open are unchanged.
+- 29 on phones: the trump suit, or that it is still hidden or not yet chosen, stays on screen during play. While bidding no trump is set yet.
 - Keep me signed in on this device: an optional tick on the sign-in form keeps this browser signed in for 30 days after its last visit. The browser's trust ends when you sign out, sign out everywhere, reset your password, or an owner suspends or signs out your account.
 - Owners can send e-mail from the admin console to everyone, to verified or unverified accounts, or to accounts not seen for 30 days. Promotional mail carries an unsubscribe link and goes only to verified accounts that have not opted out. Account mail (verification, password reset) is unchanged.
 - Property Rivals: tap a city in the player list to see its owner, buildings, rent now, the full rent table, and the mortgage, unmortgage and house costs.

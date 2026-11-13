@@ -363,7 +363,7 @@ through the app. Nothing in the repository needs editing for a rotation.
 ### D.2 Known gaps (not hidden)
 
 - The in-memory rate-limit table is used only in tests (`db/rateLimit.js` uses PostgreSQL when `DATABASE_URL` is set).
-- Public table default: today a table created without an explicit visibility is private (`server.js`). Phase 3 changes this.
+- Public table default: a table created without an explicit visibility is public. `visibilityForNewTable` in `lib/roomAccess.js` decides it; `server.js` calls it on create. Only `public` makes a public table; an unknown value makes a private one. Merged in PR #143; tests in `tests/public-default-tables.test.js`. Existing tables are not changed (they live in memory).
 
 ### D.3 Secret handling and leak response
 
@@ -557,7 +557,7 @@ Scaling triggers:
 | 5 | Session token stored only as SHA-256 hash | `db/auth.js` `hashToken` | A database dump does not reveal live sessions | Plain storage (rejected) | Lookup cost on each request | Cryptography changes |
 | 6 | No Neon Auth, storage, realtime or functions | Milestone brief and decision | Keep one provider for data | Using Neon add-ons | Auth code is in the app | Owner approval |
 | 7 | Tables are in memory; single instance | `server.js` maps | Simple, fast game state | Shared store (not implemented) | No horizontal scaling | Traffic requires more than one instance |
-| 8 | Public-by-default tables | Phase 3 of the milestone | Easier discovery for friends | Private by default (current) | Changes the default for new tables only | Phase 3 PR merged |
+| 8 | Public-by-default tables | PR #143 (merged into `development`, commit `b77079b`) | Easier discovery for friends | Private by default (the behaviour before PR #143) | Changes the default for new tables only; the host can still choose private or use Make private in the lobby | Revisit if friends report unwanted strangers at public tables |
 
 ---
 

@@ -10,6 +10,8 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 |---|---|
 | Latest `main` | `297acc4ee2b34c28fe15dd2a13450bb4ac7a1dce` (PR #106 squash merge: Chromium install retry), verified by fetching `origin/main` on 2026-11-11 |
 | CI on `297acc4` | Not yet checked on the main push. The same `ci.yml` content passed on PR #106 (head `f9c1e87`, browser job included). Previous main `ead20c14`: all five check runs completed successfully: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Build production Docker image, Production dependency audit |
+| Latest `development` (checked 2026-11-13) | `fe1cab2`, which includes the technical architecture handbook (#141), local development onboarding (#142), public-by-default tables (#143) and the 29 trump visibility fix (#144). `main` is `0a55a63` and is behind `development` until the next daily release. Verified by fetching `origin` |
+| UI audit (2026-11-13) | PR #145 adds `docs/UI_AUDIT.md`, the layout record for the phone and desktop sizes that were checked in Chromium emulation. Not verified on real iOS or Android devices |
 | Recently merged | #106 CI Chromium install retry (`297acc4`); #100 Ludo 5–6 players, Snakes and Ladders 2–6, Property Rivals goal; #102 Ludo improvements and settings toolbar; #103 Ludo visual refinements and 320px mobile layout |
 | PR #101 (Impressum) | Open, **Draft**, head `8ed927a`, base `14d46a0`. Not on `main`, not published. Needs updating against the newer `main` before any merge. Not touched by this review |
 | Production | https://playtableverse.com; Render service https://game-fmy4.onrender.com |
@@ -62,11 +64,11 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 
 | Check | Status | Evidence / next step |
 |---|---|---|
-| Public and private table access, joining, sitting, reconnecting, starting | Pending owner action | S-6 with two accounts |
+| Public and private table access, joining, sitting, reconnecting, starting | Pending owner action | S-6 with two accounts. Code and CI: new tables are public by default (PR #143, `tests/public-default-tables.test.js`) and the private-table access rules are covered by `tests/private-tables.test.js` |
 | Completed match results in both player histories | Pending owner action | S-6 |
 | Match-result Option A limitations communicated before play | Pending owner action | Wording is in `docs/MATCH_RESULT_DURABILITY.md`; testers must see it before they play |
 | Current game catalogue smoke test (Ludo, Snakes and Ladders, Property Rivals) | Verified in code/CI only | Ludo, Snakes and Property Rivals tests pass on `main`; a live smoke test is still pending |
-| Mobile layouts at 320px, 360px and 390px | Verified in code/CI only | Browser layout and mobile-fit checks in CI; a live check is still pending |
+| Mobile layouts at 320px, 360px and 390px | Verified in code/CI only | Browser layout and mobile-fit checks in CI. The 29 trump indicator on phones has a regression test (PR #144). The audit record in `docs/UI_AUDIT.md` (PR #145) lists what is not covered. A live check and a real-device check are still pending |
 
 ### D. Safety and support
 
