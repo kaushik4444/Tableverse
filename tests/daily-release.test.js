@@ -220,12 +220,26 @@ const base = (over = {}) => ({
     const fakeFetch = async (url, opts = {}) => {
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/git/matching-refs/')) return json([]);
-      if (url.includes('/pulls?state=closed')) return json([{ number: 130, merged_at: '2026-10-25T00:20:00Z', head: { ref: 'development' } }]);
+      if (url.includes('/pulls?state=closed')) return json([{ number: 130, merged_at: '2026-10-25T00:20:00Z', head: { ref: 'development', repo: { full_name: 'kaushik4444/Tableverse' } } }]);
       throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
     };
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
     const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-10-25T01:30:00Z'), git: { gitOutput: () => 'T1', mergeTreeOf: () => 'T1' }, sleep: async () => {} });
     assert.equal(r.outcome, 'skip');
+  });
+  await test('a fork PR from a branch named development does not count as today\'s release', async () => {
+    const fakeFetch = async (url, opts = {}) => {
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
+      if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return json([{ number: 99, merged_at: '2026-10-25T00:20:00Z', head: { ref: 'development', repo: { full_name: 'someone/Tableverse' } } }]);
+      if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([]);
+      throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
+    };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test', DRY_RUN: 'true' };
+    const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
+    const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-10-25T01:30:00Z'), git, sleep: async () => {} });
+    assert.equal(r.outcome, 'dry-run');
   });
   await test('no PRODUCTION_URL: the release is blocked before anything is merged', async () => {
     const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };

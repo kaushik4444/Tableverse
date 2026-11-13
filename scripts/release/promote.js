@@ -187,6 +187,20 @@ async function prState(client, owner, name, number) {
   };
 }
 
+// Release PRs merged to main from this repository's development branch on the given Berlin date. Scoped by head owner
+// (as gather() does), filtered to this repository's own head, and paginated so no page can hide a release.
+async function releasesMergedOn(client, repo, day) {
+  const [owner] = repo.split('/');
+  const found = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const batch = (await client.call('GET', `/pulls?state=closed&base=main&head=${encodeURIComponent(owner)}:development&per_page=100&page=${page}`)).data;
+    found.push(...batch.filter((p) => p.merged_at && p.head.ref === 'development' && p.head.repo && p.head.repo.full_name === repo
+      && berlinDate(new Date(p.merged_at)) === day));
+    if (batch.length < 100) break;
+  }
+  return found;
+}
+
 async function main({ env = process.env, fetchFn = fetch, now = new Date(), git = { mergeTreeOf, gitOutput }, sleep } = {}) {
   const repo = env.GITHUB_REPOSITORY;
   const dryRun = env.DRY_RUN === 'true';
@@ -207,8 +221,7 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   // One release per Berlin day. Two signs count: a release tag for today, or a release PR merged today. The second still
   // counts if the tag write failed after the merge.
   const done = (await client.call('GET', `/git/matching-refs/tags/release-${today}-`)).data;
-  const mergedToday = (await client.call('GET', '/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=30')).data
-    .filter((p) => p.merged_at && p.head.ref === 'development' && berlinDate(new Date(p.merged_at)) === today);
+  const mergedToday = await releasesMergedOn(client, repo, today);
   if (done.length > 0 || mergedToday.length > 0) {
     const what = done.length ? done.map((t) => t.ref.replace('refs/tags/', '')).join(', ') : `PR #${mergedToday[0].number}`;
     say(`Skipped: today's release already happened (${what}). One release per Berlin day.`);
