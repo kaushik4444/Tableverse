@@ -65,10 +65,12 @@ async function test(name, fn) {
       assert.equal((await login('dev.one@local.test', reset.password)).status, 200);
     });
     await test('an existing e-mail with a different username is refused, and the account is not changed', async () => {
+      const hashOf = async () => (await q("SELECT i.password_hash FROM auth_identities i JOIN players p ON p.id = i.player_id WHERE p.username = 'devone' AND i.provider = 'email'"))[0].password_hash;
+      const before = await hashOf();
       await assert.rejects(seedAccount({ email: 'dev.one@local.test', username: 'otherhandle', resetPassword: true }, deps),
         (e) => e instanceof DevEnvError && /belongs to the account "devone"/.test(e.message));
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM players WHERE username = 'otherhandle'"))[0].n, 0);
-      assert.equal((await login('dev.one@local.test', first.password)).status, 200, 'the password did not change');
+      assert.equal(await hashOf(), before, 'the password hash did not change');
     });
     await test('--owner makes the account the local owner, who can open the admin console; only one owner is possible', async () => {
       const own = await seedAccount({ email: 'boss@local.test', username: 'localboss', owner: true }, deps);
