@@ -346,9 +346,9 @@ const base = (over = {}) => ({
     await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
     assert.ok(seen.some((u) => u.includes('head=kaushik4444%3Adevelopment') || u.includes('head=kaushik4444:development')), 'the request filters by head');
   });
-  await test('the merge method is squash by default and merge only when the owner sets RELEASE_MERGE_METHOD=merge', async () => {
+  await test('the merge method is a merge commit by default, and squash only when the owner sets RELEASE_MERGE_METHOD=squash', async () => {
     const methods = [];
-    for (const extra of [{}, { RELEASE_MERGE_METHOD: 'merge' }]) {
+    for (const extra of [{}, { RELEASE_MERGE_METHOD: 'merge' }, { RELEASE_MERGE_METHOD: 'squash' }]) {
       const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
       const fakeFetch = async (url, opts = {}) => {
         const method = opts.method || 'GET';
@@ -372,7 +372,16 @@ const base = (over = {}) => ({
       const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
       await main({ env: { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test', ...extra }, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
     }
-    assert.deepEqual(methods, ['squash', 'merge']);
+    assert.deepEqual(methods, ['merge', 'merge', 'squash']);
+  });
+  await test('an unknown RELEASE_MERGE_METHOD stops the run before any GitHub call', async () => {
+    let calls = 0;
+    const fakeFetch = async () => { calls += 1; throw new Error('no GitHub call expected'); };
+    await assert.rejects(
+      main({ env: { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test', RELEASE_MERGE_METHOD: 'rebase' }, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git: { gitOutput: () => 'T1', mergeTreeOf: () => 'T1' }, sleep: async () => {} }),
+      /RELEASE_MERGE_METHOD must be "merge"/,
+    );
+    assert.equal(calls, 0);
   });
   await test('only the newest run per check name counts: an older green run cannot pass a newer running one', async () => {
     const { latestRuns } = require('../scripts/release/promote');
