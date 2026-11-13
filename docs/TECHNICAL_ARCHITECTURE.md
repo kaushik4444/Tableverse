@@ -125,7 +125,7 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Lobby: create (visibility defaults to private today; see Phase 3 plan)
+  [*] --> Lobby: create (visibility defaults to public)
   Lobby --> Lobby: join, leave, addBot, setSeats, setVisibility
   Lobby --> Playing: start (host, enough players)
   Playing --> Playing: game actions (engine validates each)
