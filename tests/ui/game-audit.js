@@ -125,14 +125,7 @@ function inPage() {
   for (const el of all) {
     if (el.matches('button:not(:disabled), a.btn, select, input:not([type=hidden])')) {
       const r = el.getBoundingClientRect();
-      // A legal Ludo token is tapped through its invisible ::after hit area (ludo.css, inset -18px), so measure that
-      // area too. Only legal tokens get this; every other control is measured by its own box.
-      let w = r.width, h = r.height;
-      if (el.matches('.ludo-token.legal')) {
-        const hit = getComputedStyle(el, '::after');
-        if (hit.content !== 'none') { w = Math.max(w, parseFloat(hit.width) || 0); h = Math.max(h, parseFloat(hit.height) || 0); }
-      }
-      if (Math.min(w, h) < 30) add('WARN', 'tap-target', `${label(el)} is ${Math.round(w)}x${Math.round(h)}`);
+      if (Math.min(r.width, r.height) < 30) add('WARN', 'tap-target', `${label(el)} is ${Math.round(r.width)}x${Math.round(r.height)}`);
     }
     // .sr-only text is clipped on purpose (it is read by screen readers only), so it is not a cut-off
     if (el.matches('button, .pt-seat .nm, .wz-status span, h1, h2, h3, b') && !el.classList.contains('sr-only') && el.scrollWidth > el.clientWidth + 2 && /(hidden|clip)/.test(getComputedStyle(el).overflowX) && getComputedStyle(el).textOverflow !== 'ellipsis') add('WARN', 'clipped-text', `${label(el)} text is cut (${el.scrollWidth} > ${el.clientWidth})`);
