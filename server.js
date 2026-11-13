@@ -24,7 +24,7 @@ const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
 const dbModeration = require('./db/moderation');
 const moderation = require('./lib/moderation');
-const { decideAccess } = require('./lib/roomAccess');
+const { decideAccess, visibilityForNewTable } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
 const legalPages = require('./lib/legalPages');
@@ -1264,7 +1264,7 @@ function start(opts = {}) {
         lastActivity: Date.now(),
         idleSince: null,
         gameId: def.id,
-        visibility: msg.visibility === 'public' ? 'public' : 'private',
+        visibility: visibilityForNewTable(msg.visibility), // public unless the request asks for private (lib/roomAccess.js)
         hostId: p.id,
         creatorId: p.id, // the person who opened the table: never loses access to it
         hosts: new Set([p.id]), // everyone who has hosted this table: their accepted invitations stay valid after a host change
