@@ -4,6 +4,9 @@
   const { esc, toast, pt } = window.CardTable;
 
   // 4-colour suits: the CSS classes suit-R/Y/G/B are shared with Wizard.
+  // Shows the points the bidding team needs when a marriage has changed the bid (marriageBid option).
+  const bidNote = (v) => (v.bidTarget != null && v.bidTarget !== v.highBid ? ` <small>(needs ${v.bidTarget})</small>` : '');
+
   const SUITS = {
     S: { sym: '♠', name: 'Spades', cls: 'suit-B' },
     H: { sym: '♥', name: 'Hearts', cls: 'suit-R' },
@@ -94,7 +97,7 @@
   function scoreStrip(v) {
     const mine = myTeam(v);
     const us = mine, them = 1 - mine;
-    const bid = v.highBidder >= 0 && v.phase !== 'bidding' ? `<span class="bidinfo">Bid ${v.highBid} by ${esc(v.players[v.highBidder].name)}</span>` : '';
+    const bid = v.highBidder >= 0 && v.phase !== 'bidding' ? `<span class="bidinfo">Bid ${v.highBid}${bidNote(v)} by ${esc(v.players[v.highBidder].name)}</span>` : '';
     return `<div class="t29-strip">
       <div class="tbox us"><span class="label">${v.teamScore[us] > v.teamScore[them] ? '👑 ' : ''}${usName(v)}</span><b>${v.teamScore[us]}</b><small>game pts · hand ${v.handPoints[us]}</small></div>
       ${bid}
@@ -116,7 +119,7 @@
     if (v.trumpSuit) h = `<span class="t29-corner-trump">Trump${v.trumpRevealed ? '' : ' (secret)'}<br>${suitPill(v.trumpSuit)}</span>`;
     else if (v.trumpSet) h = '<span class="t29-corner-trump">Trump<br><b>🔒 hidden</b></span>';
     else h = v.phase === 'bidding' ? 'Bidding…' : 'Choosing trump…';
-    if (v.highBidder >= 0 && v.phase !== 'bidding') h += `<br>Bid <b>${v.highBid}</b> · ${esc(v.players[v.highBidder].name)}`;
+    if (v.highBidder >= 0 && v.phase !== 'bidding') h += `<br>Bid <b>${v.highBid}</b>${bidNote(v)} · ${esc(v.players[v.highBidder].name)}`;
     return `<div class="cap">${h}</div>`;
   }
 
