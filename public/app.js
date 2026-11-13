@@ -1336,6 +1336,8 @@
     const person = roomPerson(C.pid) || C.last;
     if (!person) return '<p class="hint">This player is no longer at the table.</p>';
     C.last = person;
+    // Show the whole card at once: while the numbers are loading, nothing else appears, so the dialog does not change in steps.
+    if (C.loading) return `<div class="pcard-loading" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span> Loading profile…</div>`;
     const rel = relationTo(person);
     const here = Boolean(roomPerson(C.pid));
     const prof = C.profile;
@@ -1352,7 +1354,8 @@
     if (rel.kind === 'none' && S.guest) add.length = 0;
     const others = [];
     if (rel.kind === 'me') others.push('<button type="button" class="btn ghost" data-modal-act="cardEditMe">Edit my profile</button>');
-    if (person.username && rel.kind !== 'me') others.push(`<a class="btn ghost" href="/#u/${encodeURIComponent(person.username)}" target="_blank" rel="noopener">View full profile</a>`);
+    if (person.username && rel.kind !== 'me') others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardProfile">View full profile</button>`);
+    if (here && rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock">🚫 Block</button>`);
     if (rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost" data-modal-act="cardMute">${muted.has(person.id) ? '🔔 Unmute in chat' : '🔇 Mute in chat'}</button>`);
     return `<div class="pcard-head">${avatar(person, 'big')}<div><h3>${esc(person.name)}</h3><p>${sub}${person.id === S.id ? ' · you' : ''}</p>${conn}</div></div>${stats}${C.error ? `<p class="auth-msg" role="alert">${esc(C.error)}</p>` : ''}<div class="pcard-actions">${add.join('')}${others.join('')}</div>${S.guest && rel.kind === 'none' ? '<p class="pcard-note">Log in to add friends.</p>' : ''}`;
   }
@@ -1365,12 +1368,15 @@
   function openPlayerCard(pid) {
     const person = roomPerson(pid);
     if (!person) return;
-    S.card = { pid, profile: null, busy: false, error: '', last: person };
+    const loading = Boolean(person.username && !person.bot);
+    S.card = { pid, profile: null, busy: false, error: '', last: person, loading };
     drawCard();
-    if (person.username && !person.bot) {
+    if (loading) {
+      const done = () => { if (S.card && S.card.pid === pid) { S.card.loading = false; drawCard(); } };
       getJson(`/api/players/${encodeURIComponent(person.username)}`)
-        .then((d) => { if (S.card && S.card.pid === pid) { S.card.profile = d.profile; drawCard(); } })
-        .catch(() => { /* the card works without the numbers */ });
+        .then((d) => { if (S.card && S.card.pid === pid) S.card.profile = d.profile; })
+        .catch(() => { /* the card works without the numbers */ })
+        .finally(done);
     }
   }
   async function cardAction(path, body, success, label = 'Updating…') {
@@ -1813,6 +1819,29 @@
     leaveGameConfirm: () => { closeModal(); send({ t: 'leave' }); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
+    // Opening a profile is a page, and the app only shows a page when no table is open. From a table, confirm first:
+    // leaving the table is what makes room for the profile.
+    cardProfile: () => {
+      const p = S.card && S.card.last;
+      if (!p || !p.username) return;
+      if (!S.room) { closeModal(); openPage('player', p.username); return; }
+      openModal('Leave game', `<p class="hint">Open ${esc(p.name)}’s profile? This leaves the game: a bot takes your seat, and you can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
+    },
+    cardProfileConfirm: () => {
+      const p = S.card && S.card.last;
+      closeModal();
+      if (!p || !p.username) return;
+      send({ t: 'leave' });
+      openPage('player', p.username);
+    },
+    // Blocking is account-level and works the same from a table as from chat: the blocked person is hidden from table
+    // chat and table voice in both directions. The block itself is sent to the server by the player's id.
+    cardBlock: () => {
+      const p = S.card && S.card.last;
+      if (!p || p.bot || !p.id || p.id === S.id) return;
+      send({ t: 'block', id: p.id });
+      closeModal();
+    },
       makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
       kickPlayerConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'kick', id }); } },
   };
