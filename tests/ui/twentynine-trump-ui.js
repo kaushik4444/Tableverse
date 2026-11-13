@@ -50,7 +50,10 @@ const STATES = [
   // indicator would only read "–"), and a bid box copy would push the cards below the fold, so the bidder's short-phone view is exempt.
   { label: 'bidding, your bid', done: (v) => v.phase === 'bidding' && v.myTurn, skipOn: (vp) => vp.width <= 520 && vp.height <= 700 },
   { label: 'choosing trump', done: (v) => v.phase === 'chooseTrump' },
-  { label: 'playing', done: (v) => v.phase === 'playing' && v.trumpSuit },
+  // Playing: the trump is hidden until it is revealed, so there are three different indicators. `expect` is the text the indicator must state.
+  { label: 'playing, trump hidden', done: (v) => v.phase === 'playing' && v.trumpSet && !v.trumpSuit, expect: /🔒|hidden/i },
+  { label: 'playing, trump secret', done: (v) => v.phase === 'playing' && v.trumpSuit && !v.trumpRevealed, expect: /secret/i },
+  { label: 'playing, trump revealed', done: (v) => v.phase === 'playing' && v.trumpSuit && v.trumpRevealed, expect: /♦|♥|♠|♣|diamond|heart|spade|club/i },
 ];
 
 (async () => {
@@ -80,6 +83,7 @@ const STATES = [
               assert.ok(box.y >= 0 && box.y + box.height <= vp.height + 1, `the Trump indicator is below the fold (y ${Math.round(box.y)}..${Math.round(box.y + box.height)} of ${vp.height})`);
               assert.match(text, /trump/i, 'the indicator names the trump; it shows ' + JSON.stringify(text)); // rendered text is upper-cased by CSS
             }
+            if (st.expect) assert.ok(shown.some((s) => st.expect.test(s.text)), `the indicator states the trump's state (${st.expect}); it shows ${JSON.stringify(shown.map((s) => s.text))}`);
           } finally { await ctx.close(); }
         });
       }
