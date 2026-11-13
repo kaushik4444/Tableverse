@@ -31,7 +31,7 @@ Related documents: `docs/LOCAL_DEVELOPMENT.md`, `docs/RELEASES.md`, `docs/OPERAT
 | Application server | `server.js` (about 2,100 lines), `lib/*.js` | One Node.js process. Serves static files, HTTP APIs, the WebSocket endpoint, runs every table in memory, and owns the rules for who may do what. |
 | Game engines | `games/` (`index.js` registry, `common.js`, one folder per game) | Pure game logic, one folder per game. Registered in `games/index.js`. |
 | Database layer | `db/*.js`, `db/migrations/*.sql` | PostgreSQL access through `pg`. Accounts, sessions, match records, admin data, moderation, analytics. |
-| Admin console | `public/admin.html`, `admin.js`, `admin.css`, served only to staff | Uses `/api/admin/*`. Authorization is enforced on the server (`lib/adminPolicy.js`, `lib/adminRoutes.js`). |
+| Admin console | `public/admin.html`, `admin.js`, `admin.css` | The page shell is public static content (`server.js` serves it without a role check); `admin.js` asks `/api/admin/me` after load. The staff-only boundary is the `/api/admin/*` API, where authorization is enforced on the server (`lib/adminPolicy.js`, `lib/adminRoutes.js`). |
 | Voice | `public/voice.js`, `lib/voiceRelay.js`, `lib/meteredTurn.js` | Browser WebRTC audio, peer to peer. The server relays setup messages and provides TURN logins. It never handles audio. |
 | Release automation | `.github/workflows/*.yml`, `scripts/release/promote.js` | CI on pull requests, the daily promotion from `development` to `main`, and the guarded cleanup job. |
 
@@ -75,15 +75,18 @@ Browser to Render to the Node process to PostgreSQL is the only data path. Voice
 | `/api/feedback` | Feedback form. | `server.js` |
 | `/api/announcements`, `/api/announcements/dismiss` | Site banner. | `lib/announcements.js` |
 | `/api/email/unsubscribe` | Unsubscribe from broadcast e-mail. | `lib/broadcast.js` |
-| `/api/admin/*` | Admin console (staff only). | `lib/adminRoutes.js` |
+| `/api/admin/*` | Admin data and actions (staff only, enforced on the server). | `lib/adminRoutes.js` |
 | `/ws` (WebSocket upgrade) | Tables, chat, voice signalling. Authenticated by the session cookie on the upgrade request. | `server.js` |
 | `/verify-email.html`, `/reset-password.html`, `/impressum.html` | Static pages used by e-mail links. | `lib/staticFiles.js`, `lib/legalPages.js` |
 
 ### A.4 WebSocket messages (client to server, verified by name in `server.js`)
 
-`hello`, `join`, `create`, `rtc`, `chat`, `leave`, `addBot`, `removeBot`, `makeHost`, `kick`, `setVisibility`, `setSeats`, `start`,
-`ping`, plus the game actions that each engine accepts. The server validates each message before it changes state; the browser
-is never trusted to enforce a rule.
+`hello` is handled first (`handleHello`). Every other client message is dispatched only if its `t` is a key of the `handlers`
+object in `server.js`: `setName`, `emote`, `voice`, `ice`, `rtc`, `chat`, `report`, `block`, `blocks`, `unblock`, `create`, `join`,
+`sit`, `leave`, `addBot`, `removeBot`, `setOptions`, `getStats`, `makeHost`, `kick`, `setVisibility`, `setSeats`, `start`, `act`
+(game actions, carried in an `action` envelope), `rematchVote` and `rematch`. Any other `t` is ignored. A JSON `ping` is not a
+handler, so it is dropped; WebSocket ping/pong are transport control frames. The server validates each message before it changes
+state; the browser is never trusted to enforce a rule.
 
 ### A.5 Authentication and session lifecycle
 
@@ -97,7 +100,8 @@ sequenceDiagram
   S->>S: validate, hash password with argon2
   S->>D: insert player, identity, verification token (hashed)
   S->>E: verification e-mail (link with raw token)
-  U->>S: GET verify link with token
+  U->>S: GET verify page (static; changes nothing)
+  U->>S: POST /api/auth/verify-email with token and CSRF header
   S->>D: mark e-mail verified, token used
   U->>S: POST /api/auth/login
   S->>D: create session (random 32 bytes, only SHA-256 stored)
@@ -140,7 +144,7 @@ period and keeps the seat until the table closes or the host acts.
 - A dropped connection is announced to the table only after `dropGraceMs` (4,000 ms). A reconnect within the window
   restores the seat. If the host drops, the host role moves on (`ensureHost`).
 - Public tables appear in the open list only while `visibility === 'public'` and status is `lobby` or `playing`.
-- Chat messages are scrubbed by `games/scrub.js` and checked by the moderation rules in `lib/moderation.js`.
+- Chat text is cleaned on send (`cleanText`) and limited by a cooldown. Delivery is filtered by blocks and reports are validated in `lib/moderation.js`. `games/scrub.js` is used when an account is deleted (it scrubs the deleted player's name from records); it is not a content filter for chat messages.
 
 ### A.7 Voice (WebRTC, TURN)
 
@@ -160,8 +164,10 @@ period and keeps the seat until the table closes or the host acts.
   Only the owner may send e-mail broadcasts (`checkBroadcast`).
 - Every admin POST passes the CSRF check; errors are answered the same way (`lib/adminRoutes.js`). Sensitive reads, such as opening a
   player profile, are written to `admin_audit_log`.
-- Analytics: `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, written by `lib/analytics.js`. Counters are
-  aggregate; they do not store personal data.
+- Analytics: `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`, written by `lib/analytics.js`.
+  `analytics_daily` holds aggregate counters. `analytics_active` holds one row per account per day, keyed by a stable hash of the
+  account ID. That is a pseudonymous, linkable record, not an anonymous aggregate: the account-deletion path recomputes the hash to
+  delete a user's rows (`db/admin.js`). Treat it as personal data for retention and privacy.
 - Chat reports: `chat_reports`, processed in order by `db/reportQueue.js` and the admin console. Moderation actions: `db/moderation.js`.
 - Player directory and profile (`db/playerStats.js`): registered accounts only; never e-mail, network address, token or chat text.
 
@@ -293,11 +299,13 @@ Render dashboard or GitHub settings.
 | `AUTH_RESET_TTL_MIN` | Password reset link lifetime | Optional | Render or local | `db/auth.js` | Edit | Restart |
 | `RL_REGISTER_IP_LIMIT` | Per-address registration limit | Optional | Render or local | `lib/authRoutes.js` | Edit | Restart |
 | `ANNOUNCEMENT` | Optional site banner text | Optional | Render | `lib/announcements.js` | Edit in Render | Redeploy |
-| `LEGAL_IMPRESSUM_PUBLISHED` | Shows the imprint page when set by the owner | Optional | Render | `lib/legalPages.js` | Owner decision | Redeploy |
+| `LEGAL_IMPRESSUM_PUBLISHED` | Must be exactly `true` to publish the imprint page (fail closed) | Optional | Render | `lib/legalPages.js`, `server.js` | Owner decision | Redeploy |
+| `IMPRESSUM_NAME`, `IMPRESSUM_ADDRESS`, `IMPRESSUM_EMAIL` | Operator details shown on the imprint page. Publishing also needs all three non-empty; otherwise the page stays 404 | Required only with the imprint | Render | `lib/legalPages.js` | Owner decision; never in source | Redeploy |
 | `MATCH_SPOOL_DIR` | Directory for the match-result spool. Unset means the OS temporary directory, which is ephemeral | Optional (recommended with a persistent disk) | Render (disk) | `db/matchQueue.js` | Only with a persistent disk | Redeploy |
 | `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`, `STUN_URL`, `ICE_SERVERS` | Static voice relay settings (if used) | Optional | Render | `lib/voiceRelay.js` | Edit | Redeploy |
 | `METERED_APP_NAME`, `METERED_SECRET_KEY` | Metered TURN account (secret key is server-only) | Optional | Render (secret) | `lib/meteredTurn.js` | Rotate in Metered, update Render | Redeploy |
-| `TURN_TTL_SECONDS` | TURN login lifetime (300 to 86,400 s) | Optional | Render | `lib/voiceRelay.js` | Edit | Restart |
+| `TURN_TTL_SECONDS` | Login lifetime. Metered mode clamps it to 900 to 172,800 s (default 48 h, `lib/meteredTurn.js`). Shared-secret mode clamps it to 300 to 86,400 s (default one hour, `lib/voiceRelay.js`) | Optional | Render | `lib/meteredTurn.js`, `lib/voiceRelay.js` | Edit | Restart |
+| `TURN_SHARED_SECRET` | Secret for per-player, time-limited TURN logins in shared-secret mode (server only) | Required for shared-secret mode | Render (secret) | `lib/voiceRelay.js` | Rotate in the TURN server, then Render | Redeploy |
 | `VOICE_ENABLED` | Turns voice on or off | Optional | Render | `server.js` | Edit | Restart |
 | `ADMIN_OWNER_ID`, `ADMIN_OWNER_EMAIL` | Identifies the single owner account | Set once | Render or local seed | `db/admin.js`, `lib/adminPolicy.js`, `lib/devSeed.js` | Owner decision; never in source | Restart |
 | `TABLEVERSE_ALLOW_DEBUG_TOKENS` | Local-only debug tokens | Never in production | Local `.env.local` | `lib/debugTokens.js` | Local only | Restart |
@@ -335,7 +343,7 @@ through the app. Nothing in the repository needs editing for a rotation.
 | Release refusal rules (freeze, pinned head, no bypass) | IMPLEMENTED and tested | `scripts/release/promote.js`, `tests/daily-release.test.js` | Unsafe or duplicate releases | `npm test` |
 | Authentication, password policy, validation | IMPLEMENTED | `db/auth.js`, `public/password-policy.js`, `lib/authRoutes.js` | Credential attacks, weak passwords | `tests/password-policy.test.js`, auth tests |
 | Session token storage and revocation | IMPLEMENTED | Only SHA-256 of the token in `auth_sessions`; `revoked_at`; expiry checked on every lookup (`db/auth.js`) | Token theft from a database dump; reuse after logout | `tests/*auth*`, session tests |
-| Cookies and CSRF | IMPLEMENTED for auth, account and admin routes (double-submit `ct_csrf`) | `lib/authRoutes.js` | Cross-site requests, token exposure to scripts | Auth route tests |
+| Cookies and CSRF | IMPLEMENTED for every POST handled by `lib/authRoutes.js`, including friends, table invitations, the admin console, announcements and feedback (double-submit `ct_csrf`) | `lib/authRoutes.js` | Cross-site requests, token exposure to scripts | `tests/friends.pg.test.js` rejects a POST without CSRF |
 | Database parameterization | IMPLEMENTED (`$1` placeholders across `db/*.js`) | `db/*.js` | SQL injection | Code review; `tests/*.pg.test.js` |
 | Database TLS and least privilege | PARTIAL: verified TLS for remote hosts without `sslmode` in production (`db/poolConfig.js`). The application role's privileges are MANUAL (Neon). | `db/poolConfig.js`, Neon | Plaintext transport; over-broad DB role | Neon role settings (owner) |
 | Security headers | IMPLEMENTED: CSP, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` (microphone for voice only), `frame-ancestors 'none'`, HSTS in production | `server.js` `SECURITY_HEADERS` | Clickjacking, injection, MIME sniffing | Response headers on `/` |
@@ -354,8 +362,6 @@ through the app. Nothing in the repository needs editing for a rotation.
 
 ### D.2 Known gaps (not hidden)
 
-- Friend and table-invitation routes (`lib/friendRoutes.js`) are not confirmed to use the shared CSRF check. Verify before relying on them for
-  state changes; this is an open item for the security review.
 - The in-memory rate-limit table is used only in tests (`db/rateLimit.js` uses PostgreSQL when `DATABASE_URL` is set).
 - Public table default: today a table created without an explicit visibility is private (`server.js`). Phase 3 changes this.
 
@@ -401,7 +407,7 @@ The full ER diagram is not drawn here; the migrations are the authority. Add one
   Deletion (`cleanup-delete`) runs only when all of these hold: a manual `workflow_dispatch`, input `execute: true`, the repository variable
   `CLEANUP_EXECUTE` set to `true`, the dry run passed, and a reviewer approves the `production-cleanup` environment. The script refuses to
   delete more than `--max` accounts in one run (default 1000).
-- Match records and chat reports follow the retention rules in `docs/DATA_CLEANUP.md` and `db/cleanup.js`.
+- Finished matches and chat reports have no scheduled expiry (`docs/ACCOUNT_DELETION_AND_RETENTION.md`, "Data with no automatic deletion"). `db/cleanup.js` and `docs/DATA_CLEANUP.md` describe a manual destructive wipe run by `scripts/cleanup-user-data.js`, not retention housekeeping, and no workflow runs it.
 
 ### E.4 Backups and restore
 
@@ -443,7 +449,7 @@ production `DATABASE_URL` into a local file.
 ## G. Admin and operations
 
 - **Roles:** `owner` (one account), `admin`, `user`. Only the owner can grant admin, send e-mail broadcasts and manage other staff. Admins see
-  the console, handle announcements and feedback, and sign ordinary users out. Source: `lib/adminPolicy.js`.
+  the console, handle announcements and feedback. Signing another account out is owner-only, even for an ordinary user (`checkSignOut`, `lib/adminPolicy.js`), so moderators must not rely on it. Source: `lib/adminPolicy.js`.
 - **Audit:** `admin_audit_log` records admin actions and profile views (no e-mail, network address or chat text in the view).
 - **Moderation:** chat reports (`chat_reports`) are reviewed in order (`db/reportQueue.js`). Blocks and reports are described in `docs/CHAT_MODERATION.md`.
 - **Cleanup safeguards:** the schedule only dry-runs. Deletion needs a manual dispatch with `execute: true`, the repository variable
