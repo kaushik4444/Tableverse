@@ -147,11 +147,21 @@ async function gather(client, { repo, git }) {
   return { rules, openPrs, owner, name, git };
 }
 
+/** One run per check name: the newest (highest id). An older green run must never stand in for a newer red or running one. */
+function latestRuns(runs) {
+  const newest = new Map();
+  for (const r of runs) {
+    const seen = newest.get(r.name);
+    if (!seen || r.id > seen.id) newest.set(r.name, r);
+  }
+  return [...newest.values()];
+}
+
 async function prState(client, owner, name, number) {
   const pr = (await client.call('GET', `/pulls/${number}`)).data;
-  const runs = (await client.call('GET', `/commits/${pr.head.sha}/check-runs?per_page=100`)).data.check_runs;
+  const runs = latestRuns((await client.call('GET', `/commits/${pr.head.sha}/check-runs?per_page=100`)).data.check_runs);
   const checks = runs.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion }));
-  const copilot = runs.filter((r) => r.name === COPILOT_CHECK).pop();
+  const copilot = runs.find((r) => r.name === COPILOT_CHECK);
   const threadsData = (await client.graphql(
     'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved} pageInfo{hasNextPage}}}}}',
     { owner, name, number }
@@ -247,4 +257,4 @@ if (require.main === module) {
   main().then((r) => { process.exitCode = r.code; }, (err) => { console.error(`::error::${err.message}`); process.exitCode = 1; });
 }
 
-module.exports = { decide, berlinHour, checkHealth, makeClient, main, REQUIRED_CHECKS, COPILOT_CHECK, RELEASE_HOUR };
+module.exports = { decide, berlinHour, checkHealth, makeClient, main, latestRuns, REQUIRED_CHECKS, COPILOT_CHECK, RELEASE_HOUR };

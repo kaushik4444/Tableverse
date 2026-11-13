@@ -217,6 +217,22 @@ const base = (over = {}) => ({
     }
     assert.deepEqual(methods, ['squash', 'merge']);
   });
+  await test('only the newest run per check name counts: an older green run cannot pass a newer running one', async () => {
+    const { latestRuns } = require('../scripts/release/promote');
+    const runs = [
+      { id: 10, name: COPILOT_CHECK, status: 'completed', conclusion: 'success' },
+      { id: 42, name: COPILOT_CHECK, status: 'in_progress', conclusion: null },
+      { id: 7, name: 'Build and test (Node 20)', status: 'completed', conclusion: 'success' },
+      { id: 8, name: 'Build and test (Node 20)', status: 'completed', conclusion: 'failure' },
+    ];
+    const newest = latestRuns(runs);
+    assert.equal(newest.length, 2);
+    assert.equal(newest.find((r) => r.name === COPILOT_CHECK).status, 'in_progress');
+    assert.equal(newest.find((r) => r.name === 'Build and test (Node 20)').conclusion, 'failure');
+    const checks = newest.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion }));
+    const d = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ checks, copilotConclusion: 'in_progress' }) }));
+    assert.equal(d.action, 'block');
+  });
   await test('a duplicate run after the release finds no changes and does nothing', async () => {
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule' };
     const fakeFetch = async (url) => {
