@@ -7,12 +7,16 @@ changes from `development` to `main`.
 ## How a day works
 
 1. The workflow runs in the 02:xx Berlin slot (GitHub cron is UTC, so it is scheduled at 00:00 and 01:00 UTC and acts in the
-   right one). GitHub may start a scheduled run late; the release still happens in the 02:xx slot or on the next manual run.
+   right one). On the autumn rollback day both slots are 02:xx, so the second run finds today's release tag and does nothing:
+   **one release per Berlin day**. GitHub may start a scheduled run late; the release still happens in the 02:xx slot or on the
+   next manual run.
 2. If there is no content difference between `main` and `development` (compared by tree, not commits), it stops. **No empty
    PR is created.**
 3. If there are changes, it opens one release PR from `development` to `main`, or reuses the open one. Never two.
 4. It checks every gate (below) on the PR head. If all pass, it squash-merges the PR, pinned to the exact commit it checked,
-   tags the release `release-YYYY-MM-DD-<sha>`, and checks production health.
+   checks that the new `main` has the same content as the checked `development`, tags the release
+   `release-YYYY-MM-DD-<sha>` (Berlin date), and checks production health. A content mismatch is reported as `RELEASE MISMATCH`
+   and no tag is written.
 5. Otherwise it leaves the PR open, writes the reasons to the run summary and as warnings, and stops. The next day tries again.
 
 The merge is a squash merge through the GitHub API (the default; see *Squash history* below). GitHub still enforces the rulesets (five required checks, the Copilot
@@ -30,6 +34,8 @@ A release proceeds only when all of these hold on the PR head:
 | No conflicts | `git merge-tree` and the PR `mergeable` field | either reports a conflict |
 | Five required checks green | check runs on the head commit | any missing, pending or failed |
 | Copilot review finished | check run `copilot-pull-request-reviewer` | missing, running or not successful |
+| Newest run decides | every page of check runs, newest run per name | an older green run can never stand in for a newer red or running one |
+| Production target set | repository variable `PRODUCTION_URL` | it is not set (checked before the merge, so nothing is merged) |
 | Conversations resolved | GraphQL `reviewThreads` | any unresolved (lists over 100 are blocked) |
 | Rules as expected | `GET /rules/branches/{main,development}` | a required rule type is missing |
 | One release PR | open PRs | more than one |
@@ -108,6 +114,12 @@ serving correctly:
 
 The release tag (`release-YYYY-MM-DD-<sha>`) marks the bad commit; use it to find what to revert or redeploy.
 
+## Hotfixes and the release window
+
+Do not merge anything to `main` between 02:00 and 02:15 Berlin, while the release runs. The workflow pins the merge to the
+checked `development` commit and then checks that `main` has that content. If another change reached `main` in between, the
+run reports `RELEASE MISMATCH` and writes no tag: investigate `main` and the release before the next run.
+
 ## Hotfixes
 
 1. Branch from `main`, make the smallest fix, and open a PR **to `main`** (the only exception to "features target development").
@@ -121,14 +133,16 @@ blocked, and a manual merge that ignores the gate would undo the hotfix.
 
 ## Post-release health
 
-After the merge, the workflow polls `PRODUCTION_URL/healthz` and `/readyz` every 30 seconds for up to 10 attempts. It passes after
+After the merge, the workflow polls `PRODUCTION_URL/healthz` and `/readyz` every 30 seconds for up to 10 attempts. Each request
+has a 10-second deadline, body included, so a stalled probe counts as a failed attempt. It passes after
 three readings in a row where `/healthz` returns 200 and `/readyz` returns 200 with a body starting `ready` (`/readyz` checks the
 database with `SELECT 1`). This confirms the site answers and the database is reachable. It does **not** prove the new commit is the
 one serving: `/healthz` has no version field. Adding the build commit to `/healthz` is the next improvement.
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js` (22 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
+`npm test` runs `tests/daily-release.test.js` (27 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
 conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
-method switch, and a duplicate run after a release.
+method switch, a duplicate run after a release, the second scheduled run on the same Berlin day, a missing `PRODUCTION_URL`
+(blocked before the merge), a content mismatch after the merge (no tag), and check runs beyond the first page.
