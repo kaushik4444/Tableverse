@@ -268,7 +268,7 @@
     root.innerHTML = `
     <div class="wz t29" style="--cw:${z.cw}px;--tcw:${z.tcw}px;--cw0:${z.cw}px">
       <div class="wz-top">
-        <div class="wz-round"><b>Hand ${v.handNo}</b><span class="label"> · to ${v.options.target}${v.multiplier > 1 ? ` · ×${v.multiplier}` : ''}</span></div>
+        <div class="wz-round"><b>Hand ${v.handNo}</b>${v.multiplier > 1 ? ` <b class="t29-stakes" title="Stakes: this hand is worth ×${v.multiplier}">×${v.multiplier}</b>` : ''}<span class="label"> · to ${v.options.target}</span></div>
         <div class="wz-trump">${trumpHTML(v)}</div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-t9="scores">Scores</button>', 't9')}
       </div>
