@@ -204,9 +204,14 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   const devSha = git.gitOutput(['rev-parse', 'origin/development']);
   const mainSha = git.gitOutput(['rev-parse', 'origin/main']);
   const mergeTree = git.mergeTreeOf('origin/main', 'origin/development');
+  // One release per Berlin day. Two signs count: a release tag for today, or a release PR merged today. The second still
+  // counts if the tag write failed after the merge.
   const done = (await client.call('GET', `/git/matching-refs/tags/release-${today}-`)).data;
-  if (done.length > 0) {
-    say(`Skipped: today's release already happened (${done.map((t) => t.ref.replace('refs/tags/', '')).join(', ')}). One release per Berlin day.`);
+  const mergedToday = (await client.call('GET', '/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=30')).data
+    .filter((p) => p.merged_at && p.head.ref === 'development' && berlinDate(new Date(p.merged_at)) === today);
+  if (done.length > 0 || mergedToday.length > 0) {
+    const what = done.length ? done.map((t) => t.ref.replace('refs/tags/', '')).join(', ') : `PR #${mergedToday[0].number}`;
+    say(`Skipped: today's release already happened (${what}). One release per Berlin day.`);
     return finish('skip', summary, { action: 'skip', reasons: [] });
   }
   const g = await gather(client, { repo, git });
