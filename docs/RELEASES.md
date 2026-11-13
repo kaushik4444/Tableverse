@@ -13,14 +13,15 @@ changes from `development` to `main`.
 2. If there is no content difference between `main` and `development` (compared by tree, not commits), it stops. **No empty
    PR is created.**
 3. If there are changes, it opens one release PR from `development` to `main`, or reuses the open one. Never two.
-4. It checks every gate (below) on the PR head. If all pass, it squash-merges the PR, pinned to the exact commit it checked,
+4. It checks every gate (below) on the PR head. If all pass, it merges the PR with a merge commit, pinned to the exact commit it checked,
    checks that the new `main` has the same content as the checked `development`, tags the release
    `release-YYYY-MM-DD-<sha>` (Berlin date), and checks production health. A content mismatch is reported as `RELEASE MISMATCH`
    and no tag is written.
 5. Otherwise it leaves the PR open, writes the reasons to the run summary and as warnings, and stops. The next day tries again.
 
-The merge is a squash merge through the GitHub API (the default; see *Squash history* below). GitHub still enforces the rulesets (five required checks, the Copilot
-rule, conversation resolution). The workflow never uses an admin bypass, never force-pushes, and never approves its own PR.
+The merge is a merge commit through the GitHub API (see *Merge history* below). Squash is used only if the owner explicitly sets
+`RELEASE_MERGE_METHOD=squash`. GitHub still enforces the rulesets (five required checks, the Copilot rule, conversation
+resolution). The workflow never uses an admin bypass, never force-pushes, and never approves its own PR.
 
 ## The gates
 
@@ -42,36 +43,66 @@ A release proceeds only when all of these hold on the PR head:
 
 A successful CI run alone is not enough: the workflow checks the Copilot review and the conversations separately.
 
-## Squash history (owner decision needed)
+## Merge history
 
-A squash merge puts one new commit on `main`. That commit is **not** an ancestor of `development`, so Git's three-way merge
-does not know that the released lines are already in `main`. In practice:
+Releases use a **merge commit**, so `main` keeps `development`'s history. Each release's merge commit has `development` as a
+parent, and the next release's three-way merge sees the shared history, so releases merge cleanly.
 
-- The first release works. A later edit on `development` to a line that the last release changed conflicts with `main` when the
-  next release is computed. The gate then **blocks** (it never forces a release), and GitHub would show the same conflict on the
-  PR.
-- Resolving it needs a person: the conflict is between two valid versions of a line.
+- The merge method is set by the repository variable `RELEASE_MERGE_METHOD`. **Unset or empty means `merge`.** It is the
+  intended production setting, and the variable does not need to be set for it.
+- `RELEASE_MERGE_METHOD=squash` is an explicit owner override. A squash release puts one new commit on `main` that is not an
+  ancestor of `development`, so a later edit to the same lines can conflict. The gate then **blocks** the release (it never
+  forces one) until a person resolves it.
+- Any other value stops the run before it calls GitHub, so a typo cannot change the method silently.
+- Merge commits must be allowed in the repository settings (Settings → General → Pull Requests). If they are not, the merge is
+  refused and the release is blocked: nothing reaches `main`.
 
-The fix that avoids this entirely is to let releases keep history: allow **merge commits** in the repository settings
-(Settings → General → Pull Requests) and set the repository variable `RELEASE_MERGE_METHOD=merge`. Then `main` contains
-`development`'s commits and every later release merges cleanly. **This changes the approved squash policy and needs your decision.**
-Until then, the default stays squash and a conflict is reported in the run summary.
+## Owner checklist
 
-## Owner settings
+### Already in the repository (code, nothing to do)
 
-These cannot be set from the repository, and the workflow depends on them:
+- The **Daily release** workflow on `main` (`.github/workflows/daily-release.yml`): cron at 00:00 and 01:00 UTC with a 02:xx
+  Berlin guard, a `workflow_dispatch` dry run that is ticked by default, and `concurrency: daily-release`.
+- Least-privilege workflow permissions: `contents: write` and `pull-requests: write` for the release, `checks: read` and
+  `statuses: read` for the gates. No personal access token and no new secret.
+- Merge commits are the release method (`RELEASE_MERGE_METHOD` unset means merge; see *Merge history*).
+- `npm test` runs `tests/daily-release.test.js` (32 cases, no network, no database).
 
-1. **Settings → Actions → General → Workflow permissions**: allow *"Allow GitHub Actions to create and approve pull requests"*.
-   Without it, the release PR cannot be opened.
-2. **Settings → Secrets and variables → Actions → Variables**: add `PRODUCTION_URL` (the Render service URL, for example
-   `https://tableverse.example.com`, with no trailing slash). The post-release health check needs it.
-3. **Squash history:** decide between squash (default, conflicts can block a later release; see above) and merge commits
-   (`RELEASE_MERGE_METHOD=merge`, requires merge commits to be allowed in the repository settings).
-4. **Copilot review on bot PRs (verify once):** Copilot's review runs on pull requests, but a PR opened by the workflow's
-   `GITHUB_TOKEN` may not trigger it. If the Copilot check never appears on the release PR, every release is blocked with the
-   message "Copilot review has not run on this PR head". Check the first release PR: if Copilot does not run, the owner decides
-   between requesting Copilot review by hand on that PR each day or adding a GitHub App token. No personal access token is used or
-   added by this workflow.
+### Owner settings (manual: the workflow cannot set these, and an agent may not be able to read them)
+
+Tick each item only after checking it in the GitHub UI. The repository code does not verify them.
+
+- [ ] **Settings → Actions → General → Workflow permissions:** allow *"Allow GitHub Actions to create and approve pull requests"*.
+      Without it, the release PR cannot be opened.
+- [ ] **Settings → General → Pull Requests:** *"Allow merge commits"* is on. Without it, the release merge is refused and the
+      release is blocked.
+- [ ] **Settings → Secrets and variables → Actions → Variables:** `PRODUCTION_URL` is the Render service URL with no trailing
+      slash (for example `https://tableverse.example.com`). Without it, every release is blocked before anything merges.
+- [ ] **Variables:** `RELEASE_MERGE_METHOD` is either unset or `merge`. Set `squash` only if you accept that later releases can be
+      blocked by conflicts that a person must resolve.
+- [ ] **Copilot review on the first release PR:** Copilot's review must run on the PR that the workflow opens. If it never appears,
+      every release is blocked with "Copilot review has not run on this PR head". The owner then decides between requesting
+      Copilot review by hand on that PR each day or adding a GitHub App token. No personal access token is used or added by
+      this workflow.
+- [ ] **Security features (public repository, GitHub Free):** Settings → Code security: private vulnerability reporting, Dependabot
+      alerts, secret scanning and push protection are enabled. The code cannot check these.
+- [ ] **Environments:** the `production-cleanup` environment has the required reviewers you intend.
+- [ ] **Visibility:** the repository stays **public** (decided). Do not change it without a new decision.
+
+## Public repository and GitHub Free
+
+The repository is public and stays public. The audit of this change checked the following by reading the workflows:
+
+- **CI** (`ci.yml`) and the **cleanup dry run** use no secrets on pull requests. A pull request from a fork runs without
+  repository secrets, and the workflow permissions are `contents: read`.
+- **Cleanup deletion** (`cleanup-unverified.yml`) runs only from the `production-cleanup` environment, which has the required
+  reviewers the owner sets.
+- **Release** (`daily-release.yml`) has write permission only for contents and pull requests, plus read access to checks and
+  statuses. It uses the built-in `GITHUB_TOKEN` and no other secret.
+
+Features used and their plan position, to confirm on GitHub's current plan documentation before relying on them (the agent could
+not read the plan matrix from here): rulesets with required checks and the Copilot review rule, environment protection rules,
+Copilot code review, secret scanning and push protection. The owner checks each one in Settings.
 
 ## Dry run (manual, safe)
 
@@ -143,8 +174,8 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js` (31 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
+`npm test` runs `tests/daily-release.test.js` (32 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
 conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
-method switch, a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
+method (merge by default, squash only when set, unknown values refused), a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
 (blocked before the merge), a content mismatch after the merge (no tag), and check runs beyond the first page.

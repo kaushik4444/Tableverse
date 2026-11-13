@@ -4,8 +4,9 @@
 //
 // decide() is pure: it turns the observed repository state into one action and the reasons for it, so every gate can be tested
 // without GitHub. main() gathers that state through the GitHub API, acts on the decision, and writes a summary.
-// Nothing here bypasses a branch rule: the final merge is a normal squash merge pinned to the verified head, and GitHub still
-// enforces every required check, review rule and conversation rule on that merge.
+// Nothing here bypasses a branch rule: the final merge is a normal merge commit (squash only when the owner explicitly sets
+// RELEASE_MERGE_METHOD=squash), pinned to the verified head, and GitHub still enforces every required check, review rule and
+// conversation rule on that merge.
 
 const { execFileSync } = require('node:child_process');
 
@@ -209,8 +210,14 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   const repo = env.GITHUB_REPOSITORY;
   const dryRun = env.DRY_RUN === 'true';
   const today = berlinDate(now);
-  // squash is the default. 'merge' keeps development's history in main; see docs/RELEASES.md "Squash history".
-  const mergeMethod = env.RELEASE_MERGE_METHOD === 'merge' ? 'merge' : 'squash';
+  // Merge commits are the normal release method: main keeps development's history, so later releases merge cleanly (see
+  // docs/RELEASES.md "Merge history"). Unset or empty means merge. Squash is allowed only when set explicitly. Any other value
+  // stops the run before it touches GitHub, so a typo never silently changes the release method.
+  const requestedMethod = (env.RELEASE_MERGE_METHOD || '').trim().toLowerCase();
+  if (!['', 'merge', 'squash'].includes(requestedMethod)) {
+    throw new Error(`RELEASE_MERGE_METHOD must be "merge" (the normal setting) or "squash", not "${requestedMethod}".`);
+  }
+  const mergeMethod = requestedMethod === 'squash' ? 'squash' : 'merge';
   const scheduled = env.GITHUB_EVENT_NAME === 'schedule';
   const client = makeClient({ token: env.GITHUB_TOKEN, repo, fetchFn });
   const log = (msg) => console.log(msg);
