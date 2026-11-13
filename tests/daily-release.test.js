@@ -111,6 +111,7 @@ const base = (over = {}) => ({
     const fakeFetch = async (url, opts = {}) => {
       const method = opts.method || 'GET';
       if (url.includes('/git/matching-refs/')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       calls.push(`${method} ${url}`);
       const json = (data, status = 200) => ({ status, ok: status < 300, text: async () => JSON.stringify(data), json: async () => data });
       if (url.endsWith('/rules/branches/main?per_page=100') || url.endsWith('/rules/branches/development?per_page=100')) return json(RULES.map((type) => ({ type })));
@@ -143,6 +144,7 @@ const base = (over = {}) => ({
     const fakeFetch = async (url, opts = {}) => {
       const method = opts.method || 'GET';
       if (url.includes('/git/matching-refs/')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([{ ...pr }]);
@@ -166,6 +168,7 @@ const base = (over = {}) => ({
     const fakeFetch = async (url, opts = {}) => {
       const method = opts.method || 'GET';
       if (url.includes('/git/matching-refs/')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
@@ -188,6 +191,7 @@ const base = (over = {}) => ({
       const method = opts.method || 'GET';
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
@@ -205,6 +209,18 @@ const base = (over = {}) => ({
     const fakeFetch = async (url, opts = {}) => {
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/git/matching-refs/tags/release-2026-10-25-')) return json([{ ref: 'refs/tags/release-2026-10-25-fff0001' }]);
+      if (url.includes('/pulls?state=closed')) return json([]);
+      throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
+    };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
+    const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-10-25T01:30:00Z'), git: { gitOutput: () => 'T1', mergeTreeOf: () => 'T1' }, sleep: async () => {} });
+    assert.equal(r.outcome, 'skip');
+  });
+  await test('a release PR merged today counts even when its tag was never written', async () => {
+    const fakeFetch = async (url, opts = {}) => {
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
+      if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return json([{ number: 130, merged_at: '2026-10-25T00:20:00Z', head: { ref: 'development' } }]);
       throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
     };
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
@@ -218,6 +234,7 @@ const base = (over = {}) => ({
       const method = opts.method || 'GET';
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
@@ -240,6 +257,7 @@ const base = (over = {}) => ({
       const method = opts.method || 'GET';
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
@@ -265,6 +283,7 @@ const base = (over = {}) => ({
       const method = opts.method || 'GET';
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
@@ -282,8 +301,10 @@ const base = (over = {}) => ({
     const fakeFetch = async (url) => {
       seen.push(url);
       if (url.includes('/git/matching-refs/')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data) });
       if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([]);
       throw new Error('unexpected ' + url);
@@ -300,6 +321,7 @@ const base = (over = {}) => ({
       const fakeFetch = async (url, opts = {}) => {
         const method = opts.method || 'GET';
       if (url.includes('/git/matching-refs/')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
         const json = (data, status = 200) => ({ status, ok: status < 300, text: async () => JSON.stringify(data), json: async () => data });
         if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
         if (url.includes('/pulls?state=open')) return json([pr]);
@@ -341,6 +363,7 @@ const base = (over = {}) => ({
     const fakeFetch = async (url) => {
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data) });
       if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([]);
       throw new Error('unexpected ' + url);
