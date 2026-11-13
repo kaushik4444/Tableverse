@@ -205,10 +205,11 @@ function finishHand(g) {
   const target = bidTarget(g);
   const made = pts[bidderTeam] >= target;
   // Game points for this hand: 1 normally. All 29 taken by the bidding team makes a made bid worth 2;
-  // a missed bid with less than half the points (under 14.5 of 29) costs 2.
+  // a missed bid with less than half the card points (under 14.5 of 29) costs 2. Half counts card points from the
+  // tricks only, so a marriage bonus cannot lift a team over the line.
   let game = 1;
   if (made && g.options.allTwentyNine && g.trickPoints[bidderTeam] === 29) game = 2;
-  if (!made && g.options.halfFailDouble && pts[bidderTeam] * 2 < 29) game = 2;
+  if (!made && g.options.halfFailDouble && g.trickPoints[bidderTeam] * 2 < 29) game = 2;
   game *= g.multiplier || 1; // doubled hands are worth 2x, redoubled 4x
   g.teamScore[bidderTeam] += made ? game : -game;
   g.history.push({ hand: g.handNo, dealer: g.dealer, bidder: g.highBidder, bid: g.highBid, target, game: made ? game : -game, multiplier: g.multiplier || 1, trumpSuit: g.trumpSuit, points: pts, made, marriageDeclared: g.marriageDeclared, score: g.teamScore.slice() });

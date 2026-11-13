@@ -153,7 +153,7 @@
   function controlsHTML(v) {
     if (v.phase === 'challenge' && v.myTurn) {
       const doubling = v.multiplier === 1;
-      return `<div class="bidbox"><div class="label">${doubling ? 'Double the bid? Doubled hands count twice.' : 'Redouble? Redoubled hands count four times.'}</div>
+      return `<div class="bidbox"><div class="label"><span class="t29-mini-trump">${miniTrumpHTML(v)}</span> ${doubling ? 'Double the bid? Doubled hands count twice.' : 'Redouble? Redoubled hands count four times.'}</div>
         <div class="row" style="gap:6px"><button class="btn ghost small" data-t9="accept">Accept</button>
         <button class="btn small" data-t9="${doubling ? 'double' : 'redouble'}">${doubling ? 'Double (×2)' : 'Redouble (×4)'}</button></div></div>`;
     }
@@ -186,12 +186,22 @@
       .join('');
   }
 
+  // The bid as played: the points needed (a marriage can change it), and the multiplier when the hand was doubled.
+  const bidText = (h) => (h.target !== undefined && h.target !== h.bid ? `${h.target} <small>(bid ${h.bid})</small>` : `${h.bid}`);
+  const signed = (n) => `${n > 0 ? '+' : '−'}${Math.abs(n)}`;
+  // Game points this hand gave, and to whom. h.game is signed from the bidding team's side and already includes any multiplier.
+  const gameText = (h, mine, v) => {
+    const winner = h.game > 0 ? teamOf(h.bidder) : 1 - teamOf(h.bidder);
+    const who = winner === mine ? (v.me >= 0 ? 'us' : 'A') : (v.me >= 0 ? 'them' : 'B');
+    return `${signed(h.game)} ${who}${h.multiplier > 1 ? ` <small>(×${h.multiplier})</small>` : ''}`;
+  };
+
   function historyTable(v) {
     const mine = myTeam(v);
     const rows = v.history
       .map((h) => {
         const t = teamOf(h.bidder);
-        return `<tr><td>#${h.hand}</td><td>${esc(v.players[h.bidder].name)}</td><td>${h.bid}</td><td>${SUITS[h.trumpSuit].sym}</td><td>${h.points[mine]}–${h.points[1 - mine]}</td><td class="${h.made ? 'pos' : 'neg'}">${t === mine ? (h.made ? '+1 ' + (v.me >= 0 ? 'us' : 'A') : '−1 ' + (v.me >= 0 ? 'us' : 'A')) : h.made ? '+1 ' + (v.me >= 0 ? 'them' : 'B') : '−1 ' + (v.me >= 0 ? 'them' : 'B')}</td></tr>`;
+        return `<tr><td>#${h.hand}</td><td>${esc(v.players[h.bidder].name)}</td><td>${bidText(h)}</td><td>${SUITS[h.trumpSuit].sym}</td><td>${h.points[mine]}–${h.points[1 - mine]}</td><td class="${h.made ? 'pos' : 'neg'}">${gameText(h, mine, v)}</td></tr>`;
       })
       .join('');
     return `<div class="score-wrap"><table class="score"><thead><tr><th>Hand</th><th>Bidder</th><th>Bid</th><th>Trump</th><th>Points (us–them)</th><th>Result</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="hint">No hands finished yet</td></tr>'}</tbody></table></div>`;
@@ -206,7 +216,7 @@
     const h = v.history[v.history.length - 1];
     const mine = myTeam(v);
     const bidderMine = teamOf(h.bidder) === mine;
-    const result = `<p><b>${esc(v.players[h.bidder].name)}</b> (${bidderMine ? usName(v).toLowerCase() : themName(v).toLowerCase()}) bid <b>${h.bid}</b> with trump ${SUITS[h.trumpSuit].sym} and took <b>${h.points[teamOf(h.bidder)]}</b> points: <b class="${h.made ? 'pos' : 'neg'}">${h.made ? 'bid made' : 'bid failed'}</b>.</p>
+    const result = `<p><b>${esc(v.players[h.bidder].name)}</b> (${bidderMine ? usName(v).toLowerCase() : themName(v).toLowerCase()}) bid <b>${bidText(h)}</b> with trump ${SUITS[h.trumpSuit].sym} and took <b>${h.points[teamOf(h.bidder)]}</b> points: <b class="${h.made ? 'pos' : 'neg'}">${h.made ? 'bid made' : 'bid failed'}</b>. Hand result: ${gameText(h, mine, v)}.</p>
       <p>Hand points: ${usName(v).toLowerCase()} ${h.points[mine]}, ${themName(v).toLowerCase()} ${h.points[1 - mine]}.<br>Game points: ${usName(v).toLowerCase()} <b>${h.score[mine]}</b>, ${themName(v).toLowerCase()} <b>${h.score[1 - mine]}</b>.</p>`;
     if (v.phase === 'handEnd') {
       return `<div class="overlay"><div class="sheet"><h2>Hand ${v.handNo} complete</h2>${result}<div class="row" style="margin-top:12px"><button class="btn" data-t9="next">Next hand</button><span class="hint">Starts automatically in a few seconds</span></div></div></div>`;

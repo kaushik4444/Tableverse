@@ -235,6 +235,10 @@ test('Double loss below half: a missed bid under half the points (14 or fewer of
   assert.equal(endHand(on(), { bidder: 0, bid: 20, points: [15, 14] }), -1, '15 is at least half of 29');
   assert.equal(endHand(on(), { bidder: 0, bid: 20, points: [19, 10] }), -1, 'close miss stays -1');
   assert.equal(endHand(on(), { bidder: 0, bid: 16, points: [16, 13] }), 1, 'a made bid is +1');
+  // A marriage bonus is not card points: 14 card points plus the 4-point bonus still falls under half.
+  const bonus = E.createGame(people(), { halfFailDouble: true }, mulberry32(5));
+  bonus.trickPoints = [14, 15];
+  assert.equal(endHand(bonus, { bidder: 0, bid: 20, points: [18, 15], trick: [14, 15] }), -2, 'marriage bonus does not lift a team over half');
 });
 
 test('Marriage changes the bid: bidding team marriage lowers by 4 (min 15); other team raises by 4', () => {
