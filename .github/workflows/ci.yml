@@ -1,11 +1,11 @@
 name: CI
 
-# Every pull request that targets main, and every push to main.
+# Every pull request that targets main or development, and every push to main or development.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, development]
   push:
-    branches: [main]
+    branches: [main, development]
 
 # Least privilege: the workflow only needs to read the repository. No secrets are used anywhere.
 permissions:
