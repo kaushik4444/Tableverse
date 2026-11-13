@@ -110,7 +110,7 @@ async function openAndCheck(browser, url, vp, { messages, trigger, overlay, read
         overlay: '.overlay .sheet[role="dialog"]', what: 'lobby rules dialog',
       }));
       await test(`table More menu stays on screen at ${vp.name}`, () => openAndCheck(browser, url, vp, {
-        messages: tableMsgs, ready: '.game-supporting-details', trigger: '[data-act="toggleTools"]',
+        messages: tableMsgs, ready: '.tb-more-btn', trigger: '[data-act="toggleTools"]',
         overlay: '.tb-pop', what: 'table More menu',
       }));
     }
