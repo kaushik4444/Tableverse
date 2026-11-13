@@ -57,6 +57,25 @@ parent, and the next release's three-way merge sees the shared history, so relea
 - Merge commits must be allowed in the repository settings (Settings → General → Pull Requests). If they are not, the merge is
   refused and the release is blocked: nothing reaches `main`.
 
+### Current state: one owner decision needed
+
+The application code on `main` and `development` is identical. They differ only in release tooling, the release tests, this
+runbook and `.gitignore` (the maintenance changes merged through #137). `main` received the release files through squash and
+tree-only commits (#130, #134, #135), so it does not share their history. Because `development` has changed them since, a
+three-way merge of the two branches conflicts. The release gate reports this as a merge conflict and **blocks** the release: no
+release PR is opened and nothing reaches `main`. That is the safe outcome, but releases stop until the next step is done.
+
+The one-time reconciliation, which needs the owner's approval:
+
+1. Create a branch from `origin/development` (not from `main`).
+2. Merge `origin/main` into it with `git merge -s ours origin/main`. The `ours` strategy keeps the tree of the branch it runs on,
+   so the result is `development`'s tree, and `main` becomes a recorded parent.
+3. Open a PR from that branch **into `main`**. Its diff is only the maintenance files above, and no runtime code changes.
+4. Merge it with a **merge commit**, not squash or rebase, so the history is kept.
+
+Once this is merged, every later release is a merge commit that merges cleanly. Until then the gate blocks, and no release PR is
+created.
+
 ## Owner checklist
 
 ### Already in the repository (code, nothing to do)
