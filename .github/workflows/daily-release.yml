@@ -1,0 +1,56 @@
+name: Daily release
+
+# Promotes development to main once every gate passes (docs/RELEASES.md). This file must be on main: GitHub runs scheduled
+# workflows only from the default branch.
+on:
+  schedule:
+    # GitHub cron is UTC only: 00:00 UTC is 02:00 in summer time, 01:00 UTC is 02:00 in winter time. The script acts only in
+    # the 02:xx Europe/Berlin slot, so exactly one of these runs does the work.
+    - cron: '0 0 * * *'
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Check every gate and write the result to the summary. Opens and merges nothing.'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+# One release at a time. A second run waits; it then finds no changes or the PR already merged, so it does nothing.
+concurrency:
+  group: daily-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Promote development to main
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out main with full history
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch development
+        run: git fetch --no-tags origin development
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Evaluate gates and promote
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          RELEASE_FREEZE: ${{ vars.RELEASE_FREEZE }}
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+          RELEASE_MERGE_METHOD: ${{ vars.RELEASE_MERGE_METHOD }}
+        run: node scripts/release/promote.js
