@@ -180,14 +180,21 @@ The application-level safeguards and remaining launch requirements are tracked i
 
 ## Development
 
+Full local setup for Windows and macOS/Linux, with the database container, test accounts, resets and troubleshooting:
+[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md).
+
 ```bash
-npm start            # http://localhost:3000 (in-memory store without DATABASE_URL)
-npm run dev          # local development: loads .env.local, local database only (see docs/LOCAL_DEVELOPMENT.md)
+npm ci                # install exact dependencies (Node.js 22 recommended)
+cp .env.local.example .env.local      # Windows: copy .env.local.example .env.local
+npm run dev:migrate   # apply migrations to the local database named in .env.local
 npm run dev:seed -- --email me@local.test --username localme --owner   # create a local test account (+ admin)
-npm run build        # syntax-checks server, client, libraries and tests
-npm test             # all suites (PostgreSQL suites skip without TEST_DATABASE_URL)
-npm run test:ui      # Playwright layout/behaviour tests (skips when Playwright is missing)
+npm run dev           # local development server on http://localhost:3000 (loads .env.local, local database only)
+npm run build         # syntax-checks server, client, libraries and tests
+npm test              # unit suites; PostgreSQL suites print SKIPPED without TEST_DATABASE_URL
+npm run test:ui       # Playwright layout/behaviour tests; print SKIPPED when Playwright is not installed
 ```
+
+Without `DATABASE_URL`, only guest play works. Accounts, sessions, friends, history and the admin console need PostgreSQL.
 
 ## PostgreSQL tests
 
