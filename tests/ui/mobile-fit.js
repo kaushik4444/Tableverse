@@ -90,7 +90,7 @@ async function lobbyCheck(browser, url) {
       const r = await page.evaluate(() => {
         const d = document.querySelector('.wz, .ludo, .tm, .pk') || document.querySelector('.tb-more-btn');
         const bar = document.querySelector('.wz-top > .row, .ludo-tools');
-        return { mainEnd: Math.round(d.getBoundingClientRect().top + scrollY), vh: innerHeight, direct: bar ? [...bar.children].map((c) => (c.classList.contains('chat-btn') ? 'chat' : c.dataset.act === 'emotes' ? 'emotes' : c.classList.contains('vc-mic') ? 'mic' : c.classList.contains('vc-spk') ? 'speaker' : c.classList.contains('tb-more-wrap') ? 'more' : 'other')).join(',') : null,
+        return { mainEnd: Math.round(d.getBoundingClientRect().bottom + scrollY), vh: innerHeight, direct: bar ? [...bar.children].map((c) => (c.classList.contains('chat-btn') ? 'chat' : c.dataset.act === 'emotes' ? 'emotes' : c.classList.contains('vc-mic') ? 'mic' : c.classList.contains('vc-spk') ? 'speaker' : c.classList.contains('tb-more-wrap') ? 'more' : 'other')).join(',') : null,
           leaveLast: !!bar && Object.values(bar.lastElementChild.dataset).includes('leave'),
           menu: [...document.querySelectorAll('.tb-pop button')].map((b) => (b.dataset.act || '') + '=' + (b.textContent || '').trim()).join(',') };
       });

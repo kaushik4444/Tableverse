@@ -1778,6 +1778,8 @@
       const rb = document.createElement('button');
       rb.type = 'button'; rb.className = 'btn ghost small'; rb.dataset.act = 'rules'; rb.dataset.game = S.room.gameId;
       rb.setAttribute('aria-label', 'How to play'); rb.textContent = '📖 How to play';
+      // Space on a focused button must not reach the document-level Space shortcuts (The Mind plays a card on Space)
+      rb.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
       extras.push(rb);
     }
     // Go Fish has no log: it would show what other players asked for
