@@ -65,8 +65,8 @@ npm run dev
 Open <http://localhost:3000>, choose **Log in**, and use the e-mail and password from the seed command.
 
 `npm run dev` loads `.env.local`, checks the database, makes e-mail verification optional, and starts the server with only that
-checked environment. Use it for local work. `npm start` outside production also reads `.env.local` (and `.env`) without those
-checks, so prefer `npm run dev`. In production (`NODE_ENV=production`) no file is read at all.
+checked environment. `npm start` does not read `.env.local` or `.env`: the server never reads a file itself. Use `npm run dev` for
+local work.
 
 ## Open the admin console locally
 
