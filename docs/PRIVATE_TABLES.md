@@ -8,8 +8,8 @@ This is the rule the server enforces (`canEnterRoom`, `onFriendRemoved`, `enforc
 A table created without a visibility is **public** (`visibilityForNewTable` in `lib/roomAccess.js`). The Create table button asks
 for a public table. A public table is listed in the open-tables list while it is in the lobby or running, and anyone can join it.
 
-- `visibility: 'private'` in a create request makes a private table. The host can also use **Make private** at any time from the
-  table screen. Private tables are not listed and need an accepted invitation (rules below).
+- `visibility: 'private'` in a create request makes a private table. While the table is still in its lobby, the host can also use **Make private** from the
+  table screen; the server refuses the change once a game has started. Private tables are not listed and need an accepted invitation (rules below).
 - An unknown visibility value (anything other than `public` or `private`, for example `PUBLIC`) makes a **private** table. An
   unknown value never makes a table public.
 - Tables that already exist are not changed by this default: tables live in memory and the rule is read only when a table is created.

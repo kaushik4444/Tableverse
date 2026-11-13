@@ -48,7 +48,7 @@ Tableverse is currently open for friend testing.
 
 ## What's new — unreleased (Property Rivals cards, game settings, blocking)
 
-- **Public tables by default.** A new table is public and appears in the open tables. The host can make it private at any time with **Make private** on the table screen. Tables that already exist keep their current setting.
+- **Public tables by default.** A new table is public and appears in the open tables. While the table is still in its lobby, the host can make it private with **Make private** on the table screen; the server refuses the change once a game has started. Tables that already exist keep their current setting.
 - **City cards.** In Property Rivals, tap a city in a player's holdings to see its owner, buildings, mortgage value, unmortgage cost, house or hotel cost, the rent right now and the full rent table.
 - **Cash and net worth.** Each rival in the player list shows cash (coins in hand) and net worth (cash plus properties) as separate figures. The crown marks the player with the highest net worth, not the most cash.
 - **Settings at the top right.** Every game shows its current settings in the title row. Tap them for the full list. Keyboard users can open them with Enter or Space; focus returns to the same control when the dialog closes.

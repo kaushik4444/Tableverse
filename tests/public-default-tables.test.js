@@ -82,7 +82,9 @@ async function guest(port, name) {
     await host.wait((x) => x.room && x.room.code !== publicCode, 'second table');
     assert.equal(host.room.visibility, 'private', 'an explicit private request is private');
     const privateCode = host.room.code;
-    await wait(80);
+    // The host leaves its first table when it creates this one, which removes that public table from the directory. Wait for
+    // that refreshed directory before checking for the private table: a stale directory could hide a leak.
+    await viewer.wait(() => !viewer.tables.some((t) => t.code === publicCode), 'the first public table leaves the open-tables list');
     assert.equal(viewer.tables.some((t) => t.code === privateCode), false, 'a private table is not in the open-tables list');
     done('an explicit private table stays private and out of the open-tables list');
 
