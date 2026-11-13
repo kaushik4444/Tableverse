@@ -55,15 +55,20 @@ async function test(name, fn) {
       const again = await seedAccount({ email: 'dev.one@local.test', username: 'devone' }, deps);
       assert.equal(again.created, false); assert.equal(again.password, null);
       assert.equal((await login('dev.one@local.test', first.password)).status, 200);
+      const liveBefore = (await q("SELECT COUNT(*)::int AS n FROM auth_sessions s JOIN players p ON p.id = s.player_id WHERE p.username = 'devone' AND s.revoked_at IS NULL"))[0].n;
+      assert.ok(liveBefore > 0, 'the account has live sessions before the password changes');
       const reset = await seedAccount({ email: 'dev.one@local.test', username: 'devone', resetPassword: true }, deps);
       assert.notEqual(reset.password, first.password);
+      const liveAfter = (await q("SELECT COUNT(*)::int AS n FROM auth_sessions s JOIN players p ON p.id = s.player_id WHERE p.username = 'devone' AND s.revoked_at IS NULL"))[0].n;
+      assert.equal(liveAfter, 0, 'a new password ends every existing session');
       assert.equal((await login('dev.one@local.test', first.password)).status, 401);
       assert.equal((await login('dev.one@local.test', reset.password)).status, 200);
     });
-    await test('an existing account keeps its stored username when seeded under another one', async () => {
-      const other = await seedAccount({ email: 'dev.one@local.test', username: 'otherhandle' }, deps);
-      assert.equal(other.created, false);
-      assert.equal(other.username, 'devone', 'the stored username is reported, not the requested one');
+    await test('an existing e-mail with a different username is refused, and the account is not changed', async () => {
+      await assert.rejects(seedAccount({ email: 'dev.one@local.test', username: 'otherhandle', resetPassword: true }, deps),
+        (e) => e instanceof DevEnvError && /belongs to the account "devone"/.test(e.message));
+      assert.equal((await q("SELECT COUNT(*)::int AS n FROM players WHERE username = 'otherhandle'"))[0].n, 0);
+      assert.equal((await login('dev.one@local.test', first.password)).status, 200, 'the password did not change');
     });
     await test('--owner makes the account the local owner, who can open the admin console; only one owner is possible', async () => {
       const own = await seedAccount({ email: 'boss@local.test', username: 'localboss', owner: true }, deps);
