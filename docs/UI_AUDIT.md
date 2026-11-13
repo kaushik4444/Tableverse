@@ -1,6 +1,6 @@
 # Responsive UI audit (phone and tablet layouts)
 
-Status of the Phase 4 layout audit, as of `development` at `fe1cab2` (PR #144 merged). This records what was run, what it found and what is still open. It is a snapshot: rerun the commands below after layout changes.
+Status of the Phase 4 layout audit, as of `development` at `f582fbd` (PR #144 merged; sheets and topbar coverage added on this branch). This records what was run, what it found and what is still open. It is a snapshot: rerun the commands below after layout changes.
 
 ## Scope and what was run
 
@@ -10,6 +10,9 @@ Status of the Phase 4 layout audit, as of `development` at `fe1cab2` (PR #144 me
 | Trump indicator regression (29) | `node tests/ui/twentynine-trump-ui.js` | 29 bidding, bidder's turn, choosing trump, and hidden / secret / revealed trump, six sizes | 35 passed, 0 failed, 1 exempt case |
 | Phone fit (360×640) | `node tests/ui/mobile-fit.js` | 10 games, your-turn controls kept on screen | 15 passed, 0 failed |
 | Wizard layout | `node tests/ui/wizard-layout.js` | Wizard, 29, poker and the others, six sizes | all viewports ok (one flaky page-load on tic-tac-toe in an earlier run; passed on re-run) |
+| Sheets, dialogs, lobby, admin shell | `node tests/ui/sheets-layout.js` | 360×640 and 390×844. Guest login sheet and feedback dialog; signed-in what's new dialog, game log and leave confirmation (table in progress); lobby; admin page shell | 14 passed, 0 failed |
+
+The Trump regression and the sheets test are now in `npm run test:ui`, so CI's browser job runs them. The game audit stays in `npm run test:audit` (manual).
 
 The audit's `covers` check (a card covering a button or seat) found one ERROR in a single late-game 29 capture at 1280×800. It did not reproduce in two further runs, and the full audit run was clean, so it is treated as a capture taken mid-animation. It stays on the watch list.
 
@@ -29,16 +32,19 @@ Warnings are not failures. The table below groups them and says whether each is 
 
 - The 29 Trump indicator on phones (see PR #144). The regression test checks, at each size, that one copy is on screen, inside the viewport (sideways and vertically), and states the trump (suit, secret, hidden or not chosen). Limits: the bidder's own turn on a short phone (at most 520px wide and 700px tall) is deliberately exempt, because no trump is set during bidding. The test checks bounding boxes and `innerText`, not what a screen reader actually announces, so assistive-technology behaviour is unverified.
 - The audit no longer reports the intentional `sr-only` clip.
+- The guest topbar (Feedback, Log in, Create account) was 19px wider than a 360px screen, so a logged-out visitor could scroll sideways on the smallest supported phone. Narrow-phone gaps and small-button padding now fit it (`public/style.css`, max-width 400px). Found by `sheets-layout.js`.
 
 ## Not verified here
 
 - Real iOS Safari and Android Chrome devices were not available. All layouts were checked in Chromium emulation at the sizes above. A real iPhone 15 check remains a manual step.
-- Admin, moderation and account screens were not part of this audit run. They need their own pass.
+- Admin: only the public admin page shell is checked (no sideways scroll at 360 and 390). The signed-in admin screens (staff views, moderation, audit trail) are not laid out-tested.
+- Modals: covered by `sheets-layout.js`: login, feedback, what's new, game log, leave confirmation. Not covered, so unverified: join or spectate choice, edit profile, settings, delete account, game settings, player card, make host, remove player, remove friend, password reset and the report dialog.
+- Lobby: `sheets-layout.js` checks no sideways scroll at 360 and the host's start control; `mobile-fit.js` checks compact height at 390. Lobby options and the invitation list are not covered at 360.
 - Existing checks cover only part of the menus and lobby. `mobile-fit.js` checks a private Wizard lobby at 390×844 (the lobby check) and runs the in-game fit loops at 360×640; it also opens and closes the table's More menu. `touch-targets-ui.js` measures the home page controls and selected toolbar controls. Modals (confirmation dialogs, invitations, reports) are not exercised by any audit: their coverage is unverified.
 
 ## Next steps
 
 1. Triage the short-screen hand limit with the owner: accept it for SE-class phones, or plan a layout change. A game-layout change needs approval because it touches play areas.
-2. Add the admin, lobby and modal screens to the audit.
+2. Extend the sheet and modal coverage to the unverified dialogs listed above, and the signed-in admin screens (needs a staff test account in the harness).
 3. Decide whether the desktop Property Rivals card size warning is in scope.
 4. Run this audit on a real iPhone before the friends beta.
