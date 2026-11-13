@@ -59,15 +59,22 @@ parent, and the next release's three-way merge sees the shared history, so relea
 
 ### Current state: one owner decision needed
 
-`main` and `development` have the same content, but `main` does not yet have `development`'s history for the release files
-(`scripts/release/promote.js`, `tests/daily-release.test.js`, `docs/RELEASES.md`, `.gitignore`). `main` received those files through
-squash and tree-only commits (#130, #134, #135). Since then `development` changed them again (#137), so a three-way merge of the
-two branches conflicts. The release gate reports this as a merge conflict and **blocks** the release: no release PR is opened and
-nothing reaches `main`. This is the safe outcome, but releases stop until the next step is done.
+The application code on `main` and `development` is identical. They differ only in release tooling, the release tests, this
+runbook and `.gitignore` (the maintenance changes merged through #137). `main` received the release files through squash and
+tree-only commits (#130, #134, #135), so it does not share their history. Because `development` has changed them since, a
+three-way merge of the two branches conflicts. The release gate reports this as a merge conflict and **blocks** the release: no
+release PR is opened and nothing reaches `main`. That is the safe outcome, but releases stop until the next step is done.
 
-The one-time fix is a merge commit on `main` whose parents are `main` and `development`, with `development`'s tree (Git's
-`merge -s ours`). It changes no runtime code: the only differences are the five files above. It goes through a PR into `main`,
-which needs the owner's approval. Once it is merged, every later merge-commit release merges cleanly.
+The one-time reconciliation, which needs the owner's approval:
+
+1. Create a branch from `origin/development` (not from `main`).
+2. Merge `origin/main` into it with `git merge -s ours origin/main`. The `ours` strategy keeps the tree of the branch it runs on,
+   so the result is `development`'s tree, and `main` becomes a recorded parent.
+3. Open a PR from that branch **into `main`**. Its diff is only the maintenance files above, and no runtime code changes.
+4. Merge it with a **merge commit**, not squash or rebase, so the history is kept.
+
+Once this is merged, every later release is a merge commit that merges cleanly. Until then the gate blocks, and no release PR is
+created.
 
 ## Owner checklist
 
