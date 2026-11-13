@@ -189,10 +189,10 @@
   // The bid as played: the points needed (a marriage can change it), and the multiplier when the hand was doubled.
   const bidText = (h) => (h.target !== undefined && h.target !== h.bid ? `${h.target} <small>(bid ${h.bid})</small>` : `${h.bid}`);
   const signed = (n) => `${n > 0 ? '+' : '−'}${Math.abs(n)}`;
-  // Game points this hand gave, and to whom. h.game is signed from the bidding team's side and already includes any multiplier.
+  // Game points this hand gave the bidding team. h.game is already signed from the bidding team's side and includes any multiplier,
+  // so the label always names the bidding team, whatever the sign.
   const gameText = (h, mine, v) => {
-    const winner = h.game > 0 ? teamOf(h.bidder) : 1 - teamOf(h.bidder);
-    const who = winner === mine ? (v.me >= 0 ? 'us' : 'A') : (v.me >= 0 ? 'them' : 'B');
+    const who = teamOf(h.bidder) === mine ? (v.me >= 0 ? 'us' : 'A') : (v.me >= 0 ? 'them' : 'B');
     return `${signed(h.game)} ${who}${h.multiplier > 1 ? ` <small>(×${h.multiplier})</small>` : ''}`;
   };
 
