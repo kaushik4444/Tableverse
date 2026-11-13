@@ -3,6 +3,7 @@
 // reaches about 44px. A tap 14px from the token's centre (outside the drawn token) must reach that token, and the move the
 // page sends must be for that token's index. The page routes a tap to the nearest legal token (nearestLegal in ludo.js), so the
 // assertion checks the sent move, not only which element is under the pointer. Two overlapping legal targets are not covered here.
+// The tap is a touchscreen tap (the page context has hasTouch), so it exercises the touch path, not mouse input.
 const assert = require('node:assert/strict');
 const games = require('../../games');
 const { serve, scriptedPage, loadPlaywright, welcome, sessionOk } = require('./harness');
@@ -59,14 +60,14 @@ function messagesFor(g) {
             const x = cx + 14;
             const hit = document.elementFromPoint(x, cy);
             const hitBtn = hit && hit.closest('.ludo-token');
-            return { tokenW: b.width, hitIsLegal: !!(hitBtn && hitBtn.classList.contains('legal')), x, y: cy,
-              hitLt: hitBtn ? hitBtn.dataset.lt : null, lt: el.dataset.lt };
+            // Same element, not just any legal token: a neighbouring token's area must not count.
+            return { tokenW: b.width, hitIsThis: hitBtn === el, x, y: cy, lt: el.dataset.lt };
           });
           assert.ok(r.tokenW < 14, `the drawn token is small (${r.tokenW.toFixed(1)}px), so the tap needs the invisible area`);
-          assert.ok(r.hitIsLegal, `a tap 14px from the token centre (x ${Math.round(r.x)}) reaches a legal token`);
-          // Tap for real, then read the move the page sent: it must be for the token whose centre was measured.
+          assert.ok(r.hitIsThis, `a tap 14px from the token centre (x ${Math.round(r.x)}) reaches that same token, not a neighbour`);
+          // Real touch input (the context has hasTouch), then read the move the page sent: it must be for the measured token.
           await page.evaluate(() => { window.__sent = []; });
-          await page.mouse.click(r.x, r.y);
+          await page.touchscreen.tap(r.x, r.y);
           await page.waitForTimeout(150);
           const sent = await page.evaluate(() => window.__sent || []);
           const moves = sent.filter((m) => JSON.stringify(m).includes('"type":"move"'));
