@@ -1,0 +1,233 @@
+'use strict';
+// The daily release decision (scripts/release/promote.js): every gate, the Berlin time slot, the health check and one full flow.
+const assert = require('node:assert/strict');
+const { decide, berlinHour, checkHealth, main, REQUIRED_CHECKS, COPILOT_CHECK } = require('../scripts/release/promote');
+let passed = 0;
+const test = async (name, fn) => {
+  try { await fn(); passed += 1; console.log('  ok  ' + name); } catch (e) { console.error('  FAIL  ' + name + '\n' + (e && e.stack)); process.exitCode = 1; }
+};
+
+const RULES = ['required_status_checks', 'pull_request', 'non_fast_forward', 'deletion', 'copilot_code_review'];
+const greenChecks = () => [...REQUIRED_CHECKS.map((name) => ({ name, status: 'completed', conclusion: 'success' })), { name: COPILOT_CHECK, status: 'completed', conclusion: 'success' }];
+const goodPr = (over = {}) => ({
+  number: 130, base: 'main', head: 'development', head_sha: 'abc1234', mergeable: true,
+  checks: greenChecks(), copilotConclusion: 'success', threads: { unresolved: 0, hasNextPage: false }, ...over,
+});
+const base = (over = {}) => ({
+  frozen: false, scheduled: true, berlinHour: 2, devTree: 'T1', mainTree: 'T0', mergeTree: 'T1',
+  openPrs: [], rules: { main: RULES, development: RULES }, pr: null, ...over,
+});
+
+(async () => {
+  console.log('daily release');
+  await test('a scheduled run outside the 02:xx Berlin slot does nothing', async () => {
+    assert.equal(decide(base({ berlinHour: 1 })).action, 'skip');
+    assert.equal(decide(base({ berlinHour: 3 })).action, 'skip');
+  });
+  await test('a release freeze stops every run, scheduled or manual', async () => {
+    assert.equal(decide(base({ frozen: true })).action, 'skip');
+    assert.equal(decide(base({ frozen: true, scheduled: false })).action, 'skip');
+  });
+  await test('no changes: main and development have the same content, so no PR is created', async () => {
+    const d = decide(base({ mainTree: 'T1' }));
+    assert.equal(d.action, 'skip');
+    assert.match(d.reasons[0], /No changes/);
+  });
+  await test('main with changes development lacks blocks the release (it would undo them)', async () => {
+    const d = decide(base({ mergeTree: 'T9' }));
+    assert.equal(d.action, 'block');
+    assert.match(d.reasons[0], /main has changes/);
+  });
+  await test('a merge conflict blocks the release', async () => {
+    assert.equal(decide(base({ mergeTree: null })).action, 'block');
+  });
+  await test('two open release PRs block, so duplicates are never merged', async () => {
+    const d = decide(base({ openPrs: [{ number: 1 }, { number: 2 }] }));
+    assert.equal(d.action, 'block');
+    assert.match(d.reasons[0], /2 open release PRs/);
+  });
+  await test('missing expected branch rules block the release', async () => {
+    const d = decide(base({ rules: { main: RULES.slice(1), development: RULES } }));
+    assert.equal(d.action, 'block');
+    assert.match(d.reasons[0], /missing expected rules: required_status_checks/);
+  });
+  await test('changes and no PR yet: the decision is to create the PR', async () => {
+    assert.equal(decide(base()).action, 'create');
+  });
+  await test('an eligible PR with every gate green is merged', async () => {
+    assert.equal(decide(base({ openPrs: [{ number: 130 }], pr: goodPr() })).action, 'merge');
+  });
+  await test('a failed required check blocks', async () => {
+    const checks = greenChecks().map((c) => (c.name === 'Build and test (Node 22)' ? { ...c, conclusion: 'failure' } : c));
+    const d = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ checks }) }));
+    assert.equal(d.action, 'block');
+    assert.match(d.reasons.join(' '), /Required check failed: "Build and test \(Node 22\)"/);
+  });
+  await test('a required check still running blocks, and a missing one blocks', async () => {
+    const running = greenChecks().map((c) => (c.name === 'Production dependency audit' ? { ...c, status: 'in_progress', conclusion: null } : c));
+    assert.match(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ checks: running }) })).reasons.join(' '), /still running: "Production dependency audit"/);
+    const missing = greenChecks().filter((c) => c.name !== 'Browser layout and interaction checks');
+    assert.match(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ checks: missing }) })).reasons.join(' '), /missing: "Browser layout/);
+  });
+  await test('an incomplete Copilot review blocks, with the owner note', async () => {
+    const d = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: undefined }) }));
+    assert.equal(d.action, 'block');
+    assert.match(d.reasons.join(' '), /Copilot review has not run/);
+    assert.equal(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: 'in_progress' }) })).action, 'block');
+  });
+  await test('an unresolved conversation blocks, and so does a list too long to confirm', async () => {
+    assert.match(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ threads: { unresolved: 1, hasNextPage: false } }) })).reasons.join(' '), /1 review conversation/);
+    assert.match(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ threads: { unresolved: 0, hasNextPage: true } }) })).reasons.join(' '), /More than 100/);
+  });
+  await test('a merge conflict on the PR blocks; mergeability not yet computed blocks too', async () => {
+    assert.match(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ mergeable: false }) })).reasons.join(' '), /Merge conflict/);
+    assert.match(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ mergeable: null }) })).reasons.join(' '), /not computed/);
+  });
+  await test('a manual run is not limited to the 02:xx slot', async () => {
+    assert.equal(decide(base({ scheduled: false, berlinHour: 15, openPrs: [{ number: 130 }], pr: goodPr() })).action, 'merge');
+  });
+  await test('Berlin hour follows daylight saving: 02:xx in both summer and winter time', async () => {
+    assert.equal(berlinHour(new Date('2026-07-01T00:30:00Z')), 2, 'summer: 00:30 UTC is 02:30 Berlin');
+    assert.equal(berlinHour(new Date('2026-12-01T01:30:00Z')), 2, 'winter: 01:30 UTC is 02:30 Berlin');
+    assert.equal(berlinHour(new Date('2026-12-01T00:30:00Z')), 1, 'winter: 00:30 UTC is 01:30 Berlin, so the 00:00 UTC slot skips');
+  });
+  await test('health passes only after three good readings in a row; a failure resets the streak', async () => {
+    const replies = [];
+    const fakeFetch = async (url) => {
+      if (url.endsWith('/healthz')) return { status: 200, text: async () => 'ok' };
+      const next = replies.shift();
+      if (next === 'boom') throw Object.assign(new Error('x'), { code: 'ECONNRESET' });
+      return { status: next, text: async () => (next === 200 ? 'ready' : 'not ready') };
+    };
+    replies.push(200, 503, 200, 200, 200); // readyz readings: a failure resets the streak, three in a row pass
+    const r = await checkHealth('https://example.test', fakeFetch, { attempts: 6, sleep: async () => {} });
+    assert.equal(r.ok, true);
+    const bad = await checkHealth('https://example.test', async (url) => ({ status: url.endsWith('/healthz') ? 200 : 503, text: async () => 'not ready' }), { attempts: 3, sleep: async () => {} });
+    assert.equal(bad.ok, false);
+  });
+  await test('a full run merges the PR pinned to its verified head, tags it, and reports healthy', async () => {
+    const calls = [];
+    const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
+    const fakeFetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      calls.push(`${method} ${url}`);
+      const json = (data, status = 200) => ({ status, ok: status < 300, text: async () => JSON.stringify(data), json: async () => data });
+      if (url.endsWith('/rules/branches/main?per_page=100') || url.endsWith('/rules/branches/development?per_page=100')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([{ ...pr, number: 130 }]);
+      if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
+      if (url.endsWith('/commits/abc1234/check-runs?per_page=100')) return json({ check_runs: greenChecks().map((c) => ({ ...c, status: c.status, conclusion: c.conclusion })) });
+      if (url.endsWith('/git/ref/heads/development')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'abc1234' } }) };
+      if (url.endsWith('/git/ref/heads/main')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'M0' } }) };
+      if (url.endsWith('/pulls/130/merge') && method === 'PUT') { assert.equal(JSON.parse(opts.body).sha, 'abc1234', 'the merge is pinned to the verified head'); return json({ sha: 'fff0001' }); }
+      if (url.endsWith('/git/refs')) return json({}, 201);
+      if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [{ isResolved: true }], pageInfo: { hasNextPage: false } } } } } });
+      if (url.endsWith('/healthz')) return { status: 200, ok: true, text: async () => 'ok' };
+      if (url.endsWith('/readyz')) return { status: 200, ok: true, text: async () => 'ready' };
+      throw new Error('unexpected ' + method + ' ' + url);
+    };
+    const git = {
+      gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null,
+      mergeTreeOf: () => 'T1',
+    };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
+    const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    assert.equal(r.outcome, 'released');
+    assert.ok(calls.some((c) => c.startsWith('POST https://api.github.com/repos/kaushik4444/Tableverse/git/refs') || c.includes('/git/refs')));
+  });
+  await test('a head that moves between the gate check and the merge is not merged', async () => {
+    const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
+    let prReads = 0;
+    const merges = [];
+    const fakeFetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
+      if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([{ ...pr }]);
+      if (url.endsWith('/pulls/130') && method === 'GET') { prReads += 1; return json(prReads === 1 ? pr : { ...pr, head: { ...pr.head, sha: 'newpush9' } }); }
+      if (url.endsWith('/commits/abc1234/check-runs?per_page=100') || url.endsWith('/commits/newpush9/check-runs?per_page=100')) return json({ check_runs: greenChecks() });
+      if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
+      if (url.endsWith('/git/ref/heads/development')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'abc1234' } }) };
+      if (url.endsWith('/git/ref/heads/main')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'M0' } }) };
+      if (url.endsWith('/merge') && method === 'PUT') { merges.push(url); return json({ sha: 'x' }); }
+      throw new Error('unexpected ' + method + ' ' + url);
+    };
+    const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule' };
+    const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    assert.equal(r.outcome, 'block');
+    assert.equal(merges.length, 0, 'nothing is merged when the head moved');
+  });
+  await test('development moving after the gates were read, but before the merge, blocks the merge', async () => {
+    const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
+    const merges = [];
+    const fakeFetch = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
+      if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([pr]);
+      if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
+      if (url.endsWith('/check-runs?per_page=100')) return json({ check_runs: greenChecks() });
+      if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
+      if (url.endsWith('/git/ref/heads/development')) return json({ object: { sha: 'def5678' } });
+      if (url.endsWith('/git/ref/heads/main')) return json({ object: { sha: 'M0' } });
+      if (url.endsWith('/merge') && method === 'PUT') { merges.push(url); return json({ sha: 'x' }); }
+      throw new Error('unexpected ' + method + ' ' + url);
+    };
+    const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
+    const r = await main({ env: { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule' }, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    assert.equal(r.outcome, 'block');
+    assert.equal(merges.length, 0, 'nothing is merged when development moved');
+  });
+  await test('the open release PR is looked up by head and base, so a later page cannot hide it', async () => {
+    const seen = [];
+    const fakeFetch = async (url) => {
+      seen.push(url);
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data) });
+      if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([]);
+      throw new Error('unexpected ' + url);
+    };
+    const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', DRY_RUN: 'true' };
+    await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    assert.ok(seen.some((u) => u.includes('head=kaushik4444%3Adevelopment') || u.includes('head=kaushik4444:development')), 'the request filters by head');
+  });
+  await test('the merge method is squash by default and merge only when the owner sets RELEASE_MERGE_METHOD=merge', async () => {
+    const methods = [];
+    for (const extra of [{}, { RELEASE_MERGE_METHOD: 'merge' }]) {
+      const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
+      const fakeFetch = async (url, opts = {}) => {
+        const method = opts.method || 'GET';
+        const json = (data, status = 200) => ({ status, ok: status < 300, text: async () => JSON.stringify(data), json: async () => data });
+        if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+        if (url.includes('/pulls?state=open')) return json([pr]);
+        if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
+        if (url.endsWith('/check-runs?per_page=100')) return json({ check_runs: greenChecks() });
+        if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
+      if (url.endsWith('/git/ref/heads/development')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'abc1234' } }) };
+      if (url.endsWith('/git/ref/heads/main')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'M0' } }) };
+        if (url.endsWith('/merge') && method === 'PUT') { methods.push(JSON.parse(opts.body).merge_method); return json({ sha: 'fff0001' }); }
+        if (url.endsWith('/git/refs')) return json({}, 201);
+        if (url.endsWith('/healthz')) return { status: 200, ok: true, text: async () => 'ok' };
+        if (url.endsWith('/readyz')) return { status: 200, ok: true, text: async () => 'ready' };
+        throw new Error('unexpected ' + method + ' ' + url);
+      };
+      const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
+      await main({ env: { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test', ...extra }, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    }
+    assert.deepEqual(methods, ['squash', 'merge']);
+  });
+  await test('a duplicate run after the release finds no changes and does nothing', async () => {
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule' };
+    const fakeFetch = async (url) => {
+      const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data) });
+      if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([]);
+      throw new Error('unexpected ' + url);
+    };
+    const git = { gitOutput: (args) => (args[1].includes('main') ? 'T1' : 'T1'), mergeTreeOf: () => 'T1' };
+    const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
+    assert.equal(r.outcome, 'skip');
+    console.log(`${passed} daily release tests passed`);
+  });
+})();
