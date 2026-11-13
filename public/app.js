@@ -455,20 +455,27 @@
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');
     if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
     if (!loginOn) {
+      // The hint is wired once, when the sheet opens, so it follows the password, the e-mail and the username in any order.
+      // It uses the same check as the server (public/password-policy.js), so it cannot say "Looks good." for a refused password.
+      const pwInput = document.getElementById('registerPassword');
+      const pwHint = document.getElementById('registerPwHint');
+      const emailInput = document.getElementById('registerEmail');
       const u = document.getElementById('registerUsername');
+      const trimmed = (el) => String((el && el.value) || '').trim().toLowerCase();
+      const updateHint = () => {
+        if (!pwInput || !pwHint || !window.TvPassword) return;
+        const h = window.TvPassword.hint(pwInput.value, { email: trimmed(emailInput), username: trimmed(u) });
+        pwHint.classList.toggle('bad', h.bad);
+        pwHint.textContent = h.text;
+      };
+      if (pwInput) pwInput.addEventListener('input', updateHint);
+      if (emailInput) emailInput.addEventListener('input', updateHint);
+      updateHint();
       if (u) u.addEventListener('input', async () => {
-        const pwInput = document.getElementById('registerPassword');
-        const pwHint = document.getElementById('registerPwHint');
-        const pwUpdate = () => {
-          if (!pwInput || !pwHint || !window.TvPassword) return;
-          const need = window.TvPassword.missing(pwInput.value);
-          pwHint.classList.remove('bad');
-          pwHint.textContent = !pwInput.value ? 'Use an uppercase letter, a lowercase letter, a number and a symbol.' : need.length ? `Still needed: ${need.join(', ')}.` : 'Looks good.';
-        };
-        if (pwInput) pwInput.addEventListener('input', pwUpdate);
-        const hint = document.getElementById('registerUsernameHint');
-        const value = String(u.value || '').trim().toLowerCase();
+        const value = trimmed(u);
         u.value = value;
+        updateHint();
+        const hint = document.getElementById('registerUsernameHint');
         if (!hint) return;
         if (!value) { hint.textContent = ''; return; }
         if (!/^[a-z0-9_]{3,24}$/.test(value)) { hint.textContent = 'Use 3-24 chars: lowercase letters, numbers, underscore.'; return; }

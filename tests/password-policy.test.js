@@ -25,6 +25,10 @@ test('it may not contain the username or the first part of the e-mail', () => {
   assert.match(P.check('Zx-annabel-7A', { email: 'Annabel@example.com' }), /e-mail/);
   assert.equal(P.check('Zx-ann-7Aqrtv', { email: 'ann@example.com' }), null, 'a short name part (under four letters) is not matched');
 });
+test('the length limit counts characters, not UTF-16 units: 100 emoji plus the kinds fit, 197 do not', () => {
+  assert.equal(P.check('Aa1!' + '\u{1F600}'.repeat(100)), null, '104 characters is accepted');
+  assert.match(P.check('Aa1!' + '\u{1F600}'.repeat(197)), /at most 200/, '201 characters is refused');
+});
 test('too long and not-a-string are refused', () => {
   assert.match(P.check('Aa1!' + 'x'.repeat(200)), /at most 200/);
   assert.equal(P.check(undefined), 'Enter a password.'); assert.equal(P.check(12345678901), 'Enter a password.');
@@ -33,5 +37,20 @@ test('the identity parts the server checks are the normalised ones (what is stor
   // the server trims and lowercases before it calls check(); the rule itself compares case-insensitively
   assert.match(P.check('Sunshine99!ok', { username: 'sunshine99' }), /username/);
   assert.match(P.check('Zx-ANNABEL-7a', { email: 'annabel@example.com' }), /e-mail/);
+});
+
+// The sign-up hint: it must never say "Looks good." for a password the server would refuse.
+test('the hint asks for what is missing, then explains a refusal, and says "Looks good." only for an accepted password', () => {
+  assert.deepEqual(P.hint(''), { text: 'Use an uppercase letter, a lowercase letter, a number and a symbol.', bad: false });
+  assert.match(P.hint('alllowercase1!').text, /Still needed: an uppercase letter/);
+  assert.deepEqual(P.hint('TestPass123!', { username: 'ann', email: 'ann@x.test' }), { text: 'Looks good.', bad: false });
+  // every character kind is present, but the password is refused: the hint must say so
+  const obvious = P.hint('MyPassword123!', { username: 'ann', email: 'ann@x.test' });
+  assert.equal(obvious.bad, true, 'a refused password is marked bad, not "Looks good."');
+  assert.match(obvious.text, /obvious/);
+  const named = P.hint('Zx-annabel-7A', { username: 'carol', email: 'annabel@x.test' });
+  assert.equal(named.bad, true);
+  assert.match(named.text, /e-mail/);
+  assert.notEqual(P.hint('Sunshine99!ok', { username: 'sunshine99' }).text, 'Looks good.');
 });
 console.log(`${passed} password policy tests passed`);
