@@ -32,7 +32,9 @@ async function test(name, fn) {
     const { start } = require('../server');
     srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 6000 });
 
-    const login = async (email, password) => new Browser(srv.port).post('/api/auth/login', { email, password });
+    // a fresh browser has no CSRF cookie yet: fetch the token first, as a real page does, or the login is refused with 403
+    const newBrowser = async () => { const b = new Browser(srv.port); await b.csrf(); return b; };
+    const login = async (email, password) => (await newBrowser()).post('/api/auth/login', { email, password });
 
     let first;
     await test('a seeded account gets a generated password that meets the rule, and is verified and adult-confirmed', async () => {
@@ -58,14 +60,21 @@ async function test(name, fn) {
       assert.equal((await login('dev.one@local.test', first.password)).status, 401);
       assert.equal((await login('dev.one@local.test', reset.password)).status, 200);
     });
+    await test('an existing account keeps its stored username when seeded under another one', async () => {
+      const other = await seedAccount({ email: 'dev.one@local.test', username: 'otherhandle' }, deps);
+      assert.equal(other.created, false);
+      assert.equal(other.username, 'devone', 'the stored username is reported, not the requested one');
+    });
     await test('--owner makes the account the local owner, who can open the admin console; only one owner is possible', async () => {
       const own = await seedAccount({ email: 'boss@local.test', username: 'localboss', owner: true }, deps);
       assert.equal(own.role, 'owner');
-      const b = new Browser(srv.port);
+      const b = await newBrowser();
       assert.equal((await b.post('/api/auth/login', { email: 'boss@local.test', password: own.password })).status, 200);
       assert.equal((await b.get('/api/admin/overview?days=7')).status, 200, 'the owner sees the console');
-      const plain = new Browser(srv.port);
-      await plain.post('/api/auth/login', { email: 'dev.one@local.test', password: (await seedAccount({ email: 'dev.one@local.test', username: 'devone', resetPassword: true }, deps)).password });
+      const plain = await newBrowser();
+      const plainPassword = (await seedAccount({ email: 'dev.one@local.test', username: 'devone', resetPassword: true }, deps)).password;
+      const plainLogin = await plain.post('/api/auth/login', { email: 'dev.one@local.test', password: plainPassword });
+      assert.equal(plainLogin.status, 200, 'the ordinary login must succeed before its admin access is checked');
       assert.equal((await plain.get('/api/admin/overview?days=7')).status, 403, 'an ordinary account does not');
       await assert.rejects(seedAccount({ email: 'second@local.test', username: 'second', owner: true }, deps), (e) => e instanceof DevEnvError && /already has an owner/.test(e.message));
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM players WHERE role = 'owner'"))[0].n, 1);
@@ -73,6 +82,7 @@ async function test(name, fn) {
     await test('it refuses production, a managed database host, bad input and a taken username', async () => {
       await assert.rejects(seedAccount({ email: 'p@local.test', username: 'prodtry' }, { ...deps, env: { ...deps.env, NODE_ENV: 'production' } }), /NODE_ENV=production/);
       await assert.rejects(seedAccount({ email: 'p@local.test', username: 'prodtry' }, { ...deps, env: { ...deps.env, DATABASE_URL: 'postgres://u:p@ep-x.eu-central-1.aws.neon.tech/db' } }), /managed/);
+      await assert.rejects(seedAccount({ email: 'p@local.test', username: 'prodtry' }, { ...deps, env: { ...deps.env, DATABASE_URL: 'postgres://u:p@localhost/db?host=ep-x.eu-central-1.aws.neon.tech' } }), /host or hostaddr/);
       await assert.rejects(seedAccount({ email: 'nope', username: 'okname' }, deps), /valid --email/);
       await assert.rejects(seedAccount({ email: 'z@local.test', username: 'Bad Name!' }, deps), /--username/);
       await assert.rejects(seedAccount({ email: 'z@local.test', username: 'devone' }, deps), /already used/);
