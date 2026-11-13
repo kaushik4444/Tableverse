@@ -383,6 +383,29 @@ const base = (over = {}) => ({
     );
     assert.equal(calls, 0);
   });
+  await test('mergeMethodOf: merge when unset, empty or "merge" (any case and spacing); squash only for squash; anything else throws', async () => {
+    const { mergeMethodOf } = require('../scripts/release/promote');
+    assert.equal(mergeMethodOf({}), 'merge');
+    assert.equal(mergeMethodOf({ RELEASE_MERGE_METHOD: '' }), 'merge');
+    assert.equal(mergeMethodOf({ RELEASE_MERGE_METHOD: ' Merge ' }), 'merge');
+    assert.equal(mergeMethodOf({ RELEASE_MERGE_METHOD: ' SQUASH ' }), 'squash');
+    assert.throws(() => mergeMethodOf({ RELEASE_MERGE_METHOD: 'rebase' }), /RELEASE_MERGE_METHOD must be "merge"/);
+  });
+  await test('every docs/RELEASES.md section that promote.js points to exists as a heading', async () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'release', 'promote.js'), 'utf8');
+    const runbook = fs.readFileSync(path.join(__dirname, '..', 'docs', 'RELEASES.md'), 'utf8');
+    // Both orders: docs/RELEASES.md, "Section" and "Section" in docs/RELEASES.md
+    const sections = [...new Set([
+      ...[...source.matchAll(/docs\/RELEASES\.md,?\s+"([^"]+)"/g)].map((m) => m[1]),
+      ...[...source.matchAll(/"([^"]+)"\s+in\s+docs\/RELEASES\.md/g)].map((m) => m[1]),
+    ])];
+    assert.ok(sections.length >= 2, `promote.js names at least two runbook sections (found ${sections.length})`);
+    for (const section of sections) {
+      assert.match(runbook, new RegExp(`^#{2,4} ${section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'), `missing runbook heading "${section}"`);
+    }
+  });
   await test('only the newest run per check name counts: an older green run cannot pass a newer running one', async () => {
     const { latestRuns } = require('../scripts/release/promote');
     const runs = [
