@@ -116,9 +116,11 @@ The release tag (`release-YYYY-MM-DD-<sha>`) marks the bad commit; use it to fin
 
 ## Hotfixes and the release window
 
-Do not merge anything to `main` between 02:00 and 02:15 Berlin, while the release runs. The workflow pins the merge to the
-checked `development` commit and then checks that `main` has that content. If another change reached `main` in between, the
-run reports `RELEASE MISMATCH` and writes no tag: investigate `main` and the release before the next run.
+Do not merge anything to `main` while the **Daily release** workflow is queued or running (Actions tab). A scheduled run can start
+late in the 02:xx slot, a manual run can start at any hour, and one run can take up to 30 minutes. The workflow pins the merge to the
+checked `development` commit and then checks that `main` has that content. If another change reached `main` in the meantime, the
+run reports `RELEASE MISMATCH` and writes no tag: investigate `main` and the release before the next run. Preventing the window
+completely needs serialized writes to `main` (for example a merge queue), which is an owner decision.
 
 ## Hotfixes
 
@@ -141,7 +143,7 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js` (27 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
+`npm test` runs `tests/daily-release.test.js` (28 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
 conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
 method switch, a duplicate run after a release, the second scheduled run on the same Berlin day, a missing `PRODUCTION_URL`
