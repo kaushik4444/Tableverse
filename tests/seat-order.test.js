@@ -39,3 +39,17 @@ test('the members array is not changed by shuffling', () => {
 });
 
 console.log(`\n${passed} seat order tests passed`);
+
+// Results are indexed by seat. With shuffled seats the match record must still name the people who won, not the join-order slots.
+const { buildMatchRecord } = require('../db/matchRecord');
+test('a shuffled game records each result against the member who sat in that seat', () => {
+  const [a, b, c, d] = members();
+  const seated = [b, c, d, a]; // the game's seat order: B, C, D, A
+  const room = { code: 'ROOM', gameId: 'twentynine', seats: 4, options: {}, members: [a, b, c, d], seated, leftEarly: new Set(), matchKey: 'k', startedAt: Date.now() };
+  const game = { results: () => [{ score: 2, winner: true }, { score: 0, winner: false }, { score: 3, winner: true }, { score: 0, winner: false }] };
+  const rec = buildMatchRecord(room, game);
+  assert.ok(rec, 'a record is built');
+  const won = Object.fromEntries(rec.participants.map((p) => [p.playerId, p.isWinner]));
+  assert.deepEqual(won, { b: true, c: false, d: true, a: false }, 'B and D won, because they sat in the winning seats');
+  assert.deepEqual(rec.participants.map((p) => p.playerId), ['b', 'c', 'd', 'a'], 'participants are listed in seat order');
+});
