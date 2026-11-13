@@ -136,7 +136,7 @@ is set on the server through `ADMIN_OWNER_EMAIL` / `ADMIN_OWNER_ID` (see `docs/A
 
 Resetting touches only the local database named in `.env.local`. The dev tools refuse anything else.
 
-Wipe the database but keep the container:
+Wipe the database but keep the container. First stop the dev server (Ctrl+C in its terminal) and close any other database client: PostgreSQL refuses `DROP DATABASE` while sessions are connected. Restart the server after migrating and seeding:
 
 ```bash
 docker exec tableverse-pg psql -U postgres -c "DROP DATABASE IF EXISTS tableverse_dev" -c "CREATE DATABASE tableverse_dev"

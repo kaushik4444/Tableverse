@@ -27,6 +27,9 @@ const { parseEnvFile, assertSafeDevEnv, devDefaults, DevEnvError } = require('..
   assertSafeDevEnv(process.env); // before anything connects
 
   const db = require('../db/pool');
+  // migrate() skips silently without a database, so refuse here instead of reporting "up to date" for a schema nobody checked.
+  if (db.driverMissing()) throw new DevEnvError('The PostgreSQL driver (pg) is not installed. Run npm install first.');
+  if (!db.hasDatabase()) throw new DevEnvError('DATABASE_URL is not set in .env.local. Add the local database URL (docs/LOCAL_DEVELOPMENT.md).');
   const { migrate } = require('../db/migrate');
   const result = await migrate();
   const applied = result && result.applied ? result.applied : [];
