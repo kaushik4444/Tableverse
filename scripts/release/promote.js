@@ -245,13 +245,13 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
     say(`Blocked: a branch or the PR moved while the gates were checked (development ${String(devSha).slice(0, 7)} -> ${liveDev.slice(0, 7)}, main ${String(mainSha).slice(0, 7)} -> ${liveMain.slice(0, 7)}, PR head ${fresh.head_sha.slice(0, 7)}). Nothing was merged; the next run checks again.`);
     return finish('block', summary, again);
   }
+  if (!env.PRODUCTION_URL) {
+    say('Blocked: the PRODUCTION_URL repository variable is not set, so the health check has no target. Nothing was merged (checked in dry runs too).');
+    return finish('block', summary, decision);
+  }
   if (dryRun) {
     say(`DRY RUN: all gates pass on PR #${prNumber}; would ${mergeMethod} ${fresh.head_sha.slice(0, 7)}.`);
     return finish('dry-run', summary, decision);
-  }
-  if (!env.PRODUCTION_URL) {
-    say('Blocked: the PRODUCTION_URL repository variable is not set, so the health check has no target. Nothing was merged.');
-    return finish('block', summary, decision);
   }
   const merged = (await client.call('PUT', `/pulls/${prNumber}/merge`, { merge_method: mergeMethod, sha: fresh.head_sha, commit_title: 'Daily release: development to main' })).data;
   say(`Merged PR #${prNumber} as ${merged.sha.slice(0, 7)}.`);
