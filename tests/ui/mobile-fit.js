@@ -32,7 +32,7 @@ async function myTurnCheck(browser, url) {
     const { page, ctx } = await scriptedPage(browser, { viewport: { width: 360, height: 640 }, messages: build(gameId, n, true) });
     try {
       await page.goto(url + '/');
-      await page.waitForSelector('.game-supporting-details', { timeout: 8000 });
+      await page.waitForSelector('.tb-more-btn', { timeout: 8000 });
       await page.waitForTimeout(300);
       const r = await page.evaluate(() => {
         const btns = [...document.querySelectorAll('.wz button')].filter((b) => b.offsetParent && !b.disabled && !b.closest('.tb-pop, .game-supporting-details, .wz-top'));
@@ -85,18 +85,20 @@ async function lobbyCheck(browser, url) {
     const { page, ctx } = await scriptedPage(browser, { viewport: { width: 360, height: 640 }, messages: build(gameId, n) });
     try {
       await page.goto(url + '/');
-      await page.waitForSelector('.game-supporting-details', { timeout: 8000 });
+      await page.waitForSelector('.tb-more-btn', { timeout: 8000 });
       await page.waitForTimeout(300);
       const r = await page.evaluate(() => {
-        const d = document.querySelector('.game-supporting-details');
+        const d = document.querySelector('.wz, .ludo, .tm, .pk') || document.querySelector('.tb-more-btn');
         const bar = document.querySelector('.wz-top > .row, .ludo-tools');
         return { mainEnd: Math.round(d.getBoundingClientRect().top + scrollY), vh: innerHeight, direct: bar ? [...bar.children].map((c) => (c.classList.contains('chat-btn') ? 'chat' : c.dataset.act === 'emotes' ? 'emotes' : c.classList.contains('vc-mic') ? 'mic' : c.classList.contains('vc-spk') ? 'speaker' : c.classList.contains('tb-more-wrap') ? 'more' : 'other')).join(',') : null,
           leaveLast: !!bar && Object.values(bar.lastElementChild.dataset).includes('leave'),
-          menu: [...document.querySelectorAll('.tb-pop button')].map((b) => b.dataset.act || '').join(',') };
+          menu: [...document.querySelectorAll('.tb-pop button')].map((b) => (b.dataset.act || '') + '=' + (b.textContent || '').trim()).join(',') };
       });
       assert.ok(r.mainEnd <= r.vh, `${gameId}: the main play area ends at ${r.mainEnd}px but the screen is ${r.vh}px`);
-      // the right-hand toolbar: chat, reactions, mic, speaker, the game-settings chip ("other"), more, leave
-      assert.equal(r.direct, 'chat,emotes,mic,speaker,other,more,other', `${gameId}: toolbar is chat, reactions, mic, speaker, settings, more, leave (${r.direct})`);
+      // the toolbar: chat, reactions, mic, speaker, more, leave. Game settings and How to play are in the ⋯ menu.
+      assert.equal(r.direct, 'chat,emotes,mic,speaker,more,other', `${gameId}: toolbar is chat, reactions, mic, speaker, more, leave (${r.direct})`);
+      assert.match(r.menu, /gameSettings/, `${gameId}: game settings are in the ⋯ menu`);
+      assert.match(r.menu, /rules|showRules|Rules|How to play/, `${gameId}: How to play is in the ⋯ menu`);
       if (gameId === 'gofish') assert.doesNotMatch(r.menu, /activityLog/, 'gofish: no log, it would show what others asked for');
       else assert.match(r.menu, /activityLog/, `${gameId}: the log lives in the more menu`);
       assert.ok(r.leaveLast, `${gameId}: leave is the last button on the bar`);
