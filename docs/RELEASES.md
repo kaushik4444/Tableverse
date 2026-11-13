@@ -57,39 +57,37 @@ parent, and the next release's three-way merge sees the shared history, so relea
 - Merge commits must be allowed in the repository settings (Settings → General → Pull Requests). If they are not, the merge is
   refused and the release is blocked: nothing reaches `main`.
 
-### Current state: one owner decision needed
+### Reconciliation: done (PR #139)
 
-The application code on `main` and `development` is identical. They differ only in release tooling, the release tests, this
-runbook and `.gitignore` (the maintenance changes merged through #137). `main` received the release files through squash and
-tree-only commits (#130, #134, #135), so it does not share their history. Because `development` has changed them since, a
-three-way merge of the two branches conflicts. The release gate reports this as a merge conflict and **blocks** the release: no
-release PR is opened and nothing reaches `main`. That is the safe outcome, but releases stop until the next step is done.
+Earlier releases were squash commits, so `main` did not share their history with `development`. The one-time reconciliation
+(PR #139, merge commit `0a55a63`) recorded `main` as a parent of the `development` history with `git merge -s ours`, so the
+trees of the two branches are identical and `development` is an ancestor of `main`. Every later release is a merge commit and
+merges cleanly.
 
-The one-time reconciliation, which needs the owner's approval:
-
-1. Create a branch from `origin/development` (not from `main`).
-2. Merge `origin/main` into it with `git merge -s ours origin/main`. The `ours` strategy keeps the tree of the branch it runs on,
-   so the result is `development`'s tree, and `main` becomes a recorded parent.
-3. Open a PR from that branch **into `main`**. Its diff is only the maintenance files above, and no runtime code changes.
-4. Merge it with a **merge commit**, not squash or rebase, so the history is kept.
-
-Once this is merged, every later release is a merge commit that merges cleanly. Until then the gate blocks, and no release PR is
-created.
+The release gate still blocks, and does not force, if a three-way merge of `main` and `development` ever conflicts or `main` gets a
+change `development` lacks. That check is the safety net for hotfixes that were not brought back to `development`; it is not a
+pending step.
 
 ## Owner checklist
+
+The two lists below are kept apart on purpose. The first is **code in this repository**: it is reviewed through pull requests and
+needs no action. The second is **GitHub or Render settings**: no code can set or verify them, so the owner ticks each one after
+checking it in the UI.
 
 ### Already in the repository (code, nothing to do)
 
 - The **Daily release** workflow on `main` (`.github/workflows/daily-release.yml`): cron at 00:00 and 01:00 UTC with a 02:xx
   Berlin guard, a `workflow_dispatch` dry run that is ticked by default, and `concurrency: daily-release`.
 - Least-privilege workflow permissions: `contents: write` and `pull-requests: write` for the release, `checks: read` and
-  `statuses: read` for the gates. No personal access token and no new secret.
-- Merge commits are the release method (`RELEASE_MERGE_METHOD` unset means merge; see *Merge history*).
-- `npm test` runs `tests/daily-release.test.js` (32 cases, no network, no database).
+  `statuses: read` for the gates. No personal access token and no new secret. CI (`ci.yml`) has `contents: read` and uses no
+  secrets; the cleanup job runs only on a schedule or a manual dispatch, and its deletion step needs the `production-cleanup`
+  environment.
+- The release merges with a **merge commit** (`RELEASE_MERGE_METHOD` unset means merge; see *Merge history*).
+- `npm test` runs `tests/daily-release.test.js` (35 cases, no network, no database).
 
-### Owner settings (manual: the workflow cannot set these, and an agent may not be able to read them)
+### Owner settings (manual: the code cannot set or verify these)
 
-Tick each item only after checking it in the GitHub UI. The repository code does not verify them.
+Tick each item only after checking it in the GitHub or Render UI. Re-check after any change to repository settings.
 
 - [ ] **Settings → Actions → General → Workflow permissions:** allow *"Allow GitHub Actions to create and approve pull requests"*.
       Without it, the release PR cannot be opened.
@@ -97,8 +95,8 @@ Tick each item only after checking it in the GitHub UI. The repository code does
       release is blocked.
 - [ ] **Settings → Secrets and variables → Actions → Variables:** `PRODUCTION_URL` is the Render service URL with no trailing
       slash (for example `https://tableverse.example.com`). Without it, every release is blocked before anything merges.
-- [ ] **Variables:** `RELEASE_MERGE_METHOD` is either unset or `merge`. Set `squash` only if you accept that later releases can be
-      blocked by conflicts that a person must resolve.
+- [ ] **Variables:** `RELEASE_MERGE_METHOD` is unset or `merge` (the normal setting). Set `squash` only if you accept that later
+      releases can be blocked by conflicts that a person must resolve.
 - [ ] **Copilot review on the first release PR:** Copilot's review must run on the PR that the workflow opens. If it never appears,
       every release is blocked with "Copilot review has not run on this PR head". The owner then decides between requesting
       Copilot review by hand on that PR each day or adding a GitHub App token. No personal access token is used or added by
@@ -193,8 +191,8 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js` (32 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
+`npm test` runs `tests/daily-release.test.js` (35 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
 conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
-method (merge by default, squash only when set, unknown values refused), a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
+method (merge by default, squash only when set, case and spacing ignored, unknown values refused), every runbook section the script names exists, a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
 (blocked before the merge), a content mismatch after the merge (no tag), and check runs beyond the first page.
