@@ -363,7 +363,7 @@ through the app. Nothing in the repository needs editing for a rotation.
 ### D.2 Known gaps (not hidden)
 
 - The in-memory rate-limit table is used only in tests (`db/rateLimit.js` uses PostgreSQL when `DATABASE_URL` is set).
-- Public table default: a table created without an explicit visibility is public. `visibilityForNewTable` in `lib/roomAccess.js` decides it; `server.js` calls it on create. Only `public` makes a public table; an unknown value makes a private one. Merged in PR #143; tests in `tests/public-default-tables.test.js`. Existing tables are not changed (they live in memory).
+- Public table default: a table created without an explicit visibility is public. `visibilityForNewTable` in `lib/roomAccess.js` decides it; `server.js` calls it on create. An omitted value, `null`, an empty string and `public` make a public table; any other value (including `private` and unknown values such as `PUBLIC`) makes a private one, so an unknown value never makes a table public. Merged in PR #143; tests in `tests/public-default-tables.test.js`. Existing tables are not changed (they live in memory).
 
 ### D.3 Secret handling and leak response
 

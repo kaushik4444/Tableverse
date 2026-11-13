@@ -8,7 +8,7 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 
 | Item | Evidence |
 |---|---|
-| Latest `main` | `297acc4ee2b34c28fe15dd2a13450bb4ac7a1dce` (PR #106 squash merge: Chromium install retry), verified by fetching `origin/main` on 2026-11-11 |
+| Latest `main` (historical snapshot, 2026-11-11) | `297acc4ee2b34c28fe15dd2a13450bb4ac7a1dce` (PR #106 squash merge: Chromium install retry). Historical: superseded by the current `main` row below. Do not use it as the launch baseline |
 | CI on `297acc4` | Not yet checked on the main push. The same `ci.yml` content passed on PR #106 (head `f9c1e87`, browser job included). Previous main `ead20c14`: all five check runs completed successfully: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Build production Docker image, Production dependency audit |
 | Latest `development` (checked 2026-11-13) | `fe1cab2`, which includes the technical architecture handbook (#141), local development onboarding (#142), public-by-default tables (#143) and the 29 trump visibility fix (#144). `main` is `0a55a63` and is behind `development` until the next daily release. Verified by fetching `origin` |
 | UI audit (2026-11-13) | PR #145 adds `docs/UI_AUDIT.md`, the layout record for the phone and desktop sizes that were checked in Chromium emulation. Not verified on real iOS or Android devices |
