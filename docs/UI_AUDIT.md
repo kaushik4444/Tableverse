@@ -34,7 +34,7 @@ Warnings are not failures. The table below groups them and says whether each is 
 
 - Real iOS Safari and Android Chrome devices were not available. All layouts were checked in Chromium emulation at the sizes above. A real iPhone 15 check remains a manual step.
 - Admin, moderation and account screens were not part of this audit run. They need their own pass.
-- Existing checks cover only part of the menus and lobby. `mobile-fit.js` checks a private Wizard lobby at 360×640 and opens and closes the table's More menu. `touch-targets-ui.js` measures the home page controls and selected toolbar controls. Modals (confirmation dialogs, invitations, reports) are not exercised by any audit: their coverage is unverified.
+- Existing checks cover only part of the menus and lobby. `mobile-fit.js` checks a private Wizard lobby at 390×844 (the lobby check) and runs the in-game fit loops at 360×640; it also opens and closes the table's More menu. `touch-targets-ui.js` measures the home page controls and selected toolbar controls. Modals (confirmation dialogs, invitations, reports) are not exercised by any audit: their coverage is unverified.
 
 ## Next steps
 
