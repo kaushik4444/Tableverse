@@ -54,6 +54,8 @@ async function scriptedPage(browser, { viewport = { width: 390, height: 844 }, m
     window.__sent = [];
     let sock = null;
     window.__push = (m) => sock && sock.onmessage && sock.onmessage({ data: JSON.stringify(m) });
+    // Simulates the connection dropping (as a network loss would): the client sees a closed socket.
+    window.__drop = () => { if (sock) { sock.readyState = 3; sock.onclose && sock.onclose({ code: 1006 }); } };
     window.WebSocket = class {
       constructor() { sock = this; this.readyState = 0; setTimeout(() => { this.readyState = 1; this.onopen && this.onopen({}); }, 0); }
       send(raw) { try { window.__sent.push(JSON.parse(raw)); } catch { /* ignore */ } if (JSON.parse(raw).t === 'hello') msgs.forEach((x, i) => setTimeout(() => window.__push(x), 10 * (i + 1))); }

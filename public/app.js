@@ -577,6 +577,8 @@
     ws.onclose = (e) => {
       if (sock !== ws) return;
       S.ready = false;
+      // A profile waiting for the server's 'left' cannot open after a drop: the leave may never arrive, and a later leave must not open it.
+      S.pendingPage = null;
       voice.reset(); // the server drops us from voice when the connection drops
       if (e.code === 4000) {
         $banner.textContent = 'Tableverse is open in another tab. Reload to play here.';
@@ -1835,6 +1837,9 @@
       const p = S.card && S.card.last;
       closeModal();
       if (!p || !p.username) return;
+      // Without a live connection nothing is sent, so nothing would open the page later: do not keep the navigation for a
+      // later, unrelated leave. The player can try again once connected.
+      if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then open the profile again.'); return; }
       // The page opens when the server confirms the leave ('left'); opening it now would be undone by that message.
       S.pendingPage = { page: 'player', arg: p.username };
       send({ t: 'leave' });

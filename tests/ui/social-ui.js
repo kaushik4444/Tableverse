@@ -247,6 +247,25 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     } finally { await ctx.close(); }
   });
 
+  await test('a dropped connection while the leave is confirmed sends nothing and keeps the table; no profile opens later', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMsgs() });
+    try {
+      await page.goto(url + '/');
+      await page.waitForSelector('.pseat[data-pid="u-ann"]');
+      await seat(page, 'u-ann');
+      await page.waitForSelector('.pcard-head');
+      await page.click('[data-modal-act="cardProfile"]');
+      await page.waitForSelector('[data-modal-act="cardProfileConfirm"]');
+      await page.evaluate(() => window.__drop());
+      await page.click('[data-modal-act="cardProfileConfirm"]');
+      await page.waitForFunction(() => /Connection lost/.test(document.body.textContent || ''));
+      const sent = await page.evaluate(() => (window.__sent || []).filter((m) => m.t === 'leave').length);
+      assert.equal(sent, 0, 'no leave is sent while disconnected');
+      assert.ok(await page.$('.pseat'), 'the table stays on screen');
+      assert.notEqual(await page.evaluate(() => location.hash), '#u/ann', 'the profile does not open');
+    } finally { await ctx.close(); }
+  });
+
   await test('a friend’s card says so and offers removal; a bot and a guest offer no friend actions', async () => {
     const { page, ctx } = await scriptedPage(browser, { messages: tableMsgs() });
     await page.goto(url + '/');
