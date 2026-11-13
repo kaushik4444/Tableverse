@@ -18,7 +18,7 @@
     const pts = c.pts ? `<span class="cpts" title="${c.pts} point${c.pts > 1 ? 's' : ''}">${c.pts}</span>` : '';
     return `<${tag} class="card ${s.cls} ${cls}" aria-label="${esc(c.rank + ' of ' + s.name)}${c.pts ? ', ' + c.pts + ' points' : ''}" ${attrs}><span class="rk">${esc(c.rank)}<i>${s.sym}</i></span><span class="pip">${s.sym}</span>${pts}<span class="rk br">${esc(c.rank)}<i>${s.sym}</i></span></${tag}>`;
   }
-  const suitPill = (s) => `<span class="pill ${SUITS[s].cls}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</span>`;
+  const suitPill = (s) =>`<span class="pill ${SUITS[s].cls}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</span>`;
   const teamOf = (i) => i % 2;
   // Spectators have no seat (me = -1): treat Team A as "us".
   const myTeam = (v) => (v.me >= 0 ? teamOf(v.me) : 0);
@@ -78,6 +78,19 @@
     return '<div><span class="label">Trump</span><div><b>Not chosen</b></div></div>';
   }
 
+  // The trump as a compact strip item, shown on phones only (CSS). The header copy is hidden there so the hand keeps its place.
+  function miniTrumpHTML(v) {
+    // The symbols are hidden from assistive tech; the sr-only text says the suit and state, which the header and corner copies (hidden on phones) would otherwise say.
+    const visible = (inner) => `<span aria-hidden="true">${inner}</span>`;
+    const sr = (text) => `<span class="sr-only">${text}</span>`;
+    if (v.trumpSuit) {
+      const s = SUITS[v.trumpSuit];
+      return `<span class="label">Trump</span>${visible(`<span class="pill ${s.cls}"><b>${s.sym}</b></span>${v.trumpRevealed ? '' : '<small>🔒</small>'}`)}${sr(`: ${s.name}${v.trumpRevealed ? '' : ', secret'}`)}`;
+    }
+    if (v.trumpSet) return `<span class="label">Trump</span>${visible('<b>🔒</b>')}${sr(': chosen, hidden')}`;
+    return `<span class="label">Trump</span>${visible('<b>–</b>')}${sr(': not chosen yet')}`;
+  }
+
   function scoreStrip(v) {
     const mine = myTeam(v);
     const us = mine, them = 1 - mine;
@@ -99,8 +112,9 @@
 
   function cornerHTML(v) {
     let h;
-    if (v.trumpSuit) h = `Trump${v.trumpRevealed ? '' : ' (secret)'}<br>${suitPill(v.trumpSuit)}`;
-    else if (v.trumpSet) h = 'Trump<br><b>🔒 hidden</b>';
+    // The trump part is its own span: on phones the strip or bid box shows the trump, so the corner keeps only the bid (table.css).
+    if (v.trumpSuit) h = `<span class="t29-corner-trump">Trump${v.trumpRevealed ? '' : ' (secret)'}<br>${suitPill(v.trumpSuit)}</span>`;
+    else if (v.trumpSet) h = '<span class="t29-corner-trump">Trump<br><b>🔒 hidden</b></span>';
     else h = v.phase === 'bidding' ? 'Bidding…' : 'Choosing trump…';
     if (v.highBidder >= 0 && v.phase !== 'bidding') h += `<br>Bid <b>${v.highBid}</b> · ${esc(v.players[v.highBidder].name)}`;
     return `<div class="cap">${h}</div>`;
@@ -134,7 +148,8 @@
   function controlsHTML(v) {
     if (v.phase === 'chooseTrump' && v.myTurn) {
       const mine = [...new Set(v.hand.map((c) => c.suit))];
-      return `<div class="bidbox"><div class="label">Choose trump (only suits you hold)</div><div class="bidgrid">${mine
+      // The status line is hidden while this box follows it (game-ux.css), so the phone copy of the trump indicator goes here.
+      return `<div class="bidbox"><div class="label"><span class="t29-mini-trump">${miniTrumpHTML(v)}</span> Choose trump<span class="t29-hint"> (only suits you hold)</span></div><div class="bidgrid">${mine
         .map((s) => `<button class="suitbtn ${SUITS[s].cls}" data-t9="trump" data-s="${s}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</button>`)
         .join('')}</div></div>`;
     }
@@ -238,7 +253,7 @@
       </div>
       ${scoreStrip(v)}
       ${tableHTML(v, ctx)}
-      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${statusText(v)}</span>
+      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><div class="t29-mini-trump">${miniTrumpHTML(v)}</div><span>${statusText(v)}</span>
         ${v.canReveal ? '<button class="btn small" data-t9="reveal">Show trump</button>' : ''}
         ${v.canDeclareMarriage ? '<button class="btn small" data-t9="marriage">Declare K–Q (+4)</button>' : ''}
         ${canPlay ? '<button class="btn small" data-t9="play">Play</button>' : ''}</div>

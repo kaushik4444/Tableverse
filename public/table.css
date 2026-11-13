@@ -8,6 +8,8 @@
 .wz-trump { flex: 1 1 0; min-width: 0; overflow: hidden; justify-content: center; max-width: 220px; display: flex; align-items: center; gap: 8px; margin: 0 auto; padding: 4px 12px 4px 6px; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px; min-height: 40px; }
 .wz-trump .mini { --cw: 28px; }
 .wz-trump .pill { font-weight: 700; }
+.t29-mini-trump { display: none; } /* 29 on phones only (see the 520px block below) */
+.bidbox .t29-mini-trump { display: none; } /* the chooser's copy shows only on short phones, where the status line is hidden (game-ux.css) */
 .pill { display: inline-flex; gap: 4px; align-items: center; padding: 1px 8px; border-radius: 999px; color: #fff; background: var(--c); }
 
 
@@ -384,7 +386,13 @@ button.card { cursor: pointer; }
 .watchers[hidden] { display: none; }
 /* Phones: the round label gets its own line and the six controls share the line under it evenly, so nothing wraps unevenly or runs off the side. */
 @media (max-width: 520px) {
-  .wz-trump { display: none; }
+  /* Wizard shows its trump card in the table corner on phones, so its header copy is hidden. 29 has no corner: on phones its
+     trump moves into the score strip (.t29-mini-trump), which has the same height, so the hand keeps its place above the fold. */
+  .wz:not(.t29) .wz-trump, .t29 .wz-trump { display: none; }
+  .t29-mini-trump { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; }
+  .t29-mini-trump b { font-size: 18px; line-height: 1; }
+  .t29-mini-trump .pill { padding: 0 8px; line-height: 1.2; }
+  .t29 .pt-corner .t29-corner-trump { display: none; } /* the strip or bid box shows the trump on phones; the corner keeps the bid */
   .wz-top { flex-wrap: wrap; gap: 4px 6px; }
   .wz-round { flex: 1 1 auto; }
   .wz-top > .row { flex: 1 1 100%; flex-wrap: nowrap; justify-content: space-between; gap: 4px; }
