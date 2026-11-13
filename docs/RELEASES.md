@@ -89,6 +89,21 @@ Tick each item only after checking it in the GitHub UI. The repository code does
 - [ ] **Environments:** the `production-cleanup` environment has the required reviewers you intend.
 - [ ] **Visibility:** the repository stays **public** (decided). Do not change it without a new decision.
 
+## Public repository and GitHub Free
+
+The repository is public and stays public. The audit of this change checked the following by reading the workflows:
+
+- **CI** (`ci.yml`) and the **cleanup dry run** use no secrets on pull requests. A pull request from a fork runs without
+  repository secrets, and the workflow permissions are `contents: read`.
+- **Cleanup deletion** (`cleanup-unverified.yml`) runs only from the `production-cleanup` environment, which has the required
+  reviewers the owner sets.
+- **Release** (`daily-release.yml`) has write permission only for contents and pull requests, plus read access to checks and
+  statuses. It uses the built-in `GITHUB_TOKEN` and no other secret.
+
+Features used and their plan position, to confirm on GitHub's current plan documentation before relying on them (the agent could
+not read the plan matrix from here): rulesets with required checks and the Copilot review rule, environment protection rules,
+Copilot code review, secret scanning and push protection. The owner checks each one in Settings.
+
 ## Dry run (manual, safe)
 
 Actions → **Daily release** → **Run workflow** → keep `dry_run` ticked (the default). The run evaluates every gate and writes the
