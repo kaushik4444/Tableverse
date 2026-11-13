@@ -1,6 +1,8 @@
 'use strict';
-// A legal Ludo token must be easy to tap on a phone: its invisible tap ring (ludo.css, .ludo-token.legal::before) reaches
-// about 44px, so a tap 14px from its centre (outside the drawn token) still lands on that token.
+// A legal Ludo token must be easy to tap on a phone: its invisible tap area (ludo.css, .ludo-token.legal::after, inset -18px)
+// reaches about 44px. A tap 14px from the token's centre (outside the drawn token) must reach that token, and the move the
+// page sends must be for that token's index. The page routes a tap to the nearest legal token (nearestLegal in ludo.js), so the
+// assertion checks the sent move, not only which element is under the pointer. Two overlapping legal targets are not covered here.
 const assert = require('node:assert/strict');
 const games = require('../../games');
 const { serve, scriptedPage, loadPlaywright, welcome, sessionOk } = require('./harness');
@@ -53,14 +55,24 @@ function messagesFor(g) {
             const el = document.querySelector('.ludo-token.legal');
             const b = el.getBoundingClientRect();
             const cx = b.left + b.width / 2; const cy = b.top + b.height / 2;
-            // A finger 14px right of the centre: outside the drawn token (about 5px radius at 320px), inside the invisible legal ring.
+            // A finger 14px right of the centre: outside the drawn token (about 5px radius at 320px), inside the invisible legal area.
             const x = cx + 14;
             const hit = document.elementFromPoint(x, cy);
             const hitBtn = hit && hit.closest('.ludo-token');
-            return { tokenW: b.width, hitIsLegal: !!(hitBtn && hitBtn.classList.contains('legal')), x: Math.round(x) };
+            return { tokenW: b.width, hitIsLegal: !!(hitBtn && hitBtn.classList.contains('legal')), x, y: cy,
+              hitLt: hitBtn ? hitBtn.dataset.lt : null, lt: el.dataset.lt };
           });
-          assert.ok(r.tokenW < 14, `the drawn token is small (${r.tokenW.toFixed(1)}px), so the tap needs the ring`);
-          assert.ok(r.hitIsLegal, `a tap 14px from the token centre (x ${r.x}) reaches the legal token`);
+          assert.ok(r.tokenW < 14, `the drawn token is small (${r.tokenW.toFixed(1)}px), so the tap needs the invisible area`);
+          assert.ok(r.hitIsLegal, `a tap 14px from the token centre (x ${Math.round(r.x)}) reaches a legal token`);
+          // Tap for real, then read the move the page sent: it must be for the token whose centre was measured.
+          await page.evaluate(() => { window.__sent = []; });
+          await page.mouse.click(r.x, r.y);
+          await page.waitForTimeout(150);
+          const sent = await page.evaluate(() => window.__sent || []);
+          const moves = sent.filter((m) => JSON.stringify(m).includes('"type":"move"'));
+          const token = r.lt && r.lt.startsWith('tok:') ? Number(r.lt.slice(4)) : null;
+          assert.equal(moves.length, 1, `the tap sends one move (sent: ${moves.length})`);
+          assert.ok(JSON.stringify(moves[0]).includes(`"token":${token}`), `the move is for the measured token ${token} (sent ${JSON.stringify(moves[0])})`);
         } finally { await ctx.close(); }
       });
     }
