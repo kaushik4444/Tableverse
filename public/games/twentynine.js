@@ -78,6 +78,13 @@
     return '<div><span class="label">Trump</span><div><b>Not chosen</b></div></div>';
   }
 
+  // The trump as a compact strip item, shown on phones only (CSS). The header copy is hidden there so the hand keeps its place.
+  function miniTrumpHTML(v) {
+    if (v.trumpSuit) return `<span class="label">Trump</span><b class="${SUITS[v.trumpSuit].cls}">${SUITS[v.trumpSuit].sym}</b>${v.trumpRevealed ? '' : '<small>🔒</small>'}`;
+    if (v.trumpSet) return '<span class="label">Trump</span><b>🔒</b>';
+    return '<span class="label">Trump</span><b>–</b>';
+  }
+
   function scoreStrip(v) {
     const mine = myTeam(v);
     const us = mine, them = 1 - mine;
@@ -134,7 +141,8 @@
   function controlsHTML(v) {
     if (v.phase === 'chooseTrump' && v.myTurn) {
       const mine = [...new Set(v.hand.map((c) => c.suit))];
-      return `<div class="bidbox"><div class="label">Choose trump (only suits you hold)</div><div class="bidgrid">${mine
+      // The status line is hidden while this box follows it (game-ux.css), so the phone copy of the trump indicator goes here.
+      return `<div class="bidbox"><div class="t29-mini-trump">${miniTrumpHTML(v)}</div><div class="label">Choose trump (only suits you hold)</div><div class="bidgrid">${mine
         .map((s) => `<button class="suitbtn ${SUITS[s].cls}" data-t9="trump" data-s="${s}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</button>`)
         .join('')}</div></div>`;
     }
@@ -238,7 +246,7 @@
       </div>
       ${scoreStrip(v)}
       ${tableHTML(v, ctx)}
-      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${statusText(v)}</span>
+      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><div class="t29-mini-trump">${miniTrumpHTML(v)}</div><span>${statusText(v)}</span>
         ${v.canReveal ? '<button class="btn small" data-t9="reveal">Show trump</button>' : ''}
         ${v.canDeclareMarriage ? '<button class="btn small" data-t9="marriage">Declare K–Q (+4)</button>' : ''}
         ${canPlay ? '<button class="btn small" data-t9="play">Play</button>' : ''}</div>
