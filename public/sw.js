@@ -1,5 +1,5 @@
 /* Caches the scorecard so it opens without a connection after the first visit. */
-const CACHE = 'ct-scorecard-v1';
+const CACHE = 'ct-scorecard-v2';
 const FILES = ['/scorecard.html', '/scorecard.js', '/scorecard.css', '/style.css', '/icon.svg'];
 self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
