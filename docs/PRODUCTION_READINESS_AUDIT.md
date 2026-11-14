@@ -1,5 +1,7 @@
 # Production readiness audit
 
+> **Historical snapshot (note added 2026-11-14).** Audited against `main` at `c10f6a6`, long before the current games, admin console and release automation. It is not a statement about today's code. Current status: `PROGRESS.md` and `docs/WAVE_1_LAUNCH_READINESS.md`.
+
 Audited against `main` at `c10f6a6` (includes PRs #26–#35, all shipped game modes). All 10 playable game modes are covered. Every finding states whether it was **confirmed** (reproduced or read in the code), **theoretical**, or an **improvement**. Nothing here assumes paid infrastructure.
 
 **Audit status key:**

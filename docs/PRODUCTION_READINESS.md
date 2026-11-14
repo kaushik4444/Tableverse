@@ -1,5 +1,7 @@
 # Production readiness review
 
+> **Historical (note added 2026-11-14).** Last reviewed 2026-11-02. Controls listed here were true at that date; later stages added more. Current launch status: `docs/WAVE_1_LAUNCH_READINESS.md`. A passing CI run is still not a launch approval.
+
 Last reviewed: 2026-11-02
 
 This document separates protections implemented in the application from operational work that still requires deployment-owner decisions. A passing CI run is not, by itself, a production launch approval.

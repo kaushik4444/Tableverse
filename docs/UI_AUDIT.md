@@ -1,6 +1,6 @@
 # Responsive UI audit (phone and tablet layouts)
 
-Status of the Phase 4 layout audit, as of `development` at `f582fbd` (PR #144 merged; sheets and topbar coverage added on this branch). This records what was run, what it found and what is still open. It is a snapshot: rerun the commands below after layout changes.
+Status of the Phase 4 layout audit, as of `development` at `9a166ff` (2026-11-14; the audit run itself was made after #159 and #160, and #166-#170 changed no layout audited here except the 29 phone trump indicator in #170, which `twentynine-trump-ui.js` covers in CI). This records what was run, what it found and what is still open. It is a snapshot: rerun the commands below after layout changes.
 
 ## Scope and what was run
 

@@ -65,6 +65,11 @@ Earlier releases were squash commits, so `main` did not share their history with
 trees of the two branches are identical and `development` is an ancestor of `main`. Every later release is a merge commit and
 merges cleanly.
 
+Checked on 2026-11-14 (after release PR #165, `70ccd35`): GitHub shows `development` ahead of and a few commits behind `main`. The
+"behind" commits are the release merge and older squash or merge commits, so they carry no content that `development` lacks (a merge
+of `main` into `development` gives the `development` tree). This is normal after every merge-commit release. It is not a conflict and
+needs no action unless the release gate reports that `main` has changes `development` lacks.
+
 The release gate still blocks, and does not force, if a three-way merge of `main` and `development` ever conflicts or `main` gets a
 change `development` lacks. That check is the safety net for hotfixes that were not brought back to `development`; it is not a
 pending step.

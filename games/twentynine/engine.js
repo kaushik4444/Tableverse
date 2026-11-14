@@ -267,7 +267,7 @@ function applyAction(g, playerId, action) {
     case 'redouble':
     case 'accept': {
       if (g.phase !== 'challenge') return fail('There is no challenge to answer');
-      if (seat !== g.turn) return fail('Not your turn');
+      if (!answersChallenge(g, seat)) return fail('Not your turn');
       const bidderSide = team(seat) === team(g.highBidder);
       if (action.type === 'double') {
         if (bidderSide || g.multiplier !== 1) return fail('Only the other team can double, once');
@@ -344,8 +344,13 @@ function applyAction(g, playerId, action) {
   }
 }
 
+// The double and redouble are answered by the whole team: any player on the answering side may act, and one answer decides for both.
+// g.turn names a seat on the answering side, so its team is the side that answers.
+const answersChallenge = (g, seat) => g.phase === 'challenge' && seat >= 0 && team(seat) === team(g.turn);
+
 function awaiting(g) {
-  return g.phase === 'bidding' || g.phase === 'chooseTrump' || g.phase === 'challenge' || g.phase === 'playing' ? [g.players[g.turn].id] : [];
+  if (g.phase === 'challenge') return g.players.filter((_, seat) => team(seat) === team(g.turn)).map((p) => p.id);
+  return g.phase === 'bidding' || g.phase === 'chooseTrump' || g.phase === 'playing' ? [g.players[g.turn].id] : [];
 }
 
 function viewFor(g, playerId) {
@@ -359,8 +364,8 @@ function viewFor(g, playerId) {
     dealer: g.dealer,
     turn: g.phase === 'handEnd' || g.phase === 'gameOver' ? null : g.turn,
     multiplier: g.multiplier || 1,
-    canDouble: g.phase === 'challenge' && me === g.turn && (g.multiplier || 1) === 1 && team(me) !== team(g.highBidder),
-    canRedouble: g.phase === 'challenge' && me === g.turn && g.multiplier === 2 && team(me) === team(g.highBidder),
+    canDouble: answersChallenge(g, me) && (g.multiplier || 1) === 1 && team(me) !== team(g.highBidder),
+    canRedouble: answersChallenge(g, me) && g.multiplier === 2 && team(me) === team(g.highBidder),
     me,
     myTurn,
     options: g.options,

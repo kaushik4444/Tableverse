@@ -1,7 +1,7 @@
 # Tableverse technical architecture
 
 This is the single source of truth for how Tableverse works, why each part exists, how security is applied and how the system
-is operated. It describes the code as it is on `development` at the time of writing. Where a control is planned, not running, it
+is operated. It describes the code as it is on `development` (`9a166ff`, 2026-11-14), which is ahead of `main` (`70ccd35`) by PRs #166-#170; those five changes are not yet released. Where a control is planned, not running, it
 is labelled so.
 
 Status labels used throughout:
@@ -505,14 +505,14 @@ Stale or already-fixed findings are still checked against the code before dismis
 - Dry run: manual `workflow_dispatch` with `dry_run` ticked (the default). It evaluates every gate and writes the result to the summary only.
 - Full procedure and owner checklist: `docs/RELEASES.md`.
 
-### H.6 Merge-history reconciliation (Phase 0, verified)
+### H.6 Merge-history reconciliation (checked 2026-11-14)
 
-Verified on the live repository while writing this section (see Section J, decision 4, for the evidence):
+Facts checked on the live repository on 2026-11-14 (`main` `70ccd35`, `development` `9a166ff`):
 
-- `main` contains the `development` history up to PR #138 (`6e6d8f7`) through the reconciliation merge `4c9a383` and the release merge `0a55a63` (PR #139).
-- `6e6d8f7` is an ancestor of `main`. Its tree equals `main`'s tree (`e399bed`).
-- `development` now has one commit that `main` does not have: PR #140 (`85be27a`, release documentation and tests). That is expected: it ships in the next daily release.
-- A three-way merge of `main` and `development` produces the `development` tree, so the next release merge is clean.
+- The one-time reconciliation was PR #139 (`0a55a63`, 2026-11-13): it recorded `main` as a parent of the `development` history.
+- Release PR #165 (merge commit `70ccd35`, 2026-11-14) was the next release, a normal merge commit.
+- GitHub reports `development` 23 ahead and 7 behind `main`. The 23 are PRs #166-#170 with their "update branch" merge commits (13 changes, 10 merges). The 7 are history-only commits (the release merge and older squash and merge commits); no file content is only on `main`. A merge of `main` into `development` produces the `development` tree.
+- Because release merges add a merge commit to `main` that `development` lacks, `development` will always show a few commits behind after a release. That is expected; bring `main` back into `development` through a normal merge PR when the gate asks for it, never by force.
 
 ### H.7 Hotfix and branch synchronization
 
@@ -554,11 +554,11 @@ Scaling triggers:
 | 1 | Repository stays public | Owner decision, recorded in the milestone brief | Free GitHub plan; rulesets and Copilot review work on public repositories | Private repository migration (rejected) | Source and history are visible; secrets must never be committed (Section D) | The owner asks for a change |
 | 2 | Merge commits for the daily release | PR #139 and `scripts/release/promote.js` default | Keeps `main` and `development` history connected; later releases merge cleanly | Squash (owner override only) | Squash releases can conflict and block until a person resolves them | A release is blocked by a conflict |
 | 3 | Single provider stack: Render, Neon, Resend, Metered | Existing configuration, `render.yaml` | Low cost and managed services for a friends beta | Self-hosting; other providers | Provider outages affect the matching service (Section B) | Cost, limits or reliability problems |
-| 4 | Reconciliation done (main records development) | PR #139 (`0a55a63`), commit `4c9a383`; verified 2026-11-13: `6e6d8f7` ancestor of `main`, trees equal `e399bed` | Clean release merges | Squash history (rejected) | None further | Never reverse |
+| 4 | Reconciliation done (main records development) | PR #139 (`0a55a63`), commit `4c9a383`; verified 2026-11-13: `6e6d8f7` ancestor of `main`, trees equal `e399bed`. Re-checked 2026-11-14 after release #165: divergence is history-only | Clean release merges | Squash history (rejected) | None further | Never reverse |
 | 5 | Session token stored only as SHA-256 hash | `db/auth.js` `hashToken` | A database dump does not reveal live sessions | Plain storage (rejected) | Lookup cost on each request | Cryptography changes |
 | 6 | No Neon Auth, storage, realtime or functions | Milestone brief and decision | Keep one provider for data | Using Neon add-ons | Auth code is in the app | Owner approval |
 | 7 | Tables are in memory; single instance | `server.js` maps | Simple, fast game state | Shared store (not implemented) | No horizontal scaling | Traffic requires more than one instance |
-| 8 | Public-by-default tables | PR #143 (merged into `development`, commit `b77079b`) | Easier discovery for friends | Private by default (the behaviour before PR #143) | Changes the default for new tables only; the host can still choose private or use Make private in the lobby | Revisit if friends report unwanted strangers at public tables |
+| 8 | Public-by-default tables | PR #143 (commit `b77079b`; released to `main` by #165) | Easier discovery for friends | Private by default (the behaviour before PR #143) | Changes the default for new tables only; the host can still choose private or use Make private in the lobby | Revisit if friends report unwanted strangers at public tables |
 
 ---
 

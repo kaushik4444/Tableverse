@@ -178,7 +178,8 @@
     const yards = b.yards.map((y, k) => {
       const on = used(k);
       const holes = y.slots.map((q) => `<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(b.size * 0.4)}" fill="${on ? SEAT[k].dark : '#94a3b8'}" opacity="${on ? 0.3 : 0.4}"/>`).join('');
-      return `<g><path d="${softTriPath(y.tri, 3)}" fill="${on ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.4" stroke-linejoin="round"/><circle cx="${f(y.c[0])}" cy="${f(y.c[1])}" r="${f(y.r)}" fill="#fff" opacity="${on ? 0.92 : 0.6}"/>${holes}</g>`;
+      // the outer yard of the seat whose turn it is blinks, like the square yard on the four-player board
+      return `<g><path class="${k === turnK ? 'ludo-turn-home' : ''}" d="${softTriPath(y.tri, 3)}" fill="${on ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.4" stroke-linejoin="round"/><circle cx="${f(y.c[0])}" cy="${f(y.c[1])}" r="${f(y.r)}" fill="#fff" opacity="${on ? 0.92 : 0.6}"/>${holes}</g>`;
     }).join('');
     const track = b.track.map((t, i) => {
       const k = startSeat(i);
@@ -190,7 +191,7 @@
       return out;
     }).join('');
     const lanes = b.lanes.map((lane, k) => lane.map((t) => sq(t, used(k) ? SEAT[k].hex : '#e2e8f0', '#fff')).join('')).join('');
-    const homes = b.homes.map((tri, k) => `<path class="${k === turnK ? 'ludo-turn-home' : ''}" d="${softTriPath(tri, 3)}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
+    const homes = b.homes.map((tri, k) => `<path d="${softTriPath(tri, 3)}" fill="${used(k) ? SEAT[k].hex : '#cbd5e1'}" stroke="#fff" stroke-width="0.3" stroke-linejoin="round"/>`).join('');
     const hex = `<polygon points="${b.hexagon.map((q) => f(q[0]) + ',' + f(q[1])).join(' ')}" fill="#fff" stroke="#64748b" stroke-width="0.4" stroke-linejoin="round"/>`;
     return `<svg class="ludo-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect width="100" height="100" rx="6" fill="#fff"/>${yards}${track}${lanes}${hex}${homes}<circle cx="50" cy="50" r="${f(b.size * 0.35)}" fill="#fff" opacity=".9"/></svg>`;
   }

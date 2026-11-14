@@ -232,10 +232,13 @@ function socket(port, cookie) {
       dbModeration.removeBlock = async (...args) => { calls++; return original(...args); };
       try {
         const before = sb.msgs.filter((m) => m.t === 'chatlog').length;
+        const blocksBefore = sb.msgs.filter((m) => m.t === 'blocks').length;
         for (let i = 0; i < 5; i++) sb.send({ t: 'unblock', id: A.id });
         await sleep(300);
         assert.equal(calls, 0, 'an account that is not blocked causes no DELETE');
         assert.equal(sb.msgs.filter((m) => m.t === 'chatlog').length, before, 'no-op does not resend history');
+        // the page waits for an answer before it lets the next block or unblock through, so each no-op is answered with the list
+        assert.ok(sb.msgs.filter((m) => m.t === 'blocks').length > blocksBefore, 'a no-op unblock is answered with the blocks list');
       } finally {
         dbModeration.removeBlock = original;
       }

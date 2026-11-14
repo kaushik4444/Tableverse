@@ -1,5 +1,7 @@
 # Stage 20.3 readiness
 
+> **Historical record (note added 2026-11-14).** PR numbers and commits below describe the state when Stage 20.3 was closed (2026-11-10). Current baseline: `docs/WAVE_1_LAUNCH_READINESS.md`.
+
 Status: **Stage 20.3 is PASS.** The owner's block rule is merged to `main` as PR #85 (`0207b31`, squash; CI green before merge). PR #81 (`d7da199`, five CI checks green) had introduced the opposite seating rule; PR #82 is superseded and was not merged. On 2026-11-10 the owner decided the three open block questions: chat is one way, a host may keep a blocked guest at the host's own table, and the 'Blocked' profile label stays as it is. M2 (fixed sleeps in PostgreSQL tests) is a non-security test-robustness follow-up, accepted as open. The rest of this status text describes what is verified and what is not.
 
 ## 1. Completed work and merged PRs
