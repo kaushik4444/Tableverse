@@ -91,3 +91,8 @@ A decision to remove a player's access is a manual action taken outside this fea
   cooldowns reset if the account's in-memory record is dropped after an hour offline, which is harmless: the daily report
   cap and the block cap are counted in the database. A person can still create more accounts, which is limited separately
   by the per-IP and site-wide account creation limits.
+- **Block and unblock answers are not tied to the request that caused them.** The profile page locks its Block/Unblock button
+  ("Saving…") until the server answers with a block list or a block refusal. A delayed answer to an earlier action (for example
+  from the Account tab) can release that lock early, so two actions can overlap for a moment. The page then checks the server's
+  block state again after every answer and shows that, so the state settles on what the server holds. A request ID that the
+  server echoes back would remove the overlap. It is not built because the effect is brief and self-correcting.
