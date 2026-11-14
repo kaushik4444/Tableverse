@@ -1111,7 +1111,7 @@
       case 'error':
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
-        if (S.page === 'player') resyncPlayerBlock(true); // a refused block or unblock must not stay on the page
+        if (S.page === 'player') resyncPlayerBlock(true, m.message); // a refused block or unblock must not stay on the page
         break;
     }
   }
@@ -1648,8 +1648,11 @@
     P.busy = true;
     return false;
   }
-  async function resyncPlayerBlock(failed = false) {
+  // The refusals a block or unblock can get back. Other errors (a report, a chat message) say nothing about the lock.
+  const isBlockRefusal = (text) => /^(That player could not be found\.|You cannot block yourself\.|You can block up to |Slow down a little$)/.test(String(text || ''));
+  async function resyncPlayerBlock(failed = false, reason = '') {
     const P = S.player;
+    if (failed && !isBlockRefusal(reason)) return; // not an answer to this page's block or unblock
     clearPlayerBusy(P); // the server has answered (a list, or a refusal)
     if (S.page !== 'player' || !P || !P.data) return;
     const stamp = ++playerResync;
