@@ -67,7 +67,7 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
   });
 
   // ---- another player's page: Block / Unblock and Report, by username (the page never holds an id)
-  const profileApi = { 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: false } }) };
+  const profileApi = { 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe: false } }) };
   const pageFor = async (srv, hash, { socket = true } = {}) => {
     const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: [{ id: 'wizard', name: 'Wizard', icon: '🧙', accent: '#8a5cf6', seats: { min: 3, max: 6 }, options: [], rules: [] }] })] });
     // Open home first, then navigate in-app the way a tap does (pushState + popstate). A deep link can race the
@@ -100,7 +100,7 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
   });
 
   await test('a blocked player’s page offers Unblock, which sends the same username', async () => {
-    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: true, blockedByMe: true, blockedByThem: false } }) });
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe: true } }) });
     const { page, ctx } = await pageFor(srv.url, '/#u/bob');
     await page.click('[data-act="playerUnblock"]');
     await page.waitForSelector('[data-act="playerBlock"]');
@@ -108,13 +108,141 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     await ctx.close(); await srv.server.close();
   });
 
-  await test('a player who was blocked by the other side gets Block, not Unblock, because the block is theirs to lift', async () => {
-    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: true, blockedByMe: false, blockedByThem: true } }) });
+  await test('a player the viewer has not blocked gets Block, and never Unblock', async () => {
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe: false } }) });
     const { page, ctx } = await pageFor(srv.url, '/#u/bob');
-    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'no Unblock for a block made by the other player');
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'no Unblock when the viewer has not blocked them');
     assert.equal(await page.locator('[data-act="playerBlock"]').count(), 1, 'the viewer can still block them');
     await ctx.close(); await srv.server.close();
   });
+
+  // The page shows a block at once; the server's answer (the new list, or an error) puts it right if the block was refused.
+  await test('a refused block goes back to Block, and a confirmed block stays Unblock', async () => {
+    let blockedByMe = false; // what the server's profile answer says
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe } }) });
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    await page.click('[data-act="playerBlock"]');
+    await page.waitForSelector('[data-act="playerUnblock"]'); // shown at once
+    await page.evaluate(() => window.__push({ t: 'error', message: 'Slow down a little' })); // the server refused it
+    await page.waitForSelector('[data-act="playerBlock"]', { timeout: 4000 });
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'a refused block is not shown as a block');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.act), 'playerBlock', 'keyboard focus stays on the block control after the correction');
+    blockedByMe = true; // now the server accepts it
+    await page.click('[data-act="playerBlock"]');
+    await page.evaluate(() => window.__push({ t: 'blocks', blocks: [{ id: 'x', name: 'Bo' }] })); // and sends the new list
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 1, 'a confirmed block stays shown');
+    await ctx.close(); await srv.server.close();
+  });
+
+  await test('a refused block goes back to the last confirmed state even when the profile cannot be fetched again', async () => {
+    let down = false; // the profile endpoint fails after the first load
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => (down ? { __status: 503, body: { ok: false, error: 'down' } } : { ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe: false } }) });
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    down = true;
+    await page.click('[data-act="playerBlock"]');
+    await page.waitForSelector('[data-act="playerUnblock"]');
+    await page.evaluate(() => window.__push({ t: 'error', message: 'You can block up to 100 accounts.' }));
+    await page.waitForSelector('[data-act="playerBlock"]', { timeout: 4000 });
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'the refused block is not left on screen');
+    await ctx.close(); await srv.server.close();
+  });
+
+  // A block or unblock the server confirmed becomes the baseline even when the profile check afterwards cannot be made.
+  await test('a confirmed unblock is the rollback state for a later refused block, even if the profile cannot be fetched', async () => {
+    let down = false;
+    const profile = (blockedByMe) => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe } });
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => (down ? { __status: 503, body: { ok: false, error: 'down' } } : profile(true)) }); // starts blocked
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    try {
+      down = true; // from here no profile check can be made
+      await page.click('[data-act="playerUnblock"]');
+      await page.waitForSelector('[data-act="playerBlock"]'); // shown at once
+      await page.evaluate(() => window.__push({ t: 'blocks', blocks: [] })); // the server confirms the unblock
+      await page.waitForTimeout(400);
+      await page.click('[data-act="playerBlock"]');
+      await page.waitForSelector('[data-act="playerUnblock"]'); // shown at once
+      await page.evaluate(() => window.__push({ t: 'error', message: 'Slow down a little' })); // the block was refused
+      await page.waitForSelector('[data-act="playerBlock"]', { timeout: 4000 }); // back to the confirmed state: not blocked
+      assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'the refused block is not shown, and the page does not fall back to the old blocked state');
+    } finally { await ctx.close(); await srv.server.close(); }
+  });
+
+  // An older profile answer that arrives after a newer one must not change what the page falls back to.
+  // The checks are answered through request interception: the browser's cache would otherwise make the second identical
+  // request wait for the first one, and the order could not be controlled.
+  await test('a stale profile answer cannot change the confirmed block state used when a later check fails', async () => {
+    const profile = (blockedByMe) => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe } });
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), ...profileApi }); // the first load: not blocked
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    let n = 0; let down = false; let release;
+    const held = new Promise((r) => { release = r; });
+    const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    try {
+      await page.route('**/api/players/bob', async (route) => {
+        const k = ++n;
+        if (k === 1) { await held; return json(route, profile(false)); } // an older check, answered late with an old value
+        if (k === 2) return json(route, profile(true)); // a newer check confirms the block
+        return down ? json(route, { ok: false, error: 'down' }, 503) : json(route, profile(true));
+      });
+      await page.click('[data-act="playerBlock"]');
+      await page.waitForSelector('[data-act="playerUnblock"]');
+      await page.evaluate(() => window.__push({ t: 'blocks', blocks: [{ id: 'x', name: 'Bo' }] })); // check 1, held
+      await until(() => n >= 1, 'the older check to start');
+      await page.evaluate(() => window.__push({ t: 'blocks', blocks: [{ id: 'x', name: 'Bo' }] })); // check 2, answered at once
+      await until(() => n >= 2, 'the newer check to start');
+      await page.waitForTimeout(300);
+      release(); // the older, stale answer (not blocked) arrives now
+      await page.waitForTimeout(300);
+      down = true; // from here the profile cannot be fetched again
+      await page.click('[data-act="playerUnblock"]');
+      await page.waitForSelector('[data-act="playerBlock"]'); // shown at once
+      await page.evaluate(() => window.__push({ t: 'error', message: 'Slow down a little' })); // the unblock was refused
+      await page.waitForSelector('[data-act="playerUnblock"]', { timeout: 4000 }); // back to what the server last confirmed: blocked
+      assert.equal(await page.locator('[data-act="playerBlock"]').count(), 0, 'the stale answer did not make the page fall back to not blocked');
+    } finally { release(); await ctx.close(); await srv.server.close(); }
+  });
+
+  for (const initiallyBlocked of [false, true]) {
+    for (const failedCheck of [false, true]) {
+      await test(`a delayed ${failedCheck ? 'failed' : 'successful'} profile check cannot override a newer ${initiallyBlocked ? 'block' : 'unblock'} action`, async () => {
+        const profile = (blockedByMe) => ({ ...profileApi['GET /api/players/bob'](), profile: { ...profileApi['GET /api/players/bob']().profile, blockedByMe } });
+        const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => profile(initiallyBlocked) });
+        const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+        let n = 0; let release;
+        const held = new Promise((r) => { release = r; });
+        const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+        const firstAction = initiallyBlocked ? 'playerUnblock' : 'playerBlock';
+        const nextAction = initiallyBlocked ? 'playerBlock' : 'playerUnblock';
+        try {
+          await page.route('**/api/players/bob', async (route) => {
+            const k = ++n;
+            if (k === 1) {
+              await held;
+              if (!failedCheck) return json(route, profile(!initiallyBlocked));
+            }
+            return json(route, { ok: false, error: 'down' }, 503);
+          });
+          await page.click(`[data-act="${firstAction}"]`);
+          await page.evaluate(() => window.__push({ t: 'blocks', blocks: [] }));
+          await until(() => n === 1, 'the first profile check to start');
+          await page.click(`[data-act="${nextAction}"]`);
+          const response = page.waitForResponse('**/api/players/bob');
+          release();
+          await response;
+          await page.waitForTimeout(300);
+          assert.equal(await page.locator(`[data-act="${firstAction}"]`).count(), 1, 'the older check does not replace the newer optimistic state');
+          // A failed older check must not confirm the newer action before the server answers it.
+          await page.evaluate((failed) => window.__push(failed ? { t: 'error', message: 'Slow down a little' } : { t: 'blocks', blocks: [] }), failedCheck);
+          const expected = failedCheck ? nextAction : firstAction;
+          await page.waitForSelector(`[data-act="${expected}"]`, { timeout: 4000 });
+          await until(() => n === 2, 'the newer profile check to start');
+          await page.waitForTimeout(300);
+          assert.equal(await page.locator(`[data-act="${expected}"]`).count(), 1, 'failed rechecks retain the last acknowledged state');
+        } finally { release(); await ctx.close(); await srv.server.close(); }
+      });
+    }
+  }
 
   await test('a guest does not see Block or Report on another player’s page', async () => {
     const srv = await serve({ 'GET /api/auth/session': () => ({ ok: true, authenticated: false }), ...profileApi });

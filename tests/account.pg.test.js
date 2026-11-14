@@ -79,8 +79,8 @@ function socket(port, cookie) {
       assert.ok(own.profile.joinedAt);
       const pub = await anon.get(`/api/players/${u.username}`);
       assert.equal(pub.status, 200);
-      assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'blockedByMe', 'blockedByThem', 'blockedByViewer', 'displayName', 'joinedAt', 'played', 'username', 'winRate', 'wins']);
-      assert.equal(pub.json.profile.blockedByViewer, false, 'an anonymous viewer is never shown as blocked');
+      assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'blockedByMe', 'displayName', 'joinedAt', 'played', 'username', 'winRate', 'wins']);
+      assert.equal(pub.json.profile.blockedByMe, false, 'an anonymous viewer has blocked nobody');
       const raw = JSON.stringify(pub.json);
       for (const secret of [u.email, u.id, 'password', 'token', 'session', 'hash']) assert.ok(!raw.toLowerCase().includes(String(secret).toLowerCase()), 'public profile leaks ' + secret);
       assert.equal(pub.headers.get('cache-control'), 'no-store');
@@ -89,22 +89,20 @@ function socket(port, cookie) {
       assert.equal((await anon.get('/api/players/%E0%A4%A')).status, 404, 'a malformed escape is a 404, not a crash');
     });
 
-    await test('a block hides the profile both ways: the blocker and the blocked see the same answer as for an unknown name', async () => {
+    await test('a block is visible to the blocker only: the blocked person gets no sign of it from the profile', async () => {
       const a = await newUser('BlkA', 'Blocker Bea');
       const b = await newUser('BlkB', 'Blocked Bo');
       await q('INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)', [a.id, b.id]);
       const seenByBlocker = await a.browser.get(`/api/players/${b.username}`);
       assert.equal(seenByBlocker.status, 200, 'the blocker still sees the profile');
-      assert.equal(seenByBlocker.json.profile.blockedByViewer, true, 'and it is shown as blocked');
-      assert.equal(seenByBlocker.json.profile.blockedByMe, true, 'the blocker can unblock');
-      assert.equal(seenByBlocker.json.profile.blockedByThem, false);
+      assert.equal(seenByBlocker.json.profile.blockedByMe, true, 'the blocker is told, and can unblock');
       const seenByBlocked = await b.browser.get(`/api/players/${a.username}`);
       assert.equal(seenByBlocked.status, 200, 'the blocked person still sees the profile');
-      assert.equal(seenByBlocked.json.profile.blockedByViewer, true, 'and it is shown as blocked');
-      assert.equal(seenByBlocked.json.profile.blockedByMe, false, 'the blocked player cannot unblock someone else’s block');
-      assert.equal(seenByBlocked.json.profile.blockedByThem, true);
+      assert.equal(seenByBlocked.json.profile.blockedByMe, false, 'the blocked player has not blocked anyone');
+      assert.deepEqual(Object.keys(seenByBlocked.json.profile).filter((k) => /block/i.test(k)), ['blockedByMe'], 'the profile carries no other block flag');
       assert.equal((await a.browser.get(`/api/players/${a.username}`)).status, 200, 'own public page unaffected');
       const c = await newUser('BlkC', 'Bystander Cy');
+      assert.deepEqual((await b.browser.get(`/api/players/${a.username}`)).json.profile, (await c.browser.get(`/api/players/${a.username}`)).json.profile, 'the blocked person sees exactly what a bystander sees');
       assert.equal((await c.browser.get(`/api/players/${b.username}`)).status, 200, 'others are unaffected');
       await q('DELETE FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2', [a.id, b.id]);
       assert.equal((await a.browser.get(`/api/players/${b.username}`)).status, 200, 'unblocking restores the profile');

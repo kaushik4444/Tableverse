@@ -21,7 +21,7 @@
     const pts = c.pts ? `<span class="cpts" title="${c.pts} point${c.pts > 1 ? 's' : ''}">${c.pts}</span>` : '';
     return `<${tag} class="card ${s.cls} ${cls}" aria-label="${esc(c.rank + ' of ' + s.name)}${c.pts ? ', ' + c.pts + ' points' : ''}" ${attrs}><span class="rk">${esc(c.rank)}<i>${s.sym}</i></span><span class="pip">${s.sym}</span>${pts}<span class="rk br">${esc(c.rank)}<i>${s.sym}</i></span></${tag}>`;
   }
-  const suitPill = (s) =>`<span class="pill ${SUITS[s].cls}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</span>`;
+  const suitPill = (s) => `<span class="pill ${SUITS[s].cls}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</span>`;
   const teamOf = (i) => i % 2;
   // Spectators have no seat (me = -1): treat Team A as "us".
   const myTeam = (v) => (v.me >= 0 ? teamOf(v.me) : 0);
