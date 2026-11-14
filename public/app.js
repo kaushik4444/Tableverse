@@ -1373,20 +1373,21 @@
     const person = roomPerson(pid);
     if (!person) return;
     const loading = Boolean(person.username && !person.bot);
-    S.card = { pid, profile: null, busy: false, error: '', last: person, loading };
+    const card = { pid, profile: null, busy: false, error: '', last: person, loading };
+    S.card = card;
     drawCard();
     // While loading, the body has no buttons, so keep keyboard focus in the dialog on its Close control.
     if (loading) { const x = document.querySelector('#modal-overlay [data-modal-close][aria-label="Close"]'); if (x) x.focus(); }
     if (loading) {
       // Redraw only into this card's own dialog: if it was closed (or replaced by another dialog) while loading, leave it alone.
       const done = () => {
-        if (!S.card || S.card.pid !== pid) return;
-        S.card.loading = false;
+        if (S.card !== card) return; // this request belongs to an earlier opening of the card
+        card.loading = false;
         const body = document.querySelector('#modal-overlay .modal-body');
         if (body && body.dataset.card === pid) drawCard();
       };
       getJson(`/api/players/${encodeURIComponent(person.username)}`)
-        .then((d) => { if (S.card && S.card.pid === pid) S.card.profile = d.profile; })
+        .then((d) => { if (S.card === card) card.profile = d.profile; })
         .catch(() => { /* the card works without the numbers */ })
         .finally(done);
     }
