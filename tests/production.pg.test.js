@@ -88,7 +88,7 @@ function cookieSocket(port, cookie) {
       c.send({ t: 'create', gameId: 'wizard' });
       await until(() => c.room, 'table');
       c.send({ t: 'setSeats', seats: 3 });
-      c.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20', ...extra } });
+      c.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20', shuffleSeats: false, ...extra } });
       c.send({ t: 'start' });
       await until(() => c.room && c.room.status === 'finished', 'game over');
       return c;
@@ -514,7 +514,7 @@ function cookieSocket(port, cookie) {
         a.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
         await until(() => a.room, 'table');
         a.send({ t: 'setSeats', seats: 3 });
-        a.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20' } });
+        a.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20', shuffleSeats: false } });
         b.send({ t: 'join', code: a.room.code });
         await until(() => b.room && b.room.members.length === 2, 'both seated');
         a.send({ t: 'start' });

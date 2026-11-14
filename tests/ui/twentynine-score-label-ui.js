@@ -25,7 +25,8 @@ function playTo(gameId, done, seed = 7) {
   const def = games.get(gameId);
   const players = NAMES.map((name, i) => ({ id: i === 0 ? 'me' : 'p' + i, name, avatar: '🧙' }));
   let a = seed; const rng = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const g = def.create(players, Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default])), rng);
+  // the classic rules (every switch off), so the scripted hands reach the failed bid this test needs
+  const g = def.create(players, Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.type === 'boolean' ? false : o.default])), rng);
   for (let i = 0; i < 4000 && !done(g.view('me'), g) && !g.isOver(); i++) {
     const waiting = [].concat(g.awaiting() || []);
     if (!waiting.length) { const auto = g.autoAction && g.autoAction(); if (!auto) break; g.act(null, auto); continue; }
