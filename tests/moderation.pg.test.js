@@ -64,7 +64,8 @@ function socket(port, cookie) {
       const username = `${tag.toLowerCase()}mod${seq}`.slice(0, 24);
       const u = await registerAndVerify(srv.port, { email, username, displayName: tag, password: PW });
       const me = (await u.browser.get('/api/auth/session')).json.player;
-      return { ...u, email, username, id: me.id, cookie: u.browser.cookieHeader };
+      // The helper adds a random suffix to the requested name, so take the name the server stored.
+      return { ...u, email, username: me.username, id: me.id, cookie: u.browser.cookieHeader };
     };
     // Chat is rate limited per player (500 ms), so each message waits its turn.
     const say = async (s, text) => { await sleep(600); s.send({ t: 'chat', text }); };
