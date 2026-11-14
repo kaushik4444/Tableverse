@@ -95,4 +95,39 @@ async function createChatReport({ reporterId, reportedId, roomCode, messageId, m
   });
 }
 
-module.exports = { ModerationError, loadBlockedIds, listBlocked, addBlock, removeBlock, createChatReport, MAX_REPORTS_PER_DAY, MAX_BLOCKS };
+/**
+ * Stores a report about a player (from their card or profile). Like a chat report, a reporter is capped per day across both
+ * kinds of report, and a repeat report of the same player is ignored (stored: false).
+ * @returns {Promise<{ stored: boolean }>}
+ */
+async function createPlayerReport({ reporterId, reportedId, reason }) {
+  if (!REPORT_REASONS.includes(reason)) throw new ModerationError('Choose a reason for the report.', 400);
+  return db.withTransaction(async (client) => {
+    await client.query('SELECT 1 FROM players WHERE id = $1 FOR NO KEY UPDATE', [reporterId]);
+    const target = await client.query('SELECT display_name FROM players WHERE id = $1 FOR KEY SHARE', [reportedId]);
+    if (!target.rows.length) throw new ModerationError('That player could not be found.', 404);
+    const displayName = target.rows[0].display_name || 'Player';
+    const today = await client.query(
+      `SELECT (SELECT COUNT(*) FROM chat_reports WHERE reporter_id = $1 AND created_at > NOW() - INTERVAL '1 day')
+            + (SELECT COUNT(*) FROM player_reports WHERE reporter_id = $1 AND created_at > NOW() - INTERVAL '1 day') AS n`,
+      [reporterId]
+    );
+    if (Number(today.rows[0].n) >= MAX_REPORTS_PER_DAY) {
+      throw new ModerationError('You have sent many reports today. Please try again tomorrow.', 429);
+    }
+    let r;
+    try {
+      r = await client.query(
+        `INSERT INTO player_reports (reporter_id, reported_id, reported_display_name, reason) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (reporter_id, reported_id) DO NOTHING RETURNING id`,
+        [reporterId, reportedId, displayName, reason]
+      );
+    } catch (err) {
+      if (err && err.code === '23503') throw new ModerationError('That player could not be found.', 404);
+      throw err;
+    }
+    return { stored: r.rows.length === 1 };
+  });
+}
+
+module.exports = { ModerationError, loadBlockedIds, listBlocked, addBlock, removeBlock, createChatReport, createPlayerReport, MAX_REPORTS_PER_DAY, MAX_BLOCKS };

@@ -303,6 +303,18 @@ function socket(port, cookie) {
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [C.id]))[0].n, 20, 'no report beyond the cap');
     });
 
+    await test('a player report is stored once per reporter and player, with the name at the time', async () => {
+      const first = await dbModeration.createPlayerReport({ reporterId: B.id, reportedId: A.id, reason: 'harassment' });
+      assert.deepEqual(first, { stored: true });
+      const again = await dbModeration.createPlayerReport({ reporterId: B.id, reportedId: A.id, reason: 'spam' });
+      assert.deepEqual(again, { stored: false }, 'a repeat report of the same player is ignored');
+      const rows = await q('SELECT reported_display_name, reason FROM player_reports WHERE reporter_id = $1 AND reported_id = $2', [B.id, A.id]);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].reported_display_name, 'Alpha');
+      assert.equal(rows[0].reason, 'harassment', 'the first report is kept');
+      await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: crypto.randomUUID(), reason: 'spam' }), (e) => e.status === 404);
+    });
+
     await test('deleting an account retains reports about it with a display-name snapshot, but removes reports it made', async () => {
       await dbAccount.deleteAccount(A.id, PW);
       const retained = await q('SELECT reported_id, reported_display_name, message_text FROM chat_reports WHERE reporter_id = $1 ORDER BY created_at', [C.id]);
@@ -312,6 +324,10 @@ function socket(port, cookie) {
       assert.ok(retained.some((r) => r.message_text === 'hello from alpha'), 'the original report text remains');
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [A.id]))[0].n, 0, 'reports made by the deleted reporter cascade away');
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocked_id = $1 OR blocker_id = $1', [A.id]))[0].n, 0);
+      const kept = await q('SELECT reported_id, reported_display_name FROM player_reports WHERE reporter_id = $1', [B.id]);
+      assert.equal(kept.length, 1, 'the report about the deleted account remains for moderators');
+      assert.equal(kept[0].reported_id, null, 'the deleted account UUID is cleared');
+      assert.equal(kept[0].reported_display_name, 'Alpha');
     });
 
     console.log(`${passed} chat moderation checks passed`);
