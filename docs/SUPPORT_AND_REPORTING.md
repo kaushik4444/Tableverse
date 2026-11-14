@@ -14,12 +14,13 @@ The in-app routes also reach the owner, and they stay in place:
 |---|---|---|---|
 | **Feedback form** (in the app, `POST /api/feedback`) | anyone, signed in or not | Sends a bug report, an idea or other feedback. Stored with the account link if signed in. | 1,000 characters; per address 6 an hour (`RL_FEEDBACK_IP_LIMIT`); per signed-in player 10 a day (`RL_FEEDBACK_PLAYER_LIMIT`). |
 | **Chat report** (report button on a chat message) | signed-in players at a table | Records the reported message, the reason and an optional note. | One report per person per message. Nothing is hidden or sanctioned automatically. |
+| **Player report** (Report player, on a table card or a profile page) | signed-in players | Records the reported player and the reason. No message text. | One report per reporter and player. Shares the daily limit with chat reports. Nothing is hidden or sanctioned automatically. |
 | **Block** (block button on a chat message) | signed-in players | Hides a player's table chat, and stops you inviting each other. Details in `docs/CHAT_MODERATION.md`. | Chat is one-way and voice is two-way (see the terms). |
 | **Account deletion** (Profile > Delete account) | signed-in players | Deletes the account after the password is confirmed. | Final. See `docs/ACCOUNT_DELETION_AND_RETENTION.md`. |
 
 **Where the owner reads each route:**
 - Feedback: the admin console's **Feedback** tab (`feedback` rows only).
-- Chat reports: **not** shown in the Feedback tab and **not** in a console list. The console's Overview counts them. The owner reviews them with the read-only query in `docs/CHAT_MODERATION.md`, at least once a day while the beta is running (a manual process; a console list is not built).
+- Chat and player reports: **not** shown in the Feedback tab. The admin console's **Reports** tab lists both kinds (read-only, newest first) and the Overview counts them. The owner reviews every report at least once a day while the beta is running. Resolving a report is still a manual step; the console does not change or hide anything.
 
 ## Manual process (beta)
 
