@@ -81,6 +81,10 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
 .tb-pop[hidden] { display: none; }
 .tb-pop .btn.small { width: 100%; min-height: 44px; justify-content: flex-start; gap: 10px; padding: 8px 12px; border-color: transparent; font-size: 14px; }
 .tb-pop .sound-btn::after { content: attr(aria-label); font-size: 14px; }
+/* Game settings in the ⋯ menu: the summary wraps inside the menu instead of pushing the page sideways on a 320px screen */
+.tb-pop { max-width: min(280px, calc(100vw - 24px)); }
+.tb-pop .gs-menu-item { white-space: normal; flex-direction: column; align-items: flex-start; text-align: left; line-height: 1.25; }
+.tb-pop .gs-menu-sum { display: block; white-space: normal; font-size: 12px; font-weight: 400; opacity: .8; overflow-wrap: anywhere; }
 .pk-blinds { min-width: 0; white-space: nowrap; }
 @media (max-width: 520px) {
   .wz-top { gap: 6px; }
@@ -100,6 +104,8 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--g
   .tm-status, .wz-status { padding-block: 6px; }
   /* your turn to bid or bet: the panel already says what to do, so its status line and the bet-size chips give way */
   .wz-status:has(+ .bidbox), .wz-status:has(+ .pk-raise) { display: none; }
+  .bidbox .t29-mini-trump { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+  .bidbox .t29-hint { display: none; } /* the buttons already show only the suits you hold; keeps the label on one line with the trump */ /* 29 chooser: the trump shows here while the status line is hidden */
   .pk-sizes { display: none; }
   .bidbox { padding: 8px 10px; gap: 6px; }
   .wz { gap: 4px; }

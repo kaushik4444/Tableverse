@@ -30,6 +30,8 @@ Removed by the deletion itself or by foreign-key cascade (`ON DELETE CASCADE` in
 | Recent-table list | removed |
 | Chat reports the account **filed** | removed |
 | Chat reports made **against** the account | kept, with the account link cleared and the name at the time kept (migration 015) |
+| Player reports the account **filed** | removed |
+| Player reports made **against** the account | kept, with the account link cleared and the name at the time kept (migration 023) |
 | Feedback text the account sent | kept, with the account link cleared (`ON DELETE SET NULL`). Feedback is not meant to hold personal data (the form says so) |
 | Admin audit entries the account made | kept, with the actor link cleared, for the audit period |
 | Finished matches the account played | **kept**: the seat's name becomes `Deleted player` and the link to the account is cleared, so other players' results and histories stay correct |
@@ -61,7 +63,7 @@ Housekeeping (`server.js`, `db/auth.js` `purgeExpired`, `db/admin.js` `purge`) r
 These are kept until the account is deleted or someone deletes them by hand. No code path removes them on a schedule.
 
 1. **Guest accounts (`players.is_anonymous = TRUE`).** No route in the current code creates them: guests cannot play, because the game socket requires a signed-in session. Rows that exist can only come from earlier code. Check with a read-only count, `SELECT count(*) FROM players WHERE is_anonymous;`. If the count is above zero, decide a retention rule before inviting anyone. The unverified cleanup excludes guests by design.
-2. **Chat reports.** The reported message text (up to 200 characters), the reason and the reporter link are kept indefinitely (`chat_reports`). No retention period is set.
+2. **Chat reports and player reports.** A report is kept indefinitely, with its reason, until the account that made it is deleted; deleting that account removes the reports it made (`ON DELETE CASCADE` on `chat_reports` and `player_reports`). A report about an account that is later deleted stays, with the account link cleared and the name at the time kept. The reported message text (up to 200 characters, chat reports only) is kept too. No retention period is set.
 3. **Finished match records.** Kept indefinitely, by design, so results stay correct. Players are told they are kept with the name `Deleted player`.
 4. **Recorded broadcasts** (subject and message history, `email_broadcasts`). No retention period found in the code.
 

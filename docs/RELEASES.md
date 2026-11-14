@@ -6,10 +6,11 @@ changes from `development` to `main`.
 
 ## How a day works
 
-1. The workflow runs in the 02:xx Berlin slot (GitHub cron is UTC, so it is scheduled at 00:00 and 01:00 UTC and acts in the
-   right one). On the autumn rollback day both slots are 02:xx, so the second run finds today's release tag and does nothing:
-   **one release per Berlin day**. GitHub may start a scheduled run late; the release still happens in the 02:xx slot or on the
-   next manual run.
+1. The workflow is scheduled for 02:00 Berlin (GitHub cron is UTC, so it is scheduled at 00:00 and 01:00 UTC). GitHub can start
+   a scheduled run hours late: the first two scheduled runs started at 06:19 and 08:28 Berlin time. A scheduled run therefore
+   releases when it starts between 02:00 and 08:59 Berlin time, and does nothing outside that window. Two runs can fall in the
+   window (both crons, or the autumn rollback day), so the second finds today's release tag and does nothing:
+   **one release per Berlin day**. A run that starts after 08:59 skips; start a manual run to release that day.
 2. If there is no content difference between `main` and `development` (compared by tree, not commits), it stops. **No empty
    PR is created.**
 3. If there are changes, it opens one release PR from `development` to `main`, or reuses the open one. Never two.
@@ -30,7 +31,7 @@ A release proceeds only when all of these hold on the PR head:
 | Gate | Source | Blocks when |
 |---|---|---|
 | Release freeze off | repository variable `RELEASE_FREEZE` | it is `true` |
-| Same slot | schedule | a scheduled run is outside 02:xx Berlin |
+| Release window | schedule | a scheduled run starts before 02:00 or from 09:00 Berlin time (a late start up to 08:59 still releases) |
 | main has nothing development lacks | `git merge-tree` of main and development | main has changes that development does not (a hotfix not synced yet) |
 | No conflicts | `git merge-tree` and the PR `mergeable` field | either reports a conflict |
 | Five required checks green | check runs on the head commit | any missing, pending or failed |
@@ -57,39 +58,37 @@ parent, and the next release's three-way merge sees the shared history, so relea
 - Merge commits must be allowed in the repository settings (Settings → General → Pull Requests). If they are not, the merge is
   refused and the release is blocked: nothing reaches `main`.
 
-### Current state: one owner decision needed
+### Reconciliation: done (PR #139)
 
-The application code on `main` and `development` is identical. They differ only in release tooling, the release tests, this
-runbook and `.gitignore` (the maintenance changes merged through #137). `main` received the release files through squash and
-tree-only commits (#130, #134, #135), so it does not share their history. Because `development` has changed them since, a
-three-way merge of the two branches conflicts. The release gate reports this as a merge conflict and **blocks** the release: no
-release PR is opened and nothing reaches `main`. That is the safe outcome, but releases stop until the next step is done.
+Earlier releases were squash commits, so `main` did not share their history with `development`. The one-time reconciliation
+(PR #139, merge commit `0a55a63`) recorded `main` as a parent of the `development` history with `git merge -s ours`, so the
+trees of the two branches are identical and `development` is an ancestor of `main`. Every later release is a merge commit and
+merges cleanly.
 
-The one-time reconciliation, which needs the owner's approval:
-
-1. Create a branch from `origin/development` (not from `main`).
-2. Merge `origin/main` into it with `git merge -s ours origin/main`. The `ours` strategy keeps the tree of the branch it runs on,
-   so the result is `development`'s tree, and `main` becomes a recorded parent.
-3. Open a PR from that branch **into `main`**. Its diff is only the maintenance files above, and no runtime code changes.
-4. Merge it with a **merge commit**, not squash or rebase, so the history is kept.
-
-Once this is merged, every later release is a merge commit that merges cleanly. Until then the gate blocks, and no release PR is
-created.
+The release gate still blocks, and does not force, if a three-way merge of `main` and `development` ever conflicts or `main` gets a
+change `development` lacks. That check is the safety net for hotfixes that were not brought back to `development`; it is not a
+pending step.
 
 ## Owner checklist
 
+The two lists below are kept apart on purpose. The first is **code in this repository**: it is reviewed through pull requests and
+needs no action. The second is **GitHub or Render settings**: no code can set or verify them, so the owner ticks each one after
+checking it in the UI.
+
 ### Already in the repository (code, nothing to do)
 
-- The **Daily release** workflow on `main` (`.github/workflows/daily-release.yml`): cron at 00:00 and 01:00 UTC with a 02:xx
-  Berlin guard, a `workflow_dispatch` dry run that is ticked by default, and `concurrency: daily-release`.
+- The **Daily release** workflow on `main` (`.github/workflows/daily-release.yml`): cron at 00:00 and 01:00 UTC with a
+  Berlin window (02:00 to 08:59, to allow for late starts), a `workflow_dispatch` dry run that is ticked by default, and `concurrency: daily-release`.
 - Least-privilege workflow permissions: `contents: write` and `pull-requests: write` for the release, `checks: read` and
-  `statuses: read` for the gates. No personal access token and no new secret.
-- Merge commits are the release method (`RELEASE_MERGE_METHOD` unset means merge; see *Merge history*).
-- `npm test` runs `tests/daily-release.test.js` (32 cases, no network, no database).
+  `statuses: read` for the gates. No personal access token and no new secret. CI (`ci.yml`) has `contents: read` and uses no
+  secrets; the cleanup job runs only on a schedule or a manual dispatch, and its deletion step needs the `production-cleanup`
+  environment.
+- The release merges with a **merge commit** (`RELEASE_MERGE_METHOD` unset means merge; see *Merge history*).
+- `npm test` runs `tests/daily-release.test.js` (35 cases, no network, no database).
 
-### Owner settings (manual: the workflow cannot set these, and an agent may not be able to read them)
+### Owner settings (manual: the code cannot set or verify these)
 
-Tick each item only after checking it in the GitHub UI. The repository code does not verify them.
+Tick each item only after checking it in the GitHub or Render UI. Re-check after any change to repository settings.
 
 - [ ] **Settings → Actions → General → Workflow permissions:** allow *"Allow GitHub Actions to create and approve pull requests"*.
       Without it, the release PR cannot be opened.
@@ -97,8 +96,8 @@ Tick each item only after checking it in the GitHub UI. The repository code does
       release is blocked.
 - [ ] **Settings → Secrets and variables → Actions → Variables:** `PRODUCTION_URL` is the Render service URL with no trailing
       slash (for example `https://tableverse.example.com`). Without it, every release is blocked before anything merges.
-- [ ] **Variables:** `RELEASE_MERGE_METHOD` is either unset or `merge`. Set `squash` only if you accept that later releases can be
-      blocked by conflicts that a person must resolve.
+- [ ] **Variables:** `RELEASE_MERGE_METHOD` is unset or `merge` (the normal setting). Set `squash` only if you accept that later
+      releases can be blocked by conflicts that a person must resolve.
 - [ ] **Copilot review on the first release PR:** Copilot's review must run on the PR that the workflow opens. If it never appears,
       every release is blocked with "Copilot review has not run on this PR head". The owner then decides between requesting
       Copilot review by hand on that PR each day or adding a GitHub App token. No personal access token is used or added by
@@ -167,7 +166,7 @@ The release tag (`release-YYYY-MM-DD-<sha>`) marks the bad commit; use it to fin
 ## Hotfixes and the release window
 
 Do not merge anything to `main` while the **Daily release** workflow is queued or running (Actions tab). A scheduled run can start
-late in the 02:xx slot, a manual run can start at any hour, and one run can take up to 30 minutes. The workflow pins the merge to the
+late (up to 08:59 Berlin time still releases), a manual run can start at any hour, and one run can take up to 30 minutes. The workflow pins the merge to the
 checked `development` commit and then checks that `main` has that content. If another change reached `main` in the meantime, the
 run reports `RELEASE MISMATCH` and writes no tag: investigate `main` and the release before the next run. Preventing the window
 completely needs serialized writes to `main` (for example a merge queue), which is an owner decision.
@@ -193,8 +192,8 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js` (32 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
-conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health streaks, the
+`npm test` runs `tests/daily-release.test.js` (35 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
+conversations, conflict, freeze, duplicate PRs, missing rules, the Berlin release window across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
-method (merge by default, squash only when set, unknown values refused), a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
+method (merge by default, squash only when set, case and spacing ignored, unknown values refused), every runbook section the script names exists, a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
 (blocked before the merge), a content mismatch after the merge (no tag), and check runs beyond the first page.

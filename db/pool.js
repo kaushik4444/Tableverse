@@ -5,10 +5,12 @@ const { createLogger } = require('../lib/log');
 
 const dbLog = createLogger({ component: 'db' });
 
-// Automatically read .env.local or .env into process.env if present
+// Automatically read .env into process.env if present. .env.local is deliberately NOT read here: the local development
+// tools (scripts/dev.js, dev-seed.js, dev-migrate.js) read it themselves and refuse managed or non-local databases, and a
+// developer's .env.local must not be able to point an ops script at a managed database without those checks.
 function loadEnv() {
   const root = path.resolve(__dirname, '..');
-  const candidates = ['.env.local', '.env'];
+  const candidates = ['.env'];
   for (const name of candidates) {
     const full = path.join(root, name);
     if (fs.existsSync(full)) {

@@ -81,7 +81,7 @@ const msgsFor = (id) => [welcome({ id, name: id === 'a' ? 'Ann' : 'Bo', games: g
       await page.goto(url + '/');
       await page.waitForSelector('.wz-top .row, .ludo-tools');
       const order = await page.evaluate(() => [...document.querySelector('.wz-top > .row, .ludo-tools').children].map((c) => (c.classList.contains('chat-btn') ? 'chat' : c.dataset.act === 'emotes' ? 'emotes' : c.classList.contains('vc-mic') ? 'mic' : c.classList.contains('vc-spk') ? 'speaker' : c.classList.contains('gs-chip') ? 'settings' : c.classList.contains('tb-more-wrap') ? 'more' : 'leave')).join(','));
-      assert.equal(order, 'chat,emotes,mic,speaker,settings,more,leave', id);
+      assert.equal(order, 'chat,emotes,mic,speaker,more,leave', id); // game settings are in the ⋯ menu now
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       assert.equal(overflow, false, `${id}: no sideways scroll`);
       await ctx.close();

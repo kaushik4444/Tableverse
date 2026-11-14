@@ -135,7 +135,7 @@ function client(port, name, token) {
 
   const privateHost = await authClient('Private Host');
   await privateHost.until(() => privateHost.id, 'welcome private host');
-  privateHost.send({ t: 'create', gameId: 'wizard' });
+  privateHost.send({ t: 'create', gameId: 'wizard', visibility: 'private' });
   await privateHost.until(() => privateHost.room, 'private room');
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(b.tables.some((t) => t.code === privateHost.room.code), false);

@@ -4,6 +4,9 @@
   const { esc, toast, pt } = window.CardTable;
 
   // 4-colour suits: the CSS classes suit-R/Y/G/B are shared with Wizard.
+  // Shows the points the bidding team needs when a marriage has changed the bid (marriageBid option).
+  const bidNote = (v) => (v.bidTarget != null && v.bidTarget !== v.highBid ? ` <small>(needs ${v.bidTarget})</small>` : '');
+
   const SUITS = {
     S: { sym: '♠', name: 'Spades', cls: 'suit-B' },
     H: { sym: '♥', name: 'Hearts', cls: 'suit-R' },
@@ -57,6 +60,8 @@
         return v.myTurn ? `Your bid: ${v.minBid} to ${v.maxBid}, or pass` : `${name(v.turn)} is bidding…`;
       case 'chooseTrump':
         return v.myTurn ? 'You won the bid. Choose your trump suit (kept secret).' : `${name(v.highBidder)} is choosing trump…`;
+      case 'challenge':
+        return v.myTurn ? (v.multiplier === 1 ? 'Double the bid, or accept it.' : 'Redouble, or accept.') : `${name(v.turn)} is deciding on the double…`;
       case 'playing':
         if (v.myTurn) {
           if (v.canReveal) return 'You can’t follow suit. Show the trump, or discard.';
@@ -78,10 +83,23 @@
     return '<div><span class="label">Trump</span><div><b>Not chosen</b></div></div>';
   }
 
+  // The trump as a compact strip item, shown on phones only (CSS). The header copy is hidden there so the hand keeps its place.
+  function miniTrumpHTML(v) {
+    // The symbols are hidden from assistive tech; the sr-only text says the suit and state, which the header and corner copies (hidden on phones) would otherwise say.
+    const visible = (inner) => `<span aria-hidden="true">${inner}</span>`;
+    const sr = (text) => `<span class="sr-only">${text}</span>`;
+    if (v.trumpSuit) {
+      const s = SUITS[v.trumpSuit];
+      return `<span class="label">Trump</span>${visible(`<span class="pill ${s.cls}"><b>${s.sym}</b></span>${v.trumpRevealed ? '' : '<small>🔒</small>'}`)}${sr(`: ${s.name}${v.trumpRevealed ? '' : ', secret'}`)}`;
+    }
+    if (v.trumpSet) return `<span class="label">Trump</span>${visible('<b>🔒</b>')}${sr(': chosen, hidden')}`;
+    return `<span class="label">Trump</span>${visible('<b>–</b>')}${sr(': not chosen yet')}`;
+  }
+
   function scoreStrip(v) {
     const mine = myTeam(v);
     const us = mine, them = 1 - mine;
-    const bid = v.highBidder >= 0 && v.phase !== 'bidding' ? `<span class="bidinfo">Bid ${v.highBid} by ${esc(v.players[v.highBidder].name)}</span>` : '';
+    const bid = v.highBidder >= 0 && v.phase !== 'bidding' ? `<span class="bidinfo">Bid ${v.highBid}${bidNote(v)} by ${esc(v.players[v.highBidder].name)}</span>` : '';
     return `<div class="t29-strip">
       <div class="tbox us"><span class="label">${v.teamScore[us] > v.teamScore[them] ? '👑 ' : ''}${usName(v)}</span><b>${v.teamScore[us]}</b><small>game pts · hand ${v.handPoints[us]}</small></div>
       ${bid}
@@ -99,10 +117,11 @@
 
   function cornerHTML(v) {
     let h;
-    if (v.trumpSuit) h = `Trump${v.trumpRevealed ? '' : ' (secret)'}<br>${suitPill(v.trumpSuit)}`;
-    else if (v.trumpSet) h = 'Trump<br><b>🔒 hidden</b>';
+    // The trump part is its own span: on phones the strip or bid box shows the trump, so the corner keeps only the bid (table.css).
+    if (v.trumpSuit) h = `<span class="t29-corner-trump">Trump${v.trumpRevealed ? '' : ' (secret)'}<br>${suitPill(v.trumpSuit)}</span>`;
+    else if (v.trumpSet) h = '<span class="t29-corner-trump">Trump<br><b>🔒 hidden</b></span>';
     else h = v.phase === 'bidding' ? 'Bidding…' : 'Choosing trump…';
-    if (v.highBidder >= 0 && v.phase !== 'bidding') h += `<br>Bid <b>${v.highBid}</b> · ${esc(v.players[v.highBidder].name)}`;
+    if (v.highBidder >= 0 && v.phase !== 'bidding') h += `<br>Bid <b>${v.highBid}</b>${bidNote(v)} · ${esc(v.players[v.highBidder].name)}`;
     return `<div class="cap">${h}</div>`;
   }
 
@@ -132,9 +151,16 @@
   }
 
   function controlsHTML(v) {
+    if (v.phase === 'challenge' && v.myTurn) {
+      const doubling = v.multiplier === 1;
+      return `<div class="bidbox"><div class="label"><span class="t29-mini-trump">${miniTrumpHTML(v)}</span> ${doubling ? 'Double the bid? Doubled hands count twice.' : 'Redouble? Redoubled hands count four times.'}</div>
+        <div class="row" style="gap:6px"><button class="btn ghost small" data-t9="accept">Accept</button>
+        <button class="btn small" data-t9="${doubling ? 'double' : 'redouble'}">${doubling ? 'Double (×2)' : 'Redouble (×4)'}</button></div></div>`;
+    }
     if (v.phase === 'chooseTrump' && v.myTurn) {
       const mine = [...new Set(v.hand.map((c) => c.suit))];
-      return `<div class="bidbox"><div class="label">Choose trump (only suits you hold)</div><div class="bidgrid">${mine
+      // The status line is hidden while this box follows it (game-ux.css), so the phone copy of the trump indicator goes here.
+      return `<div class="bidbox"><div class="label"><span class="t29-mini-trump">${miniTrumpHTML(v)}</span> Choose trump<span class="t29-hint"> (only suits you hold)</span></div><div class="bidgrid">${mine
         .map((s) => `<button class="suitbtn ${SUITS[s].cls}" data-t9="trump" data-s="${s}"><b>${SUITS[s].sym}</b> ${SUITS[s].name}</button>`)
         .join('')}</div></div>`;
     }
@@ -160,12 +186,22 @@
       .join('');
   }
 
+  // The bid as played: the points needed (a marriage can change it), and the multiplier when the hand was doubled.
+  const bidText = (h) => (h.target !== undefined && h.target !== h.bid ? `${h.target} <small>(bid ${h.bid})</small>` : `${h.bid}`);
+  const signed = (n) => `${n > 0 ? '+' : '−'}${Math.abs(n)}`;
+  // Game points this hand gave the bidding team. h.game is already signed from the bidding team's side and includes any multiplier,
+  // so the label always names the bidding team, whatever the sign.
+  const gameText = (h, mine, v) => {
+    const who = teamOf(h.bidder) === mine ? (v.me >= 0 ? 'us' : 'A') : (v.me >= 0 ? 'them' : 'B');
+    return `${signed(h.game)} ${who}${h.multiplier > 1 ? ` <small>(×${h.multiplier})</small>` : ''}`;
+  };
+
   function historyTable(v) {
     const mine = myTeam(v);
     const rows = v.history
       .map((h) => {
         const t = teamOf(h.bidder);
-        return `<tr><td>#${h.hand}</td><td>${esc(v.players[h.bidder].name)}</td><td>${h.bid}</td><td>${SUITS[h.trumpSuit].sym}</td><td>${h.points[mine]}–${h.points[1 - mine]}</td><td class="${h.made ? 'pos' : 'neg'}">${t === mine ? (h.made ? '+1 ' + (v.me >= 0 ? 'us' : 'A') : '−1 ' + (v.me >= 0 ? 'us' : 'A')) : h.made ? '+1 ' + (v.me >= 0 ? 'them' : 'B') : '−1 ' + (v.me >= 0 ? 'them' : 'B')}</td></tr>`;
+        return `<tr><td>#${h.hand}</td><td>${esc(v.players[h.bidder].name)}</td><td>${bidText(h)}</td><td>${SUITS[h.trumpSuit].sym}</td><td>${h.points[mine]}–${h.points[1 - mine]}</td><td class="${h.made ? 'pos' : 'neg'}">${gameText(h, mine, v)}</td></tr>`;
       })
       .join('');
     return `<div class="score-wrap"><table class="score"><thead><tr><th>Hand</th><th>Bidder</th><th>Bid</th><th>Trump</th><th>Points (us–them)</th><th>Result</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="hint">No hands finished yet</td></tr>'}</tbody></table></div>`;
@@ -180,7 +216,7 @@
     const h = v.history[v.history.length - 1];
     const mine = myTeam(v);
     const bidderMine = teamOf(h.bidder) === mine;
-    const result = `<p><b>${esc(v.players[h.bidder].name)}</b> (${bidderMine ? usName(v).toLowerCase() : themName(v).toLowerCase()}) bid <b>${h.bid}</b> with trump ${SUITS[h.trumpSuit].sym} and took <b>${h.points[teamOf(h.bidder)]}</b> points: <b class="${h.made ? 'pos' : 'neg'}">${h.made ? 'bid made' : 'bid failed'}</b>.</p>
+    const result = `<p><b>${esc(v.players[h.bidder].name)}</b> (${bidderMine ? usName(v).toLowerCase() : themName(v).toLowerCase()}) bid <b>${bidText(h)}</b> with trump ${SUITS[h.trumpSuit].sym} and took <b>${h.points[teamOf(h.bidder)]}</b> points: <b class="${h.made ? 'pos' : 'neg'}">${h.made ? 'bid made' : 'bid failed'}</b>. Hand result: ${gameText(h, mine, v)}.</p>
       <p>Hand points: ${usName(v).toLowerCase()} ${h.points[mine]}, ${themName(v).toLowerCase()} ${h.points[1 - mine]}.<br>Game points: ${usName(v).toLowerCase()} <b>${h.score[mine]}</b>, ${themName(v).toLowerCase()} <b>${h.score[1 - mine]}</b>.</p>`;
     if (v.phase === 'handEnd') {
       return `<div class="overlay"><div class="sheet"><h2>Hand ${v.handNo} complete</h2>${result}<div class="row" style="margin-top:12px"><button class="btn" data-t9="next">Next hand</button><span class="hint">Starts automatically in a few seconds</span></div></div></div>`;
@@ -232,15 +268,15 @@
     root.innerHTML = `
     <div class="wz t29" style="--cw:${z.cw}px;--tcw:${z.tcw}px;--cw0:${z.cw}px">
       <div class="wz-top">
-        <div class="wz-round"><b>Hand ${v.handNo}</b><span class="label"> · to ${v.options.target}</span></div>
+        <div class="wz-round"><b>Hand ${v.handNo}</b>${v.multiplier > 1 ? ` <b class="t29-stakes" title="Stakes: this hand is worth ×${v.multiplier}">×${v.multiplier}</b>` : ''}<span class="label"> · to ${v.options.target}</span></div>
         <div class="wz-trump">${trumpHTML(v)}</div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-t9="scores">Scores</button>', 't9')}
       </div>
       ${scoreStrip(v)}
       ${tableHTML(v, ctx)}
-      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${statusText(v)}</span>
+      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><div class="t29-mini-trump">${miniTrumpHTML(v)}</div><span>${statusText(v)}</span>
         ${v.canReveal ? '<button class="btn small" data-t9="reveal">Show trump</button>' : ''}
-        ${v.canDeclareMarriage ? '<button class="btn small" data-t9="marriage">Declare K–Q (+4)</button>' : ''}
+        ${v.canDeclareMarriage ? `<button class="btn small" data-t9="marriage">${v.options.marriageBid ? 'Declare K–Q (changes bid)' : 'Declare K–Q (+4)'}</button>` : ''}
         ${canPlay ? '<button class="btn small" data-t9="play">Play</button>' : ''}</div>
       ${controlsHTML(v)}
       <div class="hand"><div class="hand-in">${handHTML(v, z)}</div></div>
@@ -307,6 +343,11 @@
         break;
       case 'marriage':
         ctx.act({ type: 'marriage' });
+        break;
+      case 'double':
+      case 'redouble':
+      case 'accept':
+        ctx.act({ type: el.dataset.t9 });
         break;
       case 'pick':
         ui.bid = Number(el.dataset.n);

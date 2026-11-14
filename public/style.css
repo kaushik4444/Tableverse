@@ -335,6 +335,8 @@ select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .tb-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
 .tb-mark { font-size: 26px; line-height: 1; }
 .tb-right { display: flex; align-items: center; gap: 8px; }
+/* Narrow phones (360px): the guest topbar (Feedback, Log in, Create account) must fit without sideways scroll. */
+@media (max-width: 400px) { .topbar { gap: 6px; } .tb-right { gap: 4px; flex-shrink: 0; } .tb-right .btn.small { padding-left: 8px; padding-right: 8px; } .tb-brand { min-width: 0; font-size: 17px; } .tb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
 .menu-wrap { position: relative; }
 .tb-avatar-btn { position: relative; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 4px 8px 4px 4px; border-radius: 999px; border: 1px solid var(--panel-line); background: rgba(255, 255, 255, .05); color: var(--ink); cursor: pointer; }
 .tb-avatar-btn:hover, .tb-avatar-btn[aria-expanded="true"] { background: rgba(255, 255, 255, .12); }
@@ -413,6 +415,7 @@ html { scroll-behavior: auto; }
 .empty p { margin: 0; font-size: 14px; max-width: 40ch; line-height: 1.45; }
 .loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 30px 0; color: var(--muted); }
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--panel-line); border-top-color: var(--gold); animation: spin .8s linear infinite; }
+.pcard-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 28px 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 .error-block { display: grid; justify-items: center; gap: 8px; padding: 22px 16px; border-radius: 16px; border: 1px solid rgba(248, 113, 113, .4); background: rgba(248, 113, 113, .08); color: #fecaca; text-align: center; }

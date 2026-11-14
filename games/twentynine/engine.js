@@ -51,7 +51,14 @@ function createGame(playerList, options = {}, rng = Math.random) {
   const g = {
     rng,
     n: 4,
-    options: { target },
+    options: {
+      target,
+      // Off by default: the classic scoring. Each one changes the result of a hand (see finishHand and bidTarget).
+      allTwentyNine: options.allTwentyNine === true,
+      halfFailDouble: options.halfFailDouble === true,
+      marriageBid: options.marriageBid === true,
+      doubleChallenge: options.doubleChallenge === true,
+    },
     players: playerList.map((p) => ({ id: p.id, name: p.name, hand: [] })),
     dealer: Math.floor(rng() * 4),
     handNo: 0,
@@ -84,8 +91,21 @@ function startHand(g) {
   g.lastTrick = null;
   g.tricksPlayed = 0;
   g.handPoints = [0, 0];
+  g.trickPoints = [0, 0]; // card points won in tricks only (no marriage bonus); together they make 29
   g.tricksWon = [0, 0];
   g.marriageDeclared = false;
+  g.marriageTeam = -1; // team that declared the marriage this hand (marriageBid option only)
+  g.multiplier = 1; // 2 after the other team doubles the bid, 4 after the bidding team redoubles (doubleChallenge option)
+}
+
+/**
+ * The points the bidding team must reach. With the marriage-bid option, a marriage by the bidding team
+ * lowers the bid by 4 (never below 15); a marriage by the other team raises it by 4.
+ */
+function bidTarget(g) {
+  if (g.highBidder < 0) return null;
+  if (!g.options.marriageBid || g.marriageTeam < 0) return g.highBid;
+  return g.marriageTeam === team(g.highBidder) ? Math.max(MIN_BID, g.highBid - 4) : g.highBid + 4;
 }
 
 function minBid(g) {
@@ -182,9 +202,17 @@ const fail = (error) => ({ ok: false, error });
 function finishHand(g) {
   const bidderTeam = team(g.highBidder);
   const pts = g.handPoints.slice();
-  const made = pts[bidderTeam] >= g.highBid;
-  g.teamScore[bidderTeam] += made ? 1 : -1;
-  g.history.push({ hand: g.handNo, dealer: g.dealer, bidder: g.highBidder, bid: g.highBid, trumpSuit: g.trumpSuit, points: pts, made, marriageDeclared: g.marriageDeclared, score: g.teamScore.slice() });
+  const target = bidTarget(g);
+  const made = pts[bidderTeam] >= target;
+  // Game points for this hand: 1 normally. All 29 taken by the bidding team makes a made bid worth 2;
+  // a missed bid with less than half the card points (under 14.5 of 29) costs 2. Half counts card points from the
+  // tricks only, so a marriage bonus cannot lift a team over the line.
+  let game = 1;
+  if (made && g.options.allTwentyNine && g.trickPoints[bidderTeam] === 29) game = 2;
+  if (!made && g.options.halfFailDouble && g.trickPoints[bidderTeam] * 2 < 29) game = 2;
+  game *= g.multiplier || 1; // doubled hands are worth 2x, redoubled 4x
+  g.teamScore[bidderTeam] += made ? game : -game;
+  g.history.push({ hand: g.handNo, dealer: g.dealer, bidder: g.highBidder, bid: g.highBid, target, game: made ? game : -game, multiplier: g.multiplier || 1, trumpSuit: g.trumpSuit, points: pts, made, marriageDeclared: g.marriageDeclared, score: g.teamScore.slice() });
   const [a, b] = g.teamScore;
   const t = g.options.target;
   if (a >= t || b <= -t) g.winnerTeam = 0;
@@ -225,8 +253,38 @@ function applyAction(g, playerId, action) {
       if (!g.players[seat].hand.some((c) => c.suit === action.suit)) return fail('Choose a suit you hold');
       g.trumpSuit = action.suit;
       for (const p of g.players) p.hand = sortHand(p.hand.concat(g.stock.splice(0, 4)));
+      if (g.options.doubleChallenge) {
+        // The other team (starting left of the bidder) may double the bid before the first card is played.
+        g.phase = 'challenge';
+        g.turn = (g.highBidder + 1) % 4;
+        return ok();
+      }
       g.phase = 'playing';
       g.turn = g.highBidder; // the winning bidder leads the first trick
+      return ok();
+    }
+    case 'double':
+    case 'redouble':
+    case 'accept': {
+      if (g.phase !== 'challenge') return fail('There is no challenge to answer');
+      if (seat !== g.turn) return fail('Not your turn');
+      const bidderSide = team(seat) === team(g.highBidder);
+      if (action.type === 'double') {
+        if (bidderSide || g.multiplier !== 1) return fail('Only the other team can double, once');
+        g.multiplier = 2;
+        g.turn = g.highBidder;
+        g.log.push({ by: g.players[seat].name, card: 'doubles the bid (×2)', kind: 'bid' });
+        return ok();
+      }
+      if (action.type === 'redouble') {
+        if (!bidderSide || g.multiplier !== 2) return fail('Only the bidding team can redouble a double');
+        g.multiplier = 4;
+        g.log.push({ by: g.players[seat].name, card: 'redoubles (×4)', kind: 'bid' });
+      } else {
+        g.log.push({ by: g.players[seat].name, card: 'accepts', kind: 'bid' });
+      }
+      g.phase = 'playing';
+      g.turn = g.highBidder; // the bidder leads the first trick
       return ok();
     }
     case 'reveal': {
@@ -238,8 +296,14 @@ function applyAction(g, playerId, action) {
     case 'marriage': {
       if (!canDeclareMarriage(g, seat)) return fail('You cannot declare a trump marriage now');
       g.marriageDeclared = true;
-      g.handPoints[team(seat)] += 4;
-      g.log.push({ by: g.players[seat].name, card: 'declares the trump King–Queen marriage (+4 points)', kind: 'marriage' });
+      if (g.options.marriageBid) {
+        g.marriageTeam = team(seat);
+        const byBidder = team(seat) === team(g.highBidder);
+        g.log.push({ by: g.players[seat].name, card: byBidder ? 'declares the trump King–Queen marriage (bid lowered by 4)' : 'declares the trump King–Queen marriage (bid raised by 4)', kind: 'marriage' });
+      } else {
+        g.handPoints[team(seat)] += 4;
+        g.log.push({ by: g.players[seat].name, card: 'declares the trump King–Queen marriage (+4 points)', kind: 'marriage' });
+      }
       return ok();
     }
     case 'play': {
@@ -262,6 +326,7 @@ function applyAction(g, playerId, action) {
       let pts = g.trick.reduce((s, t) => s + t.card.pts, 0);
       if (g.tricksPlayed === 8) pts += 1; // last trick bonus
       g.handPoints[team(winner)] += pts;
+      g.trickPoints[team(winner)] += pts;
       g.tricksWon[team(winner)]++;
       g.lastTrick = { cards: g.trick, winner, points: pts };
       g.trick = [];
@@ -280,7 +345,7 @@ function applyAction(g, playerId, action) {
 }
 
 function awaiting(g) {
-  return g.phase === 'bidding' || g.phase === 'chooseTrump' || g.phase === 'playing' ? [g.players[g.turn].id] : [];
+  return g.phase === 'bidding' || g.phase === 'chooseTrump' || g.phase === 'challenge' || g.phase === 'playing' ? [g.players[g.turn].id] : [];
 }
 
 function viewFor(g, playerId) {
@@ -293,6 +358,9 @@ function viewFor(g, playerId) {
     handNo: g.handNo,
     dealer: g.dealer,
     turn: g.phase === 'handEnd' || g.phase === 'gameOver' ? null : g.turn,
+    multiplier: g.multiplier || 1,
+    canDouble: g.phase === 'challenge' && me === g.turn && (g.multiplier || 1) === 1 && team(me) !== team(g.highBidder),
+    canRedouble: g.phase === 'challenge' && me === g.turn && g.multiplier === 2 && team(me) === team(g.highBidder),
     me,
     myTurn,
     options: g.options,
@@ -306,6 +374,8 @@ function viewFor(g, playerId) {
     bids: g.bids,
     highBid: g.highBid,
     highBidder: g.highBidder,
+    bidTarget: bidTarget(g),
+    marriageTeam: g.marriageTeam === undefined ? -1 : g.marriageTeam,
     minBid: g.phase === 'bidding' ? minBid(g) : null,
     maxBid: MAX_BID,
     canPass: g.phase === 'bidding' && me === g.turn ? canPass(g) : false,
@@ -362,6 +432,11 @@ function botAction(g, playerId) {
     return { type: 'bid', pass: true };
   }
   if (g.phase === 'chooseTrump') return { type: 'chooseTrump', suit: bestTrump(hand) };
+  if (g.phase === 'challenge') {
+    const strength = handStrength(hand);
+    if (g.multiplier === 1) return team(seat) !== team(g.highBidder) && strength >= 20 ? { type: 'double' } : { type: 'accept' };
+    return strength >= 22 ? { type: 'redouble' } : { type: 'accept' };
+  }
   if (g.phase === 'handEnd') return { type: 'continue' };
   if (g.phase === 'playing' && canDeclareMarriage(g, seat)) return { type: 'marriage' };
 
@@ -397,4 +472,4 @@ function botAction(g, playerId) {
   return { type: 'play', cardId: pick.id };
 }
 
-module.exports = { forcedPlay, SUITS, RANKS, buildDeck, createGame, applyAction, awaiting, viewFor, botAction, trickWinner, legalCards, canReveal, canDeclareMarriage, MIN_BID, MAX_BID };
+module.exports = { forcedPlay, SUITS, RANKS, buildDeck, createGame, applyAction, awaiting, viewFor, botAction, trickWinner, legalCards, canReveal, canDeclareMarriage, finishHand, bidTarget, MIN_BID, MAX_BID };

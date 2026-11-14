@@ -66,7 +66,6 @@
     bellOpen: false, // the notifications dropdown in the top bar
     toolsOpen: false, // the "more" menu in a game's toolbar
     wnSeen: store.get('ct_wn_seen') || '', // the last What's new version this person opened
-    createVisibility: 'private',
     sessionListOpen: store.get('ct_sessions_open') !== '0',
     guest: false, // true when the home screen is the public snapshot (no socket, no session)
     signingIn: false, // logged in on the server, waiting for the socket's welcome: the top bar shows the profile and taps are blocked
@@ -578,6 +577,8 @@
     ws.onclose = (e) => {
       if (sock !== ws) return;
       S.ready = false;
+      // A profile waiting for the server's 'left' cannot open after a drop: the leave may never arrive, and a later leave must not open it.
+      S.pendingPage = null;
       voice.reset(); // the server drops us from voice when the connection drops
       if (e.code === 4000) {
         $banner.textContent = 'Tableverse is open in another tab. Reload to play here.';
@@ -1007,6 +1008,7 @@
       case 'blocks':
         S.blocked = Array.isArray(m.blocks) ? m.blocks : [];
         if (S.page === 'profile') render();
+        else if (S.page === 'player') resyncPlayerBlock();
         break;
       case 'ice':
         // fresh TURN logins: used by new connections, and applied to the ones already open
@@ -1100,12 +1102,15 @@
         S.unread = 0;
         closeChat();
         wasMyTurn = false;
+        // A profile asked for from a table opens only now: the table is gone, so the page can show.
+        if (S.pendingPage) { const pending = S.pendingPage; S.pendingPage = null; openPage(pending.page, pending.arg); break; }
         setHash('');
         render();
         break;
       case 'error':
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
+        if (S.page === 'player') resyncPlayerBlock(true); // a refused block or unblock must not stay on the page
         break;
     }
   }
@@ -1337,6 +1342,8 @@
     const person = roomPerson(C.pid) || C.last;
     if (!person) return '<p class="hint">This player is no longer at the table.</p>';
     C.last = person;
+    // Show the whole card at once: while the numbers are loading, nothing else appears, so the dialog does not change in steps.
+    if (C.loading) return `<div class="pcard-loading" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span> Loading profile…</div>`;
     const rel = relationTo(person);
     const here = Boolean(roomPerson(C.pid));
     const prof = C.profile;
@@ -1353,7 +1360,13 @@
     if (rel.kind === 'none' && S.guest) add.length = 0;
     const others = [];
     if (rel.kind === 'me') others.push('<button type="button" class="btn ghost" data-modal-act="cardEditMe">Edit my profile</button>');
-    if (person.username && rel.kind !== 'me') others.push(`<a class="btn ghost" href="/#u/${encodeURIComponent(person.username)}" target="_blank" rel="noopener">View full profile</a>`);
+    if (person.username && rel.kind !== 'me') others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardProfile">View full profile</button>`);
+    if (here && rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock">🚫 Block</button>`);
+    // A report about a registered player (their conduct, not one message): a reason menu, like the chat report's.
+    if (person.username && rel.kind !== 'me' && rel.kind !== 'bot' && rel.kind !== 'guest') {
+      if (C.reporting) others.push(`<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-modal-act="cardReportSend" data-reason="${k}">${l}</button>`).join('')}<button type="button" class="btn ghost" data-modal-act="cardReport">Cancel</button></div>`);
+      else others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardReport" aria-expanded="false">🚩 Report player</button>`);
+    }
     if (rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost" data-modal-act="cardMute">${muted.has(person.id) ? '🔔 Unmute in chat' : '🔇 Mute in chat'}</button>`);
     return `<div class="pcard-head">${avatar(person, 'big')}<div><h3>${esc(person.name)}</h3><p>${sub}${person.id === S.id ? ' · you' : ''}</p>${conn}</div></div>${stats}${C.error ? `<p class="auth-msg" role="alert">${esc(C.error)}</p>` : ''}<div class="pcard-actions">${add.join('')}${others.join('')}</div>${S.guest && rel.kind === 'none' ? '<p class="pcard-note">Log in to add friends.</p>' : ''}`;
   }
@@ -1366,12 +1379,24 @@
   function openPlayerCard(pid) {
     const person = roomPerson(pid);
     if (!person) return;
-    S.card = { pid, profile: null, busy: false, error: '', last: person };
+    const loading = Boolean(person.username && !person.bot);
+    const card = { pid, profile: null, busy: false, error: '', last: person, loading };
+    S.card = card;
     drawCard();
-    if (person.username && !person.bot) {
+    // While loading, the body has no buttons, so keep keyboard focus in the dialog on its Close control.
+    if (loading) { const x = document.querySelector('#modal-overlay [data-modal-close][aria-label="Close"]'); if (x) x.focus(); }
+    if (loading) {
+      // Redraw only into this card's own dialog: if it was closed (or replaced by another dialog) while loading, leave it alone.
+      const done = () => {
+        if (S.card !== card) return; // this request belongs to an earlier opening of the card
+        card.loading = false;
+        const body = document.querySelector('#modal-overlay .modal-body');
+        if (body && body.dataset.card === pid) drawCard();
+      };
       getJson(`/api/players/${encodeURIComponent(person.username)}`)
-        .then((d) => { if (S.card && S.card.pid === pid) { S.card.profile = d.profile; drawCard(); } })
-        .catch(() => { /* the card works without the numbers */ });
+        .then((d) => { if (S.card === card) card.profile = d.profile; })
+        .catch(() => { /* the card works without the numbers */ })
+        .finally(done);
     }
   }
   async function cardAction(path, body, success, label = 'Updating…') {
@@ -1594,10 +1619,41 @@
   async function loadPlayer(username) {
     S.player = { username, loading: true, error: '', data: null };
     render();
-    try { S.player.data = (await getJson(`/api/players/${encodeURIComponent(username)}`)).profile; }
+    try { S.player.data = (await getJson(`/api/players/${encodeURIComponent(username)}`)).profile; S.player.confirmedBlockedByMe = S.player.data.blockedByMe; }
     catch (e) { S.player.error = e.status === 404 ? 'There is no player with that username.' : (e.message || 'Could not load this profile.'); }
     S.player.loading = false;
     render();
+  }
+  // The profile page shows a block or unblock at once, before the server has answered. When the server answers (the new list,
+  // or an error such as a cooldown or the block limit), the page is checked against the server again, so it never keeps
+  // showing a block that was refused or hiding one that went through. It redraws only if something changed.
+  // `failed` is true when the server refused the request. If the check itself cannot be made after a refusal, the page goes back to
+  // the last state the server confirmed (confirmedBlockedByMe) instead of leaving a refused block on screen.
+  let playerResync = 0;
+  let playerBlockAction = 0;
+  async function resyncPlayerBlock(failed = false) {
+    const P = S.player;
+    if (S.page !== 'player' || !P || !P.data) return;
+    const stamp = ++playerResync;
+    const action = playerBlockAction;
+    if (!failed) P.confirmedBlockedByMe = P.data.blockedByMe;
+    let confirmed; let fresh = false;
+    try {
+      confirmed = (await getJson(`/api/players/${encodeURIComponent(P.data.username)}`)).profile.blockedByMe;
+      fresh = true;
+    } catch {
+      if (!failed) return;
+      confirmed = P.confirmedBlockedByMe;
+    }
+    if (stamp !== playerResync || action !== playerBlockAction || S.player !== P || S.page !== 'player') return; // a newer check, action, or page took over
+    // Only a response that passed the guard above may change the confirmed state; a discarded one must not.
+    if (fresh) P.confirmedBlockedByMe = confirmed;
+    if (confirmed === undefined || P.data.blockedByMe === confirmed) return;
+    // The redraw replaces the block button, so keep the keyboard on the control if it was there.
+    const hadFocus = /^player(Block|Unblock)$/.test((document.activeElement && document.activeElement.dataset.act) || '');
+    P.data.blockedByMe = confirmed;
+    render();
+    if (hadFocus) { const el = document.querySelector('.pp-actions [data-act="playerBlock"], .pp-actions [data-act="playerUnblock"]'); if (el) el.focus(); }
   }
 
   const joinedText = (iso) => (iso ? `Joined ${fmtDate(iso)}` : '');
@@ -1669,6 +1725,18 @@
     return `<p class="pp-conn">Friend · ${f.playing ? '🎮 Playing ' + esc((gameMeta(f.playing) || {}).name || f.playing) : '🟢 Online'} · ${pingBadge(f.ping, { label: true })}</p>`;
   }
 
+  /** Block / unblock and report for another registered player's page. Signed-in viewers only; the server resolves the username. */
+  function playerActionsHTML(P, d) {
+    // Unblock only for a block this viewer made; a block the other player made is theirs to lift.
+    const blockBtn = d.blockedByMe
+      ? '<button type="button" class="btn ghost small" data-act="playerUnblock">Unblock</button>'
+      : '<button type="button" class="btn ghost small" data-act="playerBlock">🚫 Block</button>';
+    const reportPart = P.reporting
+      ? `<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-act="playerReportSend" data-reason="${k}">${l}</button>`).join('')}<button type="button" class="btn ghost small" data-act="playerReport" aria-expanded="true">Cancel</button></div>`
+      : '<button type="button" class="btn ghost small" data-act="playerReport" aria-expanded="false">🚩 Report player</button>';
+    return `<div class="pp-actions">${blockBtn}${reportPart}</div>`;
+  }
+
   function renderPlayerPage() {
     const P = S.player || { loading: true };
     let inner;
@@ -1676,8 +1744,9 @@
     else if (P.error) inner = errorBlock(P.error);
     else {
       const d = P.data;
-      inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${d.blockedByViewer ? '<p class="pp-blocked"><b>Blocked</b></p>' : friendLine(d.username)}</div></header>
-        <div class="stat-grid"><div class="stat-tile"><span class="stat-v">${d.played}</span><span class="stat-l">Games played</span></div><div class="stat-tile good"><span class="stat-v">${d.wins}</span><span class="stat-l">Wins</span></div><div class="stat-tile"><span class="stat-v">${d.winRate === null ? '–' : d.winRate + '%'}</span><span class="stat-l">Win rate</span></div></div>`;
+      inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${d.blockedByMe ? '<p class="pp-blocked"><b>Blocked</b></p>' : friendLine(d.username)}</div></header>
+        <div class="stat-grid"><div class="stat-tile"><span class="stat-v">${d.played}</span><span class="stat-l">Games played</span></div><div class="stat-tile good"><span class="stat-v">${d.wins}</span><span class="stat-l">Wins</span></div><div class="stat-tile"><span class="stat-v">${d.winRate === null ? '–' : d.winRate + '%'}</span><span class="stat-l">Win rate</span></div></div>
+        ${!S.guest && S.username && S.username.toLowerCase() !== String(d.username).toLowerCase() ? playerActionsHTML(P, d) : ''}`;
     }
     $app.innerHTML = `${topbarHTML()}<main class="page profile-page"><a class="back-link" href="/" data-act="goHome">← Back to games</a>${inner}</main>`;
   }
@@ -1723,11 +1792,11 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-property-cards-settings';
+  const WHATS_NEW_VERSION = '2026-11-block-report-menu';
   const WHATS_NEW = [
-    ['🏙️', 'Property Rivals: city cards', 'Tap a city in a player’s holdings to see its mortgage value, the rent right now and the full rent table, and what houses and hotels cost. Each rival shows cash and net worth; the crown follows net worth.'],
-    ['⚙️', 'Game settings at a glance', 'Every game shows its current settings at the top right. Tap them for the full list with each choice explained.'],
-    ['🎙️', 'Talk at the table — voice chat', 'Tap the microphone to join voice and talk with everyone at your table, in the lobby or during a game. Tap it again to mute yourself. Use the speaker to listen without speaking or silence table audio. A mic marks people in voice and a green ring shows who is speaking. Voice supports up to 8 people. Allow microphone access when your browser asks; a headset helps prevent echo.', 'voice'],
+    ['🚩', 'Block and report players', 'Block or report a player from their table card or from their profile page. Reports go to the moderators, and each player can be reported once. Guests can’t report.'],
+    ['⋯', 'How to play and the game log are in ⋯', 'The ⋯ button at the top right holds How to play, the game log and game settings, so the bottom bar stays clear on phones.'],
+    ['🔀', 'Shuffle seats, and the 29 rules explained', 'The host can turn on Shuffle seats for Wizard and 29. Game settings now explain each 29 option: the scoring for taking all 29 points, the failed-bid penalty, the marriage that changes the bid, and Double and Redouble.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
@@ -1774,6 +1843,15 @@
     const chat = bar.querySelector('.chat-btn');
     const emote = bar.querySelector('[data-act="emotes"]');
     const extras = [...bar.querySelectorAll('button')].filter((b) => b !== leave && b !== chat && b !== emote);
+    // How to play lives in the ⋯ menu for every game. A game that already has its own rules entry keeps it.
+    if (S.room && !extras.some((b) => b.dataset.act === 'rules' || /rules|how to play/i.test(b.textContent || ''))) {
+      const rb = document.createElement('button');
+      rb.type = 'button'; rb.className = 'btn ghost small'; rb.dataset.act = 'rules'; rb.dataset.game = S.room.gameId;
+      rb.setAttribute('aria-label', 'How to play'); rb.textContent = '📖 How to play';
+      // Space on a focused button must not reach the document-level Space shortcuts (The Mind plays a card on Space)
+      rb.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
+      extras.push(rb);
+    }
     // Go Fish has no log: it would show what other players asked for
     if (!bar.closest('.gf') && !extras.some((b) => b.dataset.act === 'activityLog')) {
       const log = document.createElement('button');
@@ -1814,6 +1892,56 @@
     leaveGameConfirm: () => { closeModal(); send({ t: 'leave' }); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
+    // Opening a profile is a page, and the app only shows a page when no table is open. From a table, confirm first:
+    // leaving the table is what makes room for the profile.
+    cardProfile: () => {
+      const p = S.card && S.card.last;
+      if (!p || !p.username) return;
+      if (!S.room) { closeModal(); openPage('player', p.username); return; }
+      // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
+      const seatedInGame = S.room.status === 'playing' && !isSpectator();
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' : 'This leaves the table.';
+      openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
+    },
+    cardProfileConfirm: () => {
+      const p = S.card && S.card.last;
+      closeModal();
+      if (!p || !p.username) return;
+      // Without a live connection nothing is sent, so nothing would open the page later: do not keep the navigation for a
+      // later, unrelated leave. The player can try again once connected.
+      if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then open the profile again.'); return; }
+      // The page opens when the server confirms the leave ('left'); opening it now would be undone by that message.
+      S.pendingPage = { page: 'player', arg: p.username };
+      send({ t: 'leave' });
+    },
+    // Blocking is account-level and works the same from a table as from chat: the blocked person is hidden from table
+    // chat and table voice in both directions. The block itself is sent to the server by the player's id.
+    // Reporting a player is a reason menu on the card; the server checks the account and keeps one report per reporter and player.
+    // Redrawing the card replaces the focused button, so focus moves on purpose: to the first reason when the menu opens,
+    // and back to Report when it closes (Cancel) or a report is sent.
+    cardReport: () => {
+      if (!S.card) return;
+      S.card.reporting = !S.card.reporting;
+      drawCard();
+      const target = S.card.reporting ? '#modal-overlay .report-menu .mod-btn' : '#modal-overlay [data-modal-act="cardReport"]';
+      const el = document.querySelector(target);
+      if (el) el.focus();
+    },
+    cardReportSend: (el) => {
+      const C = S.card;
+      if (!C || !C.last || !C.last.id || !el.dataset.reason) return;
+      send({ t: 'reportPlayer', id: C.last.id, reason: el.dataset.reason });
+      C.reporting = false;
+      drawCard(); // the server's notice confirms the report
+      const again = document.querySelector('#modal-overlay [data-modal-act="cardReport"]');
+      if (again) again.focus();
+    },
+    cardBlock: () => {
+      const p = S.card && S.card.last;
+      if (!p || p.bot || !p.id || p.id === S.id) return;
+      send({ t: 'block', id: p.id });
+      closeModal();
+    },
       makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
       kickPlayerConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'kick', id }); } },
   };
@@ -2111,7 +2239,8 @@
       close.focus();
       o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
       // when it closes, focus returns to the settings chip; the chip is looked up at close time because a redraw may have replaced it
-      modalOnClose = () => { const chip = document.querySelector('.gs-chip'); if (chip) chip.focus(); };
+      // the ⋯ button is the visible control that opened the menu; the settings item lives inside the (now hidden) menu
+      modalOnClose = () => { const more = document.querySelector('.tb-more-btn') || document.querySelector('.gs-chip'); if (more) more.focus(); };
     });
   }
 
@@ -2127,8 +2256,13 @@
     chip.innerHTML = `<span aria-hidden="true">⚙</span> <span class="gs-sum">${esc(summary)}</span>`;
     // Space on the focused chip opens the settings; it must not reach the document-level Space shortcuts (The Mind plays a card on Space)
     chip.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
-    // In the title row, at its right end: the shared toolbar keeps exactly its own buttons, and no extra row is added.
-    // On the right of the shared toolbar, just before the "more" menu, so it sits with the other controls on every game.
+    // Game settings live in the ⋯ menu (top right), not in the top bar. The menu item is a plain button with the summary.
+    const pop = $app.querySelector('.tb-pop');
+    if (pop) {
+      chip.className = 'btn ghost small gs-chip gs-menu-item'; chip.textContent = '⚙ Game settings';
+      const sub = document.createElement('small'); sub.className = 'gs-menu-sum'; sub.textContent = summary;
+      chip.appendChild(sub); pop.appendChild(chip); return;
+    }
     const more = $app.querySelector('.tb-more-wrap');
     if (more && more.parentElement) { more.parentElement.insertBefore(chip, more); return; }
     const title = $app.querySelector('.wz-top > .wz-round');
@@ -2322,15 +2456,6 @@
     refreshVoiceUI();
     endFlow();
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
-    const surface = $app.querySelector('.wz, .ludo, .tm, .pk') || $app.firstElementChild;
-    const gameInfo = gameMeta(S.room.gameId);
-    if (surface && gameInfo) {
-      const log = S.room.gameId === 'gofish' ? [] : (S.view.log || []).slice(-12).reverse(); // Go Fish has no log: it would reveal what others asked for
-      const supporting = document.createElement('section');
-      supporting.className = 'game-supporting-details';
-      supporting.innerHTML = `${log.length ? `<details class="game-info-panel"><summary>📜 Game log <span>${S.view.log.length} plays</span></summary><ol>${log.map((e) => `<li><span>${esc(logLine(e))}</span></li>`).join('')}</ol></details>` : ''}${(gameInfo.rules || []).length ? `<details class="game-info-panel"><summary>📖 How to play</summary>${gameInfo.rules.map((rule) => `<p>${esc(rule)}</p>`).join('')}</details>` : ''}`;
-      if (supporting.innerHTML) surface.appendChild(supporting);
-    }
     const bar = $app.querySelector('.wz-status');
     if (bar) bar.insertAdjacentHTML('beforeend', '<span class="ct-timer" hidden></span>');
     updateTimer();
@@ -2391,6 +2516,34 @@
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
     reloadProfile: () => loadProfile(),
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
+    // another player's page: the server finds the account from the username, so no id is needed here
+    playerBlock: () => {
+      const P = S.player; if (!P || !P.data) return;
+      playerBlockAction++;
+      send({ t: 'block', username: P.data.username }); P.data.blockedByMe = true; P.reporting = false; render();
+      const el = document.querySelector('.pp-actions [data-act="playerUnblock"]'); if (el) el.focus(); // the redraw replaced the button
+    },
+    playerUnblock: () => {
+      const P = S.player; if (!P || !P.data) return;
+      playerBlockAction++;
+      send({ t: 'unblock', username: P.data.username }); P.data.blockedByMe = false; render();
+      const el = document.querySelector('.pp-actions [data-act="playerBlock"]'); if (el) el.focus();
+    },
+    playerReport: () => {
+      const P = S.player; if (!P || !P.data) return;
+      P.reporting = !P.reporting;
+      render();
+      // the redraw replaces the focused button: focus the first reason when the menu opens, Report when it closes
+      const el = document.querySelector(P.reporting ? '.report-menu .mod-btn' : '.pp-actions [data-act="playerReport"]');
+      if (el) el.focus();
+    },
+    playerReportSend: (el) => {
+      const P = S.player; if (!P || !P.data) return;
+      send({ t: 'reportPlayer', username: P.data.username, reason: el.dataset.reason });
+      P.reporting = false; render();
+      const again = document.querySelector('.pp-actions [data-act="playerReport"]');
+      if (again) again.focus();
+    },
     unblock: (el) => {
       const id = el.dataset.id;
       S.blocked = (S.blocked || []).filter((b) => b.id !== id); // the server confirms with the full list straight after
@@ -2422,7 +2575,8 @@
     create: (el) => {
       if (!authed()) return gateLogin(() => actions.create(el));
       const game = el.dataset.game;
-      send({ t: 'create', gameId: game, visibility: 'private', name: S.name || undefined, avatar: S.avatar || undefined });
+      // New tables are public by default. The host can make the table private from the table screen (Make private).
+      send({ t: 'create', gameId: game, visibility: 'public', name: S.name || undefined, avatar: S.avatar || undefined });
     },
     toggleVisibility: () => {
       const cur = S.room && S.room.visibility;

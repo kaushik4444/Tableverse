@@ -64,7 +64,8 @@ function socket(port, cookie) {
       const username = `${tag.toLowerCase()}mod${seq}`.slice(0, 24);
       const u = await registerAndVerify(srv.port, { email, username, displayName: tag, password: PW });
       const me = (await u.browser.get('/api/auth/session')).json.player;
-      return { ...u, email, id: me.id, cookie: u.browser.cookieHeader };
+      // The helper adds a random suffix to the requested name, so take the name the server stored.
+      return { ...u, email, username: me.username, id: me.id, cookie: u.browser.cookieHeader };
     };
     // Chat is rate limited per player (500 ms), so each message waits its turn.
     const say = async (s, text) => { await sleep(600); s.send({ t: 'chat', text }); };
@@ -303,6 +304,53 @@ function socket(port, cookie) {
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [C.id]))[0].n, 20, 'no report beyond the cap');
     });
 
+    await test('a username resolves to its account id on the server, and an unknown name resolves to nothing', async () => {
+      assert.equal(await dbAccount.idForUsername(A.username), A.id);
+      assert.equal(await dbAccount.idForUsername(A.username.toUpperCase()), A.id, 'names are matched without case');
+      assert.equal(await dbAccount.idForUsername('nosuchplayer9'), null);
+      assert.equal(await dbAccount.idForUsername('x'), null, 'an invalid name is never looked up');
+    });
+
+    await test('a player report is stored once per reporter and player, with the name at the time', async () => {
+      const first = await dbModeration.createPlayerReport({ reporterId: B.id, reportedId: A.id, reason: 'harassment' });
+      assert.deepEqual(first, { stored: true });
+      const again = await dbModeration.createPlayerReport({ reporterId: B.id, reportedId: A.id, reason: 'spam' });
+      assert.deepEqual(again, { stored: false }, 'a repeat report of the same player is ignored');
+      const rows = await q('SELECT reported_display_name, reason FROM player_reports WHERE reporter_id = $1 AND reported_id = $2', [B.id, A.id]);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].reported_display_name, 'Alpha');
+      assert.equal(rows[0].reason, 'harassment', 'the first report is kept');
+      // moderators see player reports in the same queue as chat reports
+      const queue = await require('../db/reportQueue').listReports({});
+      const filed = queue.items.filter((i) => i.kind === 'player');
+      assert.equal(filed.length, 1, 'the player report is in the staff queue');
+      assert.equal(filed[0].message, null, 'a player report has no message text');
+      assert.equal(filed[0].reason, 'harassment');
+      const [both] = await q('SELECT (SELECT COUNT(*) FROM chat_reports) + (SELECT COUNT(*) FROM player_reports) AS n');
+      assert.equal(queue.total, Number(both.n), 'the total counts chat and player reports');
+      await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: crypto.randomUUID(), reason: 'spam' }), (e) => e.status === 404);
+    });
+
+    await test('guest accounts cannot be reported from a card, and chat and player reports share one daily allowance', async () => {
+      const [guest] = await q("INSERT INTO players (display_name, is_anonymous) VALUES ('Guest', TRUE) RETURNING id");
+      await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: guest.id, reason: 'spam' }), (e) => e.status === 404, 'a guest id is refused');
+      // Beta has one player report today; fill the rest of the allowance with chat reports, then both kinds must be refused.
+      const used = (await q(
+        `SELECT (SELECT COUNT(*) FROM chat_reports WHERE reporter_id = $1) + (SELECT COUNT(*) FROM player_reports WHERE reporter_id = $1) AS n`, [B.id]
+      ))[0].n;
+      for (let i = Number(used); i < 20; i++) {
+        await q(
+          'INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [B.id, A.id, 'Alpha', 'ROOM2', crypto.randomUUID(), 'filler ' + i, 'spam']
+        );
+      }
+      await assert.rejects(
+        dbModeration.createChatReport({ reporterId: B.id, reportedId: A.id, roomCode: 'ROOM2', messageId: crypto.randomUUID(), messageText: 'x', reason: 'spam', details: '' }),
+        (e) => e.status === 429, 'a chat report is refused once player reports used the allowance'
+      );
+      await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: C.id, reason: 'spam' }), (e) => e.status === 429, 'and so is a player report');
+    });
+
     await test('deleting an account retains reports about it with a display-name snapshot, but removes reports it made', async () => {
       await dbAccount.deleteAccount(A.id, PW);
       const retained = await q('SELECT reported_id, reported_display_name, message_text FROM chat_reports WHERE reporter_id = $1 ORDER BY created_at', [C.id]);
@@ -312,6 +360,10 @@ function socket(port, cookie) {
       assert.ok(retained.some((r) => r.message_text === 'hello from alpha'), 'the original report text remains');
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [A.id]))[0].n, 0, 'reports made by the deleted reporter cascade away');
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM player_blocks WHERE blocked_id = $1 OR blocker_id = $1', [A.id]))[0].n, 0);
+      const kept = await q('SELECT reported_id, reported_display_name FROM player_reports WHERE reporter_id = $1', [B.id]);
+      assert.equal(kept.length, 1, 'the report about the deleted account remains for moderators');
+      assert.equal(kept[0].reported_id, null, 'the deleted account UUID is cleared');
+      assert.equal(kept[0].reported_display_name, 'Alpha');
     });
 
     console.log(`${passed} chat moderation checks passed`);

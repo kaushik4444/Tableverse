@@ -72,6 +72,7 @@ function cookieSocket(port, cookie) {
       await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, expires_at) VALUES ($1, $2, 'wizard', 'ABCDEF', NOW() + INTERVAL '1 day')", reg);
       await q("INSERT INTO player_blocks (blocker_id, blocked_id) VALUES ($1, $2)", [reg[0], anon[0]]);
       await q("INSERT INTO chat_reports (reporter_id, reported_id, room_code, message_id, message_text, reason, details) VALUES ($1, $2, 'ROOM1', gen_random_uuid(), 'hello', 'spam', '')", [reg[0], anon[0]]);
+      await q("INSERT INTO player_reports (reporter_id, reported_id, reason) VALUES ($1, $2, 'spam')", [reg[0], anon[0]]);
       await q("INSERT INTO announcements (message, ends_at, created_by) VALUES ('Hi', NOW() + INTERVAL '1 day', $1)", [reg[0]]);
       await q("INSERT INTO announcement_dismissals (player_id, announcement_id, dismissed_revision) SELECT $1, id, 1 FROM announcements", [reg[0]]);
       await q("INSERT INTO admin_audit_log (actor_id, action) VALUES ($1, 'test.seed')", [reg[0]]);
@@ -79,9 +80,9 @@ function cookieSocket(port, cookie) {
       await q("INSERT INTO analytics_daily (day, metric, dim, total) VALUES (CURRENT_DATE, 'session', '', 2)");
       await q("INSERT INTO analytics_active (day, actor) VALUES (CURRENT_DATE, repeat('a', 32))");
       await q("INSERT INTO analytics_meta (key, value) VALUES ('salt', 'x') ON CONFLICT DO NOTHING");
-      return { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, players: 5, auth_identities: 2, auth_sessions: 4, auth_email_tokens: 2, auth_rate_limits: 3, matches: 3, match_participants: 12, player_recent_tables: 0, friendships: 1, friend_requests: 1, private_table_invitations: 1, player_blocks: 1, chat_reports: 1, auth_devices: 1, email_broadcasts: 0, email_broadcast_recipients: 0 };
+      return { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, players: 5, auth_identities: 2, auth_sessions: 4, auth_email_tokens: 2, auth_rate_limits: 3, matches: 3, match_participants: 12, player_recent_tables: 0, friendships: 1, friend_requests: 1, private_table_invitations: 1, player_blocks: 1, chat_reports: 1, player_reports: 1, auth_devices: 1, email_broadcasts: 0, email_broadcast_recipients: 0 };
     }
-    const SEEDED = { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, match_participants: 12, private_table_invitations: 1, friend_requests: 1, friendships: 1, matches: 3, auth_email_tokens: 2, auth_sessions: 4, auth_identities: 2, player_recent_tables: 0, auth_rate_limits: 3, players: 5, player_blocks: 1, chat_reports: 1, auth_devices: 1, email_broadcasts: 0, email_broadcast_recipients: 0 };
+    const SEEDED = { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, match_participants: 12, private_table_invitations: 1, friend_requests: 1, friendships: 1, matches: 3, auth_email_tokens: 2, auth_sessions: 4, auth_identities: 2, player_recent_tables: 0, auth_rate_limits: 3, players: 5, player_blocks: 1, chat_reports: 1, player_reports: 1, auth_devices: 1, email_broadcasts: 0, email_broadcast_recipients: 0 };
     // Derived, not typed in: the fixture and the plan are the source of truth for these totals.
     const SEEDED_ROWS = Object.values(SEEDED).reduce((a, b) => a + b, 0);
     const TABLE_COUNT = cleanup.CLEAN_TABLES.length;

@@ -19,6 +19,9 @@ const REQUIRED_CHECKS = [
 ];
 const COPILOT_CHECK = 'copilot-pull-request-reviewer';
 const RELEASE_HOUR = 2; // 02:00 Europe/Berlin
+// GitHub can start a scheduled run hours late (the first runs here started at 06:19 and 08:28 Berlin time). A scheduled run
+// that starts by 08:59 still releases; the one-release-per-Berlin-day check stops the second cron from releasing again.
+const RELEASE_LAST_HOUR = 8;
 const REQUIRED_RULE_TYPES = ['required_status_checks', 'pull_request', 'non_fast_forward', 'deletion', 'copilot_code_review'];
 const GOOD_CONCLUSIONS = new Set(['success', 'skipped', 'neutral']);
 
@@ -49,11 +52,11 @@ function berlinHour(date) {
  */
 function decide(state) {
   if (state.frozen) return { action: 'skip', reasons: ['Release freeze is on (repository variable RELEASE_FREEZE=true).'] };
-  if (state.scheduled && state.berlinHour !== RELEASE_HOUR) {
-    return { action: 'skip', reasons: [`Scheduled run at ${String(state.berlinHour).padStart(2, '0')}:xx Berlin time; releases run in the 02:xx slot only.`] };
+  if (state.scheduled && (state.berlinHour < RELEASE_HOUR || state.berlinHour > RELEASE_LAST_HOUR)) {
+    return { action: 'skip', reasons: [`Scheduled run at ${String(state.berlinHour).padStart(2, '0')}:xx Berlin time; scheduled releases run from 02:00 to 08:59 Berlin time (GitHub may start a run late).`] };
   }
   if (state.mergeTree === null) {
-    return { action: 'block', reasons: ['main and development conflict. Squash releases leave main out of development\'s history, so an edit to a line the last release changed conflicts. This needs an owner decision (docs/RELEASES.md, "Squash history"); the release is not forced.'] };
+    return { action: 'block', reasons: ['main and development conflict, so the release is blocked and nothing was merged. Resolve the conflict on development, then the next run proceeds (docs/RELEASES.md, "Merge history"). The release is not forced.'] };
   }
   if (state.mergeTree !== state.devTree) {
     return { action: 'block', reasons: ['main has changes that development does not have. Bring them into development first (docs/RELEASES.md, hotfix procedure); a release now would undo them.'] };
@@ -206,6 +209,18 @@ async function releasesMergedOn(client, repo, day) {
   }
 }
 
+/**
+ * The merge method for the release: 'merge' unless the owner sets RELEASE_MERGE_METHOD=squash. Surrounding whitespace and case
+ * are ignored. Any other value throws, so a typo can never change the method silently.
+ */
+function mergeMethodOf(env) {
+  const requested = (env.RELEASE_MERGE_METHOD || '').trim().toLowerCase();
+  if (!['', 'merge', 'squash'].includes(requested)) {
+    throw new Error(`RELEASE_MERGE_METHOD must be "merge" (the normal setting) or "squash", not "${requested}".`);
+  }
+  return requested === 'squash' ? 'squash' : 'merge';
+}
+
 async function main({ env = process.env, fetchFn = fetch, now = new Date(), git = { mergeTreeOf, gitOutput }, sleep } = {}) {
   const repo = env.GITHUB_REPOSITORY;
   const dryRun = env.DRY_RUN === 'true';
@@ -213,11 +228,7 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   // Merge commits are the normal release method: main keeps development's history, so later releases merge cleanly (see
   // docs/RELEASES.md "Merge history"). Unset or empty means merge. Squash is allowed only when set explicitly. Any other value
   // stops the run before it touches GitHub, so a typo never silently changes the release method.
-  const requestedMethod = (env.RELEASE_MERGE_METHOD || '').trim().toLowerCase();
-  if (!['', 'merge', 'squash'].includes(requestedMethod)) {
-    throw new Error(`RELEASE_MERGE_METHOD must be "merge" (the normal setting) or "squash", not "${requestedMethod}".`);
-  }
-  const mergeMethod = requestedMethod === 'squash' ? 'squash' : 'merge';
+  const mergeMethod = mergeMethodOf(env);
   const scheduled = env.GITHUB_EVENT_NAME === 'schedule';
   const client = makeClient({ token: env.GITHUB_TOKEN, repo, fetchFn });
   const log = (msg) => console.log(msg);
@@ -316,4 +327,4 @@ if (require.main === module) {
   main().then((r) => { process.exitCode = r.code; }, (err) => { console.error(`::error::${err.message}`); process.exitCode = 1; });
 }
 
-module.exports = { decide, berlinHour, checkHealth, makeClient, main, latestRuns, REQUIRED_CHECKS, COPILOT_CHECK, RELEASE_HOUR };
+module.exports = { decide, berlinHour, checkHealth, makeClient, main, latestRuns, mergeMethodOf, REQUIRED_CHECKS, COPILOT_CHECK, RELEASE_HOUR, RELEASE_LAST_HOUR };

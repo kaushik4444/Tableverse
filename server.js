@@ -8,6 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { createCloseCounter } = require('./lib/closeCounter');
+const { seatPlayers } = require('./lib/seatOrder');
 const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
@@ -24,7 +25,7 @@ const { DELETED_NAME } = dbAccount;
 const dbFriends = require('./db/friends');
 const dbModeration = require('./db/moderation');
 const moderation = require('./lib/moderation');
-const { decideAccess } = require('./lib/roomAccess');
+const { decideAccess, visibilityForNewTable } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
 const legalPages = require('./lib/legalPages');
@@ -56,6 +57,13 @@ const MIME = {
   '.xml': 'application/xml; charset=utf-8',
   '.ico': 'image/x-icon',
 };
+/** A player named by { id } (a UUID) or by { username } (a registered account, resolved here so no id is ever shown to a page). */
+async function resolveTarget(msg) {
+  if (!msg || msg.id !== undefined || typeof msg.username !== 'string') return msg;
+  const id = await dbAccount.idForUsername(msg.username);
+  return id ? { id } : null;
+}
+
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
@@ -797,8 +805,9 @@ function start(opts = {}) {
   function outcomeOf(room, g) {
     let results = null;
     try { results = typeof g.results === 'function' ? g.results() : null; } catch { results = null; }
-    const winners = Array.isArray(results) && results.length === room.members.length
-      ? room.members.filter((m, i) => results[i] && results[i].winner).map((m) => ({ id: m.id, name: m.name }))
+    const seated = room.seated || room.members;
+    const winners = Array.isArray(results) && results.length === seated.length
+      ? seated.filter((m, i) => results[i] && results[i].winner).map((m) => ({ id: m.id, name: m.name }))
       : [];
     return { winners, at: Date.now() };
   }
@@ -1078,11 +1087,89 @@ function start(opts = {}) {
   // Block and unblock for one account run one at a time, in the order they were accepted, whichever socket sent them, so
   // the in-memory list ends where the database ends. A block takes effect in memory before its database write (hiding
   // more is safe, and undone if the write fails); an unblock takes effect only after its database write.
+  // Block and unblock requests from one account are prepared in the order they arrive (a name is looked up in that order
+  // too), and written in that order. Preparation does not wait for earlier writes, so a stalled write never delays the
+  // filter for a later block. One queue per account (not per socket) keeps the order across a reconnect.
+  const orderTails = new Map();
+  const inArrivalOrder = (p, prepare, write) => {
+    const key = p.id;
+    const prepared = (orderTails.get(key) || Promise.resolve()).then(prepare);
+    const settled = prepared.catch(() => {});
+    orderTails.set(key, settled);
+    settled.then(() => { if (orderTails.get(key) === settled) orderTails.delete(key); });
+    return prepared.then((data) => (data ? inModerationTurn(p, () => write(data)) : undefined));
+  };
+  // One queue per account for the database writes.
+  const moderationTails = new Map();
   const inModerationTurn = (p, task) => {
-    const turn = (p.moderationTail || Promise.resolve()).then(task);
-    p.moderationTail = turn.catch(() => {});
+    const key = p.id;
+    const turn = (moderationTails.get(key) || Promise.resolve()).then(task);
+    const settled = turn.catch(() => {});
+    moderationTails.set(key, settled);
+    settled.then(() => { if (moderationTails.get(key) === settled) moderationTails.delete(key); });
     return turn;
   };
+  /** True when this account blocked too recently; otherwise records the attempt. */
+  function blockTooSoon(p) {
+    const now = Date.now();
+    if (now - (p.lastBlock || 0) < moderation.BLOCK_COOLDOWN_MS) return true;
+    p.lastBlock = now;
+    return false;
+  }
+  /** Hides a block target at once (pending filter) and returns the table to refresh. Must run before the database write. */
+  function reserveBlock(p, target) {
+    if (!p.blocked) p.blocked = new Set();
+    if (!p.pendingBlocks) p.pendingBlocks = new Map();
+    p.pendingBlocks.set(target, (p.pendingBlocks.get(target) || 0) + 1);
+    const room = rooms.get(p.room);
+    if (room) broadcastVoice(room);
+    broadcastTables();
+    return room;
+  }
+  /** The database write for a block that reserveBlock already hid. Runs inside the account's moderation turn. */
+  async function writeBlock(p, target, room) {
+    try {
+      await dbModeration.addBlock(p.id, target);
+      p.blocked.add(target); // committed blocks live here; pending ones are included by effectiveBlocked()
+    } catch (e) {
+      if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
+      throw e;
+    } finally {
+      const pending = (p.pendingBlocks.get(target) || 1) - 1;
+      if (pending > 0) p.pendingBlocks.set(target, pending);
+      else p.pendingBlocks.delete(target);
+      // A failed write lifts the filter again, so the voice lists are sent again either way. The player may have moved
+      // to another table while the write was pending, so that table is refreshed too.
+      if (room) broadcastVoice(room);
+      const current = rooms.get(p.room);
+      if (current && current !== room) broadcastVoice(current);
+      broadcastTables(); // refresh table labels and rejoin prompts whether the write succeeded or failed
+    }
+    resyncChat(p);
+    await sendBlocks(p);
+    const roomNow = rooms.get(p.room);
+    if (roomNow) broadcastVoice(roomNow); // a voice connection to them closes now, on both sides
+    send(p.ws, { t: 'notice', text: 'Blocked. You will not see their table chat, and you will not hear each other in table voice. You can still share a table.' });
+  }
+  /** The database write for an unblock. Runs inside the account's moderation turn. */
+  async function writeUnblock(p, targetId) {
+    // Check inside the serialized turn: a preceding block/unblock may have changed the cached state while this
+    // request was waiting. No-op unblocks must not issue a DELETE or resend the entire chat history.
+    if (!p.blocked || !p.blocked.has(targetId)) return;
+    const now = Date.now();
+    if (now - (p.lastUnblock || 0) < moderation.UNBLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+    p.lastUnblock = now;
+    // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
+    // failed unblock could not be taken back.
+    await dbModeration.removeBlock(p.id, targetId);
+    p.blocked.delete(targetId);
+    broadcastTables();
+    resyncChat(p);
+    await sendBlocks(p);
+    const roomNow = rooms.get(p.room);
+    if (roomNow) broadcastVoice(roomNow); // they may be offered voice again
+    send(p.ws, { t: 'notice', text: 'Unblocked.' });
+  }
   const handlers = {
     setName(p, msg) {
       applyProfile(p, msg);
@@ -1160,6 +1247,25 @@ function start(opts = {}) {
     },
 
     // Report a table chat message. The server looks the message up in its own copy of the table's chat.
+    // A report about a player (from their card or profile). Needs an account; the reported account is checked on the server.
+    async reportPlayer(p, msg) {
+      const self = players.get(p.id);
+      if (!self || !self.username) return sendError(p, 'Sign in to report a player.'); // guests have no account to report from
+      const resolved = await resolveTarget(msg);
+      const checked = moderation.validatePlayerReport(p.id, resolved ? { ...msg, id: resolved.id } : msg);
+      if (!checked.ok) return sendError(p, checked.error);
+      const now = Date.now();
+      if (now - (p.lastReport || 0) < moderation.REPORT_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+      p.lastReport = now;
+      try {
+        const out = await dbModeration.createPlayerReport({ reporterId: p.id, reportedId: checked.reportedId, reason: checked.reason });
+        send(p.ws, { t: 'notice', text: out.stored ? 'Thanks. Your report was recorded.' : 'You have already reported this player.' });
+      } catch (e) {
+        if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
+        throw e;
+      }
+    },
+
     async report(p, msg) {
       const room = rooms.get(p.room);
       if (!room) return sendError(p, 'Join a table to report a message.');
@@ -1185,70 +1291,27 @@ function start(opts = {}) {
 
     // Blocking applies to table access, seating, chat, reactions and voice in both directions; it never signs either account out.
     async block(p, msg) {
-      const checked = moderation.validateBlockTarget(p.id, msg && msg.id);
-      if (!checked.ok) return sendError(p, checked.error);
-      const now = Date.now();
-      if (now - (p.lastBlock || 0) < moderation.BLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
-      p.lastBlock = now;
-      if (!p.blocked) p.blocked = new Set();
-      if (!p.pendingBlocks) p.pendingBlocks = new Map();
-      const target = checked.targetId;
-      // Reserve the filter before entering the serialized database turn. A second block queued behind a slow first
-      // write must hide its own target immediately, including after a reconnect on another socket.
-      p.pendingBlocks.set(target, (p.pendingBlocks.get(target) || 0) + 1);
-      // Voice, public host labels and rejoin prompts follow the pending filter immediately.
-      const room = rooms.get(p.room);
-      if (room) broadcastVoice(room);
-      broadcastTables();
-      return inModerationTurn(p, async () => {
-        try {
-          await dbModeration.addBlock(p.id, target);
-          p.blocked.add(target); // committed blocks live here; pending ones are included by effectiveBlocked()
-        } catch (e) {
-          if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
-          throw e;
-        } finally {
-          const pending = (p.pendingBlocks.get(target) || 1) - 1;
-          if (pending > 0) p.pendingBlocks.set(target, pending);
-          else p.pendingBlocks.delete(target);
-          // A failed write lifts the filter again, so the voice lists are sent again either way. The player may have moved
-          // to another table while the write was pending, so that table is refreshed too.
-          if (room) broadcastVoice(room);
-          const current = rooms.get(p.room);
-          if (current && current !== room) broadcastVoice(current);
-          broadcastTables(); // refresh table labels and rejoin prompts whether the write succeeded or failed
-        }
-        resyncChat(p);
-        await sendBlocks(p);
-        const roomNow = rooms.get(p.room);
-        if (roomNow) broadcastVoice(roomNow); // a voice connection to them closes now, on both sides
-        send(p.ws, { t: 'notice', text: 'Blocked. You will not see their table chat, and you will not hear each other in table voice. You can still share a table.' });
-      });
+      const byName = msg && msg.id === undefined && typeof msg.username === 'string';
+      return inArrivalOrder(p, async () => {
+        const id = byName ? await dbAccount.idForUsername(msg.username) : msg && msg.id;
+        const checked = moderation.validateBlockTarget(p.id, id);
+        if (!checked.ok) { sendError(p, checked.error); return null; }
+        if (blockTooSoon(p)) { sendError(p, 'Slow down a little'); return null; }
+        // Hidden at once, before any earlier write has finished (see reserveBlock).
+        return { target: checked.targetId, room: reserveBlock(p, checked.targetId) };
+      }, ({ target, room }) => writeBlock(p, target, room));
     },
 
     /** The accounts this player has blocked, with names, for the Account tab. Answered after every block or unblock too. */
     blocks(p) { return sendBlocks(p); },
 
     async unblock(p, msg) {
-      if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
-      return inModerationTurn(p, async () => {
-        // Check inside the serialized turn: a preceding block/unblock may have changed the cached state while this
-        // request was waiting. No-op unblocks must not issue a DELETE or resend the entire chat history.
-        if (!p.blocked || !p.blocked.has(msg.id)) return;
-        const now = Date.now();
-        if (now - (p.lastUnblock || 0) < moderation.UNBLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
-        p.lastUnblock = now;
-        // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
-        // failed unblock could not be taken back.
-        await dbModeration.removeBlock(p.id, msg.id);
-        p.blocked.delete(msg.id);
-        broadcastTables();
-        resyncChat(p);
-        await sendBlocks(p);
-        const roomNow = rooms.get(p.room);
-        if (roomNow) broadcastVoice(roomNow); // they may be offered voice again
-        send(p.ws, { t: 'notice', text: 'Unblocked.' });
-      });
+      const byName = msg && msg.id === undefined && typeof msg.username === 'string';
+      return inArrivalOrder(p, async () => {
+        const id = byName ? await dbAccount.idForUsername(msg.username) : msg && msg.id;
+        if (!moderation.isUuid(id)) { sendError(p, 'That player could not be found.'); return null; }
+        return { id };
+      }, ({ id }) => writeUnblock(p, id));
     },
 
     create(p, msg) {
@@ -1264,7 +1327,7 @@ function start(opts = {}) {
         lastActivity: Date.now(),
         idleSince: null,
         gameId: def.id,
-        visibility: msg.visibility === 'public' ? 'public' : 'private',
+        visibility: visibilityForNewTable(msg.visibility), // public unless the request asks for private (lib/roomAccess.js)
         hostId: p.id,
         creatorId: p.id, // the person who opened the table: never loses access to it
         hosts: new Set([p.id]), // everyone who has hosted this table: their accepted invitations stay valid after a host change
@@ -1493,11 +1556,12 @@ function start(opts = {}) {
       if (!room) return;
       const def = games.get(room.gameId);
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
-      room.game = def.create(
-        room.members.map((m) => ({ id: m.id, name: m.name })),
-        room.options,
-        Math.random
-      );
+      // Players sit in the order they joined, unless the host turned on the game's shuffle option.
+      const offered = def.options.some((o) => o.key === 'shuffleSeats');
+      const seats = seatPlayers(room.members, { shuffle: Boolean(room.options && room.options.shuffleSeats), offered });
+      room.game = def.create(seats, room.options, Math.random);
+      // The member in each seat, in game order. Results are indexed by seat, so they are matched to people through this list.
+      room.seated = seats.map((s) => room.members.find((m) => m.id === s.id)).filter(Boolean);
       if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
       else pacing.setScale(room.game, botScale);
       room.status = 'playing';

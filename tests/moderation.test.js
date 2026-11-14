@@ -70,4 +70,20 @@ test('limits are the documented values', () => {
   assert.deepEqual([...m.REPORT_REASONS], ['harassment', 'hate', 'threats', 'sexual', 'spam', 'other']);
 });
 
+console.log('player reports');
+
+test('a player report needs a real account id and a known reason, and never names yourself', () => {
+  assert.deepEqual(m.validatePlayerReport(SELF, { id: OTHER, reason: 'harassment' }), { ok: true, reportedId: OTHER, reason: 'harassment' });
+  assert.equal(m.validatePlayerReport(SELF, { id: SELF, reason: 'spam' }).ok, false, 'cannot report yourself');
+  assert.equal(m.validatePlayerReport(SELF, { id: 'bob', reason: 'spam' }).ok, false, 'a username is not an account id');
+  assert.equal(m.validatePlayerReport(SELF, { id: OTHER, reason: 'because' }).ok, false, 'unknown reason refused');
+  assert.equal(m.validatePlayerReport(SELF, { id: OTHER }).ok, false, 'missing reason refused');
+  assert.equal(m.validatePlayerReport(SELF, null).ok, false);
+});
+
+test('a player report carries only the target id and reason, never a name or text from the client', () => {
+  const r = m.validatePlayerReport(SELF, { id: OTHER, reason: 'spam', name: 'Forged', text: 'x', details: 'y' });
+  assert.deepEqual(Object.keys(r).sort(), ['ok', 'reason', 'reportedId']);
+});
+
 console.log(`${passed} chat moderation checks passed`);

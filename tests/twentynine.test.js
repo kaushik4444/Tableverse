@@ -204,27 +204,148 @@ test('trump King–Queen marriage adds four points once after trump reveal and a
   assert.equal(g.log.at(-1).kind, 'marriage');
 });
 
+// Scoring options (all off by default). finishHand is the hand-end scorer; these set the hand state it reads.
+function endHand(g, { bidder, bid, points, trick }) {
+  g.highBidder = bidder; g.highBid = bid; g.handPoints = points.slice(); g.trickPoints = (trick || points).slice();
+  g.teamScore = [0, 0]; g.history = []; g.marriageTeam = g.marriageTeam ?? -1;
+  E.finishHand(g);
+  return g.teamScore[bidder % 2];
+}
+
+test('scoring options are off by default and keep the classic +1 / -1', () => {
+  const g = E.createGame(people(), {}, mulberry32(5));
+  assert.deepEqual(g.options, { target: 6, allTwentyNine: false, halfFailDouble: false, marriageBid: false, doubleChallenge: false });
+  assert.equal(endHand(E.createGame(people(), {}, mulberry32(5)), { bidder: 0, bid: 16, points: [29, 0] }), 1);
+  assert.equal(endHand(E.createGame(people(), {}, mulberry32(5)), { bidder: 0, bid: 20, points: [14, 15] }), -1);
+});
+
+test('All 29 doubles the win: all 29 points taken and bid made gives +2, otherwise +1', () => {
+  const on = (o) => { const g = E.createGame(people(), { allTwentyNine: true }, mulberry32(5)); return g; };
+  assert.equal(endHand(on(), { bidder: 0, bid: 16, points: [29, 0] }), 2);
+  assert.equal(endHand(on(), { bidder: 1, bid: 16, points: [0, 29] }), 2, 'bidder on the odd team');
+  assert.equal(endHand(on(), { bidder: 0, bid: 16, points: [28, 1], trick: [27, 1] }), 1, '28 points is not all 29');
+  assert.equal(endHand(on(), { bidder: 0, bid: 16, points: [33, 0], trick: [29, 0] }), 2, 'marriage bonus does not stop an all-29 win');
+  const g = E.createGame(people(), {}, mulberry32(5));
+  assert.equal(endHand(g, { bidder: 0, bid: 16, points: [29, 0] }), 1, 'option off: +1');
+});
+
+test('Double loss below half: a missed bid under half the points (14 or fewer of 29) is -2', () => {
+  const on = () => E.createGame(people(), { halfFailDouble: true }, mulberry32(5));
+  assert.equal(endHand(on(), { bidder: 0, bid: 20, points: [14, 15] }), -2);
+  assert.equal(endHand(on(), { bidder: 0, bid: 20, points: [15, 14] }), -1, '15 is at least half of 29');
+  assert.equal(endHand(on(), { bidder: 0, bid: 20, points: [19, 10] }), -1, 'close miss stays -1');
+  assert.equal(endHand(on(), { bidder: 0, bid: 16, points: [16, 13] }), 1, 'a made bid is +1');
+  // A marriage bonus is not card points: 14 card points plus the 4-point bonus still falls under half.
+  const bonus = E.createGame(people(), { halfFailDouble: true }, mulberry32(5));
+  bonus.trickPoints = [14, 15];
+  assert.equal(endHand(bonus, { bidder: 0, bid: 20, points: [18, 15], trick: [14, 15] }), -2, 'marriage bonus does not lift a team over half');
+});
+
+test('Marriage changes the bid: bidding team marriage lowers by 4 (min 15); other team raises by 4', () => {
+  const on = () => { const g = E.createGame(people(), { marriageBid: true }, mulberry32(5)); return g; };
+  let g = on(); g.marriageTeam = 0;
+  assert.equal(E.bidTarget(Object.assign(g, { highBidder: 0, highBid: 20 })), 16);
+  g = on(); g.marriageTeam = 0; g.highBidder = 0; g.highBid = 16;
+  assert.equal(E.bidTarget(g), 15, 'never below 15');
+  g = on(); g.marriageTeam = 1; g.highBidder = 0; g.highBid = 16;
+  assert.equal(E.bidTarget(g), 20, 'other team marriage raises the bid');
+  assert.equal(endHand(on(), { bidder: 0, bid: 16, points: [16, 13] }), 1, 'no marriage: no change');
+  g = on(); g.marriageTeam = 1;
+  assert.equal(endHand(g, { bidder: 0, bid: 16, points: [16, 13] }), -1, 'raised bid of 20 is missed with 16');
+  g = on(); g.marriageTeam = 0;
+  assert.equal(endHand(g, { bidder: 0, bid: 20, points: [17, 12] }), 1, 'lowered bid of 16 is made with 17');
+  g = on(); g.marriageTeam = 0;
+  assert.equal(endHand(g, { bidder: 0, bid: 20, points: [15, 14] }), -1, 'lowered bid of 16 is missed with 15, so -1 not the half rule');
+});
+
+test('marriage with the bid option adds no hand points and is still declared once per hand', () => {
+  const g = toPlaying(31);
+  g.options.marriageBid = true;
+  g.trumpSuit = 'S'; g.trumpRevealed = true; g.tricksWon = [1, 0]; g.tricksPlayed = 1; g.marriageDeclared = false; g.turn = 0;
+  g.players[0].hand = [card('S', 'K'), card('S', 'Q'), card('H', '7')];
+  assert.equal(E.applyAction(g, 'p0', { type: 'marriage' }).ok, true);
+  assert.equal(g.handPoints[0], 0);
+  assert.equal(g.marriageTeam, 0);
+  assert.equal(g.log.at(-1).card.includes('bid lowered by 4'), g.highBidder % 2 === 0);
+  assert.equal(E.applyAction(g, 'p0', { type: 'marriage' }).ok, false);
+});
+
+test('double and redouble: off by default; when on, the other team doubles before play and the bidder may redouble', () => {
+  const off = toPlaying(31);
+  assert.equal(off.phase, 'playing', 'option off: no challenge phase');
+  const g = E.createGame(people(), { doubleChallenge: true }, mulberry32(31));
+  const f = (g.dealer + 1) % 4;
+  E.applyAction(g, g.players[f].id, { type: 'bid', amount: 16 });
+  for (let k = 1; k < 4; k++) E.applyAction(g, g.players[(f + k) % 4].id, { type: 'bid', pass: true });
+  const bidder = g.highBidder;
+  const suit = g.players[bidder].hand[0].suit;
+  assert.equal(E.applyAction(g, g.players[bidder].id, { type: 'chooseTrump', suit }).ok, true);
+  assert.equal(g.phase, 'challenge');
+  assert.equal(g.turn, (bidder + 1) % 4, 'the other team answers first, left of the bidder');
+  const other = g.players[(bidder + 1) % 4].id;
+  assert.equal(E.viewFor(g, other).canDouble, true);
+  assert.equal(E.applyAction(g, g.players[bidder].id, { type: 'double' }).ok, false, 'the bidding team cannot double its own bid');
+  assert.equal(E.applyAction(g, other, { type: 'double' }).ok, true);
+  assert.equal(g.multiplier, 2);
+  assert.equal(E.applyAction(g, other, { type: 'double' }).ok, false, 'only once');
+  assert.equal(E.viewFor(g, g.players[bidder].id).canRedouble, true);
+  assert.equal(E.applyAction(g, g.players[bidder].id, { type: 'redouble' }).ok, true);
+  assert.equal(g.multiplier, 4);
+  assert.equal(g.phase, 'playing');
+  assert.equal(g.turn, bidder, 'the bidder leads');
+});
+
+test('double and redouble: accepting ends the challenge without changing the multiplier', () => {
+  const g = E.createGame(people(), { doubleChallenge: true }, mulberry32(32));
+  const f = (g.dealer + 1) % 4;
+  E.applyAction(g, g.players[f].id, { type: 'bid', amount: 16 });
+  for (let k = 1; k < 4; k++) E.applyAction(g, g.players[(f + k) % 4].id, { type: 'bid', pass: true });
+  const bidder = g.highBidder;
+  E.applyAction(g, g.players[bidder].id, { type: 'chooseTrump', suit: g.players[bidder].hand[0].suit });
+  assert.equal(E.applyAction(g, g.players[(bidder + 1) % 4].id, { type: 'accept' }).ok, true);
+  assert.equal(g.multiplier, 1);
+  assert.equal(g.phase, 'playing');
+});
+
+test('double and redouble: hands are worth 2x and 4x in game points', () => {
+  const g = E.createGame(people(), { doubleChallenge: true, allTwentyNine: true }, mulberry32(33));
+  g.multiplier = 2;
+  assert.equal(endHand(g, { bidder: 0, bid: 16, points: [29, 0] }), 4, 'all 29 (+2) doubled');
+  const h = E.createGame(people(), { doubleChallenge: true }, mulberry32(34));
+  h.multiplier = 4;
+  assert.equal(endHand(h, { bidder: 0, bid: 20, points: [10, 19] }), -4, 'missed redoubled bid is -4');
+});
+
 console.log('29 simulation');
 
-test('200 full games: every hand distributes exactly 29 points and scores add up', () => {
+test('200 full games: every hand distributes exactly 29 points and scores add up (options on and off)', () => {
   for (let seed = 1; seed <= 200; seed++) {
-    const g = E.createGame(people(), { target: [3, 6, 9][seed % 3] }, mulberry32(seed * 13));
+    const opts = seed % 2 ? {} : { allTwentyNine: true, halfFailDouble: true, marriageBid: true, doubleChallenge: true };
+    const g = E.createGame(people(), { ...opts, target: [3, 6, 9][seed % 3] }, mulberry32(seed * 13));
     let steps = 0;
     while (g.phase !== 'gameOver') {
       assert.ok(++steps < 20000, 'game did not terminate');
       if (g.phase === 'handEnd') { assert.equal(E.applyAction(g, null, { type: 'continue' }).ok, true); continue; }
       const who = E.awaiting(g)[0];
       assert.ok(who);
-      const a = E.botAction(g, who);
+      // The bot rarely doubles, so on every third seed the challenge is taken up whenever it is legal.
+      const a = seed % 3 === 0 && g.phase === 'challenge' ? { type: g.multiplier === 1 ? 'double' : 'redouble' } : E.botAction(g, who);
       const res = E.applyAction(g, who, a);
       assert.equal(res.ok, true, `${res.error} ${JSON.stringify(a)} phase ${g.phase}`);
     }
     let a = 0, b = 0;
     for (const h of g.history) {
       // The 29 card points still total 29; a declared trump marriage adds a separate 4-point bonus.
-      assert.equal(h.points[0] + h.points[1] - (h.marriageDeclared ? 4 : 0), 29);
+      // With the marriage-bid option the marriage adds no hand points, so the 4-point bonus only applies when it is off.
+      const bonus = h.marriageDeclared && !g.options.marriageBid ? 4 : 0;
+      assert.equal(h.points[0] + h.points[1] - bonus, 29);
       const t = h.bidder % 2;
-      if (h.made) { assert.ok(h.points[t] >= h.bid); t === 0 ? a++ : b++; } else { assert.ok(h.points[t] < h.bid); t === 0 ? a-- : b--; }
+      assert.ok([1, 2, 4, 8].includes(Math.abs(h.game)), `game ${h.game}`);
+      if (h.made) { assert.ok(h.points[t] >= h.target); assert.ok(h.game > 0); } else { assert.ok(h.points[t] < h.target); assert.ok(h.game < 0); }
+      assert.ok(h.multiplier === 1 || g.options.doubleChallenge);
+      if (h.multiplier === 1 && Math.abs(h.game) === 2) { assert.ok(g.options.allTwentyNine && h.made && h.points[t] === 29 || g.options.halfFailDouble && !h.made && h.points[t] * 2 < 29); }
+      if (h.multiplier === 1 && Math.abs(h.game) === 1) assert.ok(!(g.options.allTwentyNine && h.made && h.points[t] === 29));
+      t === 0 ? (a += h.game) : (b += h.game);
     }
     assert.deepEqual(g.teamScore, [a, b]);
     const t = g.options.target;

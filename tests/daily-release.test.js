@@ -20,9 +20,16 @@ const base = (over = {}) => ({
 
 (async () => {
   console.log('daily release');
-  await test('a scheduled run outside the 02:xx Berlin slot does nothing', async () => {
+  await test('a scheduled run before 02:00 or from 09:00 Berlin time does nothing', async () => {
     assert.equal(decide(base({ berlinHour: 1 })).action, 'skip');
-    assert.equal(decide(base({ berlinHour: 3 })).action, 'skip');
+    assert.equal(decide(base({ berlinHour: 9 })).action, 'skip');
+    assert.equal(decide(base({ berlinHour: 0 })).action, 'skip');
+  });
+  await test('a scheduled run that GitHub starts late still releases, up to 08:59 Berlin time', async () => {
+    for (const hour of [2, 3, 6, 8]) assert.notEqual(decide(base({ berlinHour: hour })).action, 'skip', `${hour}:xx releases`);
+    // The first scheduled runs on 14 Nov 2026 started at 05:19 and 07:28 UTC, which is 06:19 and 08:28 Berlin time.
+    assert.equal(berlinHour(new Date('2026-11-14T05:19:15Z')), 6);
+    assert.equal(berlinHour(new Date('2026-11-14T07:28:53Z')), 8);
   });
   await test('a release freeze stops every run, scheduled or manual', async () => {
     assert.equal(decide(base({ frozen: true })).action, 'skip');
@@ -382,6 +389,29 @@ const base = (over = {}) => ({
       /RELEASE_MERGE_METHOD must be "merge"/,
     );
     assert.equal(calls, 0);
+  });
+  await test('mergeMethodOf: merge when unset, empty or "merge" (any case and spacing); squash only for squash; anything else throws', async () => {
+    const { mergeMethodOf } = require('../scripts/release/promote');
+    assert.equal(mergeMethodOf({}), 'merge');
+    assert.equal(mergeMethodOf({ RELEASE_MERGE_METHOD: '' }), 'merge');
+    assert.equal(mergeMethodOf({ RELEASE_MERGE_METHOD: ' Merge ' }), 'merge');
+    assert.equal(mergeMethodOf({ RELEASE_MERGE_METHOD: ' SQUASH ' }), 'squash');
+    assert.throws(() => mergeMethodOf({ RELEASE_MERGE_METHOD: 'rebase' }), /RELEASE_MERGE_METHOD must be "merge"/);
+  });
+  await test('every docs/RELEASES.md section that promote.js points to exists as a heading', async () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'release', 'promote.js'), 'utf8');
+    const runbook = fs.readFileSync(path.join(__dirname, '..', 'docs', 'RELEASES.md'), 'utf8');
+    // Both orders: docs/RELEASES.md, "Section" and "Section" in docs/RELEASES.md
+    const sections = [...new Set([
+      ...[...source.matchAll(/docs\/RELEASES\.md,?\s+"([^"]+)"/g)].map((m) => m[1]),
+      ...[...source.matchAll(/"([^"]+)"\s+in\s+docs\/RELEASES\.md/g)].map((m) => m[1]),
+    ])];
+    assert.ok(sections.length >= 2, `promote.js names at least two runbook sections (found ${sections.length})`);
+    for (const section of sections) {
+      assert.match(runbook, new RegExp(`^#{2,4} ${section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'), `missing runbook heading "${section}"`);
+    }
   });
   await test('only the newest run per check name counts: an older green run cannot pass a newer running one', async () => {
     const { latestRuns } = require('../scripts/release/promote');

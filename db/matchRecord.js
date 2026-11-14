@@ -4,12 +4,14 @@
  * Turn a finished room into the record we store. Pure: no I/O, so it is unit-tested.
  * Returns null when the game cannot say who won (so we store nothing rather than wrong results).
  *
- * room.members is in seat order (the game was created from it). A member who left mid-game is flagged `bot`
- * (a bot finished their seat) and listed in room.leftEarly; they stay in the record but are not counted in stats.
+ * room.seated is the member in each seat of the game (the seat order may be shuffled); without it, room.members is in seat
+ * order. A member who left mid-game is flagged `bot` (a bot finished their seat) and listed in room.leftEarly; they stay in the record but are not counted in stats.
  */
 function buildMatchRecord(room, game) {
   const results = typeof game.results === 'function' ? game.results() : null;
-  if (!Array.isArray(results) || results.length !== room.members.length) return null;
+  // Results are indexed by seat; room.seated lists the member in each seat (shuffled games), else the join order.
+  const seated = room.seated || room.members;
+  if (!Array.isArray(results) || results.length !== seated.length) return null;
   const left = room.leftEarly || new Set();
   return {
     matchKey: room.matchKey || null,
@@ -18,7 +20,7 @@ function buildMatchRecord(room, game) {
     seats: room.seats,
     options: room.options || {},
     startedAt: room.startedAt ? new Date(room.startedAt) : null,
-    participants: room.members.map((m, seat) => {
+    participants: seated.map((m, seat) => {
       const r = results[seat] || {};
       const leftEarly = Boolean(m.bot && left.has(m.id));
       return {

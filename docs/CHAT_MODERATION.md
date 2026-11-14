@@ -9,6 +9,7 @@ the server. It does not replace human review, and it does not take automatic act
 | --- | --- | --- |
 | **Block** an account | Block action on another player's chat message | Their table chat and table voice are hidden between you. You cannot invite each other, and their profile shows as blocked. You can still share a table, including one hosted by someone else. |
 | **Report** a message | Report button, then a reason | Records the report in the database. There is no review queue yet. Nothing is hidden or sanctioned automatically. |
+| **Report** a player | Report player, on their table card (signed-in accounts only), then a reason | Records a player report (`player_reports`, migration 023). It is about conduct, not one message, and counts toward the same daily cap. One report per reporter and player; a repeat is ignored. Nothing is hidden automatically. |
 | **Unblock** | WebSocket action `unblock` (no button yet) | Restores their chat. |
 | **Mute** (local) | Existing mute in the chat list | Hides that player's messages in this browser only. Not enforced on the server. |
 
