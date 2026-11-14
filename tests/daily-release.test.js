@@ -20,9 +20,16 @@ const base = (over = {}) => ({
 
 (async () => {
   console.log('daily release');
-  await test('a scheduled run outside the 02:xx Berlin slot does nothing', async () => {
+  await test('a scheduled run before 02:00 or from 09:00 Berlin time does nothing', async () => {
     assert.equal(decide(base({ berlinHour: 1 })).action, 'skip');
-    assert.equal(decide(base({ berlinHour: 3 })).action, 'skip');
+    assert.equal(decide(base({ berlinHour: 9 })).action, 'skip');
+    assert.equal(decide(base({ berlinHour: 0 })).action, 'skip');
+  });
+  await test('a scheduled run that GitHub starts late still releases, up to 08:59 Berlin time', async () => {
+    for (const hour of [2, 3, 6, 8]) assert.notEqual(decide(base({ berlinHour: hour })).action, 'skip', `${hour}:xx releases`);
+    // The first scheduled runs on 14 Nov 2026 started at 05:19 and 07:28 UTC, which is 06:19 and 08:28 Berlin time.
+    assert.equal(berlinHour(new Date('2026-11-14T05:19:15Z')), 6);
+    assert.equal(berlinHour(new Date('2026-11-14T07:28:53Z')), 8);
   });
   await test('a release freeze stops every run, scheduled or manual', async () => {
     assert.equal(decide(base({ frozen: true })).action, 'skip');

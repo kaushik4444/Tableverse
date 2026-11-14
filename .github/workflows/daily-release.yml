@@ -4,8 +4,9 @@ name: Daily release
 # workflows only from the default branch.
 on:
   schedule:
-    # GitHub cron is UTC only: 00:00 UTC is 02:00 in summer time, 01:00 UTC is 02:00 in winter time. The script acts only in
-    # the 02:xx Europe/Berlin slot, so exactly one of these runs does the work.
+    # GitHub cron is UTC only: 00:00 UTC is 02:00 in summer time, 01:00 UTC is 02:00 in winter time. GitHub can start a
+    # scheduled run hours late, so the script acts when a run starts between 02:00 and 08:59 Europe/Berlin; a second run in that
+    # window finds today's release and does nothing (one release per Berlin day).
     - cron: '0 0 * * *'
     - cron: '0 1 * * *'
   workflow_dispatch:

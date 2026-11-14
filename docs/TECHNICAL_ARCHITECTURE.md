@@ -178,7 +178,7 @@ period and keeps the seat until the table closes or the host acts.
 flowchart LR
   F[Feature branch] -->|PR to development| CI[CI: 5 required checks + Copilot review]
   CI --> D[development]
-  D -->|daily 02:xx Berlin, all gates green| RPR[Release PR development to main]
+  D -->|daily from 02:00 Berlin, all gates green| RPR[Release PR development to main]
   RPR -->|merge commit, pinned head| M[main]
   M -->|Render deploys main| P[Production]
   P --> HC[Health check: /healthz and /readyz]
@@ -497,7 +497,7 @@ Stale or already-fixed findings are still checked against the code before dismis
 
 ### H.5 Daily release (Europe/Berlin)
 
-- Scheduled at 00:00 and 01:00 UTC; the script acts only in the 02:xx Berlin slot. One release per Berlin day.
+- Scheduled at 00:00 and 01:00 UTC; the script acts when a scheduled run starts between 02:00 and 08:59 Berlin time (GitHub can start a run hours late). One release per Berlin day.
 - Opens or reuses one release PR from `development` to `main`, checks every gate on its head, and merges with a **merge commit** pinned to the
   checked head. `RELEASE_MERGE_METHOD` unset means merge; squash is an owner override and is blocked on conflicts.
 - After the merge: the new `main` tree must equal the checked `development` tree, the tag `release-YYYY-MM-DD-<sha>` is written, and
