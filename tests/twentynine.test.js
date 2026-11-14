@@ -295,6 +295,27 @@ test('double and redouble: off by default; when on, the other team doubles befor
   assert.equal(g.turn, bidder, 'the bidder leads');
 });
 
+test('double and redouble: any player on the answering side may double, and any on the bidding side may redouble', () => {
+  const g = E.createGame(people(), { doubleChallenge: true }, mulberry32(34));
+  const f = (g.dealer + 1) % 4;
+  E.applyAction(g, g.players[f].id, { type: 'bid', amount: 16 });
+  for (let k = 1; k < 4; k++) E.applyAction(g, g.players[(f + k) % 4].id, { type: 'bid', pass: true });
+  const bidder = g.highBidder;
+  E.applyAction(g, g.players[bidder].id, { type: 'chooseTrump', suit: g.players[bidder].hand[0].suit });
+  const partner = g.players[(bidder + 3) % 4].id; // the other seat on the answering side, not the one left of the bidder
+  const awaitingIds = E.awaiting(g);
+  assert.equal(awaitingIds.length, 2, 'both players on the answering side are asked');
+  assert.ok(awaitingIds.includes(partner) && awaitingIds.includes(g.players[(bidder + 1) % 4].id));
+  assert.equal(E.viewFor(g, partner).myTurn, true);
+  assert.equal(E.viewFor(g, partner).canDouble, true);
+  assert.equal(E.applyAction(g, partner, { type: 'double' }).ok, true, 'the partner doubles for the team');
+  assert.equal(g.multiplier, 2);
+  assert.equal(E.viewFor(g, g.players[bidder].id).myTurn, true, 'the bidding side is asked to redouble');
+  assert.equal(E.applyAction(g, g.players[(bidder + 2) % 4].id, { type: 'redouble' }).ok, true, 'any bidding player may redouble');
+  assert.equal(g.multiplier, 4);
+  assert.equal(g.phase, 'playing');
+});
+
 test('double and redouble: accepting ends the challenge without changing the multiplier', () => {
   const g = E.createGame(people(), { doubleChallenge: true }, mulberry32(32));
   const f = (g.dealer + 1) % 4;
