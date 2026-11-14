@@ -21,7 +21,7 @@ const num = (v) => Number(v) || 0;
 
 async function listReports({ page: pg = 1, actorId = null } = {}) {
   return db.withTransaction(async (c) => {
-    const total = (await c.query('SELECT (SELECT COUNT(*) FROM chat_reports) + (SELECT COUNT(*) FROM player_reports) AS n')).rows[0].n;
+    const total = (await c.query('SELECT ((SELECT COUNT(*) FROM chat_reports) + (SELECT COUNT(*) FROM player_reports))::int AS n')).rows[0].n;
     const r = await c.query(
       `SELECT r.id, r.kind, r.reason, r.details, r.message_text, r.room_code, r.created_at,
               r.reported_display_name, rep.username AS reporter_username, rep.is_anonymous AS reporter_guest,
