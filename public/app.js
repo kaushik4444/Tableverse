@@ -577,6 +577,7 @@
     ws.onclose = (e) => {
       if (sock !== ws) return;
       S.ready = false;
+      clearPlayerBusy(S.player); // an answer to a request sent on this socket can no longer arrive
       // A profile waiting for the server's 'left' cannot open after a drop: the leave may never arrive, and a later leave must not open it.
       S.pendingPage = null;
       voice.reset(); // the server drops us from voice when the connection drops
@@ -1637,16 +1638,14 @@
   let playerResync = 0;
   let playerBlockAction = 0;
   // One block or unblock is awaiting the server at a time (playerBusy). The other button then says it is saving, so an
-  // acknowledgement always belongs to the optimistic state on screen. A safety timer frees it if no answer ever arrives.
+  // acknowledgement always belongs to the optimistic state on screen. The lock is released only by the server's answer
+  // (a list or a refusal) or by the socket closing; the check against the server then settles the state.
   function clearPlayerBusy(P) {
-    if (!P || !P.busy) return;
-    P.busy = false;
-    clearTimeout(P.busyTimer);
+    if (P) P.busy = false;
   }
   function playerBusy(P) {
     if (P.busy) { toast('Saving… one moment.'); return true; }
     P.busy = true;
-    P.busyTimer = setTimeout(() => { P.busy = false; }, 8000);
     return false;
   }
   async function resyncPlayerBlock(failed = false) {
@@ -1966,11 +1965,8 @@
       const p = S.card && S.card.last;
       if (!p || p.bot || !p.id || p.id === S.id || !S.card.profile) return;
       if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then try again.'); return; }
-      send({ t: 'unblock', id: p.id });
-      S.card.profile.blockedByMe = false; // the card stays open; the server's list confirms or corrects it
-      drawCard();
-      const again = document.querySelector('#modal-overlay [data-modal-act="cardBlock"]');
-      if (again) again.focus();
+      send({ t: 'unblock', id: p.id }); // closes like Block: the server's notice says whether it went through
+      closeModal();
     },
       makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
       kickPlayerConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'kick', id }); } },
