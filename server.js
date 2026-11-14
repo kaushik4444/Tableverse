@@ -791,7 +791,11 @@ function start(opts = {}) {
     const limit = limitMs(room);
     const now = awaitingOf(g);
     const prev = room.waiting || [];
-    const sameBatch = prev.length > 1 && now.length > 0 && now.every((id) => prev.includes(id));
+    // A batch is one set of people answering the same question. A change of phase or multiplier (a double, a redouble, or the
+    // challenge ending) starts a new one, so the answering side is never left with a deadline that was almost up.
+    const key = g.phase + ':' + (g.multiplier || 1);
+    const sameBatch = prev.length > 1 && room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id));
+    room.waitingKey = key;
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
     if (!limit || !humanWaiting) room.deadline = null;
     else if (!sameBatch || !room.deadline) {
@@ -891,7 +895,10 @@ function start(opts = {}) {
         delay = Math.max(0, dl - Date.now());
         run = () => {
           let res = { ok: true };
+          const phase0 = g.phase; const turn0 = g.turn;
           for (const id of awaitingOf(g)) {
+            // One answer ends a batch (a double, redouble or accept): the rest of the list no longer waits, so no bot acts for it.
+            if (g.phase !== phase0 || g.turn !== turn0) break;
             const m = room.members.find((x) => x.id === id);
             const r = g.act(id, g.botAction(id));
             if (!r.ok) res = r;
