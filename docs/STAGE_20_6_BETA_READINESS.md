@@ -1,5 +1,7 @@
 # Stage 20.6: invite-only beta readiness (updated 2026-11-11)
 
+> **Historical record (note added 2026-11-14).** The commit references in this document (`main` through `297acc4`) are the 2026-11-11 snapshot. The current baseline is in `docs/WAVE_1_LAUNCH_READINESS.md` (section 1). Owner decisions and the gate wording here still apply.
+
 **Status: technical implementation complete; NOT A GO for Wave 1 yet.** The server-side gaps for a signed-in, invited beta are closed on `main` (through PR #106, merge commit `297acc4`). The 18+ confirmation (C-A, PR #98) and voice off by default (C-D, PR #99) are implemented and were verified on the live site by the owner. Still open before Wave 1: the policy text and its reachable pages (C-B, needs approval), the live smoke tests and manual checks in section 4, and the owner decisions in section 6. C-C is deferred, because Wave 1 sends no broadcasts. Policy pages (C-B) and the Impressum (PR #101, Draft) are not published.
 
 **Scope:** free, invite-only beta for friends and friends-of-friends. Signed-in players only. Adults aged 18 and over. One owner account and no other admin. No ads, payments or promotional e-mail campaigns. Nothing in this document authorises a production change, a secret change, a credential rotation, a cleanup run, a database change, a load test, a new admin account or a merge.
