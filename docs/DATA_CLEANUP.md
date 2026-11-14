@@ -29,17 +29,18 @@ this code version.
 | 11 | `match_participants` | Per-player result rows of finished games (name, seat, score, winner / bot / left-early flags, optional account id) | **Empty** | `matches` (CASCADE), `players` (SET NULL) |
 | 12 | `private_table_invitations` | Private-table invitations and their lifecycle metadata | **Empty** | `players` (CASCADE, 2 keys) |
 | 13 | `chat_reports` | Chat reports (migrations 010 and 015): reporter, optional reported account, reported-name snapshot, table code, message id, a copy of the reported text, reason, details | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
-| 14 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
-| 15 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
-| 16 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
-| 17 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` (deleted before it) |
-| 18 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `players` (CASCADE) |
-| 19 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `players` (CASCADE), `auth_devices` (SET NULL, migration 019) |
-| 20 | `auth_devices` | Trusted devices for "keep me signed in on this device" (migration 018): hashed device tokens, browser and system label, dates | **Empty** | `players` (CASCADE) |
-| 21 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
-| 22 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
-| 23 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
-| 24 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
+| 14 | `player_reports` | Player reports from a profile or card (migration 023): reporter, optional reported account, reported-name snapshot, reason, time | **Empty** | `players` (reporter CASCADE; reported account SET NULL) |
+| 15 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
+| 16 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
+| 17 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
+| 18 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` (deleted before it) |
+| 19 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `players` (CASCADE) |
+| 20 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `players` (CASCADE), `auth_devices` (SET NULL, migration 019) |
+| 21 | `auth_devices` | Trusted devices for "keep me signed in on this device" (migration 018): hashed device tokens, browser and system label, dates | **Empty** | `players` (CASCADE) |
+| 22 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
+| 23 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
+| 24 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
+| 25 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
 | – | `schema_migrations` | Which migration files were applied | **PRESERVE, never touched** | none, not in the plan |
 
 **Migration 018 (keep me signed in on this device, Stage 20.9) adds one table**, `auth_devices`, emptied in the plan above.

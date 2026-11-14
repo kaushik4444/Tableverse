@@ -82,7 +82,7 @@ Browser to Render to the Node process to PostgreSQL is the only data path. Voice
 ### A.4 WebSocket messages (client to server, verified by name in `server.js`)
 
 `hello` is handled first (`handleHello`). Every other client message is dispatched only if its `t` is a key of the `handlers`
-object in `server.js`: `setName`, `emote`, `voice`, `ice`, `rtc`, `chat`, `report`, `block`, `blocks`, `unblock`, `create`, `join`,
+object in `server.js`: `setName`, `emote`, `voice`, `ice`, `rtc`, `chat`, `report`, `reportPlayer`, `block`, `blocks`, `unblock`, `create`, `join`,
 `sit`, `leave`, `addBot`, `removeBot`, `setOptions`, `getStats`, `makeHost`, `kick`, `setVisibility`, `setSeats`, `start`, `act`
 (game actions, carried in an `action` envelope), `rematchVote` and `rematch`. Any other `t` is ignored. A JSON `ping` is not a
 handler, so it is dropped; WebSocket ping/pong are transport control frames. The server validates each message before it changes
@@ -168,7 +168,7 @@ period and keeps the seat until the table closes or the host acts.
   `analytics_daily` holds aggregate counters. `analytics_active` holds one row per account per day, keyed by a stable hash of the
   account ID. That is a pseudonymous, linkable record, not an anonymous aggregate: the account-deletion path recomputes the hash to
   delete a user's rows (`db/admin.js`). Treat it as personal data for retention and privacy.
-- Chat reports: `chat_reports`, processed in order by `db/reportQueue.js` and the admin console. Moderation actions: `db/moderation.js`.
+- Chat reports: `chat_reports`, processed in order by `db/reportQueue.js` and the admin console. Player reports (from a table card): `player_reports`, stored by `db/moderation.js` `createPlayerReport`. Moderation actions: `db/moderation.js`.
 - Player directory and profile (`db/playerStats.js`): registered accounts only; never e-mail, network address, token or chat text.
 
 ### A.9 Deployment and release flow

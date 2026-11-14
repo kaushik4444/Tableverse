@@ -1162,6 +1162,24 @@ function start(opts = {}) {
     },
 
     // Report a table chat message. The server looks the message up in its own copy of the table's chat.
+    // A report about a player (from their card or profile). Needs an account; the reported account is checked on the server.
+    async reportPlayer(p, msg) {
+      const self = players.get(p.id);
+      if (!self || !self.username) return sendError(p, 'Sign in to report a player.'); // guests have no account to report from
+      const checked = moderation.validatePlayerReport(p.id, msg);
+      if (!checked.ok) return sendError(p, checked.error);
+      const now = Date.now();
+      if (now - (p.lastReport || 0) < moderation.REPORT_COOLDOWN_MS) return sendError(p, 'Slow down a little');
+      p.lastReport = now;
+      try {
+        const out = await dbModeration.createPlayerReport({ reporterId: p.id, reportedId: checked.reportedId, reason: checked.reason });
+        send(p.ws, { t: 'notice', text: out.stored ? 'Thanks. Your report was recorded.' : 'You have already reported this player.' });
+      } catch (e) {
+        if (e instanceof dbModeration.ModerationError) return sendError(p, e.message);
+        throw e;
+      }
+    },
+
     async report(p, msg) {
       const room = rooms.get(p.room);
       if (!room) return sendError(p, 'Join a table to report a message.');
