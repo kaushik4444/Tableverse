@@ -1,9 +1,9 @@
 'use strict';
 /**
- * Chat report queue for the admin console (read-only, staff only).
+ * Report queue for the admin console (read-only, staff only). It lists chat reports and player reports (from a card) together.
  *
- * Shows each chat report with what a moderator needs to triage it: the reason, the message copy kept with the report (up to
- * 200 characters), the room, when it was made, the reporter's and the reported account's usernames, whether the reported
+ * Shows each report with what a moderator needs to triage it: the reason, the message copy kept with a chat report (up to
+ * 200 characters; player reports have none), the room, when it was made, the reporter's and the reported account's usernames, whether the reported
  * account is suspended, and how often that account has been reported (all time and in the last 30 days).
  * No e-mail address, network address, token or display-name history is selected. Opening the queue is written to the audit
  * log ("reports.view") in the same transaction as the read; the audit row holds no report content.
@@ -21,18 +21,25 @@ const num = (v) => Number(v) || 0;
 
 async function listReports({ page: pg = 1, actorId = null } = {}) {
   return db.withTransaction(async (c) => {
-    const total = (await c.query('SELECT COUNT(*)::int AS n FROM chat_reports')).rows[0].n;
+    const total = (await c.query('SELECT (SELECT COUNT(*) FROM chat_reports) + (SELECT COUNT(*) FROM player_reports) AS n')).rows[0].n;
     const r = await c.query(
-      `SELECT r.id, r.reason, r.details, r.message_text, r.room_code, r.created_at,
+      `SELECT r.id, r.kind, r.reason, r.details, r.message_text, r.room_code, r.created_at,
               r.reported_display_name, rep.username AS reporter_username, rep.is_anonymous AS reporter_guest,
               rd.username AS reported_username, (rd.suspended_at IS NOT NULL) AS reported_suspended,
-              -- a deleted reported account leaves reported_id NULL (migration 015): its counts are unknown, not zero
+              -- a deleted reported account leaves reported_id NULL (migrations 015, 023): its counts are unknown, not zero
               CASE WHEN r.reported_id IS NULL THEN NULL ELSE
-                (SELECT COUNT(*) FROM chat_reports x WHERE x.reported_id = r.reported_id)::int END AS reported_total,
+                ((SELECT COUNT(*) FROM chat_reports x WHERE x.reported_id = r.reported_id)
+               + (SELECT COUNT(*) FROM player_reports y WHERE y.reported_id = r.reported_id))::int END AS reported_total,
               CASE WHEN r.reported_id IS NULL THEN NULL ELSE
-                (SELECT COUNT(*) FROM chat_reports x WHERE x.reported_id = r.reported_id
-                   AND x.created_at > NOW() - ($1::int * INTERVAL '1 day'))::int END AS reported_recent
-         FROM chat_reports r
+                ((SELECT COUNT(*) FROM chat_reports x WHERE x.reported_id = r.reported_id
+                   AND x.created_at > NOW() - ($1::int * INTERVAL '1 day'))
+               + (SELECT COUNT(*) FROM player_reports y WHERE y.reported_id = r.reported_id
+                   AND y.created_at > NOW() - ($1::int * INTERVAL '1 day')))::int END AS reported_recent
+         FROM (
+           SELECT id, 'chat' AS kind, reason, details, message_text, room_code, created_at, reported_display_name, reporter_id, reported_id FROM chat_reports
+           UNION ALL
+           SELECT id, 'player', reason, '' AS details, NULL AS message_text, NULL AS room_code, created_at, reported_display_name, reporter_id, reported_id FROM player_reports
+         ) r
          LEFT JOIN players rep ON rep.id = r.reporter_id
          LEFT JOIN players rd ON rd.id = r.reported_id
         ORDER BY r.created_at DESC, r.id
@@ -46,7 +53,7 @@ async function listReports({ page: pg = 1, actorId = null } = {}) {
     return {
       total, pageSize: PAGE, recentDays: RECENT_DAYS,
       items: r.rows.map((x) => ({
-        id: x.id, reason: x.reason, severity: SEVERITY[x.reason] || 'low', details: x.details || '', message: x.message_text,
+        id: x.id, kind: x.kind, reason: x.reason, severity: SEVERITY[x.reason] || 'low', details: x.details || '', message: x.message_text,
         room: x.room_code, createdAt: x.created_at,
         // guests have no username; a reporter with no row left is not shown as a guest
         reporter: x.reporter_username || (x.reporter_guest ? 'a guest' : null),

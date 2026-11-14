@@ -312,6 +312,13 @@ function socket(port, cookie) {
       assert.equal(rows.length, 1);
       assert.equal(rows[0].reported_display_name, 'Alpha');
       assert.equal(rows[0].reason, 'harassment', 'the first report is kept');
+      // moderators see player reports in the same queue as chat reports
+      const queue = await require('../db/reportQueue').listReports({});
+      const filed = queue.items.filter((i) => i.kind === 'player');
+      assert.equal(filed.length, 1, 'the player report is in the staff queue');
+      assert.equal(filed[0].message, null, 'a player report has no message text');
+      assert.equal(filed[0].reason, 'harassment');
+      assert.equal(queue.total, queue.items.length, 'the total counts player reports too');
       await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: crypto.randomUUID(), reason: 'spam' }), (e) => e.status === 404);
     });
 
