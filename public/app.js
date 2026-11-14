@@ -577,6 +577,8 @@
     ws.onclose = (e) => {
       if (sock !== ws) return;
       S.ready = false;
+      // A profile waiting for the server's 'left' cannot open after a drop: the leave may never arrive, and a later leave must not open it.
+      S.pendingPage = null;
       voice.reset(); // the server drops us from voice when the connection drops
       if (e.code === 4000) {
         $banner.textContent = 'Tableverse is open in another tab. Reload to play here.';
@@ -1099,6 +1101,8 @@
         S.unread = 0;
         closeChat();
         wasMyTurn = false;
+        // A profile asked for from a table opens only now: the table is gone, so the page can show.
+        if (S.pendingPage) { const pending = S.pendingPage; S.pendingPage = null; openPage(pending.page, pending.arg); break; }
         setHash('');
         render();
         break;
@@ -1336,6 +1340,8 @@
     const person = roomPerson(C.pid) || C.last;
     if (!person) return '<p class="hint">This player is no longer at the table.</p>';
     C.last = person;
+    // Show the whole card at once: while the numbers are loading, nothing else appears, so the dialog does not change in steps.
+    if (C.loading) return `<div class="pcard-loading" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span> Loading profile…</div>`;
     const rel = relationTo(person);
     const here = Boolean(roomPerson(C.pid));
     const prof = C.profile;
@@ -1352,7 +1358,8 @@
     if (rel.kind === 'none' && S.guest) add.length = 0;
     const others = [];
     if (rel.kind === 'me') others.push('<button type="button" class="btn ghost" data-modal-act="cardEditMe">Edit my profile</button>');
-    if (person.username && rel.kind !== 'me') others.push(`<a class="btn ghost" href="/#u/${encodeURIComponent(person.username)}" target="_blank" rel="noopener">View full profile</a>`);
+    if (person.username && rel.kind !== 'me') others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardProfile">View full profile</button>`);
+    if (here && rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock">🚫 Block</button>`);
     if (rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost" data-modal-act="cardMute">${muted.has(person.id) ? '🔔 Unmute in chat' : '🔇 Mute in chat'}</button>`);
     return `<div class="pcard-head">${avatar(person, 'big')}<div><h3>${esc(person.name)}</h3><p>${sub}${person.id === S.id ? ' · you' : ''}</p>${conn}</div></div>${stats}${C.error ? `<p class="auth-msg" role="alert">${esc(C.error)}</p>` : ''}<div class="pcard-actions">${add.join('')}${others.join('')}</div>${S.guest && rel.kind === 'none' ? '<p class="pcard-note">Log in to add friends.</p>' : ''}`;
   }
@@ -1365,12 +1372,24 @@
   function openPlayerCard(pid) {
     const person = roomPerson(pid);
     if (!person) return;
-    S.card = { pid, profile: null, busy: false, error: '', last: person };
+    const loading = Boolean(person.username && !person.bot);
+    const card = { pid, profile: null, busy: false, error: '', last: person, loading };
+    S.card = card;
     drawCard();
-    if (person.username && !person.bot) {
+    // While loading, the body has no buttons, so keep keyboard focus in the dialog on its Close control.
+    if (loading) { const x = document.querySelector('#modal-overlay [data-modal-close][aria-label="Close"]'); if (x) x.focus(); }
+    if (loading) {
+      // Redraw only into this card's own dialog: if it was closed (or replaced by another dialog) while loading, leave it alone.
+      const done = () => {
+        if (S.card !== card) return; // this request belongs to an earlier opening of the card
+        card.loading = false;
+        const body = document.querySelector('#modal-overlay .modal-body');
+        if (body && body.dataset.card === pid) drawCard();
+      };
       getJson(`/api/players/${encodeURIComponent(person.username)}`)
-        .then((d) => { if (S.card && S.card.pid === pid) { S.card.profile = d.profile; drawCard(); } })
-        .catch(() => { /* the card works without the numbers */ });
+        .then((d) => { if (S.card === card) card.profile = d.profile; })
+        .catch(() => { /* the card works without the numbers */ })
+        .finally(done);
     }
   }
   async function cardAction(path, body, success, label = 'Updating…') {
@@ -1822,6 +1841,36 @@
     leaveGameConfirm: () => { closeModal(); send({ t: 'leave' }); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
+    // Opening a profile is a page, and the app only shows a page when no table is open. From a table, confirm first:
+    // leaving the table is what makes room for the profile.
+    cardProfile: () => {
+      const p = S.card && S.card.last;
+      if (!p || !p.username) return;
+      if (!S.room) { closeModal(); openPage('player', p.username); return; }
+      // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
+      const seatedInGame = S.room.status === 'playing' && !isSpectator();
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' : 'This leaves the table.';
+      openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
+    },
+    cardProfileConfirm: () => {
+      const p = S.card && S.card.last;
+      closeModal();
+      if (!p || !p.username) return;
+      // Without a live connection nothing is sent, so nothing would open the page later: do not keep the navigation for a
+      // later, unrelated leave. The player can try again once connected.
+      if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then open the profile again.'); return; }
+      // The page opens when the server confirms the leave ('left'); opening it now would be undone by that message.
+      S.pendingPage = { page: 'player', arg: p.username };
+      send({ t: 'leave' });
+    },
+    // Blocking is account-level and works the same from a table as from chat: the blocked person is hidden from table
+    // chat and table voice in both directions. The block itself is sent to the server by the player's id.
+    cardBlock: () => {
+      const p = S.card && S.card.last;
+      if (!p || p.bot || !p.id || p.id === S.id) return;
+      send({ t: 'block', id: p.id });
+      closeModal();
+    },
       makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
       kickPlayerConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'kick', id }); } },
   };

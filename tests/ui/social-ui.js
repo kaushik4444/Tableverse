@@ -225,6 +225,47 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await ctx.close();
   });
 
+  await test('the card appears whole once its numbers load; View full profile stays in the app and asks before leaving the table', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMsgs() });
+    try {
+      await page.goto(url + '/');
+      await page.waitForSelector('.pseat[data-pid="u-ann"]');
+      await seat(page, 'u-ann');
+      await page.waitForSelector('.pcard-head');
+      assert.ok(await page.$('.pcard-stats'), 'the numbers are in the same render as the name, not added later');
+      await page.click('[data-modal-act="cardProfile"]');
+      await page.waitForSelector('[data-modal-act="cardProfileConfirm"]');
+      assert.equal(ctx.pages().length, 1, 'no new tab');
+      await page.click('[data-modal-act="cardProfileConfirm"]');
+      await page.waitForFunction(() => (window.__sent || []).some((m) => m.t === 'leave'));
+      // The server confirms the leave; only then does the profile open, and the table must not come back over it.
+      await page.evaluate(() => window.__push({ t: 'left' }));
+      await page.waitForFunction(() => location.hash === '#u/ann');
+      assert.equal(ctx.pages().length, 1, 'the profile opens in this tab');
+      assert.equal(await page.$('.pseat'), null, 'the table is gone');
+      await page.waitForFunction(() => /Ann/.test(document.querySelector('#app, main, body').textContent || ''));
+    } finally { await ctx.close(); }
+  });
+
+  await test('a dropped connection while the leave is confirmed sends nothing and keeps the table; no profile opens later', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMsgs() });
+    try {
+      await page.goto(url + '/');
+      await page.waitForSelector('.pseat[data-pid="u-ann"]');
+      await seat(page, 'u-ann');
+      await page.waitForSelector('.pcard-head');
+      await page.click('[data-modal-act="cardProfile"]');
+      await page.waitForSelector('[data-modal-act="cardProfileConfirm"]');
+      await page.evaluate(() => window.__drop());
+      await page.click('[data-modal-act="cardProfileConfirm"]');
+      await page.waitForFunction(() => /Connection lost/.test(document.body.textContent || ''));
+      const sent = await page.evaluate(() => (window.__sent || []).filter((m) => m.t === 'leave').length);
+      assert.equal(sent, 0, 'no leave is sent while disconnected');
+      assert.ok(await page.$('.pseat'), 'the table stays on screen');
+      assert.notEqual(await page.evaluate(() => location.hash), '#u/ann', 'the profile does not open');
+    } finally { await ctx.close(); }
+  });
+
   await test('a friend’s card says so and offers removal; a bot and a guest offer no friend actions', async () => {
     const { page, ctx } = await scriptedPage(browser, { messages: tableMsgs() });
     await page.goto(url + '/');
