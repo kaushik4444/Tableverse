@@ -67,7 +67,7 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
   });
 
   // ---- another player's page: Block / Unblock and Report, by username (the page never holds an id)
-  const profileApi = { 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: false } }) };
+  const profileApi = { 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe: false } }) };
   const pageFor = async (srv, hash, { socket = true } = {}) => {
     const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: [{ id: 'wizard', name: 'Wizard', icon: '🧙', accent: '#8a5cf6', seats: { min: 3, max: 6 }, options: [], rules: [] }] })] });
     // Open home first, then navigate in-app the way a tap does (pushState + popstate). A deep link can race the
@@ -100,7 +100,7 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
   });
 
   await test('a blocked player’s page offers Unblock, which sends the same username', async () => {
-    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: true, blockedByMe: true, blockedByThem: false } }) });
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe: true } }) });
     const { page, ctx } = await pageFor(srv.url, '/#u/bob');
     await page.click('[data-act="playerUnblock"]');
     await page.waitForSelector('[data-act="playerBlock"]');
@@ -108,11 +108,29 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     await ctx.close(); await srv.server.close();
   });
 
-  await test('a player who was blocked by the other side gets Block, not Unblock, because the block is theirs to lift', async () => {
-    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: true, blockedByMe: false, blockedByThem: true } }) });
+  await test('a player the viewer has not blocked gets Block, and never Unblock', async () => {
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe: false } }) });
     const { page, ctx } = await pageFor(srv.url, '/#u/bob');
-    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'no Unblock for a block made by the other player');
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'no Unblock when the viewer has not blocked them');
     assert.equal(await page.locator('[data-act="playerBlock"]').count(), 1, 'the viewer can still block them');
+    await ctx.close(); await srv.server.close();
+  });
+
+  // The page shows a block at once; the server's answer (the new list, or an error) puts it right if the block was refused.
+  await test('a refused block goes back to Block, and a confirmed block stays Unblock', async () => {
+    let blockedByMe = false; // what the server's profile answer says
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe } }) });
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    await page.click('[data-act="playerBlock"]');
+    await page.waitForSelector('[data-act="playerUnblock"]'); // shown at once
+    await page.evaluate(() => window.__push({ t: 'error', message: 'Slow down a little' })); // the server refused it
+    await page.waitForSelector('[data-act="playerBlock"]', { timeout: 4000 });
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'a refused block is not shown as a block');
+    blockedByMe = true; // now the server accepts it
+    await page.click('[data-act="playerBlock"]');
+    await page.evaluate(() => window.__push({ t: 'blocks', blocks: [{ id: 'x', name: 'Bo' }] })); // and sends the new list
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 1, 'a confirmed block stays shown');
     await ctx.close(); await srv.server.close();
   });
 

@@ -1008,6 +1008,7 @@
       case 'blocks':
         S.blocked = Array.isArray(m.blocks) ? m.blocks : [];
         if (S.page === 'profile') render();
+        else if (S.page === 'player') resyncPlayerBlock();
         break;
       case 'ice':
         // fresh TURN logins: used by new connections, and applied to the ones already open
@@ -1109,6 +1110,7 @@
       case 'error':
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
+        if (S.page === 'player') resyncPlayerBlock(); // a refused block or unblock must not stay on the page
         break;
     }
   }
@@ -1621,6 +1623,22 @@
     catch (e) { S.player.error = e.status === 404 ? 'There is no player with that username.' : (e.message || 'Could not load this profile.'); }
     S.player.loading = false;
     render();
+  }
+  // The profile page shows a block or unblock at once, before the server has answered. When the server answers (the new list,
+  // or an error such as a cooldown or the block limit), the page is checked against the server again, so it never keeps
+  // showing a block that was refused or hiding one that went through. It redraws only if something changed (keeps focus).
+  let playerResync = 0;
+  async function resyncPlayerBlock() {
+    const P = S.player;
+    if (S.page !== 'player' || !P || !P.data) return;
+    const stamp = ++playerResync;
+    try {
+      const d = (await getJson(`/api/players/${encodeURIComponent(P.data.username)}`)).profile;
+      if (stamp !== playerResync || S.player !== P || S.page !== 'player') return; // a newer check, or another page, took over
+      if (P.data.blockedByMe === d.blockedByMe) return;
+      P.data.blockedByMe = d.blockedByMe;
+      render();
+    } catch { /* keep what the page shows */ }
   }
 
   const joinedText = (iso) => (iso ? `Joined ${fmtDate(iso)}` : '');
@@ -2486,12 +2504,12 @@
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
       const P = S.player; if (!P || !P.data) return;
-      send({ t: 'block', username: P.data.username }); P.data.blockedByMe = true; P.data.blockedByViewer = true; P.reporting = false; render();
+      send({ t: 'block', username: P.data.username }); P.data.blockedByMe = true; P.reporting = false; render();
       const el = document.querySelector('.pp-actions [data-act="playerUnblock"]'); if (el) el.focus(); // the redraw replaced the button
     },
     playerUnblock: () => {
       const P = S.player; if (!P || !P.data) return;
-      send({ t: 'unblock', username: P.data.username }); P.data.blockedByMe = false; P.data.blockedByViewer = !!P.data.blockedByThem; render();
+      send({ t: 'unblock', username: P.data.username }); P.data.blockedByMe = false; render();
       const el = document.querySelector('.pp-actions [data-act="playerBlock"]'); if (el) el.focus();
     },
     playerReport: () => {
