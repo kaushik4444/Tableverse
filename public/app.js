@@ -577,6 +577,12 @@
     ws.onclose = (e) => {
       if (sock !== ws) return;
       S.ready = false;
+      // A block or unblock still waiting when the socket drops may never have reached the server, so the optimistic state on
+      // screen is not trusted: show the last state the server confirmed, and check again when the socket is back (welcome).
+      if (S.player && S.player.busy && S.player.data && S.player.confirmedBlockedByMe !== undefined && S.player.data.blockedByMe !== S.player.confirmedBlockedByMe) {
+        S.player.data.blockedByMe = S.player.confirmedBlockedByMe;
+        if (S.page === 'player') render();
+      }
       clearPlayerBusy(S.player); // an answer to a request sent on this socket can no longer arrive
       // A profile waiting for the server's 'left' cannot open after a drop: the leave may never arrive, and a later leave must not open it.
       S.pendingPage = null;
@@ -962,6 +968,7 @@
     switch (m.t) {
       case 'welcome': {
         S.id = m.id;
+        if (S.page === 'player' && S.player && S.player.data) resyncPlayerBlock(); // the server's state after a drop, not the optimistic one
         S.impressumPublished = m.impressumPublished === true; // the server decides (LEGAL_IMPRESSUM_PUBLISHED); no link while it is off
         S.token = '';
         S.guest = false;
