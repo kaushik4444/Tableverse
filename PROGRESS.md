@@ -40,7 +40,7 @@ Nothing here is "production verified" unless it says so; production verification
 | Responsive UI audit | IN PROGRESS | `docs/UI_AUDIT.md`: 0 errors, 172 warnings, all explained; open: Property Rivals Roll dice below the fold at 1280x800, unverified dialogs, real-device check |
 | Local development guide | DONE for macOS/Linux checks; Windows PowerShell steps NOT VERIFIED | `docs/LOCAL_DEVELOPMENT.md` lists what was and was not verified |
 | Voice chat | DEFERRED (code present; `VOICE_ENABLED` off; Metered 401 to fix and cross-network test needed) | D-3 in `docs/STAGE_20_6_BETA_READINESS.md` |
-| Privacy Notice, Beta Terms, Impressum | PENDING OWNER ACTION (drafts only; Impressum on Draft PR #101, not published, needs an update against current `main`) | Legal wording is not engineering work |
+| Privacy Notice, Beta Terms, Impressum | PENDING OWNER ACTION (drafts only; Impressum merged in #101 behind a publication gate, page not published: needs legal approval and Render settings) | Legal wording is not engineering work |
 | Render deploy confirmation, `/healthz`, `/readyz`, logs for `70ccd35` | PENDING OWNER ACTION (not verifiable from the agent environment) | |
 | Neon backup / point-in-time window, restore rehearsal | PENDING OWNER ACTION | M-8, M-10 |
 | Cleanup job safeguards (reviewer, read-only role, `CLEANUP_EXECUTE`) | PENDING OWNER ACTION (settings not visible from the repository) | M-5 |
