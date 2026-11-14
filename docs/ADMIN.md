@@ -82,7 +82,7 @@ Everyone (guests included) can send feedback from the account menu or `POST /api
 
 ## Chat report queue (read-only)
 
-The **Reports** tab lists every chat report, newest first, 25 per page. For each report it shows the reason, a severity fixed by the reason (threats and sexual content high, harassment and hate medium, spam and other low), the message copy kept with the report, the room, the reporter's and the reported account's usernames, whether the reported account is suspended, and how often that account has been reported (all time, and in the last 30 days). A reported account that has been deleted shows its last recorded display name. No e-mail address, network address or token is selected. Each time the queue is opened, one `reports.view` row is written to the audit log; it holds no report content. Resolving reports is not built yet.
+The **Reports** tab lists every report, chat reports and player reports (from a card or a profile), newest first, 25 per page. For each report it shows the reason, a severity fixed by the reason (threats and sexual content high, harassment and hate medium, spam and other low), the message copy kept with a chat report (a player report has none, and says it came from a card or profile), the room, the reporter's and the reported account's usernames, whether the reported account is suspended, and how often that account has been reported (all time, and in the last 30 days). A reported account that has been deleted shows its last recorded display name. No e-mail address, network address or token is selected. Each time the queue is opened, one `reports.view` row is written to the audit log; it holds no report content. Resolving reports is not built yet.
 
 ## Suspension and lookup (Stage 20.8)
 

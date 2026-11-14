@@ -36,7 +36,7 @@ Tableverse is currently open for friend testing.
 
 - Public home page, live table directory and a table-code box (public tables).
 - Auth sheet that resumes the action a visitor originally tapped after login.
-- Account menu (Profile, Settings, What's New, logout controls), a profile page (`#profile`; public pages at `#u/<username>`) and tap-a-player cards at the table.
+- Account menu (Profile, Settings, What's New, logout controls), a profile page (`#profile`; public pages at `#u/<username>`) and tap-a-player cards at the table. Signed-in players can block or report someone from the card or the public profile page.
 - **Friends**: username search, requests (send, accept, decline, cancel), removal, online/offline, last seen, the game a friend is playing and a connection-quality (ping) badge.
 - **Public and private tables.** New tables are public and listed in the open tables; a host can make a table private, and private tables open with friend invitations, and **host tools** to hand over the table or remove people.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
@@ -46,7 +46,17 @@ Tableverse is currently open for friend testing.
 - **Blocking**: a block hides the other player's table chat and voice, and stops invitations between you. A block never removes anyone from a table, so you can still share one.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
-## What's new — unreleased (Property Rivals cards, game settings, blocking)
+## What's new — unreleased (blocking and reports, the ⋯ menu, 29 rules, seat shuffle)
+
+- **Block and report on the card and the profile.** A signed-in player can block (or unblock) and report someone from their table card, or from their profile page (`#u/<name>`). A report has a reason (harassment, hate, threats, sexual content, spam or other) and is stored once per reporter and player. Reports count toward the same daily limit as chat reports. Guests can’t report; a deleted account’s reports stay on record with its last name.
+- **Friend profiles open in the app.** Tapping a friend’s profile while seated in a game asks first, because it leaves the table. A dropped connection never moves you.
+- **⋯ menu.** How to play, the game log and game settings are in the ⋯ menu at the top right. The bottom bar keeps only the table controls, so it fits on phones.
+- **Profile loading.** The profile shows a loading state, then the name and the statistics together.
+- **Shuffle seats.** Wizard and 29 offer a host-controlled Shuffle seats option. When it is on, seats are shuffled when the game starts, and results are recorded against the seat each player actually had.
+- **29 rules in Game settings.** The options are explained in the settings, and the rules text matches the engine: with the *All 29 doubles the win* option on, taking all 29 points is worth +2 game points (instead of +1); with *Double loss below half* on, a bidding team that misses its bid with 14 or fewer points loses 2 (instead of 1); a K–Q marriage changes the bid when the *Marriage changes the bid* option is on (the bid rises by 4 when the other team declares it, and drops by 4 when the bidding team declares it, never below 15). *Double and redouble* is an optional challenge that doubles, then redoubles, the hand’s game points.
+- **Fixes.** The 29 trump indicator fits on phones (checked at phone sizes in the browser tests); the 29 score label is correct after a marriage or a double; the guest top bar fits a 360 px screen; a friend’s profile opened from a game no longer appears after a dropped connection.
+
+## Earlier unreleased work (Property Rivals cards, game settings, blocking)
 
 - **Public tables by default.** A new table is public and appears in the open tables. While the table is still in its lobby, the host can make it private with **Make private** on the table screen; the server refuses the change once a game has started. Tables that already exist keep their current setting.
 - **City cards.** In Property Rivals, tap a city in a player's holdings to see its owner, buildings, mortgage value, unmortgage cost, house or hotel cost, the rent right now and the full rent table.
