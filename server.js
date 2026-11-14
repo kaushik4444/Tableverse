@@ -1426,6 +1426,7 @@ function start(opts = {}) {
         sys(room, `🔄 ${p.name} is back and took the seat from the bot`);
         notifyOthers(room, p.id, `🔄 ${p.name} rejoined the game`);
         ensureHost(room);
+        touchTimer(room);
         broadcast(room);
         sendChatLog(p, room);
         schedule(room);
