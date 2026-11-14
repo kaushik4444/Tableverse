@@ -1983,7 +1983,9 @@ function start(opts = {}) {
         } catch (e) {
           trackError('ws_handler');
           wsLog.error('game.handler_failed', { connId: ws.connId, type: msg.t, room: p.room || null, err: e });
-          sendError(p, 'Something went wrong');
+          // A block or unblock that fails before its write (a name lookup, a list fetch) gets its own failure message, so the
+          // profile page releases its "Saving…" lock and checks the server again, as it does for a failed write.
+          sendError(p, msg.t === 'block' ? BLOCK_SAVE_FAILED : msg.t === 'unblock' ? UNBLOCK_SAVE_FAILED : 'Something went wrong');
         }
       };
       // one message at a time per socket: a join that waits for the database must finish before the next message
