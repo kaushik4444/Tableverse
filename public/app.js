@@ -577,6 +577,7 @@
     ws.onclose = (e) => {
       if (sock !== ws) return;
       S.ready = false;
+      clearPlayerBusy(S.player); // an answer to a request sent on this socket can no longer arrive
       // A profile waiting for the server's 'left' cannot open after a drop: the leave may never arrive, and a later leave must not open it.
       S.pendingPage = null;
       voice.reset(); // the server drops us from voice when the connection drops
@@ -1110,7 +1111,7 @@
       case 'error':
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
-        if (S.page === 'player') resyncPlayerBlock(true); // a refused block or unblock must not stay on the page
+        if (S.page === 'player') resyncPlayerBlock(true, m.message); // a refused block or unblock must not stay on the page
         break;
     }
   }
@@ -1361,7 +1362,12 @@
     const others = [];
     if (rel.kind === 'me') others.push('<button type="button" class="btn ghost" data-modal-act="cardEditMe">Edit my profile</button>');
     if (person.username && rel.kind !== 'me') others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardProfile">View full profile</button>`);
-    if (here && rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock">🚫 Block</button>`);
+    // The loaded profile says whether this account is already blocked; the button then undoes that block instead.
+    if (here && rel.kind !== 'me' && rel.kind !== 'bot') {
+      others.push(prof && prof.blockedByMe
+        ? `<button type="button" class="btn ghost"${busy} data-modal-act="cardUnblock">Unblock</button>`
+        : `<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock">🚫 Block</button>`);
+    }
     // A report about a registered player (their conduct, not one message): a reason menu, like the chat report's.
     if (person.username && rel.kind !== 'me' && rel.kind !== 'bot' && rel.kind !== 'guest') {
       if (C.reporting) others.push(`<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-modal-act="cardReportSend" data-reason="${k}">${l}</button>`).join('')}<button type="button" class="btn ghost" data-modal-act="cardReport">Cancel</button></div>`);
@@ -1631,8 +1637,23 @@
   // the last state the server confirmed (confirmedBlockedByMe) instead of leaving a refused block on screen.
   let playerResync = 0;
   let playerBlockAction = 0;
-  async function resyncPlayerBlock(failed = false) {
+  // One block or unblock is awaiting the server at a time (playerBusy). The other button then says it is saving, so an
+  // acknowledgement always belongs to the optimistic state on screen. The lock is released only by the server's answer
+  // (a list or a refusal) or by the socket closing; the check against the server then settles the state.
+  function clearPlayerBusy(P) {
+    if (P) P.busy = false;
+  }
+  function playerBusy(P) {
+    if (P.busy) { toast('Saving… one moment.'); return true; }
+    P.busy = true;
+    return false;
+  }
+  // The refusals a block or unblock can get back. Other errors (a report, a chat message) say nothing about the lock.
+  const isBlockRefusal = (text) => /^(That player could not be found\.|You cannot block yourself\.|You can block up to |Slow down a little$|Could not save that (block|unblock)\. Your profile has been checked again\.$)/.test(String(text || ''));
+  async function resyncPlayerBlock(failed = false, reason = '') {
     const P = S.player;
+    if (failed && !isBlockRefusal(reason)) return; // not an answer to this page's block or unblock
+    clearPlayerBusy(P); // the server has answered (a list, or a refusal)
     if (S.page !== 'player' || !P || !P.data) return;
     const stamp = ++playerResync;
     const action = playerBlockAction;
@@ -1946,7 +1967,15 @@
     cardBlock: () => {
       const p = S.card && S.card.last;
       if (!p || p.bot || !p.id || p.id === S.id) return;
+      if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then try again.'); return; } // send() would drop it
       send({ t: 'block', id: p.id });
+      closeModal();
+    },
+    cardUnblock: () => {
+      const p = S.card && S.card.last;
+      if (!p || p.bot || !p.id || p.id === S.id || !S.card.profile) return;
+      if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then try again.'); return; }
+      send({ t: 'unblock', id: p.id }); // closes like Block: the server's notice says whether it went through
       closeModal();
     },
       makeHostConfirm: () => { closeModal(); if (S.pendingModalTarget) { const id = S.pendingModalTarget; S.pendingModalTarget = null; send({ t: 'makeHost', id }); } },
@@ -2526,12 +2555,16 @@
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
       const P = S.player; if (!P || !P.data) return;
+      if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then open the profile again.'); return; } // nothing is shown as blocked unless it is sent
+      if (playerBusy(P)) return;
       playerBlockAction++;
       send({ t: 'block', username: P.data.username }); P.data.blockedByMe = true; P.reporting = false; render();
       const el = document.querySelector('.pp-actions [data-act="playerUnblock"]'); if (el) el.focus(); // the redraw replaced the button
     },
     playerUnblock: () => {
       const P = S.player; if (!P || !P.data) return;
+      if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then open the profile again.'); return; }
+      if (playerBusy(P)) return;
       playerBlockAction++;
       send({ t: 'unblock', username: P.data.username }); P.data.blockedByMe = false; render();
       const el = document.querySelector('.pp-actions [data-act="playerBlock"]'); if (el) el.focus();

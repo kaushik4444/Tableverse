@@ -1116,6 +1116,8 @@ function start(opts = {}) {
     p.lastBlock = now;
     return false;
   }
+  const BLOCK_SAVE_FAILED = 'Could not save that block. Your profile has been checked again.';
+  const UNBLOCK_SAVE_FAILED = 'Could not save that unblock. Your profile has been checked again.';
   /** Hides a block target at once (pending filter) and returns the table to refresh. Must run before the database write. */
   function reserveBlock(p, target) {
     if (!p.blocked) p.blocked = new Set();
@@ -1128,6 +1130,17 @@ function start(opts = {}) {
   }
   /** The database write for a block that reserveBlock already hid. Runs inside the account's moderation turn. */
   async function writeBlock(p, target, room) {
+    try {
+      await writeBlockRows(p, target, room);
+    } catch (e) {
+      // Any other failure (database, or the refreshed list) gets an operation-specific answer, so the page can release its
+      // lock and reconcile the profile. Details are not logged or sent to the player.
+      console.error('Block save failed');
+      sendError(p, BLOCK_SAVE_FAILED);
+      try { await sendBlocks(p); } catch (_) { /* the page reloads the list from the server on its next visit */ }
+    }
+  }
+  async function writeBlockRows(p, target, room) {
     try {
       await dbModeration.addBlock(p.id, target);
       p.blocked.add(target); // committed blocks live here; pending ones are included by effectiveBlocked()
@@ -1155,17 +1168,26 @@ function start(opts = {}) {
   async function writeUnblock(p, targetId) {
     // Check inside the serialized turn: a preceding block/unblock may have changed the cached state while this
     // request was waiting. No-op unblocks must not issue a DELETE or resend the entire chat history.
-    if (!p.blocked || !p.blocked.has(targetId)) return;
+    // Still answered: the page waits for the server's list before it lets another block or unblock through.
+    if (!p.blocked || !p.blocked.has(targetId)) { await sendBlocks(p); return; }
     const now = Date.now();
     if (now - (p.lastUnblock || 0) < moderation.UNBLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
     p.lastUnblock = now;
-    // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
-    // failed unblock could not be taken back.
-    await dbModeration.removeBlock(p.id, targetId);
-    p.blocked.delete(targetId);
-    broadcastTables();
-    resyncChat(p);
-    await sendBlocks(p);
+    try {
+      // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
+      // failed unblock could not be taken back.
+      await dbModeration.removeBlock(p.id, targetId);
+      p.blocked.delete(targetId);
+      broadcastTables();
+      resyncChat(p);
+      await sendBlocks(p);
+    } catch (e) {
+      // Still hidden on the server, so the list sent here is the truth; the page reconciles from it.
+      console.error('Unblock save failed');
+      sendError(p, UNBLOCK_SAVE_FAILED);
+      try { await sendBlocks(p); } catch (_) { /* the page reloads the list from the server on its next visit */ }
+      return;
+    }
     const roomNow = rooms.get(p.room);
     if (roomNow) broadcastVoice(roomNow); // they may be offered voice again
     send(p.ws, { t: 'notice', text: 'Unblocked.' });
