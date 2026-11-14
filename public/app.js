@@ -1649,7 +1649,7 @@
     return false;
   }
   // The refusals a block or unblock can get back. Other errors (a report, a chat message) say nothing about the lock.
-  const isBlockRefusal = (text) => /^(That player could not be found\.|You cannot block yourself\.|You can block up to |Slow down a little$)/.test(String(text || ''));
+  const isBlockRefusal = (text) => /^(That player could not be found\.|You cannot block yourself\.|You can block up to |Slow down a little$|Could not save that (block|unblock)\. Your profile has been checked again\.$)/.test(String(text || ''));
   async function resyncPlayerBlock(failed = false, reason = '') {
     const P = S.player;
     if (failed && !isBlockRefusal(reason)) return; // not an answer to this page's block or unblock
