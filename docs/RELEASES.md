@@ -6,10 +6,11 @@ changes from `development` to `main`.
 
 ## How a day works
 
-1. The workflow runs in the 02:xx Berlin slot (GitHub cron is UTC, so it is scheduled at 00:00 and 01:00 UTC and acts in the
-   right one). On the autumn rollback day both slots are 02:xx, so the second run finds today's release tag and does nothing:
-   **one release per Berlin day**. GitHub may start a scheduled run late; the release still happens in the 02:xx slot or on the
-   next manual run.
+1. The workflow is scheduled for 02:00 Berlin (GitHub cron is UTC, so it is scheduled at 00:00 and 01:00 UTC). GitHub can start
+   a scheduled run hours late: the first two scheduled runs started at 06:19 and 08:28 Berlin time. A scheduled run therefore
+   releases when it starts between 02:00 and 08:59 Berlin time, and does nothing outside that window. Two runs can fall in the
+   window (both crons, or the autumn rollback day), so the second finds today's release tag and does nothing:
+   **one release per Berlin day**. A run that starts after 08:59 skips; start a manual run to release that day.
 2. If there is no content difference between `main` and `development` (compared by tree, not commits), it stops. **No empty
    PR is created.**
 3. If there are changes, it opens one release PR from `development` to `main`, or reuses the open one. Never two.
@@ -30,7 +31,7 @@ A release proceeds only when all of these hold on the PR head:
 | Gate | Source | Blocks when |
 |---|---|---|
 | Release freeze off | repository variable `RELEASE_FREEZE` | it is `true` |
-| Same slot | schedule | a scheduled run is outside 02:xx Berlin |
+| Release window | schedule | a scheduled run starts before 02:00 or from 09:00 Berlin time (a late start up to 08:59 still releases) |
 | main has nothing development lacks | `git merge-tree` of main and development | main has changes that development does not (a hotfix not synced yet) |
 | No conflicts | `git merge-tree` and the PR `mergeable` field | either reports a conflict |
 | Five required checks green | check runs on the head commit | any missing, pending or failed |
@@ -76,8 +77,8 @@ checking it in the UI.
 
 ### Already in the repository (code, nothing to do)
 
-- The **Daily release** workflow on `main` (`.github/workflows/daily-release.yml`): cron at 00:00 and 01:00 UTC with a 02:xx
-  Berlin guard, a `workflow_dispatch` dry run that is ticked by default, and `concurrency: daily-release`.
+- The **Daily release** workflow on `main` (`.github/workflows/daily-release.yml`): cron at 00:00 and 01:00 UTC with a
+  Berlin window (02:00 to 08:59, to allow for late starts), a `workflow_dispatch` dry run that is ticked by default, and `concurrency: daily-release`.
 - Least-privilege workflow permissions: `contents: write` and `pull-requests: write` for the release, `checks: read` and
   `statuses: read` for the gates. No personal access token and no new secret. CI (`ci.yml`) has `contents: read` and uses no
   secrets; the cleanup job runs only on a schedule or a manual dispatch, and its deletion step needs the `production-cleanup`
@@ -165,7 +166,7 @@ The release tag (`release-YYYY-MM-DD-<sha>`) marks the bad commit; use it to fin
 ## Hotfixes and the release window
 
 Do not merge anything to `main` while the **Daily release** workflow is queued or running (Actions tab). A scheduled run can start
-late in the 02:xx slot, a manual run can start at any hour, and one run can take up to 30 minutes. The workflow pins the merge to the
+late (up to 08:59 Berlin time still releases), a manual run can start at any hour, and one run can take up to 30 minutes. The workflow pins the merge to the
 checked `development` commit and then checks that `main` has that content. If another change reached `main` in the meantime, the
 run reports `RELEASE MISMATCH` and writes no tag: investigate `main` and the release before the next run. Preventing the window
 completely needs serialized writes to `main` (for example a merge queue), which is an owner decision.
@@ -192,7 +193,7 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 ## Testing
 
 `npm test` runs `tests/daily-release.test.js` (35 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
-conversations, conflict, freeze, duplicate PRs, missing rules, the 02:xx slot across summer and winter time, health streaks, the
+conversations, conflict, freeze, duplicate PRs, missing rules, the Berlin release window across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
 method (merge by default, squash only when set, case and spacing ignored, unknown values refused), every runbook section the script names exists, a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
 (blocked before the merge), a content mismatch after the merge (no tag), and check runs beyond the first page.
