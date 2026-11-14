@@ -64,7 +64,8 @@ function socket(port, cookie) {
       const username = `${tag.toLowerCase()}mod${seq}`.slice(0, 24);
       const u = await registerAndVerify(srv.port, { email, username, displayName: tag, password: PW });
       const me = (await u.browser.get('/api/auth/session')).json.player;
-      return { ...u, email, id: me.id, cookie: u.browser.cookieHeader };
+      // The helper adds a random suffix to the requested name, so take the name the server stored.
+      return { ...u, email, username: me.username, id: me.id, cookie: u.browser.cookieHeader };
     };
     // Chat is rate limited per player (500 ms), so each message waits its turn.
     const say = async (s, text) => { await sleep(600); s.send({ t: 'chat', text }); };
@@ -301,6 +302,13 @@ function socket(port, cookie) {
       sc.send({ t: 'report', messageId: fresh.mid, reason: 'harassment' });
       await until(() => sc.errors().some((e) => /many reports today/.test(e)), 'cap refused');
       assert.equal((await q('SELECT COUNT(*)::int AS n FROM chat_reports WHERE reporter_id = $1', [C.id]))[0].n, 20, 'no report beyond the cap');
+    });
+
+    await test('a username resolves to its account id on the server, and an unknown name resolves to nothing', async () => {
+      assert.equal(await dbAccount.idForUsername(A.username), A.id);
+      assert.equal(await dbAccount.idForUsername(A.username.toUpperCase()), A.id, 'names are matched without case');
+      assert.equal(await dbAccount.idForUsername('nosuchplayer9'), null);
+      assert.equal(await dbAccount.idForUsername('x'), null, 'an invalid name is never looked up');
     });
 
     await test('a player report is stored once per reporter and player, with the name at the time', async () => {

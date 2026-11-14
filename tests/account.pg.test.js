@@ -79,7 +79,7 @@ function socket(port, cookie) {
       assert.ok(own.profile.joinedAt);
       const pub = await anon.get(`/api/players/${u.username}`);
       assert.equal(pub.status, 200);
-      assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'blockedByViewer', 'displayName', 'joinedAt', 'played', 'username', 'winRate', 'wins']);
+      assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'blockedByMe', 'blockedByThem', 'blockedByViewer', 'displayName', 'joinedAt', 'played', 'username', 'winRate', 'wins']);
       assert.equal(pub.json.profile.blockedByViewer, false, 'an anonymous viewer is never shown as blocked');
       const raw = JSON.stringify(pub.json);
       for (const secret of [u.email, u.id, 'password', 'token', 'session', 'hash']) assert.ok(!raw.toLowerCase().includes(String(secret).toLowerCase()), 'public profile leaks ' + secret);
@@ -96,9 +96,13 @@ function socket(port, cookie) {
       const seenByBlocker = await a.browser.get(`/api/players/${b.username}`);
       assert.equal(seenByBlocker.status, 200, 'the blocker still sees the profile');
       assert.equal(seenByBlocker.json.profile.blockedByViewer, true, 'and it is shown as blocked');
+      assert.equal(seenByBlocker.json.profile.blockedByMe, true, 'the blocker can unblock');
+      assert.equal(seenByBlocker.json.profile.blockedByThem, false);
       const seenByBlocked = await b.browser.get(`/api/players/${a.username}`);
       assert.equal(seenByBlocked.status, 200, 'the blocked person still sees the profile');
       assert.equal(seenByBlocked.json.profile.blockedByViewer, true, 'and it is shown as blocked');
+      assert.equal(seenByBlocked.json.profile.blockedByMe, false, 'the blocked player cannot unblock someone else’s block');
+      assert.equal(seenByBlocked.json.profile.blockedByThem, true);
       assert.equal((await a.browser.get(`/api/players/${a.username}`)).status, 200, 'own public page unaffected');
       const c = await newUser('BlkC', 'Bystander Cy');
       assert.equal((await c.browser.get(`/api/players/${b.username}`)).status, 200, 'others are unaffected');
