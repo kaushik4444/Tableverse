@@ -1087,7 +1087,19 @@ function start(opts = {}) {
   // Block and unblock for one account run one at a time, in the order they were accepted, whichever socket sent them, so
   // the in-memory list ends where the database ends. A block takes effect in memory before its database write (hiding
   // more is safe, and undone if the write fails); an unblock takes effect only after its database write.
-  // One queue per account (not per socket): a reconnect on another socket keeps block and unblock in the order they were sent.
+  // Block and unblock requests from one account are prepared in the order they arrive (a name is looked up in that order
+  // too), and written in that order. Preparation does not wait for earlier writes, so a stalled write never delays the
+  // filter for a later block. One queue per account (not per socket) keeps the order across a reconnect.
+  const orderTails = new Map();
+  const inArrivalOrder = (p, prepare, write) => {
+    const key = p.id;
+    const prepared = (orderTails.get(key) || Promise.resolve()).then(prepare);
+    const settled = prepared.catch(() => {});
+    orderTails.set(key, settled);
+    settled.then(() => { if (orderTails.get(key) === settled) orderTails.delete(key); });
+    return prepared.then((data) => (data ? inModerationTurn(p, () => write(data)) : undefined));
+  };
+  // One queue per account for the database writes.
   const moderationTails = new Map();
   const inModerationTurn = (p, task) => {
     const key = p.id;
@@ -1279,40 +1291,27 @@ function start(opts = {}) {
 
     // Blocking applies to table access, seating, chat, reactions and voice in both directions; it never signs either account out.
     async block(p, msg) {
-      if (msg && msg.id === undefined && typeof msg.username === 'string') {
-        // Queued at once, and the name is looked up inside the account's turn, so a later block or unblock from this
-        // account cannot overtake it. The filter for this target is reserved when its turn starts.
-        return inModerationTurn(p, async () => {
-          const found = await dbAccount.idForUsername(msg.username);
-          const checked = moderation.validateBlockTarget(p.id, found);
-          if (!checked.ok) return sendError(p, checked.error);
-          if (blockTooSoon(p)) return sendError(p, 'Slow down a little');
-          return writeBlock(p, checked.targetId, reserveBlock(p, checked.targetId));
-        });
-      }
-      const checked = moderation.validateBlockTarget(p.id, msg && msg.id);
-      if (!checked.ok) return sendError(p, checked.error);
-      if (blockTooSoon(p)) return sendError(p, 'Slow down a little');
-      // Reserve the filter before entering the serialized database turn. A second block queued behind a slow first
-      // write must hide its own target immediately, including after a reconnect on another socket.
-      const target = checked.targetId;
-      const room = reserveBlock(p, target);
-      return inModerationTurn(p, () => writeBlock(p, target, room));
+      const byName = msg && msg.id === undefined && typeof msg.username === 'string';
+      return inArrivalOrder(p, async () => {
+        const id = byName ? await dbAccount.idForUsername(msg.username) : msg && msg.id;
+        const checked = moderation.validateBlockTarget(p.id, id);
+        if (!checked.ok) { sendError(p, checked.error); return null; }
+        if (blockTooSoon(p)) { sendError(p, 'Slow down a little'); return null; }
+        // Hidden at once, before any earlier write has finished (see reserveBlock).
+        return { target: checked.targetId, room: reserveBlock(p, checked.targetId) };
+      }, ({ target, room }) => writeBlock(p, target, room));
     },
 
     /** The accounts this player has blocked, with names, for the Account tab. Answered after every block or unblock too. */
     blocks(p) { return sendBlocks(p); },
 
     async unblock(p, msg) {
-      if (msg && msg.id === undefined && typeof msg.username === 'string') {
-        return inModerationTurn(p, async () => {
-          const found = await dbAccount.idForUsername(msg.username);
-          if (!moderation.isUuid(found)) return sendError(p, 'That player could not be found.');
-          return writeUnblock(p, found);
-        });
-      }
-      if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
-      return inModerationTurn(p, () => writeUnblock(p, msg.id));
+      const byName = msg && msg.id === undefined && typeof msg.username === 'string';
+      return inArrivalOrder(p, async () => {
+        const id = byName ? await dbAccount.idForUsername(msg.username) : msg && msg.id;
+        if (!moderation.isUuid(id)) { sendError(p, 'That player could not be found.'); return null; }
+        return { id };
+      }, ({ id }) => writeUnblock(p, id));
     },
 
     create(p, msg) {
