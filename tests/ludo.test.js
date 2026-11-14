@@ -348,6 +348,10 @@ test('hexagon: no move buttons under the board; a legal token is marked on the b
   assert.ok(!html.innerHTML.includes('ludo-pick'), 'no yellow move buttons under the board');
   for (const t of v.legalTokens) assert.ok(html.innerHTML.includes(`class="ludo-token`) && html.innerHTML.includes(`data-lt="tok:${t}"`), `token ${t} is tappable on the board`);
   assert.ok(html.innerHTML.includes('ludo-turn-home'), 'the active player\'s home blinks');
+  // six players: the blinking triangle is the outer yard (stroke 0.4), not the inner home triangle (stroke 0.3)
+  const blinking = [...html.innerHTML.matchAll(/<path class="ludo-turn-home" d="[^"]*" fill="[^"]*" stroke="#fff" stroke-width="([\d.]+)"/g)];
+  assert.equal(blinking.length, 1, 'exactly one triangle blinks on the six-player board');
+  assert.equal(blinking[0][1], '0.4', 'the blinking triangle is an outer yard');
   const five = E.createGame(people(4), {}, mulberry32(4));
   five.phase = 'moving'; five.turn = 0; five.dice = 6;
   const sq = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
