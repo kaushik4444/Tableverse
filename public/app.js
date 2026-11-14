@@ -1630,24 +1630,22 @@
   // `failed` is true when the server refused the request. If the check itself cannot be made after a refusal, the page goes back to
   // the last state the server confirmed (confirmedBlockedByMe) instead of leaving a refused block on screen.
   let playerResync = 0;
+  let playerBlockAction = 0;
   async function resyncPlayerBlock(failed = false) {
     const P = S.player;
     if (S.page !== 'player' || !P || !P.data) return;
     const stamp = ++playerResync;
+    const action = playerBlockAction;
+    if (!failed) P.confirmedBlockedByMe = P.data.blockedByMe;
     let confirmed; let fresh = false;
     try {
       confirmed = (await getJson(`/api/players/${encodeURIComponent(P.data.username)}`)).profile.blockedByMe;
       fresh = true;
     } catch {
-      if (!failed) {
-        // After a success the page is right, even if the check cannot be made: what it shows is the new baseline, so a later
-        // refused action rolls back to this state and not to the one from before the successful one.
-        if (stamp === playerResync && S.player === P && S.page === 'player') P.confirmedBlockedByMe = P.data.blockedByMe;
-        return;
-      }
+      if (!failed) return;
       confirmed = P.confirmedBlockedByMe;
     }
-    if (stamp !== playerResync || S.player !== P || S.page !== 'player') return; // a newer check, or another page, took over
+    if (stamp !== playerResync || action !== playerBlockAction || S.player !== P || S.page !== 'player') return; // a newer check, action, or page took over
     // Only a response that passed the guard above may change the confirmed state; a discarded one must not.
     if (fresh) P.confirmedBlockedByMe = confirmed;
     if (confirmed === undefined || P.data.blockedByMe === confirmed) return;
@@ -2521,11 +2519,13 @@
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
       const P = S.player; if (!P || !P.data) return;
+      playerBlockAction++;
       send({ t: 'block', username: P.data.username }); P.data.blockedByMe = true; P.reporting = false; render();
       const el = document.querySelector('.pp-actions [data-act="playerUnblock"]'); if (el) el.focus(); // the redraw replaced the button
     },
     playerUnblock: () => {
       const P = S.player; if (!P || !P.data) return;
+      playerBlockAction++;
       send({ t: 'unblock', username: P.data.username }); P.data.blockedByMe = false; render();
       const el = document.querySelector('.pp-actions [data-act="playerBlock"]'); if (el) el.focus();
     },

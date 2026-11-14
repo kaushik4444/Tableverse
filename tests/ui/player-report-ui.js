@@ -203,6 +203,47 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     } finally { release(); await ctx.close(); await srv.server.close(); }
   });
 
+  for (const initiallyBlocked of [false, true]) {
+    for (const failedCheck of [false, true]) {
+      await test(`a delayed ${failedCheck ? 'failed' : 'successful'} profile check cannot override a newer ${initiallyBlocked ? 'block' : 'unblock'} action`, async () => {
+        const profile = (blockedByMe) => ({ ...profileApi['GET /api/players/bob'](), profile: { ...profileApi['GET /api/players/bob']().profile, blockedByMe } });
+        const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => profile(initiallyBlocked) });
+        const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+        let n = 0; let release;
+        const held = new Promise((r) => { release = r; });
+        const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+        const firstAction = initiallyBlocked ? 'playerUnblock' : 'playerBlock';
+        const nextAction = initiallyBlocked ? 'playerBlock' : 'playerUnblock';
+        try {
+          await page.route('**/api/players/bob', async (route) => {
+            const k = ++n;
+            if (k === 1) {
+              await held;
+              if (!failedCheck) return json(route, profile(!initiallyBlocked));
+            }
+            return json(route, { ok: false, error: 'down' }, 503);
+          });
+          await page.click(`[data-act="${firstAction}"]`);
+          await page.evaluate(() => window.__push({ t: 'blocks', blocks: [] }));
+          await until(() => n === 1, 'the first profile check to start');
+          await page.click(`[data-act="${nextAction}"]`);
+          const response = page.waitForResponse('**/api/players/bob');
+          release();
+          await response;
+          await page.waitForTimeout(300);
+          assert.equal(await page.locator(`[data-act="${firstAction}"]`).count(), 1, 'the older check does not replace the newer optimistic state');
+          // A failed older check must not confirm the newer action before the server answers it.
+          await page.evaluate((failed) => window.__push(failed ? { t: 'error', message: 'Slow down a little' } : { t: 'blocks', blocks: [] }), failedCheck);
+          const expected = failedCheck ? nextAction : firstAction;
+          await page.waitForSelector(`[data-act="${expected}"]`, { timeout: 4000 });
+          await until(() => n === 2, 'the newer profile check to start');
+          await page.waitForTimeout(300);
+          assert.equal(await page.locator(`[data-act="${expected}"]`).count(), 1, 'failed rechecks retain the last acknowledged state');
+        } finally { release(); await ctx.close(); await srv.server.close(); }
+      });
+    }
+  }
+
   await test('a guest does not see Block or Report on another player’s page', async () => {
     const srv = await serve({ 'GET /api/auth/session': () => ({ ok: true, authenticated: false }), ...profileApi });
     const { page, ctx } = await pageFor(srv.url, '/#u/bob', { socket: false });
