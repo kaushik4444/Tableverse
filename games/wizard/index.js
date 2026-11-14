@@ -30,6 +30,13 @@ module.exports = {
       ],
     },
     {
+      key: 'shuffleSeats',
+      type: 'boolean',
+      label: 'Shuffle seats',
+      desc: 'Shuffle the seating when the game starts. Off: players sit in the order they joined.',
+      default: false,
+    },
+    {
       key: 'foresight',
       type: 'boolean',
       label: 'Foresight',
