@@ -1202,6 +1202,9 @@ function start(opts = {}) {
       console.error('Unblock save failed');
       sendError(p, UNBLOCK_SAVE_FAILED);
       try { await sendBlocks(p); } catch (_) { /* the page reloads the list from the server on its next visit */ }
+      // The unblock may already be saved (it failed after the write): the voice list follows p.blocked, so send it anyway.
+      const roomNow = rooms.get(p.room);
+      if (roomNow) broadcastVoice(roomNow);
       return;
     }
     const roomNow = rooms.get(p.room);
