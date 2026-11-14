@@ -1155,7 +1155,8 @@ function start(opts = {}) {
   async function writeUnblock(p, targetId) {
     // Check inside the serialized turn: a preceding block/unblock may have changed the cached state while this
     // request was waiting. No-op unblocks must not issue a DELETE or resend the entire chat history.
-    if (!p.blocked || !p.blocked.has(targetId)) return;
+    // Still answered: the page waits for the server's list before it lets another block or unblock through.
+    if (!p.blocked || !p.blocked.has(targetId)) { await sendBlocks(p); return; }
     const now = Date.now();
     if (now - (p.lastUnblock || 0) < moderation.UNBLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
     p.lastUnblock = now;
