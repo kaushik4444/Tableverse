@@ -85,6 +85,7 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     const { page, ctx } = await pageFor(srv.url, '/#u/bob');
     await page.click('[data-act="playerBlock"]');
     await page.waitForSelector('[data-act="playerUnblock"]');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.act), 'playerUnblock', 'focus stays on the button that replaced Block');
     const blocks = await page.evaluate(() => window.__sent.filter((m) => m.t === 'block'));
     assert.deepEqual(blocks, [{ t: 'block', username: 'bob' }]);
     await page.click('[data-act="playerReport"]');

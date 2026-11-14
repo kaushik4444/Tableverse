@@ -2484,8 +2484,16 @@
     reloadProfile: () => loadProfile(),
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
-    playerBlock: () => { const P = S.player; if (!P || !P.data) return; send({ t: 'block', username: P.data.username }); P.data.blockedByMe = true; P.data.blockedByViewer = true; P.reporting = false; render(); },
-    playerUnblock: () => { const P = S.player; if (!P || !P.data) return; send({ t: 'unblock', username: P.data.username }); P.data.blockedByMe = false; P.data.blockedByViewer = !!P.data.blockedByThem; render(); },
+    playerBlock: () => {
+      const P = S.player; if (!P || !P.data) return;
+      send({ t: 'block', username: P.data.username }); P.data.blockedByMe = true; P.data.blockedByViewer = true; P.reporting = false; render();
+      const el = document.querySelector('.pp-actions [data-act="playerUnblock"]'); if (el) el.focus(); // the redraw replaced the button
+    },
+    playerUnblock: () => {
+      const P = S.player; if (!P || !P.data) return;
+      send({ t: 'unblock', username: P.data.username }); P.data.blockedByMe = false; P.data.blockedByViewer = !!P.data.blockedByThem; render();
+      const el = document.querySelector('.pp-actions [data-act="playerBlock"]'); if (el) el.focus();
+    },
     playerReport: () => {
       const P = S.player; if (!P || !P.data) return;
       P.reporting = !P.reporting;
