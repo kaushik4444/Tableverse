@@ -148,6 +148,41 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     await ctx.close(); await srv.server.close();
   });
 
+  // An older profile answer that arrives after a newer one must not change what the page falls back to.
+  // The checks are answered through request interception: the browser's cache would otherwise make the second identical
+  // request wait for the first one, and the order could not be controlled.
+  await test('a stale profile answer cannot change the confirmed block state used when a later check fails', async () => {
+    const profile = (blockedByMe) => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe } });
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), ...profileApi }); // the first load: not blocked
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    let n = 0; let down = false; let release;
+    const held = new Promise((r) => { release = r; });
+    const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    try {
+      await page.route('**/api/players/bob', async (route) => {
+        const k = ++n;
+        if (k === 1) { await held; return json(route, profile(false)); } // an older check, answered late with an old value
+        if (k === 2) return json(route, profile(true)); // a newer check confirms the block
+        return down ? json(route, { ok: false, error: 'down' }, 503) : json(route, profile(true));
+      });
+      await page.click('[data-act="playerBlock"]');
+      await page.waitForSelector('[data-act="playerUnblock"]');
+      await page.evaluate(() => window.__push({ t: 'blocks', blocks: [{ id: 'x', name: 'Bo' }] })); // check 1, held
+      await until(() => n >= 1, 'the older check to start');
+      await page.evaluate(() => window.__push({ t: 'blocks', blocks: [{ id: 'x', name: 'Bo' }] })); // check 2, answered at once
+      await until(() => n >= 2, 'the newer check to start');
+      await page.waitForTimeout(300);
+      release(); // the older, stale answer (not blocked) arrives now
+      await page.waitForTimeout(300);
+      down = true; // from here the profile cannot be fetched again
+      await page.click('[data-act="playerUnblock"]');
+      await page.waitForSelector('[data-act="playerBlock"]'); // shown at once
+      await page.evaluate(() => window.__push({ t: 'error', message: 'Slow down a little' })); // the unblock was refused
+      await page.waitForSelector('[data-act="playerUnblock"]', { timeout: 4000 }); // back to what the server last confirmed: blocked
+      assert.equal(await page.locator('[data-act="playerBlock"]').count(), 0, 'the stale answer did not make the page fall back to not blocked');
+    } finally { release(); await ctx.close(); await srv.server.close(); }
+  });
+
   await test('a guest does not see Block or Report on another player’s page', async () => {
     const srv = await serve({ 'GET /api/auth/session': () => ({ ok: true, authenticated: false }), ...profileApi });
     const { page, ctx } = await pageFor(srv.url, '/#u/bob', { socket: false });

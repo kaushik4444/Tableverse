@@ -1634,15 +1634,17 @@
     const P = S.player;
     if (S.page !== 'player' || !P || !P.data) return;
     const stamp = ++playerResync;
-    let confirmed;
+    let confirmed; let fresh = false;
     try {
       confirmed = (await getJson(`/api/players/${encodeURIComponent(P.data.username)}`)).profile.blockedByMe;
-      P.confirmedBlockedByMe = confirmed;
+      fresh = true;
     } catch {
       if (!failed) return; // after a success, keep what the page shows
       confirmed = P.confirmedBlockedByMe;
     }
     if (stamp !== playerResync || S.player !== P || S.page !== 'player') return; // a newer check, or another page, took over
+    // Only a response that passed the guard above may change the confirmed state; a discarded one must not.
+    if (fresh) P.confirmedBlockedByMe = confirmed;
     if (confirmed === undefined || P.data.blockedByMe === confirmed) return;
     // The redraw replaces the block button, so keep the keyboard on the control if it was there.
     const hadFocus = /^player(Block|Unblock)$/.test((document.activeElement && document.activeElement.dataset.act) || '');
