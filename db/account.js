@@ -100,6 +100,15 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
  * What anybody may see: no id, no email, no sessions, no per-match detail. With a viewer, a profile is hidden (the same answer as
  * an unknown name) when either account has blocked the other: a block hides each side from the other everywhere.
  */
+/** The account id for a registered username, or null. Server-side only: public profiles never include the id. */
+async function idForUsername(username) {
+  need();
+  const u = String(username || '').trim().toLowerCase();
+  if (!/^[a-z0-9_]{3,24}$/.test(u)) return null;
+  const r = await db.query('SELECT id FROM players WHERE username = $1 AND is_anonymous = FALSE LIMIT 1', [u]);
+  return r.rows[0] ? r.rows[0].id : null;
+}
+
 async function getPublicProfile(username, { viewerId = null } = {}) {
   need();
   const u = String(username || '').trim().toLowerCase();
@@ -108,16 +117,20 @@ async function getPublicProfile(username, { viewerId = null } = {}) {
   const row = r.rows[0];
   if (!row) return null;
   // A block shows the profile as blocked; nothing else about the profile is hidden.
-  let blockedByViewer = false;
+  // blockedByMe: the viewer blocked this player (the viewer can unblock). blockedByThem: this player blocked the viewer.
+  // blockedByViewer is either, kept for existing callers.
+  let blockedByViewer = false; let blockedByMe = false; let blockedByThem = false;
   if (viewerId && isUuid(viewerId) && viewerId !== row.id) {
     const blocked = await db.query(
-      'SELECT 1 FROM player_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1',
+      'SELECT blocker_id FROM player_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)',
       [viewerId, row.id]
     );
     blockedByViewer = blocked.rows.length > 0;
+    blockedByMe = blocked.rows.some((r) => r.blocker_id === viewerId);
+    blockedByThem = blocked.rows.some((r) => r.blocker_id === row.id);
   }
   const s = await getPlayerProfile(row.id, { memberSince: row.created_at });
-  return { username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate, blockedByViewer };
+  return { username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate, blockedByViewer, blockedByMe, blockedByThem };
 }
 
 // ---------------------------------------------------------------------------------------------- recent tables
@@ -193,4 +206,4 @@ async function updatePresence(playerId) {
   await db.query('UPDATE players SET last_seen_at = NOW() WHERE id = $1', [playerId]);
 }
 
-module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };
+module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, idForUsername, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };
