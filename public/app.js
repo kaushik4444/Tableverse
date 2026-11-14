@@ -1858,6 +1858,13 @@
       log.type = 'button'; log.className = 'btn ghost small'; log.dataset.act = 'activityLog'; log.setAttribute('aria-label', 'Open game log'); log.textContent = '📜 Log';
       extras.push(log);
     }
+    // One label and one order in every game: a game's own Rules button says How to play, and the items run in the same order
+    // (the game's figures, How to play, the log). Game settings is added after these, as the last item.
+    extras.forEach((b) => { if ((b.textContent || '').trim() === 'Rules') { b.textContent = '📖 How to play'; b.setAttribute('aria-label', 'How to play'); } });
+    const menuRank = (b) => (/^(Scores|Stats|Chips)$/i.test((b.textContent || '').trim()) ? 0
+      : b.dataset.act === 'rules' || /how to play/i.test(b.textContent || '') ? 1
+      : b.dataset.act === 'activityLog' ? 2 : 3);
+    extras.sort((a, b) => menuRank(a) - menuRank(b)); // stable: equal ranks keep their order
     const wrap = document.createElement('div');
     wrap.className = 'tb-more-wrap';
     wrap.innerHTML = `<button type="button" class="btn ghost small tb-more-btn" data-act="toggleTools" aria-haspopup="true" aria-expanded="${!!S.toolsOpen}" aria-label="More options">⋯</button><div class="tb-pop" role="group" aria-label="More options" ${S.toolsOpen ? '' : 'hidden'}></div>`;
