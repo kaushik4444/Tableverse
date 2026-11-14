@@ -130,6 +130,7 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 /* ---------- home + lobby */
 .page { max-width: 640px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 24px) 16px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .brand { text-align: center; padding: 12px 0 4px; position: relative; }
+.brand .brand-seat { width: 64px; height: 64px; display: block; margin: 0 auto 4px; }
 .brand .mark { font-size: 46px; line-height: 1; filter: drop-shadow(0 4px 12px rgba(124, 92, 255, .5)); }
 .brand h1 { font-size: 46px; background: linear-gradient(90deg, #fff, #c9b8ff 60%, #7ff0da); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: -.01em; margin-top: 6px; }
 .brand p { color: var(--muted); margin: 8px auto 0; max-width: 38ch; line-height: 1.45; }
@@ -333,7 +334,7 @@ select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 /* ---------- top bar + account menu */
 .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: calc(env(safe-area-inset-top) + 8px) max(16px, calc((100% - 980px) / 2)) 8px; background: rgba(7, 21, 16, .82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--panel-line); }
 .tb-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
-.tb-mark { font-size: 26px; line-height: 1; }
+.tb-mark { width: 30px; height: 30px; flex: none; display: block; }
 .tb-right { display: flex; align-items: center; gap: 8px; }
 /* Narrow phones (360px): the guest topbar (Feedback, Log in, Create account) must fit without sideways scroll. */
 @media (max-width: 400px) { .topbar { gap: 6px; } .tb-right { gap: 4px; flex-shrink: 0; } .tb-right .btn.small { padding-left: 8px; padding-right: 8px; } .tb-brand { min-width: 0; font-size: 17px; } .tb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
