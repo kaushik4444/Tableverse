@@ -83,6 +83,7 @@ Browser to Render to the Node process to PostgreSQL is the only data path. Voice
 
 `hello` is handled first (`handleHello`). Every other client message is dispatched only if its `t` is a key of the `handlers`
 object in `server.js`: `setName`, `emote`, `voice`, `ice`, `rtc`, `chat`, `report`, `reportPlayer`, `block`, `blocks`, `unblock`, `create`, `join`,
+`block`, `unblock` and `reportPlayer` also accept `{ username }` in place of `{ id }`. The server resolves the name with `db/account.js` `idForUsername`; public profiles never include a player id, so a page only ever sends a username.
 `sit`, `leave`, `addBot`, `removeBot`, `setOptions`, `getStats`, `makeHost`, `kick`, `setVisibility`, `setSeats`, `start`, `act`
 (game actions, carried in an `action` envelope), `rematchVote` and `rematch`. Any other `t` is ignored. A JSON `ping` is not a
 handler, so it is dropped; WebSocket ping/pong are transport control frames. The server validates each message before it changes

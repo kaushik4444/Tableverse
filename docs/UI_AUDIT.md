@@ -43,6 +43,15 @@ Warnings are not failures. The table below groups them and says whether each is 
 - Lobby: `sheets-layout.js` checks no sideways scroll at 360 and the host's start control; `mobile-fit.js` checks compact height at 390. Lobby options and the invitation list are not covered at 360.
 - Existing checks cover only part of the menus and lobby. `mobile-fit.js` checks a private Wizard lobby at 390×844 (the lobby check) and runs the in-game fit loops at 360×640. `overlays-layout.js` covers the More menu's items at six sizes. `touch-targets-ui.js` measures the home page controls and selected toolbar controls. Confirmation dialogs other than leave (covered by `sheets-layout.js`), invitations and reports are not exercised by any audit: their coverage is unverified.
 
+## Profile and card actions (player reports and blocking)
+
+Covered by `tests/ui/player-report-ui.js` (in `npm run test:ui`, at the default phone size):
+
+- A table card for a registered player offers Report; the reason menu opens with focus on its first reason, Cancel returns focus to Report, and a sent report carries the chosen reason. Bots get no Report.
+- A signed-in player's page for another player offers Block (or Unblock when already blocked) and Report, sent by username. A guest sees neither.
+
+Not covered: these actions at 360 px and on tablets (not measured yet), and screen-reader announcements of the menu (not tested).
+
 ## Next steps
 
 1. Triage the short-screen hand limit with the owner: accept it for SE-class phones, or plan a layout change. A game-layout change needs approval because it touches play areas.
