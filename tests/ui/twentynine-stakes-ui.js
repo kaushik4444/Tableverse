@@ -24,6 +24,22 @@ const SIZES = [{ width: 360, height: 640 }, { width: 390, height: 844 }];
       const box = await page.locator('.t29-stakes').boundingBox();
       assert.ok(box, 'the stakes badge is drawn');
       assert.equal((await page.textContent('.t29-stakes')).trim(), '×2');
+      // Visible means inside the screen and inside every ancestor that clips (overflow other than visible), not only
+      // with a non-empty box: a clipped badge can still have a box inside the viewport.
+      const clip = await page.evaluate(() => {
+        const el = document.querySelector('.t29-stakes');
+        const r = el.getBoundingClientRect();
+        let L = 0; let T = 0; let R = window.innerWidth; let B = window.innerHeight;
+        for (let a = el.parentElement; a; a = a.parentElement) {
+          const cs = getComputedStyle(a);
+          if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') {
+            const ar = a.getBoundingClientRect();
+            L = Math.max(L, ar.left); T = Math.max(T, ar.top); R = Math.min(R, ar.right); B = Math.min(B, ar.bottom);
+          }
+        }
+        return { fully: r.width > 0 && r.height > 0 && r.left >= L - 0.5 && r.top >= T - 0.5 && r.right <= R + 0.5 && r.bottom <= B + 0.5, rect: [r.left, r.top, r.right, r.bottom], clip: [L, T, R, B] };
+      });
+      assert.ok(clip.fully, `the whole badge is visible, not clipped (badge ${JSON.stringify(clip.rect)}, visible area ${JSON.stringify(clip.clip)})`);
       assert.ok(box.x >= 0 && box.x + box.width <= viewport.width, 'the badge is inside the screen sideways');
       assert.ok(box.y >= 0 && box.y + box.height <= viewport.height, 'the badge is inside the screen vertically');
       const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
