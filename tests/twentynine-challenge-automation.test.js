@@ -76,8 +76,10 @@ async function until(fn, label, ms = 4000) {
       const b = socketFor(timedSrv.port, tokenB, bid);
       try {
         await until(() => a.id && b.id, 'both players welcomed');
-        a.send({ t: 'create', gameId: 'twentynine', visibility: 'public', options: { doubleChallenge: true, timeLimit: '20', shuffleSeats: false } });
+        a.send({ t: 'create', gameId: 'twentynine', visibility: 'public' });
         await until(() => a.room && a.room.members.some((m) => m.id === a.id), 'first player seated');
+        a.send({ t: 'setOptions', options: { doubleChallenge: true, timeLimit: '20', shuffleSeats: false } });
+        await until(() => a.room.options && a.room.options.doubleChallenge === true && a.room.options.timeLimit === '20' && a.room.options.shuffleSeats === false, 'configured lobby options');
         b.send({ t: 'join', code: a.room.code });
         await until(() => a.room.members.length === 2, 'second player seated');
         a.send({ t: 'addBot' }); a.send({ t: 'addBot' });
