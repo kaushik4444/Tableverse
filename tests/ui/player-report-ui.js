@@ -148,6 +148,26 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     await ctx.close(); await srv.server.close();
   });
 
+  // A block or unblock the server confirmed becomes the baseline even when the profile check afterwards cannot be made.
+  await test('a confirmed unblock is the rollback state for a later refused block, even if the profile cannot be fetched', async () => {
+    let down = false;
+    const profile = (blockedByMe) => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe } });
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => (down ? { __status: 503, body: { ok: false, error: 'down' } } : profile(true)) }); // starts blocked
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    try {
+      down = true; // from here no profile check can be made
+      await page.click('[data-act="playerUnblock"]');
+      await page.waitForSelector('[data-act="playerBlock"]'); // shown at once
+      await page.evaluate(() => window.__push({ t: 'blocks', blocks: [] })); // the server confirms the unblock
+      await page.waitForTimeout(400);
+      await page.click('[data-act="playerBlock"]');
+      await page.waitForSelector('[data-act="playerUnblock"]'); // shown at once
+      await page.evaluate(() => window.__push({ t: 'error', message: 'Slow down a little' })); // the block was refused
+      await page.waitForSelector('[data-act="playerBlock"]', { timeout: 4000 }); // back to the confirmed state: not blocked
+      assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'the refused block is not shown, and the page does not fall back to the old blocked state');
+    } finally { await ctx.close(); await srv.server.close(); }
+  });
+
   // An older profile answer that arrives after a newer one must not change what the page falls back to.
   // The checks are answered through request interception: the browser's cache would otherwise make the second identical
   // request wait for the first one, and the order could not be controlled.

@@ -1639,7 +1639,12 @@
       confirmed = (await getJson(`/api/players/${encodeURIComponent(P.data.username)}`)).profile.blockedByMe;
       fresh = true;
     } catch {
-      if (!failed) return; // after a success, keep what the page shows
+      if (!failed) {
+        // After a success the page is right, even if the check cannot be made: what it shows is the new baseline, so a later
+        // refused action rolls back to this state and not to the one from before the successful one.
+        if (stamp === playerResync && S.player === P && S.page === 'player') P.confirmedBlockedByMe = P.data.blockedByMe;
+        return;
+      }
       confirmed = P.confirmedBlockedByMe;
     }
     if (stamp !== playerResync || S.player !== P || S.page !== 'player') return; // a newer check, or another page, took over
