@@ -318,7 +318,8 @@ function socket(port, cookie) {
       assert.equal(filed.length, 1, 'the player report is in the staff queue');
       assert.equal(filed[0].message, null, 'a player report has no message text');
       assert.equal(filed[0].reason, 'harassment');
-      assert.equal(queue.total, queue.items.length, 'the total counts player reports too');
+      const [both] = await q('SELECT (SELECT COUNT(*) FROM chat_reports) + (SELECT COUNT(*) FROM player_reports) AS n');
+      assert.equal(queue.total, Number(both.n), 'the total counts chat and player reports');
       await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: crypto.randomUUID(), reason: 'spam' }), (e) => e.status === 404);
     });
 
