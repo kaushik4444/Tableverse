@@ -786,6 +786,10 @@ function start(opts = {}) {
    * Called after every game action: starts a fresh deadline for whoever the game now waits for.
    * During simultaneous moves (everybody bids at once) the deadline is shared and not restarted by each bid.
    */
+  /** The public state the deadline logic reads (phase, multiplier, whose turn). The adapter exposes it through view(). */
+  function publicState(g) {
+    try { const v = g.view(null) || {}; return { phase: v.phase, multiplier: v.multiplier || 1, turn: v.turn }; } catch (_) { return {}; }
+  }
   function touchTimer(room) {
     const g = room.game;
     const limit = limitMs(room);
@@ -793,7 +797,8 @@ function start(opts = {}) {
     const prev = room.waiting || [];
     // A batch is one set of people answering the same question. A change of phase or multiplier (a double, a redouble, or the
     // challenge ending) starts a new one, so the answering side is never left with a deadline that was almost up.
-    const key = g.phase + ':' + (g.multiplier || 1);
+    const ps = publicState(g);
+    const key = ps.phase + ':' + ps.multiplier;
     const sameBatch = prev.length > 1 && room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id));
     room.waitingKey = key;
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
@@ -895,10 +900,11 @@ function start(opts = {}) {
         delay = Math.max(0, dl - Date.now());
         run = () => {
           let res = { ok: true };
-          const phase0 = g.phase; const turn0 = g.turn;
+          const before = publicState(g);
           for (const id of awaitingOf(g)) {
             // One answer ends a batch (a double, redouble or accept): the rest of the list no longer waits, so no bot acts for it.
-            if (g.phase !== phase0 || g.turn !== turn0) break;
+            const now = publicState(g);
+            if (now.phase !== before.phase || now.turn !== before.turn) break;
             const m = room.members.find((x) => x.id === id);
             const r = g.act(id, g.botAction(id));
             if (!r.ok) res = r;
