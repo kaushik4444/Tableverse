@@ -126,11 +126,25 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     await page.evaluate(() => window.__push({ t: 'error', message: 'Slow down a little' })); // the server refused it
     await page.waitForSelector('[data-act="playerBlock"]', { timeout: 4000 });
     assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'a refused block is not shown as a block');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.act), 'playerBlock', 'keyboard focus stays on the block control after the correction');
     blockedByMe = true; // now the server accepts it
     await page.click('[data-act="playerBlock"]');
     await page.evaluate(() => window.__push({ t: 'blocks', blocks: [{ id: 'x', name: 'Bo' }] })); // and sends the new list
     await page.waitForTimeout(400);
     assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 1, 'a confirmed block stays shown');
+    await ctx.close(); await srv.server.close();
+  });
+
+  await test('a refused block goes back to the last confirmed state even when the profile cannot be fetched again', async () => {
+    let down = false; // the profile endpoint fails after the first load
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => (down ? { __status: 503, body: { ok: false, error: 'down' } } : { ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByMe: false } }) });
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    down = true;
+    await page.click('[data-act="playerBlock"]');
+    await page.waitForSelector('[data-act="playerUnblock"]');
+    await page.evaluate(() => window.__push({ t: 'error', message: 'You can block up to 100 accounts.' }));
+    await page.waitForSelector('[data-act="playerBlock"]', { timeout: 4000 });
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'the refused block is not left on screen');
     await ctx.close(); await srv.server.close();
   });
 

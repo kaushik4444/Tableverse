@@ -1110,7 +1110,7 @@
       case 'error':
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
-        if (S.page === 'player') resyncPlayerBlock(); // a refused block or unblock must not stay on the page
+        if (S.page === 'player') resyncPlayerBlock(true); // a refused block or unblock must not stay on the page
         break;
     }
   }
@@ -1619,26 +1619,36 @@
   async function loadPlayer(username) {
     S.player = { username, loading: true, error: '', data: null };
     render();
-    try { S.player.data = (await getJson(`/api/players/${encodeURIComponent(username)}`)).profile; }
+    try { S.player.data = (await getJson(`/api/players/${encodeURIComponent(username)}`)).profile; S.player.confirmedBlockedByMe = S.player.data.blockedByMe; }
     catch (e) { S.player.error = e.status === 404 ? 'There is no player with that username.' : (e.message || 'Could not load this profile.'); }
     S.player.loading = false;
     render();
   }
   // The profile page shows a block or unblock at once, before the server has answered. When the server answers (the new list,
   // or an error such as a cooldown or the block limit), the page is checked against the server again, so it never keeps
-  // showing a block that was refused or hiding one that went through. It redraws only if something changed (keeps focus).
+  // showing a block that was refused or hiding one that went through. It redraws only if something changed.
+  // `failed` is true when the server refused the request. If the check itself cannot be made after a refusal, the page goes back to
+  // the last state the server confirmed (confirmedBlockedByMe) instead of leaving a refused block on screen.
   let playerResync = 0;
-  async function resyncPlayerBlock() {
+  async function resyncPlayerBlock(failed = false) {
     const P = S.player;
     if (S.page !== 'player' || !P || !P.data) return;
     const stamp = ++playerResync;
+    let confirmed;
     try {
-      const d = (await getJson(`/api/players/${encodeURIComponent(P.data.username)}`)).profile;
-      if (stamp !== playerResync || S.player !== P || S.page !== 'player') return; // a newer check, or another page, took over
-      if (P.data.blockedByMe === d.blockedByMe) return;
-      P.data.blockedByMe = d.blockedByMe;
-      render();
-    } catch { /* keep what the page shows */ }
+      confirmed = (await getJson(`/api/players/${encodeURIComponent(P.data.username)}`)).profile.blockedByMe;
+      P.confirmedBlockedByMe = confirmed;
+    } catch {
+      if (!failed) return; // after a success, keep what the page shows
+      confirmed = P.confirmedBlockedByMe;
+    }
+    if (stamp !== playerResync || S.player !== P || S.page !== 'player') return; // a newer check, or another page, took over
+    if (confirmed === undefined || P.data.blockedByMe === confirmed) return;
+    // The redraw replaces the block button, so keep the keyboard on the control if it was there.
+    const hadFocus = /^player(Block|Unblock)$/.test((document.activeElement && document.activeElement.dataset.act) || '');
+    P.data.blockedByMe = confirmed;
+    render();
+    if (hadFocus) { const el = document.querySelector('.pp-actions [data-act="playerBlock"], .pp-actions [data-act="playerUnblock"]'); if (el) el.focus(); }
   }
 
   const joinedText = (iso) => (iso ? `Joined ${fmtDate(iso)}` : '');
