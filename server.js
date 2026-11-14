@@ -882,9 +882,12 @@ function start(opts = {}) {
     } else {
       const ms = waiting.map((id) => room.members.find((x) => x.id === id)).filter(Boolean);
       const bots = ms.filter((m) => m.bot);
-      let who = bots[0] || ms.find((m) => !m.bot && !isConnected(m));
+      // When any one of the waiting players can answer for all of them (29's double), a bot does not answer while a connected
+      // human among them can still decide; the table's time limit, if there is one, covers a human who does not.
+      const humanCanAnswer = typeof g.anyoneAnswers === 'function' && g.anyoneAnswers() && ms.some((m) => !m.bot && isConnected(m));
+      let who = humanCanAnswer ? undefined : (bots[0] || ms.find((m) => !m.bot && !isConnected(m)));
       let botMs = null;
-      if (bots.length && typeof g.botDelayMs === 'function') {
+      if (!humanCanAnswer && bots.length && typeof g.botDelayMs === 'function') {
         // a real-time game (The Mind) times its bots itself: the bot that wants to play soonest goes next
         const t = bots.map((m) => ({ m, d: g.botDelayMs(m.id) })).sort((x, y) => x.d - y.d)[0];
         who = t.m;

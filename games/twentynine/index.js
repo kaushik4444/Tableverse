@@ -81,6 +81,9 @@ module.exports = {
       scrub: (names, to) => scrubDeep([g, players], names, to),
       act: (playerId, action) => engine.applyAction(g, playerId, action),
       awaiting: () => engine.awaiting(g),
+      // The double and redouble can be answered by either player on the answering side, so the server must not let a bot answer
+      // for the side while a connected human on it can still decide.
+      anyoneAnswers: () => g.phase === 'challenge',
       botAction: (playerId) => engine.botAction(g, playerId),
       forcedPlay: () => engine.forcedPlay(g),
       stamp: () => g.lastTrick, // changes whenever a trick is completed
