@@ -1,6 +1,64 @@
-# Tableverse progress notes (latest work: branch `feature/stage-8-ux-refactor`)
+# Tableverse progress
 
-Never merge this branch into `main` from an agent session. Work in small stages: test, commit, push after each.
+**Reconciled 2026-11-14.** The top section is the current status. Everything under "Historical stage log" is a record of work done on
+branches that have since been merged (or superseded). It is kept for context, not as the current state: branch names, "not merged" notes
+and "NOT run here" notes in it describe the sandbox they were written in, not today's repository. For current facts use this section,
+`docs/WAVE_1_LAUNCH_READINESS.md` (launch gate), `docs/RELEASES.md` (release process) and `CHANGELOG.md`.
+
+## Current status (2026-11-14)
+
+### Branches and release baseline
+
+| Item | Value | Evidence |
+|---|---|---|
+| `main` (production branch) | `70ccd351711ec8b28f7768058bb814b1c653ecec`, release PR #165 merge commit (merged 2026-11-14 10:21 UTC) | GitHub API; all required checks green on the PR head |
+| `development` (integration branch) | `9a166ffdc3df6e621a354b02d5732c1fc63a5167` when this reconciliation started | GitHub API |
+| Divergence | GitHub reports development 23 ahead, 7 behind. The 23 are the commits of PRs #166-#170 and their merges. The 7 are release and history-only merge commits (the release merge of #165 and old squash commits). No file content exists only on `main`: a merge of `main` into `development` yields the same tree as `development` | `git merge-tree` comparison, 2026-11-14 |
+| Release method | Daily workflow `daily-release.yml` plus `scripts/release/promote.js`, merge commit, every gate on the exact head SHA | `docs/RELEASES.md` |
+| Open PRs at start | none | GitHub API |
+| Render deployment of `70ccd35` | **Not verified.** Render, the live site and the GitHub environments/variables endpoints cannot be reached from the agent environment. There is no deployment record in the repository. The owner confirms in the Render dashboard | |
+
+Merged since the baseline of the previous reconciliation (`0a55a63`, PR #139): all of PRs #140-#170. Released to `main` by #165: everything up to
+#164. Merged into `development` only (not yet released): #166 (block/unblock reliability, error wording), #167 (29 and Wizard options default on),
+#168 (Ludo six-player blink), #169 (same ⋯ menu in every game), #170 (29: whole answering side may double/redouble; trump indicator on phones;
+deadline fixes). None of these adds a migration. The newest migration is `023_player_reports.sql` and it is already on `main`.
+
+### Roadmap status
+
+Classification: DONE = implemented and covered by tests that run in CI. DONE IN DEVELOPMENT = same, but on `development` and not released.
+Nothing here is "production verified" unless it says so; production verification is owner-recorded (see `docs/WAVE_1_LAUNCH_READINESS.md`).
+
+| Area | Status | Notes and evidence |
+|---|---|---|
+| Games: Wizard, 29, Poker, The Mind, Ludo (2-6), Snakes and Ladders (2-6), Property Rivals, Go Fish, Tic-Tac-Toe / Four in a Row | DONE | Engine tests in `npm test`; browser checks in `npm run test:ui`. Live smoke test by the owner: PENDING OWNER ACTION (S-6) |
+| 29 double/redouble by the whole answering side, 29 and Wizard options on by default | DONE IN DEVELOPMENT | #167, #170 (`tests/twentynine.test.js`, `tests/seat-order.test.js`) |
+| Accounts, sessions, 18+ confirmation, password policy, keep-me-signed-in | DONE | Code and CI (PostgreSQL suites run in CI only). Live sign-up/login smoke tests: PENDING OWNER ACTION (S-2 to S-7) |
+| Friends, invitations, public-by-default tables, private tables, host tools | DONE | In `main` since #165. Live two-account check: PENDING OWNER ACTION (S-6) |
+| Blocking and reporting from card and profile | DONE (blocking reliability fixes: DONE IN DEVELOPMENT, #162 released, #166 not) | `tests/ui/player-report-ui.js`, `tests/moderation.pg.test.js` |
+| Admin console, analytics, announcements, owner e-mail broadcasts | DONE | `docs/ADMIN.md`. Live owner-console check: PENDING OWNER ACTION (S-9, S-10) |
+| Daily release automation | DONE (workflow on `main`); first scheduled success on production: not yet evidenced | Release PR #165 merged after the late-start fix (#164); whether the scheduled run itself released is not evidenced here; see `docs/RELEASES.md` |
+| Responsive UI audit | IN PROGRESS | `docs/UI_AUDIT.md`: 0 errors, 172 warnings, all explained; open: Property Rivals Roll dice below the fold at 1280x800, unverified dialogs, real-device check |
+| Local development guide | DONE for macOS/Linux checks; Windows PowerShell steps NOT VERIFIED | `docs/LOCAL_DEVELOPMENT.md` lists what was and was not verified |
+| Voice chat | DEFERRED (code present; `VOICE_ENABLED` off; Metered 401 to fix and cross-network test needed) | D-3 in `docs/STAGE_20_6_BETA_READINESS.md` |
+| Privacy Notice, Beta Terms, Impressum | PENDING OWNER ACTION (drafts only; Impressum merged in #101 behind a publication gate, page not published: needs legal approval and Render settings) | Legal wording is not engineering work |
+| Render deploy confirmation, `/healthz`, `/readyz`, logs for `70ccd35` | PENDING OWNER ACTION (not verifiable from the agent environment) | |
+| Neon backup / point-in-time window, restore rehearsal | PENDING OWNER ACTION | M-8, M-10 |
+| Cleanup job safeguards (reviewer, read-only role, `CLEANUP_EXECUTE`) | PENDING OWNER ACTION (settings not visible from the repository) | M-5 |
+| Real-device testing (iOS Safari, Android Chrome) | NOT DONE | Chromium emulation only |
+| Shared room state / more than one instance | NOT IMPLEMENTED (deliberate: single-instance limit) | `docs/TECHNICAL_ARCHITECTURE.md` section F |
+| Photo avatars, extra games, new infrastructure | NOT IMPLEMENTED (out of scope for the friends beta) | |
+
+### Beta verdict
+
+Wave 1 stays **NO-GO** (see `docs/WAVE_1_LAUNCH_READINESS.md`). Blockers are owner actions (dashboard checks, policy approval, support address,
+live smoke tests) and the unconfirmed Render deployment. A green CI run is not a launch approval.
+
+### Testing note
+
+Several suites (every `*.pg.test.js`, `ws`-dependent suites) need PostgreSQL or packages that agent sandboxes often cannot install. A
+skipped suite is not a pass. CI (five required checks) is the record of those suites.
+
+## Historical stage log (kept for context; not the current state)
 
 ## How to run the tests
 - No database needed: `node tests/<name>.test.js` for engine, twentynine, poker, themind, results, scrub, stats, matchqueue, isolation, email, cleanup, db, production, smoke.
