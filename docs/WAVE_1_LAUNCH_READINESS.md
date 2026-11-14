@@ -1,4 +1,4 @@
-# Wave 1 launch readiness (updated 2026-11-11)
+# Wave 1 launch readiness (updated 2026-11-14)
 
 **Verdict: NO-GO.** Wave 1 is a small, invite-only beta for adults. This is not a public launch. Do not declare GO until every applicable blocker in section 7 is resolved. The owner may accept only the specific gaps the Stage 20.6 gate allows to be accepted (listed in section 8); live smoke tests and manual checks cannot be waived by general acceptance.
 
@@ -8,16 +8,15 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 
 | Item | Evidence |
 |---|---|
-| Latest `main` (historical snapshot, 2026-11-11) | `297acc4ee2b34c28fe15dd2a13450bb4ac7a1dce` (PR #106 squash merge: Chromium install retry). Historical only; do not use it as the launch baseline |
-| CI on `297acc4` | Not yet checked on the main push. The same `ci.yml` content passed on PR #106 (head `f9c1e87`, browser job included). Previous main `ead20c14`: all five check runs completed successfully: Build and test (Node 20), Build and test (Node 22), Browser layout and interaction checks, Build production Docker image, Production dependency audit |
-| Current `main` launch baseline (checked 2026-11-13) | `0a55a63` (PR #139 reconciliation), the current `main` revision. Render must be running this revision or a later `main` release for this baseline to be confirmed |
-| Latest `development` (checked 2026-11-13) | `1167576`, which includes the technical architecture handbook (#141), local development onboarding (#142), public-by-default tables (#143), the 29 trump visibility fix (#144) and the UI audit record (#145). These changes are not part of the launch baseline until promoted through the release gates in `docs/RELEASES.md` and deployment on Render is confirmed |
-| UI audit (2026-11-13) | `docs/UI_AUDIT.md` (PR #145) records the layout checks run in Chromium emulation at phone, tablet and desktop sizes. Not verified on real iOS or Android devices |
-| Recently merged | #106 CI Chromium install retry (`297acc4`); #100 Ludo 5–6 players, Snakes and Ladders 2–6, Property Rivals goal; #102 Ludo improvements and settings toolbar; #103 Ludo visual refinements and 320px mobile layout |
+| Earlier `main` snapshot (historical, 2026-11-11) | `297acc4ee2b34c28fe15dd2a13450bb4ac7a1dce` (PR #106 squash merge: Chromium install retry). Historical only; do not use it as the launch baseline |
+| Current `main` launch baseline (checked 2026-11-14) | `70ccd351711ec8b28f7768058bb814b1c653ecec`, merge commit of release PR #165 (merged 2026-11-14 10:21 UTC; all five required checks green on its head). The earlier baseline `0a55a63` (PR #139) is historical. Render must be running this revision or a later `main` release for the baseline to be confirmed |
+| Latest `development` (checked 2026-11-14) | `9a166ff`, 23 commits ahead of `main`: PRs #166 (block/unblock reliability), #167 (29 and Wizard options on by default), #168 (Ludo six-player blink), #169 (same ⋯ menu in every game), #170 (29 whole-side double/redouble, trump on phones). No migrations. These changes are not part of the launch baseline until promoted through the release gates in `docs/RELEASES.md` and deployed on Render |
+| UI audit (2026-11-14) | `docs/UI_AUDIT.md` records the layout checks run in Chromium emulation at phone, tablet and desktop sizes (0 errors, warnings explained). Not verified on real iOS or Android devices |
+| Recently released (PR #165, `70ccd35`) | Public-by-default tables, 29 trump on phones, keep-me-signed-in, owner e-mail broadcasts, Property Rivals city cards, game settings chip, block and report from card and profile, seat shuffle, ⋯ menu, daily release automation. Earlier: #106 CI Chromium retry; #100 Ludo 5-6 players, Snakes and Ladders 2-6; #102, #103 Ludo refinements |
 | PR #101 (Impressum) | Open, **Draft**, head `8ed927a`, base `14d46a0`. Not on `main`, not published. Needs updating against the newer `main` before any merge. Not touched by this review |
 | Production | https://playtableverse.com; Render service https://game-fmy4.onrender.com |
-| Render deployed commit | **Could not be verified from this review.** No dashboard access in this session. Owner to confirm that the deployed commit is `0a55a63` or a later `main` release, or record the one that is live. A `development` commit does not qualify until it passes the release gates and is deployed |
-| Previous baseline | `14d46a0` and `297acc4` are historical; neither is the current launch baseline |
+| Render deployed commit | **Not verified.** The agent environment cannot reach Render, the live site or the repository environment settings. Owner to confirm in the Render dashboard (Events) that the deployed commit is `70ccd35` or a later `main` release, then open `/healthz` and `/readyz`. A `development` commit does not qualify until it passes the release gates and is deployed |
+| Previous baselines | `14d46a0`, `297acc4`, `0a55a63` are historical; none is the current launch baseline |
 
 ## 2. Status key
 
@@ -66,11 +65,11 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 
 | Check | Status | Evidence / next step |
 |---|---|---|
-| Public and private table access, joining, sitting, reconnecting, starting | Pending owner action | S-6 with two accounts. The public-by-default change is on `development` (PR #143, `tests/public-default-tables.test.js`); it is not part of the launch baseline until it passes the release gates and is deployed |
+| Public and private table access, joining, sitting, reconnecting, starting | Pending owner action | S-6 with two accounts. Public-by-default tables (PR #143, `tests/public-default-tables.test.js`) are in `main` through release #165; not yet seen live |
 | Completed match results in both player histories | Pending owner action | S-6 |
 | Match-result Option A limitations communicated before play | Pending owner action | Wording is in `docs/MATCH_RESULT_DURABILITY.md`; testers must see it before they play |
 | Current game catalogue smoke test (Ludo, Snakes and Ladders, Property Rivals) | Verified in code/CI only | Ludo, Snakes and Property Rivals tests pass on `main`; a live smoke test is still pending |
-| Mobile layouts at 320px, 360px and 390px | Verified in development only | Browser layout and mobile-fit checks in CI. The 29 trump indicator regression test (PR #144) and UI audit record (PR #145) are on `development`, not the launch baseline. A live check and a real-device check are still pending |
+| Mobile layouts at 320px, 360px and 390px | Verified in code/CI only | Browser layout and mobile-fit checks in CI, including the 29 trump indicator regression test (#144, in `main`). Later 29 phone fixes (#170) are in `development` only. A live check and a real-device check are still pending |
 
 ### D. Safety and support
 
@@ -161,7 +160,7 @@ Test accounts must not be the testers' accounts. Record times and account ids, n
 ## 7. Blockers, grouped
 
 **Owner action**
-1. Confirm the deployed Render commit is `0a55a63` or a later `main` release (or record the live one). Development changes remain outside the launch baseline until promoted through the release gates and deployed.
+1. Confirm the deployed Render commit is `70ccd35` or a later `main` release (or record the live one). Development changes remain outside the launch baseline until promoted through the release gates and deployed.
 2. Provide the support address and response target (O-7), and approve the policy text (O-4, O-6, O-10).
 3. Decide report retention (O-8) and the daily review checkpoint (O-9).
 4. Decide the existing-account 18+ question (STAGE_20_6 C-A) and accept or approve the cleanup database-name gap (STAGE_20_6 C-E).
