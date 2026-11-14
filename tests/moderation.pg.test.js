@@ -315,6 +315,26 @@ function socket(port, cookie) {
       await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: crypto.randomUUID(), reason: 'spam' }), (e) => e.status === 404);
     });
 
+    await test('guest accounts cannot be reported from a card, and chat and player reports share one daily allowance', async () => {
+      const [guest] = await q("INSERT INTO players (display_name, is_anonymous) VALUES ('Guest', TRUE) RETURNING id");
+      await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: guest.id, reason: 'spam' }), (e) => e.status === 404, 'a guest id is refused');
+      // Beta has one player report today; fill the rest of the allowance with chat reports, then both kinds must be refused.
+      const used = (await q(
+        `SELECT (SELECT COUNT(*) FROM chat_reports WHERE reporter_id = $1) + (SELECT COUNT(*) FROM player_reports WHERE reporter_id = $1) AS n`, [B.id]
+      ))[0].n;
+      for (let i = Number(used); i < 20; i++) {
+        await q(
+          'INSERT INTO chat_reports (reporter_id, reported_id, reported_display_name, room_code, message_id, message_text, reason) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [B.id, A.id, 'Alpha', 'ROOM2', crypto.randomUUID(), 'filler ' + i, 'spam']
+        );
+      }
+      await assert.rejects(
+        dbModeration.createChatReport({ reporterId: B.id, reportedId: A.id, roomCode: 'ROOM2', messageId: crypto.randomUUID(), messageText: 'x', reason: 'spam', details: '' }),
+        (e) => e.status === 429, 'a chat report is refused once player reports used the allowance'
+      );
+      await assert.rejects(dbModeration.createPlayerReport({ reporterId: B.id, reportedId: C.id, reason: 'spam' }), (e) => e.status === 429, 'and so is a player report');
+    });
+
     await test('deleting an account retains reports about it with a display-name snapshot, but removes reports it made', async () => {
       await dbAccount.deleteAccount(A.id, PW);
       const retained = await q('SELECT reported_id, reported_display_name, message_text FROM chat_reports WHERE reporter_id = $1 ORDER BY created_at', [C.id]);

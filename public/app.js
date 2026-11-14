@@ -1871,13 +1871,24 @@
     // Blocking is account-level and works the same from a table as from chat: the blocked person is hidden from table
     // chat and table voice in both directions. The block itself is sent to the server by the player's id.
     // Reporting a player is a reason menu on the card; the server checks the account and keeps one report per reporter and player.
-    cardReport: () => { if (S.card) { S.card.reporting = !S.card.reporting; drawCard(); } },
+    // Redrawing the card replaces the focused button, so focus moves on purpose: to the first reason when the menu opens,
+    // and back to Report when it closes (Cancel) or a report is sent.
+    cardReport: () => {
+      if (!S.card) return;
+      S.card.reporting = !S.card.reporting;
+      drawCard();
+      const target = S.card.reporting ? '#modal-overlay .report-menu .mod-btn' : '#modal-overlay [data-modal-act="cardReport"]';
+      const el = document.querySelector(target);
+      if (el) el.focus();
+    },
     cardReportSend: (el) => {
       const C = S.card;
       if (!C || !C.last || !C.last.id || !el.dataset.reason) return;
       send({ t: 'reportPlayer', id: C.last.id, reason: el.dataset.reason });
       C.reporting = false;
       drawCard(); // the server's notice confirms the report
+      const again = document.querySelector('#modal-overlay [data-modal-act="cardReport"]');
+      if (again) again.focus();
     },
     cardBlock: () => {
       const p = S.card && S.card.last;

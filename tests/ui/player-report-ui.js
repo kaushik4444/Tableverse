@@ -38,6 +38,7 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     await openCard(page, 'b');
     await page.click('[data-modal-act="cardReport"]');
     await page.waitForSelector('.report-menu');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.reason), 'harassment', 'opening the menu focuses its first reason');
     await page.click('[data-modal-act="cardReportSend"][data-reason="spam"]');
     await until(async () => (await page.evaluate(() => window.__sent.filter((m) => m.t === 'reportPlayer'))).length === 1, 'report sent');
     const [sent] = await page.evaluate(() => window.__sent.filter((m) => m.t === 'reportPlayer'));
@@ -53,6 +54,7 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     await page.waitForSelector('.report-menu');
     await page.click('.report-menu [data-modal-act="cardReport"]'); // the menu's Cancel
     assert.equal(await page.locator('.report-menu').count(), 0, 'Cancel closes the menu');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.modalAct), 'cardReport', 'Cancel returns focus to Report');
     assert.equal(await page.evaluate(() => window.__sent.filter((m) => m.t === 'reportPlayer').length), 0, 'nothing was sent');
     await ctx.close();
   });
