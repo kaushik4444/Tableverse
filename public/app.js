@@ -1694,7 +1694,8 @@
 
   /** Block / unblock and report for another registered player's page. Signed-in viewers only; the server resolves the username. */
   function playerActionsHTML(P, d) {
-    const blockBtn = d.blockedByViewer
+    // Unblock only for a block this viewer made; a block the other player made is theirs to lift.
+    const blockBtn = d.blockedByMe
       ? '<button type="button" class="btn ghost small" data-act="playerUnblock">Unblock</button>'
       : '<button type="button" class="btn ghost small" data-act="playerBlock">🚫 Block</button>';
     const reportPart = P.reporting
@@ -1710,7 +1711,7 @@
     else if (P.error) inner = errorBlock(P.error);
     else {
       const d = P.data;
-      inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${d.blockedByViewer ? '<p class="pp-blocked"><b>Blocked</b></p>' : friendLine(d.username)}</div></header>
+      inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${d.blockedByMe ? '<p class="pp-blocked"><b>Blocked</b></p>' : friendLine(d.username)}</div></header>
         <div class="stat-grid"><div class="stat-tile"><span class="stat-v">${d.played}</span><span class="stat-l">Games played</span></div><div class="stat-tile good"><span class="stat-v">${d.wins}</span><span class="stat-l">Wins</span></div><div class="stat-tile"><span class="stat-v">${d.winRate === null ? '–' : d.winRate + '%'}</span><span class="stat-l">Win rate</span></div></div>
         ${!S.guest && S.username && S.username.toLowerCase() !== String(d.username).toLowerCase() ? playerActionsHTML(P, d) : ''}`;
     }
@@ -1758,11 +1759,11 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-property-cards-settings';
+  const WHATS_NEW_VERSION = '2026-11-block-report-menu';
   const WHATS_NEW = [
-    ['🏙️', 'Property Rivals: city cards', 'Tap a city in a player’s holdings to see its mortgage value, the rent right now and the full rent table, and what houses and hotels cost. Each rival shows cash and net worth; the crown follows net worth.'],
-    ['⚙️', 'Game settings at a glance', 'Open ⋯ at the top right and choose Game settings for the full list, with each choice explained.'],
-    ['🎙️', 'Talk at the table — voice chat', 'Tap the microphone to join voice and talk with everyone at your table, in the lobby or during a game. Tap it again to mute yourself. Use the speaker to listen without speaking or silence table audio. A mic marks people in voice and a green ring shows who is speaking. Voice supports up to 8 people. Allow microphone access when your browser asks; a headset helps prevent echo.', 'voice'],
+    ['🚩', 'Block and report players', 'Block or report a player from their table card or from their profile page. Reports go to the moderators, and each player can be reported once. Guests can’t report.'],
+    ['⋯', 'How to play and the game log are in ⋯', 'The ⋯ button at the top right holds How to play, the game log and game settings, so the bottom bar stays clear on phones.'],
+    ['🔀', 'Shuffle seats, and the 29 rules explained', 'The host can turn on Shuffle seats for Wizard and 29. Game settings now explain each 29 option: the scoring for taking all 29 points, the failed-bid penalty, the marriage that changes the bid, and Double and Redouble.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
@@ -2483,8 +2484,8 @@
     reloadProfile: () => loadProfile(),
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
-    playerBlock: () => { const P = S.player; if (!P || !P.data) return; send({ t: 'block', username: P.data.username }); P.data.blockedByViewer = true; P.reporting = false; render(); },
-    playerUnblock: () => { const P = S.player; if (!P || !P.data) return; send({ t: 'unblock', username: P.data.username }); P.data.blockedByViewer = false; render(); },
+    playerBlock: () => { const P = S.player; if (!P || !P.data) return; send({ t: 'block', username: P.data.username }); P.data.blockedByMe = true; P.data.blockedByViewer = true; P.reporting = false; render(); },
+    playerUnblock: () => { const P = S.player; if (!P || !P.data) return; send({ t: 'unblock', username: P.data.username }); P.data.blockedByMe = false; P.data.blockedByViewer = !!P.data.blockedByThem; render(); },
     playerReport: () => {
       const P = S.player; if (!P || !P.data) return;
       P.reporting = !P.reporting;

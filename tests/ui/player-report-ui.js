@@ -99,11 +99,19 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
   });
 
   await test('a blocked player’s page offers Unblock, which sends the same username', async () => {
-    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: true } }) });
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: true, blockedByMe: true, blockedByThem: false } }) });
     const { page, ctx } = await pageFor(srv.url, '/#u/bob');
     await page.click('[data-act="playerUnblock"]');
     await page.waitForSelector('[data-act="playerBlock"]');
     assert.deepEqual(await page.evaluate(() => window.__sent.filter((m) => m.t === 'unblock')), [{ t: 'unblock', username: 'bob' }]);
+    await ctx.close(); await srv.server.close();
+  });
+
+  await test('a player who was blocked by the other side gets Block, not Unblock, because the block is theirs to lift', async () => {
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: true, blockedByMe: false, blockedByThem: true } }) });
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    assert.equal(await page.locator('[data-act="playerUnblock"]').count(), 0, 'no Unblock for a block made by the other player');
+    assert.equal(await page.locator('[data-act="playerBlock"]').count(), 1, 'the viewer can still block them');
     await ctx.close(); await srv.server.close();
   });
 
