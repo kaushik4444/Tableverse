@@ -8,6 +8,7 @@ const db = require('../db/pool');
 const dbPlayers = require('../db/players');
 const dbAuth = require('../db/auth');
 const dbModeration = require('../db/moderation');
+const dbAccount = require('../db/account');
 const { start } = require('../server');
 const { Browser, sessionSocket } = require('./helpers/auth');
 
@@ -139,6 +140,23 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
         dbModeration.addBlock = realAddBlock;
         release();
       }
+    });
+
+    // The profile page waits for a block or unblock answer to release its "Saving…" lock. A failure before the write (the name
+    // lookup) must give the operation-specific message the page recognises, not the generic one it ignores.
+    await test('a block or unblock that fails before its write is answered with its own failure message', async () => {
+      const { rawToken } = await newPlayer('Looker');
+      const s = socketFor(srv.port, rawToken); open.push(s);
+      await until(() => s.welcomed(), 'welcome');
+      const real = dbAccount.idForUsername;
+      dbAccount.idForUsername = async () => { throw new Error('lookup down'); };
+      try {
+        s.send({ t: 'block', username: 'someone_else' });
+        await until(() => s.msgs.some((m) => m.t === 'error' && /^Could not save that block\. Your profile has been checked again\.$/.test(m.message || m.text || '')), 'the block failure message');
+        s.send({ t: 'unblock', username: 'someone_else' });
+        await until(() => s.msgs.some((m) => m.t === 'error' && /^Could not save that unblock\./.test(m.message || m.text || '')), 'the unblock failure message');
+        assert.equal(s.msgs.some((m) => m.t === 'error' && /Something went wrong/.test(m.message || m.text || '')), false, 'no generic error was sent for these two');
+      } finally { dbAccount.idForUsername = real; }
     });
 
     await test('a revoked player leaves voice at once and the table is told', async () => {

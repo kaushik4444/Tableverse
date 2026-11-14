@@ -786,12 +786,21 @@ function start(opts = {}) {
    * Called after every game action: starts a fresh deadline for whoever the game now waits for.
    * During simultaneous moves (everybody bids at once) the deadline is shared and not restarted by each bid.
    */
+  /** The public state the deadline logic reads (phase, multiplier, whose turn). The adapter exposes it through view(). */
+  function publicState(g) {
+    try { const v = g.view(null) || {}; return { phase: v.phase, multiplier: v.multiplier || 1, turn: v.turn }; } catch (_) { return {}; }
+  }
   function touchTimer(room) {
     const g = room.game;
     const limit = limitMs(room);
     const now = awaitingOf(g);
     const prev = room.waiting || [];
-    const sameBatch = prev.length > 1 && now.length > 0 && now.every((id) => prev.includes(id));
+    // A batch is one set of people answering the same question. A change of phase or multiplier (a double, a redouble, or the
+    // challenge ending) starts a new one, so the answering side is never left with a deadline that was almost up.
+    const ps = publicState(g);
+    const key = ps.phase + ':' + ps.multiplier;
+    const sameBatch = prev.length > 1 && room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id));
+    room.waitingKey = key;
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
     if (!limit || !humanWaiting) room.deadline = null;
     else if (!sameBatch || !room.deadline) {
@@ -891,7 +900,11 @@ function start(opts = {}) {
         delay = Math.max(0, dl - Date.now());
         run = () => {
           let res = { ok: true };
+          const before = publicState(g);
           for (const id of awaitingOf(g)) {
+            // One answer ends a batch (a double, redouble or accept): the rest of the list no longer waits, so no bot acts for it.
+            const now = publicState(g);
+            if (now.phase !== before.phase || now.turn !== before.turn) break;
             const m = room.members.find((x) => x.id === id);
             const r = g.act(id, g.botAction(id));
             if (!r.ok) res = r;
@@ -1116,6 +1129,8 @@ function start(opts = {}) {
     p.lastBlock = now;
     return false;
   }
+  const BLOCK_SAVE_FAILED = 'Could not save that block. Your profile has been checked again.';
+  const UNBLOCK_SAVE_FAILED = 'Could not save that unblock. Your profile has been checked again.';
   /** Hides a block target at once (pending filter) and returns the table to refresh. Must run before the database write. */
   function reserveBlock(p, target) {
     if (!p.blocked) p.blocked = new Set();
@@ -1128,6 +1143,17 @@ function start(opts = {}) {
   }
   /** The database write for a block that reserveBlock already hid. Runs inside the account's moderation turn. */
   async function writeBlock(p, target, room) {
+    try {
+      await writeBlockRows(p, target, room);
+    } catch (e) {
+      // Any other failure (database, or the refreshed list) gets an operation-specific answer, so the page can release its
+      // lock and reconcile the profile. Details are not logged or sent to the player.
+      console.error('Block save failed');
+      sendError(p, BLOCK_SAVE_FAILED);
+      try { await sendBlocks(p); } catch (_) { /* the page reloads the list from the server on its next visit */ }
+    }
+  }
+  async function writeBlockRows(p, target, room) {
     try {
       await dbModeration.addBlock(p.id, target);
       p.blocked.add(target); // committed blocks live here; pending ones are included by effectiveBlocked()
@@ -1155,17 +1181,26 @@ function start(opts = {}) {
   async function writeUnblock(p, targetId) {
     // Check inside the serialized turn: a preceding block/unblock may have changed the cached state while this
     // request was waiting. No-op unblocks must not issue a DELETE or resend the entire chat history.
-    if (!p.blocked || !p.blocked.has(targetId)) return;
+    // Still answered: the page waits for the server's list before it lets another block or unblock through.
+    if (!p.blocked || !p.blocked.has(targetId)) { await sendBlocks(p); return; }
     const now = Date.now();
     if (now - (p.lastUnblock || 0) < moderation.UNBLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
     p.lastUnblock = now;
-    // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
-    // failed unblock could not be taken back.
-    await dbModeration.removeBlock(p.id, targetId);
-    p.blocked.delete(targetId);
-    broadcastTables();
-    resyncChat(p);
-    await sendBlocks(p);
+    try {
+      // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
+      // failed unblock could not be taken back.
+      await dbModeration.removeBlock(p.id, targetId);
+      p.blocked.delete(targetId);
+      broadcastTables();
+      resyncChat(p);
+      await sendBlocks(p);
+    } catch (e) {
+      // Still hidden on the server, so the list sent here is the truth; the page reconciles from it.
+      console.error('Unblock save failed');
+      sendError(p, UNBLOCK_SAVE_FAILED);
+      try { await sendBlocks(p); } catch (_) { /* the page reloads the list from the server on its next visit */ }
+      return;
+    }
     const roomNow = rooms.get(p.room);
     if (roomNow) broadcastVoice(roomNow); // they may be offered voice again
     send(p.ws, { t: 'notice', text: 'Unblocked.' });
@@ -1948,7 +1983,9 @@ function start(opts = {}) {
         } catch (e) {
           trackError('ws_handler');
           wsLog.error('game.handler_failed', { connId: ws.connId, type: msg.t, room: p.room || null, err: e });
-          sendError(p, 'Something went wrong');
+          // A block or unblock that fails before its write (a name lookup, a list fetch) gets its own failure message, so the
+          // profile page releases its "Saving…" lock and checks the server again, as it does for a failed write.
+          sendError(p, msg.t === 'block' ? BLOCK_SAVE_FAILED : msg.t === 'unblock' ? UNBLOCK_SAVE_FAILED : 'Something went wrong');
         }
       };
       // one message at a time per socket: a join that waits for the database must finish before the next message

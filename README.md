@@ -46,7 +46,15 @@ Tableverse is currently open for friend testing.
 - **Blocking**: a block hides the other player's table chat and voice, and stops invitations between you. A block never removes anyone from a table, so you can still share one.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
-## What's new — unreleased (blocking and reports, the ⋯ menu, 29 rules, seat shuffle)
+## What's new — unreleased (on `development`, not yet on `main`)
+
+- **29 and Wizard options.** The 29 rule options and Wizard's Shuffle seats now start switched on in a new table. The host can still change them in the lobby.
+- **29 double and redouble.** The whole answering side may double, redouble or accept, and one answer decides for both players. A new answer deadline starts when a double or redouble changes who answers.
+- **Blocking.** Block and unblock answer one request at a time, an unblock that changes nothing is answered, and a refusal shows an error that names the action.
+- **⋯ menu.** The same labels in the same order in every game.
+- **Ludo, six players.** The outer yard of the seat to play blinks, not the inner home.
+
+## Released 2026-11-14 (release PR #165): blocking and reports, the ⋯ menu, 29 rules, seat shuffle
 
 - **Block and report on the card and the profile.** A signed-in player can block (or unblock) and report someone from their table card, or from their profile page (`#u/<name>`). A report has a reason (harassment, hate, threats, sexual content, spam or other) and is stored once per reporter and player. Reports count toward the same daily limit as chat reports. Guests can’t report; a deleted account’s reports stay on record with its last name.
 - **Friend profiles open in the app.** Tapping a friend’s profile while seated in a game asks first, because it leaves the table. A dropped connection never moves you.
@@ -56,7 +64,7 @@ Tableverse is currently open for friend testing.
 - **29 rules in Game settings.** The options are explained in the settings, and the rules text matches the engine: with the *All 29 doubles the win* option on, taking all 29 points is worth +2 game points (instead of +1); with *Double loss below half* on, a bidding team that misses its bid with 14 or fewer points loses 2 (instead of 1); a K–Q marriage changes the bid when the *Marriage changes the bid* option is on (the bid rises by 4 when the other team declares it, and drops by 4 when the bidding team declares it, never below 15). *Double and redouble* is an optional challenge that doubles, then redoubles, the hand’s game points.
 - **Fixes.** The 29 trump indicator fits on phones (checked at phone sizes in the browser tests); the 29 score label is correct after a marriage or a double; the guest top bar fits a 360 px screen; a friend’s profile opened from a game no longer appears after a dropped connection.
 
-## Earlier unreleased work (Property Rivals cards, game settings, blocking)
+## Released earlier (Property Rivals cards, game settings, blocking)
 
 - **Public tables by default.** A new table is public and appears in the open tables. While the table is still in its lobby, the host can make it private with **Make private** on the table screen; the server refuses the change once a game has started. Tables that already exist keep their current setting.
 - **City cards.** In Property Rivals, tap a city in a player's holdings to see its owner, buildings, mortgage value, unmortgage cost, house or hotel cost, the rent right now and the full rent table.
