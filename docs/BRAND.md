@@ -2,7 +2,7 @@
 
 The mark is an oval felt table seen from above with three mint seats (top, left, right) and one gold seat at the bottom. The gold seat is you. Gold means "you / your turn / action" everywhere in the UI, and a composition uses one gold element.
 
-Assets live in `public/brand/` (`svg/` sources, `png/` exports, `favicon.ico`). They are not wired into the app yet; that is a separate change.
+Assets live in `public/brand/` (`svg/` sources, `png/` exports, `favicon.ico`). The brand identity is integrated into the application: browser and install icons, social preview metadata, the top-bar mark and the loading-screen mark are wired up.
 
 ## Colours
 | Name | Value | Use |
@@ -34,4 +34,6 @@ Wordmark: Poppins Bold, supplied as outlines (no font load). UI text stays Inter
 - Ovals and circles only for brand shapes.
 
 ## Status
-Assets only. Wiring (favicon, manifest, apple-touch icon, share image and meta tags, top bar, loading screen, service-worker cache) is planned as follow-up changes.
+Application integration is implemented: browser favicon and icons, web-app manifest and install artwork, social sharing image and metadata, top-bar mark, loading-screen mark, and service-worker cache handling.
+
+Post-release verification remains: check the deployed site and preview metadata, and confirm the browser/install icons and branding on representative real devices. These checks are separate from the completed application wiring.
