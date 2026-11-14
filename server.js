@@ -57,6 +57,13 @@ const MIME = {
   '.xml': 'application/xml; charset=utf-8',
   '.ico': 'image/x-icon',
 };
+/** A player named by { id } (a UUID) or by { username } (a registered account, resolved here so no id is ever shown to a page). */
+async function resolveTarget(msg) {
+  if (!msg || msg.id !== undefined || typeof msg.username !== 'string') return msg;
+  const id = await dbAccount.idForUsername(msg.username);
+  return id ? { id } : null;
+}
+
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
@@ -1166,7 +1173,8 @@ function start(opts = {}) {
     async reportPlayer(p, msg) {
       const self = players.get(p.id);
       if (!self || !self.username) return sendError(p, 'Sign in to report a player.'); // guests have no account to report from
-      const checked = moderation.validatePlayerReport(p.id, msg);
+      const resolved = await resolveTarget(msg);
+      const checked = moderation.validatePlayerReport(p.id, resolved ? { ...msg, id: resolved.id } : msg);
       if (!checked.ok) return sendError(p, checked.error);
       const now = Date.now();
       if (now - (p.lastReport || 0) < moderation.REPORT_COOLDOWN_MS) return sendError(p, 'Slow down a little');
@@ -1205,7 +1213,8 @@ function start(opts = {}) {
 
     // Blocking applies to table access, seating, chat, reactions and voice in both directions; it never signs either account out.
     async block(p, msg) {
-      const checked = moderation.validateBlockTarget(p.id, msg && msg.id);
+      const resolved = await resolveTarget(msg);
+      const checked = moderation.validateBlockTarget(p.id, resolved && resolved.id);
       if (!checked.ok) return sendError(p, checked.error);
       const now = Date.now();
       if (now - (p.lastBlock || 0) < moderation.BLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
@@ -1250,18 +1259,20 @@ function start(opts = {}) {
     blocks(p) { return sendBlocks(p); },
 
     async unblock(p, msg) {
-      if (!moderation.isUuid(msg && msg.id)) return sendError(p, 'That player could not be found.');
+      const resolved = await resolveTarget(msg);
+      if (!moderation.isUuid(resolved && resolved.id)) return sendError(p, 'That player could not be found.');
+      const targetId = resolved.id;
       return inModerationTurn(p, async () => {
         // Check inside the serialized turn: a preceding block/unblock may have changed the cached state while this
         // request was waiting. No-op unblocks must not issue a DELETE or resend the entire chat history.
-        if (!p.blocked || !p.blocked.has(msg.id)) return;
+        if (!p.blocked || !p.blocked.has(targetId)) return;
         const now = Date.now();
         if (now - (p.lastUnblock || 0) < moderation.UNBLOCK_COOLDOWN_MS) return sendError(p, 'Slow down a little');
         p.lastUnblock = now;
         // The database first: until the unblock is saved the author stays hidden, because a message delivered after a
         // failed unblock could not be taken back.
-        await dbModeration.removeBlock(p.id, msg.id);
-        p.blocked.delete(msg.id);
+        await dbModeration.removeBlock(p.id, targetId);
+        p.blocked.delete(targetId);
         broadcastTables();
         resyncChat(p);
         await sendBlocks(p);

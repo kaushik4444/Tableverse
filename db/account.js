@@ -100,6 +100,15 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
  * What anybody may see: no id, no email, no sessions, no per-match detail. With a viewer, a profile is hidden (the same answer as
  * an unknown name) when either account has blocked the other: a block hides each side from the other everywhere.
  */
+/** The account id for a registered username, or null. Server-side only: public profiles never include the id. */
+async function idForUsername(username) {
+  need();
+  const u = String(username || '').trim().toLowerCase();
+  if (!/^[a-z0-9_]{3,24}$/.test(u)) return null;
+  const r = await db.query('SELECT id FROM players WHERE username = $1 AND is_anonymous = FALSE LIMIT 1', [u]);
+  return r.rows[0] ? r.rows[0].id : null;
+}
+
 async function getPublicProfile(username, { viewerId = null } = {}) {
   need();
   const u = String(username || '').trim().toLowerCase();
@@ -193,4 +202,4 @@ async function updatePresence(playerId) {
   await db.query('UPDATE players SET last_seen_at = NOW() WHERE id = $1', [playerId]);
 }
 
-module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };
+module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, idForUsername, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };

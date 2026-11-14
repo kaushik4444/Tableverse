@@ -2,7 +2,7 @@
 // A registered player can be reported from their table card (not only from a chat message). The card offers a reason
 // menu, sends one report for the chosen reason, and never offers it for a bot or for the viewer.
 const assert = require('node:assert/strict');
-const { serve, scriptedPage, loadPlaywright, sessionOk, tableMessages } = require('./harness');
+const { serve, scriptedPage, loadPlaywright, sessionOk, tableMessages, welcome } = require('./harness');
 
 const { chromium } = loadPlaywright();
 
@@ -12,7 +12,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(fn, label, ms = 12000) { const t0 = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(100); } }
 
 // Seat 0 is the viewer (signed in as aarav); Bo is a registered player; Robo is a bot.
-const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', username: 'bo' }, { id: 'bot1', name: 'Robo', bot: true }];
+const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', username: 'bob' }, { id: 'bot1', name: 'Robo', bot: true }];
 
 (async () => {
   const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk() });
@@ -64,6 +64,54 @@ const extras = [{ name: 'Aarav', username: 'aarav' }, { id: 'b', name: 'Bo', use
     await openCard(page, 'bot1');
     assert.equal(await page.locator('[data-modal-act="cardReport"]').count(), 0);
     await ctx.close();
+  });
+
+  // ---- another player's page: Block / Unblock and Report, by username (the page never holds an id)
+  const profileApi = { 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: false } }) };
+  const pageFor = async (srv, hash, { socket = true } = {}) => {
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: [{ id: 'wizard', name: 'Wizard', icon: '🧙', accent: '#8a5cf6', seats: { min: 3, max: 6 }, options: [], rules: [] }] })] });
+    // Open home first, then navigate in-app the way a tap does (pushState + popstate). A deep link can race the
+    // startup route, before the welcome arrives, so it is not used here.
+    await page.goto(srv + '/');
+    if (socket) { await page.waitForFunction(() => window.__sent.some((m) => m.t === 'hello')); await page.waitForTimeout(400); } // the welcome follows the hello
+    else await page.waitForTimeout(600);
+    await page.evaluate((h) => { history.pushState(null, '', h); dispatchEvent(new PopStateEvent('popstate')); }, hash);
+    await page.waitForSelector('.pp-head');
+    return { page, ctx };
+  };
+
+  await test('a signed-in viewer’s page for another player offers Block and Report, sent by username', async () => {
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), ...profileApi });
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    await page.click('[data-act="playerBlock"]');
+    await page.waitForSelector('[data-act="playerUnblock"]');
+    const blocks = await page.evaluate(() => window.__sent.filter((m) => m.t === 'block'));
+    assert.deepEqual(blocks, [{ t: 'block', username: 'bob' }]);
+    await page.click('[data-act="playerReport"]');
+    await page.waitForSelector('.report-menu');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.reason), 'harassment', 'opening the menu focuses its first reason');
+    await page.click('[data-act="playerReportSend"][data-reason="spam"]');
+    await page.waitForSelector('[data-act="playerReport"]');
+    const reports = await page.evaluate(() => window.__sent.filter((m) => m.t === 'reportPlayer'));
+    assert.deepEqual(reports, [{ t: 'reportPlayer', username: 'bob', reason: 'spam' }]);
+    assert.equal(await page.locator('.report-menu').count(), 0, 'the menu closes after sending');
+    await ctx.close(); await srv.server.close();
+  });
+
+  await test('a blocked player’s page offers Unblock, which sends the same username', async () => {
+    const srv = await serve({ 'GET /api/auth/session': () => sessionOk(), 'GET /api/players/bob': () => ({ ok: true, profile: { username: 'bob', displayName: 'Bo', avatar: '🦊', joinedAt: '2026-01-01T00:00:00.000Z', played: 3, wins: 1, winRate: 33, blockedByViewer: true } }) });
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob');
+    await page.click('[data-act="playerUnblock"]');
+    await page.waitForSelector('[data-act="playerBlock"]');
+    assert.deepEqual(await page.evaluate(() => window.__sent.filter((m) => m.t === 'unblock')), [{ t: 'unblock', username: 'bob' }]);
+    await ctx.close(); await srv.server.close();
+  });
+
+  await test('a guest does not see Block or Report on another player’s page', async () => {
+    const srv = await serve({ 'GET /api/auth/session': () => ({ ok: true, authenticated: false }), ...profileApi });
+    const { page, ctx } = await pageFor(srv.url, '/#u/bob', { socket: false });
+    assert.equal(await page.locator('[data-act="playerBlock"], [data-act="playerReport"]').count(), 0);
+    await ctx.close(); await srv.server.close();
   });
 
   await browser.close(); server.close();
