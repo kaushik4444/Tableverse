@@ -329,6 +329,8 @@ function start(opts = {}) {
     for (const room of rooms.values()) {
       const seats = [...room.members, ...room.spectators, ...(room.seated || [])]; // seated: a departed player keeps the seat in a running game
       for (const m of seats) if (m.id === playerId) oldNames.add(m.name);
+      // names their chat messages were sent under (collected before any sender name is overwritten below)
+      for (const c of room.chat || []) if (c.id === playerId && typeof c.name === 'string') oldNames.add(c.name);
     }
     oldNames.delete(DELETED_NAME);
     if (p) p.name = DELETED_NAME;

@@ -321,6 +321,7 @@
       throw e;
     }
     if (gen !== state.gen || req !== usersSeq) return; // the admin has switched tabs, or asked for something newer, since this was asked
+    if (o.page) page = o.page; // the server answers with the last page that exists when this one has gone past the end
     const owner = state.me.isOwner;
     const rows = o.users.map((u) => {
       const staff = u.role !== 'user';
