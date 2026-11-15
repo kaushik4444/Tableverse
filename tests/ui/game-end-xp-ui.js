@@ -68,8 +68,12 @@ function finishedTable(gameId, n) {
               leaveVisible: bt ? (bt.height > 0 && bt.top >= -1 && bt.bottom <= innerHeight + 1 && (() => { const sh = btn.closest('.sheet, .ludo-end'); if (!sh) return true; const q = sh.getBoundingClientRect(); return bt.top >= q.top - 1 && bt.bottom <= q.bottom + 1; })()) : false,
               sideways: document.documentElement.scrollWidth > innerWidth + 1,
               names: [...document.querySelectorAll('.xp-name')].length,
-              // Ludo's podium styles (.ludo-end li span) must not reach the XP rows: the bar stays a thin bar, not a 22px circle
-              barThin: [...document.querySelectorAll('.xp-bar')].every((b) => b.getBoundingClientRect().height <= 10 && b.getBoundingClientRect().width > 40),
+              // Two amounts side by side, labelled, and never a combined total (there is no total element or heading)
+              cards: document.querySelectorAll('.end-xp .xp-card').length,
+              kinds: [...document.querySelectorAll('.end-xp .xp-kind')].map((k) => k.textContent.trim()),
+              noTotal: !document.querySelector('.end-xp .xp-total, .end-xp .xp-bar') && !/XP this game/.test(document.querySelector('.end-xp')?.textContent || ''),
+              // Ludo's podium rule (.ludo-end b, 18px) must not shrink the amounts' own size
+              numberSizes: [...document.querySelectorAll('.end-xp .xp-num')].map((n) => getComputedStyle(n).fontSize),
               nameWide: [...document.querySelectorAll('.xp-name')].every((n) => { const b = n.getBoundingClientRect(); return b.width > 0 && b.height < 30; }), // a name is a line of text, not a 22px circle
             };
           });
@@ -80,7 +84,10 @@ function finishedTable(gameId, n) {
           assert.ok(r.leaveVisible, 'the Leave game action is on screen');
           assert.equal(r.sideways, false, 'no sideways scroll');
           assert.ok(r.names >= 1, 'the XP rows render');
-          assert.ok(r.barThin, 'the XP progress bars keep their shape (not forced into the podium circles)');
+          assert.equal(r.cards, 2, 'two amounts: Player Progress and the game');
+          assert.ok(r.kinds.some((k) => /Player Progress/.test(k)) && r.kinds.some((k) => /Experience/.test(k)), 'both amounts are labelled: ' + r.kinds.join(' | '));
+          assert.equal(r.noTotal, true, 'there is no combined total on the game-over card');
+          assert.ok(r.numberSizes.length >= 2 && r.numberSizes.every((f) => f !== '18px'), 'the amounts keep their own size, not the podium size: ' + r.numberSizes.join(','));
           assert.ok(r.nameWide, 'the XP names keep their width');
           passed++; console.log('  ok  ' + name);
         } finally { await ctx.close(); }
