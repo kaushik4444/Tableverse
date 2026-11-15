@@ -51,8 +51,9 @@ function connect(port, token) {
     const t0 = Date.now();
     a.send({ t: 'leave' });
     await until(() => b.chats.some((m) => m.sys && /left the game/.test(m.text)), 'a left');
+    a.view = null; // only a view received after the join counts
     a.send({ t: 'join', code });
-    await until(() => a.view && a.view.me === seatA, 'seat taken back inside the window');
+    await until(() => a.view && a.view.me === seatA && a.chats.some((m) => m.sys && /took the seat/.test(m.text)), 'seat taken back inside the window');
     assert.equal(a.room.status, 'playing', 'the game still runs');
 
     // 2. leave again after the window has passed since the FIRST leave: the seat is gone for this match
@@ -60,6 +61,7 @@ function connect(port, token) {
     if (wait > 0) await sleep(wait);
     a.send({ t: 'leave' });
     await sleep(60);
+    a.view = null;
     a.send({ t: 'join', code });
     await until(() => a.view && a.view.me !== seatA, 'late return is a spectator');
     assert.ok(noHands(a.view), 'a spectator never receives a hand');

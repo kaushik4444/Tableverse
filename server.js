@@ -1444,6 +1444,8 @@ function start(opts = {}) {
       // This wins over "spectate": the home screen can only offer Spectate for a running game, and a player who
       // owns a seat must never be turned into a spectator while a bot plays their cards.
       if (seat && room.status === 'playing' && seat.bot && !rejoinPolicy.canReclaimSeat(room, p.id, Date.now(), rejoinGraceMs)) {
+        // A paused game needs a seated, connected person to resume: with nobody seated, a late return could only watch it stall.
+        if (humans(room).length === 0) return sendError(p, 'Nobody is left in this game, so it cannot resume. Start a new game instead.');
         // The grace period is over (or the person already used it up): the bot keeps the seat and the penalty stands.
         send(p.ws, { t: 'notice', text: 'The time to take your seat back has passed, so you are watching this game now. The leave still counts.' });
       }
@@ -1687,6 +1689,8 @@ function start(opts = {}) {
       room.status = 'lobby';
       room.deadline = null;
       room.votes = new Set(); room.outcome = null;
+      // A bot-held seat whose player came back after the grace period is no longer their seat: free it, so they can sit down.
+      room.members = room.members.filter((m) => !(m.bot && room.spectators.some((s) => s.id === m.id)));
       // Spectators stay spectators: watching is a choice. They take an open seat themselves with `sit`.
       broadcast(room);
     },
