@@ -1,12 +1,14 @@
 # Progress and levels
 
-Status: implemented on `development` (not yet released to `main`; see the build steps below). Rules: `lib/xp.js`, `lib/gameSkill.js`, combined per player in `lib/progress.js`
+Status: implemented on `development` (not yet released to `main`; see the build steps below). Leaving and rejoining, and what counts as play time, are in `docs/LEAVING_AND_REJOINING.md`. Rules: `lib/xp.js`, `lib/gameSkill.js`, combined per player in `lib/progress.js`
 (tests: `tests/xp.test.js`, `tests/progress.test.js`). Stored by migration 025, shown on own and public profiles, and counted for penalised leaves in the
 admin overview. Not verified in production.
 
 ## Account level: progress in Tableverse
-- Measures **time only**: 1 XP for each full minute spent in a game.
-- Winning, losing, drawing or leaving makes no difference to the calculation, and there is no penalty. Time is the actual time each person spent in their seat (see "Leaving and coming back" below). Spectator time never counts.
+- Measures **time only**: 1 XP for each full minute of **active play**.
+- Active play is the time a person was seated in a running game, counted across every stretch. It starts when the game starts (or when they take their seat back), and stops when they leave, when their connection drops (a reconnect resumes it), or when the game ends. A capped six hours per game, as before.
+- Spectators earn nothing. A bot seat earns nothing.
+- Winning, losing, drawing or leaving makes no difference to the calculation, and there is no penalty.
 - It is progress, not a ranking.
 
 ## Levels
@@ -42,21 +44,12 @@ Rules that apply to every game:
 - **Leave without a penalty** (bots only, or an abandoned game): not in the game ranking at all.
 - **Bots** are not ranked.
 
-## Leaving and coming back (rejoin grace period)
-Implemented in `lib/rejoinPolicy.js`, wired into `server.js` (leave, rejoin, game start) and `db/matchRecord.js` (what is stored). Tests: `tests/rejoin-policy.test.js`.
-- **Grace period:** 2 minutes (`REJOIN_GRACE_MS`), counted from a person's **first** voluntary departure in a game. Later leave and rejoin cycles never move that deadline.
-- **Inside the period** the person can take their seat back from the bot. Their leave penalty is removed while the game runs, as before.
-- **After the period** the bot keeps the seat, the penalty stands, and the person can only watch the game. They get a notice saying so.
-- **Network drops are not departures.** A dropped connection is handled as before (the table is told, a bot may play the seat after the absence limit), and it never starts the grace period.
-- **Active time:** each seated person's time is the sum of their intervals in the seat. It stops when they leave and starts again when they take the seat back. Bots and spectators have none. A single game counts at most 6 hours.
-- **Stored result:** the record stores each person's active seconds in `match_participants.seconds_played`. No new column or migration was needed (migration 025 already has it). Rows from before this change keep the old rule.
-- **Restart:** the grace period and active time live in memory. After a restart a running table is not resumed, so nobody can reclaim a seat; leavers' losses are still written by the shutdown record, with the active time known at that moment.
-- **Abandoned games:** a second departure still abandons the game. Nobody is penalised and the players who stayed get no result, as before.
+## Leaving and coming back
+The rules for leaving a running game, the 2-minute window to take a seat back, spectating after it, and active play time are in [LEAVING_AND_REJOINING.md](LEAVING_AND_REJOINING.md). Active play time is counted by `lib/playTime.js`, and the window by `lib/leavePolicy.js`.
 
 ## History (past games)
 - Past games count once the feature ships. Their skill points come from the stored results.
-- Time for past games comes from the stored start and finish times, for people who stayed to the end. For past leavers the
-  time up to their departure was never stored, so it counts as 0. Only games recorded from this change on store active time.
+- Time for past games comes from the stored `seconds_played`. Games recorded before active play was tracked use the old rule: the start and finish times for people who stayed, and 0 for leavers.
 - Leaves recorded before migration 024 have no penalty flag. Those leavers are not penalised, and they are left out of
   the game ranking because the record cannot show whether others were still playing.
 
@@ -66,9 +59,10 @@ Done on `development` (not released to `main`, not verified in production):
 2. Account XP and game points are calculated from the stored records (`lib/progress.js`; no separate totals table).
 3. The account level, the Game XP per game and the number of penalised leaves show on own and public profiles; the admin overview counts penalised leaves.
 
+Done since (rejoin window and active play time, see `docs/LEAVING_AND_REJOINING.md`): a leaver keeps the time up to the moment they left; a dropped connection pauses play time; a person who took their seat back is counted for each stretch they played. Past games are not recalculated.
+
 Still open:
-- Time while a dropped connection is waiting to come back: the seat is still theirs, so a bot playing it while they are offline is not yet excluded from their active time (see "Leaving and coming back").
 - Named ranks are not planned; skill levels only.
 
 ## Storage (migration 025)
-`match_participants` gets two columns: `place` (SMALLINT, NULL when the game has no place of its own, so the level is ranked by score) and `seconds_played` (INTEGER, default 0). A stayer gets the match length (finished minus started), capped at 6 hours per game; leavers and bots get 0 because a leave time is not stored. The migration backfills `seconds_played` for past games (stayers only) and is safe to re-run. Both columns are additive and nullable or defaulted, so old application versions keep working, and they are restored together with the table. They are read by `getProgress` in `db/matches.js`, which feeds the profile pages.
+`match_participants` gets two columns: `place` (SMALLINT, NULL when the game has no place of its own, so the level is ranked by score) and `seconds_played` (INTEGER, default 0). From the active-play change on, `seconds_played` is the active play time written with the record (`secondsPlayed`), capped at 6 hours per game; bots get 0. Records without it fall back to the old rule (the match length for stayers, 0 for leavers and bots). The migration backfilled `seconds_played` for past games (stayers only) and is safe to re-run. No further migration was needed for the rejoin window. Both columns are additive and nullable or defaulted, so old application versions keep working, and they are restored together with the table. They are read by `getProgress` in `db/matches.js`, which feeds the profile pages.

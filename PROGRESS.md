@@ -7,6 +7,8 @@ and "NOT run here" notes in it describe the sandbox they were written in, not to
 
 ## Current status (2026-11-14)
 
+**2026-11-15, in progress on `feat/rejoin-grace-window`:** a 2-minute rejoin window for voluntary leaves (`REJOIN_GRACE_SECONDS`), active play time per stretch (paused by a dropped connection), and the matching docs (`docs/LEAVING_AND_REJOINING.md`). Not yet pushed or merged.
+
 ### Branches and release baseline
 
 | Item | Value | Evidence |
