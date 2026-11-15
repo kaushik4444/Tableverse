@@ -1776,7 +1776,8 @@
       const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
-      const progressBefore = JSON.stringify(S.profile && S.profile.data && S.profile.data.stats && S.profile.data.stats.progress || null);
+      const priorProgress = latestProgressUser === (S.username || null) && latestProgress ? latestProgress : (S.profile && S.profile.data && S.profile.data.stats && S.profile.data.stats.progress || null);
+      const progressBefore = JSON.stringify(priorProgress);
       const noticeBefore = JSON.stringify(S.levelUp);
       latestProgress = progress || null;
       latestProgressUser = S.username || null;
