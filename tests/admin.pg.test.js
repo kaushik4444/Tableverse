@@ -67,6 +67,22 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).days, 30, 'an unknown range falls back to 30 days');
       assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).zone, 'UTC', 'an unknown zone falls back to UTC');
     });
+    await test('insights: a table that closed mid-game does not count as a game, a new player or a return', async () => {
+      const ins = require('../db/insights');
+      const before = await ins.insights({ days: 7, tz: 'UTC' });
+      const x = await newUser('Ica'); const y = await newUser('Icb');
+      // an incomplete record (only leavers' losses) for two players who have never completed a game
+      for (const pl of [x, y]) {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at, completed)
+                            VALUES (gen_random_uuid(), 'INC1', 'incompletegame', 2, NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day' + INTERVAL '5 minutes', FALSE) RETURNING id`))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw, forfeit) VALUES ($1,$2,$3,0,false,false,true,false,true)', [m, pl.id, 'x']);
+      }
+      const after = await ins.insights({ days: 7, tz: 'UTC' });
+      assert.equal(after.games.find((g) => g.gameId === 'incompletegame'), undefined, 'the incomplete table is not a game in the table statistics');
+      const sum = (o, k) => o.returning.daily.reduce((n, r) => n + r[k], 0);
+      assert.equal(sum(after, 'newPlayers'), sum(before, 'newPlayers'), 'players whose only record is incomplete are not new');
+      assert.equal(sum(after, 'returningPlayers'), sum(before, 'returningPlayers'), 'and they are not returning either');
+    });
     await test('report queue: counts, severity, suspension, a deleted reporter, and an audit row on opening it', async () => {
       const rq = require('../db/reportQueue');
       const rep = await newUser('Rpa'); const bad = await newUser('Rpb'); const staff = await newUser('Rps');

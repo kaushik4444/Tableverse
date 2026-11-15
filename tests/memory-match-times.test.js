@@ -31,6 +31,20 @@ const game = (matchKey, finishedAt, playerId) => ({
     assert.equal(profile.played, 1);
   });
 
+  await test('games are ordered by completion time, not by the order they were recorded', async () => {
+    // a newer win is recorded first, then an older loss: the profile must date and order them by when they finished
+    const newer = new Date(Date.now() - 10 * 60000);
+    const older = new Date(Date.now() - 60 * 60000);
+    await matches.recordMatch(game('11111111-0000-0000-0000-000000000003', newer, 'mem-c'));
+    await matches.recordMatch({ ...game('11111111-0000-0000-0000-000000000004', older, 'mem-c'),
+      participants: [part('mem-c', { isWinner: false, score: 1 }), part('other')] });
+    const profile = await matches.getPlayerProfile('mem-c');
+    assert.equal(new Date(profile.lastPlayed).getTime(), newer.getTime(), 'lastPlayed is the newer finish time');
+    assert.equal(profile.recent[0].won, true, 'the newest result is first');
+    assert.equal(profile.recent[1].won, false, 'the older loss is second');
+    assert.equal(profile.streak.current, 1, 'the current streak comes from the newest result');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();
