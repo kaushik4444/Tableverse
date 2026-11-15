@@ -726,12 +726,15 @@ function start(opts = {}) {
     }
   }
 
+  // The key the game uses to build a viewer's view. A spectator whose id still names a bot-held seat (their grace period
+  // has passed) must not get that seat's hand, so they are given a key that matches no seat: the spectator view.
+  const viewKey = (room, m) => (room.spectators.includes(m) && room.members.some((x) => x.id === m.id) ? `watch:${m.id}` : m.id);
   function broadcast(room) {
     room.lastActivity = Date.now();
     const infoJson = JSON.stringify(roomInfo(room)); // the same for everybody at the table: serialised once
     for (const m of viewers(room)) {
       const p = players.get(m.id);
-      if (p && p.connected) sendBoundedRaw(p.ws, `{"t":"state","room":${infoJson},"view":${JSON.stringify((room.game && room.game.view(m.id)) ?? null)}}`, maxBufferedBytes);
+      if (p && p.connected) sendBoundedRaw(p.ws, `{"t":"state","room":${infoJson},"view":${JSON.stringify((room.game && room.game.view(viewKey(room, m))) ?? null)}}`, maxBufferedBytes);
     }
     broadcastTables();
   }
@@ -1020,6 +1023,8 @@ function start(opts = {}) {
     }
     const i = room.members.findIndex((m) => m.id === p.id);
     if (i < 0) return;
+    // Already gave up this seat (a bot plays it): the leave was counted once, so leaving again changes nothing.
+    if (room.status === 'playing' && room.members[i].bot) return broadcast(room);
     const wasHost = room.hostId === p.id;
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
@@ -1099,7 +1104,8 @@ function start(opts = {}) {
   }
 
   function addSpectator(room, p) {
-    if (room.members.some((x) => x.id === p.id)) {
+    // A player who is seated (not a bot-held seat they gave up) is never added as a spectator too.
+    if (room.members.some((x) => x.id === p.id && !x.bot)) {
       p.room = room.code;
       return;
     }
