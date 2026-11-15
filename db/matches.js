@@ -69,7 +69,7 @@ class MemoryMatchStore {
     const rows = [];
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
-      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: m.recordedAt, isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
+      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: new Date(m.finishedAt ? Math.min(new Date(m.finishedAt).getTime(), new Date(m.recordedAt).getTime()) : m.recordedAt), isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
     }
     return rows.sort((a, b) => b.finishedAt - a.finishedAt);
   }

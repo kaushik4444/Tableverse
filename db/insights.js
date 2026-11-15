@@ -75,8 +75,8 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     // 5. new and returning players per day (a player's first game anywhere decides "new")
     q(`WITH firsts AS (SELECT p.player_id, (MIN(m.started_at) AT TIME ZONE 'UTC')::date AS first_day
                          FROM match_participants p JOIN matches m ON m.id = p.match_id
-                        WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN} GROUP BY p.player_id),
-            d AS (SELECT DISTINCT player_id, (started_at AT TIME ZONE 'UTC')::date AS day FROM (${HUMANS} AND m.started_at >= ${TODAY} - ($1::int - 1)) w)
+                        WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND m.completed AND ${SIGNED_IN} GROUP BY p.player_id),
+            d AS (SELECT DISTINCT player_id, (started_at AT TIME ZONE 'UTC')::date AS day FROM (${HUMANS} AND m.started_at >= ${TODAY} - ($1::int - 1) AND m.completed) w)
        SELECT d.day::text AS day, COUNT(*) FILTER (WHERE f.first_day = d.day)::int AS new_players,
               COUNT(*) FILTER (WHERE f.first_day < d.day)::int AS returning_players
          FROM d JOIN firsts f ON f.player_id = d.player_id WHERE d.day > ${TODAY} - $1::int GROUP BY d.day ORDER BY d.day`),
@@ -85,10 +85,10 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
     //    The D1 / D7 cohort is the players whose first game was 7 or more days ago and within the range; the D30 cohort is 30 or more days ago.
     q(`WITH firsts AS (SELECT p.player_id, (MIN(m.started_at) AT TIME ZONE 'UTC')::date AS first_day
                          FROM match_participants p JOIN matches m ON m.id = p.match_id
-                        WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN} GROUP BY p.player_id),
+                        WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND m.completed AND ${SIGNED_IN} GROUP BY p.player_id),
             d AS (SELECT DISTINCT p.player_id, (m.started_at AT TIME ZONE 'UTC')::date AS day
                     FROM match_participants p JOIN matches m ON m.id = p.match_id
-                   WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN})
+                   WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND m.completed AND ${SIGNED_IN})
        SELECT COUNT(*) FILTER (WHERE f.first_day > ${TODAY} - ($1::int + 7) AND f.first_day <= ${TODAY} - 7)::int AS size,
               COUNT(*) FILTER (WHERE f.first_day > ${TODAY} - ($1::int + 7) AND f.first_day <= ${TODAY} - 7
                 AND EXISTS (SELECT 1 FROM d WHERE d.player_id = f.player_id AND d.day = f.first_day + 1))::int AS d1,
