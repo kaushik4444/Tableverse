@@ -1,12 +1,12 @@
 # Progress and levels
 
-Status: implemented on `development` (not yet released to `main`). Rules: `lib/xp.js`, `lib/gameSkill.js`, combined per player in `lib/progress.js`
+Status: implemented on `development` (not yet released to `main`; see the build steps below). Rules: `lib/xp.js`, `lib/gameSkill.js`, combined per player in `lib/progress.js`
 (tests: `tests/xp.test.js`, `tests/progress.test.js`). Stored by migration 025, shown on own and public profiles, and counted for penalised leaves in the
 admin overview. Not verified in production.
 
 ## Account level: progress in Tableverse
 - Measures **time only**: 1 XP for each full minute spent in a game.
-- Winning, losing, drawing or leaving makes no difference, and there is no penalty.
+- Winning, losing, drawing or leaving makes no difference to the calculation, and there is no penalty. Today, though, a leaver is stored with 0 seconds, so the time before leaving earns no XP (see the build steps below).
 - It is progress, not a ranking.
 
 ## Levels
@@ -49,12 +49,15 @@ Rules that apply to every game:
 - Leaves recorded before migration 024 have no penalty flag. Those leavers are not penalised, and they are left out of
   the game ranking because the record cannot show whether others were still playing.
 
-## Not built yet (next steps)
-1. Migration: store time spent per player in each game record (`seconds_played`), with a backfill from past start and
-   finish times for players who stayed. A leaver's time runs to the moment they left, so new games record it exactly.
-2. Calculate account XP and game points from the stored records (no separate totals table at first).
-3. Show the account level and the per-game levels on the profile. Named ranks are not planned yet; skill levels only.
-4. Update README and What's new when each part ships.
+## Status of the build steps
+Done on `development` (not released to `main`, not verified in production):
+1. Storage: `seconds_played` and `place` (migration 025), with a backfill for past games, for the people who stayed.
+2. Account XP and game points are calculated from the stored records (`lib/progress.js`; no separate totals table).
+3. The account level, the game levels and the number of penalised leaves show on own and public profiles; the admin overview counts penalised leaves.
+
+Still open:
+- Time before a leave: a leaver's `seconds_played` is 0, because the moment they left is not stored. Until that is recorded, minutes played before leaving earn no account XP. Recording the exact leave time would need a new column and a decision.
+- Named ranks are not planned; skill levels only.
 
 ## Storage (migration 025)
 `match_participants` gets two columns: `place` (SMALLINT, NULL when the game has no place of its own, so the level is ranked by score) and `seconds_played` (INTEGER, default 0). A stayer gets the match length (finished minus started), capped at 6 hours per game; leavers and bots get 0 because a leave time is not stored. The migration backfills `seconds_played` for past games (stayers only) and is safe to re-run. Both columns are additive and nullable or defaulted, so old application versions keep working, and they are restored together with the table. They are read by `getProgress` in `db/matches.js`, which feeds the profile pages.
