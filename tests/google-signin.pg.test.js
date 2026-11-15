@@ -72,6 +72,11 @@ function idToken({ sub, email, nonce, ...over }) {
       const s = (await p.b.get('/api/auth/session')).json;
       assert.equal(s.authenticated, true); assert.equal(s.player.username, `gina_${n}`);
       first = p; firstWho = who;
+      // the account screen reads this: the Google address is the account's verified email
+      const prof = (await p.b.get('/api/me/profile')).json.profile;
+      assert.equal(prof.email, who.email); assert.equal(prof.emailVerified, true);
+      assert.equal(typeof ok.json.emailVerificationRequired, 'boolean', 'the configured policy is reported, as after a password login');
+      assert.equal(ok.json.requiresVerification, false);
     });
 
     await test('a taken username is refused with the same message as email sign-up', async () => {
@@ -88,6 +93,23 @@ function idToken({ sub, email, nonce, ...over }) {
       assert.ok(p.b.cookies.has('ct_session'));
       assert.equal((await first.b.get('/api/auth/session')).json.authenticated, false, 'one active session: the earlier one is gone');
       assert.equal((await p.b.get('/api/auth/session')).json.authenticated, true);
+    });
+
+    await test('a Google sign-in retires the trusted device the browser held, so the earlier account does not come back', async () => {
+      const email = `shared${Date.now()}@example.com`;
+      await registerAndVerify(srv.port, { email, username: 'shared_pw', password: 'TestPass123!', displayName: 'Shared' });
+      const p = await page();
+      const login = await p.b.post('/api/auth/login', { email, password: 'TestPass123!', rememberDevice: true });
+      assert.equal(login.status, 200); assert.ok(p.b.cookies.has('ct_device'), 'the browser now trusts this device for the password account');
+      const dev = (await q("SELECT d.id FROM auth_devices d JOIN auth_identities i ON i.player_id = d.player_id WHERE i.provider_user_id = $1 AND d.revoked_at IS NULL", [email]))[0];
+      assert.ok(dev);
+      const r = await p.b.post('/api/auth/google', { credential: cred(p, firstWho) });
+      assert.equal(r.status, 200, JSON.stringify(r.json));
+      assert.ok(!p.b.cookies.has('ct_device'), 'the device cookie is cleared');
+      assert.ok((await q('SELECT revoked_at FROM auth_devices WHERE id = $1', [dev.id]))[0].revoked_at, 'the device is revoked on the server');
+      assert.equal((await q('SELECT count(*)::int AS n FROM auth_sessions WHERE device_id = $1 AND revoked_at IS NULL', [dev.id]))[0].n, 0, 'sessions started from it are ended');
+      const me = (await p.b.get('/api/auth/session')).json;
+      assert.equal(me.player.username, (await q('SELECT username FROM players p JOIN auth_identities i ON i.player_id = p.id WHERE i.provider_user_id = $1', [firstWho.sub]))[0].username, 'signed in as the Google account');
     });
 
     await test('a Google address that already has an email account is refused, never linked, and nothing is created', async () => {

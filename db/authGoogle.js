@@ -11,11 +11,33 @@
  */
 const db = require('./pool');
 const dbAuth = require('./auth');
+const dbPlayers = require('./players');
 
 const { AuthError } = dbAuth;
 const PROVIDER_GOOGLE = 'google';
 
 const taken = () => new AuthError('That email already has a Tableverse account. Sign in with your email and password instead.', 409, { code: 'email_taken' });
+
+
+/** Who owns the device this browser presented (null if none or not well formed). Looked up before any lock is taken. */
+async function deviceOwner(replaceDevice) {
+  if (!dbPlayers.isWellFormedToken(replaceDevice)) return null;
+  return ((await db.query('SELECT player_id FROM auth_devices WHERE token_hash = $1', [dbAuth.hashToken(replaceDevice)])).rows[0] || {}).player_id || null;
+}
+
+/**
+ * Retires the trusted device this browser presented, and the sessions started from it, whichever account they belong to: a Google
+ * sign-in replaces the trust the browser had before, exactly as a password login does. Without it, signing in as B on a browser that
+ * remembered A would bring A back when B's session ended. Runs inside the sign-in transaction.
+ */
+async function retireDevice(client, replaceDevice, ended) {
+  if (!dbPlayers.isWellFormedToken(replaceDevice)) return;
+  const old = await client.query('UPDATE auth_devices SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL RETURNING id', [dbAuth.hashToken(replaceDevice)]);
+  for (const d of old.rows) {
+    const r = await client.query('UPDATE auth_sessions SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL RETURNING player_id, token_hash', [d.id]);
+    ended.push(...r.rows);
+  }
+}
 
 /** What the verified claims mean: an account that signs in, a refusal, or a new person who still has to choose a username. */
 async function lookupGoogle(claims) {
@@ -33,13 +55,20 @@ async function lookupGoogle(claims) {
 }
 
 /** Signs an existing Google account in: one transaction, the suspension re-checked under the account lock, the older session ended. */
-async function signInGoogle(player) {
+async function signInGoogle(player, replaceDevice = null) {
   if (player.suspended_at) throw new AuthError('This account is suspended.', 403);
   const ended = [];
+  const owner = await deviceOwner(replaceDevice);
   const raw = await db.withTransaction(async (client) => {
-    const now = await client.query('SELECT suspended_at FROM players WHERE id = $1 FOR UPDATE', [player.id]);
-    if (!now.rows.length) throw new AuthError('Sign in with Google failed. Please try again.', 401);
-    if (now.rows[0].suspended_at) throw new AuthError('This account is suspended.', 403);
+    // both accounts are locked in sorted-id order, the same as a password login, so two sign-ins that replace each other's devices cannot deadlock
+    let suspendedAt;
+    for (const id of [...new Set([player.id, owner].filter(Boolean))].sort()) {
+      const r = (await client.query('SELECT suspended_at FROM players WHERE id = $1 FOR UPDATE', [id])).rows[0];
+      if (id === player.id) suspendedAt = r ? r.suspended_at : undefined;
+    }
+    if (suspendedAt === undefined) throw new AuthError('Sign in with Google failed. Please try again.', 401);
+    if (suspendedAt) throw new AuthError('This account is suspended.', 403);
+    await retireDevice(client, replaceDevice, ended);
     return dbAuth.createSession(client, player.id, null, ended);
   });
   const result = dbAuth.makeSessionResult({ ...player, email_verified_at: player.email_verified_at || new Date() }, raw);
@@ -48,12 +77,13 @@ async function signInGoogle(player) {
 }
 
 /** Creates the account for a new Google person and signs them in. */
-async function completeGoogleSignup({ claims, username, displayName, avatar, adultConfirmed }) {
+async function completeGoogleSignup({ claims, username, displayName, avatar, adultConfirmed, replaceDevice = null }) {
   if (!db.hasDatabase()) throw new AuthError('Sign in with Google requires PostgreSQL (set DATABASE_URL).', 503);
   if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
   const u = dbAuth.normUsername(username);
   if (!dbAuth.isUsername(u)) throw new AuthError('Username must be 3-24 chars: lowercase letters, numbers, underscore.');
   const ended = [];
+  const owner = await deviceOwner(replaceDevice);
   try {
     const out = await db.withTransaction(async (client) => {
       if ((await client.query('SELECT 1 FROM players WHERE LOWER(username) = LOWER($1) LIMIT 1', [u])).rows.length) throw new AuthError('This username is already taken.');
@@ -68,10 +98,14 @@ async function completeGoogleSignup({ claims, username, displayName, avatar, adu
         `INSERT INTO auth_identities (player_id, provider, provider_user_id, email, email_verified_at) VALUES ($1, $2, $3, $4, NOW())`,
         [player.id, PROVIDER_GOOGLE, claims.sub, claims.email]
       );
+      if (owner) await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [owner]);
+      await retireDevice(client, replaceDevice, ended);
       const raw = await dbAuth.createSession(client, player.id, null, ended);
       return { player, raw };
     });
-    return dbAuth.makeSessionResult({ ...out.player, email: claims.email, email_verified_at: new Date() }, out.raw);
+    const result = dbAuth.makeSessionResult({ ...out.player, email: claims.email, email_verified_at: new Date() }, out.raw);
+    result.revokedSessions = ended.map((x) => ({ playerId: x.player_id, tokenHash: x.token_hash }));
+    return result;
   } catch (err) {
     if (err && err.code === '23505') {
       if (/username/i.test(err.constraint || err.message || '')) throw new AuthError('This username is already taken.');

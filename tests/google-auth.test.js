@@ -70,11 +70,41 @@ const rejects = async (p, detail) => { try { await p; } catch (e) { assert.ok(e 
     await rejects(v.verify(token({}, { header: { kid: 'rotated' } }), { nonce: 'n1' }), /unknown kid/);
     assert.equal(fetches, 2, 'one refetch for the unknown kid, not one per attempt');
   });
-  await test('a key outage is reported as unavailable, and a later success recovers', async () => {
-    let up = false; const v = createVerifier({ clientId: CLIENT, now: () => NOW, fetchJwks: async () => { if (!up) throw new Error('down'); return { keys: [jwk(pair, 'k1')] }; } });
+  await test('a key outage is reported as unavailable, retried only after a pause, and a later success recovers', async () => {
+    let up = false; let calls = 0; let t = NOW;
+    const v = createVerifier({ clientId: CLIENT, now: () => t, fetchJwks: async () => { calls++; if (!up) throw new Error('down'); return { keys: [jwk(pair, 'k1')] }; } });
     await rejects(v.verify(token(), { nonce: 'n1' }), /jwks/);
-    up = true;
+    await rejects(v.verify(token(), { nonce: 'n1' }), /keys unavailable/);
+    assert.equal(calls, 1, 'no second fetch right after a failure');
+    up = true; t += 11000;
     assert.equal((await v.verify(token(), { nonce: 'n1' })).sub, '1234567890');
+    assert.equal(calls, 2);
+  });
+  await test('with cached keys, an outage at expiry does not fetch on every sign-in, and one request never fetches twice', async () => {
+    let up = true; let calls = 0; let t = NOW;
+    const v = createVerifier({ clientId: CLIENT, now: () => t, fetchJwks: async () => { calls++; if (!up) throw new Error('down'); return { keys: [jwk(pair, 'k1')] }; } });
+    await v.verify(token(), { nonce: 'n1' });
+    assert.equal(calls, 1);
+    up = false; t += 3700000; // the cache has expired; Google is down
+    const late = () => token({ exp: Math.floor(t / 1000) + 3600, iat: Math.floor(t / 1000) });
+    for (let i = 0; i < 5; i++) assert.equal((await v.verify(late(), { nonce: 'n1' })).sub, '1234567890', 'the cached key still verifies');
+    assert.equal(calls, 2, 'one failed refresh, then the pause holds: ' + calls);
+    // an expired cache and an unknown key id in one request: still one fetch
+    t += 11000;
+    await rejects(v.verify(token({ exp: Math.floor(t / 1000) + 3600, iat: Math.floor(t / 1000) }, { header: { kid: 'rotated' } }), { nonce: 'n1' }), /unknown kid/);
+    assert.equal(calls, 3, 'one fetch for that request');
+  });
+  await test('a connection that fails while the key body is being read rejects instead of crashing', async () => {
+    const { EventEmitter } = require('node:events');
+    const https = require('node:https'); const orig = https.get;
+    https.get = (url, opts, cb) => { const req = new EventEmitter(); req.destroy = () => {}; process.nextTick(() => { const res = new EventEmitter(); res.statusCode = 200; res.resume = () => {}; cb(res); process.nextTick(() => res.emit('error', new Error('socket hang up'))); }); return req; };
+    try {
+      delete require.cache[require.resolve('../lib/googleAuth')];
+      const fresh = require('../lib/googleAuth');
+      const v = fresh.createVerifier({ clientId: CLIENT, now: () => NOW });
+      let err; try { await v.verify(token(), { nonce: 'n1' }); } catch (e) { err = e; }
+      assert.ok(err && err.name === 'GoogleAuthError' && /jwks: socket hang up/.test(err.detail), 'a safe error, not a crash: ' + err);
+    } finally { https.get = orig; delete require.cache[require.resolve('../lib/googleAuth')]; }
   });
   await test('the nonce is a hash of the CSRF value: stable for one browser, different for another', () => {
     assert.equal(nonceFor('abc'), nonceFor('abc')); assert.notEqual(nonceFor('abc'), nonceFor('abd')); assert.match(nonceFor('abc'), /^[0-9a-f]{64}$/);
