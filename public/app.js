@@ -131,7 +131,7 @@
     return ' Leaving counts as a loss for you.';
   };
   /** How long a person who leaves may take the seat back, as the server sets it (REJOIN_GRACE_SECONDS). */
-  const rejoinWithin = () => { const s = (S.room && S.room.rejoinWindowSeconds) || 120; return s % 60 === 0 ? (s / 60) + ' minute' + (s === 60 ? '' : 's') : s + ' seconds'; };
+  const rejoinWithin = () => { const s = (S.room && S.room.rejoinWindowSeconds) ?? 120; return s % 60 === 0 ? (s / 60) + ' minute' + (s === 60 ? '' : 's') : s + ' seconds'; };
   /** Every leave goes through here: with other people still playing, ask first, because the leave may cost something. */
   function requestLeave() {
     if (!otherHumansPlaying()) { send({ t: 'leave' }); return; }
@@ -144,7 +144,7 @@
       openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Nobody is penalised, and the people who stayed get no result. A bot takes your seat. You can watch the game from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
       return;
     }
-    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can take your seat back from the home screen within ' + rejoinWithin() + '. After that the bot keeps it.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
+    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can take your seat back from the home screen within ' + rejoinWithin() + ' of your first leave in this game. The time does not restart if you leave and come back again. After that the bot keeps the seat.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
   }
 
   window.CardTable = Object.assign(window.CardTable || {}, {
@@ -453,6 +453,7 @@
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
       </div>
+      <div id="googleSlot" class="google-slot" hidden><div id="googleBtn"></div><p class="auth-or"><span>or use your email</span></p></div>
       ${loginOn ? `
         <form id="loginForm" class="auth-form">
           <input id="loginEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -478,6 +479,7 @@
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     document.body.appendChild(overlay);
+    mountGoogle();
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');
     if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
     if (!loginOn) {
@@ -513,6 +515,72 @@
     }
   }
 
+  // "Continue with Google": shown only when the server has it configured. The page never decides who someone is: it forwards
+  // Google's token to the server, which verifies it.
+  async function mountGoogle() {
+    const slot = document.getElementById('googleSlot');
+    if (!slot || !window.TvGoogle) return;
+    if (!(await window.TvGoogle.available())) return;
+    const btn = document.getElementById('googleBtn');
+    if (!btn || !btn.isConnected) return;
+    slot.hidden = false;
+    window.TvGoogle.mount(btn, onGoogleCredential, () => { slot.hidden = true; });
+  }
+
+  let googleBusy = false;
+  async function onGoogleCredential(credential) {
+    if (googleBusy) return;
+    googleBusy = true;
+    try {
+      const out = await withBusy('Signing in with Google…', () => postJson('/api/auth/google', { credential }));
+      if (out.needsSignup) return openGoogleSignupSheet(credential, out);
+      finishSignIn(out);
+    } catch (err) {
+      openAuthSheet(S.auth || 'login', err.message || 'Google sign-in failed.', true);
+    } finally { googleBusy = false; }
+  }
+
+  // A new person: Google proved the address, they still choose a username and confirm they are an adult.
+  function openGoogleSignupSheet(credential, info, msg = '') {
+    closeOverlay();
+    S.auth = 'google';
+    const overlay = document.createElement('div');
+    overlay.id = 'auth-overlay';
+    overlay.className = 'overlay';
+    overlay.innerHTML = `<div class="sheet auth-sheet" data-stop="1" role="dialog" aria-label="Finish creating your account">
+      <div class="row" style="justify-content:space-between"><h2>Almost there</h2><button class="btn ghost small" data-auth-close aria-label="Close">✕</button></div>
+      <p class="hint" style="text-align:left">Signing up with Google as <b>${esc(info.email)}</b>. Choose how you appear at the table.</p>
+      ${msg ? `<p class="auth-msg" role="alert">${esc(msg)}</p>` : ''}
+      <form id="googleSignupForm" class="auth-form">
+        <input id="googleName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname" value="${esc(info.suggestedName || '')}">
+        <input id="googleUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
+        <small id="googleUsernameHint" class="hint"></small>
+        <label class="auth-check"><input id="googleAdult" type="checkbox" required> I am 18 or older.</label>
+        <button class="btn big" type="submit">Create account</button>
+      </form></div>`;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
+    overlay.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = String(overlay.querySelector('#googleUsername').value || '').trim().toLowerCase();
+      const displayName = overlay.querySelector('#googleName').value;
+      const adultConfirmed = overlay.querySelector('#googleAdult').checked;
+      try {
+        const out = await withBusy('Creating your account…', () => postJson('/api/auth/google/complete', { credential, username, displayName, avatar: S.avatar || undefined, adultConfirmed }));
+        finishSignIn(out);
+      } catch (err) { openGoogleSignupSheet(credential, info, err.message || 'Could not create the account.'); }
+    });
+    const u = overlay.querySelector('#googleUsername');
+    u.addEventListener('input', async () => {
+      const value = String(u.value || '').trim().toLowerCase(); u.value = value;
+      const hint = overlay.querySelector('#googleUsernameHint');
+      if (!value) { hint.textContent = ''; return; }
+      if (!/^[a-z0-9_]{3,24}$/.test(value)) { hint.textContent = 'Use 3-24 chars: lowercase letters, numbers, underscore.'; return; }
+      try { const o = await fetch(`/api/auth/username-available?username=${encodeURIComponent(value)}`).then((r) => r.json()); hint.textContent = o.available ? 'Username is available.' : 'Username is already taken.'; } catch { hint.textContent = ''; }
+    });
+    document.body.appendChild(overlay);
+    if (!matchMedia('(pointer: coarse)').matches) overlay.querySelector('#googleUsername').focus();
+  }
+
   function closeOverlay() {
     const el = document.getElementById('auth-overlay');
     if (el) el.remove();
@@ -531,6 +599,11 @@
 
   async function doLogin(email, password, rememberDevice = false) {
     const out = await withBusy('Logging in…', () => postLogin(email, password, rememberDevice));
+    finishSignIn(out);
+  }
+
+  // After the server has started a session (password login or Google): adopt the player and connect.
+  function finishSignIn(out) {
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     adoptPlayer(out.player);
@@ -738,9 +811,14 @@
   function recentTablesHTML() {
     if (!S.recentTables.length) return '';
     const rows = S.recentTables.map((r) => {
-      const mine = S.rejoin.some((x) => x.code === r.code);
-      const status = mine ? 'Your seat is waiting' : r.status === 'playing' ? 'In progress' : 'Open';
-      return `<button class="recent-table ${mine ? 'mine' : ''}" data-act="rejoin" data-code="${esc(r.code)}"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code>${mine ? '<em class="rj-badge">Rejoin</em>' : `<small>${status}</small>`}</button>`;
+      const mine = S.rejoin.find((x) => x.code === r.code);
+      if (mine && mine.canReclaim === false && mine.noSeatedHumans) {
+        return `<div class="recent-table"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code><small>Game paused</small></div>`;
+      }
+      const reclaim = mine && mine.canReclaim !== false;
+      const status = reclaim ? 'Your seat is waiting' : mine ? 'Watch game' : r.status === 'playing' ? 'In progress' : 'Open';
+      const action = mine && !reclaim ? 'watch' : 'rejoin';
+      return `<button class="recent-table ${reclaim ? 'mine' : ''}" data-act="${action}" data-code="${esc(r.code)}"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code>${reclaim ? '<em class="rj-badge">Rejoin</em>' : `<small>${status}</small>`}</button>`;
     }).join('');
     return `<section class="home-section"><h2 class="section">Recent tables</h2><div class="recent-tables">${rows}</div></section>`;
   }
@@ -750,7 +828,14 @@
     if (!S.rejoin.length) return '';
     return S.rejoin.map((r) => {
       const g = gameMeta(r.gameId) || { name: r.gameId, icon: '🎴' };
-      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.</span></div><button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button></div>`;
+      const canReclaim = r.canReclaim !== false;
+      const message = canReclaim
+        ? `${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.`
+        : `${r.noSeatedHumans ? 'The rejoin window has passed, so this game cannot resume.' : 'The rejoin window has passed, but you can still watch'} at table <code>${esc(r.code)}</code>.`;
+      const action = canReclaim
+        ? `<button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button>`
+        : r.noSeatedHumans ? '' : `<button class="btn" data-act="watch" data-code="${esc(r.code)}">Watch</button>`;
+      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${message}</span></div>${action}</div>`;
     }).join('');
   }
 
@@ -1965,7 +2050,7 @@
       if (!S.room) { closeModal(); openPage('player', p.username); return; }
       // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
       const seatedInGame = S.room.status === 'playing' && !isSpectator();
-      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' + (otherHumansPlaying() ? leaveConsequence() : '') : 'This leaves the table.';
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can take your seat back within 2 minutes from the home screen.' + (otherHumansPlaying() ? leaveConsequence() : '') : 'This leaves the table.';
       openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
     },
     cardProfileConfirm: () => {
@@ -2693,7 +2778,12 @@
       send({ t: 'setVisibility', visibility: cur === 'public' ? 'private' : 'public' });
     },
     // The server decides: your old seat if you had one (a bot is playing it), otherwise a seat in a lobby, otherwise watching.
-    rejoin: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
+    rejoin: (el) => {
+      const mine = S.rejoin.find((x) => x.code === el.dataset.code);
+      if (mine && mine.canReclaim === false) return mine.noSeatedHumans ? toast('This game cannot resume. Start a new game instead.') : actions.watch(el);
+      askJoinMode(el.dataset.code, tableByCode(el.dataset.code));
+    },
+    watch: (el) => gateLogin(() => joinTable(el.dataset.code, 'spectate')),
     joinPublic: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
     toggleSessions: () => { S.sessionListOpen = !S.sessionListOpen; store.set('ct_sessions_open', S.sessionListOpen ? '1' : '0'); render(); },
     leave: () => requestLeave(),

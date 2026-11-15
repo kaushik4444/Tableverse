@@ -44,6 +44,9 @@ Rules that apply to every game:
 - **Leave without a penalty** (bots only, or an abandoned game): not in the game ranking at all.
 - **Bots** are not ranked.
 
+## Leaving and coming back
+The rules for leaving a running game, the 2-minute window to take a seat back, spectating after it, and active play time are in [LEAVING_AND_REJOINING.md](LEAVING_AND_REJOINING.md). Active play time is counted by `lib/playTime.js`, and the window by `lib/leavePolicy.js`.
+
 ## History (past games)
 - Past games count once the feature ships. Their skill points come from the stored results.
 - Time for past games comes from the stored `seconds_played`. Games recorded before active play was tracked use the old rule: the start and finish times for people who stayed, and 0 for leavers.

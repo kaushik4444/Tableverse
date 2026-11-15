@@ -48,14 +48,20 @@ class MemoryMatchStore {
     return { played, wins, draws, losses: played - wins - draws };
   }
 
+  /** When a record's game finished: its own finish time if that is a real date not later than the record time, else the record time. */
+  completionMs(m) {
+    const recorded = new Date(m.recordedAt).getTime();
+    const given = m.finishedAt ? new Date(m.finishedAt).getTime() : NaN;
+    return Number.isFinite(given) ? Math.min(given, recorded) : recorded;
+  }
+
   /** Every participant of every match this player took part in, oldest first (for progress levels). */
   async getProgressRows(playerId) {
     const rows = [];
     for (const m of this.matches) {
       if (!m.participants.some((p) => p.playerId === playerId && !p.isBot)) continue;
       // the recorded time is the fallback completion time, so minutes never keep growing after the game; a future finish time is clamped to it
-      const recorded = new Date(m.recordedAt).getTime();
-      const finished = m.finishedAt ? Math.min(new Date(m.finishedAt).getTime(), recorded) : recorded;
+      const finished = this.completionMs(m);
       const secs = m.startedAt ? Math.max(0, Math.min(21600, Math.floor((finished - new Date(m.startedAt).getTime()) / 1000))) : 0;
       for (const p of m.participants) {
         rows.push({ matchId: m.matchKey || m, gameId: m.gameId, seat: p.seat ?? 0, playerId: p.playerId, score: p.score ?? 0, place: Number.isInteger(p.place) ? p.place : null,
@@ -69,7 +75,7 @@ class MemoryMatchStore {
     const rows = [];
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
-      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: m.recordedAt, isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
+      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: new Date(this.completionMs(m)), isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
     }
     return rows.sort((a, b) => b.finishedAt - a.finishedAt);
   }

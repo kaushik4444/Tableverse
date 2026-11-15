@@ -27,6 +27,7 @@ function buildMatchRecord(room, game) {
   const seated = room.seated || room.members;
   if (!Array.isArray(results) || results.length !== seated.length) return null;
   const left = room.leftEarly || new Set();
+  const now = Date.now(); // the moment the game ended: active time still running is stopped here
   return {
     matchKey: room.matchKey || null,
     roomCode: room.code,
@@ -73,6 +74,7 @@ function buildForfeitRecord(room) {
   const leavers = room.forfeits || new Set();
   if (room.abandoned || !leavers.size || !room.matchKey) return null;
   const seated = room.seated || room.members;
+  const now = Date.now();
   return {
     matchKey: room.matchKey,
     roomCode: room.code,

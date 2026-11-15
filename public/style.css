@@ -643,3 +643,8 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .pg-bar span { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
 .pg-games { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .pg-row { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+
+.google-slot { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 12px 0 4px; min-height: 44px; }
+.auth-or { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; color: var(--muted, #9bc4ae); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.14); }
+.auth-or span { white-space: nowrap; }

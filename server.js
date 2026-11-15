@@ -21,6 +21,7 @@ const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
 const { makeAuthEmailSender } = require('./lib/email');
+const { cspFor } = require('./lib/googleAuth');
 const { createAuthRoutes } = require('./lib/authRoutes');
 const dbAccount = require('./db/account');
 const { DELETED_NAME } = dbAccount;
@@ -69,8 +70,6 @@ async function resolveTarget(msg) {
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy':
-    "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
   'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()', // the microphone is for table voice chat
 };
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
@@ -221,8 +220,9 @@ function start(opts = {}) {
       req.on('error', reject);
     });
 
+  const SECURITY = { ...SECURITY_HEADERS, 'Content-Security-Policy': cspFor(env) };
   const setSecurityHeaders = (res) => {
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+    for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
     if (production) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   };
   const setCommonHeaders = (res, contentType = 'application/json; charset=utf-8') => {
@@ -307,6 +307,7 @@ function start(opts = {}) {
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   const authRoutes = createAuthRoutes({
     env,
+    googleVerifier: opts.googleVerifier || null, // tests only: a verifier with a local key instead of Google's
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
@@ -476,7 +477,7 @@ function start(opts = {}) {
       staticFiles.respond(req, res, entry, {
         'Content-Type': type,
         'Cache-Control': 'no-cache', // always revalidate; the ETag turns that into a cheap 304
-        ...SECURITY_HEADERS,
+        ...SECURITY,
         ...(production ? { 'Strict-Transport-Security': 'max-age=15552000; includeSubDomains' } : {}),
       });
     });
@@ -668,14 +669,24 @@ function start(opts = {}) {
     for (const room of rooms.values()) {
       if (room.status !== 'playing' || p.room === room.code) continue;
       if (room.denied && room.denied.has(p.id)) continue; // access revoked
-      if (room.members.some((m) => m.id === p.id && m.bot)) out.push({ code: room.code, gameId: room.gameId, paused: !humans(room).some(isConnected) });
+      if (room.members.some((m) => m.id === p.id && m.bot)) {
+        out.push(rejoinInfo(room, p.id, !humans(room).some(isConnected)));
+      }
     }
     return out;
   }
 
   const tablesMsg = (p) => ({ t: 'tables', tables: publicTables(p.id), rejoin: rejoinFor(p) });
 
-  /** Who can take a seat back: playerId -> [{code, gameId, paused}], built in one pass over the rooms (not once per player). */
+  const rejoinInfo = (room, playerId, paused) => ({
+    code: room.code,
+    gameId: room.gameId,
+    paused,
+    noSeatedHumans: humans(room).length === 0,
+    canReclaim: Boolean(rejoinDecision(room, playerId, Date.now()).seat), // the window policy: the seat is theirs until the window closes
+  });
+
+  /** Who can return to a running game: playerId -> [{code, gameId, paused, canReclaim}], built in one pass over the rooms. */
   function rejoinIndex() {
     const index = new Map();
     for (const room of rooms.values()) {
@@ -687,7 +698,7 @@ function start(opts = {}) {
         if (q && q.room === room.code) continue;
         if (paused === undefined) paused = !humans(room).some(isConnected);
         const list = index.get(m.id) || index.set(m.id, []).get(m.id);
-        list.push({ code: room.code, gameId: room.gameId, paused });
+        list.push(rejoinInfo(room, m.id, paused));
       }
     }
     return index;
@@ -699,6 +710,15 @@ function start(opts = {}) {
    * the whole directory to every connected player.
    */
   let tablesTimer = null;
+  const rejoinExpiryTimers = new Set();
+  function scheduleRejoinExpiryRefresh() {
+    const timer = setTimeout(() => {
+      rejoinExpiryTimers.delete(timer);
+      broadcastTables();
+    }, rejoinWindowMs + 1);
+    if (timer.unref) timer.unref();
+    rejoinExpiryTimers.add(timer);
+  }
   function broadcastTables() {
     if (tablesTimer) return;
     tablesTimer = setTimeout(flushTables, 120);
@@ -728,12 +748,15 @@ function start(opts = {}) {
     }
   }
 
+  // The key the game uses to build a viewer's view. A spectator whose id still names a bot-held seat (their grace period
+  // has passed) must not get that seat's hand, so they are given a key that matches no seat: the spectator view.
+  const viewKey = (room, m) => (room.spectators.includes(m) && room.members.some((x) => x.id === m.id) ? `watch:${m.id}` : m.id);
   function broadcast(room) {
     room.lastActivity = Date.now();
     const infoJson = JSON.stringify(roomInfo(room)); // the same for everybody at the table: serialised once
     for (const m of viewers(room)) {
       const p = players.get(m.id);
-      if (p && p.connected) sendBoundedRaw(p.ws, `{"t":"state","room":${infoJson},"view":${JSON.stringify((room.game && room.game.view(m.id)) ?? null)}}`, maxBufferedBytes);
+      if (p && p.connected) sendBoundedRaw(p.ws, `{"t":"state","room":${infoJson},"view":${JSON.stringify((room.game && room.game.view(viewKey(room, m))) ?? null)}}`, maxBufferedBytes);
     }
     broadcastTables();
   }
@@ -1023,6 +1046,8 @@ function start(opts = {}) {
     }
     const i = room.members.findIndex((m) => m.id === p.id);
     if (i < 0) return;
+    // Already gave up this seat (a bot plays it): the leave was counted once, so leaving again changes nothing.
+    if (room.status === 'playing' && room.members[i].bot) return broadcast(room);
     const wasHost = room.hostId === p.id;
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
@@ -1099,7 +1124,8 @@ function start(opts = {}) {
   }
 
   function addSpectator(room, p) {
-    if (room.members.some((x) => x.id === p.id)) {
+    // A player who is seated (not a bot-held seat they gave up) is never added as a spectator too.
+    if (room.members.some((x) => x.id === p.id && !x.bot)) {
       p.room = room.code;
       return;
     }
@@ -1438,12 +1464,14 @@ function start(opts = {}) {
       // This wins over "spectate": the home screen can only offer Spectate for a running game, and a player who
       // owns a seat must never be turned into a spectator while a bot plays their cards.
       // The window decides: after it the bot keeps the seat for the game, and the person may only watch.
-      const seatDecision = seat && room.status === 'playing' && seat.bot ? rejoinDecision(room, p.id, Date.now()) : null;
+      // One timestamp for the decision and the reclaim, so the window cannot close in between (leaveRoom below takes time).
+      const now = Date.now();
+      const seatDecision = seat && room.status === 'playing' && seat.bot ? rejoinDecision(room, p.id, now) : null;
       if (seatDecision && seatDecision.seat) {
         if (p.room && p.room !== room.code) leaveRoom(p);
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
-        reclaimSeat(room, seat, Date.now()); // back in time: the bot gives the seat back, no loss, play resumes
+        reclaimSeat(room, seat, now); // back in time: the bot gives the seat back, no loss, play resumes
         seat.avatar = p.avatar;
         p.room = room.code;
         sys(room, `🔄 ${p.name} is back and took the seat from the bot`);
@@ -1633,7 +1661,8 @@ function start(opts = {}) {
       room.startedAt = Date.now();
       room.leaveDeadlines = new Map(); // a rejoin window per person who left on purpose, started at their first departure
       room.playTime = { open: new Map(), total: new Map() };
-      for (const m of room.seated) if (!m.bot) startPlay(room, m.id, room.startedAt);
+      // Only seated people who are connected now earn time. A person who drops in the lobby starts when they come back (see hello).
+      for (const m of room.seated) if (!m.bot && isConnected(m)) startPlay(room, m.id, room.startedAt);
       room.leftEarly = new Set();
       room.forfeits = new Set();
       room.abandoned = false;
@@ -1679,6 +1708,8 @@ function start(opts = {}) {
       room.status = 'lobby';
       room.deadline = null;
       room.votes = new Set(); room.outcome = null;
+      // A bot-held seat whose player left during the game is no longer theirs: free it, so they can sit down.
+      room.members = room.members.filter((m) => !(m.bot && room.leftEarly && room.leftEarly.has(m.id)));
       // Spectators stay spectators: watching is a choice. They take an open seat themselves with `sit`.
       broadcast(room);
     },
@@ -2130,6 +2161,8 @@ function start(opts = {}) {
     }
     clearInterval(ticker);
     clearTimeout(tablesTimer);
+    for (const timer of rejoinExpiryTimers) clearTimeout(timer);
+    rejoinExpiryTimers.clear();
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
