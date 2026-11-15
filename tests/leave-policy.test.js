@@ -2,7 +2,7 @@
 // Leaving a running game, end to end through the same steps the server takes (lib/leavePolicy.js, the seat change,
 // then db/matchRecord.js when the game ends or the table closes). No database, no sockets.
 const assert = require('node:assert/strict');
-const { leaveRunningGame } = require('../lib/leavePolicy');
+const { leaveRunningGame, leaveStateOf } = require('../lib/leavePolicy');
 const { buildMatchRecord, buildForfeitRecord } = require('../db/matchRecord');
 
 let passed = 0; let failed = 0;
@@ -129,6 +129,42 @@ test('a finished game with nobody leaving is recorded normally', () => {
   const r = table(['A', 'B'], ['C']);
   const rec = finish(r);
   assert.ok(rec.participants.every((p) => !p.forfeit && !p.leftEarly));
+});
+
+test('the leave prompt state: counts, then abandons after a first leaver, then abandoned', () => {
+  const r = table(['A', 'B', 'C'], ['D']);
+  assert.equal(leaveStateOf(r), 'counts');
+  leave(r, 'A');
+  assert.equal(leaveStateOf(r), 'abandons', 'the next leaver abandons the game');
+  leave(r, 'B');
+  assert.equal(leaveStateOf(r), 'abandoned');
+});
+
+test('the record says the game finished and how the table was filled, leavers included', () => {
+  const r = table(['A', 'B', 'C'], ['D']);
+  leave(r, 'A');
+  const rec = finish(r);
+  assert.equal(rec.completed, true);
+  assert.equal(rec.tableHumans, 3, 'Ann was a person when the game started');
+  assert.equal(rec.tableBots, 1);
+});
+
+test('an abandoned game keeps the true table shape although the players who stayed are not in it', () => {
+  const r = table(['A', 'B', 'C'], ['D']);
+  leave(r, 'A'); leave(r, 'B');
+  const rec = finish(r);
+  assert.equal(rec.tableHumans, 3, 'three people sat down: two left, one stayed');
+  assert.equal(rec.tableBots, 1);
+  assert.ok(!rec.participants.some((p) => p.playerId === 'C'), 'the player who stayed has no result');
+});
+
+test('a table closed mid-game is stored as incomplete, with its table shape', () => {
+  const r = table(['A', 'B', 'C'], ['D']);
+  leave(r, 'A');
+  const rec = buildForfeitRecord(r);
+  assert.equal(rec.completed, false);
+  assert.equal(rec.tableHumans, 3);
+  assert.equal(rec.tableBots, 1);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

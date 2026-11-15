@@ -13,8 +13,9 @@ const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
-const { buildMatchRecord, buildForfeitRecord } = require('./db/matchRecord');
-const { leaveRunningGame } = require('./lib/leavePolicy');
+const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = require('./db/matchRecord');
+const { leaveRunningGame, leaveStateOf } = require('./lib/leavePolicy');
+const rejoinPolicy = require('./lib/rejoinPolicy');
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -88,6 +89,7 @@ function start(opts = {}) {
   const port = opts.port ?? Number(process.env.PORT || 3000);
   const botDelay = opts.botDelay || [900, 1600]; // ms range a bot "thinks"
   const autoAdvanceMs = opts.autoAdvanceMs ?? 8000; // pause between rounds
+  const rejoinGraceMs = opts.rejoinGraceMs ?? rejoinPolicy.REJOIN_GRACE_MS; // a voluntary leaver may take the seat back within this long after leaving
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
   const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket's session is re-checked this often
@@ -634,6 +636,9 @@ function start(opts = {}) {
       outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
+      // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
+      // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
+      leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
       now: Date.now(), // lets clients correct for clock differences
     };
   }
@@ -662,14 +667,24 @@ function start(opts = {}) {
     for (const room of rooms.values()) {
       if (room.status !== 'playing' || p.room === room.code) continue;
       if (room.denied && room.denied.has(p.id)) continue; // access revoked
-      if (room.members.some((m) => m.id === p.id && m.bot)) out.push({ code: room.code, gameId: room.gameId, paused: !humans(room).some(isConnected) });
+      if (room.members.some((m) => m.id === p.id && m.bot)) {
+        out.push(rejoinInfo(room, p.id, !humans(room).some(isConnected)));
+      }
     }
     return out;
   }
 
   const tablesMsg = (p) => ({ t: 'tables', tables: publicTables(p.id), rejoin: rejoinFor(p) });
 
-  /** Who can take a seat back: playerId -> [{code, gameId, paused}], built in one pass over the rooms (not once per player). */
+  const rejoinInfo = (room, playerId, paused) => ({
+    code: room.code,
+    gameId: room.gameId,
+    paused,
+    noSeatedHumans: humans(room).length === 0,
+    canReclaim: rejoinPolicy.canReclaimSeat(room, playerId, Date.now(), rejoinGraceMs),
+  });
+
+  /** Who can return to a running game: playerId -> [{code, gameId, paused, canReclaim}], built in one pass over the rooms. */
   function rejoinIndex() {
     const index = new Map();
     for (const room of rooms.values()) {
@@ -681,7 +696,7 @@ function start(opts = {}) {
         if (q && q.room === room.code) continue;
         if (paused === undefined) paused = !humans(room).some(isConnected);
         const list = index.get(m.id) || index.set(m.id, []).get(m.id);
-        list.push({ code: room.code, gameId: room.gameId, paused });
+        list.push(rejoinInfo(room, m.id, paused));
       }
     }
     return index;
@@ -693,6 +708,15 @@ function start(opts = {}) {
    * the whole directory to every connected player.
    */
   let tablesTimer = null;
+  const rejoinExpiryTimers = new Set();
+  function scheduleRejoinExpiryRefresh() {
+    const timer = setTimeout(() => {
+      rejoinExpiryTimers.delete(timer);
+      broadcastTables();
+    }, rejoinGraceMs + 1);
+    if (timer.unref) timer.unref();
+    rejoinExpiryTimers.add(timer);
+  }
   function broadcastTables() {
     if (tablesTimer) return;
     tablesTimer = setTimeout(flushTables, 120);
@@ -722,12 +746,15 @@ function start(opts = {}) {
     }
   }
 
+  // The key the game uses to build a viewer's view. A spectator whose id still names a bot-held seat (their grace period
+  // has passed) must not get that seat's hand, so they are given a key that matches no seat: the spectator view.
+  const viewKey = (room, m) => (room.spectators.includes(m) && room.members.some((x) => x.id === m.id) ? `watch:${m.id}` : m.id);
   function broadcast(room) {
     room.lastActivity = Date.now();
     const infoJson = JSON.stringify(roomInfo(room)); // the same for everybody at the table: serialised once
     for (const m of viewers(room)) {
       const p = players.get(m.id);
-      if (p && p.connected) sendBoundedRaw(p.ws, `{"t":"state","room":${infoJson},"view":${JSON.stringify((room.game && room.game.view(m.id)) ?? null)}}`, maxBufferedBytes);
+      if (p && p.connected) sendBoundedRaw(p.ws, `{"t":"state","room":${infoJson},"view":${JSON.stringify((room.game && room.game.view(viewKey(room, m))) ?? null)}}`, maxBufferedBytes);
     }
     broadcastTables();
   }
@@ -855,6 +882,7 @@ function start(opts = {}) {
   function schedule(room) {
     clearTimeout(room.timer);
     room.timer = null;
+    if (shuttingDown) return; // no bot or auto-play moves while the server stops
     const g = room.game;
     if (!g || room.status !== 'playing' || g.isOver()) return;
     if (!humans(room).some(isConnected)) return; // nobody watching: pause
@@ -1015,10 +1043,16 @@ function start(opts = {}) {
     }
     const i = room.members.findIndex((m) => m.id === p.id);
     if (i < 0) return;
+    // Already gave up this seat (a bot plays it): the leave was counted once, so leaving again changes nothing.
+    if (room.status === 'playing' && room.members[i].bot) return broadcast(room);
     const wasHost = room.hostId === p.id;
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
+      const activity = room.activity && room.activity.get(p.id);
+      const startsRejoinWindow = activity && activity.firstLeftAt === null;
+      rejoinPolicy.leftSeat(room, p.id, Date.now()); // starts the grace period once; active time stops here
+      if (startsRejoinWindow) scheduleRejoinExpiryRefresh();
       leaveRunningGame(room, p.id);
       room.members[i].bot = true; // a bot takes over the seat; the player can take it back by rejoining
       (room.leftEarly || (room.leftEarly = new Set())).add(p.id);
@@ -1093,7 +1127,8 @@ function start(opts = {}) {
   }
 
   function addSpectator(room, p) {
-    if (room.members.some((x) => x.id === p.id)) {
+    // A player who is seated (not a bot-held seat they gave up) is never added as a spectator too.
+    if (room.members.some((x) => x.id === p.id && !x.bot)) {
       p.room = room.code;
       return;
     }
@@ -1412,6 +1447,8 @@ function start(opts = {}) {
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
+      // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
+      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const seat = room.members.find((m) => m.id === p.id);
@@ -1429,11 +1466,18 @@ function start(opts = {}) {
       // Came back to a running game they left (a bot kept their seat): take the seat back, same player id.
       // This wins over "spectate": the home screen can only offer Spectate for a running game, and a player who
       // owns a seat must never be turned into a spectator while a bot plays their cards.
-      if (seat && room.status === 'playing' && seat.bot) {
+      if (seat && room.status === 'playing' && seat.bot && !rejoinPolicy.canReclaimSeat(room, p.id, Date.now(), rejoinGraceMs)) {
+        // A paused game needs a seated, connected person to resume: with nobody seated, a late return could only watch it stall.
+        if (humans(room).length === 0) return sendError(p, 'Nobody is left in this game, so it cannot resume. Start a new game instead.');
+        // The grace period is over (or the person already used it up): the bot keeps the seat and the penalty stands.
+        send(p.ws, { t: 'notice', text: 'The time to take your seat back has passed, so you are watching this game now. The leave still counts.' });
+      }
+      if (seat && room.status === 'playing' && seat.bot && rejoinPolicy.canReclaimSeat(room, p.id, Date.now(), rejoinGraceMs)) {
         if (p.room && p.room !== room.code) leaveRoom(p);
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
         seat.bot = false;
+        rejoinPolicy.reclaimSeat(room, p.id, Date.now());
         if (room.leftEarly) room.leftEarly.delete(p.id);
         if (room.forfeits) room.forfeits.delete(p.id); // back in time: no loss
         seat.avatar = p.avatar;
@@ -1625,6 +1669,7 @@ function start(opts = {}) {
       room.leftEarly = new Set();
       room.forfeits = new Set();
       room.abandoned = false;
+      rejoinPolicy.startActivity(room, room.members.filter((m) => !m.bot).map((m) => m.id), Date.now());
       room.deadline = null;
       room.waiting = [];
       room.pauseUntil = 0;
@@ -1635,6 +1680,8 @@ function start(opts = {}) {
     act(p, msg) {
       const room = rooms.get(p.room);
       if (!room || room.status !== 'playing' || !room.game) return sendError(p, 'No game in progress');
+      // Once the server is stopping, a game must not move on: the shutdown record of a running table is written as it is now
+      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (isSpec(room, p.id)) return sendError(p, 'You are watching this game');
       const res = room.game.act(p.id, msg.action);
       if (!res.ok) {
@@ -1665,6 +1712,8 @@ function start(opts = {}) {
       room.status = 'lobby';
       room.deadline = null;
       room.votes = new Set(); room.outcome = null;
+      // A bot-held seat whose player left during the game is no longer theirs: free it, so they can sit down.
+      room.members = room.members.filter((m) => !(m.bot && room.leftEarly && room.leftEarly.has(m.id)));
       // Spectators stay spectators: watching is a choice. They take an open seat themselves with `sit`.
       broadcast(room);
     },
@@ -2111,10 +2160,18 @@ function start(opts = {}) {
     }
     clearInterval(ticker);
     clearTimeout(tablesTimer);
+    for (const timer of rejoinExpiryTimers) clearTimeout(timer);
+    rejoinExpiryTimers.clear();
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
     clearInterval(broadcastTimer);
+    // Running games stop here: no timer may move them on (schedule and act refuse once shuttingDown is set), so the snapshot
+    // below is the final state of each table.
+    for (const room of rooms.values()) clearTimeout(room.timer);
+    // People who left a running game with others still playing are losses: queue them before the drain, so the drain below waits for them.
+    // Unfinished games are not recorded as finished.
+    try { for (const rec of buildShutdownForfeitRecords(rooms.values())) matchQueue.enqueue(rec); } catch (e) { console.error('[server] Error preparing shutdown records:', e.message); }
     // Let auth handlers finish before taking the delivery snapshot, within one shared shutdown window.
     if (drainMs) {
       const matchDrain = matchQueue.drain(drainMs);
@@ -2128,7 +2185,6 @@ function start(opts = {}) {
     }
     if (metered) metered.stop();
     matchQueue.close();
-    for (const room of rooms.values()) clearTimeout(room.timer);
     await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
     for (const ws of wss.clients) ws.terminate();
     await new Promise((resolve) => wss.close(resolve));

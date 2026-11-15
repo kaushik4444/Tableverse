@@ -1,6 +1,7 @@
 'use strict';
 const db = require('./pool');
 const { computeProfile } = require('./stats');
+const { isForfeitOnly } = require('./matchRecord');
 
 /** What a seat is called once its account no longer exists (see db/account.js deleteAccount). */
 const DELETED_NAME = 'Deleted player';
@@ -47,18 +48,24 @@ class MemoryMatchStore {
     return { played, wins, draws, losses: played - wins - draws };
   }
 
+  /** When a record's game finished: its own finish time if that is a real date not later than the record time, else the record time. */
+  completionMs(m) {
+    const recorded = new Date(m.recordedAt).getTime();
+    const given = m.finishedAt ? new Date(m.finishedAt).getTime() : NaN;
+    return Number.isFinite(given) ? Math.min(given, recorded) : recorded;
+  }
+
   /** Every participant of every match this player took part in, oldest first (for progress levels). */
   async getProgressRows(playerId) {
     const rows = [];
     for (const m of this.matches) {
       if (!m.participants.some((p) => p.playerId === playerId && !p.isBot)) continue;
       // the recorded time is the fallback completion time, so minutes never keep growing after the game; a future finish time is clamped to it
-      const recorded = new Date(m.recordedAt).getTime();
-      const finished = m.finishedAt ? Math.min(new Date(m.finishedAt).getTime(), recorded) : recorded;
+      const finished = this.completionMs(m);
       const secs = m.startedAt ? Math.max(0, Math.min(21600, Math.floor((finished - new Date(m.startedAt).getTime()) / 1000))) : 0;
       for (const p of m.participants) {
         rows.push({ matchId: m.matchKey || m, gameId: m.gameId, seat: p.seat ?? 0, playerId: p.playerId, score: p.score ?? 0, place: Number.isInteger(p.place) ? p.place : null,
-          isWinner: Boolean(p.isWinner), isDraw: Boolean(p.isDraw), isBot: Boolean(p.isBot), leftEarly: Boolean(p.leftEarly), forfeit: Boolean(p.forfeit), secondsPlayed: p.leftEarly || p.isBot ? 0 : secs });
+          isWinner: Boolean(p.isWinner), isDraw: Boolean(p.isDraw), isBot: Boolean(p.isBot), leftEarly: Boolean(p.leftEarly), forfeit: Boolean(p.forfeit), secondsPlayed: Number.isInteger(p.secondsPlayed) ? Math.min(21600, Math.max(0, p.secondsPlayed)) : (p.leftEarly || p.isBot ? 0 : secs) });
       }
     }
     return rows;
@@ -68,7 +75,7 @@ class MemoryMatchStore {
     const rows = [];
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
-      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: m.recordedAt, isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
+      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: new Date(this.completionMs(m)), isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
     }
     return rows.sort((a, b) => b.finishedAt - a.finishedAt);
   }
@@ -91,18 +98,21 @@ function validDate(v) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-async function recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants }) {
+async function recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants, completed, tableHumans = null, tableBots = null }) {
+  // A record from before the flag existed (a spooled record from an older version) is a closed-mid-game record when only
+  // forfeiting people are in it (the rule migration 026 applies to stored rows).
+  if (typeof completed !== 'boolean') completed = !isForfeitOnly(participants);
   if (!db.hasDatabase()) {
-    return memoryStore.recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants });
+    return memoryStore.recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants, completed, tableHumans, tableBots });
   }
 
   return db.withTransaction(async (client) => {
     const matchRes = await client.query(
-      `INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), LEAST(COALESCE($7::timestamptz, NOW()), NOW()))
+      `INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at, completed, table_humans, table_bots)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), LEAST(COALESCE($7::timestamptz, NOW()), NOW()), $8, $9, $10)
        ON CONFLICT (match_key) WHERE match_key IS NOT NULL DO NOTHING
        RETURNING id`,
-      [matchKey || null, roomCode, gameId, seats, JSON.stringify(options || {}), startedAt ? new Date(startedAt).toISOString() : null, validDate(finishedAt)]
+      [matchKey || null, roomCode, gameId, seats, JSON.stringify(options || {}), startedAt ? new Date(startedAt).toISOString() : null, validDate(finishedAt), completed, Number.isInteger(tableHumans) ? tableHumans : null, Number.isInteger(tableBots) ? tableBots : null]
     );
 
     if (!matchRes.rows.length) return { matchId: null, duplicate: true }; // this game was already recorded
@@ -121,7 +131,8 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
       await client.query(
         `INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot, left_early, is_draw, forfeit, place, seconds_played)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                 CASE WHEN $8 OR $7 THEN 0
+                 CASE WHEN $12::int IS NOT NULL THEN $12::int
+                      WHEN $8 OR $7 THEN 0
                       ELSE LEAST(21600, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (SELECT finished_at - started_at FROM matches WHERE id = $1)))::INTEGER)) END)`,
         [
           matchId,
@@ -135,6 +146,8 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
           Boolean(p.isDraw),
           Boolean(p.forfeit),
           Number.isInteger(p.place) && p.place >= 1 && p.place <= 32767 ? p.place : null,
+          // Actual active seconds from the match record; null for an older record, which keeps the start-to-finish rule.
+          Number.isInteger(p.secondsPlayed) ? Math.min(21600, Math.max(0, p.secondsPlayed)) : null,
         ]
       );
     }

@@ -82,7 +82,7 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
   const r = await db.query(
     `SELECT * FROM (
        SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.seats, mp.score, mp.is_winner, mp.is_draw, mp.left_early, mp.forfeit,
-         (SELECT COUNT(*)::int FROM match_participants x WHERE x.match_id = m.id AND x.is_bot = FALSE) AS humans
+         COALESCE(m.table_humans, (SELECT COUNT(*)::int FROM match_participants x WHERE x.match_id = m.id AND x.is_bot = FALSE)) AS humans
        FROM match_participants mp JOIN matches m ON m.id = mp.match_id
        WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
        ORDER BY m.id, mp.seat

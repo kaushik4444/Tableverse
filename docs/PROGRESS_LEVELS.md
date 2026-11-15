@@ -6,7 +6,7 @@ admin overview. Not verified in production.
 
 ## Account level: progress in Tableverse
 - Measures **time only**: 1 XP for each full minute spent in a game.
-- Winning, losing, drawing or leaving makes no difference to the calculation, and there is no penalty. Today, though, a leaver is stored with 0 seconds, so the time before leaving earns no XP (see the build steps below).
+- Winning, losing, drawing or leaving makes no difference to the calculation, and there is no penalty. Time is the actual time each person spent in their seat (see "Leaving and coming back" below). Spectator time never counts.
 - It is progress, not a ranking.
 
 ## Levels
@@ -42,10 +42,21 @@ Rules that apply to every game:
 - **Leave without a penalty** (bots only, or an abandoned game): not in the game ranking at all.
 - **Bots** are not ranked.
 
+## Leaving and coming back (rejoin grace period)
+Implemented in `lib/rejoinPolicy.js`, wired into `server.js` (leave, rejoin, game start) and `db/matchRecord.js` (what is stored). Tests: `tests/rejoin-policy.test.js`.
+- **Grace period:** 2 minutes (`REJOIN_GRACE_MS`), counted from a person's **first** voluntary departure in a game. Later leave and rejoin cycles never move that deadline.
+- **Inside the period** the person can take their seat back from the bot. Their leave penalty is removed while the game runs, as before.
+- **After the period** the bot keeps the seat, the penalty stands, and the person can only watch the game. They get a notice saying so.
+- **Network drops are not departures.** A dropped connection is handled as before (the table is told, a bot may play the seat after the absence limit), and it never starts the grace period.
+- **Active time:** each seated person's time is the sum of their intervals in the seat. It stops when they leave and starts again when they take the seat back. Bots and spectators have none. A single game counts at most 6 hours.
+- **Stored result:** the record stores each person's active seconds in `match_participants.seconds_played`. No new column or migration was needed (migration 025 already has it). Rows from before this change keep the old rule.
+- **Restart:** the grace period and active time live in memory. After a restart a running table is not resumed, so nobody can reclaim a seat; leavers' losses are still written by the shutdown record, with the active time known at that moment.
+- **Abandoned games:** a second departure still abandons the game. Nobody is penalised and the players who stayed get no result, as before.
+
 ## History (past games)
 - Past games count once the feature ships. Their skill points come from the stored results.
-- Time for past games comes from the stored start and finish times. A leaver's time up to the moment they left is not
-  stored, so for past leavers that time counts as 0.
+- Time for past games comes from the stored start and finish times, for people who stayed to the end. For past leavers the
+  time up to their departure was never stored, so it counts as 0. Only games recorded from this change on store active time.
 - Leaves recorded before migration 024 have no penalty flag. Those leavers are not penalised, and they are left out of
   the game ranking because the record cannot show whether others were still playing.
 
@@ -56,7 +67,7 @@ Done on `development` (not released to `main`, not verified in production):
 3. The account level, the game levels and the number of penalised leaves show on own and public profiles; the admin overview counts penalised leaves.
 
 Still open:
-- Time before a leave: a leaver's `seconds_played` is 0, because the moment they left is not stored. Until that is recorded, minutes played before leaving earn no account XP. Recording the exact leave time would need a new column and a decision.
+- Time while a dropped connection is waiting to come back: the seat is still theirs, so a bot playing it while they are offline is not yet excluded from their active time (see "Leaving and coming back").
 - Named ranks are not planned; skill levels only.
 
 ## Storage (migration 025)
