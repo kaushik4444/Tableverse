@@ -43,7 +43,7 @@ test('Wizard: placings by score; the last player gets a negative', () => {
   const pts = gameSkillPoints('wizard', [p('A', 50), p('B', 30), p('C', 10), p('D', 0)]);
   assert.equal(pts.A, WIN, '1st is the best');
   assert.equal(pts.D, LOSS, 'last place is negative');
-  assert.ok(pts.B > 0 && pts.C < 0 && pts.B > pts.C, 'in-between places are in order');
+  assert.ok(pts.B > 0 && pts.C === 0 && pts.B > pts.C, 'in-between places are in order: +10 then 0 for four players');
   assert.ok(pts.D < 0);
 });
 
@@ -58,14 +58,14 @@ test('ties share a place', () => {
   assert.equal(pts.B, pts.C);
 });
 
-test('ladder: 1st +20, last -20, in a straight line between; a lone player 0', () => {
+test('ladder: 1st +20, last -10, in a straight line between; a lone player 0', () => {
   assert.equal(ladder(1, 4), 20);
-  assert.equal(ladder(4, 4), -20);
-  assert.equal(ladder(2, 3), 0);
+  assert.equal(ladder(4, 4), -10);
+  assert.equal(ladder(2, 3), 5, 'three ranked: +20, +5, -10');
   assert.equal(ladder(1, 1), 0);
 });
 
-test('Twenty-nine and The Mind: a win is +20, a draw 0, a loss -20 for everyone on that side', () => {
+test('Twenty-nine and The Mind: a win is +20, a draw 0, a loss -10 for everyone on that side', () => {
   const pts = gameSkillPoints('twentynine', [w('A'), w('B'), l('C'), l('D')]);
   assert.deepEqual([pts.A, pts.B, pts.C, pts.D], [WIN, WIN, LOSS, LOSS]);
   const drawn = gameSkillPoints('themind', [d('A'), d('B')]);
@@ -113,7 +113,7 @@ test('a game with no rule of its own is ranked by placings', () => {
 });
 
 test('game points can go negative; the running total is not floored', () => {
-  assert.equal(xp.runningTotal([-30, -20]), -50);
+  assert.equal(xp.runningTotal([-30, -10]), -40);
   assert.equal(xp.runningTotal([20, -30]), -10);
 });
 
@@ -121,7 +121,7 @@ test('account XP accumulates across games', () => {
   assert.equal(xp.runningTotal([xp.timeXp(600), xp.timeXp(900)]), 25);
 });
 
-test('a tie at the bottom: the lowest place still gets -20 (places 1, 2, 2 are scaled to 2, not to 3)', () => {
+test('a tie at the bottom: the lowest place still gets -10 (places 1, 2, 2 are scaled to 2, not to 3)', () => {
   const pts = gameSkillPoints('wizard', [p('A', 50), p('B', 10), p('C', 10)]);
   assert.equal(pts.A, WIN);
   assert.equal(pts.B, LOSS, 'the shared last place is last');
@@ -149,14 +149,21 @@ test('a bot in 1st place does not push the humans down: places are relative to t
     p('bot', 0, { place: 1, isBot: true }), p('H2', 0, { place: 2 }), p('H3', 0, { place: 3 }), p('X', 0, { place: 4, leftEarly: true }),
   ]);
   assert.equal(pts.H2, WIN, 'the best human of those ranked gets +20');
-  assert.equal(pts.H3, LOSS, 'the last human ranked gets -20');
+  assert.equal(pts.H3, LOSS, 'the last human ranked gets -10');
   assert.equal(pts.bot, undefined);
   assert.equal(pts.X, undefined);
 });
 
-test('a lone ranked player (everyone else left or is a bot) gets 0, not -20', () => {
+test('a lone ranked player (everyone else left or is a bot) gets 0, not -10', () => {
   const pts = gameSkillPoints('propertyrivals', [p('H2', 0, { place: 2 }), p('bot', 0, { place: 1, isBot: true })]);
   assert.equal(pts.H2, 0);
+});
+
+test('every registered game has its own scoring rule (none silently falls back to placings)', () => {
+  const games = require('../games');
+  const ids = games.list().map((g) => g.id);
+  assert.ok(ids.length >= 10, 'the registry lists the games');
+  assert.deepEqual(ids.filter((id) => !RULES[id]), [], 'add a rule for each new game in lib/gameSkill.js');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
