@@ -25,6 +25,12 @@ const need = () => { if (!db.hasDatabase()) throw new AuthError('Accounts need t
 const iso = (d) => (d ? new Date(d).toISOString() : null);
 
 /** Everything the signed-in person may see about themself (includes their own email; never any hash). */
+/** Records that the player has seen the first-login welcome. Only the first call changes anything. */
+async function markWelcomed(playerId) {
+  need();
+  await db.query('UPDATE players SET welcomed_at = NOW() WHERE id = $1 AND welcomed_at IS NULL', [playerId]);
+}
+
 async function getOwnProfile(playerId) {
   need();
   const r = await db.query(
@@ -213,4 +219,4 @@ async function updatePresence(playerId) {
   await db.query('UPDATE players SET last_seen_at = NOW() WHERE id = $1', [playerId]);
 }
 
-module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, setLeaderboardOptIn, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, idForUsername, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };
+module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, setLeaderboardOptIn, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, idForUsername, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence, markWelcomed };

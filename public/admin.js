@@ -250,7 +250,7 @@
     const o = await api(`/api/admin/players/profile?username=${encodeURIComponent(username)}`);
     if (gen !== state.gen) return;
     if (!o.player) { main.innerHTML = '<p class="ad-muted">No registered player with that username.</p><button class="ad-btn" id="pBack">Back to players</button>'; document.getElementById('pBack').onclick = () => { state.gen += 1; players().catch(fail); }; return; }
-    const p = o.player; const t = o.totals;
+    const p = o.player; const t = o.totals; const pg = o.progress;
     const draw = (zone) => {
     o.zone = zone;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
@@ -262,6 +262,9 @@
       <p class="ad-muted">${p.country ? esc(countryName(p.country)) + ' · ' : ''}Role: ${esc(p.role)} · ${p.verified ? 'verified' : 'not verified'} · Joined ${esc(when(p.joinedAt))} · Last seen ${esc(when(p.lastSeenAt))}${p.suspended ? ' · <b>suspended</b>' : ''}</p>
       <div class="ad-grid">${tile(t.games, 'games played')}${tile(t.wins, 'wins')}${tile(pctText(t.wins, t.rated - t.draws), 'win rate (draws left out)')}${tile(t.draws, 'draws')}${tile(pctText(t.leftEarly, t.games), 'games left early')}${tile(mins(t.minutes), 'time played')}${tile(t.activeDays, 'days played')}</div>
       <p class="ad-muted">First game ${esc(when(t.firstGameAt))} · latest game ${esc(when(t.lastGameAt))}</p>
+      <h3>Progress</h3><div class="ad-grid">${tile(pg.level, 'overall level')}${tile(pg.xp, 'Player Progress XP (time only)')}${tile(pg.penalisedLeaves, 'penalised leaves')}</div>
+      ${pg.games.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Game XP</th><th>Ranked games</th><th>Kind</th></tr></thead><tbody>${pg.games.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Game XP">${g.points > 0 ? '+' : ''}${g.points}</td><td data-l="Ranked games">${g.played}</td><td data-l="Kind">${g.rule === 'placing' ? 'Placing' : 'Win or lose'}</td></tr>`).join('')}</tbody></table>` : '<p class="ad-muted">No ranked games yet.</p>'}
+      <p class="ad-muted">Player Progress is 1 XP per full minute of play and sets the level. Game XP is per game and never changes the level.</p>
       <h3>When this player plays</h3><div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:8px">${zoneButtons}</div>${hourColumns(o.hourly, o.zone)}
       <h3>By game</h3>${o.perGame.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Games</th><th>Wins</th><th>Win rate</th><th>Drawn</th><th>Left early</th><th>Played</th></tr></thead><tbody>${perGame}</tbody></table>` : '<p class="ad-muted">No finished games yet.</p>'}
       <h3>Latest games</h3>${o.recent.length ? `<table class="ad-t stack"><thead><tr><th>When</th><th>Game</th><th>Seats</th><th>Result</th><th>Length</th></tr></thead><tbody>${recent}</tbody></table>` : '<p class="ad-muted">No finished games yet.</p>'}
@@ -380,6 +383,19 @@
     document.getElementById('fPrev').onclick = () => feedback(status, page - 1).catch(fail);
     document.getElementById('fNext').onclick = () => feedback(status, page + 1).catch(fail);
     main.querySelectorAll('[data-fid]').forEach((b) => { b.onclick = async () => { try { await api('/api/admin/feedback/status', { id: b.dataset.fid, status: b.dataset.st }); await feedback(status, page); } catch (e) { say('fMsg', e.message, 'err'); } }; });
+  }
+
+  // ---------------------------------------------------------------- games (counts and averages only)
+  async function gamesTab(days = 30) {
+    const gen = state.gen;
+    const o = await api(`/api/admin/games?days=${days}`);
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Finished">${g.finished}</td><td data-l="Last 7 days">${g.finished7d}</td><td data-l="Signed-in players">${g.signedInPlayers}</td><td data-l="Player-games">${g.playerGames}</td><td data-l="Avg minutes each">${g.avgMinutes}</td><td data-l="Penalised leaves">${g.penalisedLeaves}</td><td data-l="Penalised leave rate">${pctText(g.penalisedLeaves, g.playerGames)}</td><td data-l="Left, no penalty">${g.leftWithoutPenalty}</td></tr>`).join('');
+    main.innerHTML = `<h2>Games <small class="ad-muted">last ${o.days} days</small></h2>
+      <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${[7, 30, 90].map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${d} days</button>`).join('')}</div>
+      ${o.games.length ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Last 7 days</th><th>Signed-in players</th><th>Player-games</th><th>Avg minutes each</th><th>Penalised leaves</th><th>Penalised leave rate</th><th>Left, no penalty</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="ad-muted">No finished games in this range.</p>'}
+      <p class="ad-muted">Counts and averages only; no player is named. A penalised leave is leaving while others were still playing. Guests count as player-games but not as signed-in players.</p>`;
+    main.querySelectorAll('[data-gd]').forEach((b) => { b.onclick = () => { state.gen += 1; const mine = state.gen; gamesTab(Number(b.dataset.gd)).catch((e) => { if (mine === state.gen) fail(e); }); }; });
   }
 
   // ---------------------------------------------------------------- chat reports (read-only queue)
@@ -637,7 +653,7 @@
     } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen && seq === renderSeq) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
   }
 
-  const views = { overview: () => overview(), insights: () => insights(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
+  const views = { overview: () => overview(), insights: () => insights(), games: () => gamesTab(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
