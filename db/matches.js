@@ -256,8 +256,10 @@ async function weeklyBoard(gameId, { days = 7, limit = 10 } = {}) {
   if (!db.hasDatabase()) return [];
   const n = Math.min(30, Math.max(1, Math.floor(Number(days)) || 7));
   const r = await db.query(
-    `SELECT m.id AS match_id, m.game_id, mp.seat, mp.player_id, mp.score, mp.place, mp.is_winner, mp.is_draw, mp.is_bot, mp.left_early, mp.forfeit, mp.seconds_played
+    `SELECT m.id AS match_id, m.game_id, mp.seat, mp.player_id, mp.score, mp.place, mp.is_winner, mp.is_draw, mp.is_bot, mp.left_early, mp.forfeit, mp.seconds_played,
+            p.id AS eligible_id, p.username, p.display_name
        FROM match_participants mp JOIN matches m ON m.id = mp.match_id
+       LEFT JOIN players p ON p.id = mp.player_id AND p.leaderboard_opt_in AND NOT mp.is_bot
       WHERE m.game_id = $1 AND m.match_key IS NOT NULL
         AND m.finished_at > NOW() - ($2::int * INTERVAL '1 day')
         AND m.id IN (SELECT mp2.match_id FROM match_participants mp2 JOIN players p ON p.id = mp2.player_id
@@ -269,10 +271,11 @@ async function weeklyBoard(gameId, { days = 7, limit = 10 } = {}) {
     matchId: x.match_id, gameId: x.game_id, seat: x.seat, playerId: x.player_id, score: x.score, place: x.place, isWinner: x.is_winner, isDraw: x.is_draw,
     isBot: x.is_bot, leftEarly: x.left_early, forfeit: x.forfeit, secondsPlayed: x.seconds_played,
   }));
-  const ids = [...new Set(rows.filter((x) => x.playerId && !x.isBot).map((x) => x.playerId))];
-  if (!ids.length) return [];
-  const people = await db.query('SELECT id, username, display_name FROM players WHERE id = ANY($1::uuid[]) AND leaderboard_opt_in = TRUE', [ids]);
-  return boardFor(rows, people.rows.map((p) => ({ id: p.id, username: p.username, displayName: p.display_name })), gameId, limit);
+  const people = new Map();
+  for (const p of r.rows) {
+    if (p.eligible_id) people.set(p.eligible_id, { id: p.eligible_id, username: p.username, displayName: p.display_name });
+  }
+  return boardFor(rows, [...people.values()], gameId, limit);
 }
 
 module.exports = {

@@ -2847,6 +2847,18 @@
     }
   }
 
+  function loadProfileBoard(prof) {
+    const id = prof.game;
+    const gen = sessionGen;
+    const request = {};
+    prof.boardRequest = request;
+    prof.board = null;
+    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardRequest === request;
+    getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
+      .then((b) => { if (current()) { prof.board = b; render(); } })
+      .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
+  }
+
   // ------------------------------------------------------------ events
   const actions = {
     endAgain: () => send({ t: 'rematch' }),
@@ -2908,21 +2920,25 @@
       getJson(`/api/me/history?game=${encodeURIComponent(id)}&page=1`)
         .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
         .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
-      getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
-        .then((b) => { if (current()) { prof.board = b; render(); } })
-        .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
+      loadProfileBoard(prof);
     },
     boardOptIn: async () => {
       const prof = S.profile;
-      if (!prof || !prof.data || !prof.data.profile) return;
+      if (!prof || !prof.data || !prof.data.profile || prof.boardOptInPending) return;
+      prof.boardOptInPending = true;
+      const gen = sessionGen;
       const next = !prof.data.profile.leaderboardOptIn;
       try {
         const out = await postJson('/api/me/leaderboard', { optIn: next });
-        prof.data.profile.leaderboardOptIn = out.optIn === true;
+        if (gen === sessionGen && S.profile === prof) {
+          prof.data.profile.leaderboardOptIn = out.optIn === true;
+          if (prof.game) loadProfileBoard(prof);
+        }
       } catch (e) { toast(e.message || 'Could not save that. Try again.'); }
+      finally { prof.boardOptInPending = false; }
       render();
     },
-    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; render(); } },
+    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; S.profile.boardRequest = null; render(); } },
     editProfile: () => openEditProfileDialog(),
     openDeleteAccount: () => openDeleteAccountDialog(),
     copyProfileLink: async () => {
