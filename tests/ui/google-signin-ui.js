@@ -54,7 +54,8 @@ async function stubGoogle(page, hits) {
     assert.equal(seen.complete, undefined, 'not sent without the 18+ confirmation');
     await page.check('#googleAdult');
     await page.click('#googleSignupForm button[type="submit"]');
-    await page.waitForSelector('#auth-overlay', { state: 'detached', timeout: 8000 });
+    // (the scripted socket answers the new connection with authRequired, which may draw the log-in sheet again: the sign-up step itself is what must be gone)
+    await page.waitForSelector('#googleSignupForm', { state: 'detached', timeout: 8000 });
     assert.deepEqual({ ...seen.complete, avatar: undefined }, { credential: 'cred-1', username: 'gina_g', displayName: 'Gina G', avatar: undefined, adultConfirmed: true });
     await ctx.close(); srv.server.close();
   });
