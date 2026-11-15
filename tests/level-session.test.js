@@ -94,7 +94,9 @@ test('a notice cannot acknowledge a level under another account and baseline cle
 for (const seedCache of ['refreshLevel', 'loadProfile']) {
   for (const newerState of ['pending', 'failed', 'succeeded']) {
     test(`profile reuses only newer cached progress (${seedCache} cache, refresh ${newerState})`, async () => {
-      const { c } = client();
+      const { c, values } = client();
+      c.S.guest = false;
+      values.set('ct_level_seen_alice', '1');
       const response = (level) => ({ profile: { displayName: 'Alice' }, stats: { progress: { account: { level } } } });
       c.getJson = async () => response(1);
       await c[seedCache]();
@@ -110,6 +112,10 @@ for (const seedCache of ['refreshLevel', 'loadProfile']) {
       pending[1].resolve({});
       await profile;
       assert.equal(c.S.profile.data.stats.progress.account.level, newerState === 'succeeded' ? 3 : 2);
+      if (newerState === 'failed') {
+        assert.equal(c.S.account.level, 2, 'the successful profile response still updates the account after a newer refresh fails');
+        assert.equal(c.S.levelUp.to, 2, 'the accepted profile response triggers the level-up notice');
+      }
       if (newerState === 'pending') {
         pending[2].resolve(response(3));
         await refresh;
