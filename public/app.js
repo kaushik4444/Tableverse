@@ -2850,10 +2850,9 @@
   function loadProfileBoard(prof) {
     const id = prof.game;
     const gen = sessionGen;
-    const request = {};
-    prof.boardRequest = request;
+    const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
     prof.board = null;
-    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardRequest === request;
+    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardGen === boardGen;
     getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
       .then((b) => { if (current()) { prof.board = b; render(); } })
       .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
@@ -2938,7 +2937,7 @@
       finally { prof.boardOptInPending = false; }
       render();
     },
-    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; S.profile.boardRequest = null; render(); } },
+    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; S.profile.boardGen = (S.profile.boardGen || 0) + 1; render(); } },
     editProfile: () => openEditProfileDialog(),
     openDeleteAccount: () => openDeleteAccountDialog(),
     copyProfileLink: async () => {

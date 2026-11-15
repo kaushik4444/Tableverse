@@ -79,6 +79,15 @@ const flush = () => new Promise((r) => setImmediate(r));
     await flush();
     assert.equal(x.prof.board, null, 'stale board discarded');
   }
+  const staleFailure = client();
+  staleFailure.context.loadProfileBoard(staleFailure.prof);
+  staleFailure.context.loadProfileBoard(staleFailure.prof);
+  staleFailure.boards[1].resolve({ board: ['current'] });
+  await flush();
+  staleFailure.boards[0].reject(new Error('old request failed'));
+  await flush();
+  assert.equal(staleFailure.prof.board.board[0], 'current', 'stale failure cannot replace newer board');
+
   const x = client();
   const saving = x.context.actions.boardOptIn();
   x.context.sessionGen++;
