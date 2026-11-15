@@ -360,6 +360,11 @@ function start(opts = {}) {
     onAccountDeleted: ({ playerId }) => {
       // drop this account's pseudonymous activity: pending in memory first (so no later write recreates it), then the stored rows
       if (dbAdmin) analytics.forget(playerId, () => dbAdmin.forgetActor(playerId)).catch(() => {}); // best effort
+      // Finished games keep each seat's XP rows in memory until the server restarts: anonymise them as the record is.
+      for (const room of rooms.values()) {
+        if (!room.outcome || !Array.isArray(room.outcome.xp)) continue;
+        for (const x of room.outcome.xp) if (x.id === playerId) { x.id = null; x.name = 'Player'; x.saved = false; }
+      }
       const p = players.get(playerId);
       if (!p) return;
       // The real name must not outlive the account anywhere: not in the table, its log or chat, and not in the match
@@ -868,7 +873,9 @@ function start(opts = {}) {
             matchQueue.enqueue(record); // never blocks the game and never rejects; failures are retried and logged by the queue
             // The XP each seat earned, from the same record: the game-over screen shows exactly what is stored
             const seats = room.seated || room.members;
-            room.outcome.xp = matchXpOf(record).map((x) => ({ ...x, id: seats[x.seat] ? seats[x.seat].id : null, name: seats[x.seat] ? seats[x.seat].name : 'Player' }));
+            // Only signed-in accounts at the table keep their XP; guests and anonymous players are shown but not kept.
+            const registered = new Set(room.members.filter((m) => !m.bot && usernameOf(m)).map((m) => m.id));
+            room.outcome.xp = matchXpOf(record, registered).map((x) => ({ ...x, id: seats[x.seat] ? seats[x.seat].id : null, name: seats[x.seat] ? seats[x.seat].name : 'Player' }));
           }
         } catch (e) {
           console.error('[server] Error preparing match record:', e.message);

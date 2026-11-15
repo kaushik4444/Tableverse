@@ -55,7 +55,7 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
   });
   await test('a new account sees its level before the first game (the empty profile keeps the progress card)', () => {
     const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'public', 'app.js'), 'utf8');
-    assert.match(src, /if \(!s \|\| !s\.played\) return progressHTML\(s && s\.progress\) \+ emptyState\(/);
+    assert.match(src, /if \(!s \|\| !s\.played\) return progressHTML\(s && s\.progress, interactive\) \+ emptyState\(/);
   });
   await test('bots and other people never count as me, and a match I was not in is ignored', () => {
     const p = computeProgress([row('1', 'tictactoe', 0, 'bot', { isBot: true, isWinner: true }), row('1', 'tictactoe', 1, 'x')], 'me');
@@ -85,6 +85,18 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
     // 'me' is not an account id, so this seat is a guest: shown, but not kept
     assert.deepEqual(out[0], { seat: 0, isBot: false, saved: false, minutes: 10, timeXp: 10, gameXp: 20, penalised: false });
     assert.deepEqual(out[1], { seat: 1, isBot: true, saved: false, minutes: 0, timeXp: 0, gameXp: null, penalised: false });
+  });
+
+  await test('only a registered account is saved: a UUID alone (anonymous or deleted player) is not', () => {
+    const uuid = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+    const rec = { gameId: 'tictactoe', participants: [
+      { seat: 0, playerId: uuid, score: 0, isWinner: true, isBot: false, leftEarly: false, forfeit: false, secondsPlayed: 60 },
+      { seat: 1, playerId: uuid.replace('6f1c', '7a2d'), score: 0, isWinner: false, isBot: false, leftEarly: false, forfeit: false, secondsPlayed: 60 },
+    ] };
+    const out = matchXpOf(rec, new Set([uuid]));
+    assert.equal(out[0].saved, true, 'a registered account keeps its XP');
+    assert.equal(out[1].saved, false, 'an id that is not registered is not kept, even if it looks like a UUID');
+    assert.equal(matchXpOf(rec)[0].saved, false, 'with no registered set nothing is kept');
   });
 
   await test('a penalised leaver gets the leave points and the time up to leaving', () => {
