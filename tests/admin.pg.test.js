@@ -620,6 +620,35 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       const again = new Browser(srv.port); await again.csrf();
       assert.equal((await again.post('/api/auth/login', { email: v.email, password: PW })).ok, true, 'sign-in works after the suspension is lifted');
     });
+    await test('the owner deletes a stale account for real: finished games stay anonymised, the audit row survives, others are untouched', async () => {
+      const v = await newUser('Gone'); const keep = await newUser('Stays');
+      const me = (await v.browser.get('/api/auth/session')).json.player;
+      const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at, completed)
+                          VALUES (gen_random_uuid(), 'DEL1', 'tictactoe', 2, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour', TRUE) RETURNING id`))[0].id;
+      await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner) VALUES ($1,$2,$3,0,TRUE)', [m, v.id, 'Gone Player']);
+      await q("UPDATE players SET last_seen_at = NOW() - INTERVAL '200 days', created_at = NOW() - INTERVAL '300 days' WHERE id = $1", [v.id]);
+      // the stale filter finds it (and not an active account), oldest first
+      const stale = (await boss().browser.get('/api/admin/users?stale=90')).json;
+      assert.ok(stale.users.some((u) => u.id === v.id), 'the quiet account is listed');
+      assert.ok(!stale.users.some((u) => u.id === keep.id), 'an account seen today is not');
+      assert.ok(stale.users.every((u) => u.role === 'user' && !u.is_anonymous));
+      // the typed username is required; nothing changes without it
+      assert.equal((await boss().browser.post('/api/admin/users/delete', { playerId: v.id, confirm: 'wrong' })).status, 400);
+      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE id = $1', [v.id]))[0].n, 1);
+      assert.equal((await keep.browser.post('/api/admin/users/delete', { playerId: v.id, confirm: me.username })).status, 403);
+      const r = await boss().browser.post('/api/admin/users/delete', { playerId: v.id, confirm: me.username });
+      assert.equal(r.status, 200, JSON.stringify(r.json)); assert.equal(r.json.matchesKept, 1);
+      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE id = $1', [v.id]))[0].n, 0);
+      assert.equal((await q('SELECT count(*)::int AS n FROM auth_identities WHERE player_id = $1', [v.id]))[0].n, 0);
+      const part = (await q('SELECT player_id, player_name FROM match_participants WHERE match_id = $1', [m]))[0];
+      assert.equal(part.player_id, null); assert.equal(part.player_name, 'Deleted player');
+      const au = (await q("SELECT detail, target_id FROM admin_audit_log WHERE action = 'user.delete' AND target_id = $1", [v.id]))[0];
+      assert.ok(au, 'audited'); assert.equal(au.detail.username, me.username); assert.ok(!JSON.stringify(au.detail).includes(v.email));
+      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE id = $1', [keep.id]))[0].n, 1, 'another account is untouched');
+      // the deleted person can no longer sign in
+      const b = new Browser(srv.port); await b.csrf();
+      assert.equal((await b.post('/api/auth/login', { email: v.email, password: PW })).ok, false);
+    });
     await test('insights: exact-day returns on day 7 and day 30, and the median length per game', async () => {
       const ins = require('../db/insights');
       const DAY = 86400000;

@@ -18,6 +18,7 @@ async function start({ env = {}, analytics = null, store: given = null, clock = 
   const e = { NODE_ENV: 'test', ...env };
   const store = given || createMemoryAdminStore({ now, env: e });
   const signedOutCalls = [];
+  const deletedCalls = [];
   // stand-ins for the database token issue and the mail sender: `mail` collects what would have been sent
   const auth = { resendVerification: async ({ email }) => ({ ok: true, verifyToken: 'tok-' + mail.length, email }) };
   const queued = { count: 0 };
@@ -36,7 +37,7 @@ async function start({ env = {}, analytics = null, store: given = null, clock = 
   const routes = createAuthRoutes({
     env: e, production: false, trustProxy: false, emailSender: {}, sendJson, sendText, readJsonBody, log: { error() {}, warn() {}, log() {} },
     extraRoutes: (ctx) => createAdminRoutes({ env: e, store, analytics, now, ctx, platform: () => ({ rooms: 0 }), idPattern: /^(p_)?[0-9a-f-]{36}$/i, // in-memory players have p_<uuid> ids; production uses plain UUIDs
-       auth, emailSender, onSignedOut: (o) => signedOutCalls.push(o),
+       auth, emailSender, onSignedOut: (o) => signedOutCalls.push(o), onAccountDeleted: (o) => deletedCalls.push(o),
        onBroadcastQueued: () => { queued.count++; }, makeUnsubscribeUrl: (t) => 'https://app.test/api/email/unsubscribe?token=' + t }).routes,
     onEvent: () => {},
   });
@@ -64,7 +65,7 @@ async function start({ env = {}, analytics = null, store: given = null, clock = 
     return b;
   }
   async function guest() { const b = new Browser(port); await b.csrf(); return b; }
-  return { port, store, clock, env: e, signedOutCalls, queued, login, otherDevice, guest, close: () => new Promise((r) => server.close(r)) };
+  return { port, store, clock, env: e, signedOutCalls, deletedCalls, queued, login, otherDevice, guest, close: () => new Promise((r) => server.close(r)) };
 }
 
 module.exports = { start };
