@@ -2605,6 +2605,21 @@
   const fmtXp = (n) => (Number(n) > 0 ? `+${Number(n)}` : `${Number(n) || 0}`);
 
   /** The statistics block of a profile. Bot seats and games left without a penalty are never counted (the server leaves them out). */
+  /**
+   * This week's board for one game (the last 7 days, opted-in players only) and the player's own switch for it, which is off
+   * by default. The board is public and read-only.
+   */
+  function weeklyBoardHTML(P, id, meta) {
+    const b = P.board;
+    const on = !!(P.data && P.data.profile && P.data.profile.leaderboardOptIn);
+    const body = !b ? '<p class="hint" style="text-align:left">Loading this week’s board…</p>'
+      : b.failed ? '<p class="hint" style="text-align:left">Could not load the board. Try again in a moment.</p>'
+      : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${fmtXp(r.points)} XP</b><small>${r.played} game${r.played === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
+      : '<p class="hint" style="text-align:left">No one on the board has played this game in the last 7 days.</p>';
+    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the weekly boards</button></div><p class="hint" style="text-align:left">Off by default. When on, your name and your ${esc(meta.name)} Game XP from the last 7 days can appear on this board.</p>` : '';
+    return `<section class="progress-card" aria-label="Weekly board for ${esc(meta.name)}"><h3 class="stat-h">This week’s board</h3>${body}${toggle}</section>`;
+  }
+
   /** Account level (time played), Game XP per game (skill) and penalised leaves. `pr` is the progress the server sends; nothing when absent. */
   function progressHTML(pr, interactive = true) {
     if (!pr || !pr.account) return '';
@@ -2649,6 +2664,7 @@
         <div class="pg-level"><span class="stat-v">${fmtXp(pg.points)} XP</span><span class="stat-l">Game XP in ${esc(meta.name)}</span></div>
         <p class="hint" style="text-align:left">${esc(rule)}</p>
       </section>
+      ${weeklyBoardHTML(P, id, meta)}
       <div class="stat-grid">
         ${tile('Played', g.played)}
         ${tile('Wins', g.wins, 'good')}
@@ -2867,6 +2883,17 @@
     }
   }
 
+  function loadProfileBoard(prof) {
+    const id = prof.game;
+    const gen = sessionGen;
+    const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
+    prof.board = null;
+    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardGen === boardGen;
+    getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
+      .then((b) => { if (current()) { prof.board = b; render(); } })
+      .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
+  }
+
   // ------------------------------------------------------------ events
   const actions = {
     endAgain: () => send({ t: 'rematch' }),
@@ -2921,15 +2948,36 @@
       const prof = S.profile;
       if (!prof || !prof.data) return;
       const id = el.dataset.game;
-      prof.game = id; prof.gameHistory = null; render();
+      prof.game = id; prof.gameHistory = null; prof.board = null; render();
       // Apply the answer only to the same profile, still open on this game (a reload or a sign-out drops it).
       const gen = sessionGen; // another account signed in or out since the click: its answer is not for this screen
       const current = () => gen === sessionGen && S.profile === prof && prof.game === id;
       getJson(`/api/me/history?game=${encodeURIComponent(id)}&page=1`)
         .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
         .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
+      loadProfileBoard(prof);
     },
-    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; render(); } },
+    boardOptIn: async () => {
+      const prof = S.profile;
+      if (!prof || !prof.data || !prof.data.profile || prof.boardOptInPending) return;
+      prof.boardOptInPending = true;
+      const gen = sessionGen;
+      const next = !prof.data.profile.leaderboardOptIn;
+      try {
+        const out = await postJson('/api/me/leaderboard', { optIn: next });
+        if (gen !== sessionGen) return;
+        if (S.profile === prof) {
+          prof.data.profile.leaderboardOptIn = out.optIn === true;
+          if (prof.game) loadProfileBoard(prof);
+        } else if (S.page === 'profile' && !S.room) {
+          // The profile screen was replaced while the save was in flight: reload it, but only if it is still the screen on show.
+          await loadProfile();
+        }
+      } catch (e) { toast(e.message || 'Could not save that. Try again.'); }
+      finally { prof.boardOptInPending = false; }
+      render();
+    },
+    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; S.profile.boardGen = (S.profile.boardGen || 0) + 1; render(); } },
     editProfile: () => openEditProfileDialog(),
     openDeleteAccount: () => openDeleteAccountDialog(),
     copyProfileLink: async () => {
