@@ -661,7 +661,7 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .end-xp .xp-card small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .end-xp .xp-note { margin: 8px 2px 0; font-size: 12px; color: var(--muted); }
 .end-xp .xp-table { margin-top: 10px; border-radius: 12px; overflow: hidden; background: rgba(255,255,255,.04); }
-.end-xp .xp-tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(64px, auto) minmax(64px, auto); gap: 8px; align-items: center; padding: 9px 12px; font-size: 14px; }
+.end-xp .xp-tr { display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px; gap: 8px; align-items: center; padding: 9px 12px; font-size: 14px; }
 .end-xp .xp-tr + .xp-tr { border-top: 1px solid rgba(255,255,255,.08); }
 .end-xp .xp-th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding-top: 8px; padding-bottom: 8px; }
 .end-xp .xp-c { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -671,7 +671,7 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .end-xp .xp-tag { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 4px; }
 @media (max-width: 420px) {
   .xp-summary { grid-template-columns: minmax(0, 1fr); }
-  .end-xp .xp-tr { grid-template-columns: minmax(0, 1fr) minmax(56px, auto) minmax(56px, auto); padding: 8px 10px; }
+  .end-xp .xp-tr { grid-template-columns: minmax(0, 1fr) 64px 56px; padding: 8px 10px; }
   .end-xp .xp-num { font-size: 20px; }
 }
 
