@@ -14,13 +14,15 @@ const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
 const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = require('./db/matchRecord');
-const { leaveRunningGame, leaveStateOf } = require('./lib/leavePolicy');
-const rejoinPolicy = require('./lib/rejoinPolicy');
+const { matchXpOf } = require('./lib/progress');
+const { leaveStateOf, rejoinGraceMs, rejoinDecision, voluntaryLeave, reclaimSeat } = require('./lib/leavePolicy');
+const { startPlay, stopPlay, stopAllPlay } = require('./lib/playTime');
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
 const { makeAuthEmailSender } = require('./lib/email');
+const { cspFor } = require('./lib/googleAuth');
 const { createAuthRoutes } = require('./lib/authRoutes');
 const dbAccount = require('./db/account');
 const { DELETED_NAME } = dbAccount;
@@ -69,8 +71,6 @@ async function resolveTarget(msg) {
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy':
-    "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
   'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()', // the microphone is for table voice chat
 };
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
@@ -90,7 +90,6 @@ function start(opts = {}) {
   const port = opts.port ?? Number(process.env.PORT || 3000);
   const botDelay = opts.botDelay || [900, 1600]; // ms range a bot "thinks"
   const autoAdvanceMs = opts.autoAdvanceMs ?? 8000; // pause between rounds
-  const rejoinGraceMs = opts.rejoinGraceMs ?? rejoinPolicy.REJOIN_GRACE_MS; // a voluntary leaver may take the seat back within this long after leaving
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
   const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket's session is re-checked this often
@@ -155,6 +154,9 @@ function start(opts = {}) {
   // Optional site-wide notice (set the ANNOUNCEMENT env var, or pass opts.announcement); shown as a dismissible banner on the home screen
   const announcement = cleanText(opts.announcement ?? process.env.ANNOUNCEMENT ?? '');
   const dropGraceMs = opts.dropGraceMs ?? 4000; // a lost connection is announced to the table after this
+  // How long a person who left a running game on purpose may take their seat back (REJOIN_GRACE_SECONDS, default 120).
+  // opts.rejoinGraceMs is the older name for the same setting (milliseconds), still accepted by the tests.
+  const rejoinWindowMs = opts.rejoinWindowMs ?? opts.rejoinGraceMs ?? rejoinGraceMs(env.REJOIN_GRACE_SECONDS);
   const forcedMs = opts.forcedMs ?? 700; // delay between automatic plays in the last trick of a round
 
   const players = new Map(); // id -> player
@@ -220,8 +222,9 @@ function start(opts = {}) {
       req.on('error', reject);
     });
 
+  const SECURITY = { ...SECURITY_HEADERS, 'Content-Security-Policy': cspFor(env) };
   const setSecurityHeaders = (res) => {
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+    for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
     if (production) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   };
   const setCommonHeaders = (res, contentType = 'application/json; charset=utf-8') => {
@@ -306,6 +309,7 @@ function start(opts = {}) {
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   const authRoutes = createAuthRoutes({
     env,
+    googleVerifier: opts.googleVerifier || null, // tests only: a verifier with a local key instead of Google's
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
@@ -358,6 +362,12 @@ function start(opts = {}) {
     onAccountDeleted: ({ playerId }) => {
       // drop this account's pseudonymous activity: pending in memory first (so no later write recreates it), then the stored rows
       if (dbAdmin) analytics.forget(playerId, () => dbAdmin.forgetActor(playerId)).catch(() => {}); // best effort
+      // Finished games keep each seat's XP rows in memory until the server restarts: anonymise them as the record is.
+      for (const room of rooms.values()) {
+        if (room.registered) room.registered.delete(playerId); // no longer an account, so its XP is not kept
+        if (!room.outcome || !Array.isArray(room.outcome.xp)) continue;
+        for (const x of room.outcome.xp) if (x.id === playerId) { x.id = null; x.name = 'Player'; x.saved = false; }
+      }
       const p = players.get(playerId);
       if (!p) return;
       // The real name must not outlive the account anywhere: not in the table, its log or chat, and not in the match
@@ -475,7 +485,7 @@ function start(opts = {}) {
       staticFiles.respond(req, res, entry, {
         'Content-Type': type,
         'Cache-Control': 'no-cache', // always revalidate; the ETag turns that into a cheap 304
-        ...SECURITY_HEADERS,
+        ...SECURITY,
         ...(production ? { 'Strict-Transport-Security': 'max-age=15552000; includeSubDomains' } : {}),
       });
     });
@@ -632,12 +642,13 @@ function start(opts = {}) {
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
       members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m), standIn: isStandIn(room, m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
-      outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at } : null,
+      outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
       // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
       leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
+      rejoinWindowSeconds: Math.round(rejoinWindowMs / 1000), // how long a person who leaves may take the seat back
       now: Date.now(), // lets clients correct for clock differences
     };
   }
@@ -680,7 +691,7 @@ function start(opts = {}) {
     gameId: room.gameId,
     paused,
     noSeatedHumans: humans(room).length === 0,
-    canReclaim: rejoinPolicy.canReclaimSeat(room, playerId, Date.now(), rejoinGraceMs),
+    canReclaim: Boolean(rejoinDecision(room, playerId, Date.now()).seat), // the window policy: the seat is theirs until the window closes
   });
 
   /** Who can return to a running game: playerId -> [{code, gameId, paused, canReclaim}], built in one pass over the rooms. */
@@ -712,7 +723,7 @@ function start(opts = {}) {
     const timer = setTimeout(() => {
       rejoinExpiryTimers.delete(timer);
       broadcastTables();
-    }, rejoinGraceMs + 1);
+    }, rejoinWindowMs + 1);
     if (timer.unref) timer.unref();
     rejoinExpiryTimers.add(timer);
   }
@@ -860,9 +871,17 @@ function start(opts = {}) {
         for (const m of humans(room)) schedulePresence(m.id);
         // Persist the completed match once (the status guard above plus the per-game key make a second attempt a no-op)
         try {
+          stopAllPlay(room, Date.now()); // play time ends with the game
           const record = buildMatchRecord(room, g);
           if (!record) console.error(`[server] ${room.gameId} cannot report results; match not recorded`);
-          else matchQueue.enqueue(record); // never blocks the game and never rejects; failures are retried and logged by the queue
+          else {
+            matchQueue.enqueue(record); // never blocks the game and never rejects; failures are retried and logged by the queue
+            // The XP each seat earned, from the same record: the game-over screen shows exactly what is stored
+            const seats = room.seated || room.members;
+            // Only signed-in accounts at the table keep their XP; guests and anonymous players are shown but not kept.
+            const registered = room.registered || new Set();
+            room.outcome.xp = matchXpOf(record, registered).map((x) => ({ ...x, id: seats[x.seat] ? seats[x.seat].id : null, name: seats[x.seat] ? seats[x.seat].name : 'Player' }));
+          }
         } catch (e) {
           console.error('[server] Error preparing match record:', e.message);
         }
@@ -1048,13 +1067,10 @@ function start(opts = {}) {
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
-      const activity = room.activity && room.activity.get(p.id);
-      const startsRejoinWindow = activity && activity.firstLeftAt === null;
-      rejoinPolicy.leftSeat(room, p.id, Date.now()); // starts the grace period once; active time stops here
-      if (startsRejoinWindow) scheduleRejoinExpiryRefresh();
-      leaveRunningGame(room, p.id);
-      room.members[i].bot = true; // a bot takes over the seat; the player can take it back by rejoining
-      (room.leftEarly || (room.leftEarly = new Set())).add(p.id);
+      // The window starts at the first departure only: later leaves keep its deadline, so the refresh is scheduled once.
+      const firstLeave = !(room.leaveDeadlines && room.leaveDeadlines.has(room.members[i].id));
+      voluntaryLeave(room, room.members[i], Date.now(), rejoinWindowMs); // a bot takes over the seat; the player can take it back in time
+      if (firstLeave) scheduleRejoinExpiryRefresh(); // when the window closes, the home screens drop the "take your seat back" offer
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
     } else {
       room.members.splice(i, 1);
@@ -1446,6 +1462,8 @@ function start(opts = {}) {
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
+      // The socket may have closed while we waited: an offline person must not take a seat or start a play-time clock.
+      if (!p.connected) return;
       // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
@@ -1465,20 +1483,15 @@ function start(opts = {}) {
       // Came back to a running game they left (a bot kept their seat): take the seat back, same player id.
       // This wins over "spectate": the home screen can only offer Spectate for a running game, and a player who
       // owns a seat must never be turned into a spectator while a bot plays their cards.
-      if (seat && room.status === 'playing' && seat.bot && !rejoinPolicy.canReclaimSeat(room, p.id, Date.now(), rejoinGraceMs)) {
-        // A paused game needs a seated, connected person to resume: with nobody seated, a late return could only watch it stall.
-        if (humans(room).length === 0) return sendError(p, 'Nobody is left in this game, so it cannot resume. Start a new game instead.');
-        // The grace period is over (or the person already used it up): the bot keeps the seat and the penalty stands.
-        send(p.ws, { t: 'notice', text: 'The time to take your seat back has passed, so you are watching this game now. The leave still counts.' });
-      }
-      if (seat && room.status === 'playing' && seat.bot && rejoinPolicy.canReclaimSeat(room, p.id, Date.now(), rejoinGraceMs)) {
+      // The window decides: after it the bot keeps the seat for the game, and the person may only watch.
+      // One timestamp for the decision and the reclaim, so the window cannot close in between (leaveRoom below takes time).
+      const now = Date.now();
+      const seatDecision = seat && room.status === 'playing' && seat.bot ? rejoinDecision(room, p.id, now) : null;
+      if (seatDecision && seatDecision.seat) {
         if (p.room && p.room !== room.code) leaveRoom(p);
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
-        seat.bot = false;
-        rejoinPolicy.reclaimSeat(room, p.id, Date.now());
-        if (room.leftEarly) room.leftEarly.delete(p.id);
-        if (room.forfeits) room.forfeits.delete(p.id); // back in time: no loss
+        reclaimSeat(room, seat, now); // back in time: the bot gives the seat back, no loss, play resumes
         seat.avatar = p.avatar;
         p.room = room.code;
         sys(room, `🔄 ${p.name} is back and took the seat from the bot`);
@@ -1492,6 +1505,7 @@ function start(opts = {}) {
       }
       if (room.status !== 'lobby') {
         // the game is already running: the newcomer watches
+        if (seatDecision && seatDecision.reason === 'expired') send(p.ws, { t: 'notice', text: 'Your time to take your seat back has passed, so the bot keeps it to the end. You can watch as a spectator.' });
         if (room.spectators.length >= MAX_SPECTATORS) return sendError(p, 'Too many spectators at that table');
         if (p.room && p.room !== room.code) leaveRoom(p);
         addSpectator(room, p);
@@ -1659,16 +1673,22 @@ function start(opts = {}) {
       room.game = def.create(seats, room.options, Math.random);
       // The member in each seat, in game order. Results are indexed by seat, so they are matched to people through this list.
       room.seated = seats.map((s) => room.members.find((m) => m.id === s.id)).filter(Boolean);
+      // Who is a registered account, decided once at the start: a leaver becomes a bot seat, and a player may be evicted
+      // from the player map, so neither can be read back from the members when the game ends.
+      room.registered = new Set(room.seated.filter((m) => !m.bot && usernameOf(m)).map((m) => m.id));
       if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
       else pacing.setScale(room.game, botScale);
       room.status = 'playing';
       analytics.track('game_started', room.gameId);
       room.matchKey = crypto.randomUUID(); // identifies this game in the match history
       room.startedAt = Date.now();
+      room.leaveDeadlines = new Map(); // a rejoin window per person who left on purpose, started at their first departure
+      room.playTime = { open: new Map(), total: new Map() };
+      // Only seated people who are connected now earn time. A person who drops in the lobby starts when they come back (see hello).
+      for (const m of room.seated) if (!m.bot && isConnected(m)) startPlay(room, m.id, room.startedAt);
       room.leftEarly = new Set();
       room.forfeits = new Set();
       room.abandoned = false;
-      rejoinPolicy.startActivity(room, room.members.filter((m) => !m.bot).map((m) => m.id), Date.now());
       room.deadline = null;
       room.waiting = [];
       room.pauseUntil = 0;
@@ -1895,6 +1915,8 @@ function start(opts = {}) {
       return;
     }
     if (room && allowed) {
+      // Back from a dropped connection in a running game: the play time resumes (no-op for spectators and bots)
+      if (room.status === 'playing' && room.members.some((m) => m.id === p.id && !m.bot)) startPlay(room, p.id, Date.now());
       if (p.dropAnnounced) {
         p.dropAnnounced = false;
         sys(room, `📶 ${p.name} reconnected`);
@@ -1920,6 +1942,9 @@ function start(opts = {}) {
     p.ws = null;
     p.connected = false;
     p.lastSeen = Date.now();
+    // A lost connection pauses the play time (it is not a departure: the seat stays)
+    const dropped = rooms.get(p.room);
+    if (dropped && dropped.status === 'playing') stopPlay(dropped, p.id, Date.now());
     presence.set(p.id, { online: false, lastSeen: new Date(p.lastSeen).toISOString() });
     dbAccount.updatePresence(p.id).catch(() => {});
     publishPresence(p.id);

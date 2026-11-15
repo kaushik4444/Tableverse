@@ -29,8 +29,8 @@ async function getOwnProfile(playerId) {
   need();
   const r = await db.query(
     `SELECT p.id, p.username, p.display_name, p.avatar, p.country, p.created_at, i.email, i.email_verified_at
-     FROM players p LEFT JOIN auth_identities i ON i.player_id = p.id AND i.provider = 'email'
-     WHERE p.id = $1 LIMIT 1`, [playerId]);
+     FROM players p LEFT JOIN LATERAL (SELECT email, email_verified_at FROM auth_identities WHERE player_id = p.id ORDER BY created_at ASC LIMIT 1) i ON TRUE
+     WHERE p.id = $1 LIMIT 1`, [playerId]); // the account's one identity, whichever provider (email or Google)
   const row = r.rows[0];
   if (!row) throw new AuthError('Account not found.', 404);
   return { id: row.id, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), country: row.country || null, email: row.email || null, emailVerified: Boolean(row.email_verified_at) };
@@ -70,13 +70,17 @@ async function updateAvatar(playerId, avatar, allowed) {
  * human seat. A seat the player left early is listed as "left" but never counted as a win or a loss. A player appears
  * at most once per match, so a duplicate participant row cannot repeat a game.
  */
-async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } = {}) {
+async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE, game = null } = {}) {
   need();
   if (!isUuid(playerId)) return { page: 1, pageSize, total: 0, pages: 0, items: [] };
   const size = Math.min(50, Math.max(1, Math.floor(Number(pageSize)) || HISTORY_PAGE_SIZE));
+  // optional: one game's results only (the game detail page). Only a plain game id is accepted.
+  const gameId = typeof game === 'string' && /^[a-z][a-z0-9]{1,39}$/.test(game) ? game : null;
+  const gameSql = gameId ? ' AND m.game_id = $2' : '';
+  const gameArgs = gameId ? [gameId] : [];
   const total = (await db.query(
     `SELECT COUNT(DISTINCT mp.match_id)::int AS n FROM match_participants mp JOIN matches m ON m.id = mp.match_id
-     WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL`, [playerId])).rows[0].n;
+     WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL${gameSql}`, [playerId, ...gameArgs])).rows[0].n;
   const pages = Math.ceil(total / size);
   const pg = Math.min(Math.max(1, Math.floor(Number(page)) || 1), Math.max(1, pages));
   const r = await db.query(
@@ -84,9 +88,9 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
        SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.seats, mp.score, mp.is_winner, mp.is_draw, mp.left_early, mp.forfeit,
          COALESCE(m.table_humans, (SELECT COUNT(*)::int FROM match_participants x WHERE x.match_id = m.id AND x.is_bot = FALSE)) AS humans
        FROM match_participants mp JOIN matches m ON m.id = mp.match_id
-       WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
+       WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL${gameSql}
        ORDER BY m.id, mp.seat
-     ) h ORDER BY finished_at DESC, id LIMIT $2 OFFSET $3`, [playerId, size, (pg - 1) * size]);
+     ) h ORDER BY finished_at DESC, id LIMIT $${gameId ? 3 : 2} OFFSET $${gameId ? 4 : 3}`, [playerId, ...gameArgs, size, (pg - 1) * size]);
   return {
     page: pg, pageSize: size, total, pages,
     items: r.rows.map((x) => ({
