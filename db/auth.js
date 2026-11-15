@@ -654,6 +654,8 @@ async function purgeExpired() {
 }
 
 module.exports = {
+  // shared with db/authGoogle.js
+  createSession, makeSessionResult, cleanName, cleanAvatar, normUsername, isUsername,
   hashPassword, // exported for the local seed script (lib/devSeed.js) only
   verifyPassword,
   AuthError,

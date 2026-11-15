@@ -65,11 +65,21 @@ async function resolveTarget(msg) {
   return id ? { id } : null;
 }
 
+/**
+ * The page may load Google's sign-in script, button frame and styles, and only when Sign in with Google is configured
+ * (GOOGLE_CLIENT_ID). Nothing else is opened up.
+ */
+function cspFor(env) {
+  const g = String(env.GOOGLE_CLIENT_ID || '').trim() !== '';
+  return "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; "
+    + (g ? "script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; frame-src https://accounts.google.com/gsi/; "
+         : "style-src 'self' 'unsafe-inline'; ")
+    + "img-src 'self' data:; connect-src 'self' ws: wss:" + (g ? ' https://accounts.google.com/gsi/' : '') + "; frame-ancestors 'none'";
+}
+
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy':
-    "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
   'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()', // the microphone is for table voice chat
 };
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
@@ -218,8 +228,9 @@ function start(opts = {}) {
       req.on('error', reject);
     });
 
+  const SECURITY = { ...SECURITY_HEADERS, 'Content-Security-Policy': cspFor(env) };
   const setSecurityHeaders = (res) => {
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+    for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
     if (production) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   };
   const setCommonHeaders = (res, contentType = 'application/json; charset=utf-8') => {
@@ -304,6 +315,7 @@ function start(opts = {}) {
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   const authRoutes = createAuthRoutes({
     env,
+    googleVerifier: opts.googleVerifier || null, // tests only: a verifier with a local key instead of Google's
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
@@ -473,7 +485,7 @@ function start(opts = {}) {
       staticFiles.respond(req, res, entry, {
         'Content-Type': type,
         'Cache-Control': 'no-cache', // always revalidate; the ETag turns that into a cheap 304
-        ...SECURITY_HEADERS,
+        ...SECURITY,
         ...(production ? { 'Strict-Transport-Security': 'max-age=15552000; includeSubDomains' } : {}),
       });
     });
