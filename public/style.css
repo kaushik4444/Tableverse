@@ -641,6 +641,7 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 
 .progress-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-bottom: 12px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid var(--panel-line); }
 .pg-level { display: flex; flex-direction: column; gap: 4px; }
+.levelup-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: rgba(245, 185, 66, 0.16); border: 1px solid rgba(245, 185, 66, 0.55); text-align: left; }
 .pg-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
 .pg-bar span { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
 .pg-games { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }

@@ -1748,6 +1748,17 @@
     const a = progress && progress.account;
     S.account = a ? { level: a.level, into: a.into, need: a.need } : null;
   }
+  /**
+   * The last level this device showed for this account, kept per device (a convenience, not a record). The first time a
+   * device sees an account it only remembers the level: nothing is announced for levels reached before.
+   */
+  function noteLevelUp() {
+    if (!S.username || !S.account || S.guest) return;
+    const k = 'ct_level_seen_' + S.username;
+    const seen = store.get(k);
+    if (seen === null) { store.set(k, String(S.account.level)); return; }
+    S.levelUp = S.account.level > Number(seen) ? { from: Number(seen), to: S.account.level } : null;
+  }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws only when the level changed. */
   async function refreshLevel() {
     const gen = sessionGen;
@@ -1757,6 +1768,7 @@
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
       setAccount(me && me.stats && me.stats.progress);
+      noteLevelUp();
       if (key(S.account) !== before) render(); // the game-over card shows into and need too
     } catch { /* the level badge is optional */ }
   }
@@ -2584,8 +2596,9 @@
         : `<li class="pg-row">${label}</li>`;
     }).join('');
     const left = pr.penalisedLeaves > 0 ? `<p class="hint" style="text-align:left">Left ${pr.penalisedLeaves} game${pr.penalisedLeaves === 1 ? '' : 's'} early (counted as a loss).</p>` : '';
-    return `<section class="progress-card" aria-label="Progress">
-      <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · ${a.into} / ${a.need} to next level</span>
+    const levelUp = interactive && S.levelUp ? `<div class="levelup-note" role="status"><b>Level up!</b> You reached level ${Number(S.levelUp.to)}. <button type="button" class="btn small" data-act="levelUpAck">Got it</button></div>` : '';
+    return `<section class="progress-card" aria-label="Progress">${levelUp}
+      <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
         <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>
       ${games ? `<h3 class="stat-h">Game XP${interactive ? ' <small>(tap a game for details)</small>' : ''}</h3><ul class="plain-list pg-games">${games}</ul>` : ''}${left}</section>`;
   }
@@ -2742,7 +2755,7 @@
       const bar = Math.max(0, Math.round((x.total / top) * 100));
       return `<div class="xp-row${me ? ' me' : ''}"><div class="xp-top"><span class="xp-name">${me ? 'You' : esc(x.name || 'Player')}${x.saved ? '' : ' <small>guest · not kept</small>'}</span><b class="xp-total">${fmtXp(x.total)} XP</b></div><span class="xp-bar" aria-hidden="true"><i style="width:${bar}%"></i></span><small class="xp-parts">Time ${fmtXp(x.timeXp)} · Game ${x.gameXp === null ? 'not ranked' : fmtXp(x.gameXp)}${x.penalised ? ' · left early' : ''}</small></div>`;
     }).join('');
-    const mine = S.account ? `<p class="hint">Your level ${Number(S.account.level)} · ${S.account.into} / ${S.account.need} to next level</p>` : '';
+    const mine = S.account ? `<p class="hint">Your level ${Number(S.account.level)} · next level in ${Math.max(0, S.account.need - S.account.into)} min of play</p>` : '';
     return `<section class="end-xp" aria-label="XP for this game"><h3 class="stat-h">XP this game</h3><div class="xp-list">${list}</div>${mine}</section>`;
   }
 
@@ -2885,6 +2898,11 @@
     toggleTools: () => setTools(!S.toolsOpen),
     toggleBell: () => { S.bellOpen = !S.bellOpen; S.menuOpen = false; render(); if (S.bellOpen) loadSocial({ quiet: true }); },
     openProfilePage: () => { S.menuOpen = false; openPage('profile'); },
+    levelUpAck: () => { // "Got it": remember this level on this device and take the notice away
+      if (S.username && S.levelUp) store.set('ct_level_seen_' + S.username, String(S.levelUp.to));
+      S.levelUp = null;
+      render();
+    },
     openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },
     openSettings: () => { S.menuOpen = false; render(); openSettingsDialog(); },
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
