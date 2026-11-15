@@ -21,7 +21,7 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
     assert.equal(win.account.xp, 50); assert.equal(win.account.level, 2); assert.equal(win.account.minutes, 50);
     assert.equal(loss.account.xp, 50);
   });
-  await test('a game has game XP only: a win is +20, a loss -20, a placing game uses the ladder', () => {
+  await test('a game has game XP only: a win is +20, a loss -10, a placing game uses the ladder', () => {
     const p = computeProgress([
       row('1', 'tictactoe', 0, 'me', { isWinner: true }), row('1', 'tictactoe', 1, 'x'),
       row('2', 'wizard', 0, 'me', { score: 100 }), row('2', 'wizard', 1, 'x', { score: 50 }), row('2', 'wizard', 2, 'y', { score: 0 }),
@@ -32,7 +32,24 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
   });
   await test('game XP can go negative and there is no game level', () => {
     const p = computeProgress([row('1', 'tictactoe', 0, 'me'), row('1', 'tictactoe', 1, 'x', { isWinner: true })], 'me');
-    assert.equal(p.games.tictactoe.points, -20); assert.equal(p.games.tictactoe.level, undefined, 'no per-game level');
+    assert.equal(p.games.tictactoe.points, -10); assert.equal(p.games.tictactoe.level, undefined, 'no per-game level');
+  });
+  await test('Player Progress is time only: game XP never changes the overall level', () => {
+    const game = (matchId, seat, playerId, extra) => row(matchId, 'tictactoe', seat, playerId, { secondsPlayed: 600, ...extra });
+    // both play two 10-minute games; one loses both, the other wins both
+    const loser = computeProgress([game('1', 0, 'me'), game('1', 1, 'x', { isWinner: true }), game('2', 0, 'me'), game('2', 1, 'x', { isWinner: true })], 'me');
+    const winner = computeProgress([game('1', 0, 'me', { isWinner: true }), game('1', 1, 'x'), game('2', 0, 'me', { isWinner: true }), game('2', 1, 'x')], 'me');
+    assert.equal(loser.account.xp, 20, '20 minutes = 20 Player Progress');
+    assert.equal(winner.account.xp, 20);
+    assert.equal(loser.account.level, winner.account.level, 'the same level whatever the results');
+    assert.equal(loser.games.tictactoe.points, -20);
+    assert.equal(winner.games.tictactoe.points, 40);
+  });
+  await test('history is re-scored from the stored rows: a loss now counts -10, and the time is unchanged', () => {
+    const p = computeProgress([row('1', 'tictactoe', 0, 'me', { secondsPlayed: 300 }), row('1', 'tictactoe', 1, 'x', { isWinner: true, secondsPlayed: 300 })], 'me');
+    assert.equal(p.games.tictactoe.points, -10, 'no stored total: the rule is applied to the stored result');
+    assert.equal(p.account.minutes, 5);
+    assert.equal(p.account.xp, 5);
   });
   await test('a penalised leave is -30, counts as a leave, and gives no time', () => {
     const p = computeProgress([row('1', 'twentynine', 0, 'me', { leftEarly: true, forfeit: true, secondsPlayed: 0 }), row('1', 'twentynine', 1, 'x', { isWinner: true })], 'me');
