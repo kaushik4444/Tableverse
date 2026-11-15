@@ -651,10 +651,10 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .stat-game-btn:hover, .stat-game-btn:focus-visible { background: rgba(255,255,255,.06); }
 .tb-level { font-size: 12px; font-weight: 700; color: var(--gold); padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.1); white-space: nowrap; }
 .end-xp { max-width: 520px; margin: 12px auto; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.06); }
-.xp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.end-xp .xp-list { margin: 0; padding: 0; display: grid; gap: 10px; text-align: left; }
 .xp-top { display: flex; justify-content: space-between; gap: 8px; }
 .xp-row.me .xp-name { font-weight: 700; }
-.xp-total { white-space: nowrap; }
+.end-xp .xp-total { white-space: nowrap; font-size: 14px; }
 .xp-bar { display: block; height: 6px; margin: 4px 0 2px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
 .xp-bar i { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
 .xp-parts { color: var(--muted); }
