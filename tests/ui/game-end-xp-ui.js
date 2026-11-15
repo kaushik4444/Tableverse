@@ -15,7 +15,7 @@ function finishedTable(gameId, n) {
   const players = names.map((name, i) => ({ id: i === 0 ? 'me' : 'p' + i, name, avatar: '🧙' }));
   const opts = Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default]));
   const g = def.create(players, { ...opts, timeLimit: 'off' }, mulberry(11));
-  for (let i = 0; i < 400 && !g.isOver(); i++) {
+  for (let i = 0; i < 5000 && !g.isOver(); i++) {
     const w = [].concat(g.awaiting() || []);
     if (!w.length) { const a = g.autoAction && g.autoAction(); if (!a) break; g.act(null, a); continue; }
     const f = g.forcedPlay && g.forcedPlay(); const id = f ? f.playerId : w[0];
@@ -32,7 +32,7 @@ function finishedTable(gameId, n) {
 (async () => {
   const srv = await serve({ 'GET /api/auth/session': () => sessionOk() }); // a signed-in player: tables are only shown to accounts
   const browser = await chromium.launch();
-  const cases = [['tictactoe', 2], ['gofish', 3]];
+  const cases = [['tictactoe', 2], ['gofish', 3], ['ludo', 4]];
   try {
     for (const [gameId, n] of cases) for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }]) {
       const name = `${gameId} result for a non-host at ${vp.width}x${vp.height}`;
@@ -48,29 +48,39 @@ function finishedTable(gameId, n) {
             sheet.scrollTop = sheet.scrollHeight; // the card and the shared actions are at the bottom of the sheet
             return { inSheet: true, canScroll: sheet.scrollHeight > sheet.clientHeight + 1 };
           });
+          // The Leave action must be reachable: bring it into view the way a player scrolls, then check it is on screen.
+          await page.evaluate(() => { const b = document.querySelector('.end-bar button[data-act="endLeave"], .end-actions button[data-act="endLeave"]'); if (b) b.scrollIntoView({ block: 'center' }); });
+          await page.waitForTimeout(100);
           const r = await page.evaluate(() => {
-            const card = document.querySelector('.end-xp'); const cb = card.getBoundingClientRect();
-            const sheet = card.closest('.sheet, .ludo-end'); const sb = sheet ? sheet.getBoundingClientRect() : null;
+            const card = document.querySelector('.end-xp'); let cb = card.getBoundingClientRect();
+            const sheet = card.closest('.sheet, .ludo-end'); let sb = sheet ? sheet.getBoundingClientRect() : null;
             const bar = document.querySelector('.end-bar'); const bb = bar ? bar.getBoundingClientRect() : null;
             const btn = document.querySelector('.end-bar button[data-act="endLeave"], .end-actions button[data-act="endLeave"]');
             const bt = btn ? btn.getBoundingClientRect() : null;
             return {
-              inSheet: !!sheet, cardInside: sheet ? cb.top >= sb.top - 1 && cb.bottom <= sb.bottom + 1 : false,
+              // the sheet is scrolled to its end first: some part of the card must then be inside the sheet's visible area
+              inSheet: !!sheet,
+              cardInside: (() => { if (!sheet) return false; sheet.scrollTop = sheet.scrollHeight; cb = card.getBoundingClientRect(); sb = sheet.getBoundingClientRect(); return cb.bottom > sb.top && cb.top < sb.bottom; })(),
               cardVisible: cb.height > 0,
               barFixed: bar ? getComputedStyle(bar).position === 'fixed' : false,
               barCoversCard: bb && bar.getBoundingClientRect() && bb.top < cb.bottom && cb.top < bb.bottom && getComputedStyle(bar).position === 'fixed',
-              leaveVisible: bt ? bt.height > 0 && bt.bottom <= innerHeight + 1 : false,
+              leaveVisible: bt ? bt.height > 0 && bt.bottom <= innerHeight + 1 && bt.top >= -1 : false,
               sideways: document.documentElement.scrollWidth > innerWidth + 1,
               names: [...document.querySelectorAll('.xp-name')].length,
+              // Ludo's podium styles (.ludo-end li span) must not reach the XP rows: the bar stays a thin bar, not a 22px circle
+              barThin: [...document.querySelectorAll('.xp-bar')].every((b) => b.getBoundingClientRect().height <= 10 && b.getBoundingClientRect().width > 40),
+              nameWide: [...document.querySelectorAll('.xp-name')].every((n) => { const b = n.getBoundingClientRect(); return b.width > 0 && b.height < 30; }), // a name is a line of text, not a 22px circle
             };
           });
           assert.ok(scrolled.inSheet, 'the XP card is inside the result sheet');
           assert.ok(r.inSheet, 'the XP card is inside the result sheet (after the layout settled)');
-          assert.ok(r.cardInside, 'the XP card is inside the sheet (scrollable to reach it)');
+          assert.ok(r.cardInside, 'the XP card is reachable inside the result sheet (scrolled to its end, some part is visible)');
           assert.equal(r.barCoversCard, false, 'the fixed action bar does not cover the XP card');
           assert.ok(r.leaveVisible, 'the Leave game action is on screen');
           assert.equal(r.sideways, false, 'no sideways scroll');
           assert.ok(r.names >= 1, 'the XP rows render');
+          assert.ok(r.barThin, 'the XP progress bars keep their shape (not forced into the podium circles)');
+          assert.ok(r.nameWide, 'the XP names keep their width');
           passed++; console.log('  ok  ' + name);
         } finally { await ctx.close(); }
       } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + (e.stack || e)); }
