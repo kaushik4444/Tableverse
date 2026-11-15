@@ -458,6 +458,8 @@ const base = (over = {}) => ({
     const git = { gitOutput: (args) => (args[1].includes('main') ? 'T1' : 'T1'), mergeTreeOf: () => 'T1' };
     const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
     assert.equal(r.outcome, 'skip');
+  });
+
   // A fake GitHub for one release run. checkRuns({ requested, sha }) returns the check runs for the PR head; refuseReview makes
   // the Copilot request fail. Returns the outcome of main() and every call made.
   const releaseRun = ({ checkRuns, refuseReview = false, productionUrl = true }) => {
@@ -580,6 +582,5 @@ const base = (over = {}) => ({
     assert.ok(logged.some((l) => l.startsWith('::error::Release blocked: ') && /PRODUCTION_URL/.test(l)), 'the error names the blocker');
   });
 
-    console.log(`${passed} daily release tests passed`);
-  });
+  console.log(`${passed} daily release tests passed`);
 })();
