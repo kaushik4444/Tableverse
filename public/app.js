@@ -2629,7 +2629,7 @@
     openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },
     openSettings: () => { S.menuOpen = false; render(); openSettingsDialog(); },
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
-    openVersionHistory: () => { S.menuOpen = false; openVersionHistoryDialog(); },
+    openVersionHistory: () => { S.menuOpen = false; render(); openVersionHistoryDialog(); },
     toggleAvatars: () => { S.avatarOpen = !S.avatarOpen; render(); },
     emotes: () => toggleEmoteBar(),
     activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },

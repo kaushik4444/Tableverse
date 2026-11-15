@@ -51,5 +51,82 @@
         { ico: '🌐', title: 'No app to install', text: 'Use Tableverse over HTTPS and allow microphone access. Voice starts off and is only on when you choose to join. Audio is peer-to-peer, so connection quality can vary, and other participants may learn connection information such as IP addresses.', voice: true },
       ],
     },
+    {
+      version: 'v0.13',
+      date: '',
+      title: 'Shared feed and crowns',
+      items: [
+        { ico: '💬', title: 'Floating messages', text: 'New public log lines (a bid, a raise, a capture, a mistake, a rent payment) float over the table for a few seconds in Wizard, 29, Poker, Ludo, The Mind and Property Rivals. Snakes and Ladders keeps its move banner; Go Fish has no log.' },
+        { ico: '👑', title: 'A crown for who is ahead', text: 'Every scoring game shows it: Wizard, Poker (three or more players), 29 (team score), Go Fish, Snakes and Ladders, Ludo and Property Rivals.' },
+        { ico: '📱', title: 'Checks for phones', text: 'Phone-fit and layout checks now cover Property Rivals, Tic-Tac-Toe and Four in a Row.' },
+      ],
+    },
+    {
+      version: 'v0.12',
+      date: '',
+      title: 'Tic-Tac-Toe and Four in a Row',
+      items: [
+        { ico: '⭕', title: 'Tic-Tac-Toe', text: 'A 3×3 board for two players. A full board with no line is a draw. Bots play perfectly.' },
+        { ico: '🔴', title: 'Four in a Row, and Five in a Row', text: 'Drop discs into a 7×6 grid to connect four. Set Line length to five for Five in a Row on a 9×8 grid. Options include who starts.' },
+        { ico: '🧭', title: 'Coming soon shows each game’s status', text: 'Hidden Miners is in development; the others are planned.' },
+      ],
+    },
+    {
+      version: 'v0.11',
+      date: '',
+      title: 'Property Rivals',
+      items: [
+        { ico: '🏠', title: 'Property Rivals is playable', text: 'For 2 to 6 players, with bots filling empty seats. A 40-square board with 22 cities, 4 ports and 2 utilities. Rent doubles on a full colour set, buildings go up to a hotel, properties mortgage, unsold properties go to auction, players trade, and there are Surprise and Community Fund cards.' },
+        { ico: '🎲', title: 'Options', text: 'A short game (30 or 60 rounds, richest wins), starting cash, auctions on or off, and a Rest Stop jackpot.' },
+        { ico: '🎬', title: 'Watch it happen', text: 'Tokens walk square by square, and each roll, landing, rent payment and card floats over the board as it happens.' },
+      ],
+    },
+    {
+      version: 'v0.10',
+      date: '',
+      title: 'Snakes and Ladders',
+      items: [
+        { ico: '🐍', title: 'Snakes and Ladders is playable', text: 'For 2 to 4 players, with bots filling empty seats. One tap to roll; ladders lift and snakes drop. Options: exact roll to finish, and roll again on a six.' },
+      ],
+    },
+    {
+      version: 'v0.9',
+      date: '',
+      title: 'Go Fish',
+      items: [
+        { ico: '🐟', title: 'Go Fish is playable', text: 'For 2 to 6 players, with bots filling empty seats. Ask for a rank you hold; books are laid down at once, and the most books wins. You only ever see your own hand.' },
+      ],
+    },
+    {
+      version: 'v0.8',
+      date: '',
+      title: 'A simpler home',
+      items: [
+        { ico: '🏡', title: 'A simpler home page', text: 'A greeting and a table code to join, then the games straight away. Friends appear as a compact card.' },
+        { ico: '🔔', title: 'A notification bell', text: 'Shows a count of friend requests and table invitations, and lets you accept or decline them in place.' },
+        { ico: '🚧', title: 'Coming soon', text: 'Upcoming games are listed as cards before their release.' },
+      ],
+    },
+    {
+      version: 'v0.7',
+      date: '',
+      title: 'Friends, private tables and host tools',
+      items: [
+        { ico: '🤝', title: 'Friends', text: 'Search players by username, send, accept, decline or cancel requests, and remove friends. Friends see whether you are online and which game you are playing.' },
+        { ico: '🔒', title: 'Private tables', text: 'A new table is private: hidden from the public list, and its code is not an access grant. The host invites friends from the lobby. Make a table public to share its code.' },
+        { ico: '🧰', title: 'Host tools', text: 'In the lobby the host can make another seated player the host, and remove a player, spectator or bot.' },
+        { ico: '🖼️', title: 'Player cards and avatars', text: 'Tap anyone at a table for their name, ping, record and friend or mute actions. Pick a picture from the fixed set; it is saved to your account.' },
+      ],
+    },
+    {
+      version: 'v0.6',
+      date: '',
+      title: 'Profiles, history and account deletion',
+      items: [
+        { ico: '📊', title: 'Profiles and history', text: 'Your own profile shows your statistics and a paginated history of finished games. Anyone can see a public page with only public fields.' },
+        { ico: '🗑️', title: 'Delete your account', text: 'Confirm with your password. Your sign-in and recent tables are removed; finished games stay, listed as Deleted player.' },
+        { ico: '🕘', title: 'Recent tables and game logs', text: 'Recent tables follow your account across devices. Every game log shows who acted.' },
+      ],
+    },
   ];
 })();
