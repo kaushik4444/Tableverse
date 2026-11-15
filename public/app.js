@@ -1978,7 +1978,7 @@
 
   // ---- account deletion
   function openDeleteAccountDialog() {
-    const viaGoogle = !!(S.profile && S.profile.data && S.profile.data.hasPassword === false);
+    const viaGoogle = !!(S.profile && S.profile.data && S.profile.data.profile && S.profile.data.profile.hasPassword === false);
     openModal('Delete your account', `<form id="deleteForm" class="auth-form">
         <p class="hint" style="text-align:left;color:var(--ink)">This permanently deletes your account. It cannot be undone.</p>
         <ul class="plain-list">
