@@ -308,10 +308,19 @@
   }
 
   // ---------------------------------------------------------------- users
-  async function users(q = '', page = 1) {
+  // each search, filter or page change gets a number: only the newest request may draw the list or report an error
+  let usersSeq = 0;
+  async function users(q = '', page = 1, stale = 0) {
     const gen = state.gen;
-    const o = await api(`/api/admin/users?q=${encodeURIComponent(q)}&page=${page}`);
-    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    const req = ++usersSeq;
+    let o;
+    try {
+      o = await api(`/api/admin/users?q=${encodeURIComponent(q)}&page=${page}${stale ? '&stale=' + encodeURIComponent(stale) : ''}`);
+    } catch (e) {
+      if (req !== usersSeq) return; // a newer request has replaced this one
+      throw e;
+    }
+    if (gen !== state.gen || req !== usersSeq) return; // the admin has switched tabs, or asked for something newer, since this was asked
     const owner = state.me.isOwner;
     const rows = o.users.map((u) => {
       const staff = u.role !== 'user';
@@ -321,21 +330,22 @@
         ? `<button class="ad-btn" data-unsusp="${esc(u.id)}">Lift suspension</button>`
         : `<button class="ad-btn danger" data-susp="${esc(u.id)}">Suspend</button>`);
       if (!u.verified && !u.is_anonymous && (u.role === 'user' || (u.role === 'admin' && owner))) acts.push(`<button class="ad-btn" data-rv="${esc(u.id)}">Resend verification</button>`);
+      if (owner && u.role === 'user' && !u.is_anonymous) acts.push(`<button class="ad-btn danger" data-del="${esc(u.id)}" data-name="${esc(u.username)}">Delete</button>`);
       if (owner && u.role === 'user' && !u.is_anonymous) acts.push(`<button class="ad-btn" data-role="admin" data-id="${esc(u.id)}">Make admin</button>`);
       if (owner && u.role === 'admin') acts.push(`<button class="ad-btn danger" data-role="user" data-id="${esc(u.id)}">Remove admin</button>`);
       return `<tr><td data-l="Player"><b>${esc(u.display_name)}</b><br><small class="ad-muted">${u.username ? '@' + esc(u.username) : 'guest'}${u.country ? ' · ' + esc(countryName(u.country)) : ''}</small></td><td data-l="Role"><span class="ad-pill ${esc(u.role)}">${esc(u.role)}</span>${u.suspended_at ? ' <span class="ad-pill danger">suspended</span>' : ''}</td><td data-l="Verified">${u.verified ? 'yes' : 'no'}</td><td data-l="Joined">${esc(when(u.created_at))}</td><td data-l="Last seen">${esc(when(u.last_seen_at))}</td><td data-l="">${staff && !owner ? '' : `<div class="ad-row">${acts.join('')}</div>`}</td></tr>`;
     }).join('');
     const pages = Math.max(1, Math.ceil(o.total / o.pageSize));
     main.innerHTML = `<h2>Users <small class="ad-muted">${o.total}</small></h2>
-      <form class="ad-search ad-row" id="uSearch"><input name="q" value="${esc(q)}" placeholder="Search name or username" maxlength="40" aria-label="Search users" style="flex:1"><button class="ad-btn primary">Search</button></form>
+      <form class="ad-search ad-row" id="uSearch"><input name="q" value="${esc(q)}" placeholder="Search name or username" maxlength="40" aria-label="Search users" style="flex:1"><select name="stale" aria-label="Activity filter"><option value="0"${!stale ? ' selected' : ''}>All accounts</option>${[30, 60, 90, 180].map((d) => `<option value="${d}"${Number(stale) === d ? ' selected' : ''}>Not seen for ${d}+ days</option>`).join('')}</select><button class="ad-btn primary">Search</button></form>
       <form class="ad-search ad-row" id="lookupForm"><input name="username" placeholder="Exact username for lookup" maxlength="24" aria-label="Look up a username" style="flex:1"><button class="ad-btn">Look up</button></form>
       <div id="lookupOut" aria-live="polite"></div>
       <p id="uMsg" class="ad-msg" role="status"></p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Player</th><th>Role</th><th>Verified</th><th>Joined</th><th>Last seen</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="ad-muted">No players found.</td></tr>'}</tbody></table></div>
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="uPrev" ${page <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${page} of ${pages}</span><button class="ad-btn" id="uNext" ${page >= pages ? 'disabled' : ''}>Next</button></div>
       <p class="ad-muted">E-mail addresses are never shown here. ${owner ? 'As the owner you manage admin roles; the owner role itself cannot be changed.' : 'Only the owner can manage admin roles.'}</p>`;
-    document.getElementById('uSearch').onsubmit = (e) => { e.preventDefault(); users(new FormData(e.target).get('q'), 1).catch(fail); };
-    document.getElementById('uPrev').onclick = () => users(q, page - 1).catch(fail);
+    document.getElementById('uSearch').onsubmit = (e) => { e.preventDefault(); { const d = new FormData(e.target); users(d.get('q'), 1, Number(d.get('stale')) || 0).catch(fail); } };
+    document.getElementById('uPrev').onclick = () => users(q, page - 1, stale).catch(fail);
     document.getElementById('lookupForm').onsubmit = async (e) => {
       e.preventDefault();
       const name = String(new FormData(e.target).get('username') || '').trim().toLowerCase();
@@ -353,17 +363,23 @@
       } catch (err) { if (seq === lookupSeq) out.innerHTML = `<p class="ad-msg err">${esc(err.message)}</p>`; }
     };
     let lookupSeq = 0;
-    document.getElementById('uNext').onclick = () => users(q, page + 1).catch(fail);
+    document.getElementById('uNext').onclick = () => users(q, page + 1, stale).catch(fail);
     main.querySelectorAll('[data-rv]').forEach((b) => { b.onclick = async () => { if (!confirm('Send this player a new verification e-mail?')) return; try { await api('/api/admin/users/resend-verification', { playerId: b.dataset.rv }); say('uMsg', 'Verification e-mail sent.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });
     main.querySelectorAll('[data-susp]').forEach((b) => { b.onclick = async () => {
       const reason = prompt('Reason for the suspension (kept in the audit log; staff with lookup access can also see it):', '');
       if (reason === null) return;
       if (!confirm('Suspend this account? Its sessions end now and it cannot sign in until the suspension is lifted.')) return;
-      try { await api('/api/admin/users/suspend', { playerId: b.dataset.susp, reason }); await users(q, page); say('uMsg', 'Account suspended.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
+      try { await api('/api/admin/users/suspend', { playerId: b.dataset.susp, reason }); await users(q, page, stale); say('uMsg', 'Account suspended.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
+    }; });
+    main.querySelectorAll('[data-del]').forEach((b) => { b.onclick = async () => {
+      const name = b.dataset.name;
+      const typed = prompt(`Permanently delete @${name}? This cannot be undone. Their finished games stay, shown as "Deleted player"; their login, sessions and friends go.\n\nType the username to confirm:`, '');
+      if (typed === null) return;
+      try { await api('/api/admin/users/delete', { playerId: b.dataset.del, confirm: typed }); await users(q, page, stale); say('uMsg', `@${name} was deleted.`, 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
     }; });
     main.querySelectorAll('[data-unsusp]').forEach((b) => { b.onclick = async () => {
       if (!confirm('Lift the suspension? The player can sign in again (old sessions stay ended).')) return;
-      try { await api('/api/admin/users/unsuspend', { playerId: b.dataset.unsusp }); await users(q, page); say('uMsg', 'Suspension lifted.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
+      try { await api('/api/admin/users/unsuspend', { playerId: b.dataset.unsusp }); await users(q, page, stale); say('uMsg', 'Suspension lifted.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
     }; });
     main.querySelectorAll('[data-so]').forEach((b) => { b.onclick = async () => { if (!confirm('Sign this player out of every device?')) return; try { const r = await api('/api/admin/users/sign-out', { playerId: b.dataset.so }); say('uMsg', `Signed out (${r.revoked} session${r.revoked === 1 ? '' : 's'}).`, 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });
     main.querySelectorAll('[data-role]').forEach((b) => { b.onclick = async () => { if (!confirm(b.dataset.role === 'admin' ? 'Give this player admin access?' : 'Remove admin access from this player?')) return; try { await api('/api/admin/roles', { playerId: b.dataset.id, role: b.dataset.role }); await users(q, page); say('uMsg', 'Role updated.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });

@@ -307,13 +307,60 @@ function start(opts = {}) {
     playersConnected: [...players.values()].filter((p) => p.connected).length,
   });
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
+  // the account no longer exists (deleted by its owner, or by the admin-console owner): leave the table, close the socket, forget the player
+  const handleAccountDeleted = ({ playerId }) => {
+    // drop this account's pseudonymous activity: pending in memory first (so no later write recreates it), then the stored rows
+    if (dbAdmin) analytics.forget(playerId, () => dbAdmin.forgetActor(playerId)).catch(() => {}); // best effort
+    // Finished games keep each seat's XP rows in memory until the server restarts: anonymise them as the record is.
+    for (const room of rooms.values()) {
+      if (room.registered) room.registered.delete(playerId); // no longer an account, so its XP is not kept
+      if (!room.outcome || !Array.isArray(room.outcome.xp)) continue;
+      for (const x of room.outcome.xp) if (x.id === playerId) { x.id = null; x.name = 'Player'; x.saved = false; }
+      // the copied winner list shown after a game (outcomeOf copies the name): clear it too
+      if (Array.isArray(room.outcome.winners)) for (const w of room.outcome.winners) if (w.id === playerId) { w.id = null; w.name = DELETED_NAME; }
+    }
+    // The seats at tables are anonymised whether or not this server still holds an in-memory player (one may have been
+    // garbage-collected after a disconnect while its game went on), so the early return comes after that.
+    const p = players.get(playerId);
+    // The real name must not outlive the account anywhere: not in the table, its log or chat, and not in the match
+    // record when the game finishes. Rename the seat everywhere first, then let the player leave (a bot keeps it).
+    // Every name this person went by at a table: the lobby name, the name a running game started with, a stale copy.
+    const oldNames = new Set(p ? [p.name] : []);
+    for (const room of rooms.values()) {
+      const seats = [...room.members, ...room.spectators, ...(room.seated || [])]; // seated: a departed player keeps the seat in a running game
+      for (const m of seats) if (m.id === playerId) oldNames.add(m.name);
+    }
+    oldNames.delete(DELETED_NAME);
+    if (p) p.name = DELETED_NAME;
+    for (const room of rooms.values()) {
+      const seated = [...new Set([...room.members, ...room.spectators, ...(room.seated || [])])].filter((m) => m.id === playerId);
+      if (!seated.length && (!p || p.room !== room.code)) continue;
+      for (const m of seated) { m.name = DELETED_NAME; m.avatar = '🧙'; }
+      // the game's own copy: players, every log line, trick records (the plugin owns its state)
+      if (room.game && typeof room.game.scrub === 'function') room.game.scrub([...oldNames], DELETED_NAME);
+      // chat: their messages, and every system line or message that mentions the name in plain text
+      for (const c of room.chat || []) {
+        if (c.id === playerId) { c.name = DELETED_NAME; c.avatar = '🧙'; }
+        if (typeof c.text === 'string') c.text = scrubText(c.text, [...oldNames], DELETED_NAME);
+      }
+    }
+    if (!p) return; // nothing else is held in memory for this account
+    try { if (p.room) leaveRoom(p); } catch { /* the player is going away either way */ }
+    if (p.ws) revokeSocket(p.ws, 4001, 'account deleted');
+    // another device that signed in separately has its own socket (and its own player object): close those too
+    // a socket still being checked for this account (its hello is awaiting the database) is closed too
+    for (const ws of wss.clients) if ((ws.player || ws.pendingPlayer)?.id === playerId) revokeSocket(ws, 4001, 'account deleted');
+    for (const [tok, q] of tokens) if (q.id === playerId) tokens.delete(tok);
+    clearTimeout(p.dropTimer);
+    players.delete(playerId);
+  };
   const authRoutes = createAuthRoutes({
     env,
     googleVerifier: opts.googleVerifier || null, // tests only: a verifier with a local key instead of Google's
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
-      onSignedOut: closeSignedOutSockets, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
+      onSignedOut: closeSignedOutSockets, onAccountDeleted: handleAccountDeleted, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
     }).routes,
     production,
     trustProxy,
@@ -359,47 +406,7 @@ function start(opts = {}) {
       broadcast(room);
     },
     // the account no longer exists: leave the table, close the socket, forget the player on this server
-    onAccountDeleted: ({ playerId }) => {
-      // drop this account's pseudonymous activity: pending in memory first (so no later write recreates it), then the stored rows
-      if (dbAdmin) analytics.forget(playerId, () => dbAdmin.forgetActor(playerId)).catch(() => {}); // best effort
-      // Finished games keep each seat's XP rows in memory until the server restarts: anonymise them as the record is.
-      for (const room of rooms.values()) {
-        if (room.registered) room.registered.delete(playerId); // no longer an account, so its XP is not kept
-        if (!room.outcome || !Array.isArray(room.outcome.xp)) continue;
-        for (const x of room.outcome.xp) if (x.id === playerId) { x.id = null; x.name = 'Player'; x.saved = false; }
-      }
-      const p = players.get(playerId);
-      if (!p) return;
-      // The real name must not outlive the account anywhere: not in the table, its log or chat, and not in the match
-      // record when the game finishes. Rename the seat everywhere first, then let the player leave (a bot keeps it).
-      // Every name this person went by at a table: the lobby name, the name a running game started with, a stale copy.
-      const oldNames = new Set([p.name]);
-      for (const room of rooms.values()) {
-        for (const m of [...room.members, ...room.spectators]) if (m.id === playerId) oldNames.add(m.name);
-      }
-      oldNames.delete(DELETED_NAME);
-      p.name = DELETED_NAME;
-      for (const room of rooms.values()) {
-        const seated = [...room.members, ...room.spectators].filter((m) => m.id === playerId);
-        if (!seated.length && p.room !== room.code) continue;
-        for (const m of seated) { m.name = DELETED_NAME; m.avatar = '🧙'; }
-        // the game's own copy: players, every log line, trick records (the plugin owns its state)
-        if (room.game && typeof room.game.scrub === 'function') room.game.scrub([...oldNames], DELETED_NAME);
-        // chat: their messages, and every system line or message that mentions the name in plain text
-        for (const c of room.chat || []) {
-          if (c.id === playerId) { c.name = DELETED_NAME; c.avatar = '🧙'; }
-          if (typeof c.text === 'string') c.text = scrubText(c.text, [...oldNames], DELETED_NAME);
-        }
-      }
-      try { if (p.room) leaveRoom(p); } catch { /* the player is going away either way */ }
-      if (p.ws) revokeSocket(p.ws, 4001, 'account deleted');
-      // another device that signed in separately has its own socket (and its own player object): close those too
-      // a socket still being checked for this account (its hello is awaiting the database) is closed too
-      for (const ws of wss.clients) if ((ws.player || ws.pendingPlayer)?.id === playerId) revokeSocket(ws, 4001, 'account deleted');
-      for (const [tok, q] of tokens) if (q.id === playerId) tokens.delete(tok);
-      clearTimeout(p.dropTimer);
-      players.delete(playerId);
-    },
+    onAccountDeleted: handleAccountDeleted,
   });
 
   const staticFiles = createStaticFiles();

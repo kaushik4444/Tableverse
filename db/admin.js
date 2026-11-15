@@ -35,7 +35,7 @@ async function lockStaff(client, actorId) {
 
 /** Locks the given accounts (always in id order, so two admins cannot deadlock) and returns them by id. */
 async function lockAccounts(client, ids) {
-  const r = await client.query('SELECT id, role, is_anonymous, suspended_at FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[...new Set(ids)]]);
+  const r = await client.query('SELECT id, username, role, is_anonymous, suspended_at FROM players WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [[...new Set(ids)]]);
   return new Map(r.rows.map((row) => [row.id, row]));
 }
 
@@ -116,16 +116,21 @@ async function setRole({ actorId, targetId, role }) {
   });
 }
 
-async function listUsers({ q = '', page: p = 1 } = {}) {
+async function listUsers({ q = '', page: p = 1, staleDays = 0 } = {}) {
   const term = String(q || '').trim().slice(0, 40);
-  const where = term ? "WHERE (username ILIKE $1 ESCAPE '\\' OR display_name ILIKE $1 ESCAPE '\\')" : '';
-  const args = term ? [like(term)] : [];
+  const days = Math.min(3650, Math.max(0, Math.floor(Number(staleDays)) || 0));
+  const conds = [];
+  const args = [];
+  if (term) { args.push(like(term)); conds.push(`(username ILIKE $${args.length} ESCAPE '\\' OR display_name ILIKE $${args.length} ESCAPE '\\')`); }
+  // "Stale": a registered ordinary account nobody has used for N days (last seen, else the day it was created); the quietest first
+  if (days) { args.push(days); conds.push(`(is_anonymous = FALSE AND role = 'user' AND COALESCE(last_seen_at, created_at) < NOW() - ($${args.length}::int * INTERVAL '1 day'))`); }
+  const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
   const total = (await db.query(`SELECT COUNT(*)::int AS n FROM players ${where}`, args)).rows[0].n;
   const r = await db.query(
     `SELECT p.id, p.username, p.display_name, p.role, p.is_anonymous, p.country, p.created_at, p.last_seen_at, p.suspended_at,
             EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified
        FROM players p ${where}
-      ORDER BY p.created_at DESC, p.id
+      ORDER BY ${days ? 'COALESCE(p.last_seen_at, p.created_at) ASC' : 'p.created_at DESC'}, p.id
       LIMIT ${PAGE} OFFSET $${args.length + 1}`,
     [...args, page(p) * PAGE]
   );
@@ -185,6 +190,22 @@ async function unsuspendUser({ actorId, targetId }) {
     await c.query('UPDATE players SET suspended_at = NULL, suspended_reason = NULL WHERE id = $1', [targetId]);
     await audit(c, { actorId, action: 'user.unsuspend', targetType: 'player', targetId, detail: {} });
     return { suspended: false };
+  });
+}
+
+/**
+ * Owner only: permanently deletes an ordinary registered account, for stale or abandoned ones. The same removal as a self-service
+ * deletion (finished games keep the seat as "Deleted player"; login, sessions and recent tables go). The audit row records the
+ * username and counts, never an e-mail address, and survives the account (no foreign key on target_id).
+ */
+async function deleteUser({ actorId, targetId, confirm }) {
+  return db.withTransaction(async (c) => {
+    const rows = await lockAccounts(c, [actorId, targetId]);
+    policy.checkDelete({ actor: rows.get(actorId), target: rows.get(targetId), confirm });
+    const target = rows.get(targetId);
+    const out = await require('./account').removePlayerTx(c, targetId);
+    await audit(c, { actorId, action: 'user.delete', targetType: 'player', targetId, detail: { username: target.username, matchesKept: out.matchesKept } });
+    return { deleted: true, matchesKept: out.matchesKept };
   });
 }
 
@@ -488,7 +509,7 @@ async function purge() {
 
 module.exports = {
   RETENTION, PAGE,
-  getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, lookupUser, isOwner,
+  getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
   addCounters, addActive, forgetActor, overview, health, gameStats,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
