@@ -2178,7 +2178,15 @@
       const items = r.items.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
       return `<section class="wn-release" aria-label="${esc(r.title)}"><h3 class="stat-h" style="margin:14px 0 6px">${esc(r.title)}${r.version || r.date ? ` <small>${esc([r.version, r.date].filter(Boolean).join(' · '))}</small>` : ''}</h3><ul class="wn-list">${items}</ul></section>`;
     }).join('');
-    openModal('Version history', body || '<p class="hint">No releases yet.</p>');
+    openModal('Version history', body || '<p class="hint">No releases yet.</p>', (o) => {
+      // the dialog's only control is its close button: focus it, and keep Tab on it, so focus never reaches the page behind
+      const close = o.querySelector('[data-modal-close]');
+      if (!close) return;
+      close.focus();
+      o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
+      // both entry points remove the trigger on open, so focus goes back to the account button when it closes
+      modalOnClose = () => { const b = document.querySelector('.tb-avatar-btn'); if (b) b.focus(); };
+    });
   }
 
   /** Fields whose text must survive a redraw (someone joins, a friend comes online) while the person is typing or choosing. */
