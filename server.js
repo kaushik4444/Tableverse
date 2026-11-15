@@ -1053,6 +1053,7 @@ function start(opts = {}) {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
       voluntaryLeave(room, room.members[i], Date.now(), rejoinWindowMs); // a bot takes over the seat; the player can take it back in time
+      scheduleRejoinExpiryRefresh(); // when the window closes, the home screens drop the "take your seat back" offer
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
     } else {
       room.members.splice(i, 1);
