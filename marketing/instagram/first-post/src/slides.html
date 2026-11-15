@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tableverse first post: carousel source</title>
+<style>
+/* Tableverse "Your Seat" identity: values from docs/BRAND.md. Poppins Bold for display, Inter for text. Gold is reserved for the logo's seat and the product screenshots. */
+@font-face{font-family:'Poppins';font-weight:700;src:url(fonts/Poppins-Bold.ttf)}
+@font-face{font-family:'Inter';font-weight:400;src:url(fonts/Inter-Regular.otf)}
+@font-face{font-family:'Inter';font-weight:600;src:url(fonts/Inter-SemiBold.otf)}
+:root{--deep:#071510;--felt:#153228;--gold:#fbbf24;--mint:#86efac;--ivory:#f0fdf4;--line:rgba(240,253,244,.14)}
+*{box-sizing:border-box;margin:0}
+body{background:#000;font-family:'Inter',system-ui,sans-serif;color:var(--ivory)}
+.slide{position:relative;width:1080px;height:1350px;overflow:hidden;background:radial-gradient(900px 700px at 50% 0%,#1b4a39 0%,rgba(21,50,40,0) 70%),radial-gradient(800px 600px at 100% 100%,#0f2d22 0%,rgba(15,45,34,0) 70%),var(--deep);margin:0 0 40px}
+.h{font-family:'Poppins',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.04;text-wrap:balance}
+.t{font-size:38px;line-height:1.4;color:#cdeedb}
+.chip{display:inline-block;border:2px solid var(--line);border-radius:999px;padding:10px 26px;font-weight:600;font-size:30px;color:var(--mint);background:rgba(134,239,172,.07)}
+.phone{position:absolute;border-radius:var(--r,56px);overflow:hidden;border:10px solid #0b1d15;outline:2px solid var(--line);box-shadow:0 30px 70px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.4);background:#0b1d15}
+.phone img{display:block;width:100%;height:auto}
+.pad{position:absolute;left:84px;right:84px}
+.dot{width:22px;height:22px;border-radius:50%;background:var(--mint);flex:none}
+.fact{display:flex;align-items:center;gap:22px;font-size:42px;font-weight:600;line-height:1.2}
+/* 1 */
+#s1 .lock{position:absolute;left:150px;top:92px;width:780px}
+#s1 .chip{position:absolute;left:84px;top:300px}
+#s1 .h{position:absolute;left:84px;top:372px;width:912px;font-size:112px}
+/* 2 */
+#s2 .h{top:110px;font-size:118px}
+#s2 .t{position:absolute;left:84px;top:372px;width:430px}
+#s2 .facts{position:absolute;left:84px;top:690px;display:grid;gap:34px;width:470px}
+#s2 .seats{position:absolute;left:84px;top:1000px;width:300px}
+/* 3 */
+#s3 .h{top:96px;font-size:118px}
+#s3 .names{position:absolute;left:84px;right:84px;bottom:64px;font-size:27px;line-height:1.5;color:#cdeedb;font-weight:600;text-align:center}
+/* 4 */
+#s4 .h{top:96px;font-size:108px}
+#s4 .cap{position:absolute;left:0;right:0;bottom:44px;display:flex;justify-content:center}
+/* 5 */
+#s5 .mark{position:absolute;left:290px;top:130px;width:500px}
+#s5 .h{position:absolute;left:84px;right:84px;top:690px;text-align:center;font-size:104px}
+#s5 .handle{position:absolute;left:0;right:0;top:960px;text-align:center}
+#s5 .handle span{display:inline-block;background:var(--ivory);color:var(--deep);font-family:'Poppins';font-weight:700;font-size:56px;padding:22px 56px;border-radius:999px;letter-spacing:-.01em}
+#s5 .t{position:absolute;left:120px;right:120px;top:1110px;text-align:center}
+</style></head><body>
+
+<section class="slide" id="s1">
+  <img class="lock" src="assets/lockup-on-dark.svg" alt="Tableverse">
+  <span class="chip">Friends beta</span>
+  <h1 class="h">Your friends. Your games. One table.</h1>
+  <div class="phone" style="left:30px;top:930px;width:330px"><img src="shots/game-wizard.png" alt=""></div>
+  <div class="phone" style="left:340px;top:850px;width:400px"><img src="shots/game-twentynine.png" alt=""></div>
+  <div class="phone" style="left:720px;top:930px;width:330px"><img src="shots/game-ludo.png" alt=""></div>
+</section>
+
+<section class="slide" id="s2">
+  <h2 class="h pad">Pull up a seat.</h2>
+  <p class="t">Card and board games with the people you actually know.</p>
+  <div class="facts">
+    <div class="fact"><i class="dot"></i>Right in your browser</div>
+    <div class="fact"><i class="dot"></i>No install</div>
+    <div class="fact"><i class="dot"></i>Bots fill empty seats</div>
+  </div>
+  <img class="seats" src="assets/players-4.svg" alt="">
+  <div class="phone" style="left:590px;top:330px;width:440px"><img src="shots/home.png" alt=""></div>
+</section>
+
+<section class="slide" id="s3">
+  <h2 class="h pad">Ten games. One table.</h2>
+  <div class="phone" style="left:50px;top:385px;width:340px"><img src="shots/game-wizard.png" alt=""></div>
+  <div class="phone" style="left:370px;top:455px;width:340px;z-index:2"><img src="shots/game-poker.png" alt=""></div>
+  <div class="phone" style="left:690px;top:385px;width:340px;z-index:3"><img src="shots/game-propertyrivals.png" alt=""></div>
+  <div class="names">Wizard · 29 · Poker · The Mind · Ludo · Go Fish<br>Snakes and Ladders · Property Rivals · Tic-Tac-Toe · Four in a Row</div>
+</section>
+
+<section class="slide" id="s4">
+  <h2 class="h pad">Make a table. Share the code.</h2>
+  <div class="phone" style="left:90px;top:380px;width:380px"><img src="shots/lobby.png" alt=""></div>
+  <div class="phone" style="left:610px;top:440px;width:380px"><img src="shots/game-wizard.png" alt=""></div>
+  <div class="cap"><div class="fact"><i class="dot"></i>Friends join with the code</div></div>
+</section>
+
+<section class="slide" id="s5">
+  <img class="mark" src="assets/mark.svg" alt="Tableverse">
+  <h2 class="h">Come play with us.</h2>
+  <div class="handle"><span>@playtableverse</span></div>
+  <p class="t">Follow for news and early seats.<br>We are in friends beta.</p>
+</section>
+</body></html>

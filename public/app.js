@@ -2251,7 +2251,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}${S.guest || !S.impressumPublished ? '' : ' · '}${S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''}</footer>
+      <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
     </main>`;
   }
 
