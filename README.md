@@ -50,7 +50,6 @@ Tableverse is currently open for friend testing.
 
 ## What's new — unreleased (on `development`, not yet on `main`)
 
-- **Sign in with Google (server side only).** The routes `GET /api/auth/google/config`, `POST /api/auth/google` and `POST /api/auth/google/complete` exist. The sign-in button is off unless `GOOGLE_CLIENT_ID` is set. It is not configured in production, so players do not see it. See `docs/GOOGLE_SIGNIN.md`.
 - **Level-up notice and next-level minutes** on the profile, and the **Instagram footer link**, are described in What's new (version `2026-11-15-level-and-follow`).
 - **Accounts.** Sign in with Google (off until the owner sets `GOOGLE_CLIENT_ID`). Google-only accounts can delete themselves with a fresh Google sign-in. "Keep me signed in" is on the Google button and in the sign-up step; use it only on a device you own.
 - **Owner clean-up.** The owner can permanently delete a stale ordinary account from the Users tab (type the username to confirm). A filter shows accounts not seen for 30 to 180 days.
