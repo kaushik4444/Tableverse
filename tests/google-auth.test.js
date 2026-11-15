@@ -106,6 +106,22 @@ const rejects = async (p, detail) => { try { await p; } catch (e) { assert.ok(e 
       assert.ok(err && err.name === 'GoogleAuthError' && /jwks: socket hang up/.test(err.detail), 'a safe error, not a crash: ' + err);
     } finally { https.get = orig; delete require.cache[require.resolve('../lib/googleAuth')]; }
   });
+  await test('concurrent sign-ins share one key fetch: none fails because another is already fetching', async () => {
+    let calls = 0; let release; const gate = new Promise((r) => { release = r; });
+    const v = createVerifier({ clientId: CLIENT, now: () => NOW, fetchJwks: async () => { calls++; await gate; return { keys: [jwk(pair, 'k1')] }; } });
+    const all = Promise.all([1, 2, 3].map(() => v.verify(token(), { nonce: 'n1' })));
+    setTimeout(release, 20);
+    const out = await all;
+    assert.ok(out.every((c) => c.sub === '1234567890')); assert.equal(calls, 1, 'one fetch for three requests');
+    // a rotated key: a request for it while a refresh is already running waits for that refresh
+    let t = NOW + 61000; let rot = false; let c2 = 0; let rel2; const gate2 = new Promise((r) => { rel2 = r; });
+    const v2 = createVerifier({ clientId: CLIENT, now: () => t, fetchJwks: async () => { c2++; if (c2 > 1) { await gate2; } return { keys: [jwk(pair, 'k1'), ...(c2 > 1 ? [jwk(pair, 'k2')] : [])] }; } });
+    await v2.verify(token(), { nonce: 'n1' }); t += 61000;
+    const fresh = () => token({ exp: Math.floor(t / 1000) + 3600, iat: Math.floor(t / 1000) }, { header: { kid: 'k2' } });
+    const both = Promise.all([v2.verify(fresh(), { nonce: 'n1' }), v2.verify(fresh(), { nonce: 'n1' })]);
+    setTimeout(rel2, 20);
+    assert.ok((await both).every((c) => c.sub === '1234567890'), 'both get the new key'); assert.equal(c2, 2);
+  });
   await test('the nonce is a hash of the CSRF value: stable for one browser, different for another', () => {
     assert.equal(nonceFor('abc'), nonceFor('abc')); assert.notEqual(nonceFor('abc'), nonceFor('abd')); assert.match(nonceFor('abc'), /^[0-9a-f]{64}$/);
   });

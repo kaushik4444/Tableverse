@@ -64,7 +64,7 @@ async function stubGoogle(page, hits) {
     const srv = await serve({
       'GET /api/auth/session': () => sessionOk(), 'GET /api/auth/csrf': () => ({ csrfToken: 'c' }),
       'GET /api/auth/google/config': () => ({ ok: true, enabled: true, clientId: 'x.apps.googleusercontent.com', nonce: 'n'.repeat(64) }),
-      'POST /api/auth/google': () => ({ __status: 409, body: { ok: false, error: 'That email already has a Tableverse account. Sign in with your email and password instead.' } }),
+      'POST /api/auth/google': () => ({ __status: 409, body: { ok: false, error: 'That email already has a Tableverse account. Sign in the way you used when you created it (email and password, or Google).' } }),
     });
     const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
     await stubGoogle(page, []);

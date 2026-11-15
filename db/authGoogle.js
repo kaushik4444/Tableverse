@@ -16,7 +16,7 @@ const dbPlayers = require('./players');
 const { AuthError } = dbAuth;
 const PROVIDER_GOOGLE = 'google';
 
-const taken = () => new AuthError('That email already has a Tableverse account. Sign in with your email and password instead.', 409, { code: 'email_taken' });
+const taken = () => new AuthError('That email already has a Tableverse account. Sign in the way you used when you created it (email and password, or Google).', 409, { code: 'email_taken' });
 
 
 /** Who owns the device this browser presented (null if none or not well formed). Looked up before any lock is taken. */
