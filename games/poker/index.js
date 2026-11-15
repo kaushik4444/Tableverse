@@ -91,7 +91,7 @@ module.exports = {
       // chips at the end; the biggest stack wins (ties share the win)
       results: () => players.map((_, i) => {
         const s = (g.standings || []).find((o) => o.player === i);
-        return { score: s ? s.chips : g.players[i].chips, winner: !!s && s.rank === 1 };
+        return { score: s ? s.chips : g.players[i].chips, winner: !!s && s.rank === 1, place: s ? s.rank : undefined };
       }),
     };
   },
