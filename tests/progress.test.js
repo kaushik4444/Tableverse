@@ -99,6 +99,17 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
     assert.equal(matchXpOf(rec)[0].saved, false, 'with no registered set nothing is kept');
   });
 
+  await test('a registered player who left mid-game is still kept (their record is not a bot seat)', () => {
+    const rec = { gameId: 'tictactoe', participants: [
+      { seat: 0, playerId: 'leaver', score: 0, isWinner: false, isBot: false, leftEarly: true, forfeit: true, secondsPlayed: 125 },
+      { seat: 1, playerId: 'other', score: 0, isWinner: true, isBot: false, leftEarly: false, forfeit: false, secondsPlayed: 300 },
+    ] };
+    const out = matchXpOf(rec, new Set(['leaver', 'other']));
+    assert.equal(out[0].saved, true);
+    assert.equal(out[0].gameXp, -30);
+    assert.equal(out[0].penalised, true);
+  });
+
   await test('a penalised leaver gets the leave points and the time up to leaving', () => {
     const rec = { gameId: 'tictactoe', participants: [
       { seat: 0, playerId: 'me', score: 0, isWinner: false, isBot: false, leftEarly: true, forfeit: true, secondsPlayed: 125 },

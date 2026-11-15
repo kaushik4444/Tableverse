@@ -362,6 +362,7 @@ function start(opts = {}) {
       if (dbAdmin) analytics.forget(playerId, () => dbAdmin.forgetActor(playerId)).catch(() => {}); // best effort
       // Finished games keep each seat's XP rows in memory until the server restarts: anonymise them as the record is.
       for (const room of rooms.values()) {
+        if (room.registered) room.registered.delete(playerId); // no longer an account, so its XP is not kept
         if (!room.outcome || !Array.isArray(room.outcome.xp)) continue;
         for (const x of room.outcome.xp) if (x.id === playerId) { x.id = null; x.name = 'Player'; x.saved = false; }
       }
@@ -874,7 +875,7 @@ function start(opts = {}) {
             // The XP each seat earned, from the same record: the game-over screen shows exactly what is stored
             const seats = room.seated || room.members;
             // Only signed-in accounts at the table keep their XP; guests and anonymous players are shown but not kept.
-            const registered = new Set(room.members.filter((m) => !m.bot && usernameOf(m)).map((m) => m.id));
+            const registered = room.registered || new Set();
             room.outcome.xp = matchXpOf(record, registered).map((x) => ({ ...x, id: seats[x.seat] ? seats[x.seat].id : null, name: seats[x.seat] ? seats[x.seat].name : 'Player' }));
           }
         } catch (e) {
@@ -1673,6 +1674,9 @@ function start(opts = {}) {
       room.game = def.create(seats, room.options, Math.random);
       // The member in each seat, in game order. Results are indexed by seat, so they are matched to people through this list.
       room.seated = seats.map((s) => room.members.find((m) => m.id === s.id)).filter(Boolean);
+      // Who is a registered account, decided once at the start: a leaver becomes a bot seat, and a player may be evicted
+      // from the player map, so neither can be read back from the members when the game ends.
+      room.registered = new Set(room.seated.filter((m) => !m.bot && usernameOf(m)).map((m) => m.id));
       if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
       else pacing.setScale(room.game, botScale);
       room.status = 'playing';
