@@ -1829,12 +1829,10 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-leave-and-reactions';
-  const WHATS_NEW = [
-    ['🚪', 'Leaving a game with others counts as a loss', 'If other people are still playing, leaving asks first. If the game then finishes, it counts as a loss for you. If a second player also leaves, the game is abandoned: nobody is penalised, and the people who stayed get no result. Playing only against bots, leaving does not count.'],
-    ['😀', 'More reactions, and spectators can react', 'There are 21 reactions now. A spectator’s reaction shows their name with a 👁, so the table knows it came from someone watching.'],
-    ['🚩', 'Block and report players', 'Block or report a player from their table card or from their profile page. Reports go to the moderators, and each player can be reported once. Guests can’t report.'],
-  ];
+  // Release history lives in public/whats-new-data.js. The home page shows the newest release's first three items.
+  const RELEASES = Array.isArray(window.TV_RELEASES) ? window.TV_RELEASES : [];
+  const WHATS_NEW_VERSION = RELEASES.length ? RELEASES[0].version : '';
+  const WHATS_NEW = RELEASES.length ? RELEASES[0].items.slice(0, 3) : [];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
   /** Friend requests + table invitations waiting for an answer (drives the menu badge and the home strip). */
@@ -1859,6 +1857,7 @@
         ${item('openFriendsPage', '👥', 'Friends')}
         ${item('openSettings', '⚙️', 'Settings')}
         ${item('openWhatsNew', '🎉', 'What’s new', hasNewNews() ? '<span class="mi-new">New</span>' : '')}
+        ${item('openVersionHistory', '📜', 'Version history')}
         ${item('openFeedback', '💬', 'Send feedback')}
         ${S.isStaff ? item('openAdmin', '🛠️', 'Admin console') : ''}
         <div class="menu-sep" role="separator"></div>
@@ -1926,6 +1925,7 @@
   }
 
   const modalActions = {
+    versionHistory: () => openVersionHistoryDialog(),
     cardAdd: () => { const p = S.card && S.card.last; if (p && p.username) cardAction('/api/me/friend-requests', { username: p.username }, 'Friend request sent.', 'Sending request…'); },
     cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }, undefined, 'Cancelling…'); },
     cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.', 'Accepting…'); },
@@ -2167,7 +2167,18 @@
     S.wnSeen = WHATS_NEW_VERSION;
     store.set('ct_wn_seen', S.wnSeen);
     render();
-    openModal('What’s new', `<ul class="wn-list">${WHATS_NEW.filter((w) => S.voiceEnabled || w[3] !== 'voice').map(([ico, t, d]) => `<li><span class="wn-ico" aria-hidden="true">${ico}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>`);
+    const newest = RELEASES[0] || { title: '', items: [] };
+    const list = WHATS_NEW.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+    openModal('What’s new', `<p class="hint" style="text-align:left">${esc(newest.title)}</p><ul class="wn-list">${list}</ul><div class="row" style="margin-top:12px"><button type="button" class="btn ghost small" data-modal-act="versionHistory">All versions</button></div>`);
+  }
+
+  /** Every release, newest first, with its items (voice items only when voice chat is on). */
+  function openVersionHistoryDialog() {
+    const body = RELEASES.map((r) => {
+      const items = r.items.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+      return `<section class="wn-release" aria-label="${esc(r.title)}"><h3 class="stat-h" style="margin:14px 0 6px">${esc(r.title)}${r.date ? ` <small>${esc(r.date)}</small>` : ''}</h3><ul class="wn-list">${items}</ul></section>`;
+    }).join('');
+    openModal('Version history', body || '<p class="hint">No releases yet.</p>');
   }
 
   /** Fields whose text must survive a redraw (someone joins, a friend comes online) while the person is typing or choosing. */
@@ -2618,6 +2629,7 @@
     openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },
     openSettings: () => { S.menuOpen = false; render(); openSettingsDialog(); },
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
+    openVersionHistory: () => { S.menuOpen = false; openVersionHistoryDialog(); },
     toggleAvatars: () => { S.avatarOpen = !S.avatarOpen; render(); },
     emotes: () => toggleEmoteBar(),
     activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },

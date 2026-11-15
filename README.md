@@ -56,6 +56,7 @@ Tableverse is currently open for friend testing.
 - **Blocking.** Block and unblock answer one request at a time, an unblock that changes nothing is answered, and a refusal shows an error that names the action.
 - **⋯ menu.** The same labels in the same order in every game.
 - **Ludo, six players.** The outer yard of the seat to play blinks, not the inner home.
+- **Version history.** What's new on the home page shows the newest release's three highlights. The account menu's **Version history** lists every release, newest first. The release notes are in `public/whats-new-data.js`; add a release there when a change ships.
 
 ## Released 2026-11-14 (release PR #165): blocking and reports, the ⋯ menu, 29 rules, seat shuffle
 

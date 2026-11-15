@@ -11,6 +11,7 @@ User-facing changes are listed first. Operational and internal implementation de
 - Blocking: block and unblock send one request at a time, and an error names the action that failed.
 - The ⋯ menu has the same labels in the same order in every game.
 - Ludo with six players: the outer yard of the seat to play blinks.
+- What's new keeps every release: the account menu's Version history lists them all, newest first.
 
 ## Released 2026-11-14 (release PR #165)
 

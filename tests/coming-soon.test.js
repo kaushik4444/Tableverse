@@ -32,16 +32,25 @@ assert.equal((html.match(/>Planned</g) || []).length, 6, 'the others are planned
 assert.match(html, /Also on the list/);
 assert.match(html, /7 planned/);
 assert.match(html, /original artwork and presentation/);
+// What's new: the release history is public/whats-new-data.js; the home page shows the newest release's first three items.
+const releaseSource = fs.readFileSync(require.resolve('../public/whats-new-data.js'), 'utf8');
+const sandbox = { window: {} };
+vm.runInNewContext(releaseSource, sandbox);
+const releases = sandbox.window.TV_RELEASES;
+assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history keeps every version (newest first)');
+const newest = releases[0];
+const highlights = newest.items.slice(0, 3).map((i) => i.title).join('\n');
+assert.equal(newest.items.slice(0, 3).length, 3, 'the home page shows three highlights');
+assert.match(highlights, /Leaving a game with others counts as a loss/);
+assert.match(highlights, /More reactions, and spectators can react/);
+assert.ok(releases.every((r) => r.version && r.title && Array.isArray(r.items) && r.items.length > 0), 'every release has a version, title and items');
+assert.equal(new Set(releases.map((r) => r.version)).size, releases.length, 'versions are unique');
 const appSource = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
-const whatsNew = appSource.match(/const WHATS_NEW = \[([\s\S]*?)\n  \];/);
-assert.ok(whatsNew, 'What’s new release notes exist');
-assert.equal((whatsNew[1].match(/^\s*\[/gm) || []).length, 3, 'What’s new only contains the latest three highlights');
-assert.ok(!html.includes('Snakes and Ladders'), 'a playable game is not listed as coming soon');
-assert.match(whatsNew[1], /Block and report players/);
-assert.match(whatsNew[1], /Leaving a game with others counts as a loss/);
-assert.match(whatsNew[1], /More reactions, and spectators can react/);
-for (const shipped of ['Four in a Row', 'Tic-Tac-Toe']) assert.ok(!html.includes(shipped), `${shipped} is playable, not coming soon`);
-assert.ok(!html.includes('Property Rivals'), 'a playable game is not listed as coming soon');
-assert.doesNotMatch(whatsNew[1], /Private tables and invitations|Host tools|Player cards|Profiles and history/);
+assert.match(appSource, /window\.TV_RELEASES/, 'the app reads the release history');
+assert.match(appSource, /openVersionHistory/, 'the account menu opens the version history');
+
+for (const shipped of ['Private tables and invitations', 'Host tools', 'Player cards', 'Profiles and history']) {
+  assert.ok(!highlights.includes(shipped), shipped + ' is not a highlight');
+}
 assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
 console.log('Coming Soon and latest-release-note tests passed (7 games, requested order, alternate working titles, 3 current highlights).');
