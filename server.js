@@ -327,12 +327,13 @@ function start(opts = {}) {
     // Every name this person went by at a table: the lobby name, the name a running game started with, a stale copy.
     const oldNames = new Set(p ? [p.name] : []);
     for (const room of rooms.values()) {
-      for (const m of [...room.members, ...room.spectators]) if (m.id === playerId) oldNames.add(m.name);
+      const seats = [...room.members, ...room.spectators, ...(room.seated || [])]; // seated: a departed player keeps the seat in a running game
+      for (const m of seats) if (m.id === playerId) oldNames.add(m.name);
     }
     oldNames.delete(DELETED_NAME);
     if (p) p.name = DELETED_NAME;
     for (const room of rooms.values()) {
-      const seated = [...room.members, ...room.spectators].filter((m) => m.id === playerId);
+      const seated = [...new Set([...room.members, ...room.spectators, ...(room.seated || [])])].filter((m) => m.id === playerId);
       if (!seated.length && (!p || p.room !== room.code)) continue;
       for (const m of seated) { m.name = DELETED_NAME; m.avatar = '🧙'; }
       // the game's own copy: players, every log line, trick records (the plugin owns its state)
