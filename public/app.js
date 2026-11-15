@@ -2616,8 +2616,8 @@
     const pg = (st.progress && st.progress.games && st.progress.games[id]) || { points: 0, rule: 'placing' };
     // Only people still in the game at the end are ranked (bots are not). Leaving while others play costs -30 on top.
     const rule = pg.rule === 'win-lose'
-      ? 'Among the people (bots are not ranked) still in the game: win +20, loss −20, draw 0. Leaving while others are still playing −30.'
-      : 'Among the people (bots are not ranked) still in the game: first place +20, the lowest place −20, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
+      ? 'Among the people (bots are not ranked) still in the game: win +20, loss −10, draw 0. Leaving while others are still playing −30.'
+      : 'Among the people (bots are not ranked) still in the game: first place +20, the lowest place −10, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
     const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
     const hist = P.gameHistory;
     const histHTML = !hist ? '<p class="hint" style="text-align:left">Loading recent games…</p>'
@@ -2748,18 +2748,39 @@
   const END_BOARD_MS = 3500; // the finished table stays visible
   const END_WINNER_MS = 2800; // then the "<name> won" pop-up
   /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
-  /** Game-over XP: each human seat's time XP and Game XP, with a bar against the best total. Guest seats are shown but not kept. */
-  function endXpHTML(rows) {
-    const people = rows.filter((x) => !x.isBot).map((x) => ({ ...x, total: (x.timeXp || 0) + (x.gameXp || 0) })).sort((a, b) => b.total - a.total);
+  /**
+   * Game over: two amounts, never added together. Player Progress is time played (1 XP per full minute): it is the only
+   * thing that moves the overall level. Game XP is this game's own skill, named after the game. Every person is listed
+   * with both amounts side by side; there is no combined total.
+   */
+  function endXpHTML(rows, gameName) {
+    const people = rows.filter((x) => !x.isBot);
     if (!people.length) return '';
-    const top = Math.max(1, ...people.map((x) => x.total));
-    const list = people.map((x) => {
-      const me = x.id === S.id;
-      const bar = Math.max(0, Math.round((x.total / top) * 100));
-      return `<div class="xp-row${me ? ' me' : ''}"><div class="xp-top"><span class="xp-name">${me ? 'You' : esc(x.name || 'Player')}${x.saved ? '' : ' <small>guest · not kept</small>'}</span><b class="xp-total">${fmtXp(x.total)} XP</b></div><span class="xp-bar" aria-hidden="true"><i style="width:${bar}%"></i></span><small class="xp-parts">Time ${fmtXp(x.timeXp)} · Game ${x.gameXp === null ? 'not ranked' : fmtXp(x.gameXp)}${x.penalised ? ' · left early' : ''}</small></div>`;
+    const game = esc(gameName || 'Game');
+    const mine = people.find((x) => x.id === S.id);
+    const time = (x) => Math.max(0, Number(x.timeXp) || 0);
+    const unranked = (x) => x.gameXp === null || x.gameXp === undefined;
+    const summary = mine ? `<div class="xp-summary">
+        <div class="xp-card xp-progress">
+          <span class="xp-kind">Player Progress</span>
+          <b class="xp-num">+${time(mine)} XP</b>
+          <small>1 XP per full minute played${S.account ? ` · Level ${Number(S.account.level)}, ${Number(S.account.into)} / ${Number(S.account.need)} to the next` : ''}</small>
+        </div>
+        <div class="xp-card xp-game">
+          <span class="xp-kind">${game} Experience</span>
+          <b class="xp-num">${unranked(mine) ? 'Not ranked' : `${fmtXp(mine.gameXp)} XP`}</b>
+          <small>Counts only in ${game}${mine.penalised ? ' · left early (−30)' : ''}</small>
+        </div>
+      </div>${mine.saved ? '' : '<p class="xp-note">Guest games are not kept. Sign in to keep your progress and game XP.</p>'}` : '';
+    const body = people.map((x) => {
+      const me = Boolean(mine) && x.id === S.id;
+      const name = me ? 'You' : esc(x.name || 'Player');
+      const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
+      const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
+      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">+${time(x)}</span><span class="xp-c" role="cell">${unranked(x) ? '–' : fmtXp(x.gameXp)}</span></div>`;
     }).join('');
-    const mine = S.account ? `<p class="hint">Your level ${Number(S.account.level)} · ${S.account.into} / ${S.account.need} to next level</p>` : '';
-    return `<section class="end-xp" aria-label="XP for this game"><h3 class="stat-h">XP this game</h3><div class="xp-list">${list}</div>${mine}</section>`;
+    const table = `<div class="xp-table" role="table" aria-label="XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">Progress</span><span class="xp-c" role="columnheader">${game}</span></div>${body}</div>`;
+    return `<section class="end-xp" aria-label="XP for this game">${summary}${table}</section>`;
   }
 
   function endFlow() {
@@ -2813,7 +2834,7 @@
       }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       if (xpRows.length && !$app.querySelector('.end-xp')) {
-        const card = endXpHTML(xpRows);
+        const card = endXpHTML(xpRows, statsGame(r.gameId).name);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.

@@ -14,7 +14,8 @@ admin overview. Not verified in production.
 ## Levels
 - Level n starts at `50 * n * (n-1) / 2` XP: level 2 at **50**, level 3 at 150, level 4 at 300, level 5 at 500.
 - Each level needs 50 more XP than the one before.
-- The account level and each game's level use the same curve.
+- The overall level uses this curve. Game XP has no levels.
+- The two kinds of XP never add into each other: Game XP does not change the overall level, and time does not change Game XP.
 
 ## Game XP: skill, per game (no game levels)
 Each game has its own rule. Points are given per game and add up to that game's **Game XP**, a running total. Game XP
@@ -22,9 +23,13 @@ can go negative. There are no game levels: the profile shows Game XP per game, a
 
 There are two kinds of result:
 
-- **Placing games**: every player gets a place from their score. The best place gets **+20**, the last place gets
-  **-20**, and places in between fall in a straight line. Ties share a place.
-- **Win or lose games**: a win gets **+20**, a draw **0**, a loss **-20**.
+- **Placing games**: every ranked player gets a place from their result. The best place gets **+20**, the last place gets
+  **-10**, and places in between fall in a straight line. Ties share a place. With four ranked players that is
+  **+20, +10, 0, -10**; with three, **+20, +5, -10**. A lone ranked player gets 0.
+- **Win or lose games**: a win gets **+20**, a draw **0**, a loss **-10**.
+- **Leaving while others are still playing** (a penalised leave) costs **-30** in every game. It is always worse than
+  finishing last. A leave without a penalty is not ranked in that game.
+- Only people still in the game are ranked; bots are never ranked.
 
 | Game | Kind | What decides the place or result |
 |---|---|---|
@@ -43,6 +48,21 @@ Rules that apply to every game:
   finishing last.
 - **Leave without a penalty** (bots only, or an abandoned game): not in the game ranking at all.
 - **Bots** are not ranked.
+
+## Game over: what the screen shows
+- The result (who won, the places) is the main line, as before.
+- **Player Progress** `+X XP`: the time you played in this game (1 XP per full minute). It is the only amount that moves your overall level.
+- **[Game] Experience** `+Y XP`: this game's own points (`Not ranked` when you were not ranked). It counts only in that game.
+- The two amounts are shown side by side and are never added together. There is no combined "overall XP" total.
+- The table lists each person with their Progress and Game XP in two columns. Guests are marked: their games are not kept.
+
+## History and rule changes
+- Game XP and Player Progress are calculated from the stored results each time they are read. No totals are stored, so a
+  rule change applies to past games as well.
+- Changing a loss from **-20** to **-10** therefore changes the Game XP of past games: each loss is 10 higher, and in a
+  placing game the line from first to last is redrawn, so in-between places can move too. It does not change any time
+  played, Player Progress, or any overall level.
+- Stored results (places, seconds played, win/lose/draw) are not rewritten. Nothing needs a migration or a backfill.
 
 ## Leaving and coming back
 The rules for leaving a running game, the 2-minute window to take a seat back, spectating after it, and active play time are in [LEAVING_AND_REJOINING.md](LEAVING_AND_REJOINING.md). Active play time is counted by `lib/playTime.js`, and the window by `lib/leavePolicy.js`.
