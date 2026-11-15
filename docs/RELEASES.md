@@ -35,7 +35,7 @@ A release proceeds only when all of these hold on the PR head:
 | main has nothing development lacks | `git merge-tree` of main and development | main has changes that development does not (a hotfix not synced yet) |
 | No conflicts | `git merge-tree` and the PR `mergeable` field | either reports a conflict |
 | Five required checks green | check runs on the head commit | any missing, pending or failed |
-| Copilot review finished | check run `copilot-pull-request-reviewer` | missing, running or not successful |
+| Copilot review of this head finished | check run `copilot-pull-request-reviewer` on the PR head commit | missing, running or not successful. A review of an older commit never counts. |
 | Newest run decides | every page of check runs, newest run per name | an older green run can never stand in for a newer red or running one |
 | Production target set | repository variable `PRODUCTION_URL` | it is not set (checked before the merge, so nothing is merged) |
 | Conversations resolved | GraphQL `reviewThreads` | any unresolved (lists over 100 are blocked) |
@@ -43,6 +43,21 @@ A release proceeds only when all of these hold on the PR head:
 | One release PR | open PRs | more than one |
 
 A successful CI run alone is not enough: the workflow checks the Copilot review and the conversations separately.
+
+### How the Copilot review is obtained
+
+The release workflow does not rely on Copilot's automatic review. When the Copilot review of the PR head is missing or failed,
+the run asks GitHub for one with the REST request `POST /repos/{owner}/{repo}/pulls/{number}/requested_reviewers` and the reviewer
+`copilot-pull-request-reviewer[bot]`. It then waits in the same run (up to 15 minutes) for a Copilot check run on that exact head.
+If Copilot finishes, the gates are read again and the release goes ahead when everything passes. If it has not started after
+3 minutes, or has failed, the run is blocked and the next run asks again. A review of an older commit is never accepted, so a
+changed head always needs a fresh review.
+
+The request uses the workflow's own token (`pull-requests: write`). No personal access token and no GitHub App is added. If GitHub
+refuses the request, the run says so in its summary and fails with the HTTP status; the release stays blocked until the owner checks
+that Copilot code review is enabled for this repository (Settings → Copilot).
+
+A blocked release fails the run (red) with `Release blocked: …`, so a blocked release is never shown as a completed one.
 
 ## Merge history
 
@@ -103,10 +118,9 @@ Tick each item only after checking it in the GitHub or Render UI. Re-check after
       slash (for example `https://tableverse.example.com`). Without it, every release is blocked before anything merges.
 - [ ] **Variables:** `RELEASE_MERGE_METHOD` is unset or `merge` (the normal setting). Set `squash` only if you accept that later
       releases can be blocked by conflicts that a person must resolve.
-- [ ] **Copilot review on the first release PR:** Copilot's review must run on the PR that the workflow opens. If it never appears,
-      every release is blocked with "Copilot review has not run on this PR head". The owner then decides between requesting
-      Copilot review by hand on that PR each day or adding a GitHub App token. No personal access token is used or added by
-      this workflow.
+- [ ] **Copilot code review enabled:** the workflow requests a Copilot review of each release PR head itself (see *How the Copilot
+      review is obtained*). Check that Copilot code review is enabled for the repository (Settings → Copilot). If a run reports
+      that GitHub refused the request, enable it there; no token is added and no review is dismissed.
 - [ ] **Security features (public repository, GitHub Free):** Settings → Code security: private vulnerability reporting, Dependabot
       alerts, secret scanning and push protection are enabled. The code cannot check these.
 - [ ] **Environments:** the `production-cleanup` environment has the required reviewers you intend.
@@ -148,7 +162,7 @@ stops with the freeze reason. A frozen run does not close or change the open rel
 ## What happens when a gate fails
 
 - **Blocked (CI red, Copilot not finished, conversation open, conflict):** the release PR stays open, the reason appears in the
-  run summary and as a warning. Fix the cause on `development` (or resolve the conversation); the next run, or a manual run,
+  run summary and as an error, and the run fails (red) so it is never mistaken for a release. Fix the cause on `development` (or resolve the conversation); the next run, or a manual run,
   proceeds. Nothing is merged, so nothing reaches production.
 - **Blocked because main has changes development lacks:** see *Hotfixes* below. The release waits until development has them.
 - **Failed run (health check failed after a merge):** the run fails and GitHub emails the repository's notification recipients.
@@ -197,7 +211,7 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js` (35 cases): no changes, eligible, failed CI, incomplete Copilot review, unresolved
+`npm test` runs `tests/daily-release.test.js` (41 cases): no changes, eligible, failed CI, incomplete Copilot review (requested, awaited on the head, retried, refused, stale-head reviews ignored), unresolved
 conversations, conflict, freeze, duplicate PRs, missing rules, the Berlin release window across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
 method (merge by default, squash only when set, case and spacing ignored, unknown values refused), every runbook section the script names exists, a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
