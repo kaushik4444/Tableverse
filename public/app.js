@@ -736,9 +736,14 @@
   function recentTablesHTML() {
     if (!S.recentTables.length) return '';
     const rows = S.recentTables.map((r) => {
-      const mine = S.rejoin.some((x) => x.code === r.code);
-      const status = mine ? 'Your seat is waiting' : r.status === 'playing' ? 'In progress' : 'Open';
-      return `<button class="recent-table ${mine ? 'mine' : ''}" data-act="rejoin" data-code="${esc(r.code)}"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code>${mine ? '<em class="rj-badge">Rejoin</em>' : `<small>${status}</small>`}</button>`;
+      const mine = S.rejoin.find((x) => x.code === r.code);
+      if (mine && mine.canReclaim === false && mine.paused) {
+        return `<div class="recent-table"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code><small>Game paused</small></div>`;
+      }
+      const reclaim = mine && mine.canReclaim !== false;
+      const status = reclaim ? 'Your seat is waiting' : mine ? 'Watch game' : r.status === 'playing' ? 'In progress' : 'Open';
+      const action = mine && !reclaim ? 'watch' : 'rejoin';
+      return `<button class="recent-table ${reclaim ? 'mine' : ''}" data-act="${action}" data-code="${esc(r.code)}"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code>${reclaim ? '<em class="rj-badge">Rejoin</em>' : `<small>${status}</small>`}</button>`;
     }).join('');
     return `<section class="home-section"><h2 class="section">Recent tables</h2><div class="recent-tables">${rows}</div></section>`;
   }
@@ -748,7 +753,14 @@
     if (!S.rejoin.length) return '';
     return S.rejoin.map((r) => {
       const g = gameMeta(r.gameId) || { name: r.gameId, icon: '🎴' };
-      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.</span></div><button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button></div>`;
+      const canReclaim = r.canReclaim !== false;
+      const message = canReclaim
+        ? `${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.`
+        : `${r.paused ? 'The rejoin window has passed, so this game cannot resume.' : 'The rejoin window has passed, but you can still watch'} at table <code>${esc(r.code)}</code>.`;
+      const action = canReclaim
+        ? `<button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button>`
+        : r.paused ? '' : `<button class="btn" data-act="watch" data-code="${esc(r.code)}">Watch</button>`;
+      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${message}</span></div>${action}</div>`;
     }).join('');
   }
 
@@ -2691,7 +2703,12 @@
       send({ t: 'setVisibility', visibility: cur === 'public' ? 'private' : 'public' });
     },
     // The server decides: your old seat if you had one (a bot is playing it), otherwise a seat in a lobby, otherwise watching.
-    rejoin: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
+    rejoin: (el) => {
+      const mine = S.rejoin.find((x) => x.code === el.dataset.code);
+      if (mine && mine.canReclaim === false) return mine.paused ? toast('This game cannot resume. Start a new game instead.') : actions.watch(el);
+      askJoinMode(el.dataset.code, tableByCode(el.dataset.code));
+    },
+    watch: (el) => gateLogin(() => joinTable(el.dataset.code, 'spectate')),
     joinPublic: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
     toggleSessions: () => { S.sessionListOpen = !S.sessionListOpen; store.set('ct_sessions_open', S.sessionListOpen ? '1' : '0'); render(); },
     leave: () => requestLeave(),

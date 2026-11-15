@@ -17,13 +17,14 @@ async function until(fn, label, ms = 8000) {
 }
 
 function connect(port, token) {
-  const c = { room: null, view: null, chats: [], errors: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
+  const c = { room: null, view: null, rejoin: [], chats: [], errors: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
   c.send = (m) => c.ws.send(JSON.stringify(m));
   c.ws.on('open', () => c.send({ t: 'hello' }));
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
-    if (m.t === 'welcome') c.id = m.id;
+    if (m.t === 'welcome') { c.id = m.id; c.rejoin = m.rejoin || []; }
     if (m.t === 'state') { c.room = m.room; c.view = m.view; }
+    if (m.t === 'tables') c.rejoin = m.rejoin || [];
     if (m.t === 'chat') c.chats.push(m.m);
     if (m.t === 'chatlog') c.chats = c.chats.concat(m.messages);
     if (m.t === 'error') c.errors.push(m.message);
@@ -45,7 +46,10 @@ function connect(port, token) {
     await until(() => a.view && a.view.me >= 0 && b.view && b.view.me >= 0, 'game started');
     const seatA = a.view.me;
     const code = a.room.code;
-    const noHands = (view) => (view.players || []).every((p) => !Array.isArray(p.hand));
+    const noHands = (view) => view && view.me === -1
+      && (!Array.isArray(view.hand) || view.hand.length === 0)
+      && (!Array.isArray(view.foresight) || view.foresight.length === 0)
+      && (view.players || []).every((p) => !Array.isArray(p.hand));
 
     // 1. leave and come back inside the window: the same seat, and the leave is forgiven
     const t0 = Date.now();
@@ -56,14 +60,18 @@ function connect(port, token) {
     await until(() => a.view && a.view.me === seatA && a.chats.some((m) => m.sys && /took the seat/.test(m.text)), 'seat taken back inside the window');
     assert.equal(a.room.status, 'playing', 'the game still runs');
 
-    // 2. leave again after the window has passed since the FIRST leave: the seat is gone for this match
-    const wait = t0 + GRACE_MS + 150 - Date.now();
-    if (wait > 0) await sleep(wait);
+    // 2. Leaving again does not restart the original deadline, which also refreshes the open home screen at expiry.
+    a.view = null;
     a.send({ t: 'leave' });
-    await sleep(60);
+    await until(() => a.rejoin.some((r) => r.code === code && r.canReclaim), 'rejoin remains available before original deadline');
+    await until(() => Date.now() >= t0 + GRACE_MS && a.rejoin.some((r) => r.code === code && !r.canReclaim), 'home screen refreshed when original deadline expires');
+
+    // 3. Returning after that deadline is a spectator: no private state, no seat actions, and no new forfeits.
     a.view = null;
     a.send({ t: 'join', code });
-    await until(() => a.view && a.view.me !== seatA, 'late return is a spectator');
+    await until(() => a.view && a.view.me === -1 && a.room.spectators.some((s) => s.id === a.id), 'late return is registered as a spectator');
+    assert.ok(a.room.members.some((m) => m.id === a.id && m.bot), 'the bot retains the former seat');
+    await until(() => b.room.spectators.some((s) => s.id === a.id), 'other players see the late return as a spectator');
     assert.ok(noHands(a.view), 'a spectator never receives a hand');
     assert.equal(a.room.status, 'playing', 'the game keeps running for the bot-held seat');
     a.errors = [];
@@ -72,11 +80,12 @@ function connect(port, token) {
     assert.ok(a.errors.some((e) => /watching/.test(e)), 'a spectator cannot move for the bot-held seat');
     assert.ok(noHands(a.view), 'still no hand after a refused move');
 
-    // 3. leaving again as a spectator changes nothing: the game is not abandoned for the player who stayed
+    // 4. leaving again as a spectator changes nothing: the game is not abandoned for the player who stayed
     a.send({ t: 'leave' });
-    await sleep(80);
+    await until(() => b.room.spectators.every((s) => s.id !== a.id), 'spectator stopped watching');
     assert.equal(b.room.status, 'playing', 'the game is not abandoned');
     assert.ok(!b.chats.some((m) => m.sys && /abandon/i.test(m.text)), 'nobody is told the game was abandoned');
+    assert.ok(b.room.members.some((m) => m.id === a.id && m.bot), 'leaving as a spectator does not take the bot-held seat');
     console.log('  ok  rejoin socket: inside the window, after it, and leaving again as a spectator');
     console.log('\n1 passed, 0 failed');
   } catch (e) {

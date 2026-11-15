@@ -666,14 +666,23 @@ function start(opts = {}) {
     for (const room of rooms.values()) {
       if (room.status !== 'playing' || p.room === room.code) continue;
       if (room.denied && room.denied.has(p.id)) continue; // access revoked
-      if (room.members.some((m) => m.id === p.id && m.bot)) out.push({ code: room.code, gameId: room.gameId, paused: !humans(room).some(isConnected) });
+      if (room.members.some((m) => m.id === p.id && m.bot)) {
+        out.push(rejoinInfo(room, p.id, !humans(room).some(isConnected)));
+      }
     }
     return out;
   }
 
   const tablesMsg = (p) => ({ t: 'tables', tables: publicTables(p.id), rejoin: rejoinFor(p) });
 
-  /** Who can take a seat back: playerId -> [{code, gameId, paused}], built in one pass over the rooms (not once per player). */
+  const rejoinInfo = (room, playerId, paused) => ({
+    code: room.code,
+    gameId: room.gameId,
+    paused,
+    canReclaim: rejoinPolicy.canReclaimSeat(room, playerId, Date.now(), rejoinGraceMs),
+  });
+
+  /** Who can return to a running game: playerId -> [{code, gameId, paused, canReclaim}], built in one pass over the rooms. */
   function rejoinIndex() {
     const index = new Map();
     for (const room of rooms.values()) {
@@ -685,7 +694,7 @@ function start(opts = {}) {
         if (q && q.room === room.code) continue;
         if (paused === undefined) paused = !humans(room).some(isConnected);
         const list = index.get(m.id) || index.set(m.id, []).get(m.id);
-        list.push({ code: room.code, gameId: room.gameId, paused });
+        list.push(rejoinInfo(room, m.id, paused));
       }
     }
     return index;
@@ -697,6 +706,15 @@ function start(opts = {}) {
    * the whole directory to every connected player.
    */
   let tablesTimer = null;
+  const rejoinExpiryTimers = new Set();
+  function scheduleRejoinExpiryRefresh() {
+    const timer = setTimeout(() => {
+      rejoinExpiryTimers.delete(timer);
+      broadcastTables();
+    }, rejoinGraceMs + 1);
+    if (timer.unref) timer.unref();
+    rejoinExpiryTimers.add(timer);
+  }
   function broadcastTables() {
     if (tablesTimer) return;
     tablesTimer = setTimeout(flushTables, 120);
@@ -1030,6 +1048,7 @@ function start(opts = {}) {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
       rejoinPolicy.leftSeat(room, p.id, Date.now()); // starts the grace period once; active time stops here
+      scheduleRejoinExpiryRefresh();
       leaveRunningGame(room, p.id);
       room.members[i].bot = true; // a bot takes over the seat; the player can take it back by rejoining
       (room.leftEarly || (room.leftEarly = new Set())).add(p.id);
@@ -2137,6 +2156,8 @@ function start(opts = {}) {
     }
     clearInterval(ticker);
     clearTimeout(tablesTimer);
+    for (const timer of rejoinExpiryTimers) clearTimeout(timer);
+    rejoinExpiryTimers.clear();
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
