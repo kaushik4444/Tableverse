@@ -114,5 +114,27 @@ test('account XP accumulates across games', () => {
   assert.equal(xp.runningTotal([xp.timeXp(600), xp.timeXp(900)]), 25);
 });
 
+test('a tie at the bottom: the lowest place still gets -20 (places 1, 2, 2 are scaled to 2, not to 3)', () => {
+  const pts = gameSkillPoints('wizard', [p('A', 50), p('B', 10), p('C', 10)]);
+  assert.equal(pts.A, WIN);
+  assert.equal(pts.B, LOSS, 'the shared last place is last');
+  assert.equal(pts.C, LOSS);
+});
+
+test('a game-supplied place is used instead of score: Property Rivals players out in order get distinct places', () => {
+  // four players; all went bankrupt, so every score is 0 (the score alone cannot tell them apart)
+  const pts = gameSkillPoints('propertyrivals', [
+    p('A', 0, { place: 1 }), p('B', 0, { place: 2 }), p('C', 0, { place: 3 }), p('D', 0, { place: 4 }),
+  ]);
+  assert.equal(pts.A, WIN);
+  assert.equal(pts.D, LOSS, 'the one who went out last keeps the last place, not the same as the others');
+  assert.ok(pts.A > pts.B && pts.B > pts.C && pts.C > pts.D, 'each place is distinct');
+});
+
+test('Poker: the final standing gives the place, so chips that tie do not share a place', () => {
+  const pts = gameSkillPoints('poker', [p('A', 300, { place: 1 }), p('B', 100, { place: 2 }), p('C', 100, { place: 3 })]);
+  assert.ok(pts.B > pts.C, 'the standing separates them');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
