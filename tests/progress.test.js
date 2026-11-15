@@ -2,7 +2,7 @@
 // Progress from stored rows: the one overall level from time only, game XP per game (no game levels), penalised leaves counted. No database.
 require('./helpers/env'); // first: no test may reach a real database
 const assert = require('node:assert/strict');
-const { computeProgress, matchXpOf } = require('../lib/progress');
+const { computeProgress, matchXpOf, boardFor } = require('../lib/progress');
 const dbMatches = require('../db/matches');
 
 let passed = 0; let failed = 0;
@@ -21,7 +21,7 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
     assert.equal(win.account.xp, 50); assert.equal(win.account.level, 2); assert.equal(win.account.minutes, 50);
     assert.equal(loss.account.xp, 50);
   });
-  await test('a game has game XP only: a win is +20, a loss -20, a placing game uses the ladder', () => {
+  await test('a game has game XP only: a win is +20, a loss -10, a placing game uses the ladder', () => {
     const p = computeProgress([
       row('1', 'tictactoe', 0, 'me', { isWinner: true }), row('1', 'tictactoe', 1, 'x'),
       row('2', 'wizard', 0, 'me', { score: 100 }), row('2', 'wizard', 1, 'x', { score: 50 }), row('2', 'wizard', 2, 'y', { score: 0 }),
@@ -32,7 +32,24 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
   });
   await test('game XP can go negative and there is no game level', () => {
     const p = computeProgress([row('1', 'tictactoe', 0, 'me'), row('1', 'tictactoe', 1, 'x', { isWinner: true })], 'me');
-    assert.equal(p.games.tictactoe.points, -20); assert.equal(p.games.tictactoe.level, undefined, 'no per-game level');
+    assert.equal(p.games.tictactoe.points, -10); assert.equal(p.games.tictactoe.level, undefined, 'no per-game level');
+  });
+  await test('Player Progress is time only: game XP never changes the overall level', () => {
+    const game = (matchId, seat, playerId, extra) => row(matchId, 'tictactoe', seat, playerId, { secondsPlayed: 600, ...extra });
+    // both play two 10-minute games; one loses both, the other wins both
+    const loser = computeProgress([game('1', 0, 'me'), game('1', 1, 'x', { isWinner: true }), game('2', 0, 'me'), game('2', 1, 'x', { isWinner: true })], 'me');
+    const winner = computeProgress([game('1', 0, 'me', { isWinner: true }), game('1', 1, 'x'), game('2', 0, 'me', { isWinner: true }), game('2', 1, 'x')], 'me');
+    assert.equal(loser.account.xp, 20, '20 minutes = 20 Player Progress');
+    assert.equal(winner.account.xp, 20);
+    assert.equal(loser.account.level, winner.account.level, 'the same level whatever the results');
+    assert.equal(loser.games.tictactoe.points, -20);
+    assert.equal(winner.games.tictactoe.points, 40);
+  });
+  await test('history is re-scored from the stored rows: a loss now counts -10, and the time is unchanged', () => {
+    const p = computeProgress([row('1', 'tictactoe', 0, 'me', { secondsPlayed: 300 }), row('1', 'tictactoe', 1, 'x', { isWinner: true, secondsPlayed: 300 })], 'me');
+    assert.equal(p.games.tictactoe.points, -10, 'no stored total: the rule is applied to the stored result');
+    assert.equal(p.account.minutes, 5);
+    assert.equal(p.account.xp, 5);
   });
   await test('a penalised leave is -30, counts as a leave, and gives no time', () => {
     const p = computeProgress([row('1', 'twentynine', 0, 'me', { leftEarly: true, forfeit: true, secondsPlayed: 0 }), row('1', 'twentynine', 1, 'x', { isWinner: true })], 'me');
@@ -135,6 +152,35 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
     assert.equal(out[0].minutes, 2);
     assert.equal(out[0].penalised, true);
     assert.equal(out[1].gameXp, 20);
+  });
+
+  await test('weekly board: only the people who turned it on, ranked by Game XP in that game', () => {
+    // alice wins two Ludo games (both placings first), bob wins one and loses one, carol has not opted in
+    const rows = [
+      row('a1', 'ludo', 0, 'alice', { place: 1 }), row('a1', 'ludo', 1, 'bob', { place: 2 }),
+      row('a2', 'ludo', 0, 'alice', { place: 1 }), row('a2', 'ludo', 1, 'carol', { place: 2 }),
+      row('a3', 'ludo', 0, 'bob', { place: 1 }), row('a3', 'ludo', 1, 'alice', { place: 2 }),
+      row('a4', 'tictactoe', 0, 'carol', { isWinner: true }), row('a4', 'tictactoe', 1, 'bob'),
+    ];
+    const people = [{ id: 'alice', username: 'alice', displayName: 'Alice' }, { id: 'bob', username: 'bob' }];
+    const board = boardFor(rows, people, 'ludo');
+    assert.equal(board.length, 2, 'carol is not on the board: she did not opt in');
+    assert.equal(board[0].username, 'alice');
+    assert.equal(board[0].displayName, 'Alice');
+    assert.ok(board[0].points >= board[1].points, 'highest Game XP first');
+    assert.ok(board.every((x) => x.played > 0), 'only people with ranked games');
+  });
+  await test('weekly board: a player with no game in the window is left out; empty when nobody has played', () => {
+    assert.deepEqual(boardFor([], [{ id: 'alice', username: 'alice' }], 'ludo'), []);
+    const rows = [row('a1', 'tictactoe', 0, 'alice', { isWinner: true }), row('a1', 'tictactoe', 1, 'bob')];
+    assert.deepEqual(boardFor(rows, [{ id: 'alice', username: 'alice' }], 'ludo'), [], 'no Ludo games, so no Ludo board entry');
+  });
+  await test('weekly board: ties on points go to more games, then username; the list is capped', () => {
+    const rows = [row('w1', 'tictactoe', 0, 'p1', { isWinner: true }), row('w1', 'tictactoe', 1, 'p2')];
+    const people = [{ id: 'p2', username: 'zed' }, { id: 'p1', username: 'amy' }];
+    const b = boardFor(rows, people, 'tictactoe', 1);
+    assert.equal(b.length, 1, 'capped to the limit');
+    assert.equal(b[0].username, 'amy', 'a win first');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

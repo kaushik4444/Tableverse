@@ -380,6 +380,7 @@
       if (!out || !out.ok || !out.authenticated) return false;
       adoptPlayer(out.player);
       S.emailVerified = !!out.emailVerified;
+      S.welcomeDue = out.welcome === true; // first login: the welcome dialog is shown once, after the lobby starts
       refreshLevel();
       return true;
     } catch {
@@ -396,7 +397,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; levelRequest += 1; S.latestProgress = null; S.latestProgressUser = null; S.latestProgressRequest = 0; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -621,14 +622,15 @@
     adoptPlayer(out.player);
     S.requireEmailVerification = policyRequiresVerification(out);
     S.emailVerified = !!(out.player && out.player.email_verified);
-    refreshLevel(); // password and Google sign-ins do not pass through hydrateSession
     S.signedOutIntentionally = false;
     if (S.requireEmailVerification && !S.emailVerified) {
       openAuthSheet('login', 'Please verify your email before playing. Use “Resend verification email” if the link did not arrive.');
       return;
     }
+    S.welcomeDue = out.welcome === true;
     closeOverlay();
     beginSignIn();
+    if (S.welcomeDue) showWelcome();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
@@ -1097,6 +1099,7 @@
         S.impressumPublished = m.impressumPublished === true; // the server decides (LEGAL_IMPRESSUM_PUBLISHED); no link while it is off
         S.token = '';
         S.guest = false;
+        refreshLevel(); // detect levels only after welcome confirms the signed-in account
         S.games = m.games;
         S.publicTables = m.tables || [];
         S.rejoin = m.rejoin || [];
@@ -1361,6 +1364,7 @@
       openAuthSheet('login', 'Please verify your email to enter the lobby.');
       return;
     }
+    if (S.welcomeDue) showWelcome();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   })();
@@ -1748,29 +1752,69 @@
     const a = progress && progress.account;
     S.account = a ? { level: a.level, into: a.into, need: a.need } : null;
   }
-  /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws only when the level changed. */
+  /**
+   * The last level this device showed for this account, kept per device (a convenience, not a record). The first time a
+   * device sees an account it only remembers the level: nothing is announced for levels reached before.
+   */
+  function noteLevelUp() {
+    if (!S.username || !S.account || S.guest) return;
+    const k = 'ct_level_seen_' + S.username;
+    const seen = store.get(k);
+    if (seen === null) { S.levelUp = null; store.set(k, String(S.account.level)); return; }
+    S.levelUp = S.account.level > Number(seen) ? { username: S.username, from: Number(seen), to: S.account.level } : null;
+  }
+  /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
+  let levelRequest = 0; // shared ordering for both profile loaders
   async function refreshLevel() {
     const gen = sessionGen;
+    const mine = ++levelRequest;
     try {
       const me = await getJson('/api/me/profile');
-      if (gen !== sessionGen) return; // another account (or nobody) is signed in now
+      if (gen !== sessionGen || mine !== levelRequest) return; // another account or a newer profile response won
+      const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
-      setAccount(me && me.stats && me.stats.progress);
-      if (key(S.account) !== before) render(); // the game-over card shows into and need too
+      const priorProgress = S.latestProgressUser === (S.username || null) && S.latestProgress ? S.latestProgress : (S.profile && S.profile.data && S.profile.data.stats && S.profile.data.stats.progress || null);
+      const progressBefore = JSON.stringify(priorProgress);
+      const noticeBefore = JSON.stringify(S.levelUp);
+      S.latestProgress = progress || null;
+      S.latestProgressUser = S.username || null;
+      S.latestProgressRequest = mine;
+      setAccount(progress);
+      noteLevelUp();
+      // Keep the open profile in step, including Game XP changes that do not advance a time-based level.
+      if (S.profile && S.profile.data && S.profile.data.stats && progress) S.profile.data.stats.progress = progress;
+      const progressAfter = JSON.stringify(S.profile && S.profile.data && S.profile.data.stats && S.profile.data.stats.progress || null);
+      if (key(S.account) !== before || progressAfter !== progressBefore || JSON.stringify(S.levelUp) !== noticeBefore) render();
     } catch { /* the level badge is optional */ }
   }
 
   async function loadProfile(historyPage = 1) {
     const keepTab = S.profile && S.profile.tab;
     const gen = sessionGen; // an answer for an account that has since signed out (or changed) is dropped
+    const mine = ++levelRequest; // profile and background refreshes share one response-ordering policy
     S.profile = { loading: true, error: '', data: null, history: null, tab: keepTab || 'overview', historyPage };
     render();
     try {
       const [me, hist] = await Promise.all([getJson('/api/me/profile'), getJson(`/api/me/history?page=${historyPage}`)]);
       if (gen !== sessionGen) return;
+      const hasNewerAcceptedProgress = S.latestProgressRequest > mine
+        && S.latestProgressUser === (S.username || null)
+        && S.latestProgress;
+      if (hasNewerAcceptedProgress) {
+        // A newer request has already succeeded; don't put this older snapshot back on screen.
+        if (me && me.stats) me.stats.progress = S.latestProgress;
+      } else {
+        // A newer request may still be pending or may fail. Accept this successful profile response
+        // unless a newer response has already been accepted, then let any later success supersede it.
+        const progress = me && me.stats && me.stats.progress;
+        S.latestProgress = progress || null;
+        S.latestProgressUser = S.username || null;
+        S.latestProgressRequest = mine;
+        setAccount(progress);
+        noteLevelUp();
+      }
       S.profile = { ...S.profile, loading: false, data: me, history: hist };
-      setAccount(me.stats && me.stats.progress);
       S.name = me.profile.displayName; S.named = true;
     } catch (e) {
       if (gen !== sessionGen) return;
@@ -2067,6 +2111,7 @@
 
   const modalActions = {
     versionHistory: () => openVersionHistoryDialog(),
+    welcomeStart: () => closeModal(),
     cardAdd: () => { const p = S.card && S.card.last; if (p && p.username) cardAction('/api/me/friend-requests', { username: p.username }, 'Friend request sent.', 'Sending request…'); },
     cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }, undefined, 'Cancelling…'); },
     cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.', 'Accepting…'); },
@@ -2313,6 +2358,19 @@
     openModal('What’s new', `<p class="hint" style="text-align:left">${esc(newest.title)}</p><ul class="wn-list">${list}</ul><div class="row" style="margin-top:12px"><button type="button" class="btn ghost small" data-modal-act="versionHistory">All versions</button></div>`);
   }
 
+  /**
+   * First login: a welcome dialog, shown once. It says what Tableverse is and shows the newest release's highlights.
+   * It is marked as seen on the server when it opens, so a reload or another device does not show it again.
+   */
+  function showWelcome() {
+    S.welcomeDue = false;
+    const newest = RELEASES[0] || { items: [] };
+    const list = (newest.items || []).filter((w) => S.voiceEnabled || !w.voice).slice(0, 3)
+      .map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+    openModal('Welcome to Tableverse', `<p class="hint" style="text-align:left">Tableverse is a place to play classic card and board games online, with friends and other players. Find a table, sit down and play. Your games and progress are kept on your profile, so you can see how you are getting on.</p>${list ? `<h3>What’s new</h3><ul class="wn-list">${list}</ul>` : ''}<div class="row" style="margin-top:12px"><button type="button" class="btn primary" data-modal-act="welcomeStart">Start playing</button></div>`);
+    postJson('/api/me/welcome-seen', {}).catch(() => {}); // shown: remember it on the account (a failed save only means it may show once more)
+  }
+
   /** Every release, newest first, with its items (voice items only when voice chat is on). */
   function openVersionHistoryDialog() {
     const body = RELEASES.map((r) => {
@@ -2411,7 +2469,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot">${S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>'}${S.guest || !S.impressumPublished ? '' : ' · '}${S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''}</footer>
+      <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
     </main>`;
   }
 
@@ -2570,6 +2628,21 @@
   const fmtXp = (n) => (Number(n) > 0 ? `+${Number(n)}` : `${Number(n) || 0}`);
 
   /** The statistics block of a profile. Bot seats and games left without a penalty are never counted (the server leaves them out). */
+  /**
+   * This week's board for one game (the last 7 days, opted-in players only) and the player's own switch for it, which is off
+   * by default. The board is public and read-only.
+   */
+  function weeklyBoardHTML(P, id, meta) {
+    const b = P.board;
+    const on = !!(P.data && P.data.profile && P.data.profile.leaderboardOptIn);
+    const body = !b ? '<p class="hint" style="text-align:left">Loading this week’s board…</p>'
+      : b.failed ? '<p class="hint" style="text-align:left">Could not load the board. Try again in a moment.</p>'
+      : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${fmtXp(r.points)} XP</b><small>${r.played} game${r.played === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
+      : '<p class="hint" style="text-align:left">No one on the board has played this game in the last 7 days.</p>';
+    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the weekly boards</button></div><p class="hint" style="text-align:left">Off by default. When on, your name and your ${esc(meta.name)} Game XP from the last 7 days can appear on this board.</p>` : '';
+    return `<section class="progress-card" aria-label="Weekly board for ${esc(meta.name)}"><h3 class="stat-h">This week’s board</h3>${body}${toggle}</section>`;
+  }
+
   /** Account level (time played), Game XP per game (skill) and penalised leaves. `pr` is the progress the server sends; nothing when absent. */
   function progressHTML(pr, interactive = true) {
     if (!pr || !pr.account) return '';
@@ -2584,8 +2657,9 @@
         : `<li class="pg-row">${label}</li>`;
     }).join('');
     const left = pr.penalisedLeaves > 0 ? `<p class="hint" style="text-align:left">Left ${pr.penalisedLeaves} game${pr.penalisedLeaves === 1 ? '' : 's'} early (counted as a loss).</p>` : '';
-    return `<section class="progress-card" aria-label="Progress">
-      <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · ${a.into} / ${a.need} to next level</span>
+    const levelUp = interactive && S.levelUp && S.levelUp.username === S.username ? `<div class="levelup-note" role="status"><b>Level up!</b> You reached level ${Number(S.levelUp.to)}. <button type="button" class="btn small" data-act="levelUpAck">Got it</button></div>` : '';
+    return `<section class="progress-card" aria-label="Progress">${levelUp}
+      <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
         <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>
       ${games ? `<h3 class="stat-h">Game XP${interactive ? ' <small>(tap a game for details)</small>' : ''}</h3><ul class="plain-list pg-games">${games}</ul>` : ''}${left}</section>`;
   }
@@ -2601,8 +2675,8 @@
     const pg = (st.progress && st.progress.games && st.progress.games[id]) || { points: 0, rule: 'placing' };
     // Only people still in the game at the end are ranked (bots are not). Leaving while others play costs -30 on top.
     const rule = pg.rule === 'win-lose'
-      ? 'Among the people (bots are not ranked) still in the game: win +20, loss −20, draw 0. Leaving while others are still playing −30.'
-      : 'Among the people (bots are not ranked) still in the game: first place +20, the lowest place −20, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
+      ? 'Among the people (bots are not ranked) still in the game: win +20, loss −10, draw 0. Leaving while others are still playing −30.'
+      : 'Among the people (bots are not ranked) still in the game: first place +20, the lowest place −10, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
     const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
     const hist = P.gameHistory;
     const histHTML = !hist ? '<p class="hint" style="text-align:left">Loading recent games…</p>'
@@ -2613,6 +2687,7 @@
         <div class="pg-level"><span class="stat-v">${fmtXp(pg.points)} XP</span><span class="stat-l">Game XP in ${esc(meta.name)}</span></div>
         <p class="hint" style="text-align:left">${esc(rule)}</p>
       </section>
+      ${weeklyBoardHTML(P, id, meta)}
       <div class="stat-grid">
         ${tile('Played', g.played)}
         ${tile('Wins', g.wins, 'good')}
@@ -2732,18 +2807,39 @@
   const END_BOARD_MS = 3500; // the finished table stays visible
   const END_WINNER_MS = 2800; // then the "<name> won" pop-up
   /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
-  /** Game-over XP: each human seat's time XP and Game XP, with a bar against the best total. Guest seats are shown but not kept. */
-  function endXpHTML(rows) {
-    const people = rows.filter((x) => !x.isBot).map((x) => ({ ...x, total: (x.timeXp || 0) + (x.gameXp || 0) })).sort((a, b) => b.total - a.total);
+  /**
+   * Game over: two amounts, never added together. Player Progress is time played (1 XP per full minute): it is the only
+   * thing that moves the overall level. Game XP is this game's own skill, named after the game. Every person is listed
+   * with both amounts side by side; there is no combined total.
+   */
+  function endXpHTML(rows, gameName) {
+    const people = rows.filter((x) => !x.isBot);
     if (!people.length) return '';
-    const top = Math.max(1, ...people.map((x) => x.total));
-    const list = people.map((x) => {
-      const me = x.id === S.id;
-      const bar = Math.max(0, Math.round((x.total / top) * 100));
-      return `<div class="xp-row${me ? ' me' : ''}"><div class="xp-top"><span class="xp-name">${me ? 'You' : esc(x.name || 'Player')}${x.saved ? '' : ' <small>guest · not kept</small>'}</span><b class="xp-total">${fmtXp(x.total)} XP</b></div><span class="xp-bar" aria-hidden="true"><i style="width:${bar}%"></i></span><small class="xp-parts">Time ${fmtXp(x.timeXp)} · Game ${x.gameXp === null ? 'not ranked' : fmtXp(x.gameXp)}${x.penalised ? ' · left early' : ''}</small></div>`;
+    const game = esc(gameName || 'Game');
+    const mine = people.find((x) => x.id === S.id);
+    const time = (x) => Math.max(0, Number(x.timeXp) || 0);
+    const unranked = (x) => x.gameXp === null || x.gameXp === undefined;
+    const summary = mine ? `<div class="xp-summary">
+        <div class="xp-card xp-progress">
+          <span class="xp-kind">Player Progress</span>
+          <b class="xp-num">+${time(mine)} XP</b>
+          <small>1 XP per full minute played${S.account ? ` · Level ${Number(S.account.level)}, ${Number(S.account.into)} / ${Number(S.account.need)} to the next` : ''}</small>
+        </div>
+        <div class="xp-card xp-game">
+          <span class="xp-kind">${game} Experience</span>
+          <b class="xp-num">${unranked(mine) ? 'Not ranked' : `${fmtXp(mine.gameXp)} XP`}</b>
+          <small>Counts only in ${game}${mine.penalised ? ' · left early (−30)' : ''}</small>
+        </div>
+      </div>${mine.saved ? '' : '<p class="xp-note">Guest games are not kept. Sign in to keep your progress and game XP.</p>'}` : '';
+    const body = people.map((x) => {
+      const me = Boolean(mine) && x.id === S.id;
+      const name = me ? 'You' : esc(x.name || 'Player');
+      const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
+      const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
+      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">+${time(x)}</span><span class="xp-c" role="cell">${unranked(x) ? '–' : fmtXp(x.gameXp)}</span></div>`;
     }).join('');
-    const mine = S.account ? `<p class="hint">Your level ${Number(S.account.level)} · ${S.account.into} / ${S.account.need} to next level</p>` : '';
-    return `<section class="end-xp" aria-label="XP for this game"><h3 class="stat-h">XP this game</h3><div class="xp-list">${list}</div>${mine}</section>`;
+    const table = `<div class="xp-table" role="table" aria-label="XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">Progress</span><span class="xp-c" role="columnheader">${game}</span></div>${body}</div>`;
+    return `<section class="end-xp" aria-label="XP for this game">${summary}${table}</section>`;
   }
 
   function endFlow() {
@@ -2797,7 +2893,7 @@
       }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       if (xpRows.length && !$app.querySelector('.end-xp')) {
-        const card = endXpHTML(xpRows);
+        const card = endXpHTML(xpRows, statsGame(r.gameId).name);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
@@ -2808,6 +2904,17 @@
         else $app.insertAdjacentHTML('beforeend', card); // no result sheet at all: the bar is the only place
       }
     }
+  }
+
+  function loadProfileBoard(prof) {
+    const id = prof.game;
+    const gen = sessionGen;
+    const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
+    prof.board = null;
+    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardGen === boardGen;
+    getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
+      .then((b) => { if (current()) { prof.board = b; render(); } })
+      .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
   }
 
   // ------------------------------------------------------------ events
@@ -2864,15 +2971,36 @@
       const prof = S.profile;
       if (!prof || !prof.data) return;
       const id = el.dataset.game;
-      prof.game = id; prof.gameHistory = null; render();
+      prof.game = id; prof.gameHistory = null; prof.board = null; render();
       // Apply the answer only to the same profile, still open on this game (a reload or a sign-out drops it).
       const gen = sessionGen; // another account signed in or out since the click: its answer is not for this screen
       const current = () => gen === sessionGen && S.profile === prof && prof.game === id;
       getJson(`/api/me/history?game=${encodeURIComponent(id)}&page=1`)
         .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
         .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
+      loadProfileBoard(prof);
     },
-    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; render(); } },
+    boardOptIn: async () => {
+      const prof = S.profile;
+      if (!prof || !prof.data || !prof.data.profile || prof.boardOptInPending) return;
+      prof.boardOptInPending = true;
+      const gen = sessionGen;
+      const next = !prof.data.profile.leaderboardOptIn;
+      try {
+        const out = await postJson('/api/me/leaderboard', { optIn: next });
+        if (gen !== sessionGen) return;
+        if (S.profile === prof) {
+          prof.data.profile.leaderboardOptIn = out.optIn === true;
+          if (prof.game) loadProfileBoard(prof);
+        } else if (S.page === 'profile' && !S.room) {
+          // The profile screen was replaced while the save was in flight: reload it, but only if it is still the screen on show.
+          await loadProfile();
+        }
+      } catch (e) { toast(e.message || 'Could not save that. Try again.'); }
+      finally { prof.boardOptInPending = false; }
+      render();
+    },
+    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; S.profile.boardGen = (S.profile.boardGen || 0) + 1; render(); } },
     editProfile: () => openEditProfileDialog(),
     openDeleteAccount: () => openDeleteAccountDialog(),
     copyProfileLink: async () => {
@@ -2885,6 +3013,11 @@
     toggleTools: () => setTools(!S.toolsOpen),
     toggleBell: () => { S.bellOpen = !S.bellOpen; S.menuOpen = false; render(); if (S.bellOpen) loadSocial({ quiet: true }); },
     openProfilePage: () => { S.menuOpen = false; openPage('profile'); },
+    levelUpAck: () => { // "Got it": remember this level on this device and take the notice away
+      if (S.levelUp && S.levelUp.username === S.username) store.set('ct_level_seen_' + S.levelUp.username, String(S.levelUp.to));
+      S.levelUp = null;
+      render();
+    },
     openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },
     openSettings: () => { S.menuOpen = false; render(); openSettingsDialog(); },
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
