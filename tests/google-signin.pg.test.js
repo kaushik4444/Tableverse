@@ -188,17 +188,18 @@ function idToken({ sub, email, nonce, ...over }) {
 
     await test('deleting a Google account needs a fresh token for the SAME Google identity', async () => {
       const p = await page(); const who = person();
-      const up = await p.b.post('/api/auth/google/complete', { credential: cred(p, who), username: `del_${n}`, adultConfirmed: true });
+      const uname = `del_${n}`; // captured now: person() below moves the counter on
+      const up = await p.b.post('/api/auth/google/complete', { credential: cred(p, who), username: uname, adultConfirmed: true });
       assert.equal(up.status, 200, 'signup for the deletion test: ' + JSON.stringify(up.json));
       const other = person();
       const wrong = await p.b.post('/api/me/delete-account', { credential: cred(p, other) });
       assert.equal(wrong.status, 403, JSON.stringify(wrong.json));
       const garbage = await p.b.post('/api/me/delete-account', { credential: 'not.a.token' });
       assert.ok([401, 403].includes(garbage.status));
-      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE username = $1', [`del_${n}`]))[0].n, 1, 'nothing was deleted');
+      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE username = $1', [uname]))[0].n, 1, 'nothing was deleted');
       const ok = await p.b.post('/api/me/delete-account', { credential: cred(p, who) });
       assert.equal(ok.status, 200, JSON.stringify(ok.json));
-      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE username = $1', [`del_${n}`]))[0].n, 0);
+      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE username = $1', [uname]))[0].n, 0);
       assert.equal((await q('SELECT count(*)::int AS n FROM auth_identities WHERE provider_user_id = $1', [who.sub]))[0].n, 0, 'the Google link went with it');
       assert.equal((await p.b.get('/api/auth/session')).json.authenticated, false);
       // the same Google person can sign up again afterwards
