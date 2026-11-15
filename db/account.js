@@ -70,13 +70,17 @@ async function updateAvatar(playerId, avatar, allowed) {
  * human seat. A seat the player left early is listed as "left" but never counted as a win or a loss. A player appears
  * at most once per match, so a duplicate participant row cannot repeat a game.
  */
-async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } = {}) {
+async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE, game = null } = {}) {
   need();
   if (!isUuid(playerId)) return { page: 1, pageSize, total: 0, pages: 0, items: [] };
   const size = Math.min(50, Math.max(1, Math.floor(Number(pageSize)) || HISTORY_PAGE_SIZE));
+  // optional: one game's results only (the game detail page). Only a plain game id is accepted.
+  const gameId = typeof game === 'string' && /^[a-z][a-z0-9]{1,39}$/.test(game) ? game : null;
+  const gameSql = gameId ? ' AND m.game_id = $2' : '';
+  const gameArgs = gameId ? [gameId] : [];
   const total = (await db.query(
     `SELECT COUNT(DISTINCT mp.match_id)::int AS n FROM match_participants mp JOIN matches m ON m.id = mp.match_id
-     WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL`, [playerId])).rows[0].n;
+     WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL${gameSql}`, [playerId, ...gameArgs])).rows[0].n;
   const pages = Math.ceil(total / size);
   const pg = Math.min(Math.max(1, Math.floor(Number(page)) || 1), Math.max(1, pages));
   const r = await db.query(
@@ -84,9 +88,9 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
        SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.seats, mp.score, mp.is_winner, mp.is_draw, mp.left_early, mp.forfeit,
          COALESCE(m.table_humans, (SELECT COUNT(*)::int FROM match_participants x WHERE x.match_id = m.id AND x.is_bot = FALSE)) AS humans
        FROM match_participants mp JOIN matches m ON m.id = mp.match_id
-       WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
+       WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL${gameSql}
        ORDER BY m.id, mp.seat
-     ) h ORDER BY finished_at DESC, id LIMIT $2 OFFSET $3`, [playerId, size, (pg - 1) * size]);
+     ) h ORDER BY finished_at DESC, id LIMIT $${gameId ? 3 : 2} OFFSET $${gameId ? 4 : 3}`, [playerId, ...gameArgs, size, (pg - 1) * size]);
   return {
     page: pg, pageSize: size, total, pages,
     items: r.rows.map((x) => ({
