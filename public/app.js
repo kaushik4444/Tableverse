@@ -1834,8 +1834,6 @@
     ['🚪', 'Leaving a game with others counts as a loss', 'If other people are still playing, leaving asks first. If the game then finishes, it counts as a loss for you. If a second player also leaves, the game is abandoned: nobody is penalised, and the people who stayed get no result. Playing only against bots, leaving does not count.'],
     ['😀', 'More reactions, and spectators can react', 'There are 21 reactions now. A spectator’s reaction shows their name with a 👁, so the table knows it came from someone watching.'],
     ['🚩', 'Block and report players', 'Block or report a player from their table card or from their profile page. Reports go to the moderators, and each player can be reported once. Guests can’t report.'],
-    ['⋯', 'How to play and the game log are in ⋯', 'The ⋯ button at the top right holds How to play, the game log and game settings, so the bottom bar stays clear on phones.'],
-    ['🔀', 'Shuffle seats, and the 29 rules explained', 'The host can turn on Shuffle seats for Wizard and 29. Game settings now explain each 29 option: the scoring for taking all 29 points, the failed-bid penalty, the marriage that changes the bid, and Double and Redouble.'],
   ];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
