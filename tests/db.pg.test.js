@@ -447,6 +447,38 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       assert.equal((await x.query('SELECT count(*)::int AS n FROM matches WHERE match_key = $1', [m.matchKey])).rows[0].n, 1);
       assert.equal((await x.query('SELECT count(*)::int AS n FROM match_participants WHERE match_id = $1', [first.matchId])).rows[0].n, 2);
     });
+    await test('progress columns: place is stored when the game gives one, seconds_played is the game length for stayers and 0 for leavers and bots', async () => {
+      const m = matchOf({ startedAt: new Date(Date.now() - 600000), participants: [
+        participant({ seat: 0, isWinner: true, place: 1 }),
+        participant({ seat: 1, place: 2 }),
+        participant({ seat: 2, leftEarly: true, forfeit: true }),
+        participant({ seat: 3, isBot: true }),
+        participant({ seat: 4, place: 0 }),
+      ] });
+      const r = await dbMatches.recordMatch(m);
+      const rows = (await x.query('SELECT seat, place, seconds_played FROM match_participants WHERE match_id = $1 ORDER BY seat', [r.matchId])).rows;
+      assert.deepEqual(rows.map((q) => q.place), [1, 2, null, null, null], 'a missing or invalid place is NULL');
+      assert.ok(rows[0].seconds_played >= 599 && rows[0].seconds_played <= 605, 'about ten minutes: ' + rows[0].seconds_played);
+      assert.equal(rows[1].seconds_played, rows[0].seconds_played);
+      assert.equal(rows[2].seconds_played, 0, 'a leaver has no stored time');
+      assert.equal(rows[3].seconds_played, 0, 'a bot has no time');
+    });
+    await test('seconds_played is capped at 6 hours so a table left open cannot inflate account XP', async () => {
+      const r = await dbMatches.recordMatch(matchOf({ startedAt: new Date(Date.now() - 3 * 86400000) }));
+      const rows = (await x.query('SELECT seconds_played FROM match_participants WHERE match_id = $1', [r.matchId])).rows;
+      assert.ok(rows.every((q) => q.seconds_played === 21600));
+    });
+    await test('migration 025 backfills seconds_played for stayers only, and re-running it changes nothing', async () => {
+      const m = (await x.query("INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at) VALUES ($1, 'BACKFL', 'wizard', 3, '{}', NOW() - interval '30 minutes', NOW()) RETURNING id", [uuid()])).rows[0].id;
+      await x.query("INSERT INTO match_participants (match_id, player_name, seat, score, is_winner, is_bot, left_early) VALUES ($1,'Stay',0,0,true,false,false), ($1,'Left',1,0,false,false,true), ($1,'Bot',2,0,false,true,false)", [m]);
+      const sql = require('node:fs').readFileSync(path.join(__dirname, '..', 'db', 'migrations', '025_match_progress.sql'), 'utf8');
+      await x.query(sql);
+      await x.query(sql);
+      const rows = (await x.query('SELECT player_name, seconds_played FROM match_participants WHERE match_id = $1 ORDER BY seat', [m])).rows;
+      assert.ok(rows[0].seconds_played >= 1799 && rows[0].seconds_played <= 1801, 'a stayer gets the match length: ' + rows[0].seconds_played);
+      assert.equal(rows[1].seconds_played, 0);
+      assert.equal(rows[2].seconds_played, 0);
+    });
     await test('ten concurrent writers of one match key: exactly one wins, none fail', async () => {
       const m = matchOf();
       const res = await Promise.all(Array.from({ length: 10 }, () => dbMatches.recordMatch(m)));
