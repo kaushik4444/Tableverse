@@ -135,14 +135,14 @@
     if (!otherHumansPlaying()) { send({ t: 'leave' }); return; }
     const state = leaveState();
     if (state === 'abandoned') {
-      openModal('Leave game?', '<p class="hint">The game is already abandoned, so leaving costs nothing. A bot takes your seat, and the others keep playing. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave</button></div>');
+      openModal('Leave game?', '<p class="hint">The game is already abandoned, so leaving costs nothing. A bot takes your seat, and the others keep playing. You can take your seat back within 2 minutes of leaving, from the home screen. After that you can only watch.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave</button></div>');
       return;
     }
     if (state === 'abandons') {
-      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Nobody is penalised, and the people who stayed get no result. A bot takes your seat. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
+      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Nobody is penalised, and the people who stayed get no result. A bot takes your seat. You can take your seat back within 2 minutes of leaving, from the home screen. After that you can only watch.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
       return;
     }
-    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
+    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can take your seat back within 2 minutes of leaving, from the home screen. After that you can only watch.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
   }
 
   window.CardTable = Object.assign(window.CardTable || {}, {
@@ -1963,7 +1963,7 @@
       if (!S.room) { closeModal(); openPage('player', p.username); return; }
       // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
       const seatedInGame = S.room.status === 'playing' && !isSpectator();
-      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' + (otherHumansPlaying() ? leaveConsequence() : '') : 'This leaves the table.';
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can take your seat back within 2 minutes from the home screen.' + (otherHumansPlaying() ? leaveConsequence() : '') : 'This leaves the table.';
       openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
     },
     cardProfileConfirm: () => {
