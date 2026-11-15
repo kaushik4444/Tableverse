@@ -21,20 +21,21 @@ test('account XP is 1 per full minute, whatever the result', () => {
   assert.equal(xp.timeXp(undefined), 0);
 });
 
-test('level 2 starts at 100 XP, and each level needs 100 more than the one before', () => {
+test('level 2 starts at 50 XP, and each level needs 50 more than the one before', () => {
   assert.equal(xp.levelStart(1), 0);
-  assert.equal(xp.levelStart(2), 100);
-  assert.equal(xp.levelStart(3), 300);
-  assert.equal(xp.levelStart(4), 600);
-  const steps = [2, 3, 4, 5, 6].map((n) => xp.levelStart(n + 1) - xp.levelStart(n));
-  assert.deepEqual(steps, [200, 300, 400, 500, 600]);
+  assert.equal(xp.levelStart(2), 50);
+  assert.equal(xp.levelStart(3), 150);
+  assert.equal(xp.levelStart(4), 300);
+  assert.equal(xp.levelStart(5), 500);
+  const steps = [1, 2, 3, 4, 5].map((n) => xp.levelStart(n + 1) - xp.levelStart(n));
+  assert.deepEqual(steps, [50, 100, 150, 200, 250]);
 });
 
 test('levelProgress reports the level, how far in it, and its size', () => {
-  assert.deepEqual(xp.levelProgress(0), { level: 1, xp: 0, into: 0, need: 100 });
-  assert.deepEqual(xp.levelProgress(99), { level: 1, xp: 99, into: 99, need: 100 });
-  assert.deepEqual(xp.levelProgress(100), { level: 2, xp: 100, into: 0, need: 200 });
-  assert.deepEqual(xp.levelProgress(450), { level: 3, xp: 450, into: 150, need: 300 });
+  assert.deepEqual(xp.levelProgress(0), { level: 1, xp: 0, into: 0, need: 50 });
+  assert.deepEqual(xp.levelProgress(49), { level: 1, xp: 49, into: 49, need: 50 });
+  assert.deepEqual(xp.levelProgress(50), { level: 2, xp: 50, into: 0, need: 100 });
+  assert.deepEqual(xp.levelProgress(450), { level: 4, xp: 450, into: 150, need: 200 });
   assert.equal(xp.levelProgress(-5).level, 1, 'negative XP reads as level 1');
 });
 

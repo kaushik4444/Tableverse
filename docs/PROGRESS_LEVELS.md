@@ -8,35 +8,49 @@ Status: the rules below are agreed and implemented as pure calculations (`lib/xp
 - Winning, losing, drawing or leaving makes no difference, and there is no penalty.
 - It is progress, not a ranking.
 
+## Levels
+- Level n starts at `50 * n * (n-1) / 2` XP: level 2 at **50**, level 3 at 150, level 4 at 300, level 5 at 500.
+- Each level needs 50 more XP than the one before.
+- The account level and each game's level use the same curve.
+
 ## Game level: skill, one per game
-Each game has its own rule, because the games are scored differently.
+Each game has its own rule. Points are given per game, and a game's level comes from its running total. Points can go
+negative.
 
-| Game | How a finished game counts |
-|---|---|
-| Wizard | Placings by score: 1st +20, last -20, in a straight line between. Ties share a place. |
-| Poker | Placings by chips (same ladder). |
-| Property Rivals | Placings by net worth; bankrupt players rank last (same ladder). |
-| Go Fish | Placings by books (same ladder). |
-| Ludo | Placings by finishing order (same ladder). |
-| Snakes & Ladders | Placings by finishing order (same ladder). |
-| Twenty-nine | Win +20, draw 0, loss -20 for everyone on that team. |
-| Line Games | Win +20, draw 0, loss -20. |
-| The Mind | Cooperative: cleared together +20 each, lost together -20 each. |
+There are two kinds of result:
 
-- **Penalised leave** (leaving while others are still playing, see `lib/leavePolicy.js`): **-30** in every game. It is always
-  worse than finishing last.
+- **Placing games**: every player gets a place from their score. The best place gets **+20**, the last place gets
+  **-20**, and places in between fall in a straight line. Ties share a place.
+- **Win or lose games**: a win gets **+20**, a draw **0**, a loss **-20**.
+
+| Game | Kind | What decides the place or result |
+|---|---|---|
+| Wizard | Placing | Points at the end of the game (higher is better). |
+| Poker | Placing | Chips at the end of the game. |
+| Property Rivals | Placing | Net worth at the end of the game. Bankrupt players are last. |
+| Go Fish | Placing | Number of books collected. |
+| Ludo | Placing | Finishing order. |
+| Snakes & Ladders | Placing | Finishing order. |
+| Twenty-nine | Win or lose | Your team wins or loses (both players on a team get the same points). |
+| Line Games | Win or lose | Your side wins, draws or loses. |
+| The Mind | Win or lose | Everyone plays together: cleared together is a win for all, lost together is a loss for all. |
+
+Rules that apply to every game:
+- **Penalised leave** (leaving while others are still playing, see `lib/leavePolicy.js`): **-30**. It is always worse than
+  finishing last.
 - **Leave without a penalty** (bots only, or an abandoned game): not in the game ranking at all.
 - **Bots** are not ranked.
-- Points can go **negative**. A game's level comes from its running total, which is not floored.
 
-## Levels (both systems)
-- Level n starts at `100 * n * (n-1) / 2` XP: **level 2 starts at 100**, level 3 at 300, level 4 at 600, level 5 at 1000.
-- Each level needs 100 more XP than the one before.
-- The numbers are starting values and can be tuned in `lib/xp.js` and `lib/gameSkill.js`.
+## History (past games)
+- Past games count once the feature ships. Their skill points come from the stored results.
+- Time for past games comes from the stored start and finish times. A leaver's time up to the moment they left is not
+  stored, so for past leavers that time counts as 0.
+- Leaves recorded before migration 024 have no penalty flag. Those leavers are not penalised, and they are left out of
+  the game ranking because the record cannot show whether others were still playing.
 
 ## Not built yet (next steps)
-1. Store time spent per player in each game record (a migration adding `seconds_played`; a leaver's time runs to the
-   moment they left). Until then, account XP cannot be calculated correctly for leavers.
-2. Calculate account XP and per-game points from the stored records (no separate totals table at first).
-3. Show the account level and the per-game levels on the profile.
+1. Migration: store time spent per player in each game record (`seconds_played`), with a backfill from past start and
+   finish times for players who stayed. A leaver's time runs to the moment they left, so new games record it exactly.
+2. Calculate account XP and game points from the stored records (no separate totals table at first).
+3. Show the account level and the per-game levels on the profile. Named ranks are not planned yet; skill levels only.
 4. Update README and What's new when each part ships.
