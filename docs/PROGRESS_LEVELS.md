@@ -16,9 +16,9 @@ admin overview. Not verified in production.
 - Each level needs 50 more XP than the one before.
 - The account level and each game's level use the same curve.
 
-## Game level: skill, one per game
-Each game has its own rule. Points are given per game, and a game's level comes from its running total. Points can go
-negative.
+## Game XP: skill, per game (no game levels)
+Each game has its own rule. Points are given per game and add up to that game's **Game XP**, a running total. Game XP
+can go negative. There are no game levels: the profile shows Game XP per game, and each game opens a detail view.
 
 There are two kinds of result:
 
@@ -57,7 +57,7 @@ The rules for leaving a running game, the 2-minute window to take a seat back, s
 Done on `development` (not released to `main`, not verified in production):
 1. Storage: `seconds_played` and `place` (migration 025), with a backfill for past games, for the people who stayed.
 2. Account XP and game points are calculated from the stored records (`lib/progress.js`; no separate totals table).
-3. The account level, the game levels and the number of penalised leaves show on own and public profiles; the admin overview counts penalised leaves.
+3. The account level, the Game XP per game and the number of penalised leaves show on own and public profiles; the admin overview counts penalised leaves.
 
 Done since (rejoin window and active play time, see `docs/LEAVING_AND_REJOINING.md`): a leaver keeps the time up to the moment they left; a dropped connection pauses play time; a person who took their seat back is counted for each stretch they played. Past games are not recalculated.
 

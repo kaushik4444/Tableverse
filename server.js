@@ -14,6 +14,7 @@ const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
 const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = require('./db/matchRecord');
+const { matchXpOf } = require('./lib/progress');
 const { leaveStateOf, rejoinGraceMs, rejoinDecision, voluntaryLeave, reclaimSeat } = require('./lib/leavePolicy');
 const { startPlay, stopPlay, stopAllPlay } = require('./lib/playTime');
 const dbPlayers = require('./db/players');
@@ -361,6 +362,12 @@ function start(opts = {}) {
     onAccountDeleted: ({ playerId }) => {
       // drop this account's pseudonymous activity: pending in memory first (so no later write recreates it), then the stored rows
       if (dbAdmin) analytics.forget(playerId, () => dbAdmin.forgetActor(playerId)).catch(() => {}); // best effort
+      // Finished games keep each seat's XP rows in memory until the server restarts: anonymise them as the record is.
+      for (const room of rooms.values()) {
+        if (room.registered) room.registered.delete(playerId); // no longer an account, so its XP is not kept
+        if (!room.outcome || !Array.isArray(room.outcome.xp)) continue;
+        for (const x of room.outcome.xp) if (x.id === playerId) { x.id = null; x.name = 'Player'; x.saved = false; }
+      }
       const p = players.get(playerId);
       if (!p) return;
       // The real name must not outlive the account anywhere: not in the table, its log or chat, and not in the match
@@ -635,7 +642,7 @@ function start(opts = {}) {
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
       members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m), standIn: isStandIn(room, m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
-      outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at } : null,
+      outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
@@ -867,7 +874,14 @@ function start(opts = {}) {
           stopAllPlay(room, Date.now()); // play time ends with the game
           const record = buildMatchRecord(room, g);
           if (!record) console.error(`[server] ${room.gameId} cannot report results; match not recorded`);
-          else matchQueue.enqueue(record); // never blocks the game and never rejects; failures are retried and logged by the queue
+          else {
+            matchQueue.enqueue(record); // never blocks the game and never rejects; failures are retried and logged by the queue
+            // The XP each seat earned, from the same record: the game-over screen shows exactly what is stored
+            const seats = room.seated || room.members;
+            // Only signed-in accounts at the table keep their XP; guests and anonymous players are shown but not kept.
+            const registered = room.registered || new Set();
+            room.outcome.xp = matchXpOf(record, registered).map((x) => ({ ...x, id: seats[x.seat] ? seats[x.seat].id : null, name: seats[x.seat] ? seats[x.seat].name : 'Player' }));
+          }
         } catch (e) {
           console.error('[server] Error preparing match record:', e.message);
         }
@@ -1659,6 +1673,9 @@ function start(opts = {}) {
       room.game = def.create(seats, room.options, Math.random);
       // The member in each seat, in game order. Results are indexed by seat, so they are matched to people through this list.
       room.seated = seats.map((s) => room.members.find((m) => m.id === s.id)).filter(Boolean);
+      // Who is a registered account, decided once at the start: a leaver becomes a bot seat, and a player may be evicted
+      // from the player map, so neither can be read back from the members when the game ends.
+      room.registered = new Set(room.seated.filter((m) => !m.bot && usernameOf(m)).map((m) => m.id));
       if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
       else pacing.setScale(room.game, botScale);
       room.status = 'playing';
