@@ -52,7 +52,9 @@ class MemoryMatchStore {
     const rows = [];
     for (const m of this.matches) {
       if (!m.participants.some((p) => p.playerId === playerId && !p.isBot)) continue;
-      const finished = m.finishedAt ? new Date(m.finishedAt).getTime() : Date.now();
+      // the recorded time is the fallback completion time, so minutes never keep growing after the game; a future finish time is clamped to it
+      const recorded = new Date(m.recordedAt).getTime();
+      const finished = m.finishedAt ? Math.min(new Date(m.finishedAt).getTime(), recorded) : recorded;
       const secs = m.startedAt ? Math.max(0, Math.min(21600, Math.floor((finished - new Date(m.startedAt).getTime()) / 1000))) : 0;
       for (const p of m.participants) {
         rows.push({ matchId: m.matchKey || m, gameId: m.gameId, seat: p.seat ?? 0, playerId: p.playerId, score: p.score ?? 0, place: Number.isInteger(p.place) ? p.place : null,

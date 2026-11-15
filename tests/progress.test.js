@@ -1,5 +1,6 @@
 'use strict';
 // Progress from stored rows: account level from time only, a level per game from skill, penalised leaves counted. No database.
+require('./helpers/env'); // first: no test may reach a real database
 const assert = require('node:assert/strict');
 const { computeProgress } = require('../lib/progress');
 const dbMatches = require('../db/matches');
@@ -36,6 +37,25 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
   await test('a penalised leave is -30, counts as a leave, and gives no time', () => {
     const p = computeProgress([row('1', 'twentynine', 0, 'me', { leftEarly: true, forfeit: true, secondsPlayed: 0 }), row('1', 'twentynine', 1, 'x', { isWinner: true })], 'me');
     assert.equal(p.games.twentynine.points, -30); assert.equal(p.penalisedLeaves, 1); assert.equal(p.account.minutes, 0);
+  });
+  await test('an unpenalised leave gives no game level entry, but the time still counts for the account', () => {
+    const p = computeProgress([row('1', 'wizard', 0, 'me', { leftEarly: true, secondsPlayed: 0 }), row('1', 'wizard', 1, 'x', { score: 5 }), row('1', 'wizard', 2, 'y', { score: 3 })], 'me');
+    assert.deepEqual(p.games, {}, 'no Wizard level from an abandoned game');
+    const q = computeProgress([row('1', 'wizard', 0, 'me', { leftEarly: true, secondsPlayed: 180 }), row('1', 'wizard', 1, 'x', { score: 5 })], 'me');
+    assert.equal(q.account.minutes, 3);
+  });
+  await test('memory store: minutes do not keep growing between reads, and a future finish time is clamped', async () => {
+    const id = '22222222-2222-4222-8222-222222222222';
+    await dbMatches.recordMatch({ matchKey: 'k2', roomCode: 'BBBBBB', gameId: 'tictactoe', seats: 2, options: {}, startedAt: new Date(Date.now() - 600000), finishedAt: new Date(Date.now() + 3600000),
+      participants: [{ playerId: id, name: 'A', seat: 0, score: 1, isWinner: true }, { playerId: 'c', name: 'C', seat: 1, score: 0 }] });
+    const first = (await dbMatches.getProgress(id)).account.minutes;
+    await new Promise((r) => setTimeout(r, 1100));
+    assert.equal((await dbMatches.getProgress(id)).account.minutes, first);
+    assert.ok(first >= 9 && first <= 10, 'ten minutes, not an hour: ' + first);
+  });
+  await test('a new account sees its level before the first game (the empty profile keeps the progress card)', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'public', 'app.js'), 'utf8');
+    assert.match(src, /if \(!s \|\| !s\.played\) return progressHTML\(s && s\.progress\) \+ emptyState\(/);
   });
   await test('bots and other people never count as me, and a match I was not in is ignored', () => {
     const p = computeProgress([row('1', 'tictactoe', 0, 'bot', { isBot: true, isWinner: true }), row('1', 'tictactoe', 1, 'x')], 'me');
