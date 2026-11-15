@@ -2901,6 +2901,7 @@
       const prof = S.profile;
       if (!prof || !prof.data) return;
       const id = el.dataset.game;
+      const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
       prof.game = id; prof.gameHistory = null; prof.board = null; render();
       // Apply the answer only to the same profile, still open on this game (a reload or a sign-out drops it).
       const gen = sessionGen; // another account signed in or out since the click: its answer is not for this screen
@@ -2909,8 +2910,8 @@
         .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
         .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
       getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
-        .then((b) => { if (current()) { prof.board = b; render(); } })
-        .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
+        .then((b) => { if (current() && prof.boardGen === boardGen) { prof.board = b; render(); } })
+        .catch(() => { if (current() && prof.boardGen === boardGen) { prof.board = { failed: true }; render(); } });
     },
     boardOptIn: async () => {
       const prof = S.profile;
