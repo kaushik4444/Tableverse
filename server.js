@@ -316,21 +316,24 @@ function start(opts = {}) {
       if (room.registered) room.registered.delete(playerId); // no longer an account, so its XP is not kept
       if (!room.outcome || !Array.isArray(room.outcome.xp)) continue;
       for (const x of room.outcome.xp) if (x.id === playerId) { x.id = null; x.name = 'Player'; x.saved = false; }
+      // the copied winner list shown after a game (outcomeOf copies the name): clear it too
+      if (Array.isArray(room.outcome.winners)) for (const w of room.outcome.winners) if (w.id === playerId) { w.id = null; w.name = DELETED_NAME; }
     }
+    // The seats at tables are anonymised whether or not this server still holds an in-memory player (one may have been
+    // garbage-collected after a disconnect while its game went on), so the early return comes after that.
     const p = players.get(playerId);
-    if (!p) return;
     // The real name must not outlive the account anywhere: not in the table, its log or chat, and not in the match
     // record when the game finishes. Rename the seat everywhere first, then let the player leave (a bot keeps it).
     // Every name this person went by at a table: the lobby name, the name a running game started with, a stale copy.
-    const oldNames = new Set([p.name]);
+    const oldNames = new Set(p ? [p.name] : []);
     for (const room of rooms.values()) {
       for (const m of [...room.members, ...room.spectators]) if (m.id === playerId) oldNames.add(m.name);
     }
     oldNames.delete(DELETED_NAME);
-    p.name = DELETED_NAME;
+    if (p) p.name = DELETED_NAME;
     for (const room of rooms.values()) {
       const seated = [...room.members, ...room.spectators].filter((m) => m.id === playerId);
-      if (!seated.length && p.room !== room.code) continue;
+      if (!seated.length && (!p || p.room !== room.code)) continue;
       for (const m of seated) { m.name = DELETED_NAME; m.avatar = '🧙'; }
       // the game's own copy: players, every log line, trick records (the plugin owns its state)
       if (room.game && typeof room.game.scrub === 'function') room.game.scrub([...oldNames], DELETED_NAME);
@@ -340,6 +343,7 @@ function start(opts = {}) {
         if (typeof c.text === 'string') c.text = scrubText(c.text, [...oldNames], DELETED_NAME);
       }
     }
+    if (!p) return; // nothing else is held in memory for this account
     try { if (p.room) leaveRoom(p); } catch { /* the player is going away either way */ }
     if (p.ws) revokeSocket(p.ws, 4001, 'account deleted');
     // another device that signed in separately has its own socket (and its own player object): close those too

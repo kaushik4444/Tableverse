@@ -308,10 +308,19 @@
   }
 
   // ---------------------------------------------------------------- users
+  // each search, filter or page change gets a number: only the newest request may draw the list or report an error
+  let usersSeq = 0;
   async function users(q = '', page = 1, stale = 0) {
     const gen = state.gen;
-    const o = await api(`/api/admin/users?q=${encodeURIComponent(q)}&page=${page}${stale ? '&stale=' + encodeURIComponent(stale) : ''}`);
-    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    const req = ++usersSeq;
+    let o;
+    try {
+      o = await api(`/api/admin/users?q=${encodeURIComponent(q)}&page=${page}${stale ? '&stale=' + encodeURIComponent(stale) : ''}`);
+    } catch (e) {
+      if (req !== usersSeq) return; // a newer request has replaced this one
+      throw e;
+    }
+    if (gen !== state.gen || req !== usersSeq) return; // the admin has switched tabs, or asked for something newer, since this was asked
     const owner = state.me.isOwner;
     const rows = o.users.map((u) => {
       const staff = u.role !== 'user';
