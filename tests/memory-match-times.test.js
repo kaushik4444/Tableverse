@@ -2,6 +2,7 @@
 // The in-memory match store (no database) must survive a record with an unusable finish time: it falls back to the time
 // the record was written, and never turns a bad value into an Invalid Date that breaks the profile or the progress.
 // Runs without a database.
+require('./helpers/env'); // clears any inherited database setting before db/matches is loaded
 const assert = require('node:assert/strict');
 const matches = require('../db/matches');
 
