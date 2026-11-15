@@ -27,7 +27,12 @@ const playersFixture = (sort, total = 1) => ({ ok: true, total, pageSize: 25, so
 const live = { players: 3, tables: 1, sockets: 4, fail: false };
 const liveFixture = () => (live.fail ? { __status: 500, body: { ok: false } } : { ok: true, at: new Date().toISOString(), players: live.players, tables: live.tables, sockets: live.sockets });
 const funnelFixture = (days) => ({ ok: true, days, totals: { signups: 6, played: 5, returned: 1 }, daily: [{ day: '2026-11-07', signups: 4, played: 3, returned: 1 }] });
+const gamesFixture = (days) => ({ ok: true, days, games: [
+  { gameId: 'ludo', finished: 12, finished7d: 5, signedInPlayers: 9, playerGames: 40, avgMinutes: 21.4, penalisedLeaves: 2, leftWithoutPenalty: 1, leftEarly: 3 },
+  { gameId: 'tictactoe', finished: 5, finished7d: 0, signedInPlayers: 4, playerGames: 10, avgMinutes: 2.1, penalisedLeaves: 0, leftWithoutPenalty: 0, leftEarly: 0 }] });
 const api = (role) => ({
+  'GET /api/admin/games?days=30': () => gamesFixture(30),
+  'GET /api/admin/games?days=7': () => gamesFixture(7),
   'GET /api/admin/live': () => liveFixture(),
   'GET /api/admin/funnel?days=30': () => funnelFixture(30),
   'GET /api/admin/funnel?days=7': () => funnelFixture(7),
@@ -45,6 +50,7 @@ const api = (role) => ({
   'GET /api/admin/players/profile?username=ann': () => ({ ok: true, player: { username: 'ann', displayName: 'Ann', country: 'DE', role: 'user', verified: true, joinedAt: '2026-11-01T10:00:00Z', lastSeenAt: '2026-11-08T09:00:00Z', suspended: false },
     totals: { games: 14, rated: 11, wins: 6, draws: 1, losses: 4, leftEarly: 2, minutes: 130, activeDays: 5, firstGameAt: '2026-11-02T10:00:00Z', lastGameAt: '2026-11-08T08:00:00Z' },
     perGame: [{ gameId: 'ludo', games: 10, rated: 7, wins: 4, draws: 0, leftEarly: 2, minutes: 120 }],
+    progress: { level: 3, xp: 180, into: 30, need: 150, minutes: 180, penalisedLeaves: 1, games: [{ gameId: 'ludo', points: 15, played: 7, rule: 'placing' }, { gameId: 'tictactoe', points: -10, played: 1, rule: 'win-lose' }] },
     hourly: { UTC: Array.from({ length: 24 }, (_, h) => (h === 19 ? 9 : 0)), 'Europe/Berlin': Array.from({ length: 24 }, (_, h) => (h === 20 ? 9 : 0)), 'Asia/Kolkata': Array.from({ length: 24 }, (_, h) => (h === 0 ? 9 : 0)) },
     recent: [{ gameId: 'ludo', at: '2026-11-08T08:00:00Z', seats: 4, won: true, draw: false, leftEarly: false, unknown: false, minutes: 22 },
       { gameId: 'ludo', at: '2026-11-07T08:00:00Z', seats: 4, won: false, draw: false, leftEarly: false, unknown: true, minutes: 18 }] }),
@@ -490,6 +496,36 @@ const api = (role) => ({
     assert.equal(await a.page.locator('#rHistWrap').count(), 0, 'admins do not see Render history');
     assert.equal(a.calls.some((c) => c.path.startsWith('/api/admin/render-logs')), false, 'and nothing is requested for them');
     await a.close();
+  });
+
+  await test('games: the Games tab shows each game with its counts, a range choice, and no player name', async () => {
+    const s = await open('admin');
+    await s.page.waitForSelector('.ad-grid');
+    await tab(s.page, 'games');
+    await s.page.waitForSelector('[data-gd="30"][aria-pressed="true"]');
+    const text = await s.page.textContent('#adMain');
+    assert.match(text, /ludo/); assert.match(text, /tictactoe/);
+    assert.match(text, /Penalised leave rate/);
+    assert.equal(/\bann\b/i.test(text), false, 'no player is named');
+    await s.page.click('[data-gd="7"]');
+    await s.page.waitForSelector('[data-gd="7"][aria-pressed="true"]');
+    assert.ok(s.calls.some((c) => c.path === '/api/admin/games?days=7'), 'the 7-day range is asked for');
+    await s.close();
+  });
+
+  await test('players: a profile shows the overall level, Player Progress XP, and Game XP per game', async () => {
+    const s = await open('admin');
+    await s.page.waitForSelector('.ad-grid');
+    await tab(s.page, 'players');
+    await s.page.waitForSelector('[data-view="ann"]');
+    await s.page.click('[data-view="ann"]');
+    await s.page.waitForSelector('#pBack');
+    const text = await s.page.textContent('#adMain');
+    assert.match(text, /overall level/); assert.match(text, /Player Progress XP/);
+    assert.match(text, /\+15/, 'a positive Game XP shows its sign');
+    assert.match(text, /-10/);
+    assert.match(text, /Win or lose/); assert.match(text, /Placing/);
+    await s.close();
   });
 
   await browser.close();

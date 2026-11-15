@@ -380,6 +380,7 @@
       if (!out || !out.ok || !out.authenticated) return false;
       adoptPlayer(out.player);
       S.emailVerified = !!out.emailVerified;
+      S.welcomeDue = out.welcome === true; // first login: the welcome dialog is shown once, after the lobby starts
       refreshLevel();
       return true;
     } catch {
@@ -626,8 +627,10 @@
       openAuthSheet('login', 'Please verify your email before playing. Use “Resend verification email” if the link did not arrive.');
       return;
     }
+    S.welcomeDue = out.welcome === true;
     closeOverlay();
     beginSignIn();
+    if (S.welcomeDue) showWelcome();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
@@ -1361,6 +1364,7 @@
       openAuthSheet('login', 'Please verify your email to enter the lobby.');
       return;
     }
+    if (S.welcomeDue) showWelcome();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   })();
@@ -2084,6 +2088,7 @@
 
   const modalActions = {
     versionHistory: () => openVersionHistoryDialog(),
+    welcomeStart: () => closeModal(),
     cardAdd: () => { const p = S.card && S.card.last; if (p && p.username) cardAction('/api/me/friend-requests', { username: p.username }, 'Friend request sent.', 'Sending request…'); },
     cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }, undefined, 'Cancelling…'); },
     cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.', 'Accepting…'); },
@@ -2328,6 +2333,19 @@
     const newest = RELEASES[0] || { title: '', items: [] };
     const list = WHATS_NEW.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
     openModal('What’s new', `<p class="hint" style="text-align:left">${esc(newest.title)}</p><ul class="wn-list">${list}</ul><div class="row" style="margin-top:12px"><button type="button" class="btn ghost small" data-modal-act="versionHistory">All versions</button></div>`);
+  }
+
+  /**
+   * First login: a welcome dialog, shown once. It says what Tableverse is and shows the newest release's highlights.
+   * It is marked as seen on the server when it opens, so a reload or another device does not show it again.
+   */
+  function showWelcome() {
+    S.welcomeDue = false;
+    const newest = RELEASES[0] || { items: [] };
+    const list = (newest.items || []).filter((w) => S.voiceEnabled || !w.voice).slice(0, 3)
+      .map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+    openModal('Welcome to Tableverse', `<p class="hint" style="text-align:left">Tableverse is a place to play classic card and board games online, with friends and other players. Find a table, sit down and play. Your games and progress are kept on your profile, so you can see how you are getting on.</p>${list ? `<h3>What’s new</h3><ul class="wn-list">${list}</ul>` : ''}<div class="row" style="margin-top:12px"><button type="button" class="btn primary" data-modal-act="welcomeStart">Start playing</button></div>`);
+    postJson('/api/me/welcome-seen', {}).catch(() => {}); // shown: remember it on the account (a failed save only means it may show once more)
   }
 
   /** Every release, newest first, with its items (voice items only when voice chat is on). */
