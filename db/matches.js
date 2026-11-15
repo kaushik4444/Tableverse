@@ -47,6 +47,21 @@ class MemoryMatchStore {
     return { played, wins, draws, losses: played - wins - draws };
   }
 
+  /** Every participant of every match this player took part in, oldest first (for progress levels). */
+  async getProgressRows(playerId) {
+    const rows = [];
+    for (const m of this.matches) {
+      if (!m.participants.some((p) => p.playerId === playerId && !p.isBot)) continue;
+      const finished = m.finishedAt ? new Date(m.finishedAt).getTime() : Date.now();
+      const secs = m.startedAt ? Math.max(0, Math.min(21600, Math.floor((finished - new Date(m.startedAt).getTime()) / 1000))) : 0;
+      for (const p of m.participants) {
+        rows.push({ matchId: m.matchKey || m, gameId: m.gameId, seat: p.seat ?? 0, playerId: p.playerId, score: p.score ?? 0, place: Number.isInteger(p.place) ? p.place : null,
+          isWinner: Boolean(p.isWinner), isDraw: Boolean(p.isDraw), isBot: Boolean(p.isBot), leftEarly: Boolean(p.leftEarly), forfeit: Boolean(p.forfeit), secondsPlayed: p.leftEarly || p.isBot ? 0 : secs });
+      }
+    }
+    return rows;
+  }
+
   async getPlayerRows(playerId) {
     const rows = [];
     for (const m of this.matches) {
@@ -58,6 +73,7 @@ class MemoryMatchStore {
 }
 
 const memoryStore = new MemoryMatchStore();
+const { computeProgress } = require('../lib/progress');
 
 /**
  * Persist a completed match and participant results, all-or-nothing.
@@ -150,6 +166,27 @@ async function getPlayerStats(playerId) {
 }
 
 /**
+ * Account level, time played, a level per game and the number of penalised leaves, from the stored matches.
+ * Throws if the database fails (a zero would be misleading).
+ */
+async function getProgress(playerId) {
+  if (!db.hasDatabase()) return computeProgress(await memoryStore.getProgressRows(playerId), playerId);
+  if (!isUuid(playerId)) return computeProgress([], playerId);
+  const r = await db.query(
+    `SELECT m.id AS match_id, m.game_id, mp.seat, mp.player_id, mp.score, mp.place, mp.is_winner, mp.is_draw, mp.is_bot, mp.left_early, mp.forfeit, mp.seconds_played
+       FROM match_participants mp JOIN matches m ON m.id = mp.match_id
+      WHERE mp.match_id IN (SELECT match_id FROM match_participants WHERE player_id = $1 AND is_bot = FALSE)
+        AND m.match_key IS NOT NULL
+      ORDER BY m.finished_at, m.id, mp.seat`,
+    [playerId]
+  );
+  return computeProgress(r.rows.map((x) => ({
+    matchId: x.match_id, gameId: x.game_id, seat: x.seat, playerId: x.player_id, score: x.score, place: x.place, isWinner: x.is_winner, isDraw: x.is_draw,
+    isBot: x.is_bot, leftEarly: x.left_early, forfeit: x.forfeit, secondsPlayed: x.seconds_played,
+  })), playerId);
+}
+
+/**
  * Profile statistics for one player: games played, wins, losses, win rate, favourite game, per-game record,
  * streaks and recent results. Throws if the database fails (a zero would be misleading).
  */
@@ -201,5 +238,6 @@ module.exports = {
   isUuid,
   recordMatch,
   getPlayerProfile,
+  getProgress,
   getPlayerStats,
 };
