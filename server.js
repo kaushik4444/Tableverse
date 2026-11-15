@@ -21,6 +21,7 @@ const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
 const { makeAuthEmailSender } = require('./lib/email');
+const { cspFor } = require('./lib/googleAuth');
 const { createAuthRoutes } = require('./lib/authRoutes');
 const dbAccount = require('./db/account');
 const { DELETED_NAME } = dbAccount;
@@ -69,8 +70,6 @@ async function resolveTarget(msg) {
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy':
-    "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'",
   'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()', // the microphone is for table voice chat
 };
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
@@ -220,8 +219,9 @@ function start(opts = {}) {
       req.on('error', reject);
     });
 
+  const SECURITY = { ...SECURITY_HEADERS, 'Content-Security-Policy': cspFor(env) };
   const setSecurityHeaders = (res) => {
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+    for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
     if (production) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   };
   const setCommonHeaders = (res, contentType = 'application/json; charset=utf-8') => {
@@ -306,6 +306,7 @@ function start(opts = {}) {
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   const authRoutes = createAuthRoutes({
     env,
+    googleVerifier: opts.googleVerifier || null, // tests only: a verifier with a local key instead of Google's
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
@@ -475,7 +476,7 @@ function start(opts = {}) {
       staticFiles.respond(req, res, entry, {
         'Content-Type': type,
         'Cache-Control': 'no-cache', // always revalidate; the ETag turns that into a cheap 304
-        ...SECURITY_HEADERS,
+        ...SECURITY,
         ...(production ? { 'Strict-Transport-Security': 'max-age=15552000; includeSubDomains' } : {}),
       });
     });

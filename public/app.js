@@ -451,6 +451,7 @@
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
       </div>
+      <div id="googleSlot" class="google-slot" hidden><div id="googleBtn"></div><p class="auth-or"><span>or use your email</span></p></div>
       ${loginOn ? `
         <form id="loginForm" class="auth-form">
           <input id="loginEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -476,6 +477,7 @@
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     document.body.appendChild(overlay);
+    mountGoogle();
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');
     if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
     if (!loginOn) {
@@ -511,6 +513,72 @@
     }
   }
 
+  // "Continue with Google": shown only when the server has it configured. The page never decides who someone is: it forwards
+  // Google's token to the server, which verifies it.
+  async function mountGoogle() {
+    const slot = document.getElementById('googleSlot');
+    if (!slot || !window.TvGoogle) return;
+    if (!(await window.TvGoogle.available())) return;
+    const btn = document.getElementById('googleBtn');
+    if (!btn || !btn.isConnected) return;
+    slot.hidden = false;
+    window.TvGoogle.mount(btn, onGoogleCredential, () => { slot.hidden = true; });
+  }
+
+  let googleBusy = false;
+  async function onGoogleCredential(credential) {
+    if (googleBusy) return;
+    googleBusy = true;
+    try {
+      const out = await withBusy('Signing in with Google…', () => postJson('/api/auth/google', { credential }));
+      if (out.needsSignup) return openGoogleSignupSheet(credential, out);
+      finishSignIn(out);
+    } catch (err) {
+      openAuthSheet(S.auth || 'login', err.message || 'Google sign-in failed.', true);
+    } finally { googleBusy = false; }
+  }
+
+  // A new person: Google proved the address, they still choose a username and confirm they are an adult.
+  function openGoogleSignupSheet(credential, info, msg = '') {
+    closeOverlay();
+    S.auth = 'google';
+    const overlay = document.createElement('div');
+    overlay.id = 'auth-overlay';
+    overlay.className = 'overlay';
+    overlay.innerHTML = `<div class="sheet auth-sheet" data-stop="1" role="dialog" aria-label="Finish creating your account">
+      <div class="row" style="justify-content:space-between"><h2>Almost there</h2><button class="btn ghost small" data-auth-close aria-label="Close">✕</button></div>
+      <p class="hint" style="text-align:left">Signing up with Google as <b>${esc(info.email)}</b>. Choose how you appear at the table.</p>
+      ${msg ? `<p class="auth-msg" role="alert">${esc(msg)}</p>` : ''}
+      <form id="googleSignupForm" class="auth-form">
+        <input id="googleName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname" value="${esc(info.suggestedName || '')}">
+        <input id="googleUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
+        <small id="googleUsernameHint" class="hint"></small>
+        <label class="auth-check"><input id="googleAdult" type="checkbox" required> I am 18 or older.</label>
+        <button class="btn big" type="submit">Create account</button>
+      </form></div>`;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
+    overlay.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = String(overlay.querySelector('#googleUsername').value || '').trim().toLowerCase();
+      const displayName = overlay.querySelector('#googleName').value;
+      const adultConfirmed = overlay.querySelector('#googleAdult').checked;
+      try {
+        const out = await withBusy('Creating your account…', () => postJson('/api/auth/google/complete', { credential, username, displayName, avatar: S.avatar || undefined, adultConfirmed }));
+        finishSignIn(out);
+      } catch (err) { openGoogleSignupSheet(credential, info, err.message || 'Could not create the account.'); }
+    });
+    const u = overlay.querySelector('#googleUsername');
+    u.addEventListener('input', async () => {
+      const value = String(u.value || '').trim().toLowerCase(); u.value = value;
+      const hint = overlay.querySelector('#googleUsernameHint');
+      if (!value) { hint.textContent = ''; return; }
+      if (!/^[a-z0-9_]{3,24}$/.test(value)) { hint.textContent = 'Use 3-24 chars: lowercase letters, numbers, underscore.'; return; }
+      try { const o = await fetch(`/api/auth/username-available?username=${encodeURIComponent(value)}`).then((r) => r.json()); hint.textContent = o.available ? 'Username is available.' : 'Username is already taken.'; } catch { hint.textContent = ''; }
+    });
+    document.body.appendChild(overlay);
+    if (!matchMedia('(pointer: coarse)').matches) overlay.querySelector('#googleUsername').focus();
+  }
+
   function closeOverlay() {
     const el = document.getElementById('auth-overlay');
     if (el) el.remove();
@@ -529,6 +597,11 @@
 
   async function doLogin(email, password, rememberDevice = false) {
     const out = await withBusy('Logging in…', () => postLogin(email, password, rememberDevice));
+    finishSignIn(out);
+  }
+
+  // After the server has started a session (password login or Google): adopt the player and connect.
+  function finishSignIn(out) {
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     adoptPlayer(out.player);

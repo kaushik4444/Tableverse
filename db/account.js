@@ -29,8 +29,8 @@ async function getOwnProfile(playerId) {
   need();
   const r = await db.query(
     `SELECT p.id, p.username, p.display_name, p.avatar, p.country, p.created_at, i.email, i.email_verified_at
-     FROM players p LEFT JOIN auth_identities i ON i.player_id = p.id AND i.provider = 'email'
-     WHERE p.id = $1 LIMIT 1`, [playerId]);
+     FROM players p LEFT JOIN LATERAL (SELECT email, email_verified_at FROM auth_identities WHERE player_id = p.id ORDER BY created_at ASC LIMIT 1) i ON TRUE
+     WHERE p.id = $1 LIMIT 1`, [playerId]); // the account's one identity, whichever provider (email or Google)
   const row = r.rows[0];
   if (!row) throw new AuthError('Account not found.', 404);
   return { id: row.id, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), country: row.country || null, email: row.email || null, emailVerified: Boolean(row.email_verified_at) };
