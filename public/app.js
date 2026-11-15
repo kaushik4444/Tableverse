@@ -119,6 +119,31 @@
   }
 
   const isSpectator = () => !!(S.room && (S.room.spectators || []).some((s) => s.id === S.id));
+  /** Other people are still playing this game with us: leaving then counts as a loss. Against bots only it does not. */
+  const otherHumansPlaying = () => !!(S.room && S.room.status === 'playing' && !isSpectator() && (S.room.members || []).some((m) => m.id !== S.id && !m.bot));
+  /** What leaving now does, as the server decides it: 'counts' (a loss), 'abandons' (the game is abandoned, nobody penalised) or 'abandoned'. */
+  const leaveState = () => (S.room && S.room.leaveState) || 'counts';
+  /** One sentence for the profile and leave prompts, matching what leaving now actually does. */
+  const leaveConsequence = () => {
+    const state = leaveState();
+    if (state === 'abandons') return ' Another player has already left, so leaving now abandons the game: nobody is penalised.';
+    if (state === 'abandoned') return ' The game is already abandoned, so leaving costs nothing.';
+    return ' Leaving counts as a loss for you.';
+  };
+  /** Every leave goes through here: with other people still playing, ask first, because the leave may cost something. */
+  function requestLeave() {
+    if (!otherHumansPlaying()) { send({ t: 'leave' }); return; }
+    const state = leaveState();
+    if (state === 'abandoned') {
+      openModal('Leave game?', '<p class="hint">The game is already abandoned, so leaving costs nothing. A bot takes your seat, and the others keep playing. You can take your seat back within 2 minutes of leaving, from the home screen. After that you can only watch.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave</button></div>');
+      return;
+    }
+    if (state === 'abandons') {
+      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Nobody is penalised, and the people who stayed get no result. A bot takes your seat. You can take your seat back within 2 minutes of leaving, from the home screen. After that you can only watch.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
+      return;
+    }
+    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can take your seat back within 2 minutes of leaving, from the home screen. After that you can only watch.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
+  }
 
   window.CardTable = Object.assign(window.CardTable || {}, {
     esc,
@@ -711,9 +736,14 @@
   function recentTablesHTML() {
     if (!S.recentTables.length) return '';
     const rows = S.recentTables.map((r) => {
-      const mine = S.rejoin.some((x) => x.code === r.code);
-      const status = mine ? 'Your seat is waiting' : r.status === 'playing' ? 'In progress' : 'Open';
-      return `<button class="recent-table ${mine ? 'mine' : ''}" data-act="rejoin" data-code="${esc(r.code)}"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code>${mine ? '<em class="rj-badge">Rejoin</em>' : `<small>${status}</small>`}</button>`;
+      const mine = S.rejoin.find((x) => x.code === r.code);
+      if (mine && mine.canReclaim === false && mine.noSeatedHumans) {
+        return `<div class="recent-table"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code><small>Game paused</small></div>`;
+      }
+      const reclaim = mine && mine.canReclaim !== false;
+      const status = reclaim ? 'Your seat is waiting' : mine ? 'Watch game' : r.status === 'playing' ? 'In progress' : 'Open';
+      const action = mine && !reclaim ? 'watch' : 'rejoin';
+      return `<button class="recent-table ${reclaim ? 'mine' : ''}" data-act="${action}" data-code="${esc(r.code)}"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code>${reclaim ? '<em class="rj-badge">Rejoin</em>' : `<small>${status}</small>`}</button>`;
     }).join('');
     return `<section class="home-section"><h2 class="section">Recent tables</h2><div class="recent-tables">${rows}</div></section>`;
   }
@@ -723,7 +753,14 @@
     if (!S.rejoin.length) return '';
     return S.rejoin.map((r) => {
       const g = gameMeta(r.gameId) || { name: r.gameId, icon: '🎴' };
-      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.</span></div><button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button></div>`;
+      const canReclaim = r.canReclaim !== false;
+      const message = canReclaim
+        ? `${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.`
+        : `${r.noSeatedHumans ? 'The rejoin window has passed, so this game cannot resume.' : 'The rejoin window has passed, but you can still watch'} at table <code>${esc(r.code)}</code>.`;
+      const action = canReclaim
+        ? `<button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button>`
+        : r.noSeatedHumans ? '' : `<button class="btn" data-act="watch" data-code="${esc(r.code)}">Watch</button>`;
+      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${message}</span></div>${action}</div>`;
     }).join('');
   }
 
@@ -1037,7 +1074,7 @@
         break;
       }
       case 'emote':
-        showEmote(m.id, m.e);
+        showEmote(m.id, m.e, m);
         CardTable.sound.play('emote');
         break;
       case 'chat':
@@ -1296,12 +1333,14 @@
     if (b.myTurn && (!a.myTurn || trickDone)) setTimeout(() => snd.play('turn'), trickDone ? CardTable.TRICK_HOLD_MS + 80 : 220);
   }
 
-  function showEmote(id, e) {
+  function showEmote(id, e, who) {
     const seat = document.querySelector(`[data-pid="${CSS.escape(id)}"] .av`);
     const r = seat ? seat.getBoundingClientRect() : { left: innerWidth / 2, top: 80, width: 0, height: 0 };
     const el = document.createElement('div');
     el.className = 'emote-pop';
     el.textContent = e;
+    // A spectator has no seat: the reaction names them, so the table knows it came from someone watching.
+    if (who && who.spectator) { const tag = document.createElement('div'); tag.className = 'emote-tag'; tag.textContent = '👁 ' + (who.name || 'Spectator'); el.appendChild(tag); }
     el.style.left = r.left + r.width / 2 + 'px';
     el.style.top = r.top + r.height / 2 + 'px';
     document.body.appendChild(el);
@@ -1578,7 +1617,7 @@
   const emptyState = (icon, title, text) => `<div class="empty"><span class="empty-ico" aria-hidden="true">${icon}</span><b>${esc(title)}</b><p>${esc(text)}</p></div>`;
   const loadingBlock = (text = 'Loading…') => `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>${esc(text)}</div>`;
   const errorBlock = (text, retryAct) => `<div class="error-block" role="alert"><p>${esc(text)}</p>${retryAct ? `<button type="button" class="btn ghost small" data-act="${retryAct}">Try again</button>` : ''}</div>`;
-  const RESULT_LABEL = { won: 'Won', lost: 'Lost', draw: 'Draw', left: 'Left early' };
+  const RESULT_LABEL = { won: 'Won', lost: 'Lost', draw: 'Draw', left: 'Left (not counted)', forfeit: 'Left (counts as a loss)' };
 
   async function getJson(url) {
     const r = await fetch(url, { credentials: 'same-origin' });
@@ -1702,7 +1741,7 @@
       return `<li class="hist-row"><span class="hist-ico" aria-hidden="true">${esc(meta.icon || '🎴')}</span><span class="hist-main"><b>${esc(meta.name)}</b><small>${esc(fmtDate(g.finishedAt))} · ${g.humans} player${g.humans === 1 ? '' : 's'}${g.seats > g.humans ? ` + ${g.seats - g.humans} bot${g.seats - g.humans === 1 ? '' : 's'}` : ''}</small></span><span class="result ${g.result}">${RESULT_LABEL[g.result]}</span></li>`;
     }).join('');
     const pager = h.pages > 1 ? `<nav class="pager" aria-label="History pages"><button type="button" class="btn ghost small" data-act="historyPage" data-page="${h.page - 1}" ${h.page <= 1 ? 'disabled' : ''}>← Newer</button><span>Page ${h.page} of ${h.pages}</span><button type="button" class="btn ghost small" data-act="historyPage" data-page="${h.page + 1}" ${h.page >= h.pages ? 'disabled' : ''}>Older →</button></nav>` : '';
-    return `<ul class="hist-list">${rows}</ul>${pager}<p class="hint" style="text-align:left">Games you left early are listed but not counted in your statistics.</p>`;
+    return `<ul class="hist-list">${rows}</ul>${pager}<p class="hint" style="text-align:left">Leaving while others were still playing counts as a loss. Leaving against bots only, or in a game that was abandoned, is listed but not counted.</p>`;
   }
 
   /** Accounts this person has blocked, with a button to unblock each. Names are shown only here, to the blocker. */
@@ -1773,6 +1812,7 @@
     else {
       const d = P.data;
       inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${d.blockedByMe ? '<p class="pp-blocked"><b>Blocked</b></p>' : friendLine(d.username)}</div></header>
+        ${progressHTML(d.progress)}
         <div class="stat-grid"><div class="stat-tile"><span class="stat-v">${d.played}</span><span class="stat-l">Games played</span></div><div class="stat-tile good"><span class="stat-v">${d.wins}</span><span class="stat-l">Wins</span></div><div class="stat-tile"><span class="stat-v">${d.winRate === null ? '–' : d.winRate + '%'}</span><span class="stat-l">Win rate</span></div></div>
         ${!S.guest && S.username && S.username.toLowerCase() !== String(d.username).toLowerCase() ? playerActionsHTML(P, d) : ''}`;
     }
@@ -1820,12 +1860,10 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-block-report-menu';
-  const WHATS_NEW = [
-    ['🚩', 'Block and report players', 'Block or report a player from their table card or from their profile page. Reports go to the moderators, and each player can be reported once. Guests can’t report.'],
-    ['⋯', 'How to play and the game log are in ⋯', 'The ⋯ button at the top right holds How to play, the game log and game settings, so the bottom bar stays clear on phones.'],
-    ['🔀', 'Shuffle seats, and the 29 rules explained', 'The host can turn on Shuffle seats for Wizard and 29. Game settings now explain each 29 option: the scoring for taking all 29 points, the failed-bid penalty, the marriage that changes the bid, and Double and Redouble.'],
-  ];
+  // Release history lives in public/whats-new-data.js. The home page shows the newest release's first three items.
+  const RELEASES = Array.isArray(window.TV_RELEASES) ? window.TV_RELEASES : [];
+  const WHATS_NEW_VERSION = RELEASES.length ? RELEASES[0].version : '';
+  const WHATS_NEW = RELEASES.length ? RELEASES[0].items.slice(0, 3) : [];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
   /** Friend requests + table invitations waiting for an answer (drives the menu badge and the home strip). */
@@ -1850,6 +1888,7 @@
         ${item('openFriendsPage', '👥', 'Friends')}
         ${item('openSettings', '⚙️', 'Settings')}
         ${item('openWhatsNew', '🎉', 'What’s new', hasNewNews() ? '<span class="mi-new">New</span>' : '')}
+        ${item('openVersionHistory', '📜', 'Version history')}
         ${item('openFeedback', '💬', 'Send feedback')}
         ${S.isStaff ? item('openAdmin', '🛠️', 'Admin console') : ''}
         <div class="menu-sep" role="separator"></div>
@@ -1917,6 +1956,7 @@
   }
 
   const modalActions = {
+    versionHistory: () => openVersionHistoryDialog(),
     cardAdd: () => { const p = S.card && S.card.last; if (p && p.username) cardAction('/api/me/friend-requests', { username: p.username }, 'Friend request sent.', 'Sending request…'); },
     cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }, undefined, 'Cancelling…'); },
     cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.', 'Accepting…'); },
@@ -1935,7 +1975,7 @@
       if (!S.room) { closeModal(); openPage('player', p.username); return; }
       // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
       const seatedInGame = S.room.status === 'playing' && !isSpectator();
-      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' : 'This leaves the table.';
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can take your seat back within 2 minutes from the home screen.' + (otherHumansPlaying() ? leaveConsequence() : '') : 'This leaves the table.';
       openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
     },
     cardProfileConfirm: () => {
@@ -2158,7 +2198,26 @@
     S.wnSeen = WHATS_NEW_VERSION;
     store.set('ct_wn_seen', S.wnSeen);
     render();
-    openModal('What’s new', `<ul class="wn-list">${WHATS_NEW.filter((w) => S.voiceEnabled || w[3] !== 'voice').map(([ico, t, d]) => `<li><span class="wn-ico" aria-hidden="true">${ico}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>`);
+    const newest = RELEASES[0] || { title: '', items: [] };
+    const list = WHATS_NEW.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+    openModal('What’s new', `<p class="hint" style="text-align:left">${esc(newest.title)}</p><ul class="wn-list">${list}</ul><div class="row" style="margin-top:12px"><button type="button" class="btn ghost small" data-modal-act="versionHistory">All versions</button></div>`);
+  }
+
+  /** Every release, newest first, with its items (voice items only when voice chat is on). */
+  function openVersionHistoryDialog() {
+    const body = RELEASES.map((r) => {
+      const items = r.items.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+      return `<section class="wn-release" aria-label="${esc(r.title)}"><h3 class="stat-h" style="margin:14px 0 6px">${esc(r.title)}${r.version || r.date ? ` <small>${esc([r.version, r.date].filter(Boolean).join(' · '))}</small>` : ''}</h3><ul class="wn-list">${items}</ul></section>`;
+    }).join('');
+    openModal('Version history', body || '<p class="hint">No releases yet.</p>', (o) => {
+      // the dialog's only control is its close button: focus it, and keep Tab on it, so focus never reaches the page behind
+      const close = o.querySelector('[data-modal-close]');
+      if (!close) return;
+      close.focus();
+      o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
+      // both entry points remove the trigger on open, so focus goes back to the account button when it closes
+      modalOnClose = () => { const b = document.querySelector('.tb-avatar-btn'); if (b) b.focus(); };
+    });
   }
 
   /** Fields whose text must survive a redraw (someone joins, a friend comes online) while the person is typing or choosing. */
@@ -2178,7 +2237,7 @@
     }
     if (!S.room || S.room.status !== 'finished') S.endFlow = null;
     if (!S.ready && !S.guest && !S.room) {
-      $app.innerHTML = '<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>';
+      $app.innerHTML = '<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle class="seat-halo" cx="128" cy="216" r="27" fill="#fbbf24" fill-opacity=".25"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>';
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
     else if (!S.room && S.page === 'player') renderPlayerPage();
     else if (!S.room && S.page === 'friends' && !S.guest) $app.innerHTML = topbarHTML() + friendsPageHTML();
@@ -2397,9 +2456,25 @@
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
-  /** The statistics block of a profile. Games you left early and bot seats are never counted (the server leaves them out). */
+  /** The statistics block of a profile. Bot seats and games left without a penalty are never counted (the server leaves them out). */
+  /** Account level (time played), a level per game (skill) and penalised leaves. `pr` is the progress the server sends; nothing when absent. */
+  function progressHTML(pr) {
+    if (!pr || !pr.account) return '';
+    const a = pr.account;
+    const pct = a.need ? Math.min(100, Math.round((a.into / a.need) * 100)) : 0;
+    const games = Object.entries(pr.games || {}).sort((x, y) => y[1].points - x[1].points).map(([id, g]) => {
+      const meta = statsGame(id);
+      return `<li class="pg-row"><span>${esc(meta.icon || '🎴')} ${esc(meta.name)}</span><b>Level ${g.level}</b></li>`;
+    }).join('');
+    const left = pr.penalisedLeaves > 0 ? `<p class="hint" style="text-align:left">Left ${pr.penalisedLeaves} game${pr.penalisedLeaves === 1 ? '' : 's'} early (counted as a loss).</p>` : '';
+    return `<section class="progress-card" aria-label="Progress">
+      <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · ${a.into} / ${a.need} to next level</span>
+        <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>
+      ${games ? `<h3 class="stat-h">Game levels</h3><ul class="plain-list pg-games">${games}</ul>` : ''}${left}</section>`;
+  }
+
   function statsHTML(s) {
-    if (!s || !s.played) return emptyState('🃏', 'No finished games yet', 'Finish a game with friends or bots and your record shows up here. Games you leave early are not counted.');
+    if (!s || !s.played) return progressHTML(s && s.progress) + emptyState('🃏', 'No finished games yet', 'Finish a game with friends or bots and your record shows up here. Leaving while others are still playing counts as a loss.');
     const fav = s.favouriteGame ? statsGame(s.favouriteGame) : null;
     const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
     const games = s.perGame.map((g) => {
@@ -2408,6 +2483,7 @@
     }).join('');
     const recent = s.recent.map((r) => `<span class="stat-chip ${r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${esc(statsGame(r.gameId).icon || '🎴')}<b>${r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
     return `
+      ${progressHTML(s.progress)}
       <div class="stat-grid">
         ${tile('Games played', s.played)}
         ${tile('Wins', s.wins, 'good')}
@@ -2421,7 +2497,7 @@
       <div class="stat-games">${games}</div>
       <h3 class="stat-h">Last ${s.recent.length} games <small>(newest first)</small></h3>
       <div class="stat-recent">${recent}</div>
-      <p class="hint" style="text-align:left;margin-top:12px">Ties share the win. Games you left early are not counted.</p>`;
+      <p class="hint" style="text-align:left;margin-top:12px">Ties share the win. Leaving while others are still playing counts as a loss.</p>`;
   }
 
   function openActivityLog() {
@@ -2480,11 +2556,7 @@
       isHost: S.room.hostId === S.id,
       activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
       act: (action) => send({ t: 'act', action }),
-      leave: () => {
-        const playing = S.room.status === 'playing' && !isSpectator();
-        if (!playing) send({ t: 'leave' });
-        else openModal('Leave game', '<p class="hint">Leave this game? A bot will take your seat, and you can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave game</button></div>');
-      },
+      leave: () => requestLeave(),
       rematch: () => send({ t: 'rematch' }),
       showRules: () => showRules(S.room.gameId),
       rerender: render,
@@ -2552,7 +2624,7 @@
   const actions = {
     endAgain: () => send({ t: 'rematch' }),
     endVote: () => send({ t: 'rematchVote', on: !(S.room.votes || []).includes(S.id) }),
-    endLeave: () => send({ t: 'leave' }),
+    endLeave: () => requestLeave(),
     playerCard: (el) => openPlayerCard(el.dataset.pid),
     avatar: (el) => { S.avatarOpen = false; changeAvatar(el.dataset.a); },
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
@@ -2613,6 +2685,7 @@
     openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },
     openSettings: () => { S.menuOpen = false; render(); openSettingsDialog(); },
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
+    openVersionHistory: () => { S.menuOpen = false; render(); openVersionHistoryDialog(); },
     toggleAvatars: () => { S.avatarOpen = !S.avatarOpen; render(); },
     emotes: () => toggleEmoteBar(),
     activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
@@ -2630,10 +2703,15 @@
       send({ t: 'setVisibility', visibility: cur === 'public' ? 'private' : 'public' });
     },
     // The server decides: your old seat if you had one (a bot is playing it), otherwise a seat in a lobby, otherwise watching.
-    rejoin: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
+    rejoin: (el) => {
+      const mine = S.rejoin.find((x) => x.code === el.dataset.code);
+      if (mine && mine.canReclaim === false) return mine.noSeatedHumans ? toast('This game cannot resume. Start a new game instead.') : actions.watch(el);
+      askJoinMode(el.dataset.code, tableByCode(el.dataset.code));
+    },
+    watch: (el) => gateLogin(() => joinTable(el.dataset.code, 'spectate')),
     joinPublic: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
     toggleSessions: () => { S.sessionListOpen = !S.sessionListOpen; store.set('ct_sessions_open', S.sessionListOpen ? '1' : '0'); render(); },
-    leave: () => send({ t: 'leave' }),
+    leave: () => requestLeave(),
     chat: () => (S.chatOpen ? closeChat() : openChat()),
     sit: () => send({ t: 'sit' }),
     rules: (el) => showRules(el.dataset.game),

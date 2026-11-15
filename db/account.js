@@ -6,7 +6,7 @@
  */
 const db = require('./pool');
 const dbAuth = require('./auth');
-const { isUuid, getPlayerProfile } = require('./matches');
+const { isUuid, getPlayerProfile, getProgress } = require('./matches');
 
 const { AuthError } = dbAuth;
 const RECENT_LIMIT = 6;
@@ -81,8 +81,8 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
   const pg = Math.min(Math.max(1, Math.floor(Number(page)) || 1), Math.max(1, pages));
   const r = await db.query(
     `SELECT * FROM (
-       SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.seats, mp.score, mp.is_winner, mp.is_draw, mp.left_early,
-         (SELECT COUNT(*)::int FROM match_participants x WHERE x.match_id = m.id AND x.is_bot = FALSE) AS humans
+       SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.seats, mp.score, mp.is_winner, mp.is_draw, mp.left_early, mp.forfeit,
+         COALESCE(m.table_humans, (SELECT COUNT(*)::int FROM match_participants x WHERE x.match_id = m.id AND x.is_bot = FALSE)) AS humans
        FROM match_participants mp JOIN matches m ON m.id = mp.match_id
        WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
        ORDER BY m.id, mp.seat
@@ -91,7 +91,9 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE } =
     page: pg, pageSize: size, total, pages,
     items: r.rows.map((x) => ({
       gameId: x.game_id, finishedAt: iso(x.finished_at), seats: x.seats, humans: x.humans, score: x.score,
-      result: x.left_early ? 'left' : x.is_draw ? 'draw' : x.is_winner ? 'won' : 'lost', // 'left' is not counted in the statistics; a draw is neither a win nor a loss
+      // 'forfeit': left with others still playing, a loss in the statistics. 'left': left with no penalty (bots only, or an
+      // abandoned game), not counted in the statistics. A draw is neither a win nor a loss.
+      result: x.forfeit ? 'forfeit' : x.left_early ? 'left' : x.is_draw ? 'draw' : x.is_winner ? 'won' : 'lost',
     })),
   };
 }
@@ -122,8 +124,8 @@ async function getPublicProfile(username, { viewerId = null } = {}) {
     const blocked = await db.query('SELECT 1 FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2 LIMIT 1', [viewerId, row.id]);
     blockedByMe = blocked.rows.length > 0;
   }
-  const s = await getPlayerProfile(row.id, { memberSince: row.created_at });
-  return { username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate, blockedByMe };
+  const [s, progress] = await Promise.all([getPlayerProfile(row.id, { memberSince: row.created_at }), getProgress(row.id)]);
+  return { progress, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate, blockedByMe };
 }
 
 // ---------------------------------------------------------------------------------------------- recent tables

@@ -290,7 +290,9 @@ async function overview({ days = 30 } = {}) {
     // work waiting for a person: reports (no status column yet, so recent and total) and feedback not yet read
     db.query(`SELECT (SELECT COUNT(*) FROM chat_reports WHERE created_at > NOW() - INTERVAL '7 days')::int AS reports7d,
                      (SELECT COUNT(*) FROM chat_reports)::int AS reports_total,
-                     (SELECT COUNT(*) FROM feedback WHERE status = 'new')::int AS feedback_new`),
+                     (SELECT COUNT(*) FROM feedback WHERE status = 'new')::int AS feedback_new,
+                     (SELECT COUNT(*) FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.forfeit AND m.finished_at > NOW() - INTERVAL '7 days')::int AS forfeits7d,
+                     (SELECT COUNT(*) FROM match_participants WHERE forfeit)::int AS forfeits_total`),
   ]);
   return { days: n, series: series.rows, dims: dims.rows, active: active.rows[0], accounts: accounts.rows[0], activeDaily: activeDaily.rows, queues: queues.rows[0] };
 }
