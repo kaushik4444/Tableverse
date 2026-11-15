@@ -2785,7 +2785,8 @@
         const card = endXpHTML(xpRows);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
-        const sheet = $app.querySelector('.overlay .sheet, .overlay, .ludo-end');
+        // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
+        const sheet = $app.querySelector('.overlay .sheet') || $app.querySelector('.ludo-end') || $app.querySelector('.overlay');
         const wrap = $app.querySelector('.end-actions-wrap');
         if (wrap) wrap.insertAdjacentHTML('beforebegin', card);
         else if (sheet) sheet.insertAdjacentHTML('beforeend', card);
