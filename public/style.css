@@ -643,6 +643,21 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .pg-bar span { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
 .pg-games { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .pg-row { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+.pg-btn { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; padding: 6px 8px; margin: 0; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pg-btn:hover, .pg-btn:focus-visible { background: rgba(255,255,255,.06); }
+.pg-btn b { white-space: nowrap; color: var(--gold); }
+.pg-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.stat-game-btn { width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.stat-game-btn:hover, .stat-game-btn:focus-visible { background: rgba(255,255,255,.06); }
+.tb-level { font-size: 12px; font-weight: 700; color: var(--gold); padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.1); white-space: nowrap; }
+.end-xp { max-width: 520px; margin: 12px auto; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.06); }
+.xp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.xp-top { display: flex; justify-content: space-between; gap: 8px; }
+.xp-row.me .xp-name { font-weight: 700; }
+.xp-total { white-space: nowrap; }
+.xp-bar { display: block; height: 6px; margin: 4px 0 2px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+.xp-bar i { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
+.xp-parts { color: var(--muted); }
 
 .google-slot { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 12px 0 4px; min-height: 44px; }
 .auth-or { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; color: var(--muted, #9bc4ae); font-size: 12px; }
