@@ -32,6 +32,8 @@ function buildMatchRecord(room, game) {
           name: String(m.name || 'Player').slice(0, 32),
           seat,
           score: Number.isFinite(r.score) ? Math.round(r.score) : 0,
+          // The finishing place, when the game knows it (Property Rivals: elimination order). Null: ranked by score.
+          place: Number.isFinite(r.place) ? Math.round(r.place) : null,
           // A leaver never wins or draws, penalised or not. A draw is neither a win nor a loss.
           isWinner: leftEarly ? false : Boolean(r.winner),
           isDraw: leftEarly ? false : Boolean(r.draw),
