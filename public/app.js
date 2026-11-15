@@ -119,6 +119,13 @@
   }
 
   const isSpectator = () => !!(S.room && (S.room.spectators || []).some((s) => s.id === S.id));
+  /** Other people are still playing this game with us: leaving then counts as a loss. Against bots only it does not. */
+  const otherHumansPlaying = () => !!(S.room && S.room.status === 'playing' && !isSpectator() && (S.room.members || []).some((m) => m.id !== S.id && !m.bot));
+  /** Every leave goes through here: with other people still playing, ask first, because the leave counts as a loss. */
+  function requestLeave() {
+    if (!otherHumansPlaying()) { send({ t: 'leave' }); return; }
+    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you. A bot takes your seat, and the others keep playing. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
+  }
 
   window.CardTable = Object.assign(window.CardTable || {}, {
     esc,
@@ -1037,7 +1044,7 @@
         break;
       }
       case 'emote':
-        showEmote(m.id, m.e);
+        showEmote(m.id, m.e, m);
         CardTable.sound.play('emote');
         break;
       case 'chat':
@@ -1296,12 +1303,14 @@
     if (b.myTurn && (!a.myTurn || trickDone)) setTimeout(() => snd.play('turn'), trickDone ? CardTable.TRICK_HOLD_MS + 80 : 220);
   }
 
-  function showEmote(id, e) {
+  function showEmote(id, e, who) {
     const seat = document.querySelector(`[data-pid="${CSS.escape(id)}"] .av`);
     const r = seat ? seat.getBoundingClientRect() : { left: innerWidth / 2, top: 80, width: 0, height: 0 };
     const el = document.createElement('div');
     el.className = 'emote-pop';
     el.textContent = e;
+    // A spectator has no seat: the reaction names them, so the table knows it came from someone watching.
+    if (who && who.spectator) { const tag = document.createElement('div'); tag.className = 'emote-tag'; tag.textContent = '👁 ' + (who.name || 'Spectator'); el.appendChild(tag); }
     el.style.left = r.left + r.width / 2 + 'px';
     el.style.top = r.top + r.height / 2 + 'px';
     document.body.appendChild(el);
@@ -1820,8 +1829,10 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-block-report-menu';
+  const WHATS_NEW_VERSION = '2026-11-leave-and-reactions';
   const WHATS_NEW = [
+    ['🚪', 'Leaving a game with others counts as a loss', 'If other people are still playing, leaving asks first, and it counts as a loss for you. Playing only against bots, leaving does not count. If a second player leaves, the people who stayed get no result for that game.'],
+    ['😀', 'More reactions, and spectators can react', 'There are 21 reactions now. A spectator’s reaction shows their name with a 👁, so the table knows it came from someone watching.'],
     ['🚩', 'Block and report players', 'Block or report a player from their table card or from their profile page. Reports go to the moderators, and each player can be reported once. Guests can’t report.'],
     ['⋯', 'How to play and the game log are in ⋯', 'The ⋯ button at the top right holds How to play, the game log and game settings, so the bottom bar stays clear on phones.'],
     ['🔀', 'Shuffle seats, and the 29 rules explained', 'The host can turn on Shuffle seats for Wizard and 29. Game settings now explain each 29 option: the scoring for taking all 29 points, the failed-bid penalty, the marriage that changes the bid, and Double and Redouble.'],
@@ -1935,7 +1946,7 @@
       if (!S.room) { closeModal(); openPage('player', p.username); return; }
       // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
       const seatedInGame = S.room.status === 'playing' && !isSpectator();
-      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' : 'This leaves the table.';
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' + (otherHumansPlaying() ? ' Leaving counts as a loss for you.' : '') : 'This leaves the table.';
       openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
     },
     cardProfileConfirm: () => {
@@ -2480,11 +2491,7 @@
       isHost: S.room.hostId === S.id,
       activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
       act: (action) => send({ t: 'act', action }),
-      leave: () => {
-        const playing = S.room.status === 'playing' && !isSpectator();
-        if (!playing) send({ t: 'leave' });
-        else openModal('Leave game', '<p class="hint">Leave this game? A bot will take your seat, and you can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave game</button></div>');
-      },
+      leave: () => requestLeave(),
       rematch: () => send({ t: 'rematch' }),
       showRules: () => showRules(S.room.gameId),
       rerender: render,
@@ -2552,7 +2559,7 @@
   const actions = {
     endAgain: () => send({ t: 'rematch' }),
     endVote: () => send({ t: 'rematchVote', on: !(S.room.votes || []).includes(S.id) }),
-    endLeave: () => send({ t: 'leave' }),
+    endLeave: () => requestLeave(),
     playerCard: (el) => openPlayerCard(el.dataset.pid),
     avatar: (el) => { S.avatarOpen = false; changeAvatar(el.dataset.a); },
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
@@ -2633,7 +2640,7 @@
     rejoin: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
     joinPublic: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
     toggleSessions: () => { S.sessionListOpen = !S.sessionListOpen; store.set('ct_sessions_open', S.sessionListOpen ? '1' : '0'); render(); },
-    leave: () => send({ t: 'leave' }),
+    leave: () => requestLeave(),
     chat: () => (S.chatOpen ? closeChat() : openChat()),
     sit: () => send({ t: 'sit' }),
     rules: (el) => showRules(el.dataset.game),

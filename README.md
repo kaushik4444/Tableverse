@@ -48,6 +48,9 @@ Tableverse is currently open for friend testing.
 
 ## What's new — unreleased (on `development`, not yet on `main`)
 
+- **Leaving a game.** Leaving a game that other people are still playing asks first and counts as a loss for the leaver. A bot takes the seat, and the others keep playing. Leaving a game played only against bots does not count. When a second player leaves, the people who stayed get no result for that game (it is not counted as played, a draw or a loss). A game closed before it finished still records the losses of the people who left with others playing. This applies to every game.
+- **Reactions.** There are 21 reactions (from 8). A spectator can react too: their reaction shows their name and a 👁 mark, so the table knows it came from a spectator.
+- **Database.** One additive migration (`024_match_forfeits.sql`) adds `forfeit` to match participants. Older rows read as before.
 - **29 and Wizard options.** The 29 rule options and Wizard's Shuffle seats now start switched on in a new table. The host can still change them in the lobby.
 - **29 double and redouble.** The whole answering side may double, redouble or accept, and one answer decides for both players. A new answer deadline starts when a double or redouble changes who answers.
 - **Blocking.** Block and unblock answer one request at a time, an unblock that changes nothing is answered, and a refusal shows an error that names the action.

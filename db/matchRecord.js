@@ -8,6 +8,7 @@
  * order. A member who left mid-game is flagged `bot` (a bot finished their seat) and listed in room.leftEarly; they stay in the record but are not counted in stats.
  */
 function buildMatchRecord(room, game) {
+  const leavers = room.forfeits || new Set();
   const results = typeof game.results === 'function' ? game.results() : null;
   // Results are indexed by seat; room.seated lists the member in each seat (shuffled games), else the join order.
   const seated = room.seated || room.members;
@@ -20,21 +21,58 @@ function buildMatchRecord(room, game) {
     seats: room.seats,
     options: room.options || {},
     startedAt: room.startedAt ? new Date(room.startedAt) : null,
-    participants: seated.map((m, seat) => {
-      const r = results[seat] || {};
-      const leftEarly = Boolean(m.bot && left.has(m.id));
-      return {
-        playerId: m.id,
-        name: String(m.name || 'Player').slice(0, 32),
-        seat,
-        score: Number.isFinite(r.score) ? Math.round(r.score) : 0,
-        isWinner: Boolean(r.winner),
-        isDraw: Boolean(r.draw), // a draw is neither a win nor a loss
-        isBot: Boolean(m.bot) && !leftEarly,
-        leftEarly,
-      };
-    }),
+    participants: seated
+      .map((m, seat) => {
+        const r = results[seat] || {};
+        const leftEarly = Boolean(m.bot && left.has(m.id));
+        const forfeit = leftEarly && leavers.has(m.id); // left with other people still playing: a loss
+        return {
+          playerId: m.id,
+          name: String(m.name || 'Player').slice(0, 32),
+          seat,
+          score: Number.isFinite(r.score) ? Math.round(r.score) : 0,
+          isWinner: forfeit ? false : Boolean(r.winner),
+          isDraw: forfeit ? false : Boolean(r.draw), // a draw is neither a win nor a loss
+          isBot: Boolean(m.bot) && !leftEarly,
+          leftEarly,
+          forfeit,
+        };
+      })
+      // In an abandoned game (a second person left) the players who stayed get no result at all: not played, not a loss.
+      .filter((p) => !(room.abandoned && !p.leftEarly && !p.isBot)),
   };
 }
 
-module.exports = { buildMatchRecord };
+/**
+ * The record for a table that closed before its game finished. Only people who left with others still playing are
+ * written, as losses; nobody else gets a result. Returns null when nobody forfeited.
+ */
+function buildForfeitRecord(room) {
+  const leavers = room.forfeits || new Set();
+  if (!leavers.size || !room.matchKey) return null;
+  const seated = room.seated || room.members;
+  return {
+    matchKey: room.matchKey,
+    roomCode: room.code,
+    gameId: room.gameId,
+    seats: room.seats,
+    options: room.options || {},
+    startedAt: room.startedAt ? new Date(room.startedAt) : null,
+    participants: seated
+      .map((m, seat) => ({ m, seat }))
+      .filter(({ m }) => leavers.has(m.id))
+      .map(({ m, seat }) => ({
+        playerId: m.id,
+        name: String(m.name || 'Player').slice(0, 32),
+        seat,
+        score: 0,
+        isWinner: false,
+        isDraw: false,
+        isBot: false,
+        leftEarly: true,
+        forfeit: true,
+      })),
+  };
+}
+
+module.exports = { buildMatchRecord, buildForfeitRecord };
