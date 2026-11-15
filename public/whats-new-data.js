@@ -8,6 +8,16 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-15-level-and-follow',
+      date: '2026-11-15',
+      title: 'Your level, and where to follow us',
+      items: [
+        { ico: '⭐', title: 'See how far you are to the next level', text: 'Your profile shows your level, the minutes played and how many more you need to reach the next one.' },
+        { ico: '🎉', title: 'A level-up notice, once', text: 'When you reach a new level you see a short notice with the new level. Tap Got it and it will not show again for that level on this device.' },
+        { ico: '📸', title: 'Follow @playtableverse on Instagram', text: 'The home page footer has a link to our Instagram account, which opens in a new tab.' },
+      ],
+    },
+    {
       version: '2026-11-leave-and-reactions',
       date: '2026-11-15',
       title: 'Leaving, reactions and history',
