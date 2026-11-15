@@ -14,6 +14,7 @@ const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
 const { buildMatchRecord, buildForfeitRecord } = require('./db/matchRecord');
+const { leaveRunningGame } = require('./lib/leavePolicy');
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -1017,11 +1018,7 @@ function start(opts = {}) {
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
-      const withOthers = humans(room).some((m) => m.id !== p.id);
-      if (withOthers) {
-        if (room.forfeits && room.forfeits.size) room.abandoned = true;
-        (room.forfeits || (room.forfeits = new Set())).add(p.id);
-      }
+      leaveRunningGame(room, p.id);
       room.members[i].bot = true; // a bot takes over the seat; the player can take it back by rejoining
       (room.leftEarly || (room.leftEarly = new Set())).add(p.id);
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
