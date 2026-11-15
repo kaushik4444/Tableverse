@@ -1524,8 +1524,8 @@ function start(opts = {}) {
       const now = Date.now();
       if (p.statsAt && now - p.statsAt < 1000) return;
       p.statsAt = now;
-      dbMatches.getPlayerProfile(p.id, { memberSince: p.createdAt }).then(
-        (stats) => send(p.ws, { t: 'stats', stats }),
+      Promise.all([dbMatches.getPlayerProfile(p.id, { memberSince: p.createdAt }), dbMatches.getProgress(p.id)]).then(
+        ([stats, progress]) => send(p.ws, { t: 'stats', stats: { ...stats, progress } }),
         (err) => {
           console.error('[server] stats failed:', err.message);
           sendError(p, 'Stats are unavailable right now');
