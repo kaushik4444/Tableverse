@@ -10,6 +10,7 @@ function client() {
   const c = vm.createContext({
     S: { guest: true, username: 'alice', pending: [], routed: true },
     sessionGen: 0, httpBusy: false,
+    levelRequest: 0, // the newest refresh counter lives at app scope (`let levelRequest` next to refreshLevel), so the sandbox needs its own
     store: { get: (key) => values.get(key) ?? null, set: (key, value) => values.set(key, value) },
     location: { hash: '' },
     getJson: async () => ({ stats: { progress: { account: { level: 3, into: 10, need: 140 } } } }),
