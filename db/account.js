@@ -34,7 +34,7 @@ async function markWelcomed(playerId) {
 async function getOwnProfile(playerId) {
   need();
   const r = await db.query(
-    `SELECT p.id, p.username, p.display_name, p.avatar, p.country, p.created_at, p.leaderboard_opt_in, i.email, i.email_verified_at
+    `SELECT p.id, p.username, p.display_name, p.avatar, p.country, p.created_at, p.leaderboard_opt_in, i.email, i.email_verified_at, i.has_password
      FROM players p LEFT JOIN LATERAL (SELECT email, email_verified_at, (provider = 'email' AND password_hash IS NOT NULL) AS has_password FROM auth_identities WHERE player_id = p.id ORDER BY created_at ASC LIMIT 1) i ON TRUE
      WHERE p.id = $1 LIMIT 1`, [playerId]); // the account's one identity, whichever provider (email or Google)
   const row = r.rows[0];

@@ -75,6 +75,7 @@ function socket(port, cookie) {
       const u = await newUser('Priv', 'Private Pat');
       const own = (await u.browser.get('/api/me/profile')).json;
       assert.equal(own.profile.email, u.email);
+      assert.equal(own.profile.hasPassword, true, 'email accounts use a password to delete their account');
       assert.equal(own.profile.username, u.username);
       assert.ok(own.profile.joinedAt);
       const pub = await anon.get(`/api/players/${u.username}`);
