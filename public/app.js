@@ -2176,7 +2176,7 @@
   function openVersionHistoryDialog() {
     const body = RELEASES.map((r) => {
       const items = r.items.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
-      return `<section class="wn-release" aria-label="${esc(r.title)}"><h3 class="stat-h" style="margin:14px 0 6px">${esc(r.title)}${r.date ? ` <small>${esc(r.date)}</small>` : ''}</h3><ul class="wn-list">${items}</ul></section>`;
+      return `<section class="wn-release" aria-label="${esc(r.title)}"><h3 class="stat-h" style="margin:14px 0 6px">${esc(r.title)}${r.version || r.date ? ` <small>${esc([r.version, r.date].filter(Boolean).join(' · '))}</small>` : ''}</h3><ul class="wn-list">${items}</ul></section>`;
     }).join('');
     openModal('Version history', body || '<p class="hint">No releases yet.</p>');
   }

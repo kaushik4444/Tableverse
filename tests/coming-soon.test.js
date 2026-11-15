@@ -52,5 +52,6 @@ assert.match(appSource, /openVersionHistory/, 'the account menu opens the versio
 for (const shipped of ['Private tables and invitations', 'Host tools', 'Player cards', 'Profiles and history']) {
   assert.ok(!highlights.includes(shipped), shipped + ' is not a highlight');
 }
+assert.match(appSource, /<h3 class="stat-h"[^\n]*r\.version/, 'each Version history heading shows its version, since older releases have no date');
 assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
 console.log('Coming Soon and latest-release-note tests passed (7 games, requested order, alternate working titles, 3 current highlights).');
