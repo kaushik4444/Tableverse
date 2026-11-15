@@ -33,5 +33,8 @@ services:
       # Missing or invalid values default to secure mode ("true").
       - key: REQUIRE_EMAIL_VERIFICATION
         value: "true"
+      # Optional: turns on "Sign in with Google" when set (a public web client ID, not a secret). See docs/GOOGLE_SIGNIN.md.
+      # - key: GOOGLE_CLIENT_ID
+      #   sync: false
       # Optional: where the match-result spool lives (put it on a persistent disk if you have one)
       # - key: MATCH_SPOOL_DIR
