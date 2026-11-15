@@ -203,7 +203,8 @@ async function prState(client, owner, name, number) {
   )).repository.pullRequest.reviewThreads;
   return {
     number, base: pr.base.ref, head: pr.head.ref, head_sha: pr.head.sha, mergeable: pr.mergeable,
-    checks, copilotConclusion: copilot ? (copilot.status === 'completed' ? copilot.conclusion : 'in_progress') : undefined,
+    checks, copilotRunId: copilot ? copilot.id : undefined,
+    copilotConclusion: copilot ? (copilot.status === 'completed' ? copilot.conclusion : 'in_progress') : undefined,
     threads: { unresolved: threadsData.nodes.filter((n) => !n.isResolved).length, hasNextPage: threadsData.pageInfo.hasNextPage },
   };
 }
@@ -251,11 +252,14 @@ async function requestCopilotReview(client, number) {
  * Wait, within this run, for the Copilot review of the PR's current head. Returns the latest state. It stops as soon as
  * Copilot has finished on this head (success or not), or when it never started (the next run asks again).
  */
-async function waitForCopilotReview(client, owner, name, number, { sleep, intervalMs = COPILOT_WAIT_INTERVAL_MS }) {
+// sinceRunId: after a request, only a Copilot run newer than this id is the requested review (GitHub can still show the
+// earlier failed run for a while). null when nothing was requested: then the run already on the head is waited for.
+async function waitForCopilotReview(client, owner, name, number, { sleep, intervalMs = COPILOT_WAIT_INTERVAL_MS, sinceRunId = null }) {
+  const newer = (state) => sinceRunId === null || (state.copilotRunId !== undefined && state.copilotRunId > sinceRunId);
   let state = await prState(client, owner, name, number);
   for (let poll = 0; poll < COPILOT_WAIT_POLLS; poll += 1) {
-    if (state.copilotConclusion !== undefined && state.copilotConclusion !== 'in_progress') break; // finished on this head
-    if (state.copilotConclusion === undefined && poll >= COPILOT_STARTUP_POLLS) break; // never started
+    if (newer(state) && state.copilotConclusion !== undefined && state.copilotConclusion !== 'in_progress') break; // finished
+    if (sinceRunId !== null && !newer(state) && poll >= COPILOT_STARTUP_POLLS) break; // requested, but no new run started
     await sleep(intervalMs);
     state = await prState(client, owner, name, number);
   }
@@ -299,7 +303,9 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   // A Copilot review is requested in dry runs too: it is the only change a dry run makes, and it never opens or merges.
   const reviewStep = async () => {
     let accepted = decision.copilotRunning;
+    let sinceRunId = null;
     if (decision.requestCopilot) {
+      sinceRunId = lastState.copilotRunId || 0; // any Copilot run that exists now is older than the requested one
       const asked = await requestCopilotReview(client, prNumber);
       accepted = asked.status < 300;
       if (!accepted) {
@@ -309,7 +315,10 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
       }
     }
     if (accepted) {
-      lastState = await waitForCopilotReview(client, g.owner, g.name, prNumber, { sleep: sleep || ((ms) => new Promise((r) => setTimeout(r, ms))) });
+      lastState = await waitForCopilotReview(client, g.owner, g.name, prNumber, {
+        sleep: sleep || ((ms) => new Promise((r) => setTimeout(r, ms))),
+        sinceRunId,
+      });
       decision = decide({ ...base, openPrs: [{ number: prNumber, head: 'development', base: 'main' }], pr: lastState });
     }
   };
@@ -328,10 +337,9 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   if (decision.action !== 'merge') {
     for (const r of decision.reasons) {
       say(`${decision.action === 'skip' ? 'Skipped' : 'Blocked'}: ${r}`);
-      if (decision.action === 'block') log(`::error::Release blocked: ${r}`);
     }
     // A blocked release is a failed run, not a completed one: the next scheduled run tries again.
-    return finish(decision.action, summary, decision, decision.action === 'block' ? 1 : 0);
+    return finish(decision.action, summary, decision);
   }
   // Every gate passed on lastState. Read the PR again: the merge goes ahead only if the same head still passes.
   const fresh = await prState(client, g.owner, g.name, prNumber);
@@ -375,6 +383,12 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
 }
 
 function finish(outcome, summary, decision, code = 0) {
+  // Every blocked release fails the run and says so, whichever gate stopped it (the summary keeps the reasons).
+  if (outcome === 'block') {
+    for (const line of summary) if (line.startsWith('Blocked')) console.log(`::error::Release blocked: ${line.replace(/^Blocked: /, '')}`);
+    if (!summary.some((l) => l.startsWith('Blocked'))) console.log('::error::Release blocked (see the run summary).');
+    code = code || 1;
+  }
   const out = process.env.GITHUB_STEP_SUMMARY;
   if (out) {
     try { require('node:fs').appendFileSync(out, `## Daily release: ${outcome}\n\n${summary.map((l) => `- ${l}`).join('\n')}\n`); } catch (_) { /* summary is best effort */ }

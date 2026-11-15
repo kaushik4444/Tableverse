@@ -9,7 +9,7 @@ const test = async (name, fn) => {
 
 const RULES = ['required_status_checks', 'pull_request', 'non_fast_forward', 'deletion', 'copilot_code_review'];
 // A Copilot check run belongs to one commit; GitHub returns head_sha on every check run, and the gate reads only the PR head's.
-const greenChecks = (sha = 'abc1234') => [...REQUIRED_CHECKS.map((name) => ({ name, status: 'completed', conclusion: 'success' })), { name: COPILOT_CHECK, status: 'completed', conclusion: 'success', head_sha: sha }];
+const greenChecks = (sha = 'abc1234') => [...REQUIRED_CHECKS.map((name) => ({ name, status: 'completed', conclusion: 'success' })), { name: COPILOT_CHECK, status: 'completed', conclusion: 'success', head_sha: sha, id: 1 }];
 const shaOf = (url) => (url.match(/\/commits\/([0-9a-f]+)\//) || [])[1];
 const goodPr = (over = {}) => ({
   number: 130, base: 'main', head: 'development', head_sha: 'abc1234', mergeable: true,
@@ -460,7 +460,7 @@ const base = (over = {}) => ({
     assert.equal(r.outcome, 'skip');
   // A fake GitHub for one release run. checkRuns({ requested, sha }) returns the check runs for the PR head; refuseReview makes
   // the Copilot request fail. Returns the outcome of main() and every call made.
-  const releaseRun = ({ checkRuns, refuseReview = false }) => {
+  const releaseRun = ({ checkRuns, refuseReview = false, productionUrl = true }) => {
     const calls = [];
     let requested = false;
     const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
@@ -493,7 +493,7 @@ const base = (over = {}) => ({
       gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null,
       mergeTreeOf: () => 'T1',
     };
-    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', ...(productionUrl ? { PRODUCTION_URL: 'https://example.test' } : {}) };
     return { calls, run: () => main({ env, fetchFn, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} }) };
   };
   const copilotRequests = (calls) => calls.filter((c) => c.endsWith('/pulls/130/requested_reviewers'));
@@ -546,6 +546,38 @@ const base = (over = {}) => ({
     assert.equal(r.outcome, 'block');
     assert.equal(r.code, 1);
     assert.ok(!f.calls.some((c) => c.includes('/pulls/130/merge')), 'nothing is merged');
+  });
+
+  await test('after a retry request the old failed Copilot run may stay visible; a newer run that succeeds still releases in the same run', async () => {
+    let reads = 0;
+    const f = releaseRun({ checkRuns: ({ requested, sha }) => {
+      const copilot = (extra) => greenChecks(sha).map((c) => (c.name === COPILOT_CHECK ? { ...c, ...extra } : c));
+      if (!requested) return copilot({ id: 1, conclusion: 'failure' });
+      reads += 1;
+      if (reads <= 3) return copilot({ id: 1, conclusion: 'failure' }); // GitHub still shows the old failed run
+      if (reads === 4) return copilot({ id: 2, status: 'in_progress', conclusion: null });
+      return copilot({ id: 2, conclusion: 'success' });
+    } });
+    const r = await f.run();
+    assert.equal(r.outcome, 'released', 'the retry result, not the old failure, decides');
+    assert.equal(copilotRequests(f.calls).length, 1);
+  });
+  await test('a retry whose new run never starts is blocked, not read as the old failure', async () => {
+    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha).map((c) => (c.name === COPILOT_CHECK ? { ...c, id: 1, conclusion: 'failure' } : c)) });
+    const r = await f.run();
+    assert.equal(r.outcome, 'block');
+    assert.equal(r.code, 1);
+  });
+  await test('every blocked release fails the run with a Release blocked error, including a missing PRODUCTION_URL', async () => {
+    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha), productionUrl: false });
+    const logged = [];
+    const orig = console.log;
+    console.log = (line) => { logged.push(String(line)); };
+    let r;
+    try { r = await f.run(); } finally { console.log = orig; }
+    assert.equal(r.outcome, 'block');
+    assert.equal(r.code, 1);
+    assert.ok(logged.some((l) => l.startsWith('::error::Release blocked: ') && /PRODUCTION_URL/.test(l)), 'the error names the blocker');
   });
 
     console.log(`${passed} daily release tests passed`);
