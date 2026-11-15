@@ -463,6 +463,15 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       assert.equal(rows[2].seconds_played, 0, 'a leaver has no stored time');
       assert.equal(rows[3].seconds_played, 0, 'a bot has no time');
     });
+    await test('a record replayed after an outage counts the game length, not the delay (finishedAt is kept)', async () => {
+      const m = matchOf({ startedAt: new Date(Date.now() - 4200000), finishedAt: new Date(Date.now() - 3600000).toISOString() });
+      const r = await dbMatches.recordMatch(m);
+      const rows = (await x.query('SELECT mp.seconds_played, m.finished_at FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE m.id = $1', [r.matchId])).rows;
+      assert.ok(rows.every((q) => q.seconds_played >= 599 && q.seconds_played <= 601), 'ten minutes, not 70: ' + rows[0].seconds_played);
+      assert.ok(Date.now() - new Date(rows[0].finished_at).getTime() > 3500000, 'finished_at is the completion time');
+      const future = await dbMatches.recordMatch(matchOf({ finishedAt: new Date(Date.now() + 3600000).toISOString() }));
+      assert.ok((await x.query('SELECT finished_at <= NOW() AS ok FROM matches WHERE id = $1', [future.matchId])).rows[0].ok, 'a finish time in the future is clamped to now');
+    });
     await test('seconds_played is capped at 6 hours so a table left open cannot inflate account XP', async () => {
       const r = await dbMatches.recordMatch(matchOf({ startedAt: new Date(Date.now() - 3 * 86400000) }));
       const rows = (await x.query('SELECT seconds_played FROM match_participants WHERE match_id = $1', [r.matchId])).rows;

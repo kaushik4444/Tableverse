@@ -82,5 +82,13 @@ test('a table closed mid-game with no forfeit writes nothing', () => {
   assert.equal(buildForfeitRecord(room()), null);
 });
 
+test('the record carries the completion time, so a replay after an outage keeps the real game length', () => {
+  const before = Date.now();
+  const rec = buildMatchRecord(room(), { results: () => [{ score: 3, winner: true }, { score: 2 }, { score: 1 }, { score: 0 }] });
+  assert.ok(rec.finishedAt instanceof Date && rec.finishedAt.getTime() >= before && rec.finishedAt.getTime() <= Date.now());
+  // it survives the queue's JSON round trip as an ISO string
+  assert.equal(new Date(JSON.parse(JSON.stringify(rec)).finishedAt).getTime(), rec.finishedAt.getTime());
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

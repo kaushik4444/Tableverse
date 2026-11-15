@@ -22,6 +22,8 @@ function buildMatchRecord(room, game) {
     seats: room.seats,
     options: room.options || {},
     startedAt: room.startedAt ? new Date(room.startedAt) : null,
+    // When the game ended, captured now: a record that is queued and replayed after an outage must not count the delay as play time
+    finishedAt: new Date(),
     participants: seated
       .map((m, seat) => {
         const r = results[seat] || {};
@@ -62,6 +64,8 @@ function buildForfeitRecord(room) {
     seats: room.seats,
     options: room.options || {},
     startedAt: room.startedAt ? new Date(room.startedAt) : null,
+    // When the game ended, captured now: a record that is queued and replayed after an outage must not count the delay as play time
+    finishedAt: new Date(),
     participants: seated
       .map((m, seat) => ({ m, seat }))
       .filter(({ m }) => leavers.has(m.id))

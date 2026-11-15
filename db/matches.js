@@ -66,18 +66,25 @@ const memoryStore = new MemoryMatchStore();
  * REJECTS when the database write fails: callers must never believe a failed write succeeded. The error carries the
  * driver's `code` (SQLSTATE or network code) so callers can tell transient failures from permanent ones.
  */
-async function recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, participants }) {
+/** An ISO string for a usable date, else null (older queued records have no finishedAt, so the insert time is used). */
+function validDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+async function recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants }) {
   if (!db.hasDatabase()) {
-    return memoryStore.recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, participants });
+    return memoryStore.recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants });
   }
 
   return db.withTransaction(async (client) => {
     const matchRes = await client.query(
       `INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), NOW())
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), LEAST(COALESCE($7::timestamptz, NOW()), NOW()))
        ON CONFLICT (match_key) WHERE match_key IS NOT NULL DO NOTHING
        RETURNING id`,
-      [matchKey || null, roomCode, gameId, seats, JSON.stringify(options || {}), startedAt ? new Date(startedAt).toISOString() : null]
+      [matchKey || null, roomCode, gameId, seats, JSON.stringify(options || {}), startedAt ? new Date(startedAt).toISOString() : null, validDate(finishedAt)]
     );
 
     if (!matchRes.rows.length) return { matchId: null, duplicate: true }; // this game was already recorded
