@@ -2951,7 +2951,8 @@
         if (S.profile === prof) {
           prof.data.profile.leaderboardOptIn = out.optIn === true;
           if (prof.game) loadProfileBoard(prof);
-        } else {
+        } else if (S.page === 'profile' && !S.room) {
+          // The profile screen was replaced while the save was in flight: reload it, but only if it is still the screen on show.
           await loadProfile();
         }
       } catch (e) { toast(e.message || 'Could not save that. Try again.'); }

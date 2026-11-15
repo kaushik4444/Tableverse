@@ -105,6 +105,7 @@ const flush = () => new Promise((r) => setImmediate(r));
     null,
   ]) {
     const reloaded = client();
+    reloaded.context.S.page = 'profile';
     const pending = reloaded.context.actions.boardOptIn();
     reloaded.context.S.profile = replacement;
     reloaded.saves[0].resolve({ optIn: true });
@@ -115,6 +116,15 @@ const flush = () => new Promise((r) => setImmediate(r));
     assert.equal(reloaded.boards.length, 0, 'replaced profile cannot launch a board request');
   }
   assert.equal(c.reloads.length, 0, 'unchanged profile updates directly');
+
+  // Left the profile screen while the save was in flight: no reload, so the screen the viewer is on is not replaced.
+  const elsewhere = client();
+  elsewhere.context.S.page = 'home';
+  const away = elsewhere.context.actions.boardOptIn();
+  elsewhere.context.S.profile = { loading: true, data: null };
+  elsewhere.saves[0].resolve({ optIn: true });
+  await away;
+  assert.equal(elsewhere.reloads.length, 0, 'a profile replaced after the viewer left the screen is not reloaded');
 
   const original = { hasDatabase: db.hasDatabase, query: db.query };
   let calls = 0;
