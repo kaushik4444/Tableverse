@@ -1,6 +1,8 @@
 # How to post the carousel on @playtableverse
 
 ## What to post
+The status and what is still open are in `POSTING_STATUS.md`. Paste the caption from `paste-ready-caption.txt`.
+
 Five images, in this order: `slides/slide-01.png` to `slide-05.png`. Use the caption in `caption.md` and the alt text from the same file.
 
 ## Getting the pictures onto your phone
