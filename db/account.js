@@ -28,12 +28,20 @@ const iso = (d) => (d ? new Date(d).toISOString() : null);
 async function getOwnProfile(playerId) {
   need();
   const r = await db.query(
-    `SELECT p.id, p.username, p.display_name, p.avatar, p.country, p.created_at, i.email, i.email_verified_at
+    `SELECT p.id, p.username, p.display_name, p.avatar, p.country, p.created_at, p.leaderboard_opt_in, i.email, i.email_verified_at
      FROM players p LEFT JOIN LATERAL (SELECT email, email_verified_at FROM auth_identities WHERE player_id = p.id ORDER BY created_at ASC LIMIT 1) i ON TRUE
      WHERE p.id = $1 LIMIT 1`, [playerId]); // the account's one identity, whichever provider (email or Google)
   const row = r.rows[0];
   if (!row) throw new AuthError('Account not found.', 404);
-  return { id: row.id, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), country: row.country || null, email: row.email || null, emailVerified: Boolean(row.email_verified_at) };
+  return { id: row.id, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), country: row.country || null, email: row.email || null, emailVerified: Boolean(row.email_verified_at), leaderboardOptIn: Boolean(row.leaderboard_opt_in) };
+}
+
+/** Turns the weekly boards on or off for this account. Off by default. Returns the stored value. */
+async function setLeaderboardOptIn(playerId, optIn) {
+  need();
+  const r = await db.query('UPDATE players SET leaderboard_opt_in = $2 WHERE id = $1 RETURNING leaderboard_opt_in', [playerId, optIn === true]);
+  if (!r.rows.length) throw new AuthError('Account not found.', 404);
+  return Boolean(r.rows[0].leaderboard_opt_in);
 }
 
 async function updateDisplayName(playerId, rawName) {
@@ -205,4 +213,4 @@ async function updatePresence(playerId) {
   await db.query('UPDATE players SET last_seen_at = NOW() WHERE id = $1', [playerId]);
 }
 
-module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, idForUsername, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };
+module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, setLeaderboardOptIn, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, idForUsername, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence };
