@@ -59,7 +59,10 @@ test('the old emoji mark is not used by any public page or script', () => {
   }
 });
 
-test('the loading pulse respects reduced motion', () => {
+test('the loading pulse has a target and respects reduced motion', () => {
+  const app = read('app.js'); const i = app.indexOf('<svg class="brand-seat"');
+  assert.ok(i > 0, 'the loading screen draws the brand seat');
+  assert.ok(app.slice(i, app.indexOf('</svg>', i)).includes('class="seat-halo"'), 'the loading mark contains the element the pulse animates');
   const css = read('style.css');
   assert.match(css, /\.brand \.seat-halo\s*\{[^}]*animation:\s*seat-pulse/);
   assert.match(css, /prefers-reduced-motion:\s*reduce\)\s*\{\s*\.brand \.seat-halo\s*\{\s*animation:\s*none/);

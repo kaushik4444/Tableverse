@@ -2187,7 +2187,7 @@
     }
     if (!S.room || S.room.status !== 'finished') S.endFlow = null;
     if (!S.ready && !S.guest && !S.room) {
-      $app.innerHTML = '<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>';
+      $app.innerHTML = '<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle class="seat-halo" cx="128" cy="216" r="27" fill="#fbbf24" fill-opacity=".25"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>';
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
     else if (!S.room && S.page === 'player') renderPlayerPage();
     else if (!S.room && S.page === 'friends' && !S.guest) $app.innerHTML = topbarHTML() + friendsPageHTML();
