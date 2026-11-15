@@ -554,6 +554,7 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(r.json.accounts.registered >= 1);
       assert.ok(Array.isArray(r.json.activeDaily) && r.json.activeDaily.length === 30 && r.json.activeDaily.every(Number.isInteger), 'one active count per day');
       assert.ok(Number.isInteger(r.json.queues.reports7d) && Number.isInteger(r.json.queues.reports_total) && Number.isInteger(r.json.queues.feedback_new), 'queue counts');
+      assert.ok(Number.isInteger(r.json.queues.forfeits7d) && Number.isInteger(r.json.queues.forfeits_total), 'penalised-leave counts');
       assert.equal((await boss().browser.get('/api/admin/health')).json.db.ok, true);
     });
     console.log('suspension and lookup (Stage 20.8)');
