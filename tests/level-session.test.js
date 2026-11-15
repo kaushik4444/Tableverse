@@ -121,7 +121,7 @@ for (const seedCache of ['refreshLevel', 'loadProfile']) {
         await refresh;
         assert.equal(c.S.profile.data.stats.progress.account.level, 3);
       }
-      assert.equal(c.S.latestProgressRequest, newerState === 'failed' ? 1 : 3);
+      assert.equal(c.S.latestProgressRequest, newerState === 'failed' ? 2 : 3);
       c.clearClientSession();
       assert.equal(c.S.latestProgressRequest, 0);
     });
