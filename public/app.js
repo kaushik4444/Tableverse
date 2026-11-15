@@ -124,7 +124,7 @@
   /** Every leave goes through here: with other people still playing, ask first, because the leave counts as a loss. */
   function requestLeave() {
     if (!otherHumansPlaying()) { send({ t: 'leave' }); return; }
-    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you. A bot takes your seat, and the others keep playing. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
+    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
   }
 
   window.CardTable = Object.assign(window.CardTable || {}, {
@@ -1831,7 +1831,7 @@
   // ------------------------------------------------------------ top bar, account menu and its dialogs
   const WHATS_NEW_VERSION = '2026-11-leave-and-reactions';
   const WHATS_NEW = [
-    ['🚪', 'Leaving a game with others counts as a loss', 'If other people are still playing, leaving asks first, and it counts as a loss for you. Playing only against bots, leaving does not count. If a second player leaves, the people who stayed get no result for that game.'],
+    ['🚪', 'Leaving a game with others counts as a loss', 'If other people are still playing, leaving asks first. If the game then finishes, it counts as a loss for you. If a second player also leaves, the game is abandoned: nobody is penalised, and the people who stayed get no result. Playing only against bots, leaving does not count.'],
     ['😀', 'More reactions, and spectators can react', 'There are 21 reactions now. A spectator’s reaction shows their name with a 👁, so the table knows it came from someone watching.'],
     ['🚩', 'Block and report players', 'Block or report a player from their table card or from their profile page. Reports go to the moderators, and each player can be reported once. Guests can’t report.'],
     ['⋯', 'How to play and the game log are in ⋯', 'The ⋯ button at the top right holds How to play, the game log and game settings, so the bottom bar stays clear on phones.'],

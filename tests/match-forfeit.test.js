@@ -41,16 +41,31 @@ test('leaving against bots only is not a loss: the leaver is excluded, as before
   assert.equal(a.leftEarly, true); assert.equal(a.forfeit, false);
 });
 
-test('an abandoned game gives the players who stayed no result (not played), and both leavers are losses', () => {
+test('an abandoned game gives the players who stayed no result, and reverts the first leaver\'s loss', () => {
   const r = room({ abandoned: true });
-  r.members[0].bot = true; r.members[1].bot = true; // Ann and Ben left
+  r.members[0].bot = true; r.members[1].bot = true; // Ann left first, Ben left later
   r.leftEarly.add('A'); r.leftEarly.add('B'); r.forfeits.add('A'); r.forfeits.add('B');
   const rec = buildMatchRecord(r, game);
   const ids = rec.participants.map((p) => p.playerId);
   assert.ok(!ids.includes('C'), 'Cem stayed: his game is not counted');
-  assert.equal(byId(rec)['A'].forfeit, true);
-  assert.equal(byId(rec)['B'].forfeit, true);
+  assert.equal(byId(rec)['A'].forfeit, false, 'Ann\'s loss is reverted: the game was abandoned');
+  assert.equal(byId(rec)['B'].forfeit, false, 'Ben is not a loss either');
+  assert.equal(byId(rec)['A'].isWinner, false);
   assert.equal(byId(rec)['B'].isWinner, false);
+});
+
+test('a first leaver whose game finishes without a second leaver is a loss', () => {
+  const r = room(); // Ann left, nobody else did, the game ran to the end
+  r.members[0].bot = true; r.leftEarly.add('A'); r.forfeits.add('A');
+  const rec = buildMatchRecord(r, game);
+  assert.equal(byId(rec)['A'].forfeit, true);
+  assert.equal(byId(rec)['A'].isWinner, false);
+});
+
+test('an abandoned table closed mid-game writes nothing', () => {
+  const r = room({ abandoned: true });
+  r.members[0].bot = true; r.members[1].bot = true; r.leftEarly.add('A'); r.leftEarly.add('B'); r.forfeits.add('A'); r.forfeits.add('B');
+  assert.equal(buildForfeitRecord(r), null);
 });
 
 test('a table closed mid-game writes only the people who forfeited, as losses', () => {

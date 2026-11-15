@@ -8,7 +8,8 @@
  * order. A member who left mid-game is flagged `bot` (a bot finished their seat) and listed in room.leftEarly; they stay in the record but are not counted in stats.
  */
 function buildMatchRecord(room, game) {
-  const leavers = room.forfeits || new Set();
+  // A leave is only a loss if the game is finished without a second leaver. In an abandoned game nobody is penalised.
+  const leavers = room.abandoned ? new Set() : room.forfeits || new Set();
   const results = typeof game.results === 'function' ? game.results() : null;
   // Results are indexed by seat; room.seated lists the member in each seat (shuffled games), else the join order.
   const seated = room.seated || room.members;
@@ -31,8 +32,9 @@ function buildMatchRecord(room, game) {
           name: String(m.name || 'Player').slice(0, 32),
           seat,
           score: Number.isFinite(r.score) ? Math.round(r.score) : 0,
-          isWinner: forfeit ? false : Boolean(r.winner),
-          isDraw: forfeit ? false : Boolean(r.draw), // a draw is neither a win nor a loss
+          // A leaver never wins or draws, penalised or not. A draw is neither a win nor a loss.
+          isWinner: leftEarly ? false : Boolean(r.winner),
+          isDraw: leftEarly ? false : Boolean(r.draw),
           isBot: Boolean(m.bot) && !leftEarly,
           leftEarly,
           forfeit,
@@ -49,7 +51,7 @@ function buildMatchRecord(room, game) {
  */
 function buildForfeitRecord(room) {
   const leavers = room.forfeits || new Set();
-  if (!leavers.size || !room.matchKey) return null;
+  if (room.abandoned || !leavers.size || !room.matchKey) return null;
   const seated = room.seated || room.members;
   return {
     matchKey: room.matchKey,
