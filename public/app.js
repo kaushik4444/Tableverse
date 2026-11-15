@@ -2947,9 +2947,12 @@
       const next = !prof.data.profile.leaderboardOptIn;
       try {
         const out = await postJson('/api/me/leaderboard', { optIn: next });
-        if (gen === sessionGen && S.profile === prof) {
+        if (gen !== sessionGen) return;
+        if (S.profile === prof) {
           prof.data.profile.leaderboardOptIn = out.optIn === true;
           if (prof.game) loadProfileBoard(prof);
+        } else {
+          await loadProfile();
         }
       } catch (e) { toast(e.message || 'Could not save that. Try again.'); }
       finally { prof.boardOptInPending = false; }

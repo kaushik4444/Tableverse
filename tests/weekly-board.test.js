@@ -14,11 +14,12 @@ function deferred() {
   return { promise, resolve, reject };
 }
 function client() {
-  const saves = [], boards = [], errors = [];
+  const saves = [], boards = [], errors = [], reloads = [];
   const prof = { game: 'ludo', data: { profile: { leaderboardOptIn: false } } };
   const context = {
     S: { profile: prof }, sessionGen: 1, encodeURIComponent, render() {},
     toast: (e) => errors.push(e),
+    loadProfile: async () => { reloads.push(context.S.profile); },
     postJson: () => { const d = deferred(); saves.push(d); return d.promise; },
     getJson: (url) => { const d = deferred(); boards.push({ ...d, url }); return d.promise; },
   };
@@ -26,7 +27,7 @@ function client() {
   const handler = source.slice(source.indexOf('    boardOptIn: async () =>'), source.indexOf('    closeGameStats:'));
   vm.createContext(context);
   vm.runInContext(helper + '\nvar actions = {\n' + handler + '\n};', context);
-  return { context, prof, saves, boards, errors };
+  return { context, prof, saves, boards, errors, reloads };
 }
 const flush = () => new Promise((r) => setImmediate(r));
 
@@ -95,6 +96,25 @@ const flush = () => new Promise((r) => setImmediate(r));
   await saving;
   assert.equal(x.prof.data.profile.leaderboardOptIn, false);
   assert.equal(x.boards.length, 0, 'stale save cannot launch board request');
+
+  assert.equal(x.reloads.length, 0, 'another session cannot trigger a profile refresh');
+
+  for (const replacement of [
+    { data: { profile: { leaderboardOptIn: false } } },
+    { loading: true, data: null },
+    null,
+  ]) {
+    const reloaded = client();
+    const pending = reloaded.context.actions.boardOptIn();
+    reloaded.context.S.profile = replacement;
+    reloaded.saves[0].resolve({ optIn: true });
+    await pending;
+    assert.equal(reloaded.reloads.length, 1, 'same-session profile replacement refreshes after save');
+    assert.equal(reloaded.reloads[0], replacement);
+    assert.equal(reloaded.prof.boardOptInPending, false);
+    assert.equal(reloaded.boards.length, 0, 'replaced profile cannot launch a board request');
+  }
+  assert.equal(c.reloads.length, 0, 'unchanged profile updates directly');
 
   const original = { hasDatabase: db.hasDatabase, query: db.query };
   let calls = 0;
