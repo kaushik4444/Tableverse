@@ -84,13 +84,15 @@ async function listPlayers({ q = '', sort = 'seen', page: pg = 1 } = {}) {
 async function playerProfile({ username, actorId }) {
   const u = String(username || '').trim().toLowerCase();
   if (!/^[a-z0-9_]{3,24}$/.test(u)) return { player: null };
-  return db.withTransaction(async (c) => {
+  let playerId;
+  const profile = await db.withTransaction(async (c) => {
     const base = (await c.query(
       `SELECT p.id, p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
               EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified
          FROM players p WHERE p.username = $1 AND p.is_anonymous = FALSE LIMIT 1`, [u])).rows[0];
     if (!base) return { player: null };
     const id = base.id;
+    playerId = id;
     const [total, perGame, recent, days, ...hours] = await Promise.all([
       c.query(`SELECT ${COUNTS}, MIN(m.started_at) AS first_game, MAX(m.finished_at) AS last_game
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot`, [id]),
@@ -116,13 +118,6 @@ async function playerProfile({ username, actorId }) {
     ZONES.forEach((z, i) => { hourly[z] = Array(24).fill(0); for (const r of hours[i].rows) hourly[z][r.hour] = r.games; });
     const games = num(t.games);
     const rated = num(t.rated);
-    // Overall level and Player Progress (time only), and Game XP per game; the same rules as the player's own profile
-    const pr = await require('./matches').getProgress(id);
-    const progress = {
-      level: pr.account.level, xp: pr.account.xp, into: pr.account.into, need: pr.account.need, minutes: pr.account.minutes,
-      penalisedLeaves: pr.penalisedLeaves,
-      games: Object.entries(pr.games).map(([gameId, g]) => ({ gameId, points: g.points, played: g.played, rule: g.rule })),
-    };
     return {
       player: {
         username: base.username, displayName: base.display_name, country: base.country || null, role: base.role, verified: Boolean(base.verified),
@@ -134,10 +129,18 @@ async function playerProfile({ username, actorId }) {
       },
       perGame: perGame.rows.map((r) => ({ gameId: r.game_id, games: r.games, rated: r.rated, wins: r.wins, draws: r.draws, leftEarly: r.left_early, minutes: round1(r.minutes) })),
       hourly,
-      progress,
       recent: recent.rows.map((r) => ({ gameId: r.game_id, at: r.finished_at, seats: r.seats, won: r.is_winner, draw: r.is_draw, leftEarly: r.left_early, unknown: Boolean(r.unknown), minutes: round1(r.minutes) })),
     };
   });
+  if (!profile.player) return profile;
+  // The transaction has released its client before progress obtains another one.
+  const pr = await require('./matches').getProgress(playerId);
+  profile.progress = {
+    level: pr.account.level, xp: pr.account.xp, into: pr.account.into, need: pr.account.need, minutes: pr.account.minutes,
+    penalisedLeaves: pr.penalisedLeaves,
+    games: Object.entries(pr.games).map(([gameId, g]) => ({ gameId, points: g.points, played: g.played, rule: g.rule })),
+  };
+  return profile;
 }
 
 module.exports = { listPlayers, playerProfile, PAGE, SORTS, clampSort, clampZone };

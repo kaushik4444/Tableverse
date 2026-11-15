@@ -308,12 +308,13 @@ async function gameStats({ days = 30 } = {}) {
     SELECT m.game_id,
            COUNT(DISTINCT m.id)::int AS finished,
            COUNT(*) FILTER (WHERE NOT mp.is_bot)::int AS player_games,
-           COUNT(DISTINCT mp.player_id) FILTER (WHERE NOT mp.is_bot AND mp.player_id IS NOT NULL)::int AS signed_in_players,
+           COUNT(DISTINCT mp.player_id) FILTER (WHERE NOT mp.is_bot AND NOT pl.is_anonymous)::int AS signed_in_players,
            COUNT(*) FILTER (WHERE NOT mp.is_bot AND mp.forfeit)::int AS penalised_leaves,
            COUNT(*) FILTER (WHERE NOT mp.is_bot AND mp.left_early AND NOT mp.forfeit)::int AS left_without_penalty,
            COALESCE(AVG(mp.seconds_played) FILTER (WHERE NOT mp.is_bot), 0)::float AS avg_seconds,
            COUNT(DISTINCT m.id) FILTER (WHERE m.finished_at > NOW() - INTERVAL '7 days')::int AS finished_7d
       FROM matches m JOIN match_participants mp ON mp.match_id = m.id
+      LEFT JOIN players pl ON pl.id = mp.player_id
      WHERE m.finished_at > NOW() - ($1::int * INTERVAL '1 day')
      GROUP BY m.game_id
      ORDER BY finished DESC, m.game_id`, [n]);

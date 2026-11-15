@@ -628,8 +628,10 @@
       openAuthSheet('login', 'Please verify your email before playing. Use “Resend verification email” if the link did not arrive.');
       return;
     }
+    S.welcomeDue = out.welcome === true;
     closeOverlay();
     beginSignIn();
+    if (S.welcomeDue) showWelcome();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
