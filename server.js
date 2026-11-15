@@ -14,7 +14,8 @@ const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
 const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = require('./db/matchRecord');
-const { leaveRunningGame, leaveStateOf } = require('./lib/leavePolicy');
+const { leaveStateOf, rejoinGraceMs, rejoinDecision, voluntaryLeave, reclaimSeat } = require('./lib/leavePolicy');
+const { startPlay, stopPlay, stopAllPlay } = require('./lib/playTime');
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -153,6 +154,8 @@ function start(opts = {}) {
   // Optional site-wide notice (set the ANNOUNCEMENT env var, or pass opts.announcement); shown as a dismissible banner on the home screen
   const announcement = cleanText(opts.announcement ?? process.env.ANNOUNCEMENT ?? '');
   const dropGraceMs = opts.dropGraceMs ?? 4000; // a lost connection is announced to the table after this
+  // How long a person who left a running game on purpose may take their seat back (REJOIN_GRACE_SECONDS, default 120).
+  const rejoinWindowMs = opts.rejoinWindowMs ?? rejoinGraceMs(env.REJOIN_GRACE_SECONDS);
   const forcedMs = opts.forcedMs ?? 700; // delay between automatic plays in the last trick of a round
 
   const players = new Map(); // id -> player
@@ -636,6 +639,7 @@ function start(opts = {}) {
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
       // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
       leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
+      rejoinWindowSeconds: Math.round(rejoinWindowMs / 1000), // how long a person who leaves may take the seat back
       now: Date.now(), // lets clients correct for clock differences
     };
   }
@@ -836,6 +840,7 @@ function start(opts = {}) {
         for (const m of humans(room)) schedulePresence(m.id);
         // Persist the completed match once (the status guard above plus the per-game key make a second attempt a no-op)
         try {
+          stopAllPlay(room, Date.now()); // play time ends with the game
           const record = buildMatchRecord(room, g);
           if (!record) console.error(`[server] ${room.gameId} cannot report results; match not recorded`);
           else matchQueue.enqueue(record); // never blocks the game and never rejects; failures are retried and logged by the queue
@@ -1022,9 +1027,7 @@ function start(opts = {}) {
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
-      leaveRunningGame(room, p.id);
-      room.members[i].bot = true; // a bot takes over the seat; the player can take it back by rejoining
-      (room.leftEarly || (room.leftEarly = new Set())).add(p.id);
+      voluntaryLeave(room, room.members[i], Date.now(), rejoinWindowMs); // a bot takes over the seat; the player can take it back in time
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
     } else {
       room.members.splice(i, 1);
@@ -1434,13 +1437,13 @@ function start(opts = {}) {
       // Came back to a running game they left (a bot kept their seat): take the seat back, same player id.
       // This wins over "spectate": the home screen can only offer Spectate for a running game, and a player who
       // owns a seat must never be turned into a spectator while a bot plays their cards.
-      if (seat && room.status === 'playing' && seat.bot) {
+      // The window decides: after it the bot keeps the seat for the game, and the person may only watch.
+      const seatDecision = seat && room.status === 'playing' && seat.bot ? rejoinDecision(room, p.id, Date.now()) : null;
+      if (seatDecision && seatDecision.seat) {
         if (p.room && p.room !== room.code) leaveRoom(p);
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
-        seat.bot = false;
-        if (room.leftEarly) room.leftEarly.delete(p.id);
-        if (room.forfeits) room.forfeits.delete(p.id); // back in time: no loss
+        reclaimSeat(room, seat, Date.now()); // back in time: the bot gives the seat back, no loss, play resumes
         seat.avatar = p.avatar;
         p.room = room.code;
         sys(room, `🔄 ${p.name} is back and took the seat from the bot`);
@@ -1454,6 +1457,7 @@ function start(opts = {}) {
       }
       if (room.status !== 'lobby') {
         // the game is already running: the newcomer watches
+        if (seatDecision && seatDecision.reason === 'expired') send(p.ws, { t: 'notice', text: 'Your time to take your seat back has passed, so the bot keeps it to the end. You can watch as a spectator.' });
         if (room.spectators.length >= MAX_SPECTATORS) return sendError(p, 'Too many spectators at that table');
         if (p.room && p.room !== room.code) leaveRoom(p);
         addSpectator(room, p);
@@ -1627,6 +1631,9 @@ function start(opts = {}) {
       analytics.track('game_started', room.gameId);
       room.matchKey = crypto.randomUUID(); // identifies this game in the match history
       room.startedAt = Date.now();
+      room.leaveDeadlines = new Map(); // a rejoin window per person who left on purpose, started at their first departure
+      room.playTime = { open: new Map(), total: new Map() };
+      for (const m of room.seated) if (!m.bot) startPlay(room, m.id, room.startedAt);
       room.leftEarly = new Set();
       room.forfeits = new Set();
       room.abandoned = false;
@@ -1854,6 +1861,8 @@ function start(opts = {}) {
       return;
     }
     if (room && allowed) {
+      // Back from a dropped connection in a running game: the play time resumes (no-op for spectators and bots)
+      if (room.status === 'playing' && room.members.some((m) => m.id === p.id && !m.bot)) startPlay(room, p.id, Date.now());
       if (p.dropAnnounced) {
         p.dropAnnounced = false;
         sys(room, `📶 ${p.name} reconnected`);
@@ -1879,6 +1888,9 @@ function start(opts = {}) {
     p.ws = null;
     p.connected = false;
     p.lastSeen = Date.now();
+    // A lost connection pauses the play time (it is not a departure: the seat stays)
+    const dropped = rooms.get(p.room);
+    if (dropped && dropped.status === 'playing') stopPlay(dropped, p.id, Date.now());
     presence.set(p.id, { online: false, lastSeen: new Date(p.lastSeen).toISOString() });
     dbAccount.updatePresence(p.id).catch(() => {});
     publishPresence(p.id);
