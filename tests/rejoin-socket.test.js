@@ -1,0 +1,88 @@
+'use strict';
+// Rejoin grace period on the real server (memory mode, short grace): a seat is taken back inside the window; after the
+// window the player is a spectator (no hand, no moves for the bot-held seat), and leaving again changes nothing.
+require('./helpers/env');
+const { sessionSocket } = require('./helpers/auth');
+const assert = require('node:assert/strict');
+const WebSocket = require('ws');
+const { registerAndVerify } = require('./helpers/auth');
+const { start } = require('../server');
+
+const GRACE_MS = 400;
+const guard = setTimeout(() => { console.error('FAIL rejoin socket test timed out'); process.exit(1); }, 90000);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function until(fn, label, ms = 8000) {
+  const t0 = Date.now();
+  for (;;) { const v = fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(15); }
+}
+
+function connect(port, token) {
+  const c = { room: null, view: null, chats: [], errors: [], ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, sessionSocket(token)) };
+  c.send = (m) => c.ws.send(JSON.stringify(m));
+  c.ws.on('open', () => c.send({ t: 'hello' }));
+  c.ws.on('message', (raw) => {
+    const m = JSON.parse(raw);
+    if (m.t === 'welcome') c.id = m.id;
+    if (m.t === 'state') { c.room = m.room; c.view = m.view; }
+    if (m.t === 'chat') c.chats.push(m.m);
+    if (m.t === 'chatlog') c.chats = c.chats.concat(m.messages);
+    if (m.t === 'error') c.errors.push(m.message);
+  });
+  return c;
+}
+
+(async () => {
+  const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, dropGraceMs: 50, maxMsgsPerSec: Infinity, rejoinGraceMs: GRACE_MS });
+  try {
+    const mk = async (name) => (await registerAndVerify(srv.port, { email: `${name.toLowerCase()}@rejoin.test.local`, displayName: name, password: 'TestPass123!' })).token;
+    const a = connect(srv.port, await mk('Ann')); const b = connect(srv.port, await mk('Ben'));
+    await until(() => a.id && b.id, 'welcome');
+    a.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+    await until(() => a.room, 'table');
+    b.send({ t: 'join', code: a.room.code });
+    await until(() => b.room, 'ben joined');
+    a.send({ t: 'start' });
+    await until(() => a.view && a.view.me >= 0 && b.view && b.view.me >= 0, 'game started');
+    const seatA = a.view.me;
+    const code = a.room.code;
+    const noHands = (view) => (view.players || []).every((p) => !Array.isArray(p.hand));
+
+    // 1. leave and come back inside the window: the same seat, and the leave is forgiven
+    const t0 = Date.now();
+    a.send({ t: 'leave' });
+    await until(() => b.chats.some((m) => m.sys && /left the game/.test(m.text)), 'a left');
+    a.send({ t: 'join', code });
+    await until(() => a.view && a.view.me === seatA, 'seat taken back inside the window');
+    assert.equal(a.room.status, 'playing', 'the game still runs');
+
+    // 2. leave again after the window has passed since the FIRST leave: the seat is gone for this match
+    const wait = t0 + GRACE_MS + 150 - Date.now();
+    if (wait > 0) await sleep(wait);
+    a.send({ t: 'leave' });
+    await sleep(60);
+    a.send({ t: 'join', code });
+    await until(() => a.view && a.view.me !== seatA, 'late return is a spectator');
+    assert.ok(noHands(a.view), 'a spectator never receives a hand');
+    assert.equal(a.room.status, 'playing', 'the game keeps running for the bot-held seat');
+    a.errors = [];
+    a.send({ t: 'act', action: { type: 'bid', amount: 0 } });
+    await until(() => a.errors.length > 0, 'the move is refused');
+    assert.ok(a.errors.some((e) => /watching/.test(e)), 'a spectator cannot move for the bot-held seat');
+    assert.ok(noHands(a.view), 'still no hand after a refused move');
+
+    // 3. leaving again as a spectator changes nothing: the game is not abandoned for the player who stayed
+    a.send({ t: 'leave' });
+    await sleep(80);
+    assert.equal(b.room.status, 'playing', 'the game is not abandoned');
+    assert.ok(!b.chats.some((m) => m.sys && /abandon/i.test(m.text)), 'nobody is told the game was abandoned');
+    console.log('  ok  rejoin socket: inside the window, after it, and leaving again as a spectator');
+    console.log('\n1 passed, 0 failed');
+  } catch (e) {
+    console.error('FAIL  rejoin socket\n' + e.stack);
+    process.exitCode = 1;
+  } finally {
+    clearTimeout(guard);
+    await srv.close();
+    process.exit(process.exitCode || 0);
+  }
+})();
