@@ -92,6 +92,28 @@ function connect(port, token) {
       const info = a.rejoin.find((r) => r.code === code && !r.canReclaim);
       return info && info.paused && !info.noSeatedHumans;
     }, 'disconnected seated player still allows watching');
+
+    // At rematch, free an early leaver's bot-held seat even if they never returned to watch.
+    const c = connect(srv.port, await mk('Cam'));
+    await until(() => c.id, 'third player welcome');
+    a.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+    await until(() => a.room && a.room.code !== code, 'new table');
+    const rematchCode = a.room.code;
+    c.send({ t: 'join', code: rematchCode });
+    await until(() => a.room.members.some((m) => m.id === c.id), 'third player joined');
+    a.send({ t: 'setSeats', seats: 3 });
+    a.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20' } });
+    a.send({ t: 'start' });
+    await until(() => a.room.status === 'playing', 'second game started');
+    const originalBots = a.room.members.filter((m) => m.bot).map((m) => m.id);
+    c.send({ t: 'leave' });
+    await until(() => a.room.members.some((m) => m.id === c.id && m.bot), 'early leaver bot takes the seat');
+    assert.ok(!a.room.spectators.some((s) => s.id === c.id), 'the early leaver is not spectating');
+    await until(() => a.room.status === 'finished', 'second game finished');
+    a.send({ t: 'rematch' });
+    await until(() => a.room.status === 'lobby', 'rematch lobby');
+    assert.ok(!a.room.members.some((m) => m.id === c.id), 'the early leaver seat is free');
+    assert.ok(originalBots.every((id) => a.room.members.some((m) => m.id === id)), 'bots from the start keep their seats');
     console.log('  ok  rejoin socket: inside the window, after it, and leaving again as a spectator');
     console.log('\n1 passed, 0 failed');
   } catch (e) {

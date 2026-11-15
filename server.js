@@ -1711,8 +1711,8 @@ function start(opts = {}) {
       room.status = 'lobby';
       room.deadline = null;
       room.votes = new Set(); room.outcome = null;
-      // A bot-held seat whose player came back after the grace period is no longer their seat: free it, so they can sit down.
-      room.members = room.members.filter((m) => !(m.bot && room.spectators.some((s) => s.id === m.id)));
+      // A bot-held seat whose player left during the game is no longer theirs: free it, so they can sit down.
+      room.members = room.members.filter((m) => !(m.bot && room.leftEarly && room.leftEarly.has(m.id)));
       // Spectators stay spectators: watching is a choice. They take an open seat themselves with `sit`.
       broadcast(room);
     },
