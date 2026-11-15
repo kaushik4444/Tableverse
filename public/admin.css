@@ -5,7 +5,9 @@
 html { background: var(--bg); }
 body { margin: 0; min-height: 100vh; background: radial-gradient(1000px 600px at 15% -10%, rgba(16,185,129,.22), transparent 60%), radial-gradient(900px 600px at 95% 15%, rgba(59,130,246,.18), transparent 60%), linear-gradient(180deg, #0d231b, var(--bg) 85%) fixed; color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; padding-bottom: env(safe-area-inset-bottom); }
 .ad-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-.ad-brand { color: var(--text); text-decoration: none; font-weight: 700; }
+.ad-brand { color: var(--text); text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; }
+.ad-brand b { font-weight: 700; }
+.ad-brand .ad-mark { width: 24px; height: 24px; flex: none; display: block; }
 .ad-brand span { color: var(--accent); font-weight: 600; margin-left: 6px; }
 .ad-who { color: var(--muted); font-size: 13px; }
 .ad-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px; border-bottom: 1px solid var(--line); -webkit-overflow-scrolling: touch; }

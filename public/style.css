@@ -131,6 +131,9 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 .page { max-width: 640px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 24px) 16px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .brand { text-align: center; padding: 12px 0 4px; position: relative; }
 .brand .brand-seat { width: 64px; height: 64px; display: block; margin: 0 auto 4px; }
+.brand .seat-halo { transform-origin: 128px 216px; animation: seat-pulse 1.8s ease-in-out infinite; }
+@keyframes seat-pulse { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.45); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .brand .seat-halo { animation: none; } }
 .brand .mark { font-size: 46px; line-height: 1; filter: drop-shadow(0 4px 12px rgba(124, 92, 255, .5)); }
 .brand h1 { font-size: 46px; background: linear-gradient(90deg, #fff, #c9b8ff 60%, #7ff0da); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: -.01em; margin-top: 6px; }
 .brand p { color: var(--muted); margin: 8px auto 0; max-width: 38ch; line-height: 1.45; }

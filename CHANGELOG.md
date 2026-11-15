@@ -4,6 +4,9 @@ User-facing changes are listed first. Operational and internal implementation de
 
 ## Unreleased
 
+- The loading screen's gold seat now pulses (off when the device asks for reduced motion), and the admin page uses the new Tableverse mark.
+- New Tableverse look ("Your Seat": an oval table with a gold seat), already released in PR #179: site icon, home-screen and install icons, share preview image and the top-bar mark.
+
 - Leaving a game: with other people still playing, leaving asks first. If the game then finishes, the leaver counts as a loss; playing only against bots it does not count. If a second player also leaves, the game is abandoned: nobody is penalised and the people who stayed get no result. This applies to every game.
 - Reactions: 21 reactions instead of 8. Spectators can react, and their reaction shows their name with a 👁 mark.
 - 29 and Wizard: the rule options (29) and Shuffle seats (Wizard) start switched on in a new table. The host can still change them in the lobby.
