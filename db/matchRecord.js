@@ -1,5 +1,7 @@
 'use strict';
 
+const rejoinPolicy = require('../lib/rejoinPolicy');
+
 /**
  * How the table was filled at the start, from the record of who left: a leaver's seat has a bot now but was a person then,
  * so it still counts as a human. Stored with the match, because stayers are not kept as participants of an abandoned game.
@@ -26,6 +28,7 @@ function buildMatchRecord(room, game) {
   const seated = room.seated || room.members;
   if (!Array.isArray(results) || results.length !== seated.length) return null;
   const left = room.leftEarly || new Set();
+  const now = Date.now(); // the moment the game ended: active time still running is stopped here
   return {
     matchKey: room.matchKey || null,
     roomCode: room.code,
@@ -55,6 +58,8 @@ function buildMatchRecord(room, game) {
           isBot: Boolean(m.bot) && !leftEarly,
           leftEarly,
           forfeit,
+          // Actual active seconds in the seat (rejoin.js). Bots have none; spectator time never enters this number.
+          secondsPlayed: m.bot && !leftEarly ? 0 : rejoinPolicy.playedSeconds(room, m.id, now),
         };
       })
       // In an abandoned game (a second person left) the players who stayed get no result at all: not played, not a loss.
@@ -70,6 +75,7 @@ function buildForfeitRecord(room) {
   const leavers = room.forfeits || new Set();
   if (room.abandoned || !leavers.size || !room.matchKey) return null;
   const seated = room.seated || room.members;
+  const now = Date.now();
   return {
     matchKey: room.matchKey,
     roomCode: room.code,
@@ -95,6 +101,7 @@ function buildForfeitRecord(room) {
         isBot: false,
         leftEarly: true,
         forfeit: true,
+        secondsPlayed: rejoinPolicy.playedSeconds(room, m.id, now),
       })),
   };
 }
