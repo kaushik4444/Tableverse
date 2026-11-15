@@ -54,3 +54,6 @@ Rules that apply to every game:
 2. Calculate account XP and game points from the stored records (no separate totals table at first).
 3. Show the account level and the per-game levels on the profile. Named ranks are not planned yet; skill levels only.
 4. Update README and What's new when each part ships.
+
+## Storage (migration 025)
+`match_participants` gets two columns: `place` (SMALLINT, NULL when the game has no place of its own, so the level is ranked by score) and `seconds_played` (INTEGER, default 0). A stayer gets the match length (finished minus started), capped at 6 hours per game; leavers and bots get 0 because a leave time is not stored. The migration backfills `seconds_played` for past games (stayers only) and is safe to re-run. Both columns are additive and nullable or defaulted, so old application versions keep working, and they are restored together with the table. Nothing reads them yet; showing levels on profiles is a later change.
