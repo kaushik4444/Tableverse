@@ -1,7 +1,7 @@
 # Tableverse technical architecture
 
 This is the single source of truth for how Tableverse works, why each part exists, how security is applied and how the system
-is operated. It describes the code as it is on `development` (`9a166ff`, 2026-11-14), which is ahead of `main` (`70ccd35`) by PRs #166-#170; those five changes are not yet released. Where a control is planned, not running, it
+is operated. It describes the code on `development` as of 2026-11-15, after PR #204 (level hints) and before the release merge of PR #200 to `main`. Later changes are listed in `CHANGELOG.md` under Unreleased. Where a control is planned, not running, it
 is labelled so.
 
 Status labels used throughout:
@@ -65,7 +65,7 @@ Browser to Render to the Node process to PostgreSQL is the only data path. Voice
 | `/healthz` | Liveness: 200 while the process runs. Does not touch the database. | `lib/health.js` |
 | `/readyz` | Readiness: 200 only when `SELECT 1` answers within a timeout. Fixed text on failure. | `lib/health.js`, `db/pool.js` |
 | `/api/games` | Public game list (from the registry). | `server.js` |
-| `/api/auth/*` | Register, login, logout, e-mail verification, password reset, session info, device restore. | `lib/authRoutes.js` |
+| `/api/auth/*` | Register, login, logout, e-mail verification, password reset, session info, device restore. Sign in with Google: `GET /api/auth/google/config`, `POST /api/auth/google`, `POST /api/auth/google/complete`; on only when `GOOGLE_CLIENT_ID` is set (see `docs/GOOGLE_SIGNIN.md`). | `lib/authRoutes.js`, `lib/googleAuth.js`, `db/authGoogle.js` |
 | `/api/me/profile`, `/api/me/display-name`, `/api/me/country`, `/api/me/avatar` | The signed-in player's own profile settings. | `lib/accountRoutes.js` |
 | `/api/me/history`, `/api/me/recent`, `/api/me/recent/clear` | Own match history and recent tables. | `lib/accountRoutes.js` |
 | `/api/me/delete-account` | Account deletion. | `lib/accountRoutes.js` |
