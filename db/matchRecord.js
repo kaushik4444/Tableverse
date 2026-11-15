@@ -1,6 +1,17 @@
 'use strict';
 
 /**
+ * How the table was filled at the start, from the record of who left: a leaver's seat has a bot now but was a person then,
+ * so it still counts as a human. Stored with the match, because stayers are not kept as participants of an abandoned game.
+ */
+function tableShape(room) {
+  const seated = room.seated || room.members;
+  const left = room.leftEarly || new Set();
+  const humans = seated.filter((m) => !m.bot || left.has(m.id)).length;
+  return { tableHumans: humans, tableBots: seated.length - humans };
+}
+
+/**
  * Turn a finished room into the record we store. Pure: no I/O, so it is unit-tested.
  * Returns null when the game cannot say who won (so we store nothing rather than wrong results).
  *
@@ -24,6 +35,8 @@ function buildMatchRecord(room, game) {
     startedAt: room.startedAt ? new Date(room.startedAt) : null,
     // When the game ended, captured now: a record that is queued and replayed after an outage must not count the delay as play time
     finishedAt: new Date(),
+    completed: true,
+    ...tableShape(room),
     participants: seated
       .map((m, seat) => {
         const r = results[seat] || {};
@@ -66,6 +79,9 @@ function buildForfeitRecord(room) {
     startedAt: room.startedAt ? new Date(room.startedAt) : null,
     // When the game ended, captured now: a record that is queued and replayed after an outage must not count the delay as play time
     finishedAt: new Date(),
+    // Only the leavers are written, so this is not a finished game: table analytics leave it out, and each leaver's loss counts
+    completed: false,
+    ...tableShape(room),
     participants: seated
       .map((m, seat) => ({ m, seat }))
       .filter(({ m }) => leavers.has(m.id))
@@ -83,4 +99,18 @@ function buildForfeitRecord(room) {
   };
 }
 
-module.exports = { buildMatchRecord, buildForfeitRecord };
+/**
+ * The records for running tables when the server shuts down: each people-who-left-with-others-still-playing record, so a
+ * loss is not lost with the table. Unfinished games are not recorded as finished. Returns an array (possibly empty).
+ */
+function buildShutdownForfeitRecords(rooms) {
+  const out = [];
+  for (const room of rooms) {
+    if (room.status !== 'playing') continue;
+    const rec = buildForfeitRecord(room);
+    if (rec) out.push(rec);
+  }
+  return out;
+}
+
+module.exports = { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords };

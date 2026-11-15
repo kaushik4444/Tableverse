@@ -91,18 +91,18 @@ function validDate(v) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-async function recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants }) {
+async function recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants, completed = true, tableHumans = null, tableBots = null }) {
   if (!db.hasDatabase()) {
-    return memoryStore.recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants });
+    return memoryStore.recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants, completed, tableHumans, tableBots });
   }
 
   return db.withTransaction(async (client) => {
     const matchRes = await client.query(
-      `INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), LEAST(COALESCE($7::timestamptz, NOW()), NOW()))
+      `INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at, completed, table_humans, table_bots)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), LEAST(COALESCE($7::timestamptz, NOW()), NOW()), $8, $9, $10)
        ON CONFLICT (match_key) WHERE match_key IS NOT NULL DO NOTHING
        RETURNING id`,
-      [matchKey || null, roomCode, gameId, seats, JSON.stringify(options || {}), startedAt ? new Date(startedAt).toISOString() : null, validDate(finishedAt)]
+      [matchKey || null, roomCode, gameId, seats, JSON.stringify(options || {}), startedAt ? new Date(startedAt).toISOString() : null, validDate(finishedAt), completed !== false, Number.isInteger(tableHumans) ? tableHumans : null, Number.isInteger(tableBots) ? tableBots : null]
     );
 
     if (!matchRes.rows.length) return { matchId: null, duplicate: true }; // this game was already recorded

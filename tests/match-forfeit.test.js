@@ -2,7 +2,7 @@
 // Leaving a game: with other people still playing it is a loss for the leaver; against bots only it is not; in an
 // abandoned game (a second person left) the people who stayed get no result. Pure record logic, no database.
 const assert = require('node:assert/strict');
-const { buildMatchRecord, buildForfeitRecord } = require('../db/matchRecord');
+const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = require('../db/matchRecord');
 
 let passed = 0; let failed = 0;
 function test(name, fn) { try { fn(); passed++; console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + e.stack); } }
@@ -88,6 +88,19 @@ test('the record carries the completion time, so a replay after an outage keeps 
   assert.ok(rec.finishedAt instanceof Date && rec.finishedAt.getTime() >= before && rec.finishedAt.getTime() <= Date.now());
   // it survives the queue's JSON round trip as an ISO string
   assert.equal(new Date(JSON.parse(JSON.stringify(rec)).finishedAt).getTime(), rec.finishedAt.getTime());
+});
+
+test('shutdown saves the leavers of running tables only, and skips tables with nobody who left', () => {
+  const left = room();
+  left.members[1].bot = true; left.leftEarly.add('B'); left.forfeits.add('B');
+  const quiet = room({ code: 'ROOM02', matchKey: 'key-2' });
+  const lobby = room({ code: 'ROOM03', matchKey: 'key-3', status: 'lobby' });
+  lobby.members[1].bot = true; lobby.leftEarly.add('B'); lobby.forfeits.add('B');
+  const running = [{ ...left, status: 'playing' }, { ...quiet, status: 'playing' }, { ...lobby, status: 'lobby' }];
+  const recs = buildShutdownForfeitRecords(running);
+  assert.deepEqual(recs.map((r) => r.matchKey), ['key-1']);
+  assert.equal(recs[0].completed, false);
+  assert.deepEqual(recs[0].participants.map((p) => [p.playerId, p.forfeit]), [['B', true]]);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
