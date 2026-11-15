@@ -134,12 +134,18 @@ stateDiagram-v2
   Finished --> Persisted: match record queued and written
   Persisted --> [*]
   Lobby --> Closed: everyone left or abandoned
+  Playing --> Playing: a player leaves on purpose (a bot takes the seat; a rejoin window starts)
+  Playing --> Playing: that player takes the seat back within the window (no penalty)
   Playing --> Paused: a player drops (grace period)
   Paused --> Playing: player reconnects
 ```
 
 The `Paused` state is a simplification: the server does not store a paused state. It announces a lost connection after the grace
 period and keeps the seat until the table closes or the host acts.
+
+A voluntary leave is different from a dropped connection. A voluntary leave hands the seat to a bot and starts a rejoin window
+(`leaveDeadlines` on the room, default 2 minutes from the first departure). Play time stops at the leave and at a drop, and resumes
+when the person is seated and connected again (`lib/playTime.js`). Rules: `docs/LEAVING_AND_REJOINING.md`.
 
 - Rooms, players and tokens live in memory on the one Node process (`server.js`: `rooms`, `players`, `tokens` maps). `MAX_ROOMS` is 500.
 - A dropped connection is announced to the table only after `dropGraceMs` (4,000 ms). A reconnect within the window
@@ -303,6 +309,7 @@ Render dashboard or GitHub settings.
 | `LEGAL_IMPRESSUM_PUBLISHED` | Must be exactly `true` to publish the imprint page (fail closed) | Optional | Render | `lib/legalPages.js`, `server.js` | Owner decision | Redeploy |
 | `IMPRESSUM_NAME`, `IMPRESSUM_ADDRESS`, `IMPRESSUM_EMAIL` | Operator details shown on the imprint page. Publishing also needs all three non-empty; otherwise the page stays 404 | Required only with the imprint | Render | `lib/legalPages.js` | Owner decision; never in source | Redeploy |
 | `MATCH_SPOOL_DIR` | Directory for the match-result spool. Unset means the OS temporary directory, which is ephemeral | Optional (recommended with a persistent disk) | Render (disk) | `db/matchQueue.js` | Only with a persistent disk | Redeploy |
+| `REJOIN_GRACE_SECONDS` | How long a person who left a running game on purpose may take their seat back, from their first departure (0 to 600, default 120). Read at start; see `docs/LEAVING_AND_REJOINING.md` | Optional | Render | `lib/leavePolicy.js`, `server.js` | Owner decision | Redeploy |
 | `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`, `STUN_URL`, `ICE_SERVERS` | Static voice relay settings (if used) | Optional | Render | `lib/voiceRelay.js` | Edit | Redeploy |
 | `METERED_APP_NAME`, `METERED_SECRET_KEY` | Metered TURN account (secret key is server-only) | Optional | Render (secret) | `lib/meteredTurn.js` | Rotate in Metered, update Render | Redeploy |
 | `TURN_TTL_SECONDS` | Login lifetime. Metered mode clamps it to 900 to 172,800 s (default 48 h, `lib/meteredTurn.js`). Shared-secret mode clamps it to 300 to 86,400 s (default one hour, `lib/voiceRelay.js`) | Optional | Render | `lib/meteredTurn.js`, `lib/voiceRelay.js` | Edit | Restart |
@@ -429,6 +436,9 @@ production `DATABASE_URL` into a local file.
 
 - **Connection and reconnect:** a dropped socket is announced after 4 seconds (`dropGraceMs`). Reconnecting within that window restores the
   seat without announcing the drop. A later reconnect gets a fresh welcome.
+- **Leaving and rejoining:** a voluntary leave hands the seat to a bot and opens a rejoin window (`lib/leavePolicy.js`: `voluntaryLeave`,
+  `reclaimSeat`, `rejoinDecision`). The window starts at the first departure and never restarts. Play time (`lib/playTime.js`) is
+  per person and per stretch; a dropped connection pauses it. Both are stored with the match record (`seconds_played`).
 - **Ownership:** each room has one host (`hostId`). When the host drops, `ensureHost` picks the next seat. The host can add or remove bots, change
   seats and visibility, start the game, and kick players. The host cannot remove themselves (they use Leave).
 - **In memory versus persistent:** tables, seats, game state, chat and presence are in memory. Accounts, sessions, invitations and finished match

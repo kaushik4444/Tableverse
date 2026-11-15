@@ -1,6 +1,5 @@
 'use strict';
-
-const rejoinPolicy = require('../lib/rejoinPolicy');
+const { secondsPlayed } = require('../lib/playTime');
 
 /**
  * How the table was filled at the start, from the record of who left: a leaver's seat has a bot now but was a person then,
@@ -58,8 +57,8 @@ function buildMatchRecord(room, game) {
           isBot: Boolean(m.bot) && !leftEarly,
           leftEarly,
           forfeit,
-          // Actual active seconds in the seat (rejoin.js). Bots have none; spectator time never enters this number.
-          secondsPlayed: m.bot && !leftEarly ? 0 : rejoinPolicy.playedSeconds(room, m.id, now),
+          // active playing time (null when the room has no play-time record: the stored rule then applies)
+          secondsPlayed: secondsPlayed(room, m.id), // a leaver keeps the time up to the leave; a bot seat has none
         };
       })
       // In an abandoned game (a second person left) the players who stayed get no result at all: not played, not a loss.
@@ -101,7 +100,7 @@ function buildForfeitRecord(room) {
         isBot: false,
         leftEarly: true,
         forfeit: true,
-        secondsPlayed: rejoinPolicy.playedSeconds(room, m.id, now),
+        secondsPlayed: secondsPlayed(room, m.id),
       })),
   };
 }
