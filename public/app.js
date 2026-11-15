@@ -397,7 +397,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; levelRequest += 1; S.latestProgress = null; S.S.latestProgressUser = null; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; levelRequest += 1; S.latestProgress = null; S.latestProgressUser = null; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -1765,8 +1765,6 @@
   }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
   let levelRequest = 0; // shared ordering for both profile loaders
-  let S.latestProgress = null;
-  let S.S.latestProgressUser = null;
   async function refreshLevel() {
     const gen = sessionGen;
     const mine = ++levelRequest;
@@ -1776,11 +1774,11 @@
       const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
-      const priorProgress = S.S.latestProgressUser === (S.username || null) && S.latestProgress ? S.latestProgress : (S.profile && S.profile.data && S.profile.data.stats && S.profile.data.stats.progress || null);
+      const priorProgress = S.latestProgressUser === (S.username || null) && S.latestProgress ? S.latestProgress : (S.profile && S.profile.data && S.profile.data.stats && S.profile.data.stats.progress || null);
       const progressBefore = JSON.stringify(priorProgress);
       const noticeBefore = JSON.stringify(S.levelUp);
       S.latestProgress = progress || null;
-      S.S.latestProgressUser = S.username || null;
+      S.latestProgressUser = S.username || null;
       setAccount(progress);
       noteLevelUp();
       // Keep the open profile in step, including Game XP changes that do not advance a time-based level.
@@ -1802,10 +1800,10 @@
       if (mine === levelRequest) {
         const progress = me && me.stats && me.stats.progress;
         S.latestProgress = progress || null;
-        S.S.latestProgressUser = S.username || null;
+        S.latestProgressUser = S.username || null;
         setAccount(progress);
         noteLevelUp();
-      } else if (S.S.latestProgressUser === (S.username || null) && S.latestProgress && me && me.stats) {
+      } else if (S.latestProgressUser === (S.username || null) && S.latestProgress && me && me.stats) {
         // A newer refresh finished while this request was in flight; don't put its older snapshot back on screen.
         me.stats.progress = S.latestProgress;
       }
