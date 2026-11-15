@@ -1415,6 +1415,8 @@ function start(opts = {}) {
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
+      // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
+      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const seat = room.members.find((m) => m.id === p.id);
