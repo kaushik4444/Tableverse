@@ -34,7 +34,7 @@ async function test(name, fn) {
     assert.match(html, /<h1>Hi<\/h1>/);
     assert.match(html, /<strong>this<\/strong>/);
     assert.match(html, /<a href="https:\/\/playtableverse\.com" rel="noopener">site<\/a>/);
-    assert.doesNotMatch(html, /javascript:/);
+    assert.doesNotMatch(html, /href="javascript/i); // shown as plain text, never as a link
     assert.doesNotMatch(html, /<script/);
     assert.match(html, /&lt;script&gt;/);
     assert.match(html, /<li>one &amp; two<\/li>/);
