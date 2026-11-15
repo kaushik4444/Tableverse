@@ -116,6 +116,13 @@ async function playerProfile({ username, actorId }) {
     ZONES.forEach((z, i) => { hourly[z] = Array(24).fill(0); for (const r of hours[i].rows) hourly[z][r.hour] = r.games; });
     const games = num(t.games);
     const rated = num(t.rated);
+    // Overall level and Player Progress (time only), and Game XP per game; the same rules as the player's own profile
+    const pr = await require('./matches').getProgress(id);
+    const progress = {
+      level: pr.account.level, xp: pr.account.xp, into: pr.account.into, need: pr.account.need, minutes: pr.account.minutes,
+      penalisedLeaves: pr.penalisedLeaves,
+      games: Object.entries(pr.games).map(([gameId, g]) => ({ gameId, points: g.points, played: g.played, rule: g.rule })),
+    };
     return {
       player: {
         username: base.username, displayName: base.display_name, country: base.country || null, role: base.role, verified: Boolean(base.verified),
@@ -127,6 +134,7 @@ async function playerProfile({ username, actorId }) {
       },
       perGame: perGame.rows.map((r) => ({ gameId: r.game_id, games: r.games, rated: r.rated, wins: r.wins, draws: r.draws, leftEarly: r.left_early, minutes: round1(r.minutes) })),
       hourly,
+      progress,
       recent: recent.rows.map((r) => ({ gameId: r.game_id, at: r.finished_at, seats: r.seats, won: r.is_winner, draw: r.is_draw, leftEarly: r.left_early, unknown: Boolean(r.unknown), minutes: round1(r.minutes) })),
     };
   });
