@@ -679,6 +679,7 @@ function start(opts = {}) {
     code: room.code,
     gameId: room.gameId,
     paused,
+    noSeatedHumans: humans(room).length === 0,
     canReclaim: rejoinPolicy.canReclaimSeat(room, playerId, Date.now(), rejoinGraceMs),
   });
 
@@ -1047,8 +1048,10 @@ function start(opts = {}) {
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
+      const activity = room.activity && room.activity.get(p.id);
+      const startsRejoinWindow = activity && activity.firstLeftAt === null;
       rejoinPolicy.leftSeat(room, p.id, Date.now()); // starts the grace period once; active time stops here
-      scheduleRejoinExpiryRefresh();
+      if (startsRejoinWindow) scheduleRejoinExpiryRefresh();
       leaveRunningGame(room, p.id);
       room.members[i].bot = true; // a bot takes over the seat; the player can take it back by rejoining
       (room.leftEarly || (room.leftEarly = new Set())).add(p.id);

@@ -737,7 +737,7 @@
     if (!S.recentTables.length) return '';
     const rows = S.recentTables.map((r) => {
       const mine = S.rejoin.find((x) => x.code === r.code);
-      if (mine && mine.canReclaim === false && mine.paused) {
+      if (mine && mine.canReclaim === false && mine.noSeatedHumans) {
         return `<div class="recent-table"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code><small>Game paused</small></div>`;
       }
       const reclaim = mine && mine.canReclaim !== false;
@@ -756,10 +756,10 @@
       const canReclaim = r.canReclaim !== false;
       const message = canReclaim
         ? `${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.`
-        : `${r.paused ? 'The rejoin window has passed, so this game cannot resume.' : 'The rejoin window has passed, but you can still watch'} at table <code>${esc(r.code)}</code>.`;
+        : `${r.noSeatedHumans ? 'The rejoin window has passed, so this game cannot resume.' : 'The rejoin window has passed, but you can still watch'} at table <code>${esc(r.code)}</code>.`;
       const action = canReclaim
         ? `<button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button>`
-        : r.paused ? '' : `<button class="btn" data-act="watch" data-code="${esc(r.code)}">Watch</button>`;
+        : r.noSeatedHumans ? '' : `<button class="btn" data-act="watch" data-code="${esc(r.code)}">Watch</button>`;
       return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${message}</span></div>${action}</div>`;
     }).join('');
   }
@@ -2705,7 +2705,7 @@
     // The server decides: your old seat if you had one (a bot is playing it), otherwise a seat in a lobby, otherwise watching.
     rejoin: (el) => {
       const mine = S.rejoin.find((x) => x.code === el.dataset.code);
-      if (mine && mine.canReclaim === false) return mine.paused ? toast('This game cannot resume. Start a new game instead.') : actions.watch(el);
+      if (mine && mine.canReclaim === false) return mine.noSeatedHumans ? toast('This game cannot resume. Start a new game instead.') : actions.watch(el);
       askJoinMode(el.dataset.code, tableByCode(el.dataset.code));
     },
     watch: (el) => gateLogin(() => joinTable(el.dataset.code, 'spectate')),

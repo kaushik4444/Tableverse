@@ -33,7 +33,7 @@ function connect(port, token) {
 }
 
 (async () => {
-  const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, dropGraceMs: 50, maxMsgsPerSec: Infinity, rejoinGraceMs: GRACE_MS });
+  const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, dropGraceMs: 1000, maxMsgsPerSec: Infinity, rejoinGraceMs: GRACE_MS });
   try {
     const mk = async (name) => (await registerAndVerify(srv.port, { email: `${name.toLowerCase()}@rejoin.test.local`, displayName: name, password: 'TestPass123!' })).token;
     const a = connect(srv.port, await mk('Ann')); const b = connect(srv.port, await mk('Ben'));
@@ -86,6 +86,12 @@ function connect(port, token) {
     assert.equal(b.room.status, 'playing', 'the game is not abandoned');
     assert.ok(!b.chats.some((m) => m.sys && /abandon/i.test(m.text)), 'nobody is told the game was abandoned');
     assert.ok(b.room.members.some((m) => m.id === a.id && m.bot), 'leaving as a spectator does not take the bot-held seat');
+
+    b.ws.close();
+    await until(() => {
+      const info = a.rejoin.find((r) => r.code === code && !r.canReclaim);
+      return info && info.paused && !info.noSeatedHumans;
+    }, 'disconnected seated player still allows watching');
     console.log('  ok  rejoin socket: inside the window, after it, and leaving again as a spectator');
     console.log('\n1 passed, 0 failed');
   } catch (e) {
