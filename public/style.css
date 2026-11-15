@@ -596,6 +596,8 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .end-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 12px; }
 .end-votes { display: block; text-align: center; margin-top: 8px; }
 .end-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(20, 16, 44, .94); border-top: 1px solid rgba(255, 255, 255, .15); }
+/* The shared actions inside the result sheet scroll with it; only a bar outside a sheet is fixed to the bottom. */
+.end-bar.end-bar-in { position: static; margin-top: 12px; background: none; border: 0; padding: 0; }
 @keyframes endFade { from { opacity: 0 } to { opacity: 1 } }
 @keyframes endPop { from { transform: scale(.6); opacity: 0 } to { transform: scale(1); opacity: 1 } }
 @keyframes endBounce { 50% { transform: translateY(-6px) } }

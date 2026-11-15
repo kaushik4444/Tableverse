@@ -110,6 +110,21 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
     assert.equal(out[0].penalised, true);
   });
 
+  await test('a UUID alone does not make a seat an account: anonymous and deleted players are not kept', () => {
+    const uuid = '6f1c2d3e-4a5b-4c6d-8e9f-0a1b2c3d4e5f';
+    const rec = { gameId: 'tictactoe', participants: [
+      { seat: 0, playerId: uuid, score: 1, isWinner: true, isBot: false, leftEarly: false, forfeit: false, secondsPlayed: 300 }, // anonymous: an id, not an account
+      { seat: 1, playerId: 'deleted', score: 0, isWinner: false, isBot: false, leftEarly: false, forfeit: false, secondsPlayed: 300 },
+    ] };
+    // registered = the accounts at the table when the game began; the deleted player was removed from it by the deletion
+    const registered = new Set(['deleted']);
+    registered.delete('deleted');
+    const out = matchXpOf(rec, registered);
+    assert.equal(out[0].saved, false, 'an anonymous player with a UUID is not kept');
+    assert.equal(out[1].saved, false, 'a deleted account is not kept');
+    assert.ok(out[0].timeXp >= 0, 'the guest still sees the XP it earned');
+  });
+
   await test('a penalised leaver gets the leave points and the time up to leaving', () => {
     const rec = { gameId: 'tictactoe', participants: [
       { seat: 0, playerId: 'me', score: 0, isWinner: false, isBot: false, leftEarly: true, forfeit: true, secondsPlayed: 125 },

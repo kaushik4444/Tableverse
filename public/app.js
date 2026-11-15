@@ -133,8 +133,19 @@
   /** How long a person who leaves may take the seat back, as the server sets it (REJOIN_GRACE_SECONDS). */
   const rejoinWithin = () => { const s = (S.room && S.room.rejoinWindowSeconds) ?? 120; return s % 60 === 0 ? (s / 60) + ' minute' + (s === 60 ? '' : 's') : s + ' seconds'; };
   /** Every leave goes through here: with other people still playing, ask first, because the leave may cost something. */
+  /** The result is written in the background and can finish after the player has left: refresh the level a few times. */
+  function scheduleLevelRefresh() {
+    refreshLevel();
+    setTimeout(refreshLevel, 4000);
+    setTimeout(refreshLevel, 15000);
+  }
+  /** Leaves the table. A finished game refreshes the level once the result is written, even if the player leaves early. */
+  function leaveNow() {
+    if (S.room && S.room.status === 'finished') scheduleLevelRefresh();
+    send({ t: 'leave' });
+  }
   function requestLeave() {
-    if (!otherHumansPlaying()) { send({ t: 'leave' }); return; }
+    if (!otherHumansPlaying()) { leaveNow(); return; }
     const state = leaveState();
     if (state === 'abandoned') {
       openModal('Leave game?', '<p class="hint">The game is already abandoned, so leaving costs nothing. A bot takes your seat, and the others keep playing. You can watch the game from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave</button></div>');
@@ -2063,7 +2074,7 @@
     cardRemove: () => { const r = relationTo(S.card && S.card.last); if (!r.friend) return; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="cardRemoveConfirm">Remove friend</button></div>'); },
     cardRemoveConfirm: () => { const r = relationTo(S.card && S.card.last); closeModal(); if (r.friend) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.', 'Removing friend…'); },
     removeFriendConfirm: () => { const id = S.pendingFriendRemovalId; S.pendingFriendRemovalId = null; closeModal(); if (id) socialPost('/api/me/friends/remove', { friendId: id }, 'Friend removed.', 'Removing friend…'); },
-    leaveGameConfirm: () => { closeModal(); send({ t: 'leave' }); },
+    leaveGameConfirm: () => { closeModal(); leaveNow(); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
     // Opening a profile is a page, and the app only shows a page when no table is open. From a table, confirm first:
@@ -2086,7 +2097,7 @@
       if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then open the profile again.'); return; }
       // The page opens when the server confirms the leave ('left'); opening it now would be undone by that message.
       S.pendingPage = { page: 'player', arg: p.username };
-      send({ t: 'leave' });
+      leaveNow();
     },
     // Blocking is account-level and works the same from a table as from chat: the blocked person is hidden from table
     // chat and table voice in both directions. The block itself is sent to the server by the player's id.
@@ -2590,8 +2601,8 @@
     const pg = (st.progress && st.progress.games && st.progress.games[id]) || { points: 0, rule: 'placing' };
     // Only people still in the game at the end are ranked (bots are not). Leaving while others play costs -30 on top.
     const rule = pg.rule === 'win-lose'
-      ? 'Among the people still in the game: win +20, loss −20, draw 0. Leaving while others are still playing −30.'
-      : 'Among the people still in the game: first place +20, the lowest place −20, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
+      ? 'Among the people (bots are not ranked) still in the game: win +20, loss −20, draw 0. Leaving while others are still playing −30.'
+      : 'Among the people (bots are not ranked) still in the game: first place +20, the lowest place −20, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
     const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
     const hist = P.gameHistory;
     const histHTML = !hist ? '<p class="hint" style="text-align:left">Loading recent games…</p>'
@@ -2745,9 +2756,7 @@
       // The result is written in the background and can finish later than the screen: refresh now and again shortly after
       // (a retry may still be writing). Leaving the table does not cancel these.
       f.levelDone = true;
-      refreshLevel();
-      setTimeout(refreshLevel, 4000);
-      setTimeout(refreshLevel, 15000);
+      scheduleLevelRefresh();
     }
     const t = Date.now() - f.start;
     const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
@@ -2779,7 +2788,13 @@
       }
       // Games whose non-host sees only a hint (no button) are covered by the row of the host button; if none was found, add a bar.
       for (const h of $app.querySelectorAll('.overlay .hint, .ludo-end .hint')) if (/waiting for the host/i.test(h.textContent)) h.remove();
-      if (!$app.querySelector('.end-actions')) $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
+      if (!$app.querySelector('.end-actions')) {
+        // No action row in this game (the non-host view): the shared actions go inside the result sheet, so they scroll with
+        // the XP card. The fixed bar is only for a screen with no sheet.
+        const inSheet = $app.querySelector('.overlay .sheet') || $app.querySelector('.ludo-end');
+        if (inSheet) inSheet.insertAdjacentHTML('beforeend', `<div class="end-bar end-bar-in">${html}</div>`);
+        else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
+      }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       if (xpRows.length && !$app.querySelector('.end-xp')) {
         const card = endXpHTML(xpRows);
@@ -2851,7 +2866,8 @@
       const id = el.dataset.game;
       prof.game = id; prof.gameHistory = null; render();
       // Apply the answer only to the same profile, still open on this game (a reload or a sign-out drops it).
-      const current = () => S.profile === prof && prof.game === id;
+      const gen = sessionGen; // another account signed in or out since the click: its answer is not for this screen
+      const current = () => gen === sessionGen && S.profile === prof && prof.game === id;
       getJson(`/api/me/history?game=${encodeURIComponent(id)}&page=1`)
         .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
         .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
