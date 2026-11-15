@@ -15,6 +15,8 @@ User-facing changes are listed first. Operational and internal implementation de
 - The ⋯ menu has the same labels in the same order in every game.
 - Ludo with six players: the outer yard of the seat to play blinks.
 - What's new keeps every release: the account menu's Version history lists them all, newest first.
+- Progress: profiles show an account level (1 XP for each full minute in a game; wins, losses and leaves make no difference), a skill level per game (+20 for a win or first place down to -20, a penalised leave is -30) and how many games you left early. Past games count. Admin overview counts penalised leaves.
+- Database: migration `025_match_progress.sql` adds `place` and `seconds_played` to match participants (additive; past games are backfilled for the people who stayed).
 
 ## Released 2026-11-14 (release PR #165)
 

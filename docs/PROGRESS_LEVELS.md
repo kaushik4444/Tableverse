@@ -1,7 +1,8 @@
 # Progress and levels
 
-Status: the rules below are agreed and implemented as pure calculations (`lib/xp.js`, `lib/gameSkill.js`, tested in
-`tests/xp.test.js`). Nothing is stored or shown yet.
+Status: implemented on `development` (not yet released to `main`). Rules: `lib/xp.js`, `lib/gameSkill.js`, combined per player in `lib/progress.js`
+(tests: `tests/xp.test.js`, `tests/progress.test.js`). Stored by migration 025, shown on own and public profiles, and counted for penalised leaves in the
+admin overview. Not verified in production.
 
 ## Account level: progress in Tableverse
 - Measures **time only**: 1 XP for each full minute spent in a game.
@@ -56,4 +57,4 @@ Rules that apply to every game:
 4. Update README and What's new when each part ships.
 
 ## Storage (migration 025)
-`match_participants` gets two columns: `place` (SMALLINT, NULL when the game has no place of its own, so the level is ranked by score) and `seconds_played` (INTEGER, default 0). A stayer gets the match length (finished minus started), capped at 6 hours per game; leavers and bots get 0 because a leave time is not stored. The migration backfills `seconds_played` for past games (stayers only) and is safe to re-run. Both columns are additive and nullable or defaulted, so old application versions keep working, and they are restored together with the table. Nothing reads them yet; showing levels on profiles is a later change.
+`match_participants` gets two columns: `place` (SMALLINT, NULL when the game has no place of its own, so the level is ranked by score) and `seconds_played` (INTEGER, default 0). A stayer gets the match length (finished minus started), capped at 6 hours per game; leavers and bots get 0 because a leave time is not stored. The migration backfills `seconds_played` for past games (stayers only) and is safe to re-run. Both columns are additive and nullable or defaulted, so old application versions keep working, and they are restored together with the table. They are read by `getProgress` in `db/matches.js`, which feeds the profile pages.
