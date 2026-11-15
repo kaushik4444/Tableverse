@@ -59,7 +59,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       log(actorId, role === 'admin' ? 'role.grant_admin' : 'role.revoke_admin', 'player', targetId, { from, to: role });
       return { changed: true, role };
     },
-    async listUsers({ q = '' } = {}) { const u = [...players.values()].filter((p) => !q || p.username.includes(q)); return { total: u.length, pageSize: 25, users: u.map(({ email, ...rest }) => rest) }; },
+    async listUsers({ q = '' } = {}) { const u = [...players.values()].filter((p) => !q || p.username.includes(q)); return { total: u.length, pageSize: 25, page: 1, users: u.map(({ email, ...rest }) => rest) }; },
     async suspendUser({ actorId, targetId, reason = '' }) {
       policy.checkSuspend({ actor: players.get(actorId), target: players.get(targetId) });
       const t = players.get(targetId);

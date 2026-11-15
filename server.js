@@ -335,20 +335,24 @@ function start(opts = {}) {
     for (const room of rooms.values()) {
       const seats = [...room.members, ...room.spectators, ...(room.seated || [])]; // seated: a departed player keeps the seat in a running game
       for (const m of seats) if (m.id === playerId) oldNames.add(m.name);
+      // names their chat messages were sent under (collected before any sender name is overwritten below)
+      for (const c of room.chat || []) if (c.id === playerId && typeof c.name === 'string') oldNames.add(c.name);
     }
     oldNames.delete(DELETED_NAME);
+    // longest first: a shorter name ("Sam") must not be replaced inside a longer one ("Sam Smith") before the longer is matched
+    const nameList = [...oldNames].sort((a, b) => b.length - a.length);
     if (p) p.name = DELETED_NAME;
     for (const room of rooms.values()) {
+      // chat first, in every room: someone who left a lobby keeps their messages there without a seat
+      for (const c of room.chat || []) {
+        if (c.id === playerId) { c.name = DELETED_NAME; c.avatar = '🧙'; }
+        if (typeof c.text === 'string') c.text = scrubText(c.text, nameList, DELETED_NAME);
+      }
       const seated = [...new Set([...room.members, ...room.spectators, ...(room.seated || [])])].filter((m) => m.id === playerId);
       if (!seated.length && (!p || p.room !== room.code)) continue;
       for (const m of seated) { m.name = DELETED_NAME; m.avatar = '🧙'; }
       // the game's own copy: players, every log line, trick records (the plugin owns its state)
-      if (room.game && typeof room.game.scrub === 'function') room.game.scrub([...oldNames], DELETED_NAME);
-      // chat: their messages, and every system line or message that mentions the name in plain text
-      for (const c of room.chat || []) {
-        if (c.id === playerId) { c.name = DELETED_NAME; c.avatar = '🧙'; }
-        if (typeof c.text === 'string') c.text = scrubText(c.text, [...oldNames], DELETED_NAME);
-      }
+      if (room.game && typeof room.game.scrub === 'function') room.game.scrub(nameList, DELETED_NAME);
     }
     if (!p) return; // nothing else is held in memory for this account
     try { if (p.room) leaveRoom(p); } catch { /* the player is going away either way */ }

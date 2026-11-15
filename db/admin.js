@@ -126,15 +126,18 @@ async function listUsers({ q = '', page: p = 1, staleDays = 0 } = {}) {
   if (days) { args.push(days); conds.push(`(is_anonymous = FALSE AND role = 'user' AND COALESCE(last_seen_at, created_at) < NOW() - ($${args.length}::int * INTERVAL '1 day'))`); }
   const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
   const total = (await db.query(`SELECT COUNT(*)::int AS n FROM players ${where}`, args)).rows[0].n;
+  // a filter or a role change can leave the requested page past the end: answer with the last page that exists
+  const last = Math.max(0, Math.ceil(total / PAGE) - 1);
+  const pg = Math.min(page(p), last);
   const r = await db.query(
     `SELECT p.id, p.username, p.display_name, p.role, p.is_anonymous, p.country, p.created_at, p.last_seen_at, p.suspended_at,
             EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified
        FROM players p ${where}
       ORDER BY ${days ? 'COALESCE(p.last_seen_at, p.created_at) ASC' : 'p.created_at DESC'}, p.id
       LIMIT ${PAGE} OFFSET $${args.length + 1}`,
-    [...args, page(p) * PAGE]
+    [...args, pg * PAGE]
   );
-  return { total, pageSize: PAGE, users: r.rows };
+  return { total, pageSize: PAGE, page: pg + 1, users: r.rows };
 }
 
 async function signOutUser({ actorId, targetId }) {

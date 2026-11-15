@@ -321,6 +321,7 @@
       throw e;
     }
     if (gen !== state.gen || req !== usersSeq) return; // the admin has switched tabs, or asked for something newer, since this was asked
+    if (o.page) page = o.page; // the server answers with the last page that exists when this one has gone past the end
     const owner = state.me.isOwner;
     const rows = o.users.map((u) => {
       const staff = u.role !== 'user';
@@ -345,6 +346,12 @@
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="uPrev" ${page <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${page} of ${pages}</span><button class="ad-btn" id="uNext" ${page >= pages ? 'disabled' : ''}>Next</button></div>
       <p class="ad-muted">E-mail addresses are never shown here. ${owner ? 'As the owner you manage admin roles; the owner role itself cannot be changed.' : 'Only the owner can manage admin roles.'}</p>`;
     document.getElementById('uSearch').onsubmit = (e) => { e.preventDefault(); { const d = new FormData(e.target); users(d.get('q'), 1, Number(d.get('stale')) || 0).catch(fail); } };
+    // Refreshes the list the admin is looking at now (their latest search or filter), not the one this view was drawn with
+    const reloadUsers = () => {
+      const f = document.getElementById('uSearch');
+      const d = f ? new FormData(f) : null;
+      return users(d ? String(d.get('q') || '') : q, page, d ? Number(d.get('stale')) || 0 : stale);
+    };
     document.getElementById('uPrev').onclick = () => users(q, page - 1, stale).catch(fail);
     document.getElementById('lookupForm').onsubmit = async (e) => {
       e.preventDefault();
@@ -369,20 +376,20 @@
       const reason = prompt('Reason for the suspension (kept in the audit log; staff with lookup access can also see it):', '');
       if (reason === null) return;
       if (!confirm('Suspend this account? Its sessions end now and it cannot sign in until the suspension is lifted.')) return;
-      try { await api('/api/admin/users/suspend', { playerId: b.dataset.susp, reason }); await users(q, page, stale); say('uMsg', 'Account suspended.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
+      try { await api('/api/admin/users/suspend', { playerId: b.dataset.susp, reason }); await reloadUsers(); say('uMsg', 'Account suspended.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
     }; });
     main.querySelectorAll('[data-del]').forEach((b) => { b.onclick = async () => {
       const name = b.dataset.name;
       const typed = prompt(`Permanently delete @${name}? This cannot be undone. Their finished games stay, shown as "Deleted player"; their login, sessions and friends go.\n\nType the username to confirm:`, '');
       if (typed === null) return;
-      try { await api('/api/admin/users/delete', { playerId: b.dataset.del, confirm: typed }); await users(q, page, stale); say('uMsg', `@${name} was deleted.`, 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
+      try { await api('/api/admin/users/delete', { playerId: b.dataset.del, confirm: typed }); await reloadUsers(); say('uMsg', `@${name} was deleted.`, 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
     }; });
     main.querySelectorAll('[data-unsusp]').forEach((b) => { b.onclick = async () => {
       if (!confirm('Lift the suspension? The player can sign in again (old sessions stay ended).')) return;
-      try { await api('/api/admin/users/unsuspend', { playerId: b.dataset.unsusp }); await users(q, page, stale); say('uMsg', 'Suspension lifted.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
+      try { await api('/api/admin/users/unsuspend', { playerId: b.dataset.unsusp }); await reloadUsers(); say('uMsg', 'Suspension lifted.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); }
     }; });
     main.querySelectorAll('[data-so]').forEach((b) => { b.onclick = async () => { if (!confirm('Sign this player out of every device?')) return; try { const r = await api('/api/admin/users/sign-out', { playerId: b.dataset.so }); say('uMsg', `Signed out (${r.revoked} session${r.revoked === 1 ? '' : 's'}).`, 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });
-    main.querySelectorAll('[data-role]').forEach((b) => { b.onclick = async () => { if (!confirm(b.dataset.role === 'admin' ? 'Give this player admin access?' : 'Remove admin access from this player?')) return; try { await api('/api/admin/roles', { playerId: b.dataset.id, role: b.dataset.role }); await users(q, page); say('uMsg', 'Role updated.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });
+    main.querySelectorAll('[data-role]').forEach((b) => { b.onclick = async () => { if (!confirm(b.dataset.role === 'admin' ? 'Give this player admin access?' : 'Remove admin access from this player?')) return; try { await api('/api/admin/roles', { playerId: b.dataset.id, role: b.dataset.role }); await reloadUsers(); say('uMsg', 'Role updated.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });
   }
 
   // ---------------------------------------------------------------- feedback
