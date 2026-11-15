@@ -2588,9 +2588,10 @@
     const g = (st.perGame || []).find((x) => x.gameId === id);
     if (!g) return `${head}${emptyState('🃏', 'Not played yet', 'Play this game and your Game XP and record show up here.')}`;
     const pg = (st.progress && st.progress.games && st.progress.games[id]) || { points: 0, rule: 'placing' };
+    // Only people still in the game at the end are ranked (bots are not). Leaving while others play costs -30 on top.
     const rule = pg.rule === 'win-lose'
-      ? 'Win +20 · Loss −20 · Draw 0. Leaving while others are still playing −30.'
-      : 'Placing: 1st place +20 and last place −20, with the places in between spread evenly. Leaving while others are still playing −30.';
+      ? 'Among the people still in the game: win +20, loss −20, draw 0. Leaving while others are still playing −30.'
+      : 'Among the people still in the game: first place +20, the lowest place −20, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
     const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
     const hist = P.gameHistory;
     const histHTML = !hist ? '<p class="hint" style="text-align:left">Loading recent games…</p>'
@@ -2740,6 +2741,14 @@
     if (!S.endFlow || S.endFlow.code !== r.code) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0), timer: null };
     const f = S.endFlow;
     clearTimeout(f.timer);
+    if (!f.levelDone) {
+      // The result is written in the background and can finish later than the screen: refresh now and again shortly after
+      // (a retry may still be writing). Leaving the table does not cancel these.
+      f.levelDone = true;
+      refreshLevel();
+      setTimeout(refreshLevel, 4000);
+      setTimeout(refreshLevel, 15000);
+    }
     const t = Date.now() - f.start;
     const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
     $app.classList.toggle('endhold', stage !== 'result');
@@ -2751,7 +2760,6 @@
       $app.insertAdjacentHTML('beforeend', `<div class="end-pop" role="status" aria-live="polite"><div class="end-pop-card"><div class="end-pop-ico" aria-hidden="true">🏆</div><b>${text}</b></div></div>`);
     }
     if (stage === 'result') {
-      if (!f.levelDone) { f.levelDone = true; refreshLevel(); }
       const spectator = isSpectator();
       const isHost = r.hostId === S.id;
       const humans = r.members.filter((m) => !m.bot);
@@ -2776,10 +2784,12 @@
       if (xpRows.length && !$app.querySelector('.end-xp')) {
         const card = endXpHTML(xpRows);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
-        const host = $app.querySelector('.overlay, .ludo-end'); // the result sheet, so the card is not hidden behind the fixed bar
-        if (anchor) anchor.insertAdjacentHTML('beforebegin', card);
-        else if (host) host.insertAdjacentHTML('beforeend', card);
-        else $app.insertAdjacentHTML('beforeend', card);
+        // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
+        const sheet = $app.querySelector('.overlay .sheet, .overlay, .ludo-end');
+        const wrap = $app.querySelector('.end-actions-wrap');
+        if (wrap) wrap.insertAdjacentHTML('beforebegin', card);
+        else if (sheet) sheet.insertAdjacentHTML('beforeend', card);
+        else $app.insertAdjacentHTML('beforeend', card); // no result sheet at all: the bar is the only place
       }
     }
   }
