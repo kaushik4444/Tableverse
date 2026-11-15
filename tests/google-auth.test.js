@@ -1,0 +1,84 @@
+'use strict';
+// Google ID token verification with a locally generated key pair: no network.
+require('./helpers/env');
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const { createVerifier, nonceFor, GoogleAuthError } = require('../lib/googleAuth');
+
+let passed = 0; let failed = 0;
+async function test(name, fn) { try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + e.stack); } }
+
+const CLIENT = 'client-123.apps.googleusercontent.com';
+const NOW = 1800000000000;
+const pair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+const other = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+const jwk = (kp, kid) => ({ ...kp.publicKey.export({ format: 'jwk' }), kid, alg: 'RS256', use: 'sig' });
+const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+function token(over = {}, { key = pair.privateKey, header = {} } = {}) {
+  const t = Math.floor(NOW / 1000);
+  const claims = { iss: 'https://accounts.google.com', aud: CLIENT, sub: '1234567890', email: 'Player@Example.com', email_verified: true, name: 'Pat Player', nonce: 'n1', iat: t, exp: t + 3600, ...over };
+  const head = { alg: 'RS256', kid: 'k1', typ: 'JWT', ...header };
+  const signed = b64(head) + '.' + b64(claims);
+  return signed + '.' + crypto.sign('RSA-SHA256', Buffer.from(signed), key).toString('base64url');
+}
+let fetches = 0;
+const mk = (over = {}) => createVerifier({ clientId: CLIENT, now: () => NOW, fetchJwks: async () => { fetches++; return { keys: [jwk(pair, 'k1')] }; }, ...over });
+const rejects = async (p, detail) => { try { await p; } catch (e) { assert.ok(e instanceof GoogleAuthError, 'a GoogleAuthError, got ' + e); if (detail) assert.match(e.detail, detail); return; } assert.fail('expected a rejection'); };
+
+(async () => {
+  await test('a valid token gives the verified identity, with the email lower-cased', async () => {
+    const c = await mk().verify(token(), { nonce: 'n1' });
+    assert.deepEqual(c, { sub: '1234567890', email: 'player@example.com', name: 'Pat Player' });
+  });
+  await test('a bad signature (another key) is rejected', async () => rejects(mk().verify(token({}, { key: other.privateKey }), { nonce: 'n1' }), /signature/));
+  await test('a tampered payload is rejected', async () => {
+    const [h, , s] = token().split('.');
+    const forged = b64({ iss: 'https://accounts.google.com', aud: CLIENT, sub: 'someone-else', email: 'x@y.z', email_verified: true, nonce: 'n1', exp: NOW / 1000 + 3600 });
+    await rejects(mk().verify(h + '.' + forged + '.' + s, { nonce: 'n1' }), /signature/);
+  });
+  await test('alg none and HS256 are rejected', async () => {
+    await rejects(mk().verify(token({}, { header: { alg: 'none' } }), { nonce: 'n1' }), /alg/);
+    await rejects(mk().verify(token({}, { header: { alg: 'HS256' } }), { nonce: 'n1' }), /alg/);
+    await rejects(mk().verify(b64({ alg: 'none' }) + '.' + b64({ sub: 'x' }) + '.', { nonce: 'n1' }));
+  });
+  await test('the wrong audience, issuer, nonce or an expired token is rejected', async () => {
+    await rejects(mk().verify(token({ aud: 'someone-elses-app' }), { nonce: 'n1' }), /audience/);
+    await rejects(mk().verify(token({ iss: 'https://evil.example' }), { nonce: 'n1' }), /issuer/);
+    await rejects(mk().verify(token(), { nonce: 'other' }), /nonce/);
+    await rejects(mk().verify(token(), {}), /nonce/);
+    await rejects(mk().verify(token({ nonce: undefined }), { nonce: 'n1' }), /nonce/);
+    await rejects(mk().verify(token({ exp: NOW / 1000 - 3600 }), { nonce: 'n1' }), /expired/);
+    await rejects(mk().verify(token({ iat: NOW / 1000 + 3600 }), { nonce: 'n1' }), /iat/);
+  });
+  await test('an unverified or missing email is rejected', async () => {
+    await rejects(mk().verify(token({ email_verified: false }), { nonce: 'n1' }), /not verified/);
+    await rejects(mk().verify(token({ email_verified: 'true' }), { nonce: 'n1' }), /not verified/);
+    await rejects(mk().verify(token({ email: undefined }), { nonce: 'n1' }), /no email/);
+  });
+  await test('no client id means sign-in is off; junk and oversized tokens are rejected before any key is used', async () => {
+    await rejects(createVerifier({ clientId: '' }).verify(token(), { nonce: 'n1' }), /client id/);
+    const v = mk(); const before = fetches;
+    await rejects(v.verify('not a jwt', { nonce: 'n1' })); await rejects(v.verify('a.b', { nonce: 'n1' })); await rejects(v.verify('x'.repeat(5000), { nonce: 'n1' })); await rejects(v.verify(null, {}));
+    assert.equal(fetches, before, 'no key fetch for malformed input');
+  });
+  await test('keys are cached; an unknown key id refetches at most once per minute', async () => {
+    fetches = 0; let t = NOW; const v = mk({ now: () => t });
+    await v.verify(token(), { nonce: 'n1' }); await v.verify(token(), { nonce: 'n1' });
+    assert.equal(fetches, 1, 'cached');
+    t += 61000;
+    await rejects(v.verify(token({}, { header: { kid: 'rotated' } }), { nonce: 'n1' }), /unknown kid/);
+    await rejects(v.verify(token({}, { header: { kid: 'rotated' } }), { nonce: 'n1' }), /unknown kid/);
+    assert.equal(fetches, 2, 'one refetch for the unknown kid, not one per attempt');
+  });
+  await test('a key outage is reported as unavailable, and a later success recovers', async () => {
+    let up = false; const v = createVerifier({ clientId: CLIENT, now: () => NOW, fetchJwks: async () => { if (!up) throw new Error('down'); return { keys: [jwk(pair, 'k1')] }; } });
+    await rejects(v.verify(token(), { nonce: 'n1' }), /jwks/);
+    up = true;
+    assert.equal((await v.verify(token(), { nonce: 'n1' })).sub, '1234567890');
+  });
+  await test('the nonce is a hash of the CSRF value: stable for one browser, different for another', () => {
+    assert.equal(nonceFor('abc'), nonceFor('abc')); assert.notEqual(nonceFor('abc'), nonceFor('abd')); assert.match(nonceFor('abc'), /^[0-9a-f]{64}$/);
+  });
+  console.log(`\n${passed} passed, ${failed} failed`);
+  if (failed) process.exit(1);
+})();
