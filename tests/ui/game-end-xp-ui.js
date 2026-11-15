@@ -64,7 +64,8 @@ function finishedTable(gameId, n) {
               cardVisible: cb.height > 0,
               barFixed: bar ? getComputedStyle(bar).position === 'fixed' : false,
               barCoversCard: bb && bar.getBoundingClientRect() && bb.top < cb.bottom && cb.top < bb.bottom && getComputedStyle(bar).position === 'fixed',
-              leaveVisible: bt ? bt.height > 0 && bt.bottom <= innerHeight + 1 && bt.top >= -1 : false,
+              // on screen, and inside the sheet's visible box when the action lives in the sheet (clipping counts)
+              leaveVisible: bt ? (bt.height > 0 && bt.top >= -1 && bt.bottom <= innerHeight + 1 && (() => { const sh = btn.closest('.sheet, .ludo-end'); if (!sh) return true; const q = sh.getBoundingClientRect(); return bt.top >= q.top - 1 && bt.bottom <= q.bottom + 1; })()) : false,
               sideways: document.documentElement.scrollWidth > innerWidth + 1,
               names: [...document.querySelectorAll('.xp-name')].length,
               // Ludo's podium styles (.ludo-end li span) must not reach the XP rows: the bar stays a thin bar, not a 22px circle
