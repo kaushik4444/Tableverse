@@ -505,7 +505,7 @@ function cookieSocket(port, cookie) {
     await srv.close();
 
     console.log('players who leave');
-    await test('a player who leaves early is stored as such and does not get the game in their stats; the one who stayed does', async () => {
+    await test('a player who leaves while another person is still playing is stored as a loss; the one who stayed keeps the game', async () => {
       srv = await start({ ...fast, matchLog: quiet() });
       let a; let b;
       try {
@@ -524,9 +524,12 @@ function cookieSocket(port, cookie) {
         const [m] = await until(async () => { const r = await matchesOf(a.room.code); return r.length ? r : null; }, 'match row');
         const ps = await q('SELECT * FROM match_participants WHERE match_id = $1 ORDER BY seat', [m.id]);
         assert.deepEqual(ps.map((p) => [p.left_early, p.is_bot]), [[false, false], [true, false], [false, true]]);
+        assert.deepEqual(ps.map((p) => p.forfeit), [false, true, false], 'the quitter is a penalised leave, nobody else');
         assert.equal((await a.getStats()).played, 1);
         b.send({ t: 'hello' });
-        assert.equal((await b.getStats()).played, 0, 'leaving a game early is not a loss');
+        const bs = await b.getStats();
+        assert.equal(bs.played, 1, 'the leave counts as a game played');
+        assert.equal(bs.losses, 1, 'and as a loss for the leaver');
       } finally {
         if (a?.ws && a.ws.readyState !== WebSocket.CLOSED) a.ws.terminate();
         if (b?.ws && b.ws.readyState !== WebSocket.CLOSED) b.ws.terminate();

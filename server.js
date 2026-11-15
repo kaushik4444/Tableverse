@@ -13,7 +13,8 @@ const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
-const { buildMatchRecord } = require('./db/matchRecord');
+const { buildMatchRecord, buildForfeitRecord } = require('./db/matchRecord');
+const { leaveRunningGame } = require('./lib/leavePolicy');
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -77,7 +78,7 @@ const MAX_ROOMS = 500;
 const DEFAULT_MAX_SPECTATORS = 20;
 const CHAT_KEEP = 60; // messages remembered per table
 const AVATARS = ['🧙', '🧝', '🧛', '🧞', '🦊', '🐺', '🦉', '🐉', '🦄', '🐙', '🐸', '🦁', '🐼', '🐯', '🦅', '🐲'];
-const EMOTES = ['👍', '👏', '😂', '😮', '😡', '🤔', '🔥', '😎'];
+const EMOTES = ['👍', '👏', '😂', '🤣', '😮', '😱', '😡', '🤔', '🔥', '😎', '🥳', '😜', '😭', '🙌', '💪', '🤝', '👀', '😴', '🏆', '💀', '🎉'];
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -959,6 +960,10 @@ function start(opts = {}) {
   function destroyRoom(room) {
     clearTimeout(room.timer);
     rooms.delete(room.code);
+    // A table closed in the middle of a game: the people who left with others still playing are recorded as losses.
+    if (room.status === 'playing') {
+      try { const fr = buildForfeitRecord(room); if (fr) matchQueue.enqueue(fr); } catch (e) { console.error('[server] Error preparing forfeit record:', e.message); }
+    }
     for (const m of humans(room)) schedulePresence(m.id);
     if (dbPool.hasDatabase()) dbFriends.expireClosedRoomInvitations(room.code).catch((err) => console.error('[server] invitation cleanup failed:', err.message));
     broadcastTables();
@@ -1011,6 +1016,9 @@ function start(opts = {}) {
     if (i < 0) return;
     const wasHost = room.hostId === p.id;
     if (room.status === 'playing') {
+      // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
+      // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
+      leaveRunningGame(room, p.id);
       room.members[i].bot = true; // a bot takes over the seat; the player can take it back by rejoining
       (room.leftEarly || (room.leftEarly = new Set())).add(p.id);
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
@@ -1232,14 +1240,16 @@ function start(opts = {}) {
 
     emote(p, msg) {
       const room = rooms.get(p.room);
-      if (!room || room.status === 'lobby' || isSpec(room, p.id) || !EMOTES.includes(msg.e)) return;
+      if (!room || room.status === 'lobby' || !EMOTES.includes(msg.e)) return;
       const now = Date.now();
       if (now - (p.lastEmote || 0) < 700) return;
       p.lastEmote = now;
+      // A spectator has no seat, so the reaction says who sent it: everyone sees the name and the 👁 mark.
+      const spectator = isSpec(room, p.id);
       for (const m of viewers(room)) {
         if (m.id !== p.id && pairBlocked(p.id, m.id)) continue; // a blocked pair does not see each other's reactions
         const q = players.get(m.id);
-        if (q && q.connected) send(q.ws, { t: 'emote', id: p.id, e: msg.e });
+        if (q && q.connected) send(q.ws, { t: 'emote', id: p.id, e: msg.e, spectator, name: spectator ? String(p.name || 'Spectator').slice(0, 32) : undefined });
       }
     },
 
@@ -1424,6 +1434,7 @@ function start(opts = {}) {
         if (si >= 0) room.spectators.splice(si, 1);
         seat.bot = false;
         if (room.leftEarly) room.leftEarly.delete(p.id);
+        if (room.forfeits) room.forfeits.delete(p.id); // back in time: no loss
         seat.avatar = p.avatar;
         p.room = room.code;
         sys(room, `🔄 ${p.name} is back and took the seat from the bot`);
@@ -1611,6 +1622,8 @@ function start(opts = {}) {
       room.matchKey = crypto.randomUUID(); // identifies this game in the match history
       room.startedAt = Date.now();
       room.leftEarly = new Set();
+      room.forfeits = new Set();
+      room.abandoned = false;
       room.deadline = null;
       room.waiting = [];
       room.pauseUntil = 0;

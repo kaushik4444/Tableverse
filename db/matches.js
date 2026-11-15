@@ -38,7 +38,7 @@ class MemoryMatchStore {
     let draws = 0;
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
-      if (part && !part.leftEarly && !part.isBot) {
+      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) {
         played++;
         if (part.isWinner) wins++;
         if (part.isDraw) draws++;
@@ -51,7 +51,7 @@ class MemoryMatchStore {
     const rows = [];
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
-      if (part && !part.leftEarly && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: m.recordedAt, isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
+      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: m.recordedAt, isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
     }
     return rows.sort((a, b) => b.finishedAt - a.finishedAt);
   }
@@ -94,8 +94,8 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
       }
       const gone = isUuid(p.playerId) && !accountId && !p.isBot;
       await client.query(
-        `INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot, left_early, is_draw)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot, left_early, is_draw, forfeit)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           matchId,
           accountId,
@@ -106,6 +106,7 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
           Boolean(p.isBot),
           Boolean(p.leftEarly),
           Boolean(p.isDraw),
+          Boolean(p.forfeit),
         ]
       );
     }
@@ -131,7 +132,7 @@ async function getPlayerStats(playerId) {
        COUNT(*) FILTER (WHERE mp.is_draw = TRUE)::int AS draws
      FROM match_participants mp
      JOIN matches m ON m.id = mp.match_id
-     WHERE mp.player_id = $1 AND mp.left_early = FALSE AND mp.is_bot = FALSE AND m.match_key IS NOT NULL`, // match_key IS NULL: written before results were reported, winners are unknown
+     WHERE mp.player_id = $1 AND (mp.left_early = FALSE OR mp.forfeit = TRUE) AND mp.is_bot = FALSE AND m.match_key IS NOT NULL`, // match_key IS NULL: written before results were reported, winners are unknown
     [playerId]
   );
   const row = res.rows[0];
@@ -162,7 +163,7 @@ async function pgProfile(playerId, memberSince) {
   const base = `WITH mine AS (
       SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.options, m.seats, mp.is_winner, mp.is_draw, mp.score
       FROM match_participants mp JOIN matches m ON m.id = mp.match_id
-      WHERE mp.player_id = $1 AND mp.left_early = FALSE AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
+      WHERE mp.player_id = $1 AND (mp.left_early = FALSE OR mp.forfeit = TRUE) AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
       ORDER BY m.id, mp.seat)`;
   const [grouped, recent, streaks] = await Promise.all([
     db.query(`${base} SELECT game_id, options, seats, is_winner, is_draw, score, COUNT(*)::int AS n FROM mine GROUP BY game_id, options, seats, is_winner, is_draw, score`, [playerId]),

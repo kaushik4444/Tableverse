@@ -434,3 +434,7 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 
 /* 360px phones and narrower: played cards are smaller so they clear the neighbouring name plates */
 @media (max-width: 360px) { .pt-card { --cw: 44px; } }
+
+/* Reactions: the emote bar wraps on a phone (21 emoji), and a spectator's reaction is labelled with their name. */
+.emote-bar { flex-wrap: wrap; justify-content: center; max-width: min(92vw, 360px); }
+.emote-tag { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); white-space: nowrap; font: 600 12px/1.2 var(--sans); padding: 3px 8px; border-radius: 999px; background: rgba(10, 13, 43, .85); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); }
