@@ -25,7 +25,8 @@ const HUMANS = `
     FROM match_participants p
     JOIN matches m ON m.id = p.match_id
    WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN}`;
-const IN_WINDOW = "m.finished_at > NOW() - ($1::int * INTERVAL '1 day')";
+// Finished games only: a table that closed mid-game (completed = FALSE) keeps its leavers' losses, not its table statistics
+const IN_WINDOW = "m.finished_at > NOW() - ($1::int * INTERVAL '1 day') AND m.completed";
 
 const num = (v) => Number(v) || 0;
 const round1 = (v) => Math.round(num(v) * 10) / 10;

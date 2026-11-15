@@ -13,8 +13,8 @@ const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
-const { buildMatchRecord, buildForfeitRecord } = require('./db/matchRecord');
-const { leaveRunningGame } = require('./lib/leavePolicy');
+const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = require('./db/matchRecord');
+const { leaveRunningGame, leaveStateOf } = require('./lib/leavePolicy');
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -633,6 +633,9 @@ function start(opts = {}) {
       outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
+      // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
+      // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
+      leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
       now: Date.now(), // lets clients correct for clock differences
     };
   }
@@ -854,6 +857,7 @@ function start(opts = {}) {
   function schedule(room) {
     clearTimeout(room.timer);
     room.timer = null;
+    if (shuttingDown) return; // no bot or auto-play moves while the server stops
     const g = room.game;
     if (!g || room.status !== 'playing' || g.isOver()) return;
     if (!humans(room).some(isConnected)) return; // nobody watching: pause
@@ -1411,6 +1415,8 @@ function start(opts = {}) {
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
+      // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
+      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const seat = room.members.find((m) => m.id === p.id);
@@ -1634,6 +1640,8 @@ function start(opts = {}) {
     act(p, msg) {
       const room = rooms.get(p.room);
       if (!room || room.status !== 'playing' || !room.game) return sendError(p, 'No game in progress');
+      // Once the server is stopping, a game must not move on: the shutdown record of a running table is written as it is now
+      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (isSpec(room, p.id)) return sendError(p, 'You are watching this game');
       const res = room.game.act(p.id, msg.action);
       if (!res.ok) {
@@ -2114,6 +2122,12 @@ function start(opts = {}) {
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
     clearInterval(broadcastTimer);
+    // Running games stop here: no timer may move them on (schedule and act refuse once shuttingDown is set), so the snapshot
+    // below is the final state of each table.
+    for (const room of rooms.values()) clearTimeout(room.timer);
+    // People who left a running game with others still playing are losses: queue them before the drain, so the drain below waits for them.
+    // Unfinished games are not recorded as finished.
+    try { for (const rec of buildShutdownForfeitRecords(rooms.values())) matchQueue.enqueue(rec); } catch (e) { console.error('[server] Error preparing shutdown records:', e.message); }
     // Let auth handlers finish before taking the delivery snapshot, within one shared shutdown window.
     if (drainMs) {
       const matchDrain = matchQueue.drain(drainMs);
@@ -2127,7 +2141,6 @@ function start(opts = {}) {
     }
     if (metered) metered.stop();
     matchQueue.close();
-    for (const room of rooms.values()) clearTimeout(room.timer);
     await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
     for (const ws of wss.clients) ws.terminate();
     await new Promise((resolve) => wss.close(resolve));
