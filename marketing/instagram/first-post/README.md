@@ -11,4 +11,4 @@ Identity: `docs/BRAND.md` ("Your Seat"). Colours deep felt #071510, felt #153228
 
 Screenshots: the real Tableverse front-end (`public/`) running the real game engines (`games/`) at 390 x 844 (2x), with sample player names and a sample table code. There is no live server and no real player data.
 
-Rebuild: `NODE_PATH=<playwright dir> node src/capture.js` (from the repo root), then `node src/render.js` (from `src/`). Preview: `montage slides/slide-0*.png -tile 5x1 -geometry 432x540+12+12 -background '#02070a' preview-all-slides.png`.
+Rebuild (run from the repository root): `NODE_PATH=<playwright dir> node marketing/instagram/first-post/src/capture.js` to capture the screenshots, then `cd marketing/instagram/first-post/src && node render.js` to render the PNGs. `NODE_PATH` is needed whenever Playwright is installed outside the project. Preview: `montage slides/slide-0*.png -tile 5x1 -geometry 432x540+12+12 -background '#02070a' preview-all-slides.png`.
