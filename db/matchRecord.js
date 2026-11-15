@@ -113,4 +113,12 @@ function buildShutdownForfeitRecords(rooms) {
   return out;
 }
 
-module.exports = { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords };
+/**
+ * True when a participant list is only people who left a table that closed mid-game (no stayer, no bot). Used for records
+ * with no completed flag (spooled by an older version): the same rule migration 026 applies to stored rows.
+ */
+function isForfeitOnly(participants) {
+  return Array.isArray(participants) && participants.length > 0 && participants.every((p) => p.forfeit && !p.isBot);
+}
+
+module.exports = { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords, isForfeitOnly };

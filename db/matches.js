@@ -1,6 +1,7 @@
 'use strict';
 const db = require('./pool');
 const { computeProfile } = require('./stats');
+const { isForfeitOnly } = require('./matchRecord');
 
 /** What a seat is called once its account no longer exists (see db/account.js deleteAccount). */
 const DELETED_NAME = 'Deleted player';
@@ -91,7 +92,10 @@ function validDate(v) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-async function recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants, completed = true, tableHumans = null, tableBots = null }) {
+async function recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants, completed, tableHumans = null, tableBots = null }) {
+  // A record from before the flag existed (a spooled record from an older version) is a closed-mid-game record when only
+  // forfeiting people are in it (the rule migration 026 applies to stored rows).
+  if (typeof completed !== 'boolean') completed = !isForfeitOnly(participants);
   if (!db.hasDatabase()) {
     return memoryStore.recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants, completed, tableHumans, tableBots });
   }
@@ -102,7 +106,7 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
        VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), LEAST(COALESCE($7::timestamptz, NOW()), NOW()), $8, $9, $10)
        ON CONFLICT (match_key) WHERE match_key IS NOT NULL DO NOTHING
        RETURNING id`,
-      [matchKey || null, roomCode, gameId, seats, JSON.stringify(options || {}), startedAt ? new Date(startedAt).toISOString() : null, validDate(finishedAt), completed !== false, Number.isInteger(tableHumans) ? tableHumans : null, Number.isInteger(tableBots) ? tableBots : null]
+      [matchKey || null, roomCode, gameId, seats, JSON.stringify(options || {}), startedAt ? new Date(startedAt).toISOString() : null, validDate(finishedAt), completed, Number.isInteger(tableHumans) ? tableHumans : null, Number.isInteger(tableBots) ? tableBots : null]
     );
 
     if (!matchRes.rows.length) return { matchId: null, duplicate: true }; // this game was already recorded

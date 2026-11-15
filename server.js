@@ -857,6 +857,7 @@ function start(opts = {}) {
   function schedule(room) {
     clearTimeout(room.timer);
     room.timer = null;
+    if (shuttingDown) return; // no bot or auto-play moves while the server stops
     const g = room.game;
     if (!g || room.status !== 'playing' || g.isOver()) return;
     if (!humans(room).some(isConnected)) return; // nobody watching: pause
@@ -1637,6 +1638,8 @@ function start(opts = {}) {
     act(p, msg) {
       const room = rooms.get(p.room);
       if (!room || room.status !== 'playing' || !room.game) return sendError(p, 'No game in progress');
+      // Once the server is stopping, a game must not move on: the shutdown record of a running table is written as it is now
+      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (isSpec(room, p.id)) return sendError(p, 'You are watching this game');
       const res = room.game.act(p.id, msg.action);
       if (!res.ok) {
@@ -2117,6 +2120,9 @@ function start(opts = {}) {
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
     clearInterval(broadcastTimer);
+    // Running games stop here: no timer may move them on (schedule and act refuse once shuttingDown is set), so the snapshot
+    // below is the final state of each table.
+    for (const room of rooms.values()) clearTimeout(room.timer);
     // People who left a running game with others still playing are losses: queue them before the drain, so the drain below waits for them.
     // Unfinished games are not recorded as finished.
     try { for (const rec of buildShutdownForfeitRecords(rooms.values())) matchQueue.enqueue(rec); } catch (e) { console.error('[server] Error preparing shutdown records:', e.message); }
@@ -2133,7 +2139,6 @@ function start(opts = {}) {
     }
     if (metered) metered.stop();
     matchQueue.close();
-    for (const room of rooms.values()) clearTimeout(room.timer);
     await new Promise((r) => setTimeout(r, wss.clients.size ? 300 : 0)); // let the restart notice reach the sockets
     for (const ws of wss.clients) ws.terminate();
     await new Promise((resolve) => wss.close(resolve));
