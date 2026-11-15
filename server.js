@@ -154,7 +154,8 @@ function start(opts = {}) {
   const announcement = cleanText(opts.announcement ?? process.env.ANNOUNCEMENT ?? '');
   const dropGraceMs = opts.dropGraceMs ?? 4000; // a lost connection is announced to the table after this
   // How long a person who left a running game on purpose may take their seat back (REJOIN_GRACE_SECONDS, default 120).
-  const rejoinWindowMs = opts.rejoinWindowMs ?? rejoinGraceMs(env.REJOIN_GRACE_SECONDS);
+  // opts.rejoinGraceMs is the older name for the same setting (milliseconds), still accepted by the tests.
+  const rejoinWindowMs = opts.rejoinWindowMs ?? opts.rejoinGraceMs ?? rejoinGraceMs(env.REJOIN_GRACE_SECONDS);
   const forcedMs = opts.forcedMs ?? 700; // delay between automatic plays in the last trick of a round
 
   const players = new Map(); // id -> player
@@ -1052,8 +1053,10 @@ function start(opts = {}) {
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
+      // The window starts at the first departure only: later leaves keep its deadline, so the refresh is scheduled once.
+      const firstLeave = !(room.leaveDeadlines && room.leaveDeadlines.has(room.members[i].id));
       voluntaryLeave(room, room.members[i], Date.now(), rejoinWindowMs); // a bot takes over the seat; the player can take it back in time
-      scheduleRejoinExpiryRefresh(); // when the window closes, the home screens drop the "take your seat back" offer
+      if (firstLeave) scheduleRejoinExpiryRefresh(); // when the window closes, the home screens drop the "take your seat back" offer
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
     } else {
       room.members.splice(i, 1);
@@ -1445,6 +1448,8 @@ function start(opts = {}) {
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
+      // The socket may have closed while we waited: an offline person must not take a seat or start a play-time clock.
+      if (!p.connected) return;
       // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
