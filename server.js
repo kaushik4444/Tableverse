@@ -15,6 +15,7 @@ const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
 const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = require('./db/matchRecord');
 const { leaveRunningGame, leaveStateOf } = require('./lib/leavePolicy');
+const rejoinPolicy = require('./lib/rejoinPolicy');
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -89,6 +90,7 @@ function start(opts = {}) {
   const port = opts.port ?? Number(process.env.PORT || 3000);
   const botDelay = opts.botDelay || [900, 1600]; // ms range a bot "thinks"
   const autoAdvanceMs = opts.autoAdvanceMs ?? 8000; // pause between rounds
+  const rejoinGraceMs = opts.rejoinGraceMs ?? rejoinPolicy.REJOIN_GRACE_MS; // a voluntary leaver may take the seat back within this long after leaving
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
   const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket's session is re-checked this often
@@ -1022,6 +1024,7 @@ function start(opts = {}) {
     if (room.status === 'playing') {
       // Leaving a game that other people are still playing counts as a loss for the leaver. Leaving a game against bots
       // only does not. A second leaver makes the game "abandoned": the people still playing get no result for it.
+      rejoinPolicy.leftSeat(room, p.id, Date.now()); // starts the grace period once; active time stops here
       leaveRunningGame(room, p.id);
       room.members[i].bot = true; // a bot takes over the seat; the player can take it back by rejoining
       (room.leftEarly || (room.leftEarly = new Set())).add(p.id);
@@ -1434,11 +1437,16 @@ function start(opts = {}) {
       // Came back to a running game they left (a bot kept their seat): take the seat back, same player id.
       // This wins over "spectate": the home screen can only offer Spectate for a running game, and a player who
       // owns a seat must never be turned into a spectator while a bot plays their cards.
-      if (seat && room.status === 'playing' && seat.bot) {
+      if (seat && room.status === 'playing' && seat.bot && !rejoinPolicy.canReclaimSeat(room, p.id, Date.now(), rejoinGraceMs)) {
+        // The grace period is over (or the person already used it up): the bot keeps the seat and the penalty stands.
+        send(p.ws, { t: 'notice', text: 'The time to take your seat back has passed, so you are watching this game now. The leave still counts.' });
+      }
+      if (seat && room.status === 'playing' && seat.bot && rejoinPolicy.canReclaimSeat(room, p.id, Date.now(), rejoinGraceMs)) {
         if (p.room && p.room !== room.code) leaveRoom(p);
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
         seat.bot = false;
+        rejoinPolicy.reclaimSeat(room, p.id, Date.now());
         if (room.leftEarly) room.leftEarly.delete(p.id);
         if (room.forfeits) room.forfeits.delete(p.id); // back in time: no loss
         seat.avatar = p.avatar;
@@ -1630,6 +1638,7 @@ function start(opts = {}) {
       room.leftEarly = new Set();
       room.forfeits = new Set();
       room.abandoned = false;
+      rejoinPolicy.startActivity(room, room.members.filter((m) => !m.bot).map((m) => m.id), Date.now());
       room.deadline = null;
       room.waiting = [];
       room.pauseUntil = 0;

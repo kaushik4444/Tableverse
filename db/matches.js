@@ -59,7 +59,7 @@ class MemoryMatchStore {
       const secs = m.startedAt ? Math.max(0, Math.min(21600, Math.floor((finished - new Date(m.startedAt).getTime()) / 1000))) : 0;
       for (const p of m.participants) {
         rows.push({ matchId: m.matchKey || m, gameId: m.gameId, seat: p.seat ?? 0, playerId: p.playerId, score: p.score ?? 0, place: Number.isInteger(p.place) ? p.place : null,
-          isWinner: Boolean(p.isWinner), isDraw: Boolean(p.isDraw), isBot: Boolean(p.isBot), leftEarly: Boolean(p.leftEarly), forfeit: Boolean(p.forfeit), secondsPlayed: p.leftEarly || p.isBot ? 0 : secs });
+          isWinner: Boolean(p.isWinner), isDraw: Boolean(p.isDraw), isBot: Boolean(p.isBot), leftEarly: Boolean(p.leftEarly), forfeit: Boolean(p.forfeit), secondsPlayed: Number.isInteger(p.secondsPlayed) ? Math.min(21600, Math.max(0, p.secondsPlayed)) : (p.leftEarly || p.isBot ? 0 : secs) });
       }
     }
     return rows;
@@ -125,7 +125,8 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
       await client.query(
         `INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot, left_early, is_draw, forfeit, place, seconds_played)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                 CASE WHEN $8 OR $7 THEN 0
+                 CASE WHEN $12::int IS NOT NULL THEN $12::int
+                      WHEN $8 OR $7 THEN 0
                       ELSE LEAST(21600, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (SELECT finished_at - started_at FROM matches WHERE id = $1)))::INTEGER)) END)`,
         [
           matchId,
@@ -139,6 +140,8 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
           Boolean(p.isDraw),
           Boolean(p.forfeit),
           Number.isInteger(p.place) && p.place >= 1 && p.place <= 32767 ? p.place : null,
+          // Actual active seconds from the match record; null for an older record, which keeps the start-to-finish rule.
+          Number.isInteger(p.secondsPlayed) ? Math.min(21600, Math.max(0, p.secondsPlayed)) : null,
         ]
       );
     }
