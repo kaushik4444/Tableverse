@@ -17,7 +17,7 @@ function client() {
     hashCode: () => '', policyRequiresVerification: () => false,
   });
   for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
-  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'onMessage']) {
+  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'loadProfile', 'onMessage']) {
     const match = source.match(new RegExp('^  (?:async )?function ' + name + '\\([^]*?^  }', 'm'));
     assert.ok(match, name);
     vm.runInContext(match[0], c);
@@ -89,3 +89,35 @@ test('a notice cannot acknowledge a level under another account and baseline cle
   assert.equal(values.get('ct_level_seen_bob'), '3');
   assert.equal(c.S.levelUp, null);
 });
+
+// A profile load also waits for history; a refresh may start or finish in that gap.
+for (const seedCache of ['refreshLevel', 'loadProfile']) {
+  for (const newerState of ['pending', 'failed', 'succeeded']) {
+    test(`profile reuses only newer cached progress (${seedCache} cache, refresh ${newerState})`, async () => {
+      const { c } = client();
+      const response = (level) => ({ profile: { displayName: 'Alice' }, stats: { progress: { account: { level } } } });
+      c.getJson = async () => response(1);
+      await c[seedCache]();
+      assert.equal(c.S.latestProgressRequest, 1);
+      const pending = [];
+      c.getJson = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+      const profile = c.loadProfile();
+      const refresh = c.refreshLevel();
+      if (newerState === 'failed') pending[2].reject(new Error('offline'));
+      if (newerState === 'succeeded') pending[2].resolve(response(3));
+      if (newerState !== 'pending') await refresh;
+      pending[0].resolve(response(2));
+      pending[1].resolve({});
+      await profile;
+      assert.equal(c.S.profile.data.stats.progress.account.level, newerState === 'succeeded' ? 3 : 2);
+      if (newerState === 'pending') {
+        pending[2].resolve(response(3));
+        await refresh;
+        assert.equal(c.S.profile.data.stats.progress.account.level, 3);
+      }
+      assert.equal(c.S.latestProgressRequest, newerState === 'failed' ? 1 : 3);
+      c.clearClientSession();
+      assert.equal(c.S.latestProgressRequest, 0);
+    });
+  }
+}
