@@ -136,5 +136,21 @@ test('Poker: the final standing gives the place, so chips that tie do not share 
   assert.ok(pts.B > pts.C, 'the standing separates them');
 });
 
+test('a bot in 1st place does not push the humans down: places are relative to the ranked players', () => {
+  // four seats: a bot won (place 1), two humans are 2nd and 3rd, a human left without penalty (not ranked)
+  const pts = gameSkillPoints('propertyrivals', [
+    p('bot', 0, { place: 1, isBot: true }), p('H2', 0, { place: 2 }), p('H3', 0, { place: 3 }), p('X', 0, { place: 4, leftEarly: true }),
+  ]);
+  assert.equal(pts.H2, WIN, 'the best human of those ranked gets +20');
+  assert.equal(pts.H3, LOSS, 'the last human ranked gets -20');
+  assert.equal(pts.bot, undefined);
+  assert.equal(pts.X, undefined);
+});
+
+test('a lone ranked player (everyone else left or is a bot) gets 0, not -20', () => {
+  const pts = gameSkillPoints('propertyrivals', [p('H2', 0, { place: 2 }), p('bot', 0, { place: 1, isBot: true })]);
+  assert.equal(pts.H2, 0);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
