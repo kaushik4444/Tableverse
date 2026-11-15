@@ -181,7 +181,7 @@ async function getPlayerStats(playerId) {
 }
 
 /**
- * Account level, time played, a level per game and the number of penalised leaves, from the stored matches.
+ * Account level, time played, Game XP per game and the number of penalised leaves, from the stored matches.
  * Throws if the database fails (a zero would be misleading).
  */
 async function getProgress(playerId) {
