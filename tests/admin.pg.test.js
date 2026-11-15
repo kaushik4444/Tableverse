@@ -557,6 +557,18 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(Number.isInteger(r.json.queues.forfeits7d) && Number.isInteger(r.json.queues.forfeits_total), 'penalised-leave counts');
       assert.equal((await boss().browser.get('/api/admin/health')).json.db.ok, true);
     });
+    await test('the overview counts penalised leaves per participant, only forfeits, and the 7-day count only covers recent matches', async () => {
+      const before = (await boss().browser.get('/api/admin/overview?days=30')).json.queues;
+      // a recent match: two penalised leavers, one unpenalised early leaver, one stayer
+      const recent = (await q("INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at) VALUES (gen_random_uuid(), 'FFRECE', 'wizard', 4, '{}', NOW() - INTERVAL '1 hour', NOW()) RETURNING id"))[0].id;
+      await q("INSERT INTO match_participants (match_id, player_name, seat, score, left_early, forfeit) VALUES ($1,'A',0,0,TRUE,TRUE), ($1,'B',1,0,TRUE,TRUE), ($1,'C',2,0,TRUE,FALSE), ($1,'D',3,0,FALSE,FALSE)", [recent]);
+      // an older match (20 days ago): one penalised leaver
+      const old = (await q("INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at) VALUES (gen_random_uuid(), 'FFOLDM', 'wizard', 2, '{}', NOW() - INTERVAL '20 days 1 hour', NOW() - INTERVAL '20 days') RETURNING id"))[0].id;
+      await q("INSERT INTO match_participants (match_id, player_name, seat, score, left_early, forfeit) VALUES ($1,'E',0,0,TRUE,TRUE), ($1,'F',1,0,FALSE,FALSE)", [old]);
+      const after = (await boss().browser.get('/api/admin/overview?days=30')).json.queues;
+      assert.equal(after.forfeits_total - before.forfeits_total, 3, 'three penalised participants, not two matches and not the unpenalised leaver');
+      assert.equal(after.forfeits7d - before.forfeits7d, 2, 'only the two in the recent match');
+    });
     console.log('suspension and lookup (Stage 20.8)');
     await test('a suspended account cannot sign in and its existing session stops working; lifting it allows sign-in again', async () => {
       const v = await newUser('Susp');
