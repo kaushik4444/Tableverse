@@ -33,6 +33,10 @@ const { decideAccess, visibilityForNewTable } = require('./lib/roomAccess');
 const { scrubText } = require('./games/scrub');
 const { createStaticFiles } = require('./lib/staticFiles');
 const legalPages = require('./lib/legalPages');
+// The privacy notice and terms text, read once at start. A missing file just leaves its page answering 404.
+const LEGAL_TEXT = Object.fromEntries(['privacy', 'terms'].map((name) => {
+  try { return [name, fs.readFileSync(path.join(__dirname, 'lib', 'legal', name + '.md'), 'utf8')]; } catch { return [name, null]; }
+}));
 const { enqueueSocketMessage, createBoundedSerialQueue, sendBounded, sendBoundedRaw } = require('./lib/wsLimits');
 const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
@@ -115,6 +119,8 @@ function start(opts = {}) {
   // The Impressum is off unless LEGAL_IMPRESSUM_PUBLISHED=true (fail closed); see lib/legalPages.js.
   // Reported as on only when the page can actually be rendered (flag on and every detail set), so the links never point at a 404.
   const impressumOn = (opts.impressumPublished ?? legalPages.impressumPublished(env)) && legalPages.detailsComplete(env);
+  // The privacy notice and terms are off unless LEGAL_PAGES_PUBLISHED=true (fail closed); the text is read once from lib/legal.
+  const legalPagesOn = opts.legalPagesPublished ?? legalPages.legalPagesPublished(env);
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId, metered });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
@@ -461,6 +467,18 @@ function start(opts = {}) {
     if (rel.includes('\0')) {
       res.writeHead(400);
       return res.end();
+    }
+    // The privacy notice and the terms (/privacy, /terms): shown only when LEGAL_PAGES_PUBLISHED=true and the text has no
+    // owner placeholders left (fail closed). Served from lib/legal, never from public/, so the raw drafts are not reachable.
+    if (rel === '/privacy' || rel === '/terms') {
+      const body = legalPagesOn ? legalPages.renderLegal(LEGAL_TEXT[rel.slice(1)]) : null;
+      if (!body) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        return res.end('Not found');
+      }
+      const html = legalPages.legalPage(rel === '/privacy' ? 'Privacy notice' : 'Terms of use', body);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(html) });
+      return res.end(html);
     }
     if (rel.endsWith('/')) rel += 'index.html';
     const file = path.normalize(path.join(PUBLIC_DIR, rel));

@@ -105,3 +105,14 @@ This draft was prepared from the official texts: the GDPR (Regulation (EU) 2016/
 12. **Voice relay (Metered).** Voice audio passes through Metered when a direct connection fails. In the beta, voice is withheld. [OWNER: confirm voice stays withheld until Metered is verified and the processor terms are checked.]
 13. **Pre-sign-up display.** The approved text must be shown before registration (planned change C-B). [OWNER: approve the change.]
 14. **Provider list.** The list must match the live configuration at launch, including the GitHub cleanup workflow. [OWNER: confirm at launch.]
+
+---
+
+## How the pages are published (implemented)
+
+- The publishable text is `lib/legal/privacy.md` and `lib/legal/terms.md`. It was copied from the drafts above, without the status note and the open-question list. Those drafts remain the working files for the owner's decisions.
+- `/privacy` and `/terms` answer 404 unless `LEGAL_PAGES_PUBLISHED=true` **and** the text has no `[OWNER` or `[LEGAL` placeholder left. Today there are placeholders, so the pages stay hidden even with the switch on.
+- To publish: the owner approves each open question, the placeholders are filled in `lib/legal/*.md` through a reviewed PR, then `LEGAL_PAGES_PUBLISHED=true` is set on Render. The public URLs for Google's Branding page are `https://playtableverse.com/privacy` and `https://playtableverse.com/terms`.
+- The pages carry no script and are `noindex`. The raw files are never served from `public/`.
+- The app does not link to these pages yet. Footer links are a separate change once the text is approved.
+
