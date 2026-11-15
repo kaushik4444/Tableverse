@@ -1587,7 +1587,7 @@
   const emptyState = (icon, title, text) => `<div class="empty"><span class="empty-ico" aria-hidden="true">${icon}</span><b>${esc(title)}</b><p>${esc(text)}</p></div>`;
   const loadingBlock = (text = 'Loading…') => `<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>${esc(text)}</div>`;
   const errorBlock = (text, retryAct) => `<div class="error-block" role="alert"><p>${esc(text)}</p>${retryAct ? `<button type="button" class="btn ghost small" data-act="${retryAct}">Try again</button>` : ''}</div>`;
-  const RESULT_LABEL = { won: 'Won', lost: 'Lost', draw: 'Draw', left: 'Left early' };
+  const RESULT_LABEL = { won: 'Won', lost: 'Lost', draw: 'Draw', left: 'Left (not counted)', forfeit: 'Left (counts as a loss)' };
 
   async function getJson(url) {
     const r = await fetch(url, { credentials: 'same-origin' });
@@ -1711,7 +1711,7 @@
       return `<li class="hist-row"><span class="hist-ico" aria-hidden="true">${esc(meta.icon || '🎴')}</span><span class="hist-main"><b>${esc(meta.name)}</b><small>${esc(fmtDate(g.finishedAt))} · ${g.humans} player${g.humans === 1 ? '' : 's'}${g.seats > g.humans ? ` + ${g.seats - g.humans} bot${g.seats - g.humans === 1 ? '' : 's'}` : ''}</small></span><span class="result ${g.result}">${RESULT_LABEL[g.result]}</span></li>`;
     }).join('');
     const pager = h.pages > 1 ? `<nav class="pager" aria-label="History pages"><button type="button" class="btn ghost small" data-act="historyPage" data-page="${h.page - 1}" ${h.page <= 1 ? 'disabled' : ''}>← Newer</button><span>Page ${h.page} of ${h.pages}</span><button type="button" class="btn ghost small" data-act="historyPage" data-page="${h.page + 1}" ${h.page >= h.pages ? 'disabled' : ''}>Older →</button></nav>` : '';
-    return `<ul class="hist-list">${rows}</ul>${pager}<p class="hint" style="text-align:left">Games you left early are listed but not counted in your statistics.</p>`;
+    return `<ul class="hist-list">${rows}</ul>${pager}<p class="hint" style="text-align:left">Leaving while others were still playing counts as a loss. Leaving against bots only, or in a game that was abandoned, is listed but not counted.</p>`;
   }
 
   /** Accounts this person has blocked, with a button to unblock each. Names are shown only here, to the blocker. */
@@ -2406,9 +2406,9 @@
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
-  /** The statistics block of a profile. Games you left early and bot seats are never counted (the server leaves them out). */
+  /** The statistics block of a profile. Bot seats and games left without a penalty are never counted (the server leaves them out). */
   function statsHTML(s) {
-    if (!s || !s.played) return emptyState('🃏', 'No finished games yet', 'Finish a game with friends or bots and your record shows up here. Games you leave early are not counted.');
+    if (!s || !s.played) return emptyState('🃏', 'No finished games yet', 'Finish a game with friends or bots and your record shows up here. Leaving while others are still playing counts as a loss.');
     const fav = s.favouriteGame ? statsGame(s.favouriteGame) : null;
     const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
     const games = s.perGame.map((g) => {
@@ -2430,7 +2430,7 @@
       <div class="stat-games">${games}</div>
       <h3 class="stat-h">Last ${s.recent.length} games <small>(newest first)</small></h3>
       <div class="stat-recent">${recent}</div>
-      <p class="hint" style="text-align:left;margin-top:12px">Ties share the win. Games you left early are not counted.</p>`;
+      <p class="hint" style="text-align:left;margin-top:12px">Ties share the win. Leaving while others are still playing counts as a loss.</p>`;
   }
 
   function openActivityLog() {
