@@ -397,7 +397,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; levelRequest += 1; S.latestProgress = null; S.latestProgressUser = null; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; levelRequest += 1; S.latestProgress = null; S.latestProgressUser = null; S.latestProgressRequest = 0; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -1779,6 +1779,7 @@
       const noticeBefore = JSON.stringify(S.levelUp);
       S.latestProgress = progress || null;
       S.latestProgressUser = S.username || null;
+      S.latestProgressRequest = mine;
       setAccount(progress);
       noteLevelUp();
       // Keep the open profile in step, including Game XP changes that do not advance a time-based level.
@@ -1801,9 +1802,10 @@
         const progress = me && me.stats && me.stats.progress;
         S.latestProgress = progress || null;
         S.latestProgressUser = S.username || null;
+        S.latestProgressRequest = mine;
         setAccount(progress);
         noteLevelUp();
-      } else if (S.latestProgressUser === (S.username || null) && S.latestProgress && me && me.stats) {
+      } else if (S.latestProgressRequest > mine && S.latestProgressUser === (S.username || null) && S.latestProgress && me && me.stats) {
         // A newer refresh finished while this request was in flight; don't put its older snapshot back on screen.
         me.stats.progress = S.latestProgress;
       }
