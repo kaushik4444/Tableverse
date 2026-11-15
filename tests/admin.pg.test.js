@@ -83,6 +83,26 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(sum(after, 'newPlayers'), sum(before, 'newPlayers'), 'players whose only record is incomplete are not new');
       assert.equal(sum(after, 'returningPlayers'), sum(before, 'returningPlayers'), 'and they are not returning either');
     });
+    await test('retention: incomplete games do not put a player in a cohort or count as a return', async () => {
+      const ins = require('../db/insights');
+      const DAY = 86400000;
+      const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
+      const cohort = async () => (await ins.insights({ days: 7, tz: 'UTC' })).returning.cohort;
+      const mk = async (player, at, completed) => {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at, completed)
+                            VALUES (gen_random_uuid(), 'RIC1', 'ludo', 2, $1::timestamptz, $1::timestamptz + INTERVAL '15 minutes', $2) RETURNING id`, [at, completed]))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw, forfeit) VALUES ($1,$2,$3,0,false,false,$4,false,$4)', [m, player, 'x', !completed]);
+      };
+      const before = await cohort();
+      const pat = await newUser('Ric'); const quin = await newUser('Rid');
+      // an incomplete first record 9 days ago must not start the cohort; the first completed game is 8 days ago
+      await mk(pat.id, ago(9), false); await mk(pat.id, ago(8), true);
+      // an incomplete return the next day must not count as coming back
+      await mk(quin.id, ago(9), true); await mk(quin.id, ago(8), false);
+      const after = await cohort();
+      assert.equal(after.size - before.size, 2, 'both players start the cohort from their first completed game');
+      assert.equal(after.d1 - before.d1, 0, 'neither returned with a completed game on day 1');
+    });
     await test('report queue: counts, severity, suspension, a deleted reporter, and an audit row on opening it', async () => {
       const rq = require('../db/reportQueue');
       const rep = await newUser('Rpa'); const bad = await newUser('Rpb'); const staff = await newUser('Rps');
