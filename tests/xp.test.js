@@ -73,10 +73,17 @@ test('Twenty-nine and The Mind: a win is +20, a draw 0, a loss -20 for everyone 
   assert.equal(drawn.B, 0);
 });
 
-test('Line Games: a win, a draw and a loss', () => {
-  const pts = gameSkillPoints('linegames', [w('A'), l('B')]);
-  assert.equal(pts.A, WIN);
-  assert.equal(pts.B, LOSS);
+test('Line Games (the real ids): a win and a loss, also when the opponent forfeits or is a bot', () => {
+  for (const id of ['tictactoe', 'fourinarow']) {
+    const pts = gameSkillPoints(id, [w('A'), l('B')]);
+    assert.equal(pts.A, WIN, id);
+    assert.equal(pts.B, LOSS, id);
+    // the opponent forfeits: the remaining player is ranked alone but still gets the win
+    const solo = gameSkillPoints(id, [w('A'), p('B', 0, { leftEarly: true, forfeit: true })]);
+    assert.equal(solo.A, WIN, id + ' win against a forfeit');
+    const vsBot = gameSkillPoints(id, [w('A'), p('B', 0, { isBot: true })]);
+    assert.equal(vsBot.A, WIN, id + ' win against a bot');
+  }
 });
 
 test('a penalised leave costs the same in every game and is worse than losing', () => {
