@@ -1,0 +1,90 @@
+'use strict';
+// Exercise the client's session/level boundaries without a server or database.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const { test } = require('node:test');
+const source = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
+function client() {
+  const values = new Map();
+  const c = vm.createContext({
+    S: { guest: true, username: 'alice', pending: [], routed: true },
+    sessionGen: 0, httpBusy: false,
+    store: { get: (key) => values.get(key) ?? null, set: (key, value) => values.set(key, value) },
+    location: { hash: '' },
+    getJson: async () => ({ stats: { progress: { account: { level: 3, into: 10, need: 140 } } } }),
+    hashCode: () => '', policyRequiresVerification: () => false,
+  });
+  for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
+  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'onMessage']) {
+    const match = source.match(new RegExp('^  (?:async )?function ' + name + '\\([^]*?^  }', 'm'));
+    assert.ok(match, name);
+    vm.runInContext(match[0], c);
+  }
+  const ack = source.slice(source.indexOf('    levelUpAck: () =>'), source.indexOf('    openFriendsPage:', source.indexOf('    levelUpAck: () =>')));
+  c.ack = vm.runInContext('({' + ack + '}).levelUpAck', c);
+  return { c, values };
+}
+const settle = () => new Promise(setImmediate);
+
+test('sign-in detects a level after welcome confirms the guest transition', async () => {
+  for (const seen of [null, '2']) {
+    const { c, values } = client();
+    if (seen !== null) values.set('ct_level_seen_alice', seen);
+    // Hydration may finish its profile request while the snapshot still says guest.
+    await c.refreshLevel();
+    assert.equal(c.S.levelUp, undefined);
+    c.finishSignIn({ player: { username: 'alice', display_name: 'Alice', email_verified: true } });
+    let renders = 0;
+    c.render = () => { renders++; };
+    c.onMessage({ t: 'welcome', id: 'alice' });
+    const welcomeRenders = renders;
+    await settle();
+    assert.equal(c.S.guest, false);
+    if (seen === null) {
+      assert.equal(values.get('ct_level_seen_alice'), '3');
+      assert.equal(c.S.levelUp, null);
+    } else {
+      assert.ok(renders > welcomeRenders, 'the new notice redraws even when progress was already fetched');
+      assert.equal(c.S.levelUp.username, 'alice');
+      assert.equal(c.S.levelUp.to, 3);
+      c.ack();
+      assert.equal(values.get('ct_level_seen_alice'), '3');
+      assert.equal(c.S.levelUp, null);
+    }
+  }
+});
+
+test('clearing a session discards its notice and ignores its pending profile response', async () => {
+  const { c, values } = client();
+  c.S.guest = false;
+  values.set('ct_level_seen_alice', '2');
+  await c.refreshLevel();
+  assert.ok(c.S.levelUp);
+  let resolve;
+  c.getJson = () => new Promise((done) => { resolve = done; });
+  const pending = c.refreshLevel();
+  c.clearClientSession();
+  assert.equal(c.S.levelUp, null);
+  c.S.username = 'bob';
+  resolve({ stats: { progress: { account: { level: 9 } } } });
+  await pending;
+  assert.equal(c.S.account, null);
+  assert.equal(c.S.levelUp, null);
+});
+
+test('a notice cannot acknowledge a level under another account and baseline clears it', async () => {
+  const { c, values } = client();
+  c.S.guest = false;
+  values.set('ct_level_seen_alice', '2');
+  await c.refreshLevel();
+  const notice = c.S.levelUp;
+  c.S.username = 'bob';
+  c.ack();
+  assert.equal(values.has('ct_level_seen_bob'), false);
+  assert.equal(values.get('ct_level_seen_alice'), '2');
+  c.S.levelUp = notice;
+  c.noteLevelUp();
+  assert.equal(values.get('ct_level_seen_bob'), '3');
+  assert.equal(c.S.levelUp, null);
+});

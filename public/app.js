@@ -396,7 +396,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -621,7 +621,6 @@
     adoptPlayer(out.player);
     S.requireEmailVerification = policyRequiresVerification(out);
     S.emailVerified = !!(out.player && out.player.email_verified);
-    refreshLevel(); // password and Google sign-ins do not pass through hydrateSession
     S.signedOutIntentionally = false;
     if (S.requireEmailVerification && !S.emailVerified) {
       openAuthSheet('login', 'Please verify your email before playing. Use “Resend verification email” if the link did not arrive.');
@@ -1097,6 +1096,7 @@
         S.impressumPublished = m.impressumPublished === true; // the server decides (LEGAL_IMPRESSUM_PUBLISHED); no link while it is off
         S.token = '';
         S.guest = false;
+        refreshLevel(); // detect levels only after welcome confirms the signed-in account
         S.games = m.games;
         S.publicTables = m.tables || [];
         S.rejoin = m.rejoin || [];
@@ -1756,10 +1756,10 @@
     if (!S.username || !S.account || S.guest) return;
     const k = 'ct_level_seen_' + S.username;
     const seen = store.get(k);
-    if (seen === null) { store.set(k, String(S.account.level)); return; }
-    S.levelUp = S.account.level > Number(seen) ? { from: Number(seen), to: S.account.level } : null;
+    if (seen === null) { S.levelUp = null; store.set(k, String(S.account.level)); return; }
+    S.levelUp = S.account.level > Number(seen) ? { username: S.username, from: Number(seen), to: S.account.level } : null;
   }
-  /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws only when the level changed. */
+  /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
   async function refreshLevel() {
     const gen = sessionGen;
     try {
@@ -1767,9 +1767,10 @@
       if (gen !== sessionGen) return; // another account (or nobody) is signed in now
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
+      const noticeBefore = JSON.stringify(S.levelUp);
       setAccount(me && me.stats && me.stats.progress);
       noteLevelUp();
-      if (key(S.account) !== before) render(); // the game-over card shows into and need too
+      if (key(S.account) !== before || JSON.stringify(S.levelUp) !== noticeBefore) render(); // the game-over card shows into and need too
     } catch { /* the level badge is optional */ }
   }
 
@@ -2596,7 +2597,7 @@
         : `<li class="pg-row">${label}</li>`;
     }).join('');
     const left = pr.penalisedLeaves > 0 ? `<p class="hint" style="text-align:left">Left ${pr.penalisedLeaves} game${pr.penalisedLeaves === 1 ? '' : 's'} early (counted as a loss).</p>` : '';
-    const levelUp = interactive && S.levelUp ? `<div class="levelup-note" role="status"><b>Level up!</b> You reached level ${Number(S.levelUp.to)}. <button type="button" class="btn small" data-act="levelUpAck">Got it</button></div>` : '';
+    const levelUp = interactive && S.levelUp && S.levelUp.username === S.username ? `<div class="levelup-note" role="status"><b>Level up!</b> You reached level ${Number(S.levelUp.to)}. <button type="button" class="btn small" data-act="levelUpAck">Got it</button></div>` : '';
     return `<section class="progress-card" aria-label="Progress">${levelUp}
       <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
         <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>
@@ -2899,7 +2900,7 @@
     toggleBell: () => { S.bellOpen = !S.bellOpen; S.menuOpen = false; render(); if (S.bellOpen) loadSocial({ quiet: true }); },
     openProfilePage: () => { S.menuOpen = false; openPage('profile'); },
     levelUpAck: () => { // "Got it": remember this level on this device and take the notice away
-      if (S.username && S.levelUp) store.set('ct_level_seen_' + S.username, String(S.levelUp.to));
+      if (S.levelUp && S.levelUp.username === S.username) store.set('ct_level_seen_' + S.levelUp.username, String(S.levelUp.to));
       S.levelUp = null;
       render();
     },
