@@ -55,6 +55,7 @@ Tableverse is currently open for friend testing.
 - **29 double and redouble.** The whole answering side may double, redouble or accept, and one answer decides for both players. A new answer deadline starts when a double or redouble changes who answers.
 - **Blocking.** Block and unblock answer one request at a time, an unblock that changes nothing is answered, and a refusal shows an error that names the action.
 - **⋯ menu.** The same labels in the same order in every game.
+- **Progress and levels.** Your profile (and other players' profiles) shows an account level from time played, a skill level per game and the number of penalised early leaves (a leave that was not penalised is not counted); the admin overview counts penalised leaves. Time before leaving a game early is not stored yet, so it earns no account XP. Rules: `docs/PROGRESS_LEVELS.md`. One additive migration (`025_match_progress.sql`) stores `place` and `seconds_played`; past games are backfilled for the people who stayed.
 - **Ludo, six players.** The outer yard of the seat to play blinks, not the inner home.
 - **Version history.** What's new on the home page shows the newest release's three highlights. The account menu's **Version history** lists every release, newest first. The release notes are in `public/whats-new-data.js`; add a release there when a change ships.
 
