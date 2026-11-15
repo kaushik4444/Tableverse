@@ -1798,16 +1798,21 @@
     try {
       const [me, hist] = await Promise.all([getJson('/api/me/profile'), getJson(`/api/me/history?page=${historyPage}`)]);
       if (gen !== sessionGen) return;
-      if (mine === levelRequest) {
+      const hasNewerAcceptedProgress = S.latestProgressRequest > mine
+        && S.latestProgressUser === (S.username || null)
+        && S.latestProgress;
+      if (hasNewerAcceptedProgress) {
+        // A newer request has already succeeded; don't put this older snapshot back on screen.
+        if (me && me.stats) me.stats.progress = S.latestProgress;
+      } else {
+        // A newer request may still be pending or may fail. Accept this successful profile response
+        // unless a newer response has already been accepted, then let any later success supersede it.
         const progress = me && me.stats && me.stats.progress;
         S.latestProgress = progress || null;
         S.latestProgressUser = S.username || null;
         S.latestProgressRequest = mine;
         setAccount(progress);
         noteLevelUp();
-      } else if (S.latestProgressRequest > mine && S.latestProgressUser === (S.username || null) && S.latestProgress && me && me.stats) {
-        // A newer refresh finished while this request was in flight; don't put its older snapshot back on screen.
-        me.stats.progress = S.latestProgress;
       }
       S.profile = { ...S.profile, loading: false, data: me, history: hist };
       S.name = me.profile.displayName; S.named = true;
