@@ -178,12 +178,18 @@ function idToken({ sub, email, nonce, ...over }) {
     });
 
     await test('profile tells the page whether the account has a password (Google-only accounts delete through Google)', async () => {
-      assert.equal((await first.b.get('/api/me/profile')).json.profile.hasPassword, false);
+      // a fresh Google-only account (the earlier browsers were signed out by the one-session rule)
+      const p = await page(); const who = person();
+      const up = await p.b.post('/api/auth/google/complete', { credential: cred(p, who), username: `prof_${n}`, adultConfirmed: true });
+      assert.equal(up.status, 200, JSON.stringify(up.json));
+      const prof = await p.b.get('/api/me/profile');
+      assert.equal(prof.json.profile.hasPassword, false);
     });
 
     await test('deleting a Google account needs a fresh token for the SAME Google identity', async () => {
       const p = await page(); const who = person();
-      await p.b.post('/api/auth/google/complete', { credential: cred(p, who), username: `del_${n}`, adultConfirmed: true });
+      const up = await p.b.post('/api/auth/google/complete', { credential: cred(p, who), username: `del_${n}`, adultConfirmed: true });
+      assert.equal(up.status, 200, 'signup for the deletion test: ' + JSON.stringify(up.json));
       const other = person();
       const wrong = await p.b.post('/api/me/delete-account', { credential: cred(p, other) });
       assert.equal(wrong.status, 403, JSON.stringify(wrong.json));
