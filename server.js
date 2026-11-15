@@ -20,6 +20,7 @@ const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
 const { makeAuthEmailSender } = require('./lib/email');
+const { cspFor } = require('./lib/googleAuth');
 const { createAuthRoutes } = require('./lib/authRoutes');
 const dbAccount = require('./db/account');
 const { DELETED_NAME } = dbAccount;
@@ -63,18 +64,6 @@ async function resolveTarget(msg) {
   if (!msg || msg.id !== undefined || typeof msg.username !== 'string') return msg;
   const id = await dbAccount.idForUsername(msg.username);
   return id ? { id } : null;
-}
-
-/**
- * The page may load Google's sign-in script, button frame and styles, and only when Sign in with Google is configured
- * (GOOGLE_CLIENT_ID). Nothing else is opened up.
- */
-function cspFor(env) {
-  const g = String(env.GOOGLE_CLIENT_ID || '').trim() !== '';
-  return "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; "
-    + (g ? "script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; frame-src https://accounts.google.com/gsi/; "
-         : "style-src 'self' 'unsafe-inline'; ")
-    + "img-src 'self' data:; connect-src 'self' ws: wss:" + (g ? ' https://accounts.google.com/gsi/' : '') + "; frame-ancestors 'none'";
 }
 
 const SECURITY_HEADERS = {

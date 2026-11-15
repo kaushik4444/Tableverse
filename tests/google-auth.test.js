@@ -3,7 +3,7 @@
 require('./helpers/env');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { createVerifier, nonceFor, GoogleAuthError } = require('../lib/googleAuth');
+const { createVerifier, nonceFor, GoogleAuthError, cspFor } = require('../lib/googleAuth');
 
 let passed = 0; let failed = 0;
 async function test(name, fn) { try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + e.stack); } }
@@ -78,6 +78,15 @@ const rejects = async (p, detail) => { try { await p; } catch (e) { assert.ok(e 
   });
   await test('the nonce is a hash of the CSRF value: stable for one browser, different for another', () => {
     assert.equal(nonceFor('abc'), nonceFor('abc')); assert.notEqual(nonceFor('abc'), nonceFor('abd')); assert.match(nonceFor('abc'), /^[0-9a-f]{64}$/);
+  });
+  await test('the CSP opens up for Google only when a client ID is configured', () => {
+    const off = cspFor({});
+    assert.ok(!off.includes('google'), off); assert.match(off, /default-src 'self'/); assert.match(off, /frame-ancestors 'none'/);
+    const on = cspFor({ GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com' });
+    assert.match(on, /script-src 'self' https:\/\/accounts\.google\.com\/gsi\/client/); assert.match(on, /frame-src https:\/\/accounts\.google\.com\/gsi\//);
+    assert.match(on, /connect-src 'self' ws: wss: https:\/\/accounts\.google\.com\/gsi\//); assert.match(on, /object-src 'none'/);
+    assert.ok(!/script-src[^;]*'unsafe-inline'/.test(on) && !/script-src[^;]*\*/.test(on), 'no inline or wildcard scripts');
+    assert.ok(!cspFor({ GOOGLE_CLIENT_ID: '   ' }).includes('google'), 'blank means off');
   });
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
