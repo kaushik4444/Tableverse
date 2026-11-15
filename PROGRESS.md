@@ -44,6 +44,7 @@ Nothing here is "production verified" unless it says so; production verification
 | Render deploy confirmation, `/healthz`, `/readyz`, logs for `70ccd35` | PENDING OWNER ACTION (not verifiable from the agent environment) | |
 | Neon backup / point-in-time window, restore rehearsal | PENDING OWNER ACTION | M-8, M-10 |
 | Cleanup job safeguards (reviewer, read-only role, `CLEANUP_EXECUTE`) | PENDING OWNER ACTION (settings not visible from the repository) | M-5 |
+| Brand identity "Your Seat" (kit, site wiring, guide) | DONE (released in #179); loading pulse and admin mark DONE IN DEVELOPMENT (#184). Install icons on real devices and the live share-card preview: PENDING OWNER ACTION | `docs/BRAND.md`; `tests/brand-assets.test.js` checks icon files, manifest, share image and metadata |
 | Real-device testing (iOS Safari, Android Chrome) | NOT DONE | Chromium emulation only |
 | Shared room state / more than one instance | NOT IMPLEMENTED (deliberate: single-instance limit) | `docs/TECHNICAL_ARCHITECTURE.md` section F |
 | Photo avatars, extra games, new infrastructure | NOT IMPLEMENTED (out of scope for the friends beta) | |
