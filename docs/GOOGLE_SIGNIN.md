@@ -1,6 +1,6 @@
 # Sign in with Google
 
-Status: server side implemented on a branch; the sign-in button is a separate change. Off unless `GOOGLE_CLIENT_ID` is set. Not configured or verified in production.
+Status: implemented (server and the sign-in button); off unless `GOOGLE_CLIENT_ID` is set. Not configured or verified in production.
 
 ## Cost
 Free. Sign in with Google (Google Identity Services) has no usage charge and needs no billing account. It needs a Google Cloud project with an OAuth consent screen and one **Web** OAuth client ID. Only the basic `openid`, `email` and `profile` information is used, which does not require Google's app verification. There is no client secret in this flow, so there is nothing secret to store: `GOOGLE_CLIENT_ID` is public.
