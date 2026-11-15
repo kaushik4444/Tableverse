@@ -121,9 +121,27 @@
   const isSpectator = () => !!(S.room && (S.room.spectators || []).some((s) => s.id === S.id));
   /** Other people are still playing this game with us: leaving then counts as a loss. Against bots only it does not. */
   const otherHumansPlaying = () => !!(S.room && S.room.status === 'playing' && !isSpectator() && (S.room.members || []).some((m) => m.id !== S.id && !m.bot));
-  /** Every leave goes through here: with other people still playing, ask first, because the leave counts as a loss. */
+  /** What leaving now does, as the server decides it: 'counts' (a loss), 'abandons' (the game is abandoned, nobody penalised) or 'abandoned'. */
+  const leaveState = () => (S.room && S.room.leaveState) || 'counts';
+  /** One sentence for the profile and leave prompts, matching what leaving now actually does. */
+  const leaveConsequence = () => {
+    const state = leaveState();
+    if (state === 'abandons') return ' Another player has already left, so leaving now abandons the game: nobody is penalised.';
+    if (state === 'abandoned') return ' The game is already abandoned, so leaving costs nothing.';
+    return ' Leaving counts as a loss for you.';
+  };
+  /** Every leave goes through here: with other people still playing, ask first, because the leave may cost something. */
   function requestLeave() {
     if (!otherHumansPlaying()) { send({ t: 'leave' }); return; }
+    const state = leaveState();
+    if (state === 'abandoned') {
+      openModal('Leave game?', '<p class="hint">The game is already abandoned, so leaving costs nothing. A bot takes your seat, and the others keep playing. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave</button></div>');
+      return;
+    }
+    if (state === 'abandons') {
+      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Nobody is penalised, and the people who stayed get no result. A bot takes your seat. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
+      return;
+    }
     openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
   }
 
@@ -1945,7 +1963,7 @@
       if (!S.room) { closeModal(); openPage('player', p.username); return; }
       // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
       const seatedInGame = S.room.status === 'playing' && !isSpectator();
-      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' + (otherHumansPlaying() ? ' Leaving counts as a loss for you.' : '') : 'This leaves the table.';
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' + (otherHumansPlaying() ? leaveConsequence() : '') : 'This leaves the table.';
       openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
     },
     cardProfileConfirm: () => {

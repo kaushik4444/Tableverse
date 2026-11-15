@@ -13,8 +13,8 @@ const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
 const { prepareDatabase } = require('./db/startup');
-const { buildMatchRecord, buildForfeitRecord } = require('./db/matchRecord');
-const { leaveRunningGame } = require('./lib/leavePolicy');
+const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = require('./db/matchRecord');
+const { leaveRunningGame, leaveStateOf } = require('./lib/leavePolicy');
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -633,6 +633,9 @@ function start(opts = {}) {
       outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
+      // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
+      // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
+      leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
       now: Date.now(), // lets clients correct for clock differences
     };
   }
@@ -2114,6 +2117,9 @@ function start(opts = {}) {
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
     clearInterval(broadcastTimer);
+    // People who left a running game with others still playing are losses: queue them before the drain, so the drain below waits for them.
+    // Unfinished games are not recorded as finished.
+    try { for (const rec of buildShutdownForfeitRecords(rooms.values())) matchQueue.enqueue(rec); } catch (e) { console.error('[server] Error preparing shutdown records:', e.message); }
     // Let auth handlers finish before taking the delivery snapshot, within one shared shutdown window.
     if (drainMs) {
       const matchDrain = matchQueue.drain(drainMs);
