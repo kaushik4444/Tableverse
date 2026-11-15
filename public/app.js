@@ -466,7 +466,7 @@
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
       </div>
-      <div id="googleSlot" class="google-slot" hidden><div id="googleBtn"></div><p class="auth-or"><span>or use your email</span></p></div>
+      <div id="googleSlot" class="google-slot" hidden><div id="googleBtn"></div><label class="check-row"><input id="googleRemember" type="checkbox"> Keep me signed in on this device</label><p class="auth-or"><span>or use your email</span></p></div>
       ${loginOn ? `
         <form id="loginForm" class="auth-form">
           <input id="loginEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -545,8 +545,9 @@
     if (googleBusy) return;
     googleBusy = true;
     try {
-      const out = await withBusy('Signing in with Google…', () => postJson('/api/auth/google', { credential }));
-      if (out.needsSignup) return openGoogleSignupSheet(credential, out);
+      const remember = !!(document.getElementById('googleRemember') || {}).checked;
+      const out = await withBusy('Signing in with Google…', () => postJson('/api/auth/google', { credential, rememberDevice: remember }));
+      if (out.needsSignup) return openGoogleSignupSheet(credential, { ...out, remember });
       finishSignIn(out);
     } catch (err) {
       openAuthSheet(S.auth || 'login', err.message || 'Google sign-in failed.', true);
@@ -569,6 +570,7 @@
         <input id="googleUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
         <small id="googleUsernameHint" class="hint"></small>
         <label class="auth-check"><input id="googleAdult" type="checkbox" required> I am 18 or older.</label>
+        <label class="auth-check"><input id="googleKeep" type="checkbox"${info.remember ? ' checked' : ''}> Keep me signed in on this device <small class="hint">Only on a device you own.</small></label>
         <button class="btn big" type="submit">Create account</button>
       </form></div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
@@ -577,10 +579,11 @@
       const username = String(overlay.querySelector('#googleUsername').value || '').trim().toLowerCase();
       const displayName = overlay.querySelector('#googleName').value;
       const adultConfirmed = overlay.querySelector('#googleAdult').checked;
+      const remember = overlay.querySelector('#googleKeep').checked;
       try {
-        const out = await withBusy('Creating your account…', () => postJson('/api/auth/google/complete', { credential, username, displayName, avatar: S.avatar || undefined, adultConfirmed }));
+        const out = await withBusy('Creating your account…', () => postJson('/api/auth/google/complete', { credential, username, displayName, avatar: S.avatar || undefined, adultConfirmed, rememberDevice: remember }));
         finishSignIn(out);
-      } catch (err) { openGoogleSignupSheet(credential, info, err.message || 'Could not create the account.'); }
+      } catch (err) { openGoogleSignupSheet(credential, { ...info, remember }, err.message || 'Could not create the account.'); }
     });
     const u = overlay.querySelector('#googleUsername');
     u.addEventListener('input', async () => {
@@ -1975,35 +1978,52 @@
 
   // ---- account deletion
   function openDeleteAccountDialog() {
+    const viaGoogle = !!(S.profile && S.profile.data && S.profile.data.profile && S.profile.data.profile.hasPassword === false);
     openModal('Delete your account', `<form id="deleteForm" class="auth-form">
         <p class="hint" style="text-align:left;color:var(--ink)">This permanently deletes your account. It cannot be undone.</p>
         <ul class="plain-list">
           <li><b>Deleted:</b> your login (email and password), your username and display name, your avatar, your sessions on every device and your recent tables.</li>
           <li><b>Kept:</b> the games you finished, so other players’ history and results stay correct. Your seat in them is shown as “Deleted player” and is no longer linked to you.</li>
         </ul>
-        <label class="label" for="deletePw">Enter your password to confirm</label>
-        <input id="deletePw" type="password" required autocomplete="current-password" placeholder="Password">
+        ${viaGoogle
+          ? `<p class="hint" style="text-align:left;color:var(--ink)">This account signs in with Google. Confirm it is you with Google, and it is deleted straight away.</p><div id="deleteGoogleBtn" class="google-slot"></div>`
+          : `<label class="label" for="deletePw">Enter your password to confirm</label>
+        <input id="deletePw" type="password" required autocomplete="current-password" placeholder="Password">`}
         <p id="deleteMsg" class="auth-msg" role="alert" hidden></p>
-        <div class="row" style="justify-content:flex-end;gap:8px"><button type="button" class="btn ghost" data-modal-close>Cancel</button><button type="submit" class="btn danger">Delete my account</button></div>
+        <div class="row" style="justify-content:flex-end;gap:8px"><button type="button" class="btn ghost" data-modal-close>Cancel</button>${viaGoogle ? '' : '<button type="submit" class="btn danger">Delete my account</button>'}</div>
       </form>`, (o) => {
+      const finishDeletion = () => {
+        closeModal();
+        S.signedOutIntentionally = true;
+        clearClientSession();
+        for (const k of ['ct_name', 'ct_username', 'ct_avatar']) store.remove(k);
+        S.name = ''; S.username = ''; S.named = false; S.avatar = ''; S.profile = null; S.recentTables = [];
+        S.ready = false; S.room = null; S.view = null; S.page = 'home';
+        try { history.replaceState(null, '', location.pathname); } catch { /* ignore */ }
+        loadSnapshot();
+        toast('Your account has been deleted.');
+      };
+      if (viaGoogle && window.TvGoogle) {
+        const target = o.querySelector('#deleteGoogleBtn');
+        const msg = o.querySelector('#deleteMsg');
+        window.TvGoogle.mount(target, async (credential) => {
+          try {
+            await withBusy('Deleting your account…', () => postJson('/api/me/delete-account', { credential }));
+            finishDeletion();
+          } catch (err) { msg.textContent = err.message || 'Could not delete the account.'; msg.hidden = false; }
+        }, () => { msg.textContent = 'Google could not be loaded. Try again later.'; msg.hidden = false; });
+      }
       o.addEventListener('submit', async (e) => {
         if (e.target.id !== 'deleteForm') return;
         e.preventDefault();
         const msg = o.querySelector('#deleteMsg');
         const btn = e.target.querySelector('button[type=submit]');
+        if (!btn) return; // Google accounts confirm with Google's button instead
         btn.disabled = true;
         try {
           const pw = o.querySelector('#deletePw').value;
           await withBusy('Deleting your account…', () => postJson('/api/me/delete-account', { password: pw }));
-          closeModal();
-          S.signedOutIntentionally = true;
-          clearClientSession();
-          for (const k of ['ct_name', 'ct_username', 'ct_avatar']) store.remove(k);
-          S.name = ''; S.username = ''; S.named = false; S.avatar = ''; S.profile = null; S.recentTables = [];
-          S.ready = false; S.room = null; S.view = null; S.page = 'home';
-          try { history.replaceState(null, '', location.pathname); } catch { /* ignore */ }
-          loadSnapshot();
-          toast('Your account has been deleted.');
+          finishDeletion();
         } catch (err) {
           msg.textContent = err.message || 'Could not delete the account.';
           msg.hidden = false;

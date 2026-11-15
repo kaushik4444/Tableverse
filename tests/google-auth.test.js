@@ -50,6 +50,12 @@ const rejects = async (p, detail) => { try { await p; } catch (e) { assert.ok(e 
     await rejects(mk().verify(token({ exp: NOW / 1000 - 3600 }), { nonce: 'n1' }), /expired/);
     await rejects(mk().verify(token({ iat: NOW / 1000 + 3600 }), { nonce: 'n1' }), /iat/);
   });
+  await test('a deletion confirmation must be a recent token: an older one is refused even if otherwise valid', async () => {
+    const t = Math.floor(NOW / 1000);
+    await mk().verify(token({ iat: t, exp: t + 3600 }), { nonce: 'n1', maxAgeSeconds: 300 });
+    await rejects(mk().verify(token({ iat: t - 3600, exp: t + 3000 }), { nonce: 'n1', maxAgeSeconds: 300 }), /too old/);
+    await mk().verify(token({ iat: t - 3600, exp: t + 3000 }), { nonce: 'n1' }); // without a limit an older token is still a valid sign-in
+  });
   await test('an unverified or missing email is rejected', async () => {
     await rejects(mk().verify(token({ email_verified: false }), { nonce: 'n1' }), /not verified/);
     await rejects(mk().verify(token({ email_verified: 'true' }), { nonce: 'n1' }), /not verified/);
