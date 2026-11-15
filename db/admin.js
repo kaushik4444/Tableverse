@@ -290,9 +290,42 @@ async function overview({ days = 30 } = {}) {
     // work waiting for a person: reports (no status column yet, so recent and total) and feedback not yet read
     db.query(`SELECT (SELECT COUNT(*) FROM chat_reports WHERE created_at > NOW() - INTERVAL '7 days')::int AS reports7d,
                      (SELECT COUNT(*) FROM chat_reports)::int AS reports_total,
-                     (SELECT COUNT(*) FROM feedback WHERE status = 'new')::int AS feedback_new`),
+                     (SELECT COUNT(*) FROM feedback WHERE status = 'new')::int AS feedback_new,
+                     (SELECT COUNT(*) FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.forfeit AND m.finished_at > NOW() - INTERVAL '7 days')::int AS forfeits7d,
+                     (SELECT COUNT(*) FROM match_participants WHERE forfeit)::int AS forfeits_total`),
   ]);
   return { days: n, series: series.rows, dims: dims.rows, active: active.rows[0], accounts: accounts.rows[0], activeDaily: activeDaily.rows, queues: queues.rows[0] };
+}
+
+/**
+ * Game by game, over the last N days: finished games, player-games, signed-in players, penalised leaves (left while
+ * others were still playing), leaves without a penalty, average play time per player-game, and games in the last 7 days.
+ * Counts and averages only: no player is named, and guests are counted without an identity.
+ */
+async function gameStats({ days = 30 } = {}) {
+  const n = Math.min(90, Math.max(1, Math.floor(Number(days)) || 30));
+  const perGame = await db.query(`
+    SELECT m.game_id,
+           COUNT(DISTINCT m.id)::int AS finished,
+           COUNT(*) FILTER (WHERE NOT mp.is_bot)::int AS player_games,
+           COUNT(DISTINCT mp.player_id) FILTER (WHERE NOT mp.is_bot AND NOT pl.is_anonymous)::int AS signed_in_players,
+           COUNT(*) FILTER (WHERE NOT mp.is_bot AND mp.forfeit)::int AS penalised_leaves,
+           COUNT(*) FILTER (WHERE NOT mp.is_bot AND mp.left_early AND NOT mp.forfeit)::int AS left_without_penalty,
+           COALESCE(AVG(mp.seconds_played) FILTER (WHERE NOT mp.is_bot), 0)::float AS avg_seconds,
+           COUNT(DISTINCT m.id) FILTER (WHERE m.finished_at > NOW() - INTERVAL '7 days')::int AS finished_7d
+      FROM matches m JOIN match_participants mp ON mp.match_id = m.id
+      LEFT JOIN players pl ON pl.id = mp.player_id
+     WHERE m.finished_at > NOW() - ($1::int * INTERVAL '1 day')
+     GROUP BY m.game_id
+     ORDER BY finished DESC, m.game_id`, [n]);
+  return {
+    days: n,
+    games: perGame.rows.map((r) => ({
+      gameId: r.game_id, finished: r.finished, playerGames: r.player_games, signedInPlayers: r.signed_in_players,
+      penalisedLeaves: r.penalised_leaves, leftWithoutPenalty: r.left_without_penalty,
+      avgMinutes: Math.round((r.avg_seconds / 60) * 10) / 10, finished7d: r.finished_7d,
+    })),
+  };
 }
 
 async function health() {
@@ -456,7 +489,7 @@ async function purge() {
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health,
+  addCounters, addActive, forgetActor, overview, health, gameStats,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)

@@ -596,6 +596,8 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .end-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 12px; }
 .end-votes { display: block; text-align: center; margin-top: 8px; }
 .end-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(20, 16, 44, .94); border-top: 1px solid rgba(255, 255, 255, .15); }
+/* The shared actions inside the result sheet scroll with it; only a bar outside a sheet is fixed to the bottom. */
+.end-bar.end-bar-in { position: static; margin-top: 12px; background: none; border: 0; padding: 0; }
 @keyframes endFade { from { opacity: 0 } to { opacity: 1 } }
 @keyframes endPop { from { transform: scale(.6); opacity: 0 } to { transform: scale(1); opacity: 1 } }
 @keyframes endBounce { 50% { transform: translateY(-6px) } }
@@ -636,3 +638,45 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 
 /* a form hint that is now an error (for example a password that is too weak) */
 .hint.bad { color: #fca5a5; }
+
+.progress-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-bottom: 12px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid var(--panel-line); }
+.pg-level { display: flex; flex-direction: column; gap: 4px; }
+.levelup-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: rgba(245, 185, 66, 0.16); border: 1px solid rgba(245, 185, 66, 0.55); text-align: left; }
+.pg-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+.pg-bar span { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
+.pg-games { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.pg-row { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+.pg-btn { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; padding: 6px 8px; margin: 0; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pg-btn:hover, .pg-btn:focus-visible { background: rgba(255,255,255,.06); }
+.pg-btn b { white-space: nowrap; color: var(--gold); }
+.pg-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.stat-game-btn { width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.stat-game-btn:hover, .stat-game-btn:focus-visible { background: rgba(255,255,255,.06); }
+.tb-level { font-size: 12px; font-weight: 700; color: var(--gold); padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.1); white-space: nowrap; }
+.end-xp { max-width: 560px; margin: 12px auto 0; text-align: left; }
+.xp-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.xp-card { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); }
+.xp-card.xp-game { background: rgba(255,255,255,.03); }
+.end-xp .xp-kind { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); overflow-wrap: anywhere; }
+.end-xp .xp-num { font-size: 22px; line-height: 1.15; color: var(--gold); white-space: nowrap; }
+.end-xp .xp-card small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.end-xp .xp-note { margin: 8px 2px 0; font-size: 12px; color: var(--muted); }
+.end-xp .xp-table { margin-top: 10px; border-radius: 12px; overflow: hidden; background: rgba(255,255,255,.04); }
+.end-xp .xp-tr { display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px; gap: 8px; align-items: center; padding: 9px 12px; font-size: 14px; }
+.end-xp .xp-tr + .xp-tr { border-top: 1px solid rgba(255,255,255,.08); }
+.end-xp .xp-th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding-top: 8px; padding-bottom: 8px; }
+.end-xp .xp-c { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.end-xp .xp-th .xp-c { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+.end-xp .xp-name { min-width: 0; overflow-wrap: anywhere; }
+.end-xp .xp-tr.me { font-weight: 700; }
+.end-xp .xp-tag { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+@media (max-width: 420px) {
+  .xp-summary { grid-template-columns: minmax(0, 1fr); }
+  .end-xp .xp-tr { grid-template-columns: minmax(0, 1fr) 64px 56px; padding: 8px 10px; }
+  .end-xp .xp-num { font-size: 20px; }
+}
+
+.google-slot { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 12px 0 4px; min-height: 44px; }
+.auth-or { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; color: var(--muted, #9bc4ae); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.14); }
+.auth-or span { white-space: nowrap; }

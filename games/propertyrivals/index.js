@@ -64,7 +64,15 @@ module.exports = {
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // the score is each player's net worth at the end; the winner is the last player standing (or the richest in a timed game)
-      results: () => g.players.map((p, i) => ({ score: p.bankrupt ? 0 : E.netWorth(g, i), winner: g.winner === i })),
+      // place: the order players went out (last out is last); players still in are ranked by net worth among themselves
+      results: () => {
+        const stillIn = g.players.map((_, j) => j).filter((j) => !g.players[j].bankrupt);
+        return g.players.map((p, i) => ({
+          score: p.bankrupt ? 0 : E.netWorth(g, i),
+          winner: g.winner === i,
+          place: p.bankrupt ? p.place || g.players.length : 1 + stillIn.filter((j) => j !== i && E.netWorth(g, j) > E.netWorth(g, i)).length,
+        }));
+      },
     };
   },
 };

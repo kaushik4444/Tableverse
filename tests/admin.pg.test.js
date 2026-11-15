@@ -67,6 +67,42 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).days, 30, 'an unknown range falls back to 30 days');
       assert.equal((await ins.insights({ days: 5, tz: 'Mars/Base' })).zone, 'UTC', 'an unknown zone falls back to UTC');
     });
+    await test('insights: a table that closed mid-game does not count as a game, a new player or a return', async () => {
+      const ins = require('../db/insights');
+      const before = await ins.insights({ days: 7, tz: 'UTC' });
+      const x = await newUser('Ica'); const y = await newUser('Icb');
+      // an incomplete record (only leavers' losses) for two players who have never completed a game
+      for (const pl of [x, y]) {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at, completed)
+                            VALUES (gen_random_uuid(), 'INC1', 'incompletegame', 2, NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day' + INTERVAL '5 minutes', FALSE) RETURNING id`))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw, forfeit) VALUES ($1,$2,$3,0,false,false,true,false,true)', [m, pl.id, 'x']);
+      }
+      const after = await ins.insights({ days: 7, tz: 'UTC' });
+      assert.equal(after.games.find((g) => g.gameId === 'incompletegame'), undefined, 'the incomplete table is not a game in the table statistics');
+      const sum = (o, k) => o.returning.daily.reduce((n, r) => n + r[k], 0);
+      assert.equal(sum(after, 'newPlayers'), sum(before, 'newPlayers'), 'players whose only record is incomplete are not new');
+      assert.equal(sum(after, 'returningPlayers'), sum(before, 'returningPlayers'), 'and they are not returning either');
+    });
+    await test('retention: incomplete games do not put a player in a cohort or count as a return', async () => {
+      const ins = require('../db/insights');
+      const DAY = 86400000;
+      const ago = (days) => new Date(Date.now() - days * DAY).toISOString();
+      const cohort = async () => (await ins.insights({ days: 7, tz: 'UTC' })).returning.cohort;
+      const mk = async (player, at, completed) => {
+        const m = (await q(`INSERT INTO matches (match_key, room_code, game_id, seats, started_at, finished_at, completed)
+                            VALUES (gen_random_uuid(), 'RIC1', 'ludo', 2, $1::timestamptz, $1::timestamptz + INTERVAL '15 minutes', $2) RETURNING id`, [at, completed]))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw, forfeit) VALUES ($1,$2,$3,0,false,false,$4,false,$4)', [m, player, 'x', !completed]);
+      };
+      const before = await cohort();
+      const pat = await newUser('Ric'); const quin = await newUser('Rid');
+      // an incomplete first record 9 days ago must not start the cohort; the first completed game is 8 days ago
+      await mk(pat.id, ago(9), false); await mk(pat.id, ago(8), true);
+      // an incomplete return the next day must not count as coming back
+      await mk(quin.id, ago(9), true); await mk(quin.id, ago(8), false);
+      const after = await cohort();
+      assert.equal(after.size - before.size, 2, 'both players start the cohort from their first completed game');
+      assert.equal(after.d1 - before.d1, 0, 'neither returned with a completed game on day 1');
+    });
     await test('report queue: counts, severity, suspension, a deleted reporter, and an audit row on opening it', async () => {
       const rq = require('../db/reportQueue');
       const rep = await newUser('Rpa'); const bad = await newUser('Rpb'); const staff = await newUser('Rps');
@@ -554,7 +590,20 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.ok(r.json.accounts.registered >= 1);
       assert.ok(Array.isArray(r.json.activeDaily) && r.json.activeDaily.length === 30 && r.json.activeDaily.every(Number.isInteger), 'one active count per day');
       assert.ok(Number.isInteger(r.json.queues.reports7d) && Number.isInteger(r.json.queues.reports_total) && Number.isInteger(r.json.queues.feedback_new), 'queue counts');
+      assert.ok(Number.isInteger(r.json.queues.forfeits7d) && Number.isInteger(r.json.queues.forfeits_total), 'penalised-leave counts');
       assert.equal((await boss().browser.get('/api/admin/health')).json.db.ok, true);
+    });
+    await test('the overview counts penalised leaves per participant, only forfeits, and the 7-day count only covers recent matches', async () => {
+      const before = (await boss().browser.get('/api/admin/overview?days=30')).json.queues;
+      // a recent match: two penalised leavers, one unpenalised early leaver, one stayer
+      const recent = (await q("INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at) VALUES (gen_random_uuid(), 'FFRECE', 'wizard', 4, '{}', NOW() - INTERVAL '1 hour', NOW()) RETURNING id"))[0].id;
+      await q("INSERT INTO match_participants (match_id, player_name, seat, score, left_early, forfeit) VALUES ($1,'A',0,0,TRUE,TRUE), ($1,'B',1,0,TRUE,TRUE), ($1,'C',2,0,TRUE,FALSE), ($1,'D',3,0,FALSE,FALSE)", [recent]);
+      // an older match (20 days ago): one penalised leaver
+      const old = (await q("INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at) VALUES (gen_random_uuid(), 'FFOLDM', 'wizard', 2, '{}', NOW() - INTERVAL '20 days 1 hour', NOW() - INTERVAL '20 days') RETURNING id"))[0].id;
+      await q("INSERT INTO match_participants (match_id, player_name, seat, score, left_early, forfeit) VALUES ($1,'E',0,0,TRUE,TRUE), ($1,'F',1,0,FALSE,FALSE)", [old]);
+      const after = (await boss().browser.get('/api/admin/overview?days=30')).json.queues;
+      assert.equal(after.forfeits_total - before.forfeits_total, 3, 'three penalised participants, not two matches and not the unpenalised leaver');
+      assert.equal(after.forfeits7d - before.forfeits7d, 2, 'only the two in the recent match');
     });
     console.log('suspension and lookup (Stage 20.8)');
     await test('a suspended account cannot sign in and its existing session stops working; lifting it allows sign-in again', async () => {

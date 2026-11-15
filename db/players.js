@@ -106,7 +106,7 @@ async function authenticateToken(rawToken) {
 
   const tokenHash = hashToken(rawToken);
   const sql = `
-    SELECT p.id, p.username, p.display_name, p.avatar, p.is_anonymous, p.created_at, p.last_seen_at
+    SELECT p.id, p.username, p.display_name, p.avatar, p.is_anonymous, p.created_at, p.last_seen_at, p.welcomed_at
     FROM auth_sessions s
     JOIN players p ON s.player_id = p.id
     WHERE s.token_hash = $1

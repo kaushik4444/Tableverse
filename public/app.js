@@ -121,10 +121,41 @@
   const isSpectator = () => !!(S.room && (S.room.spectators || []).some((s) => s.id === S.id));
   /** Other people are still playing this game with us: leaving then counts as a loss. Against bots only it does not. */
   const otherHumansPlaying = () => !!(S.room && S.room.status === 'playing' && !isSpectator() && (S.room.members || []).some((m) => m.id !== S.id && !m.bot));
-  /** Every leave goes through here: with other people still playing, ask first, because the leave counts as a loss. */
+  /** What leaving now does, as the server decides it: 'counts' (a loss), 'abandons' (the game is abandoned, nobody penalised) or 'abandoned'. */
+  const leaveState = () => (S.room && S.room.leaveState) || 'counts';
+  /** One sentence for the profile and leave prompts, matching what leaving now actually does. */
+  const leaveConsequence = () => {
+    const state = leaveState();
+    if (state === 'abandons') return ' Another player has already left, so leaving now abandons the game: nobody is penalised.';
+    if (state === 'abandoned') return ' The game is already abandoned, so leaving costs nothing.';
+    return ' Leaving counts as a loss for you.';
+  };
+  /** How long a person who leaves may take the seat back, as the server sets it (REJOIN_GRACE_SECONDS). */
+  const rejoinWithin = () => { const s = (S.room && S.room.rejoinWindowSeconds) ?? 120; return s % 60 === 0 ? (s / 60) + ' minute' + (s === 60 ? '' : 's') : s + ' seconds'; };
+  /** Every leave goes through here: with other people still playing, ask first, because the leave may cost something. */
+  /** The result is written in the background and can finish after the player has left: refresh the level a few times. */
+  function scheduleLevelRefresh() {
+    refreshLevel();
+    setTimeout(refreshLevel, 4000);
+    setTimeout(refreshLevel, 15000);
+  }
+  /** Leaves the table. A finished game refreshes the level once the result is written, even if the player leaves early. */
+  function leaveNow() {
+    if (S.room && S.room.status === 'finished') scheduleLevelRefresh();
+    send({ t: 'leave' });
+  }
   function requestLeave() {
-    if (!otherHumansPlaying()) { send({ t: 'leave' }); return; }
-    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can rejoin from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
+    if (!otherHumansPlaying()) { leaveNow(); return; }
+    const state = leaveState();
+    if (state === 'abandoned') {
+      openModal('Leave game?', '<p class="hint">The game is already abandoned, so leaving costs nothing. A bot takes your seat, and the others keep playing. You can watch the game from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave</button></div>');
+      return;
+    }
+    if (state === 'abandons') {
+      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Nobody is penalised, and the people who stayed get no result. A bot takes your seat. You can watch the game from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
+      return;
+    }
+    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can take your seat back from the home screen within ' + rejoinWithin() + ' of your first leave in this game. The time does not restart if you leave and come back again. After that the bot keeps the seat.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
   }
 
   window.CardTable = Object.assign(window.CardTable || {}, {
@@ -349,6 +380,8 @@
       if (!out || !out.ok || !out.authenticated) return false;
       adoptPlayer(out.player);
       S.emailVerified = !!out.emailVerified;
+      S.welcomeDue = out.welcome === true; // first login: the welcome dialog is shown once, after the lobby starts
+      refreshLevel();
       return true;
     } catch {
       return false;
@@ -364,7 +397,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -433,6 +466,7 @@
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
       </div>
+      <div id="googleSlot" class="google-slot" hidden><div id="googleBtn"></div><p class="auth-or"><span>or use your email</span></p></div>
       ${loginOn ? `
         <form id="loginForm" class="auth-form">
           <input id="loginEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -458,6 +492,7 @@
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     document.body.appendChild(overlay);
+    mountGoogle();
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');
     if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
     if (!loginOn) {
@@ -493,6 +528,72 @@
     }
   }
 
+  // "Continue with Google": shown only when the server has it configured. The page never decides who someone is: it forwards
+  // Google's token to the server, which verifies it.
+  async function mountGoogle() {
+    const slot = document.getElementById('googleSlot');
+    if (!slot || !window.TvGoogle) return;
+    if (!(await window.TvGoogle.available())) return;
+    const btn = document.getElementById('googleBtn');
+    if (!btn || !btn.isConnected) return;
+    slot.hidden = false;
+    window.TvGoogle.mount(btn, onGoogleCredential, () => { slot.hidden = true; });
+  }
+
+  let googleBusy = false;
+  async function onGoogleCredential(credential) {
+    if (googleBusy) return;
+    googleBusy = true;
+    try {
+      const out = await withBusy('Signing in with Google…', () => postJson('/api/auth/google', { credential }));
+      if (out.needsSignup) return openGoogleSignupSheet(credential, out);
+      finishSignIn(out);
+    } catch (err) {
+      openAuthSheet(S.auth || 'login', err.message || 'Google sign-in failed.', true);
+    } finally { googleBusy = false; }
+  }
+
+  // A new person: Google proved the address, they still choose a username and confirm they are an adult.
+  function openGoogleSignupSheet(credential, info, msg = '') {
+    closeOverlay();
+    S.auth = 'google';
+    const overlay = document.createElement('div');
+    overlay.id = 'auth-overlay';
+    overlay.className = 'overlay';
+    overlay.innerHTML = `<div class="sheet auth-sheet" data-stop="1" role="dialog" aria-label="Finish creating your account">
+      <div class="row" style="justify-content:space-between"><h2>Almost there</h2><button class="btn ghost small" data-auth-close aria-label="Close">✕</button></div>
+      <p class="hint" style="text-align:left">Signing up with Google as <b>${esc(info.email)}</b>. Choose how you appear at the table.</p>
+      ${msg ? `<p class="auth-msg" role="alert">${esc(msg)}</p>` : ''}
+      <form id="googleSignupForm" class="auth-form">
+        <input id="googleName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname" value="${esc(info.suggestedName || '')}">
+        <input id="googleUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
+        <small id="googleUsernameHint" class="hint"></small>
+        <label class="auth-check"><input id="googleAdult" type="checkbox" required> I am 18 or older.</label>
+        <button class="btn big" type="submit">Create account</button>
+      </form></div>`;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
+    overlay.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = String(overlay.querySelector('#googleUsername').value || '').trim().toLowerCase();
+      const displayName = overlay.querySelector('#googleName').value;
+      const adultConfirmed = overlay.querySelector('#googleAdult').checked;
+      try {
+        const out = await withBusy('Creating your account…', () => postJson('/api/auth/google/complete', { credential, username, displayName, avatar: S.avatar || undefined, adultConfirmed }));
+        finishSignIn(out);
+      } catch (err) { openGoogleSignupSheet(credential, info, err.message || 'Could not create the account.'); }
+    });
+    const u = overlay.querySelector('#googleUsername');
+    u.addEventListener('input', async () => {
+      const value = String(u.value || '').trim().toLowerCase(); u.value = value;
+      const hint = overlay.querySelector('#googleUsernameHint');
+      if (!value) { hint.textContent = ''; return; }
+      if (!/^[a-z0-9_]{3,24}$/.test(value)) { hint.textContent = 'Use 3-24 chars: lowercase letters, numbers, underscore.'; return; }
+      try { const o = await fetch(`/api/auth/username-available?username=${encodeURIComponent(value)}`).then((r) => r.json()); hint.textContent = o.available ? 'Username is available.' : 'Username is already taken.'; } catch { hint.textContent = ''; }
+    });
+    document.body.appendChild(overlay);
+    if (!matchMedia('(pointer: coarse)').matches) overlay.querySelector('#googleUsername').focus();
+  }
+
   function closeOverlay() {
     const el = document.getElementById('auth-overlay');
     if (el) el.remove();
@@ -511,6 +612,11 @@
 
   async function doLogin(email, password, rememberDevice = false) {
     const out = await withBusy('Logging in…', () => postLogin(email, password, rememberDevice));
+    finishSignIn(out);
+  }
+
+  // After the server has started a session (password login or Google): adopt the player and connect.
+  function finishSignIn(out) {
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     adoptPlayer(out.player);
@@ -521,8 +627,10 @@
       openAuthSheet('login', 'Please verify your email before playing. Use “Resend verification email” if the link did not arrive.');
       return;
     }
+    S.welcomeDue = out.welcome === true;
     closeOverlay();
     beginSignIn();
+    if (S.welcomeDue) showWelcome();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
@@ -718,9 +826,14 @@
   function recentTablesHTML() {
     if (!S.recentTables.length) return '';
     const rows = S.recentTables.map((r) => {
-      const mine = S.rejoin.some((x) => x.code === r.code);
-      const status = mine ? 'Your seat is waiting' : r.status === 'playing' ? 'In progress' : 'Open';
-      return `<button class="recent-table ${mine ? 'mine' : ''}" data-act="rejoin" data-code="${esc(r.code)}"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code>${mine ? '<em class="rj-badge">Rejoin</em>' : `<small>${status}</small>`}</button>`;
+      const mine = S.rejoin.find((x) => x.code === r.code);
+      if (mine && mine.canReclaim === false && mine.noSeatedHumans) {
+        return `<div class="recent-table"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code><small>Game paused</small></div>`;
+      }
+      const reclaim = mine && mine.canReclaim !== false;
+      const status = reclaim ? 'Your seat is waiting' : mine ? 'Watch game' : r.status === 'playing' ? 'In progress' : 'Open';
+      const action = mine && !reclaim ? 'watch' : 'rejoin';
+      return `<button class="recent-table ${reclaim ? 'mine' : ''}" data-act="${action}" data-code="${esc(r.code)}"><span>↺</span><b>${esc(r.name)}</b><code>${esc(r.code)}</code>${reclaim ? '<em class="rj-badge">Rejoin</em>' : `<small>${status}</small>`}</button>`;
     }).join('');
     return `<section class="home-section"><h2 class="section">Recent tables</h2><div class="recent-tables">${rows}</div></section>`;
   }
@@ -730,7 +843,14 @@
     if (!S.rejoin.length) return '';
     return S.rejoin.map((r) => {
       const g = gameMeta(r.gameId) || { name: r.gameId, icon: '🎴' };
-      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.</span></div><button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button></div>`;
+      const canReclaim = r.canReclaim !== false;
+      const message = canReclaim
+        ? `${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.`
+        : `${r.noSeatedHumans ? 'The rejoin window has passed, so this game cannot resume.' : 'The rejoin window has passed, but you can still watch'} at table <code>${esc(r.code)}</code>.`;
+      const action = canReclaim
+        ? `<button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button>`
+        : r.noSeatedHumans ? '' : `<button class="btn" data-act="watch" data-code="${esc(r.code)}">Watch</button>`;
+      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${message}</span></div>${action}</div>`;
     }).join('');
   }
 
@@ -979,6 +1099,7 @@
         S.impressumPublished = m.impressumPublished === true; // the server decides (LEGAL_IMPRESSUM_PUBLISHED); no link while it is off
         S.token = '';
         S.guest = false;
+        refreshLevel(); // detect levels only after welcome confirms the signed-in account
         S.games = m.games;
         S.publicTables = m.tables || [];
         S.rejoin = m.rejoin || [];
@@ -1243,6 +1364,7 @@
       openAuthSheet('login', 'Please verify your email to enter the lobby.');
       return;
     }
+    if (S.welcomeDue) showWelcome();
     connect();
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   })();
@@ -1625,15 +1747,54 @@
     if (page === 'profile') loadProfile(); else if (page === 'player') loadPlayer(arg); else if (page === 'friends') { render(); loadSocial({ quiet: true }); } else render();
   }
 
+  /** Overall level (time played) shown beside the avatar. Null when the progress is missing. */
+  function setAccount(progress) {
+    const a = progress && progress.account;
+    S.account = a ? { level: a.level, into: a.into, need: a.need } : null;
+  }
+  /**
+   * The last level this device showed for this account, kept per device (a convenience, not a record). The first time a
+   * device sees an account it only remembers the level: nothing is announced for levels reached before.
+   */
+  function noteLevelUp() {
+    if (!S.username || !S.account || S.guest) return;
+    const k = 'ct_level_seen_' + S.username;
+    const seen = store.get(k);
+    if (seen === null) { S.levelUp = null; store.set(k, String(S.account.level)); return; }
+    S.levelUp = S.account.level > Number(seen) ? { username: S.username, from: Number(seen), to: S.account.level } : null;
+  }
+  /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
+  let levelRequest = 0; // the newest refresh; an answer from an older refresh must not overwrite it
+  async function refreshLevel() {
+    const gen = sessionGen;
+    const mine = ++levelRequest;
+    try {
+      const me = await getJson('/api/me/profile');
+      if (gen !== sessionGen || mine !== levelRequest) return; // another account is signed in, or a newer refresh has started
+      const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
+      const before = key(S.account);
+      const noticeBefore = JSON.stringify(S.levelUp);
+      setAccount(me && me.stats && me.stats.progress);
+      noteLevelUp();
+      // The profile page draws its own copy of the progress: keep it in step with the level shown in the header
+      if (S.profile && S.profile.data && S.profile.data.stats && me && me.stats && me.stats.progress) S.profile.data.stats.progress = me.stats.progress;
+      if (key(S.account) !== before || JSON.stringify(S.levelUp) !== noticeBefore) render(); // the game-over card shows into and need too
+    } catch { /* the level badge is optional */ }
+  }
+
   async function loadProfile(historyPage = 1) {
     const keepTab = S.profile && S.profile.tab;
+    const gen = sessionGen; // an answer for an account that has since signed out (or changed) is dropped
     S.profile = { loading: true, error: '', data: null, history: null, tab: keepTab || 'overview', historyPage };
     render();
     try {
       const [me, hist] = await Promise.all([getJson('/api/me/profile'), getJson(`/api/me/history?page=${historyPage}`)]);
+      if (gen !== sessionGen) return;
       S.profile = { ...S.profile, loading: false, data: me, history: hist };
+      setAccount(me.stats && me.stats.progress);
       S.name = me.profile.displayName; S.named = true;
     } catch (e) {
+      if (gen !== sessionGen) return;
       S.profile = { ...S.profile, loading: false, error: e.message || 'Could not load your profile.' };
     }
     render();
@@ -1742,7 +1903,7 @@
             <div class="setting-row"><div><b>Sessions</b><small>Sign out of this device, or of every device you are logged in on.</small></div><span class="row" style="gap:6px"><button type="button" class="btn ghost small" data-act="logout">Log out</button><button type="button" class="btn ghost small" data-act="logoutAll">Everywhere</button></span></div>
             <div class="danger-zone"><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
           </div>`
-        : statsHTML(P.data.stats);
+        : P.game ? gameDetailHTML(P) : statsHTML(P.data.stats);
       inner = `<header class="pp-head">
           ${avatar({ name, avatar: me.avatar }, 'big')}
           <div class="pp-id"><h1>${esc(name)}</h1><p>${me.username ? `@${esc(me.username)} · ` : ''}${esc(joinedText(me.joinedAt))}</p><p class="pp-conn">📶 Connection ${pingBadge(S.ping, { label: true, live: 'self' })}</p></div>
@@ -1782,6 +1943,7 @@
     else {
       const d = P.data;
       inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${d.blockedByMe ? '<p class="pp-blocked"><b>Blocked</b></p>' : friendLine(d.username)}</div></header>
+        ${progressHTML(d.progress, false)}
         <div class="stat-grid"><div class="stat-tile"><span class="stat-v">${d.played}</span><span class="stat-l">Games played</span></div><div class="stat-tile good"><span class="stat-v">${d.wins}</span><span class="stat-l">Wins</span></div><div class="stat-tile"><span class="stat-v">${d.winRate === null ? '–' : d.winRate + '%'}</span><span class="stat-l">Win rate</span></div></div>
         ${!S.guest && S.username && S.username.toLowerCase() !== String(d.username).toLowerCase() ? playerActionsHTML(P, d) : ''}`;
     }
@@ -1829,12 +1991,10 @@
   }
 
   // ------------------------------------------------------------ top bar, account menu and its dialogs
-  const WHATS_NEW_VERSION = '2026-11-leave-and-reactions';
-  const WHATS_NEW = [
-    ['🚪', 'Leaving a game with others counts as a loss', 'If other people are still playing, leaving asks first. If the game then finishes, it counts as a loss for you. If a second player also leaves, the game is abandoned: nobody is penalised, and the people who stayed get no result. Playing only against bots, leaving does not count.'],
-    ['😀', 'More reactions, and spectators can react', 'There are 21 reactions now. A spectator’s reaction shows their name with a 👁, so the table knows it came from someone watching.'],
-    ['🚩', 'Block and report players', 'Block or report a player from their table card or from their profile page. Reports go to the moderators, and each player can be reported once. Guests can’t report.'],
-  ];
+  // Release history lives in public/whats-new-data.js. The home page shows the newest release's first three items.
+  const RELEASES = Array.isArray(window.TV_RELEASES) ? window.TV_RELEASES : [];
+  const WHATS_NEW_VERSION = RELEASES.length ? RELEASES[0].version : '';
+  const WHATS_NEW = RELEASES.length ? RELEASES[0].items.slice(0, 3) : [];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
   /** Friend requests + table invitations waiting for an answer (drives the menu badge and the home strip). */
@@ -1859,13 +2019,14 @@
         ${item('openFriendsPage', '👥', 'Friends')}
         ${item('openSettings', '⚙️', 'Settings')}
         ${item('openWhatsNew', '🎉', 'What’s new', hasNewNews() ? '<span class="mi-new">New</span>' : '')}
+        ${item('openVersionHistory', '📜', 'Version history')}
         ${item('openFeedback', '💬', 'Send feedback')}
         ${S.isStaff ? item('openAdmin', '🛠️', 'Admin console') : ''}
         <div class="menu-sep" role="separator"></div>
         ${item('logout', '🚪', 'Log out')}
         ${item('logoutAll', '🔒', 'Log out everywhere', '', 'dim')}
       </div>` : '';
-    return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}">${av}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
+    return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}${S.account ? `, level ${Number(S.account.level)}` : ''}">${av}${S.account ? `<span class="tb-level" title="Your overall level">Lv ${Number(S.account.level)}</span>` : ''}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
   }
 
   /**
@@ -1926,6 +2087,8 @@
   }
 
   const modalActions = {
+    versionHistory: () => openVersionHistoryDialog(),
+    welcomeStart: () => closeModal(),
     cardAdd: () => { const p = S.card && S.card.last; if (p && p.username) cardAction('/api/me/friend-requests', { username: p.username }, 'Friend request sent.', 'Sending request…'); },
     cardCancel: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/cancel', { requestId: r.request.id }, undefined, 'Cancelling…'); },
     cardAccept: () => { const r = relationTo(S.card && S.card.last); if (r.request) cardAction('/api/me/friend-requests/accept', { requestId: r.request.id }, 'Friend request accepted.', 'Accepting…'); },
@@ -1933,7 +2096,7 @@
     cardRemove: () => { const r = relationTo(S.card && S.card.last); if (!r.friend) return; openModal('Remove friend', '<p class="hint">Remove this friend? Any pending invitations between you will also be revoked.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Cancel</button><button type="button" class="btn danger" data-modal-act="cardRemoveConfirm">Remove friend</button></div>'); },
     cardRemoveConfirm: () => { const r = relationTo(S.card && S.card.last); closeModal(); if (r.friend) cardAction('/api/me/friends/remove', { friendId: r.friend.id }, 'Friend removed.', 'Removing friend…'); },
     removeFriendConfirm: () => { const id = S.pendingFriendRemovalId; S.pendingFriendRemovalId = null; closeModal(); if (id) socialPost('/api/me/friends/remove', { friendId: id }, 'Friend removed.', 'Removing friend…'); },
-    leaveGameConfirm: () => { closeModal(); send({ t: 'leave' }); },
+    leaveGameConfirm: () => { closeModal(); leaveNow(); },
     cardMute: () => { const p = S.card && S.card.last; if (!p) return; if (muted.has(p.id)) muted.delete(p.id); else muted.add(p.id); saveMuted(); drawChat(); drawCard(); },
     cardEditMe: () => { closeModal(); openEditProfileDialog(); },
     // Opening a profile is a page, and the app only shows a page when no table is open. From a table, confirm first:
@@ -1944,7 +2107,7 @@
       if (!S.room) { closeModal(); openPage('player', p.username); return; }
       // Only a seated player in a running game has a seat a bot takes; in the lobby, after a game, or spectating, opening the profile just leaves the table.
       const seatedInGame = S.room.status === 'playing' && !isSpectator();
-      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can rejoin from the home screen.' + (otherHumansPlaying() ? ' Leaving counts as a loss for you.' : '') : 'This leaves the table.';
+      const leaveText = seatedInGame ? 'This leaves the game: a bot takes your seat, and you can take your seat back within 2 minutes from the home screen.' + (otherHumansPlaying() ? leaveConsequence() : '') : 'This leaves the table.';
       openModal(seatedInGame ? 'Leave game' : 'Leave table', `<p class="hint">Open ${esc(p.name)}’s profile? ${leaveText}</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn small" data-modal-act="cardProfileConfirm">View profile</button></div>`);
     },
     cardProfileConfirm: () => {
@@ -1956,7 +2119,7 @@
       if (!(ws && ws.readyState === 1)) { toast('Connection lost. Reconnect, then open the profile again.'); return; }
       // The page opens when the server confirms the leave ('left'); opening it now would be undone by that message.
       S.pendingPage = { page: 'player', arg: p.username };
-      send({ t: 'leave' });
+      leaveNow();
     },
     // Blocking is account-level and works the same from a table as from chat: the blocked person is hidden from table
     // chat and table voice in both directions. The block itself is sent to the server by the player's id.
@@ -2167,7 +2330,39 @@
     S.wnSeen = WHATS_NEW_VERSION;
     store.set('ct_wn_seen', S.wnSeen);
     render();
-    openModal('What’s new', `<ul class="wn-list">${WHATS_NEW.filter((w) => S.voiceEnabled || w[3] !== 'voice').map(([ico, t, d]) => `<li><span class="wn-ico" aria-hidden="true">${ico}</span><div><b>${esc(t)}</b><p>${esc(d)}</p></div></li>`).join('')}</ul>`);
+    const newest = RELEASES[0] || { title: '', items: [] };
+    const list = WHATS_NEW.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+    openModal('What’s new', `<p class="hint" style="text-align:left">${esc(newest.title)}</p><ul class="wn-list">${list}</ul><div class="row" style="margin-top:12px"><button type="button" class="btn ghost small" data-modal-act="versionHistory">All versions</button></div>`);
+  }
+
+  /**
+   * First login: a welcome dialog, shown once. It says what Tableverse is and shows the newest release's highlights.
+   * It is marked as seen on the server when it opens, so a reload or another device does not show it again.
+   */
+  function showWelcome() {
+    S.welcomeDue = false;
+    const newest = RELEASES[0] || { items: [] };
+    const list = (newest.items || []).filter((w) => S.voiceEnabled || !w.voice).slice(0, 3)
+      .map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+    openModal('Welcome to Tableverse', `<p class="hint" style="text-align:left">Tableverse is a place to play classic card and board games online, with friends and other players. Find a table, sit down and play. Your games and progress are kept on your profile, so you can see how you are getting on.</p>${list ? `<h3>What’s new</h3><ul class="wn-list">${list}</ul>` : ''}<div class="row" style="margin-top:12px"><button type="button" class="btn primary" data-modal-act="welcomeStart">Start playing</button></div>`);
+    postJson('/api/me/welcome-seen', {}).catch(() => {}); // shown: remember it on the account (a failed save only means it may show once more)
+  }
+
+  /** Every release, newest first, with its items (voice items only when voice chat is on). */
+  function openVersionHistoryDialog() {
+    const body = RELEASES.map((r) => {
+      const items = r.items.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+      return `<section class="wn-release" aria-label="${esc(r.title)}"><h3 class="stat-h" style="margin:14px 0 6px">${esc(r.title)}${r.version || r.date ? ` <small>${esc([r.version, r.date].filter(Boolean).join(' · '))}</small>` : ''}</h3><ul class="wn-list">${items}</ul></section>`;
+    }).join('');
+    openModal('Version history', body || '<p class="hint">No releases yet.</p>', (o) => {
+      // the dialog's only control is its close button: focus it, and keep Tab on it, so focus never reaches the page behind
+      const close = o.querySelector('[data-modal-close]');
+      if (!close) return;
+      close.focus();
+      o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
+      // both entry points remove the trigger on open, so focus goes back to the account button when it closes
+      modalOnClose = () => { const b = document.querySelector('.tb-avatar-btn'); if (b) b.focus(); };
+    });
   }
 
   /** Fields whose text must survive a redraw (someone joins, a friend comes online) while the person is typing or choosing. */
@@ -2406,17 +2601,77 @@
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
+  /** Signed XP number for display, e.g. +20 or -30. */
+  const fmtXp = (n) => (Number(n) > 0 ? `+${Number(n)}` : `${Number(n) || 0}`);
+
   /** The statistics block of a profile. Bot seats and games left without a penalty are never counted (the server leaves them out). */
-  function statsHTML(s) {
-    if (!s || !s.played) return emptyState('🃏', 'No finished games yet', 'Finish a game with friends or bots and your record shows up here. Leaving while others are still playing counts as a loss.');
+  /** Account level (time played), Game XP per game (skill) and penalised leaves. `pr` is the progress the server sends; nothing when absent. */
+  function progressHTML(pr, interactive = true) {
+    if (!pr || !pr.account) return '';
+    const a = pr.account;
+    const pct = a.need ? Math.min(100, Math.round((a.into / a.need) * 100)) : 0;
+    const games = Object.entries(pr.games || {}).sort((x, y) => y[1].points - x[1].points).map(([id, g]) => {
+      const meta = statsGame(id);
+      const label = `<span>${esc(meta.icon || '🎴')} ${esc(meta.name)}</span><b>${fmtXp(g.points)} XP</b>`;
+      // Another player's profile shows the same numbers but has no detail view for them, so its rows are plain text.
+      return interactive
+        ? `<li class="pg-row"><button type="button" class="pg-btn" data-act="openGameStats" data-game="${esc(id)}" aria-label="${esc(meta.name)}: ${fmtXp(g.points)} Game XP, details">${label}</button></li>`
+        : `<li class="pg-row">${label}</li>`;
+    }).join('');
+    const left = pr.penalisedLeaves > 0 ? `<p class="hint" style="text-align:left">Left ${pr.penalisedLeaves} game${pr.penalisedLeaves === 1 ? '' : 's'} early (counted as a loss).</p>` : '';
+    const levelUp = interactive && S.levelUp && S.levelUp.username === S.username ? `<div class="levelup-note" role="status"><b>Level up!</b> You reached level ${Number(S.levelUp.to)}. <button type="button" class="btn small" data-act="levelUpAck">Got it</button></div>` : '';
+    return `<section class="progress-card" aria-label="Progress">${levelUp}
+      <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
+        <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>
+      ${games ? `<h3 class="stat-h">Game XP${interactive ? ' <small>(tap a game for details)</small>' : ''}</h3><ul class="plain-list pg-games">${games}</ul>` : ''}${left}</section>`;
+  }
+
+  /** One game from "By game": its Game XP and how it is earned, the record, and that game's recent results. */
+  function gameDetailHTML(P) {
+    const id = P.game;
+    const meta = statsGame(id);
+    const head = `<div class="pg-head"><button type="button" class="btn ghost small" data-act="closeGameStats">← All games</button><b>${esc(meta.icon || '🎴')} ${esc(meta.name)}</b></div>`;
+    const st = P.data.stats;
+    const g = (st.perGame || []).find((x) => x.gameId === id);
+    if (!g) return `${head}${emptyState('🃏', 'Not played yet', 'Play this game and your Game XP and record show up here.')}`;
+    const pg = (st.progress && st.progress.games && st.progress.games[id]) || { points: 0, rule: 'placing' };
+    // Only people still in the game at the end are ranked (bots are not). Leaving while others play costs -30 on top.
+    const rule = pg.rule === 'win-lose'
+      ? 'Among the people (bots are not ranked) still in the game: win +20, loss −10, draw 0. Leaving while others are still playing −30.'
+      : 'Among the people (bots are not ranked) still in the game: first place +20, the lowest place −10, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
+    const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
+    const hist = P.gameHistory;
+    const histHTML = !hist ? '<p class="hint" style="text-align:left">Loading recent games…</p>'
+      : hist.failed ? '<p class="hint" style="text-align:left">Could not load this game’s history. Try again in a moment.</p>'
+      : historyHTML({ ...hist, pages: 1 });
+    return `${head}
+      <section class="progress-card" aria-label="${esc(meta.name)} Game XP">
+        <div class="pg-level"><span class="stat-v">${fmtXp(pg.points)} XP</span><span class="stat-l">Game XP in ${esc(meta.name)}</span></div>
+        <p class="hint" style="text-align:left">${esc(rule)}</p>
+      </section>
+      <div class="stat-grid">
+        ${tile('Played', g.played)}
+        ${tile('Wins', g.wins, 'good')}
+        ${tile('Losses', g.losses)}
+        ${tile('Win rate', g.winRate + '%')}
+        ${g.best !== null && g.bestLabel ? tile(esc(g.bestLabel), esc(g.bestText), 'wide') : ''}
+      </div>
+      <h3 class="stat-h">Recent ${esc(meta.name)} games</h3>
+      ${histHTML}`;
+  }
+
+  function statsHTML(s, interactive = true) {
+    if (!s || !s.played) return progressHTML(s && s.progress, interactive) + emptyState('🃏', 'No finished games yet', 'Finish a game with friends or bots and your record shows up here. Leaving while others are still playing counts as a loss.');
     const fav = s.favouriteGame ? statsGame(s.favouriteGame) : null;
     const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
     const games = s.perGame.map((g) => {
       const meta = statsGame(g.gameId);
-      return `<div class="stat-game"><span class="stat-game-name">${esc(meta.icon || '🎴')} ${esc(meta.name)}${KIND_NOTE[g.kind] ? ` <small class="stat-kind" title="${esc(KIND_NOTE[g.kind])}">${g.kind === 'coop' ? 'co-op' : 'teams'}</small>` : ''}</span><span class="stat-game-rec">${g.wins}W · ${g.losses}L</span><span class="stat-bar" aria-hidden="true"><i style="width:${g.winRate || 0}%"></i></span><span class="stat-game-pct">${g.winRate}%</span>${g.best !== null && g.bestLabel ? `<span class="stat-game-best">${esc(g.bestLabel)}: <b>${esc(g.bestText)}</b></span>` : ''}</div>`;
+      const tag = interactive ? 'button' : 'div';
+      return `<${tag} class="stat-game${interactive ? ' stat-game-btn' : ''}"${interactive ? ` type="button" data-act="openGameStats" data-game="${esc(g.gameId)}" aria-label="${esc(meta.name)}: details"` : ''}><span class="stat-game-name">${esc(meta.icon || '🎴')} ${esc(meta.name)}${KIND_NOTE[g.kind] ? ` <small class="stat-kind" title="${esc(KIND_NOTE[g.kind])}">${g.kind === 'coop' ? 'co-op' : 'teams'}</small>` : ''}</span><span class="stat-game-rec">${g.wins}W · ${g.losses}L</span><span class="stat-bar" aria-hidden="true"><i style="width:${g.winRate || 0}%"></i></span><span class="stat-game-pct">${g.winRate}%</span>${g.best !== null && g.bestLabel ? `<span class="stat-game-best">${esc(g.bestLabel)}: <b>${esc(g.bestText)}</b></span>` : ''}</${tag}>`;
     }).join('');
     const recent = s.recent.map((r) => `<span class="stat-chip ${r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${esc(statsGame(r.gameId).icon || '🎴')}<b>${r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
     return `
+      ${progressHTML(s.progress, interactive)}
       <div class="stat-grid">
         ${tile('Games played', s.played)}
         ${tile('Wins', s.wins, 'good')}
@@ -2513,12 +2768,53 @@
   const END_BOARD_MS = 3500; // the finished table stays visible
   const END_WINNER_MS = 2800; // then the "<name> won" pop-up
   /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
+  /**
+   * Game over: two amounts, never added together. Player Progress is time played (1 XP per full minute): it is the only
+   * thing that moves the overall level. Game XP is this game's own skill, named after the game. Every person is listed
+   * with both amounts side by side; there is no combined total.
+   */
+  function endXpHTML(rows, gameName) {
+    const people = rows.filter((x) => !x.isBot);
+    if (!people.length) return '';
+    const game = esc(gameName || 'Game');
+    const mine = people.find((x) => x.id === S.id);
+    const time = (x) => Math.max(0, Number(x.timeXp) || 0);
+    const unranked = (x) => x.gameXp === null || x.gameXp === undefined;
+    const summary = mine ? `<div class="xp-summary">
+        <div class="xp-card xp-progress">
+          <span class="xp-kind">Player Progress</span>
+          <b class="xp-num">+${time(mine)} XP</b>
+          <small>1 XP per full minute played${S.account ? ` · Level ${Number(S.account.level)}, ${Number(S.account.into)} / ${Number(S.account.need)} to the next` : ''}</small>
+        </div>
+        <div class="xp-card xp-game">
+          <span class="xp-kind">${game} Experience</span>
+          <b class="xp-num">${unranked(mine) ? 'Not ranked' : `${fmtXp(mine.gameXp)} XP`}</b>
+          <small>Counts only in ${game}${mine.penalised ? ' · left early (−30)' : ''}</small>
+        </div>
+      </div>${mine.saved ? '' : '<p class="xp-note">Guest games are not kept. Sign in to keep your progress and game XP.</p>'}` : '';
+    const body = people.map((x) => {
+      const me = Boolean(mine) && x.id === S.id;
+      const name = me ? 'You' : esc(x.name || 'Player');
+      const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
+      const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
+      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">+${time(x)}</span><span class="xp-c" role="cell">${unranked(x) ? '–' : fmtXp(x.gameXp)}</span></div>`;
+    }).join('');
+    const table = `<div class="xp-table" role="table" aria-label="XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">Progress</span><span class="xp-c" role="columnheader">${game}</span></div>${body}</div>`;
+    return `<section class="end-xp" aria-label="XP for this game">${summary}${table}</section>`;
+  }
+
   function endFlow() {
     const r = S.room;
     if (!r || r.status !== 'finished') { $app.classList.remove('endhold'); return; }
     if (!S.endFlow || S.endFlow.code !== r.code) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0), timer: null };
     const f = S.endFlow;
     clearTimeout(f.timer);
+    if (!f.levelDone) {
+      // The result is written in the background and can finish later than the screen: refresh now and again shortly after
+      // (a retry may still be writing). Leaving the table does not cancel these.
+      f.levelDone = true;
+      scheduleLevelRefresh();
+    }
     const t = Date.now() - f.start;
     const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
     $app.classList.toggle('endhold', stage !== 'result');
@@ -2549,7 +2845,25 @@
       }
       // Games whose non-host sees only a hint (no button) are covered by the row of the host button; if none was found, add a bar.
       for (const h of $app.querySelectorAll('.overlay .hint, .ludo-end .hint')) if (/waiting for the host/i.test(h.textContent)) h.remove();
-      if (!$app.querySelector('.end-actions')) $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
+      if (!$app.querySelector('.end-actions')) {
+        // No action row in this game (the non-host view): the shared actions go inside the result sheet, so they scroll with
+        // the XP card. The fixed bar is only for a screen with no sheet.
+        const inSheet = $app.querySelector('.overlay .sheet') || $app.querySelector('.ludo-end');
+        if (inSheet) inSheet.insertAdjacentHTML('beforeend', `<div class="end-bar end-bar-in">${html}</div>`);
+        else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
+      }
+      const xpRows = (r.outcome && r.outcome.xp) || [];
+      if (xpRows.length && !$app.querySelector('.end-xp')) {
+        const card = endXpHTML(xpRows, statsGame(r.gameId).name);
+        const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
+        // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
+        // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
+        const sheet = $app.querySelector('.overlay .sheet') || $app.querySelector('.ludo-end') || $app.querySelector('.overlay');
+        const wrap = $app.querySelector('.end-actions-wrap');
+        if (wrap) wrap.insertAdjacentHTML('beforebegin', card);
+        else if (sheet) sheet.insertAdjacentHTML('beforeend', card);
+        else $app.insertAdjacentHTML('beforeend', card); // no result sheet at all: the bar is the only place
+      }
     }
   }
 
@@ -2563,7 +2877,7 @@
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
     reloadProfile: () => loadProfile(),
-    profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
+    profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
       const P = S.player; if (!P || !P.data) return;
@@ -2603,6 +2917,19 @@
       send({ t: 'unblock', id });
     },
     historyPage: (el) => loadProfile(Number(el.dataset.page) || 1),
+    openGameStats: (el) => {
+      const prof = S.profile;
+      if (!prof || !prof.data) return;
+      const id = el.dataset.game;
+      prof.game = id; prof.gameHistory = null; render();
+      // Apply the answer only to the same profile, still open on this game (a reload or a sign-out drops it).
+      const gen = sessionGen; // another account signed in or out since the click: its answer is not for this screen
+      const current = () => gen === sessionGen && S.profile === prof && prof.game === id;
+      getJson(`/api/me/history?game=${encodeURIComponent(id)}&page=1`)
+        .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
+        .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
+    },
+    closeGameStats: () => { if (S.profile) { S.profile.game = null; S.profile.gameHistory = null; render(); } },
     editProfile: () => openEditProfileDialog(),
     openDeleteAccount: () => openDeleteAccountDialog(),
     copyProfileLink: async () => {
@@ -2615,9 +2942,15 @@
     toggleTools: () => setTools(!S.toolsOpen),
     toggleBell: () => { S.bellOpen = !S.bellOpen; S.menuOpen = false; render(); if (S.bellOpen) loadSocial({ quiet: true }); },
     openProfilePage: () => { S.menuOpen = false; openPage('profile'); },
+    levelUpAck: () => { // "Got it": remember this level on this device and take the notice away
+      if (S.levelUp && S.levelUp.username === S.username) store.set('ct_level_seen_' + S.levelUp.username, String(S.levelUp.to));
+      S.levelUp = null;
+      render();
+    },
     openFriendsPage: () => { S.menuOpen = false; S.bellOpen = false; openPage('friends'); },
     openSettings: () => { S.menuOpen = false; render(); openSettingsDialog(); },
     openWhatsNew: () => { S.menuOpen = false; openWhatsNewDialog(); },
+    openVersionHistory: () => { S.menuOpen = false; render(); openVersionHistoryDialog(); },
     toggleAvatars: () => { S.avatarOpen = !S.avatarOpen; render(); },
     emotes: () => toggleEmoteBar(),
     activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
@@ -2635,7 +2968,12 @@
       send({ t: 'setVisibility', visibility: cur === 'public' ? 'private' : 'public' });
     },
     // The server decides: your old seat if you had one (a bot is playing it), otherwise a seat in a lobby, otherwise watching.
-    rejoin: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
+    rejoin: (el) => {
+      const mine = S.rejoin.find((x) => x.code === el.dataset.code);
+      if (mine && mine.canReclaim === false) return mine.noSeatedHumans ? toast('This game cannot resume. Start a new game instead.') : actions.watch(el);
+      askJoinMode(el.dataset.code, tableByCode(el.dataset.code));
+    },
+    watch: (el) => gateLogin(() => joinTable(el.dataset.code, 'spectate')),
     joinPublic: (el) => askJoinMode(el.dataset.code, tableByCode(el.dataset.code)),
     toggleSessions: () => { S.sessionListOpen = !S.sessionListOpen; store.set('ct_sessions_open', S.sessionListOpen ? '1' : '0'); render(); },
     leave: () => requestLeave(),

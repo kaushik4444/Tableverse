@@ -470,7 +470,7 @@ async function resetPassword({ token, newPassword }) {
 /** The answer for a player whose session a device restore has just started, from the player rather than the token (which a racing restore may already have retired). */
 async function sessionInfoForPlayer(playerId) {
   const r = await db.query(
-    `SELECT id, username, display_name, avatar, is_anonymous, created_at, last_seen_at
+    `SELECT id, username, display_name, avatar, is_anonymous, created_at, last_seen_at, welcomed_at
      FROM players WHERE id = $1 AND suspended_at IS NULL`,
     [playerId]
   );
@@ -654,6 +654,8 @@ async function purgeExpired() {
 }
 
 module.exports = {
+  // shared with db/authGoogle.js
+  createSession, makeSessionResult, hashToken, cleanName, cleanAvatar, normUsername, isUsername,
   hashPassword, // exported for the local seed script (lib/devSeed.js) only
   verifyPassword,
   AuthError,

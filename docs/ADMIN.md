@@ -149,3 +149,12 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 ## Visits by hour and visit length (Insights)
 
 The game server counts, per day, how many connections opened in each UTC hour (`session_hour`) and how long each connection lasted, in five buckets (`session_len`: under 1 min, 1-5, 5-15, 15-60, over 1 h). Both are aggregate counters in `analytics_daily` (kept 400 days like the others); no account, address or device is attached. A visit is one WebSocket connection, so a reconnect is a new visit, and connections shorter than 3 seconds (health checks, flapping) are in neither counter. A visit is counted when it ends, under the UTC hour it opened in. The console shows the hour counts in the chosen zone using that zone's offset today. Counting starts when this feature is deployed.
+
+## Games and player profiles (Games tab)
+
+- **Games tab** (staff): `GET /api/admin/games?days=` (7, 30 or 90) gives, for each game, the finished games (and the last 7 days), signed-in players, player-games, penalised leaves (left while others were still playing) and their rate, leaves without a penalty, and average minutes per player-game. These are counts and averages from `matches` and `match_participants`. No player is named, and guests are counted as player-games only.
+- **Player profile** (staff): `GET /api/admin/players/profile?username=` also returns `progress`: overall level, Player Progress XP (time only), penalised leaves, and Game XP per game. It is computed from the stored results on each read, with the same rules as the player's own profile. Opening a profile is still recorded in the audit log.
+
+## First-login welcome
+
+`players.welcomed_at` (migration 027) records when an account has seen the welcome dialog. `GET /api/auth/session` returns `welcome: true` only while it is still NULL. The dialog is shown once after sign-in, and it is marked seen when it opens (`POST /api/me/welcome-seen`, signed in, CSRF header). Accounts that existed before the migration were marked as seen, so only new accounts see it.

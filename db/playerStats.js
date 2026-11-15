@@ -84,13 +84,15 @@ async function listPlayers({ q = '', sort = 'seen', page: pg = 1 } = {}) {
 async function playerProfile({ username, actorId }) {
   const u = String(username || '').trim().toLowerCase();
   if (!/^[a-z0-9_]{3,24}$/.test(u)) return { player: null };
-  return db.withTransaction(async (c) => {
+  let playerId;
+  const profile = await db.withTransaction(async (c) => {
     const base = (await c.query(
       `SELECT p.id, p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
               EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified
          FROM players p WHERE p.username = $1 AND p.is_anonymous = FALSE LIMIT 1`, [u])).rows[0];
     if (!base) return { player: null };
     const id = base.id;
+    playerId = id;
     const [total, perGame, recent, days, ...hours] = await Promise.all([
       c.query(`SELECT ${COUNTS}, MIN(m.started_at) AS first_game, MAX(m.finished_at) AS last_game
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot`, [id]),
@@ -130,6 +132,15 @@ async function playerProfile({ username, actorId }) {
       recent: recent.rows.map((r) => ({ gameId: r.game_id, at: r.finished_at, seats: r.seats, won: r.is_winner, draw: r.is_draw, leftEarly: r.left_early, unknown: Boolean(r.unknown), minutes: round1(r.minutes) })),
     };
   });
+  if (!profile.player) return profile;
+  // The transaction has released its client before progress obtains another one.
+  const pr = await require('./matches').getProgress(playerId);
+  profile.progress = {
+    level: pr.account.level, xp: pr.account.xp, into: pr.account.into, need: pr.account.need, minutes: pr.account.minutes,
+    penalisedLeaves: pr.penalisedLeaves,
+    games: Object.entries(pr.games).map(([gameId, g]) => ({ gameId, points: g.points, played: g.played, rule: g.rule })),
+  };
+  return profile;
 }
 
 module.exports = { listPlayers, playerProfile, PAGE, SORTS, clampSort, clampZone };
