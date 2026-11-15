@@ -12,6 +12,7 @@
       date: '2026-11-15',
       title: 'Leaving, reactions and history',
       items: [
+        { ico: '↩️', title: 'Take your seat back within two minutes', text: 'If you leave a running game on purpose, you can take your seat back within two minutes of your first departure, and the penalty goes. After that a bot keeps the seat and you can watch. A dropped connection does not count as leaving. Your play time counts only while you are seated and connected.' },
         { ico: '🚪', title: 'Leaving a game with others counts as a loss', text: 'If other people are still playing, leaving asks first. If the game then finishes, it counts as a loss for you. If a second player also leaves, the game is abandoned: nobody is penalised, and the people who stayed get no result. Playing only against bots, leaving does not count.' },
         { ico: '😀', title: 'More reactions, and spectators can react', text: 'There are 21 reactions now. A spectator’s reaction shows their name with a 👁, so the table knows it came from someone watching.' },
         { ico: '🧾', title: 'Your history says why a game counted', text: 'Each game in your history shows whether you won, lost or drew, or whether you left and how that counted. Leaving against bots only is listed but not counted.' },
