@@ -8,7 +8,9 @@ const test = async (name, fn) => {
 };
 
 const RULES = ['required_status_checks', 'pull_request', 'non_fast_forward', 'deletion', 'copilot_code_review'];
-const greenChecks = () => [...REQUIRED_CHECKS.map((name) => ({ name, status: 'completed', conclusion: 'success' })), { name: COPILOT_CHECK, status: 'completed', conclusion: 'success' }];
+// A Copilot check run belongs to one commit; GitHub returns head_sha on every check run, and the gate reads only the PR head's.
+const greenChecks = (sha = 'abc1234') => [...REQUIRED_CHECKS.map((name) => ({ name, status: 'completed', conclusion: 'success' })), { name: COPILOT_CHECK, status: 'completed', conclusion: 'success', head_sha: sha }];
+const shaOf = (url) => (url.match(/\/commits\/([0-9a-f]+)\//) || [])[1];
 const goodPr = (over = {}) => ({
   number: 130, base: 'main', head: 'development', head_sha: 'abc1234', mergeable: true,
   checks: greenChecks(), copilotConclusion: 'success', threads: { unresolved: 0, hasNextPage: false }, ...over,
@@ -124,7 +126,7 @@ const base = (over = {}) => ({
       if (url.endsWith('/rules/branches/main?per_page=100') || url.endsWith('/rules/branches/development?per_page=100')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([{ ...pr, number: 130 }]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
-      if (url.includes('/commits/abc1234/check-runs?per_page=100')) return json({ check_runs: greenChecks().map((c) => ({ ...c, status: c.status, conclusion: c.conclusion })) });
+      if (url.includes('/commits/abc1234/check-runs?per_page=100')) return json({ check_runs: greenChecks(shaOf(url)).map((c) => ({ ...c, status: c.status, conclusion: c.conclusion })) });
       if (url.endsWith('/git/ref/heads/development')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'abc1234' } }) };
       if (url.endsWith('/git/ref/heads/main')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'M0' } }) };
       if (url.endsWith('/pulls/130/merge') && method === 'PUT') { assert.equal(JSON.parse(opts.body).sha, 'abc1234', 'the merge is pinned to the verified head'); return json({ sha: 'fff0001' }); }
@@ -133,6 +135,7 @@ const base = (over = {}) => ({
       if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [{ isResolved: true }], pageInfo: { hasNextPage: false } } } } } });
       if (url.endsWith('/healthz')) return { status: 200, ok: true, text: async () => 'ok' };
       if (url.endsWith('/readyz')) return { status: 200, ok: true, text: async () => 'ready' };
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + method + ' ' + url);
     };
     const git = {
@@ -156,11 +159,12 @@ const base = (over = {}) => ({
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([{ ...pr }]);
       if (url.endsWith('/pulls/130') && method === 'GET') { prReads += 1; return json(prReads === 1 ? pr : { ...pr, head: { ...pr.head, sha: 'newpush9' } }); }
-      if (url.includes('/commits/abc1234/check-runs?per_page=100') || url.includes('/commits/newpush9/check-runs?per_page=100')) return json({ check_runs: greenChecks() });
+      if (url.includes('/commits/abc1234/check-runs?per_page=100') || url.includes('/commits/newpush9/check-runs?per_page=100')) return json({ check_runs: greenChecks(shaOf(url)) });
       if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
       if (url.endsWith('/git/ref/heads/development')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'abc1234' } }) };
       if (url.endsWith('/git/ref/heads/main')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'M0' } }) };
       if (url.endsWith('/merge') && method === 'PUT') { merges.push(url); return json({ sha: 'x' }); }
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + method + ' ' + url);
     };
     const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
@@ -180,11 +184,12 @@ const base = (over = {}) => ({
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
-      if (url.includes('/check-runs?per_page=100')) return json({ check_runs: greenChecks() });
+      if (url.includes('/check-runs?per_page=100')) return json({ check_runs: greenChecks(shaOf(url)) });
       if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
       if (url.endsWith('/git/ref/heads/development')) return json({ object: { sha: 'def5678' } });
       if (url.endsWith('/git/ref/heads/main')) return json({ object: { sha: 'M0' } });
       if (url.endsWith('/merge') && method === 'PUT') { merges.push(url); return json({ sha: 'x' }); }
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + method + ' ' + url);
     };
     const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
@@ -202,10 +207,11 @@ const base = (over = {}) => ({
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
-      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: greenChecks() });
+      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: greenChecks(shaOf(url)) });
       if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
       if (url.endsWith('/git/ref/heads/development')) return json({ object: { sha: 'abc1234' } });
       if (url.endsWith('/git/ref/heads/main')) return json({ object: { sha: 'M0' } });
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + method + ' ' + url);
     };
     const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
@@ -217,6 +223,7 @@ const base = (over = {}) => ({
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/git/matching-refs/tags/release-2026-10-25-')) return json([{ ref: 'refs/tags/release-2026-10-25-fff0001' }]);
       if (url.includes('/pulls?state=closed')) return json([]);
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
     };
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
@@ -228,6 +235,7 @@ const base = (over = {}) => ({
       const json = (data) => ({ status: 200, ok: true, text: async () => JSON.stringify(data), json: async () => data });
       if (url.includes('/git/matching-refs/')) return json([]);
       if (url.includes('/pulls?state=closed')) return json([{ number: 130, merged_at: '2026-10-25T00:20:00Z', head: { ref: 'development', repo: { full_name: 'kaushik4444/Tableverse' } } }]);
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
     };
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
@@ -241,6 +249,7 @@ const base = (over = {}) => ({
       if (url.includes('/pulls?state=closed')) return json([{ number: 99, merged_at: '2026-10-25T00:20:00Z', head: { ref: 'development', repo: { full_name: 'someone/Tableverse' } } }]);
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([]);
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
     };
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test', DRY_RUN: 'true' };
@@ -257,6 +266,7 @@ const base = (over = {}) => ({
         calls += 1;
         return json(Array.from({ length: 100 }, (_, i) => ({ number: i, merged_at: null, head: { ref: 'feature', repo: { full_name: 'kaushik4444/Tableverse' } } })));
       }
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + (opts.method || 'GET') + ' ' + url);
     };
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
@@ -277,11 +287,12 @@ const base = (over = {}) => ({
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
-      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: greenChecks() });
+      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: greenChecks(shaOf(url)) });
       if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
       if (url.endsWith('/git/ref/heads/development')) return json({ object: { sha: 'abc1234' } });
       if (url.endsWith('/git/ref/heads/main')) return json({ object: { sha: 'M0' } });
       if (url.endsWith('/merge') && method === 'PUT') { merges.push(url); return json({ sha: 'x' }); }
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + method + ' ' + url);
     };
     const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
@@ -300,13 +311,14 @@ const base = (over = {}) => ({
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
-      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: greenChecks() });
+      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: greenChecks(shaOf(url)) });
       if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
       if (url.endsWith('/git/ref/heads/development')) return json({ object: { sha: 'abc1234' } });
       if (url.endsWith('/git/ref/heads/main')) return json({ object: { sha: 'M0' } });
       if (url.endsWith('/merge') && method === 'PUT') return json({ sha: 'fff0001' });
       if (url.includes('/git/commits/')) return json({ tree: { sha: 'OTHER' } });
       if (url.endsWith('/git/refs')) { tags.push(url); return json({}, 201); }
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + method + ' ' + url);
     };
     const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
@@ -329,6 +341,7 @@ const base = (over = {}) => ({
       if (url.includes('/check-runs?per_page=100&page=1')) return json({ total_count: 107, check_runs: [...greenChecks().map((c, i) => ({ ...c, id: i + 1 })), ...many.slice(0, 100 - greenChecks().length)] });
       if (url.includes('/check-runs?per_page=100&page=2')) return json({ total_count: 107, check_runs: [{ id: 999, name: 'Production dependency audit', status: 'completed', conclusion: 'failure' }] });
       if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + method + ' ' + url);
     };
     const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
@@ -346,6 +359,7 @@ const base = (over = {}) => ({
       if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([]);
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + url);
     };
     const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
@@ -365,7 +379,7 @@ const base = (over = {}) => ({
         if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
         if (url.includes('/pulls?state=open')) return json([pr]);
         if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
-        if (url.includes('/check-runs?per_page=100')) return json({ check_runs: greenChecks() });
+        if (url.includes('/check-runs?per_page=100')) return json({ check_runs: greenChecks(shaOf(url)) });
         if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } } } } } });
       if (url.endsWith('/git/ref/heads/development')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'abc1234' } }) };
       if (url.endsWith('/git/ref/heads/main')) return { status: 200, ok: true, text: async () => JSON.stringify({ object: { sha: 'M0' } }) };
@@ -374,6 +388,7 @@ const base = (over = {}) => ({
       if (url.endsWith('/git/refs')) return json({}, 201);
         if (url.endsWith('/healthz')) return { status: 200, ok: true, text: async () => 'ok' };
         if (url.endsWith('/readyz')) return { status: 200, ok: true, text: async () => 'ready' };
+        if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
         throw new Error('unexpected ' + method + ' ' + url);
       };
       const git = { gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null, mergeTreeOf: () => 'T1' };
@@ -437,11 +452,102 @@ const base = (over = {}) => ({
       if (url.includes('/pulls?state=closed')) return { status: 200, ok: true, text: async () => '[]', json: async () => [] };
       if (url.includes('/rules/branches/')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([]);
+      if (url.endsWith('/requested_reviewers')) return { status: 201, ok: true, text: async () => '{}', json: async () => ({}) };
       throw new Error('unexpected ' + url);
     };
     const git = { gitOutput: (args) => (args[1].includes('main') ? 'T1' : 'T1'), mergeTreeOf: () => 'T1' };
     const r = await main({ env, fetchFn: fakeFetch, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} });
     assert.equal(r.outcome, 'skip');
+  // A fake GitHub for one release run. checkRuns({ requested, sha }) returns the check runs for the PR head; refuseReview makes
+  // the Copilot request fail. Returns the outcome of main() and every call made.
+  const releaseRun = ({ checkRuns, refuseReview = false }) => {
+    const calls = [];
+    let requested = false;
+    const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
+    const json = (data, status = 200) => ({ status, ok: status < 300, text: async () => JSON.stringify(data), json: async () => data });
+    const fetchFn = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      if (url.includes('/git/matching-refs/')) return json([]);
+      if (url.includes('/pulls?state=closed')) return json([]);
+      calls.push(`${method} ${url}`);
+      if (url.endsWith('/rules/branches/main?per_page=100') || url.endsWith('/rules/branches/development?per_page=100')) return json(RULES.map((type) => ({ type })));
+      if (url.includes('/pulls?state=open')) return json([pr]);
+      if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
+      if (url.endsWith('/requested_reviewers') && method === 'POST') {
+        if (refuseReview) return json({ message: 'Resource not accessible by integration' }, 403);
+        requested = true;
+        return json({}, 201);
+      }
+      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: checkRuns({ requested, sha: shaOf(url) }) });
+      if (url.endsWith('/git/ref/heads/development')) return json({ object: { sha: 'abc1234' } });
+      if (url.endsWith('/git/ref/heads/main')) return json({ object: { sha: 'M0' } });
+      if (url.endsWith('/pulls/130/merge') && method === 'PUT') return json({ sha: 'fff0001' });
+      if (url.includes('/git/commits/')) return json({ tree: { sha: 'T1' } });
+      if (url.endsWith('/git/refs')) return json({}, 201);
+      if (url.startsWith('https://api.github.com/graphql')) return json({ data: { repository: { pullRequest: { reviewThreads: { nodes: [{ isResolved: true }], pageInfo: { hasNextPage: false } } } } } });
+      if (url.endsWith('/healthz')) return { status: 200, ok: true, text: async () => 'ok' };
+      if (url.endsWith('/readyz')) return { status: 200, ok: true, text: async () => 'ready' };
+      throw new Error('unexpected ' + method + ' ' + url);
+    };
+    const git = {
+      gitOutput: (args) => ({ 'rev-parse,origin/development^{tree}': 'T1', 'rev-parse,origin/main^{tree}': 'T0', 'rev-parse,origin/development': 'abc1234', 'rev-parse,origin/main': 'M0' })[args.join(',')] || null,
+      mergeTreeOf: () => 'T1',
+    };
+    const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', PRODUCTION_URL: 'https://example.test' };
+    return { calls, run: () => main({ env, fetchFn, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} }) };
+  };
+  const copilotRequests = (calls) => calls.filter((c) => c.endsWith('/pulls/130/requested_reviewers'));
+
+  await test('the gate asks for a Copilot review when it is missing or failed, and only waits while one is running', async () => {
+    assert.equal(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: undefined }) })).requestCopilot, true);
+    assert.equal(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: 'failure' }) })).requestCopilot, true);
+    const running = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: 'in_progress' }) }));
+    assert.equal(running.requestCopilot, false);
+    assert.equal(running.copilotRunning, true);
+    const done = decide(base({ openPrs: [{ number: 130 }], pr: goodPr() }));
+    assert.equal(done.action, 'merge');
+    assert.equal(done.requestCopilot, false);
+  });
+  await test('a missing Copilot review is requested, awaited on this head, and the release merges in the same run; the open PR is reused', async () => {
+    const f = releaseRun({ checkRuns: ({ requested, sha }) => greenChecks(sha).filter((c) => c.name !== COPILOT_CHECK || requested) });
+    const r = await f.run();
+    assert.equal(r.outcome, 'released');
+    assert.equal(copilotRequests(f.calls).length, 1, 'one request');
+    assert.ok(!f.calls.some((c) => c === 'POST https://api.github.com/repos/kaushik4444/Tableverse/pulls'), 'the existing PR is reused, not duplicated');
+  });
+  await test('a Copilot review already running is waited for, not requested again', async () => {
+    let reads = 0;
+    const f = releaseRun({ checkRuns: ({ sha }) => {
+      reads += 1;
+      return greenChecks(sha).map((c) => (c.name === COPILOT_CHECK && reads < 3 ? { ...c, status: 'in_progress', conclusion: null } : c));
+    } });
+    const r = await f.run();
+    assert.equal(r.outcome, 'released');
+    assert.equal(copilotRequests(f.calls).length, 0);
+  });
+  await test('a Copilot review of an older commit never counts: this head is requested and the run blocks until it is reviewed', async () => {
+    const f = releaseRun({ checkRuns: () => greenChecks('oldcommit1') });
+    const r = await f.run();
+    assert.equal(r.outcome, 'block');
+    assert.equal(r.code, 1, 'a blocked release fails the run');
+    assert.equal(copilotRequests(f.calls).length, 1);
+    assert.match(r.decision.reasons.join(' '), /has not run on this PR head/);
+  });
+  await test('a failed Copilot review is requested again on the next run, and the run is reported as blocked', async () => {
+    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha).map((c) => (c.name === COPILOT_CHECK ? { ...c, conclusion: 'failure' } : c)) });
+    const r = await f.run();
+    assert.equal(r.outcome, 'block');
+    assert.equal(r.code, 1);
+    assert.equal(copilotRequests(f.calls).length, 1, 'asked again on this run');
+  });
+  await test('a refused Copilot request blocks the release, says why, and merges nothing', async () => {
+    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha).filter((c) => c.name !== COPILOT_CHECK), refuseReview: true });
+    const r = await f.run();
+    assert.equal(r.outcome, 'block');
+    assert.equal(r.code, 1);
+    assert.ok(!f.calls.some((c) => c.includes('/pulls/130/merge')), 'nothing is merged');
+  });
+
     console.log(`${passed} daily release tests passed`);
   });
 })();

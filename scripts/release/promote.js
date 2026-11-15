@@ -18,6 +18,13 @@ const REQUIRED_CHECKS = [
   'Build production Docker image',
 ];
 const COPILOT_CHECK = 'copilot-pull-request-reviewer';
+// The reviewer login that GitHub's REST API accepts for a Copilot code review (POST .../requested_reviewers).
+const COPILOT_REVIEWER = 'copilot-pull-request-reviewer[bot]';
+// After a review is requested, the run waits for it on this head: up to 30 polls, 30 seconds apart (15 minutes).
+// If no Copilot check has appeared after 6 polls (3 minutes), the run gives up and the next run asks again.
+const COPILOT_WAIT_INTERVAL_MS = 30000;
+const COPILOT_WAIT_POLLS = 30;
+const COPILOT_STARTUP_POLLS = 6;
 const RELEASE_HOUR = 2; // 02:00 Europe/Berlin
 // GitHub can start a scheduled run hours late (the first runs here started at 06:19 and 08:28 Berlin time). A scheduled run
 // that starts by 08:59 still releases; the one-release-per-Berlin-day check stops the second cron from releasing again.
@@ -88,13 +95,22 @@ function decide(state) {
       blockers.push(`Check failed: "${c.name}" (${c.conclusion}).`);
     }
   }
-  if (pr.copilotConclusion !== 'success') {
-    blockers.push(pr.copilotConclusion ? `Copilot review did not succeed (${pr.copilotConclusion}).` : 'Copilot review has not run on this PR head. Owner action may be needed (docs/RELEASES.md).');
+  // Copilot must have reviewed this exact head. A review of an older head never counts. When it is missing or failed, the
+  // run requests it again (requestCopilot); while it is still running, the run waits for it.
+  const copilotRunning = pr.copilotConclusion === 'in_progress';
+  const copilotDone = pr.copilotConclusion === 'success';
+  if (!copilotDone) {
+    blockers.push(copilotRunning
+      ? 'Copilot review is still running on this PR head.'
+      : pr.copilotConclusion
+        ? `Copilot review did not succeed on this PR head (${pr.copilotConclusion}); the run requests it again.`
+        : 'Copilot review has not run on this PR head; the run requests it (docs/RELEASES.md).');
   }
+  const requestCopilot = !copilotDone && !copilotRunning;
   if (pr.threads.hasNextPage) blockers.push('More than 100 review conversations; the gate cannot confirm all are resolved.');
   if (pr.threads.unresolved > 0) blockers.push(`${pr.threads.unresolved} review conversation(s) still open.`);
-  if (blockers.length) return { action: 'block', reasons: blockers };
-  return { action: 'merge', reasons: [`All gates passed on PR #${pr.number} at ${pr.head_sha.slice(0, 7)}.`] };
+  if (blockers.length) return { action: 'block', reasons: blockers, requestCopilot, copilotRunning };
+  return { action: 'merge', reasons: [`All gates passed on PR #${pr.number} at ${pr.head_sha.slice(0, 7)}.`], requestCopilot: false, copilotRunning: false };
 }
 
 /** Post-merge health: /readyz must answer 200 with a body starting "ready" on three checks in a row, and /healthz 200. */
@@ -179,7 +195,8 @@ async function prState(client, owner, name, number) {
   }
   const runs = latestRuns(all);
   const checks = runs.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion }));
-  const copilot = runs.find((r) => r.name === COPILOT_CHECK);
+  // Only a Copilot check on this head counts; a check on an older head is never read as this head's review.
+  const copilot = runs.find((r) => r.name === COPILOT_CHECK && r.head_sha === pr.head.sha);
   const threadsData = (await client.graphql(
     'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved} pageInfo{hasNextPage}}}}}',
     { owner, name, number }
@@ -221,6 +238,30 @@ function mergeMethodOf(env) {
   return requested === 'squash' ? 'squash' : 'merge';
 }
 
+/**
+ * Ask GitHub for a Copilot review of this PR's current head (the supported REST request for a Copilot code review). Returns
+ * the HTTP status; a refusal is reported, never hidden, and the release stays blocked.
+ */
+async function requestCopilotReview(client, number) {
+  const res = await client.call('POST', `/pulls/${number}/requested_reviewers`, { reviewers: [COPILOT_REVIEWER] }, false);
+  return { status: res.status, message: res.data && res.data.message };
+}
+
+/**
+ * Wait, within this run, for the Copilot review of the PR's current head. Returns the latest state. It stops as soon as
+ * Copilot has finished on this head (success or not), or when it never started (the next run asks again).
+ */
+async function waitForCopilotReview(client, owner, name, number, { sleep, intervalMs = COPILOT_WAIT_INTERVAL_MS }) {
+  let state = await prState(client, owner, name, number);
+  for (let poll = 0; poll < COPILOT_WAIT_POLLS; poll += 1) {
+    if (state.copilotConclusion !== undefined && state.copilotConclusion !== 'in_progress') break; // finished on this head
+    if (state.copilotConclusion === undefined && poll >= COPILOT_STARTUP_POLLS) break; // never started
+    await sleep(intervalMs);
+    state = await prState(client, owner, name, number);
+  }
+  return state;
+}
+
 async function main({ env = process.env, fetchFn = fetch, now = new Date(), git = { mergeTreeOf, gitOutput }, sleep } = {}) {
   const repo = env.GITHUB_REPOSITORY;
   const dryRun = env.DRY_RUN === 'true';
@@ -255,6 +296,23 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
   let prNumber = g.openPrs.length === 1 ? g.openPrs[0].number : null;
   let lastState = prNumber ? await prState(client, g.owner, g.name, prNumber) : null;
   let decision = decide({ ...base, pr: lastState });
+  // A Copilot review is requested in dry runs too: it is the only change a dry run makes, and it never opens or merges.
+  const reviewStep = async () => {
+    let accepted = decision.copilotRunning;
+    if (decision.requestCopilot) {
+      const asked = await requestCopilotReview(client, prNumber);
+      accepted = asked.status < 300;
+      if (!accepted) {
+        say(`Blocked: GitHub refused the Copilot review request (HTTP ${asked.status}: ${asked.message || 'no message'}). The release stays blocked until the owner checks Copilot code review for this repository (docs/RELEASES.md).`);
+      } else {
+        say(`Requested a Copilot review of PR #${prNumber} at ${lastState.head_sha.slice(0, 7)}.`);
+      }
+    }
+    if (accepted) {
+      lastState = await waitForCopilotReview(client, g.owner, g.name, prNumber, { sleep: sleep || ((ms) => new Promise((r) => setTimeout(r, ms))) });
+      decision = decide({ ...base, openPrs: [{ number: prNumber, head: 'development', base: 'main' }], pr: lastState });
+    }
+  };
   if (decision.action === 'create') {
     if (dryRun) {
       say('DRY RUN: would open a release PR from development to main.');
@@ -266,12 +324,14 @@ async function main({ env = process.env, fetchFn = fetch, now = new Date(), git 
     lastState = await prState(client, g.owner, g.name, prNumber);
     decision = decide({ ...base, openPrs: [{ number: prNumber, head: 'development', base: 'main' }], pr: lastState });
   }
+  if (prNumber && decision.action !== 'create' && decision.action !== 'skip') await reviewStep();
   if (decision.action !== 'merge') {
     for (const r of decision.reasons) {
       say(`${decision.action === 'skip' ? 'Skipped' : 'Blocked'}: ${r}`);
-      if (decision.action === 'block') log(`::warning::${r}`);
+      if (decision.action === 'block') log(`::error::Release blocked: ${r}`);
     }
-    return finish(decision.action, summary, decision);
+    // A blocked release is a failed run, not a completed one: the next scheduled run tries again.
+    return finish(decision.action, summary, decision, decision.action === 'block' ? 1 : 0);
   }
   // Every gate passed on lastState. Read the PR again: the merge goes ahead only if the same head still passes.
   const fresh = await prState(client, g.owner, g.name, prNumber);
