@@ -333,16 +333,16 @@ function start(opts = {}) {
     oldNames.delete(DELETED_NAME);
     if (p) p.name = DELETED_NAME;
     for (const room of rooms.values()) {
+      // chat first, in every room: someone who left a lobby keeps their messages there without a seat
+      for (const c of room.chat || []) {
+        if (c.id === playerId) { c.name = DELETED_NAME; c.avatar = '🧙'; }
+        if (typeof c.text === 'string') c.text = scrubText(c.text, [...oldNames], DELETED_NAME);
+      }
       const seated = [...new Set([...room.members, ...room.spectators, ...(room.seated || [])])].filter((m) => m.id === playerId);
       if (!seated.length && (!p || p.room !== room.code)) continue;
       for (const m of seated) { m.name = DELETED_NAME; m.avatar = '🧙'; }
       // the game's own copy: players, every log line, trick records (the plugin owns its state)
       if (room.game && typeof room.game.scrub === 'function') room.game.scrub([...oldNames], DELETED_NAME);
-      // chat: their messages, and every system line or message that mentions the name in plain text
-      for (const c of room.chat || []) {
-        if (c.id === playerId) { c.name = DELETED_NAME; c.avatar = '🧙'; }
-        if (typeof c.text === 'string') c.text = scrubText(c.text, [...oldNames], DELETED_NAME);
-      }
     }
     if (!p) return; // nothing else is held in memory for this account
     try { if (p.room) leaveRoom(p); } catch { /* the player is going away either way */ }
