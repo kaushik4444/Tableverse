@@ -45,7 +45,7 @@ async function stubGoogle(page, hits) {
     assert.ok(await page.isVisible('#googleSlot'));
     await page.click('#fakeGoogleBtn');
     await page.waitForSelector('#googleSignupForm', { timeout: 8000 });
-    assert.deepEqual(seen.first, { credential: 'cred-1' });
+    assert.deepEqual(seen.first, { credential: 'cred-1', rememberDevice: false });
     assert.match(await page.textContent('#auth-overlay'), /gina@example\.com/);
     assert.equal(await page.inputValue('#googleName'), 'Gina G');
     await page.fill('#googleUsername', 'gina_g');
@@ -56,7 +56,7 @@ async function stubGoogle(page, hits) {
     await page.click('#googleSignupForm button[type="submit"]');
     // (the scripted socket answers the new connection with authRequired, which may draw the log-in sheet again: the sign-up step itself is what must be gone)
     await page.waitForSelector('#googleSignupForm', { state: 'detached', timeout: 8000 });
-    assert.deepEqual({ ...seen.complete, avatar: undefined }, { credential: 'cred-1', username: 'gina_g', displayName: 'Gina G', avatar: undefined, adultConfirmed: true });
+    assert.deepEqual({ ...seen.complete, avatar: undefined }, { credential: 'cred-1', username: 'gina_g', displayName: 'Gina G', avatar: undefined, adultConfirmed: true, rememberDevice: false });
     await ctx.close(); srv.server.close();
   });
 
@@ -73,6 +73,31 @@ async function stubGoogle(page, hits) {
     await page.click('#fakeGoogleBtn');
     await page.waitForSelector('#auth-overlay .auth-msg[role="alert"]', { timeout: 8000 });
     assert.match(await page.textContent('#auth-overlay .auth-msg'), /already has a Tableverse account/);
+    await ctx.close(); srv.server.close();
+  });
+
+  await test('"Keep me signed in" is sent with the Google sign-in and carried into the sign-up step', async () => {
+    const seen = {};
+    const srv = await serve({
+      'GET /api/auth/session': () => sessionOk(), 'GET /api/auth/csrf': () => ({ csrfToken: 'c' }),
+      'GET /api/auth/google/config': () => ({ ok: true, enabled: true, clientId: 'x.apps.googleusercontent.com', nonce: 'n'.repeat(64) }),
+      'POST /api/auth/google': ({ body }) => { seen.first = JSON.parse(body); return { ok: true, needsSignup: true, email: 'gina@example.com', suggestedName: 'Gina G' }; },
+      'POST /api/auth/google/complete': ({ body }) => { seen.complete = JSON.parse(body); return { ok: false, error: 'This username is already taken.' }; },
+      'GET /api/auth/username-available': () => ({ available: true }),
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+    await stubGoogle(page, []);
+    await page.goto(srv.url + '/');
+    await page.waitForSelector('#fakeGoogleBtn', { timeout: 8000 });
+    await page.check('#googleRemember');
+    await page.click('#fakeGoogleBtn');
+    await page.waitForSelector('#googleSignupForm', { timeout: 8000 });
+    assert.equal(seen.first.rememberDevice, true);
+    assert.equal(await page.isChecked('#googleKeep'), true, 'the choice carries into the sign-up step');
+    await page.fill('#googleUsername', 'gina_g'); await page.check('#googleAdult'); await page.uncheck('#googleKeep');
+    await page.click('#googleSignupForm button[type="submit"]');
+    await page.waitForFunction(() => document.querySelector('#auth-overlay .auth-msg'), null, { timeout: 8000 });
+    assert.equal(seen.complete.rememberDevice, false, 'unticking in the sign-up step wins');
     await ctx.close(); srv.server.close();
   });
 

@@ -35,11 +35,11 @@ async function getOwnProfile(playerId) {
   need();
   const r = await db.query(
     `SELECT p.id, p.username, p.display_name, p.avatar, p.country, p.created_at, p.leaderboard_opt_in, i.email, i.email_verified_at
-     FROM players p LEFT JOIN LATERAL (SELECT email, email_verified_at FROM auth_identities WHERE player_id = p.id ORDER BY created_at ASC LIMIT 1) i ON TRUE
+     FROM players p LEFT JOIN LATERAL (SELECT email, email_verified_at, (provider = 'email' AND password_hash IS NOT NULL) AS has_password FROM auth_identities WHERE player_id = p.id ORDER BY created_at ASC LIMIT 1) i ON TRUE
      WHERE p.id = $1 LIMIT 1`, [playerId]); // the account's one identity, whichever provider (email or Google)
   const row = r.rows[0];
   if (!row) throw new AuthError('Account not found.', 404);
-  return { id: row.id, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), country: row.country || null, email: row.email || null, emailVerified: Boolean(row.email_verified_at), leaderboardOptIn: Boolean(row.leaderboard_opt_in) };
+  return { id: row.id, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), country: row.country || null, email: row.email || null, hasPassword: row.has_password === true, emailVerified: Boolean(row.email_verified_at), leaderboardOptIn: Boolean(row.leaderboard_opt_in) };
 }
 
 /** Turns the weekly boards on or off for this account. Off by default. Returns the stored value. */
@@ -202,16 +202,31 @@ async function deleteAccount(playerId, password) {
   if (!r.rows.length) throw new AuthError('This account has no password to confirm with.', 400);
   // Argon2 outside the transaction: no connection is held while it runs
   if (!(await dbAuth.verifyPassword(r.rows[0].password_hash, password))) throw new AuthError('That password is not correct.', 403);
-  return db.withTransaction(async (c) => {
-    const locked = await c.query('SELECT id, role FROM players WHERE id = $1 FOR UPDATE', [playerId]);
-    if (!locked.rows.length) throw new AuthError('Account not found.', 404);
-    // Stage 20.5: the owner account is protected from accidental removal. Ownership is handed over by the operator first (docs/ADMIN.md).
-    if (locked.rows[0].role === 'owner') throw new AuthError('This is the owner account of the admin console, so it cannot be deleted here. See docs/ADMIN.md.', 409);
-    const anon = await c.query('UPDATE match_participants SET player_name = $2, player_id = NULL WHERE player_id = $1', [playerId, DELETED_NAME]);
-    const del = await c.query('DELETE FROM players WHERE id = $1', [playerId]);
-    if (del.rowCount !== 1) throw new Error('account row was not deleted');
-    return { matchesKept: anon.rowCount };
-  });
+  return db.withTransaction((c) => removePlayerTx(c, playerId));
+}
+
+/**
+ * Delete an account after a fresh Google sign-in proved it (no password exists to confirm with).
+ * The verified Google subject must be the one linked to this very account, so another Google user can never delete it.
+ */
+async function deleteAccountWithGoogle(playerId, claims) {
+  need();
+  if (!claims || !claims.sub) throw new AuthError('Google could not confirm your identity.', 401);
+  const r = await db.query("SELECT 1 FROM auth_identities WHERE player_id = $1 AND provider = 'google' AND provider_user_id = $2", [playerId, String(claims.sub)]);
+  if (!r.rows.length) throw new AuthError('That Google account is not the one linked to this account.', 403);
+  return db.withTransaction((c) => removePlayerTx(c, playerId));
+}
+
+/** Shared by the self-service paths above and the owner's admin deletion: anonymise the seats, delete the player row. */
+async function removePlayerTx(c, playerId, { allowOwner = false } = {}) {
+  const locked = await c.query('SELECT id, role FROM players WHERE id = $1 FOR UPDATE', [playerId]);
+  if (!locked.rows.length) throw new AuthError('Account not found.', 404);
+  // Stage 20.5: the owner account is protected from accidental removal. Ownership is handed over by the operator first (docs/ADMIN.md).
+  if (locked.rows[0].role === 'owner' && !allowOwner) throw new AuthError('This is the owner account of the admin console, so it cannot be deleted here. See docs/ADMIN.md.', 409);
+  const anon = await c.query('UPDATE match_participants SET player_name = $2, player_id = NULL WHERE player_id = $1', [playerId, DELETED_NAME]);
+  const del = await c.query('DELETE FROM players WHERE id = $1', [playerId]);
+  if (del.rowCount !== 1) throw new Error('account row was not deleted');
+  return { matchesKept: anon.rowCount };
 }
 
 async function updatePresence(playerId) {
@@ -219,4 +234,4 @@ async function updatePresence(playerId) {
   await db.query('UPDATE players SET last_seen_at = NOW() WHERE id = $1', [playerId]);
 }
 
-module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, setLeaderboardOptIn, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, idForUsername, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence, markWelcomed };
+module.exports = { DELETED_NAME, RECENT_LIMIT, HISTORY_PAGE_SIZE, cleanDisplayName, setLeaderboardOptIn, deleteAccountWithGoogle, removePlayerTx, getOwnProfile, updateDisplayName, updateCountry, updateAvatar, getHistory, getPublicProfile, idForUsername, rememberTable, listRecentTables, forgetRecentTables, clearRecentTables, deleteAccount, updatePresence, markWelcomed };

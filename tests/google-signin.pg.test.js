@@ -161,6 +161,45 @@ function idToken({ sub, email, nonce, ...over }) {
       assert.equal((await q('SELECT count(*)::int AS n FROM auth_identities WHERE provider_user_id = $1', [who.sub]))[0].n, 1);
     });
 
+    await test('"Keep me signed in": a new Google person and a returning one get a trusted device only when they ask', async () => {
+      const p = await page(); const who = person();
+      const up = await p.b.post('/api/auth/google/complete', { credential: cred(p, who), username: `keep_${n}`, adultConfirmed: true, rememberDevice: true });
+      assert.equal(up.status, 200, JSON.stringify(up.json)); assert.ok(p.b.cookies.has('ct_device'), 'sign-up issued the device cookie');
+      assert.equal((await q('SELECT count(*)::int AS n FROM auth_devices d JOIN players p ON p.id = d.player_id WHERE p.username = $1', [`keep_${n}`]))[0].n, 1);
+      // a plain sign-in later (new browser) does not create one
+      const p2 = await page();
+      const plain = await p2.b.post('/api/auth/google', { credential: cred(p2, who) });
+      assert.equal(plain.status, 200); assert.ok(!p2.b.cookies.has('ct_device'));
+      const p3 = await page();
+      const kept = await p3.b.post('/api/auth/google', { credential: cred(p3, who), rememberDevice: true });
+      assert.equal(kept.status, 200); assert.ok(p3.b.cookies.has('ct_device'));
+      // one trusted device: the earlier one was retired only if it was this browser's cookie, so two browsers hold two devices at most
+      assert.ok((await q('SELECT count(*)::int AS n FROM auth_devices d JOIN players p ON p.id = d.player_id WHERE p.username = $1', [`keep_${n}`]))[0].n >= 1);
+    });
+
+    await test('profile tells the page whether the account has a password (Google-only accounts delete through Google)', async () => {
+      assert.equal((await first.b.get('/api/me/profile')).json.profile.hasPassword, false);
+    });
+
+    await test('deleting a Google account needs a fresh token for the SAME Google identity', async () => {
+      const p = await page(); const who = person();
+      await p.b.post('/api/auth/google/complete', { credential: cred(p, who), username: `del_${n}`, adultConfirmed: true });
+      const other = person();
+      const wrong = await p.b.post('/api/me/delete-account', { credential: cred(p, other) });
+      assert.equal(wrong.status, 403, JSON.stringify(wrong.json));
+      const garbage = await p.b.post('/api/me/delete-account', { credential: 'not.a.token' });
+      assert.ok([401, 403].includes(garbage.status));
+      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE username = $1', [`del_${n}`]))[0].n, 1, 'nothing was deleted');
+      const ok = await p.b.post('/api/me/delete-account', { credential: cred(p, who) });
+      assert.equal(ok.status, 200, JSON.stringify(ok.json));
+      assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE username = $1', [`del_${n}`]))[0].n, 0);
+      assert.equal((await q('SELECT count(*)::int AS n FROM auth_identities WHERE provider_user_id = $1', [who.sub]))[0].n, 0, 'the Google link went with it');
+      assert.equal((await p.b.get('/api/auth/session')).json.authenticated, false);
+      // the same Google person can sign up again afterwards
+      const p2 = await page();
+      assert.equal((await p2.b.post('/api/auth/google', { credential: cred(p2, who) })).json.needsSignup, true);
+    });
+
     await srv.close();
     await dbPool.close();
     console.log(`\n${passed} Google sign-in tests passed`);

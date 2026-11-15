@@ -19,8 +19,9 @@ Free. Sign in with Google (Google Identity Services) has no usage charge and nee
 5. A Google address that already belongs to an email-and-password account is **refused with a clear message**, never linked automatically. Linking by address would let anyone who controls that mailbox at Google take over the account. The message tells the person to sign in the way they used when they created the account. Signing in that way keeps working. Linking from account settings can be added later.
 
 ## Limits and known gaps
-- Google-only accounts have no password. Login, password reset and verification emails look only at the email identity, so they do nothing for these accounts. **Deleting such an account is not possible yet** (the deletion flow asks for the password): that needs a re-authentication with Google and is the next change.
-- Sign-in does not offer "remember this device" yet.
+- Google-only accounts have no password. Login, password reset and verification emails look only at the email identity, so they do nothing for these accounts.
+- **Deleting a Google account** asks for a fresh Google sign-in (same token checks, bound to the browser by the nonce). The verified Google subject must equal the one linked to the signed-in account, so another Google user cannot delete it. The owner account stays protected, as with passwords.
+- **"Keep me signed in"** is offered on the Google button and in the sign-up step. It issues the same trusted device as a password login (`ct_device`, 30 days by default), linked to the session; a plain Google sign-in retires the browser's previous device.
 - The ID token is bound to the browser by the nonce and expires after about an hour; it is not stored.
 - Privacy: Google learns that the person signs in to Tableverse. `docs/PRIVACY_NOTICE_DRAFT.md` still needs the owner's review for this processor.
 - Rate limits: `RL_GOOGLE_IP_LIMIT` and `RL_GOOGLE_SIGNUP_IP_LIMIT`.
