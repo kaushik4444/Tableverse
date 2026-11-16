@@ -1495,6 +1495,19 @@
   }
   const roomPerson = (pid) => S.room && [...(S.room.members || []), ...(S.room.spectators || [])].find((x) => x.id === pid);
 
+  /**
+   * The game-related numbers on a player card: their overall level, and their lifetime XP in the game being played (their
+   * stored game points across all their matches). Time played is not a game amount, so it is not shown here.
+   */
+  function cardXpHTML(prof) {
+    const prog = prof && prof.progress;
+    if (!prog || !prog.account) return '';
+    const gameId = S.room && S.room.gameId;
+    const row = gameId && prog.games ? prog.games[gameId] : null;
+    const name = esc(statsGame(gameId || '').name);
+    return `<p class="pcard-xp">Level ${Number(prog.account.level)} · Lifetime ${name} XP ${fmtXp(row ? row.points : 0)}</p>`;
+  }
+
   function cardHTML() {
     const C = S.card;
     const person = roomPerson(C.pid) || C.last;
@@ -1505,7 +1518,7 @@
     const rel = relationTo(person);
     const here = Boolean(roomPerson(C.pid));
     const prof = C.profile;
-    const stats = prof ? `<div class="pcard-stats"><div><b>${prof.played}</b><span>Games</span></div><div><b>${prof.wins}</b><span>Wins</span></div><div><b>${prof.winRate === null ? '–' : prof.winRate + '%'}</b><span>Win rate</span></div></div>` : '';
+    const stats = prof ? `<div class="pcard-stats"><div><b>${prof.played}</b><span>Games</span></div><div><b>${prof.wins}</b><span>Wins</span></div><div><b>${prof.winRate === null ? '–' : prof.winRate + '%'}</b><span>Win rate</span></div></div>${cardXpHTML(prof)}` : '';
     const sub = person.bot ? 'Bot' : person.username ? `@${esc(person.username)}` : 'Guest player';
     const conn = !person.bot && here ? `<p class="pp-conn">📶 ${person.connected === false ? 'Disconnected' : pingBadge(person.ping, { label: true })}</p>` : '';
     const busy = C.busy ? ' disabled' : '';
