@@ -55,7 +55,7 @@ async function lookupGoogle(claims) {
 }
 
 /** Signs an existing Google account in: one transaction, the suspension re-checked under the account lock, the older session ended. */
-async function signInGoogle(player, replaceDevice = null) {
+async function signInGoogle(player, replaceDevice = null, { rememberDevice = false, userAgent = '' } = {}) {
   if (player.suspended_at) throw new AuthError('This account is suspended.', 403);
   const ended = [];
   const owner = await deviceOwner(replaceDevice);
@@ -69,15 +69,18 @@ async function signInGoogle(player, replaceDevice = null) {
     if (suspendedAt === undefined) throw new AuthError('Sign in with Google failed. Please try again.', 401);
     if (suspendedAt) throw new AuthError('This account is suspended.', 403);
     await retireDevice(client, replaceDevice, ended);
-    return dbAuth.createSession(client, player.id, null, ended);
+    // a new trusted device ("Keep me signed in") is issued under the same account lock; the session is linked to it
+    const device = rememberDevice ? await dbAuth.insertDevice(client, player.id, userAgent) : null;
+    return { session: await dbAuth.createSession(client, player.id, device ? device.id : null, ended), device: device ? device.raw : null };
   });
-  const result = dbAuth.makeSessionResult({ ...player, email_verified_at: player.email_verified_at || new Date() }, raw);
+  const result = dbAuth.makeSessionResult({ ...player, email_verified_at: player.email_verified_at || new Date() }, raw.session);
+  if (raw.device) result.device = raw.device;
   result.revokedSessions = ended.map((x) => ({ playerId: x.player_id, tokenHash: x.token_hash }));
   return result;
 }
 
 /** Creates the account for a new Google person and signs them in. */
-async function completeGoogleSignup({ claims, username, displayName, avatar, adultConfirmed, replaceDevice = null }) {
+async function completeGoogleSignup({ claims, username, displayName, avatar, adultConfirmed, replaceDevice = null, rememberDevice = false, userAgent = '' }) {
   if (!db.hasDatabase()) throw new AuthError('Sign in with Google requires PostgreSQL (set DATABASE_URL).', 503);
   if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
   const u = dbAuth.normUsername(username);
@@ -100,10 +103,12 @@ async function completeGoogleSignup({ claims, username, displayName, avatar, adu
       );
       if (owner) await client.query('SELECT 1 FROM players WHERE id = $1 FOR UPDATE', [owner]);
       await retireDevice(client, replaceDevice, ended);
-      const raw = await dbAuth.createSession(client, player.id, null, ended);
-      return { player, raw };
+      const device = rememberDevice ? await dbAuth.insertDevice(client, player.id, userAgent) : null;
+      const raw = await dbAuth.createSession(client, player.id, device ? device.id : null, ended);
+      return { player, raw, device: device ? device.raw : null };
     });
     const result = dbAuth.makeSessionResult({ ...out.player, email: claims.email, email_verified_at: new Date() }, out.raw);
+    if (out.device) result.device = out.device;
     result.revokedSessions = ended.map((x) => ({ playerId: x.player_id, tokenHash: x.token_hash }));
     return result;
   } catch (err) {

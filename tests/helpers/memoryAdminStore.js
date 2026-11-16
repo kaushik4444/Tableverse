@@ -59,7 +59,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       log(actorId, role === 'admin' ? 'role.grant_admin' : 'role.revoke_admin', 'player', targetId, { from, to: role });
       return { changed: true, role };
     },
-    async listUsers({ q = '' } = {}) { const u = [...players.values()].filter((p) => !q || p.username.includes(q)); return { total: u.length, pageSize: 25, users: u.map(({ email, ...rest }) => rest) }; },
+    async listUsers({ q = '' } = {}) { const u = [...players.values()].filter((p) => !q || p.username.includes(q)); return { total: u.length, pageSize: 25, page: 1, users: u.map(({ email, ...rest }) => rest) }; },
     async suspendUser({ actorId, targetId, reason = '' }) {
       policy.checkSuspend({ actor: players.get(actorId), target: players.get(targetId) });
       const t = players.get(targetId);
@@ -74,6 +74,13 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
       Object.assign(players.get(targetId), { suspended_at: null, suspended_reason: null });
       log(actorId, 'user.unsuspend', 'player', targetId);
       return { suspended: false };
+    },
+    async deleteUser({ actorId, targetId, confirm }) {
+      policy.checkDelete({ actor: players.get(actorId), target: players.get(targetId), confirm });
+      const username = players.get(targetId).username;
+      players.delete(targetId);
+      log(actorId, 'user.delete', 'player', targetId, { username, matchesKept: 0 });
+      return { deleted: true, matchesKept: 0 };
     },
     async lookupUser({ username }) {
       const u = String(username || '').trim().toLowerCase();

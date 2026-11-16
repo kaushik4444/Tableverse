@@ -662,6 +662,34 @@ const ADMIN_POSTS = [
       assert.equal((await owner.b.post('/api/admin/users/unsuspend', { playerId: victim.id })).status, 200);
       assert.equal(s.store.players.get(victim.id).suspended_at, null);
     });
+    console.log('owner deletes any ordinary account');
+    await test('only the owner can delete an account; admins and players get 403 and nothing changes', async () => {
+      const victim = await s.login({ email: 'victim.del1@example.com', verified: true });
+      const name = s.store.players.get(victim.id).username;
+      assert.equal((await admin.b.post('/api/admin/users/delete', { playerId: victim.id, confirm: name })).status, 403);
+      assert.equal((await user.b.post('/api/admin/users/delete', { playerId: victim.id, confirm: name })).status, 403);
+      assert.ok(s.store.players.has(victim.id));
+      assert.equal(s.deletedCalls.length, 0);
+    });
+    await test('the owner must type the username; then the account goes, the audit row keeps the username and live sockets close', async () => {
+      const victim = await s.login({ email: 'victim.del2@example.com', verified: true });
+      const name = s.store.players.get(victim.id).username;
+      assert.equal((await owner.b.post('/api/admin/users/delete', { playerId: victim.id })).status, 400, 'no confirmation');
+      assert.equal((await owner.b.post('/api/admin/users/delete', { playerId: victim.id, confirm: 'someone_else' })).status, 400, 'wrong confirmation');
+      assert.ok(s.store.players.has(victim.id));
+      const r = await owner.b.post('/api/admin/users/delete', { playerId: victim.id, confirm: ' ' + name.toUpperCase() + ' ' });
+      assert.equal(r.status, 200, JSON.stringify(r.json));
+      assert.ok(!s.store.players.has(victim.id));
+      assert.ok(s.deletedCalls.some((c) => c.playerId === victim.id), 'the server forgets the player and closes sockets');
+      const row = s.store.audit.find((a) => a.action === 'user.delete' && a.target_id === victim.id);
+      assert.ok(row && row.detail.username === name && !JSON.stringify(row).includes('@'), 'audited without an e-mail address');
+    });
+    await test('an owner cannot delete an admin, the owner, themselves or a guest', async () => {
+      assert.equal((await owner.b.post('/api/admin/users/delete', { playerId: admin.id, confirm: s.store.players.get(admin.id).username })).status, 403);
+      assert.equal((await owner.b.post('/api/admin/users/delete', { playerId: owner.id, confirm: s.store.players.get(owner.id).username })).status, 400);
+      const g = await s.login({}); // an anonymous guest account
+      assert.equal((await owner.b.post('/api/admin/users/delete', { playerId: g.id, confirm: s.store.players.get(g.id).username || 'x' })).status, 400);
+    });
     await test('an owner cannot suspend an admin, the owner or themselves, or a guest', async () => {
       const guest = await s.login({});
       assert.equal((await owner.b.post('/api/admin/users/suspend', { playerId: admin.id })).status, 403);

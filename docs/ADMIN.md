@@ -8,7 +8,7 @@ The console lives at `/admin.html` (linked from the account menu for staff only)
 
 | Role | Can |
 |---|---|
-| `owner` | Everything an admin can, plus grant and remove the `admin` role, sign accounts out of every device, suspend and lift suspensions of ordinary accounts, and send e-mail. Exactly one account. |
+| `owner` | Everything an admin can, plus grant and remove the `admin` role, sign accounts out of every device, suspend and lift suspensions of ordinary accounts, permanently delete ordinary accounts, and send e-mail. Exactly one account. |
 | `admin` | See the console, look accounts up, manage announcements and feedback, resend verification e-mail to ordinary players. Cannot sign anyone out, suspend anyone, or touch the owner or other admins. |
 | `user` | Nothing in the console. |
 
@@ -87,6 +87,7 @@ The **Reports** tab lists every report, chat reports and player reports (from a 
 ## Suspension and lookup (Stage 20.8)
 
 - **Suspend** (owner only, ordinary registered accounts only; never the owner, an admin, a guest or the owner's own account): the account's sessions end at once, its open connections close, and sign-in is refused with "This account is suspended." Existing sessions stop working because every session check also requires the account not to be suspended. The reason is optional, kept to 200 characters, cleaned of line breaks, and stored on the account and in the audit log. Staff who can use the lookup, and staff who can read the audit log, can see the reason, so it must not hold anything confidential.
+- **Delete** (owner only, ordinary registered accounts only, same protections as Suspend): the owner types the account's username to confirm. The account is removed the same way as a self-service deletion: login, sessions, devices and recent tables go, and its finished games keep the seat as "Deleted player". Open connections close at once. The audit row records the username and counts, never an e-mail address. Irreversible. The Users tab has a filter for accounts not seen for 30, 60, 90 or 180 days, oldest first, to find stale ones.
 - **Lift** (owner only): sign-in works again. Sessions that ended stay ended; the player signs in again.
 - **Sign out** of every device is owner only.
 - **Lookup** (staff): exact username. Shows role, verified state, dates, active session count and suspension state. Never an e-mail address, a network address or a token.
@@ -126,6 +127,7 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 | `GET /api/admin/overview?days=`, `/health`, `/users?q=&page=`, `/feedback?status=&page=`, `/announcements`, `/audit?page=`, `/logs` | staff |
 | `POST /api/admin/users/sign-out` | owner |
 | `POST /api/admin/users/suspend`, `/users/unsuspend` | owner (ordinary registered accounts only) |
+| `POST /api/admin/users/delete` | owner (ordinary registered accounts only; body `confirm` must equal the username) |
 | `GET /api/admin/users/lookup?username=` | staff (read-only; never an address, network address or token) |
 | `GET /api/admin/reports?page=` | staff (read-only chat report queue; opening it is audited as `reports.view`) |
 | `POST /api/admin/users/resend-verification` | staff (admins only on ordinary players) |
