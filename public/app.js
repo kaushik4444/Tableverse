@@ -488,7 +488,7 @@
           <button class="btn big" type="submit">Create account</button>
         </form>
       `}
-      ${S.impressumPublished ? '<p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>' : ''}
+      ${legalLinksHtml()}
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     document.body.appendChild(overlay);
@@ -954,13 +954,27 @@
   }
 
   /** Home data for visitors (no socket): the public games list, the live table directory and the site announcement. */
-  // A sign-in sheet that was already open when the flag arrived gets the link added (or removed) in place, so typed input survives.
+  // The server says which legal pages are live (privacy, terms, Impressum). Each link is shown only when its page answers 200.
+  function applyLegal(m) {
+    if (typeof m.impressumPublished === 'boolean') S.impressumPublished = m.impressumPublished;
+    if (typeof m.privacyPublished === 'boolean') S.privacyPublished = m.privacyPublished;
+    if (typeof m.termsPublished === 'boolean') S.termsPublished = m.termsPublished;
+  }
+  /** Links for the sign-in and sign-up sheet. Empty when no legal page is live. */
+  function legalLinksHtml() {
+    const links = [];
+    if (S.privacyPublished) links.push('<a href="/privacy">Privacy notice</a>');
+    if (S.termsPublished) links.push('<a href="/terms">Terms</a>');
+    if (S.impressumPublished) links.push('<a href="/impressum.html">Impressum</a>');
+    return links.length ? `<p class="hint auth-legal">${links.join(' · ')}</p>` : '';
+  }
+  // A sign-in sheet that was already open when the flags arrived gets the links added (or removed) in place, so typed input survives.
   function syncImpressumLink() {
     const sheet = document.querySelector('#auth-overlay .sheet');
     if (!sheet) return;
-    const link = sheet.querySelector('.auth-legal');
-    if (S.impressumPublished && !link) sheet.insertAdjacentHTML('beforeend', '<p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>');
-    else if (!S.impressumPublished && link) link.remove();
+    sheet.querySelectorAll('.auth-legal').forEach((el) => el.remove());
+    const html = legalLinksHtml();
+    if (html) sheet.insertAdjacentHTML('beforeend', html);
   }
 
   async function loadSnapshot() {
@@ -974,7 +988,7 @@
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
         // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
-        if (typeof out.impressumPublished === 'boolean') S.impressumPublished = out.impressumPublished;
+        applyLegal(out);
         syncImpressumLink();
       }
     } catch { /* offline: the home screen still renders, just without live data */ }
@@ -1099,7 +1113,7 @@
       case 'welcome': {
         S.id = m.id;
         if (S.page === 'player' && S.player && S.player.data) resyncPlayerBlock(); // the server's state after a drop, not the optimistic one
-        S.impressumPublished = m.impressumPublished === true; // the server decides (LEGAL_IMPRESSUM_PUBLISHED); no link while it is off
+        applyLegal(m); // the server decides each link (see server.js legalFlags)
         S.token = '';
         S.guest = false;
         refreshLevel(); // detect levels only after welcome confirms the signed-in account
@@ -1136,7 +1150,7 @@
         break;
       }
       case 'authRequired':
-        S.impressumPublished = m.impressumPublished === true; // signed-out sheet has no welcome, so the flag rides on this message too
+        applyLegal(m); // signed-out sheet has no welcome, so the flags ride on this message too
         S.signingIn = false;
         hideBusy();
         clearClientSession();
@@ -2489,7 +2503,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
+      <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.privacyPublished ? '<a href="/privacy">Privacy notice</a>' : '', S.termsPublished ? '<a href="/terms">Terms</a>' : '', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
     </main>`;
   }
 
