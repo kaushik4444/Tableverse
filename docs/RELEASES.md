@@ -21,7 +21,7 @@ changes from `development` to `main`.
 5. Otherwise it leaves the PR open, writes the reasons to the run summary and as warnings, and stops. The next day tries again.
 
 The merge is a merge commit through the GitHub API (see *Merge history* below). Squash is used only if the owner explicitly sets
-`RELEASE_MERGE_METHOD=squash`. GitHub still enforces the rulesets (five required checks, the Copilot rule, conversation
+`RELEASE_MERGE_METHOD=squash`. GitHub still enforces the rulesets (five required checks, conversation
 resolution). The workflow never uses an admin bypass, never force-pushes, and never approves its own PR.
 
 ## The gates
@@ -35,27 +35,21 @@ A release proceeds only when all of these hold on the PR head:
 | main has nothing development lacks | `git merge-tree` of main and development | main has changes that development does not (a hotfix not synced yet) |
 | No conflicts | `git merge-tree` and the PR `mergeable` field | either reports a conflict |
 | Five required checks green | check runs on the head commit | any missing, pending or failed |
-| Copilot review of this head finished | check run `copilot-pull-request-reviewer` on the PR head commit | missing, running or not successful. A review of an older commit never counts. |
+| CodeRabbit review of this head finished | check run `CodeRabbit` on the PR head commit | missing, running or not successful. A review of an older commit never counts. |
 | Newest run decides | every page of check runs, newest run per name | an older green run can never stand in for a newer red or running one |
 | Production target set | repository variable `PRODUCTION_URL` | it is not set (checked before the merge, so nothing is merged) |
 | Conversations resolved | GraphQL `reviewThreads` | any unresolved (lists over 100 are blocked) |
 | Rules as expected | `GET /rules/branches/{main,development}` | a required rule type is missing |
 | One release PR | open PRs | more than one |
 
-A successful CI run alone is not enough: the workflow checks the Copilot review and the conversations separately.
+A successful CI run alone is not enough: the workflow checks the CodeRabbit review and the conversations separately.
 
-### How the Copilot review is obtained
+### How the CodeRabbit review is read
 
-The release workflow does not rely on Copilot's automatic review. When the Copilot review of the PR head is missing or failed,
-the run asks GitHub for one with the REST request `POST /repos/{owner}/{repo}/pulls/{number}/requested_reviewers` and the reviewer
-`copilot-pull-request-reviewer[bot]`. It then waits in the same run (up to 15 minutes) for a Copilot check run on that exact head.
-If Copilot finishes, the gates are read again and the release goes ahead when everything passes. If it has not started after
-3 minutes, or has failed, the run is blocked and the next run asks again. A review of an older commit is never accepted, so a
-changed head always needs a fresh review.
-
-The request uses the workflow's own token (`pull-requests: write`). No personal access token and no GitHub App is added. If GitHub
-refuses the request, the run says so in its summary and fails with the HTTP status; the release stays blocked until the owner checks
-that Copilot code review is enabled for this repository (Settings → Copilot).
+The release run reads the `CodeRabbit` check run on the PR head commit. CodeRabbit reviews each push itself, so the run never
+requests a review and never waits for one. A review that is missing, still running, failed, or belongs to an older commit blocks
+the release, and the next scheduled run reads it again. The ruleset must not require a Copilot code review (see the owner steps):
+Copilot is not used for this repository.
 
 A blocked release fails the run (red) with `Release blocked: …`, so a blocked release is never shown as a completed one.
 
@@ -118,9 +112,9 @@ Tick each item only after checking it in the GitHub or Render UI. Re-check after
       slash (for example `https://tableverse.example.com`). Without it, every release is blocked before anything merges.
 - [ ] **Variables:** `RELEASE_MERGE_METHOD` is unset or `merge` (the normal setting). Set `squash` only if you accept that later
       releases can be blocked by conflicts that a person must resolve.
-- [ ] **Copilot code review enabled:** the workflow requests a Copilot review of each release PR head itself (see *How the Copilot
-      review is obtained*). Check that Copilot code review is enabled for the repository (Settings → Copilot). If a run reports
-      that GitHub refused the request, enable it there; no token is added and no review is dismissed.
+- [ ] **CodeRabbit is the review gate:** CodeRabbit is installed on the repository and posts its `CodeRabbit` check on each PR head.
+      The release run reads that check. The ruleset rule *Copilot code review* must be removed, because Copilot is not used
+      (Settings → Rules → Rulesets, both `main` and `development`). Until it is removed, GitHub keeps blocking merges.
 - [ ] **Security features (public repository, GitHub Free):** Settings → Code security: private vulnerability reporting, Dependabot
       alerts, secret scanning and push protection are enabled. The code cannot check these.
 - [ ] **Environments:** the `production-cleanup` environment has the required reviewers you intend.
@@ -138,8 +132,8 @@ The repository is public and stays public. The audit of this change checked the 
   statuses. It uses the built-in `GITHUB_TOKEN` and no other secret.
 
 Features used and their plan position, to confirm on GitHub's current plan documentation before relying on them (the agent could
-not read the plan matrix from here): rulesets with required checks and the Copilot review rule, environment protection rules,
-Copilot code review, secret scanning and push protection. The owner checks each one in Settings.
+not read the plan matrix from here): rulesets with required checks (the Copilot code review rule must be removed, see above), environment protection rules,
+secret scanning and push protection. The owner checks each one in Settings.
 
 ## Dry run (manual, safe)
 
@@ -161,7 +155,7 @@ stops with the freeze reason. A frozen run does not close or change the open rel
 
 ## What happens when a gate fails
 
-- **Blocked (CI red, Copilot not finished, conversation open, conflict):** the release PR stays open, the reason appears in the
+- **Blocked (CI red, CodeRabbit not finished, conversation open, conflict):** the release PR stays open, the reason appears in the
   run summary and as an error, and the run fails (red) so it is never mistaken for a release. Fix the cause on `development` (or resolve the conversation); the next run, or a manual run,
   proceeds. Nothing is merged, so nothing reaches production.
 - **Blocked because main has changes development lacks:** see *Hotfixes* below. The release waits until development has them.
@@ -193,7 +187,7 @@ completely needs serialized writes to `main` (for example a merge queue), which 
 ## Hotfixes
 
 1. Branch from `main`, make the smallest fix, and open a PR **to `main`** (the only exception to "features target development").
-   CI and Copilot must pass as usual.
+   CI and CodeRabbit must pass as usual.
 2. Merge it, then **immediately open the same change as a PR to `development`** (a cherry-pick or a branch from `main`). Merge it.
 3. The release gate blocks any release until development contains everything on main. Once step 2 is done, the next release
    proceeds normally.
@@ -211,7 +205,7 @@ one serving: `/healthz` has no version field. Adding the build commit to `/healt
 
 ## Testing
 
-`npm test` runs `tests/daily-release.test.js` (41 cases): no changes, eligible, failed CI, incomplete Copilot review (requested, awaited on the head, retried, refused, stale-head reviews ignored), unresolved
+`npm test` runs `tests/daily-release.test.js` (39 cases): no changes, eligible, failed CI, missing or running CodeRabbit review (blocked, never requested, stale-head reviews ignored), unresolved
 conversations, conflict, freeze, duplicate PRs, missing rules, the Berlin release window across summer and winter time, health streaks, the
 full flow with the merge pinned to the verified head, a head or branch that moves before the merge (checked against the start-of-run snapshot), the head-filtered PR lookup, the merge
 method (merge by default, squash only when set, case and spacing ignored, unknown values refused), every runbook section the script names exists, a duplicate run after a release, the second scheduled run on the same Berlin day, a fork PR named `development` (ignored), an endless closed-PR list (the run stops rather than releasing), a missing `PRODUCTION_URL`
