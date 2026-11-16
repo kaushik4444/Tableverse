@@ -50,11 +50,14 @@ const base = (srv) => `http://127.0.0.1:${srv.port}`;
       assert.equal(body.clientId, CLIENT_ID);
     });
 
-    await test('Google sign-in routes are refused while the privacy notice is not live', async () => {
-      // Refused before any token check: 403 from the CSRF guard that runs first (no token sent), or 404 from the gate itself.
-      const res = await fetch(base(switchOn) + '/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      assert.ok(res.status === 403 || res.status === 404, 'status ' + res.status);
-      assert.notEqual((await res.json().catch(() => ({}))).ok, true);
+    await test('Google sign-in routes answer 404 while the privacy notice is not live', async () => {
+      // Fetch a real CSRF token first, so the request reaches the sign-in gate rather than the CSRF guard.
+      const csrfRes = await fetch(base(switchOn) + '/api/auth/csrf');
+      const csrf = await csrfRes.json();
+      const ctCsrf = /ct_csrf=([^;]+)/.exec(csrfRes.headers.get('set-cookie') || '');
+      assert.ok(ctCsrf, 'csrf cookie');
+      const res = await fetch(base(switchOn) + '/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: 'ct_csrf=' + ctCsrf[1], 'X-CSRF-Token': csrf.csrfToken }, body: '{}' });
+      assert.equal(res.status, 404, 'the publication gate answers 404');
     });
 
     await test('the page policy allows Google\'s script when a client ID is set, so deletion confirmation works', async () => {
