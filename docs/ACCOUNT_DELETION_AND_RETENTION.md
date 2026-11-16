@@ -7,7 +7,13 @@ Each statement below names the code that does it. Where a number is a default th
 ## How a user deletes their account (self-service, implemented)
 
 1. Signed in, open the profile page and choose **Delete account** (`public/app.js`).
-2. Enter the account password. The server checks it (`db/account.js` `deleteAccount`). A wrong password changes nothing.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:7c37762c3c3541a7148a5cbdffbd6378a46a074749ffe385fb31eee08773c41b -->
+
+2. Confirm with the account password, or, for a Google-only account, a fresh Google sign-in for the same identity. The server checks the confirmation (`db/account.js` `deleteAccount` / `deleteAccountWithGoogle`). A failed confirmation changes nothing.
+
+<!-- /coderabbit-ai-generated:v1 -->
 3. `POST /api/me/delete-account` runs. It is rate limited to 5 attempts an hour per account (`RL_ME_DELETE_LIMIT`).
 4. The account is removed in one transaction. The player's open game socket is closed.
 
@@ -16,7 +22,19 @@ Limits:
 - A deletion is final. There is no undo and no grace period.
 - A user cannot delete someone else's account. Only the owner can suspend an ordinary registered account, and no one can delete an account from the console.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:4e29bf811d4f6dc0cc75d0b2b4bae2fd1ea819e553dff6e615b38fb4a077e0c3 -->
+
+## Google-only accounts when Google confirmation is unavailable
+
+Google self-service deletion requires a configured `GOOGLE_CLIENT_ID` and a live privacy notice. When the privacy notice is off (or its text is incomplete), `server.js` passes `googleAllowed: false` to `lib/authRoutes.js`: the Google config endpoint returns `enabled: false`, no deletion verifier is supplied, and the page's Content Security Policy blocks Google's credential-producing script. The local `public/google-signin.js` helper remains served, but cannot offer Google confirmation in that state. Enabling only the verifier would not restore a usable deletion flow.
+
+In this state, the **supported deletion option is a manual request to support**, following [Support and reporting, Manual process](SUPPORT_AND_REPORTING.md#manual-process-beta). This also applies when the Google client ID is removed. Password reset does not provide a password for a Google-only account. The owner confirms the request came from the registered address and follows the existing backup and recorded-approval process. The support address is still an owner-supplied placeholder in that document and must be provided to users before relying on this route.
+
 ## What is removed when an account is deleted
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Removed by the deletion itself or by foreign-key cascade (`ON DELETE CASCADE` in the migrations):
 
