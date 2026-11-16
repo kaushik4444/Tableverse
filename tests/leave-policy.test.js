@@ -29,6 +29,7 @@ function finish(room) {
   const results = room.seated.map((m, i) => ({ score: 10 - i, winner: i === 0 }));
   return buildMatchRecord(room, { results: () => results });
 }
+const finishRecord = (room) => finish(room);
 const byId = (rec) => Object.fromEntries(rec.participants.map((p) => [p.playerId, p]));
 
 test('one player leaves with others playing; the game finishes: the leaver is a loss', () => {
@@ -166,6 +167,91 @@ test('a table closed mid-game is stored as incomplete, with its table shape', ()
   assert.equal(rec.tableHumans, 3);
   assert.equal(rec.tableBots, 1);
 });
+
+// ---- third leave is final; rejoining inside the window still works
+const { voluntaryLeave, reclaimSeat, rejoinDecision, startRejoinWindow, leaveCountOf, FINAL_LEAVE } = require('../lib/leavePolicy');
+const WINDOW_MS = 120000;
+// Drives the same functions the server uses for a departure and for taking the seat back.
+function departure(room, id, now) {
+  const m = room.members.find((x) => x.id === id);
+  voluntaryLeave(room, m, now, WINDOW_MS);
+}
+function takeSeatBack(room, id, now) {
+  return reclaimSeat(room, room.members.find((x) => x.id === id), now);
+}
+function playingTable(humans, bots) {
+  const r = table(humans, bots);
+  return r;
+}
+
+test('the first and second leave are penalties a rejoin cancels; the third is final', () => {
+  const r = playingTable(['A', 'B', 'C'], ['D']);
+  const t0 = 1000;
+  departure(r, 'A', t0);
+  assert.equal(leaveCountOf(r, 'A'), 1);
+  assert.equal(takeSeatBack(r, 'A', t0 + 1000).seat, true, 'first leave: rejoin inside the window');
+  assert.equal(r.forfeits.has('A'), false, 'rejoin cancels the first penalty');
+  departure(r, 'A', t0 + 2000);
+  assert.equal(leaveCountOf(r, 'A'), 2, 'rejoining does not reset the count');
+  assert.equal(takeSeatBack(r, 'A', t0 + 3000).seat, true, 'second leave: still rejoinable');
+  assert.equal(r.forfeits.has('A'), false, 'rejoin cancels the second penalty');
+  departure(r, 'A', t0 + 4000);
+  assert.equal(leaveCountOf(r, 'A'), FINAL_LEAVE, 'third leave');
+  assert.equal(r.forfeits.has('A'), true, 'third leave penalises directly');
+  assert.equal(r.finalForfeits.has('A'), true);
+});
+
+test('a rejoin after the third leave keeps the penalty, and the seat is given back inside the window', () => {
+  const r = playingTable(['A', 'B', 'C'], ['D']);
+  const t0 = 1000;
+  for (let i = 0; i < 3; i += 1) { departure(r, 'A', t0 + i * 1000); if (i < 2) takeSeatBack(r, 'A', t0 + i * 1000 + 500); }
+  assert.equal(takeSeatBack(r, 'A', t0 + 5000).seat, true, 'the rejoin option is still there after the third leave');
+  assert.equal(r.forfeits.has('A'), true, 'the final penalty stays');
+  const rec = finishRecord(r);
+  assert.equal(byId(rec).A.forfeit, true);
+});
+
+test('the 2-minute window is total: it starts at the first departure and later leaves do not extend it', () => {
+  const r = playingTable(['A', 'B', 'C'], ['D']);
+  const t0 = 1000;
+  departure(r, 'A', t0);
+  takeSeatBack(r, 'A', t0 + 10000);
+  departure(r, 'A', t0 + 100000);
+  assert.equal(rejoinDecision(r, 'A', t0 + WINDOW_MS + 1).seat, false, 'closed at the first departure plus 2 minutes');
+  assert.equal(rejoinDecision(r, 'A', t0 + WINDOW_MS).seat, true, 'open at the deadline itself');
+});
+
+test('after the window closes the person can only watch: no seat, no rejoin', () => {
+  const r = playingTable(['A', 'B', 'C'], ['D']);
+  departure(r, 'A', 1000);
+  assert.equal(rejoinDecision(r, 'A', 1000 + WINDOW_MS + 1).reason, 'expired');
+});
+
+test('a fourth leave by the same person is not an abandonment, and the others are not penalised by it', () => {
+  const r = playingTable(['A', 'B', 'C'], ['D']);
+  for (let i = 0; i < 4; i += 1) { departure(r, 'A', 1000 + i * 1000); if (i < 3) takeSeatBack(r, 'A', 1500 + i * 1000); }
+  assert.equal(r.abandoned, false, 'the game is not abandoned by its own leaver');
+  assert.equal(r.forfeits.has('B'), false);
+});
+
+test('a final penalty still counts when another person later abandons the game', () => {
+  const r = playingTable(['A', 'B', 'C'], ['D']);
+  for (let i = 0; i < 3; i += 1) { departure(r, 'A', 1000 + i * 1000); if (i < 2) takeSeatBack(r, 'A', 1500 + i * 1000); }
+  departure(r, 'B', 9000);
+  assert.equal(r.abandoned, true, 'a second person leaving abandons the game');
+  const rec = finishRecord(r);
+  assert.equal(byId(rec).A.forfeit, true, 'the third leave is final even in an abandoned game');
+  assert.equal(byId(rec).B.forfeit, false, 'a non-final leaver is not penalised in an abandoned game');
+});
+
+test('the leave prompt state for a player: others pending means abandons; their own final penalty does not', () => {
+  const r = playingTable(['A', 'B', 'C'], ['D']);
+  for (let i = 0; i < 3; i += 1) { departure(r, 'A', 1000 + i * 1000); if (i < 2) takeSeatBack(r, 'A', 1500 + i * 1000); }
+  takeSeatBack(r, 'A', 9000);
+  assert.equal(leaveStateOf(r, 'A'), 'counts', 'A does not abandon the game by its own pending penalty');
+  assert.equal(leaveStateOf(r, 'B'), 'abandons', 'B would abandon the game');
+});
+
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
