@@ -119,8 +119,15 @@ function start(opts = {}) {
   // The Impressum is off unless LEGAL_IMPRESSUM_PUBLISHED=true (fail closed); see lib/legalPages.js.
   // Reported as on only when the page can actually be rendered (flag on and every detail set), so the links never point at a 404.
   const impressumOn = (opts.impressumPublished ?? legalPages.impressumPublished(env)) && legalPages.detailsComplete(env);
-  // The privacy notice and terms are off unless LEGAL_PAGES_PUBLISHED=true (fail closed); the text is read once from lib/legal.
-  const legalPagesOn = opts.legalPagesPublished ?? legalPages.legalPagesPublished(env);
+  // The privacy notice and the terms have separate switches (LEGAL_PRIVACY_PUBLISHED, LEGAL_TERMS_PUBLISHED), each off unless
+  // exactly "true". A page is live only when its switch is on AND its text is complete (see lib/legalPages.js). Google
+  // sign-in is offered only while the privacy notice is live, so the Terms never block it.
+  const privacyOn = opts.legalPrivacyPublished ?? legalPages.privacyPublished(env);
+  const termsOn = opts.legalTermsPublished ?? legalPages.termsPublished(env);
+  const privacyLive = legalPages.legalPageLive(LEGAL_TEXT.privacy, env, privacyOn);
+  const termsLive = legalPages.legalPageLive(LEGAL_TEXT.terms, env, termsOn);
+  // Sent to the client and in the welcome/authRequired messages, so the links only appear when the pages answer 200.
+  const legalFlags = { impressumPublished: impressumOn, privacyPublished: privacyLive, termsPublished: termsLive };
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId, metered });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
@@ -367,6 +374,7 @@ function start(opts = {}) {
   const authRoutes = createAuthRoutes({
     env,
     googleVerifier: opts.googleVerifier || null, // tests only: a verifier with a local key instead of Google's
+    googleAllowed: privacyLive, // Google sign-in is offered only while the privacy notice is live
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
@@ -464,16 +472,17 @@ function start(opts = {}) {
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
     if (rel === '/api/games') {
-      return sendJson(res, 200, { ok: true, games: games.list(), tables: publicTables(), announcement, impressumPublished: impressumOn });
+      return sendJson(res, 200, { ok: true, games: games.list(), tables: publicTables(), announcement, ...legalFlags });
     }
     if (rel.includes('\0')) {
       res.writeHead(400);
       return res.end();
     }
-    // The privacy notice and the terms (/privacy, /terms): shown only when LEGAL_PAGES_PUBLISHED=true and the text has no
-    // owner placeholders left (fail closed). Served from lib/legal, never from public/, so the raw drafts are not reachable.
+    // The privacy notice and the terms (/privacy, /terms): each shown only when its own switch is on and its text is complete
+    // (fail closed). Served from lib/legal, never from public/, so the raw drafts are not reachable.
     if (rel === '/privacy' || rel === '/terms') {
-      const body = legalPagesOn ? legalPages.renderLegal(LEGAL_TEXT[rel.slice(1)]) : null;
+      const live = rel === '/privacy' ? privacyLive : termsLive;
+      const body = live ? legalPages.renderLegal(LEGAL_TEXT[rel.slice(1)], env) : null;
       if (!body) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('Not found');
@@ -1838,7 +1847,7 @@ function start(opts = {}) {
     // accepted: anything a page can send can then never be mistaken for a session.
     const presentedToken = ws.cookieToken || null;
     if (!presentedToken) {
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Please log in to play.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Please log in to play.' });
       return ws.close(1008, 'auth required');
     }
 
@@ -1877,7 +1886,7 @@ function start(opts = {}) {
     }
 
     if (!p) {
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
 
@@ -1892,11 +1901,11 @@ function start(opts = {}) {
     // the authoritative PostgreSQL session state.
     if (!auth.authenticated) {
       tokens.delete(p.token);
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
     if (dbPool.hasDatabase() && dbAuth.isEmailVerificationRequired(env) && !auth.emailVerified) {
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Please verify your email before entering the lobby.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Please verify your email before entering the lobby.' });
       return ws.close(1008, 'email verification required');
     }
 
@@ -1909,7 +1918,7 @@ function start(opts = {}) {
     // The account may have been deleted, or its record dropped, while the checks above were pending. Only the player
     // record that is still registered on this server can be taken over.
     if (players.get(p.id) !== p) {
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
     if (p.ws && p.ws !== ws) {
@@ -1930,7 +1939,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, impressumPublished: impressumOn, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
@@ -2015,7 +2024,7 @@ function start(opts = {}) {
       const current = await dbPlayers.authenticateToken(ws.authToken);
       if (ws.revoked || ws.player !== p) return; // ended while the check was running
       if (!current || current.id !== p.id) {
-        send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session has ended. Please log in again.' });
+        send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session has ended. Please log in again.' });
         revokeSocket(ws, 4001, 'session ended');
       }
     } catch (err) {
