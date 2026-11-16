@@ -313,6 +313,7 @@
   async function users(q = '', page = 1, stale = 0) {
     const gen = state.gen;
     const req = ++usersSeq;
+    state.usersSel = { q, page, stale }; // the last selection asked for: what a refresh after an action reloads
     let o;
     try {
       o = await api(`/api/admin/users?q=${encodeURIComponent(q)}&page=${page}${stale ? '&stale=' + encodeURIComponent(stale) : ''}`);
@@ -322,6 +323,7 @@
     }
     if (gen !== state.gen || req !== usersSeq) return; // the admin has switched tabs, or asked for something newer, since this was asked
     if (o.page) page = o.page; // the server answers with the last page that exists when this one has gone past the end
+    state.usersSel = { q, page, stale };
     const owner = state.me.isOwner;
     const rows = o.users.map((u) => {
       const staff = u.role !== 'user';
@@ -348,9 +350,8 @@
     document.getElementById('uSearch').onsubmit = (e) => { e.preventDefault(); { const d = new FormData(e.target); users(d.get('q'), 1, Number(d.get('stale')) || 0).catch(fail); } };
     // Refreshes the list the admin is looking at now (their latest search or filter), not the one this view was drawn with
     const reloadUsers = () => {
-      const f = document.getElementById('uSearch');
-      const d = f ? new FormData(f) : null;
-      return users(d ? String(d.get('q') || '') : q, page, d ? Number(d.get('stale')) || 0 : stale);
+      const sel = state.usersSel || { q, page, stale };
+      return users(sel.q, sel.page, sel.stale);
     };
     document.getElementById('uPrev').onclick = () => users(q, page - 1, stale).catch(fail);
     document.getElementById('lookupForm').onsubmit = async (e) => {
