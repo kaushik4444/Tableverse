@@ -55,7 +55,7 @@ async function test(name, fn) {
       const googleStart = app.indexOf('function openGoogleSignupSheet');
       const googleEnd = app.indexOf('\n  function ', googleStart + 10);
       assert.ok(googleStart >= 0 && googleEnd > googleStart, 'Google signup sheet is present');
-      assert.match(app.slice(googleStart, googleEnd), /legalLinksHtml\\(\\)/, 'Google signup sheet includes published legal links');
+      assert.ok(app.slice(googleStart, googleEnd).includes('${legalLinksHtml()}'), 'Google signup sheet includes published legal links');
       assert.match(app, /if \(typeof m\.impressumPublished === 'boolean'\) S\.impressumPublished = m\.impressumPublished/, 'client reads the server flag');
       assert.match(app, /applyLegal\(out\)/, 'signed-out snapshot reads the flags');
       assert.match(app, /<footer class="home-foot">[\s\S]*S\.impressumPublished \? '<a href="\/impressum\.html">Impressum<\/a>' : ''[\s\S]*<\/footer>/, 'home footer link, only when published');
