@@ -572,7 +572,9 @@
         <label class="auth-check"><input id="googleAdult" type="checkbox" required> I am 18 or older.</label>
         <label class="auth-check"><input id="googleKeep" type="checkbox"${info.remember ? ' checked' : ''}> Keep me signed in on this device <small class="hint">Only on a device you own.</small></label>
         <button class="btn big" type="submit">Create account</button>
-      </form></div>`;
+      </form>
+      ${legalLinksHtml()}
+    </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     overlay.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();
