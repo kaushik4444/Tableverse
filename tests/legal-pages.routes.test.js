@@ -1,11 +1,12 @@
 'use strict';
-// Server wiring for the legal pages and Google sign-in gating (needs the server, so it runs in CI with the ws package).
+// Server wiring for the legal pages and Google gating (needs the server, so it runs in CI with the ws package).
 require('./helpers/env');
 const assert = require('node:assert/strict');
 const { start } = require('../server');
 
 const guard = setTimeout(() => { console.error('FAIL legal routes test timed out'); process.exit(1); }, 90000);
 const quiet = { log() {}, warn() {}, error() {} };
+const CLIENT_ID = 'test-client.apps.googleusercontent.com';
 const DETAILS = { IMPRESSUM_NAME: 'Test Person', IMPRESSUM_ADDRESS: 'Teststraße 1, 10115 Berlin', IMPRESSUM_EMAIL: 'test@example.invalid' };
 let passed = 0;
 async function test(name, fn) {
@@ -15,7 +16,7 @@ const base = (srv) => `http://127.0.0.1:${srv.port}`;
 
 (async () => {
   console.log('legal pages (routes and Google gating)');
-  const env = { ...process.env, ...DETAILS, GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com' };
+  const env = { ...process.env, ...DETAILS, GOOGLE_CLIENT_ID: CLIENT_ID };
   // Privacy switch on, but the shipped text still has owner items: the page and Google sign-in must stay off.
   const switchOn = await start({ port: 0, trustProxy: false, legalPrivacyPublished: true, legalTermsPublished: true, env, matchLog: quiet });
   // Switches off: nothing is published, regardless of the text.
@@ -42,15 +43,21 @@ const base = (srv) => `http://127.0.0.1:${srv.port}`;
       assert.equal(body.impressumPublished, false, 'Impressum is its own switch and stays off');
     });
 
-    await test('Google sign-in is not offered while the privacy notice is not live, even with a client ID set', async () => {
+    await test('Google sign-in is not offered while the privacy notice is not live; deletion confirmation still is', async () => {
       const body = await (await fetch(base(switchOn) + '/api/auth/google/config')).json();
-      assert.equal(body.enabled, false);
-      assert.equal(body.clientId, undefined);
+      assert.equal(body.enabled, false, 'sign-in offer');
+      assert.equal(body.deleteConfirm, true, 'deletion confirmation for existing Google accounts');
+      assert.equal(body.clientId, CLIENT_ID);
     });
 
-    await test('the Google script is not allowed by the page policy while the privacy notice is not live', async () => {
+    await test('Google sign-in routes answer 404 while the privacy notice is not live', async () => {
+      const res = await fetch(base(switchOn) + '/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      assert.equal(res.status, 404);
+    });
+
+    await test('the page policy allows Google\'s script when a client ID is set, so deletion confirmation works', async () => {
       const res = await fetch(base(switchOn) + '/api/games');
-      assert.doesNotMatch(res.headers.get('content-security-policy') || '', /accounts\.google\.com/);
+      assert.match(res.headers.get('content-security-policy') || '', /accounts\.google\.com\/gsi\/client/);
     });
 
     await test('the raw drafts are never served from public/', async () => {

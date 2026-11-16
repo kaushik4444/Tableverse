@@ -101,11 +101,9 @@ test('terms cover the sections the product relies on, and contact is taken from 
 });
 
 
-test('CSP opens Google only when the client ID is set AND the privacy notice is live', () => {
-  const env = { GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com' };
-  assert.doesNotMatch(cspFor(env, false), /accounts\.google\.com/);
-  assert.match(cspFor(env, true), /accounts\.google\.com\/gsi\/client/);
-  assert.doesNotMatch(cspFor({}, true), /accounts\.google\.com/);
+test('CSP allows Google\'s script whenever a client ID is set (deletion confirmation does not depend on the sign-in gate)', () => {
+  assert.match(cspFor({ GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com' }), /accounts\.google\.com\/gsi\/client/);
+  assert.doesNotMatch(cspFor({}), /accounts\.google\.com/);
 });
 
 console.log(`\n${passed} legal publication tests passed`);

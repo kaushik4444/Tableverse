@@ -235,7 +235,7 @@ function start(opts = {}) {
       req.on('error', reject);
     });
 
-  const SECURITY = { ...SECURITY_HEADERS, 'Content-Security-Policy': cspFor(env, privacyLive) };
+  const SECURITY = { ...SECURITY_HEADERS, 'Content-Security-Policy': cspFor(env) };
   const setSecurityHeaders = (res) => {
     for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
     if (production) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');

@@ -48,13 +48,13 @@ To run the service you asked for: signing you in, keeping your games and results
 - **Neon**: hosts the PostgreSQL database that holds account and game data.
 - **GitHub**: holds the source code and runs maintenance workflows, including a cleanup job with database access (see `docs/ACCOUNT_DELETION_AND_RETENTION.md`).
 - **Resend**: delivers verification and password-reset e-mail.
-- **Google**: if you use Google sign-in, Google receives the request needed to sign you in and returns your Google account details to us. Google's own privacy policy applies to Google's handling of your data.
+- **Google**: if you sign in with Google, or confirm an account deletion with Google, Google receives the request needed for that step and returns your Google account details to us. Google's own privacy policy applies to Google's handling of your data.
 - **Metered**: relays voice traffic when a direct connection cannot be made. Used only when voice is switched on.
 - **Google and Cloudflare**: STUN servers used during voice setup. They receive your network address. Used only when voice is switched on.
 
 [OWNER: hosting and database regions, and confirmation of processor terms with each provider above.]
 
-We do not sell your data. The game pages do not load advertising or analytics scripts. The sign-in page loads Google's sign-in script only when Google sign-in is offered. If you choose to share a table link through the share button, the text is opened in WhatsApp and is sent only where you send it.
+We do not sell your data. The game pages do not load advertising or analytics scripts. The page loads Google's sign-in script only when you sign in with Google or confirm an account deletion with Google. If you choose to share a table link through the share button, the text is opened in WhatsApp and is sent only where you send it.
 
 ## Promotional e-mail
 

@@ -2027,7 +2027,7 @@
             await withBusy('Deleting your account…', () => postJson('/api/me/delete-account', { credential }));
             finishDeletion();
           } catch (err) { msg.textContent = err.message || 'Could not delete the account.'; msg.hidden = false; }
-        }, () => { msg.textContent = 'Google could not be loaded. Try again later.'; msg.hidden = false; });
+        }, () => { msg.textContent = 'Google could not be loaded. Try again later.'; msg.hidden = false; }, { forDelete: true });
       }
       o.addEventListener('submit', async (e) => {
         if (e.target.id !== 'deleteForm') return;
