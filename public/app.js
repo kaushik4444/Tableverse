@@ -1782,6 +1782,19 @@
     if (seen === null) { S.levelUp = null; store.set(k, String(S.account.level)); return; }
     S.levelUp = S.account.level > Number(seen) ? { username: S.username, from: Number(seen), to: S.account.level } : null;
   }
+  /**
+   * The level-up dialog: shown once, on the next menu (home) visit after a new level. The level is remembered on this
+   * device as soon as the dialog opens, so closing it in any way (OK, the close button, a click outside) counts as seen.
+   */
+  function showLevelUpDialog() {
+    const n = S.levelUp;
+    if (!n || n.username !== S.username || S.guest || S.room || S.page !== 'home') return;
+    if (document.getElementById('modal-overlay')) return; // one dialog at a time: the notice waits for the next visit
+    store.set('ct_level_seen_' + n.username, String(n.to));
+    S.levelUp = null;
+    const left = S.account ? Math.max(0, Number(S.account.need) - Number(S.account.into)) : null;
+    openModal('Level up', `<p>Congratulations on reaching level ${Number(n.to)}!</p>${left !== null ? `<p class="hint">Next level in ${left} XP.</p>` : ''}<div class="row" style="margin-top:12px"><button class="btn" type="button" data-modal-close="1">OK</button></div>`);
+  }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
   let levelRequest = 0; // shared ordering for both profile loaders
   async function refreshLevel() {
@@ -2450,6 +2463,7 @@
     else renderGame();
     updateWatchers();
     if ($chat && S.chatOpen) drawChat();
+    showLevelUpDialog();
     for (const id of openFolds) { const d = document.getElementById(id); if (d && d.tagName === 'DETAILS') d.open = true; }
     if (focusedOpt) { const el = $app.querySelector(`[data-opt="${CSS.escape(focusedOpt)}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
     for (const id of KEEP_FIELDS) {
