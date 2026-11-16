@@ -51,9 +51,9 @@ async function test(name, fn) {
       const body = await res.text();
       assert.doesNotMatch(body, /legal-foot/);
       const app = await (await fetch(base + '/app.js')).text();
-      assert.match(app, /class="hint auth-legal"><a href="\/impressum\.html">Impressum<\/a>/, 'sign-in sheet link');
-      assert.match(app, /S\.impressumPublished = m\.impressumPublished === true/, 'client reads the server flag');
-      assert.match(app, /typeof out\.impressumPublished === 'boolean'\) S\.impressumPublished = out\.impressumPublished/, 'signed-out snapshot reads the flag');
+      assert.match(app, /links\.push\('<a href="\/impressum\.html">Impressum<\/a>'\)/, 'sign-in sheet link');
+      assert.match(app, /if \(typeof m\.impressumPublished === 'boolean'\) S\.impressumPublished = m\.impressumPublished/, 'client reads the server flag');
+      assert.match(app, /applyLegal\(out\)/, 'signed-out snapshot reads the flags');
       assert.match(app, /<footer class="home-foot">[\s\S]*S\.impressumPublished \? '<a href="\/impressum\.html">Impressum<\/a>' : ''[\s\S]*<\/footer>/, 'home footer link, only when published');
     });
 
