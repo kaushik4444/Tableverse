@@ -1262,6 +1262,10 @@
         setHash('');
         render();
         break;
+      case 'gameTotals':
+        // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
+        if (S.room && S.room.code === m.code) { S.gameTotals = { code: m.code, totals: m.totals || {} }; render(); }
+        break;
       case 'error':
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
@@ -2844,38 +2848,31 @@
   const END_WINNER_MS = 2800; // then the "<name> won" pop-up
   /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
   /**
-   * Game over: two amounts, never added together. Player Progress is time played (1 XP per full minute): it is the only
-   * thing that moves the overall level. Game XP is this game's own skill, named after the game. Every person is listed
-   * with both amounts side by side; there is no combined total.
+   * Game over: one table for every person at the table. Per game only: this game's skill XP, and the lifetime skill XP
+   * this person has earned in this same game across all their stored matches. Time-played (Player Progress) XP is not
+   * shown here. `totals` maps player id to lifetime game XP, or is null while the server has not answered yet.
    */
-  function endXpHTML(rows, gameName) {
+  function endXpHTML(rows, gameName, totals) {
     const people = rows.filter((x) => !x.isBot);
     if (!people.length) return '';
     const game = esc(gameName || 'Game');
     const mine = people.find((x) => x.id === S.id);
-    const time = (x) => Math.max(0, Number(x.timeXp) || 0);
     const unranked = (x) => x.gameXp === null || x.gameXp === undefined;
-    const summary = mine ? `<div class="xp-summary">
-        <div class="xp-card xp-progress">
-          <span class="xp-kind">Player Progress</span>
-          <b class="xp-num">+${time(mine)} XP</b>
-          <small>1 XP per full minute played${S.account ? ` · Level ${Number(S.account.level)}, ${Number(S.account.into)} / ${Number(S.account.need)} to the next` : ''}</small>
-        </div>
-        <div class="xp-card xp-game">
-          <span class="xp-kind">${game} Experience</span>
-          <b class="xp-num">${unranked(mine) ? 'Not ranked' : `${fmtXp(mine.gameXp)} XP`}</b>
-          <small>Counts only in ${game}${mine.penalised ? ' · left early (−30)' : ''}</small>
-        </div>
-      </div>${mine.saved ? '' : '<p class="xp-note">Guest games are not kept. Sign in to keep your progress and game XP.</p>'}` : '';
+    const lifetime = (x) => {
+      if (!x.saved) return '–'; // guests have no stored history
+      if (!totals) return '…';
+      return fmtXp(totals[x.id] || 0);
+    };
+    const note = mine && !mine.saved ? '<p class="xp-note">Guest games are not kept. Sign in to keep your game XP.</p>' : '';
     const body = people.map((x) => {
       const me = Boolean(mine) && x.id === S.id;
       const name = me ? 'You' : esc(x.name || 'Player');
       const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
-      const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
-      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">+${time(x)}</span><span class="xp-c" role="cell">${unranked(x) ? '–' : fmtXp(x.gameXp)}</span></div>`;
+      const left = x.penalised ? '<small class="xp-tag">left early (−30)</small>' : '';
+      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${unranked(x) ? '–' : fmtXp(x.gameXp)}</span><span class="xp-c" role="cell">${lifetime(x)}</span></div>`;
     }).join('');
-    const table = `<div class="xp-table" role="table" aria-label="XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">Progress</span><span class="xp-c" role="columnheader">${game}</span></div>${body}</div>`;
-    return `<section class="end-xp" aria-label="XP for this game">${summary}${table}</section>`;
+    const table = `<div class="xp-table" role="table" aria-label="${game} XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">${game} XP</span><span class="xp-c" role="columnheader">Lifetime ${game} XP</span></div>${body}</div>`;
+    return `<section class="end-xp" aria-label="${game} XP for this game">${note}${table}</section>`;
   }
 
   function endFlow() {
@@ -2928,8 +2925,11 @@
         else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
       }
       const xpRows = (r.outcome && r.outcome.xp) || [];
+      // Lifetime game XP comes from the server once per finished game (the table's own game only)
+      const gotTotals = S.gameTotals && S.gameTotals.code === r.code ? S.gameTotals.totals : null;
+      if (xpRows.length && !gotTotals && !f.totalsAsked) { f.totalsAsked = true; send({ t: 'gameTotals' }); }
       if (xpRows.length && !$app.querySelector('.end-xp')) {
-        const card = endXpHTML(xpRows, statsGame(r.gameId).name);
+        const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.

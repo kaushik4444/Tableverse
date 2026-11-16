@@ -1615,6 +1615,33 @@ function start(opts = {}) {
       broadcast(room);
     },
 
+    // Game over: the lifetime game XP of each signed-in person at this table, for this game (their stored game points across
+    // all matches). Only the table's own finished game is answered, so nobody can ask for totals outside their table.
+    gameTotals(p) {
+      const room = rooms.get(p.room);
+      if (!room || room.status !== 'finished' || !room.outcome || !Array.isArray(room.outcome.xp)) return;
+      const now = Date.now();
+      if (p.totalsAt && now - p.totalsAt < 1000) return;
+      p.totalsAt = now;
+      const gameId = room.gameId;
+      const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
+      (async () => {
+        await matchQueue.drain(3000); // this game's own record may still be on its way to the database
+        const totals = {};
+        await Promise.all(ids.map(async (id) => {
+          const progress = await dbMatches.getProgress(id);
+          totals[id] = (progress.games[gameId] || {}).points || 0;
+        }));
+        return totals;
+      })().then(
+        (totals) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, totals }),
+        (err) => {
+          console.error('[server] game totals failed:', err.message);
+          sendError(p, 'Game totals are unavailable right now');
+        }
+      );
+    },
+
     // Profile statistics for the asking player only (nobody can request somebody else's)
     getStats(p) {
       const now = Date.now();
