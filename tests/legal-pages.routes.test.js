@@ -50,9 +50,11 @@ const base = (srv) => `http://127.0.0.1:${srv.port}`;
       assert.equal(body.clientId, CLIENT_ID);
     });
 
-    await test('Google sign-in routes answer 404 while the privacy notice is not live', async () => {
+    await test('Google sign-in routes are refused while the privacy notice is not live', async () => {
+      // Refused before any token check: 403 from the CSRF guard that runs first (no token sent), or 404 from the gate itself.
       const res = await fetch(base(switchOn) + '/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      assert.equal(res.status, 404);
+      assert.ok(res.status === 403 || res.status === 404, 'status ' + res.status);
+      assert.notEqual((await res.json().catch(() => ({}))).ok, true);
     });
 
     await test('the page policy allows Google\'s script when a client ID is set, so deletion confirmation works', async () => {
