@@ -52,10 +52,12 @@ Rules that apply to every game:
 
 ## Game over: what the screen shows
 - The result (who won, the places) is the main line, as before.
-- **Player Progress** `+X XP`: the time you played in this game (1 XP per full minute). It is the only amount that moves your overall level.
-- **[Game] Experience** `+Y XP`: this game's own points (`Not ranked` when you were not ranked). It counts only in that game.
-- The two amounts are shown side by side and are never added together. There is no combined "overall XP" total.
-- The table lists each person with their Progress and Game XP in two columns. Guests are marked: their games are not kept.
+- No progress cards. The screen shows one table for everyone at the table, with three columns:
+  - **Player**: the name, with a guest or left-early mark where that applies.
+  - **[Game] XP**: this game's own skill points for each person (`–` when they were not ranked, for example an unpenalised leave).
+  - **Lifetime [Game] XP**: the sum of that person's Game XP in this same game across all their stored matches. It is read from the database when the game ends (`gameTotals` in `server.js`), after this game's own record is written. Guests show `–` (their games are not kept).
+- Time played (Player Progress) is not shown on this screen. It still moves the overall level, and it is on the profile.
+- The lifetime column may show `…` for a moment while the server answers. The client asks once per finished game; if the answer is lost, the column stays `…` for that game (the game itself is unaffected).
 
 ## History and rule changes
 - Game XP and Player Progress are calculated from the stored results each time they are read. No totals are stored, so a

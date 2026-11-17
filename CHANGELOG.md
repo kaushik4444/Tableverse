@@ -10,6 +10,7 @@
 - The third leave of one person in a game is a final penalty: rejoining inside the window still works, but it no longer removes the penalty.
 - Take your seat back within `REJOIN_GRACE_SECONDS` (default 120) of your first departure: the penalty goes. After that the bot keeps the seat.
 - Active play time: XP and `seconds_played` count only the time a person was seated and connected. A dropped connection pauses it.
+- Game over: no progress cards. One table shows each person's XP in this game and their lifetime XP in the same game (`gameTotals`, read from stored matches after this game is written).
 - Progress levels, per-game skill points, version history, shutdown saves leavers' losses (migration 025 and 026).
 
 Details: `docs/LEAVING_AND_REJOINING.md`, `docs/PROGRESS_LEVELS.md`.
