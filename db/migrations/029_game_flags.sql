@@ -6,5 +6,5 @@ CREATE TABLE IF NOT EXISTS game_flags (
   game_id    TEXT PRIMARY KEY,
   enabled    BOOLEAN NOT NULL DEFAULT TRUE,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_by UUID REFERENCES players(id) ON DELETE SET NULL
+  updated_by UUID NULL -- the owner who made the change (no foreign key: this is configuration, kept when accounts are cleared)
 );
