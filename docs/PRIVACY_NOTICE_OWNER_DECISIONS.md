@@ -109,7 +109,13 @@ The publication switch and Google sign-in are not in this PR. The code's names a
 
 **Stage A (this PR, #234).** Merge into `development` once CI and CodeRabbit pass and threads are resolved. No switch is changed. The notice stays unpublished, `/privacy` returns 404, and Google sign-in stays off.
 
-**Stage B (owner, before publication).** Clear every item in section 5 and the publication blockers in section 9. Each open provider DPA or transfer check, the guest count, the retention decision, and the `[LEGAL]` entries. Then open a reviewed PR that removes the last markers and sets the publication date. In that PR, update the assertions in `tests/privacy-notice.test.js` to accept the removed markers and completed publication date, including the section 9 blocker checks. Preserve marker-gating coverage with a fixture that still contains `[OWNER]` and `[LEGAL]` markers and verifies that publication is blocked while they remain.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:9859147425e750933668851ad1639e8acd7de84f70d932376452132130b357aa -->
+
+**Stage B (owner, before publication).** First complete the owner checks and decisions in section 5 items 1–6 and resolve the section 9 blockers that can be cleared before the publication PR, including the provider DPA and transfer checks, guest count, retention decision, and decisions on the `[LEGAL]` entries. Then open a reviewed publication PR to complete the PR-dependent parts of section 5 item 7 and section 9: apply the decisions, remove the last markers and set the publication date to the day of publication. In that PR, update the assertions in `tests/privacy-notice.test.js` to accept the removed markers and completed publication date, including the section 9 blocker checks. Preserve marker-gating coverage with a fixture that still contains `[OWNER]` and `[LEGAL]` markers and verifies that publication is blocked while they remain. After the PR is deployed in Stage C, publish the notice in Stage D.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 **Stage C (release `development` to `main`).** Use the existing promotion process, with owner approval. The switches are still off, so this release changes no public page and enables no sign-in. Verify after deploy: `/privacy` returns 404, and `GET /api/games` reports `privacyPublished: false`.
 
