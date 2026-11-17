@@ -141,6 +141,10 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 
 `ADMIN_OWNER_ID`, `ADMIN_OWNER_EMAIL` (owner bootstrap), `ANALYTICS_ENABLED` (`0` disables). E-mail: `PUBLIC_APP_URL` (needed for promotional mail), `RL_BROADCAST_LIMIT` (queued sends per owner per day, default 20), `RL_UNSUBSCRIBE_IP_LIMIT`. Rate limits can be tuned with `RL_ADMIN_IP_LIMIT`, `RL_ADMIN_PLAYER_LIMIT`, `RL_ANNOUNCE_IP_LIMIT`, `RL_FEEDBACK_IP_LIMIT`, `RL_FEEDBACK_PLAYER_LIMIT`. `ANNOUNCEMENT_CACHE_MS` changes the 15 s banner cache (tests use 0).
 
+## Player directory sorting
+
+The Players tab can be sorted by any visible column: Player, Games, Wins, Win rate, Left early (rate), Played and Last seen. A header button sorts its column in its default direction; clicking the active header flips it. The request adds `dir=asc|desc` only when a header chose a direction. The preset sort buttons (Last seen, Newest, Games, Wins, Time played, Left early count) are unchanged. Sort keys are a fixed server-side map, so no request text reaches the SQL.
+
 ## Not included (limits of the free beta)
 
 - No owner transfer in the UI, no two-factor step for admins, no e-mail alerts.
