@@ -277,9 +277,10 @@
     render();
   }
   const send = (msg) => {
-    if (!(ws && ws.readyState === 1)) return;
+    if (!(ws && ws.readyState === 1)) return false; // nothing was sent (not connected)
     ws.send(JSON.stringify(msg));
     if (BUSY_LABELS[msg.t]) showBusy(BUSY_LABELS[msg.t], BUSY_FAST.has(msg.t) ? 8000 : 20000, msg.t);
+    return true;
   };
 
   // ------------------------------------------------------------ table voice chat (public/voice.js)
@@ -1816,7 +1817,7 @@
     store.set('ct_level_seen_' + n.username, String(n.to));
     S.levelUp = null;
     const left = S.account ? Math.max(0, Number(S.account.need) - Number(S.account.into)) : null;
-    openModal('Level up', `<p>Congratulations on reaching level ${Number(n.to)}!</p>${left !== null ? `<p class="hint">Next level in ${left} XP.</p>` : ''}<div class="row" style="margin-top:12px"><button class="btn" type="button" data-modal-close="1">OK</button></div>`);
+    openModal('Level up', `<p>Congratulations on reaching level ${Number(n.to)}!</p>${left !== null ? `<p class="hint">Next level in ${left} min of play.</p>` : ''}<div class="row" style="margin-top:12px"><button class="btn" type="button" data-modal-close="1">OK</button></div>`);
   }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
   let levelRequest = 0; // shared ordering for both profile loaders
@@ -2718,22 +2719,29 @@
 
   /** Account level (time played), Game XP per game (skill) and penalised leaves. `pr` is the progress the server sends; nothing when absent. */
   function progressHTML(pr, interactive = true) {
-    if (!pr || !pr.account) return '';
-    const a = pr.account;
-    const pct = a.need ? Math.min(100, Math.round((a.into / a.need) * 100)) : 0;
-    const games = Object.entries(pr.games || {}).sort((x, y) => y[1].points - x[1].points).map(([id, g]) => {
+    // Own profile: `account` carries the level bar. Another player's profile (getPublicProfile) has only `level` and each
+    // game's `xp`, so it shows the level and the game XP without the bar, minutes or leave counts.
+    if (!pr || (!pr.account && (pr.level === undefined || pr.level === null))) return '';
+    const a = pr.account || null;
+    const level = a ? a.level : pr.level;
+    const pct = a && a.need ? Math.min(100, Math.round((a.into / a.need) * 100)) : 0;
+    const gameXp = (g) => Number(g.points !== undefined ? g.points : g.xp) || 0;
+    const games = Object.entries(pr.games || {}).sort((x, y) => gameXp(y[1]) - gameXp(x[1])).map(([id, g]) => {
       const meta = statsGame(id);
-      const label = `<span>${esc(meta.icon || '🎴')} ${esc(meta.name)}</span><b>${fmtXp(g.points)} XP</b>`;
+      const label = `<span>${esc(meta.icon || '🎴')} ${esc(meta.name)}</span><b>${fmtXp(gameXp(g))} XP</b>`;
       // Another player's profile shows the same numbers but has no detail view for them, so its rows are plain text.
       return interactive
-        ? `<li class="pg-row"><button type="button" class="pg-btn" data-act="openGameStats" data-game="${esc(id)}" aria-label="${esc(meta.name)}: ${fmtXp(g.points)} Game XP, details">${label}</button></li>`
+        ? `<li class="pg-row"><button type="button" class="pg-btn" data-act="openGameStats" data-game="${esc(id)}" aria-label="${esc(meta.name)}: ${fmtXp(gameXp(g))} Game XP, details">${label}</button></li>`
         : `<li class="pg-row">${label}</li>`;
     }).join('');
+    const levelBlock = a
+      ? `<div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
+        <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>`
+      : `<div class="pg-level"><span class="stat-v">Level ${Number(level) || 0}</span></div>`;
     const left = pr.penalisedLeaves > 0 ? `<p class="hint" style="text-align:left">Left ${pr.penalisedLeaves} game${pr.penalisedLeaves === 1 ? '' : 's'} early (counted as a loss).</p>` : '';
     const levelUp = interactive && S.levelUp && S.levelUp.username === S.username ? `<div class="levelup-note" role="status"><b>Level up!</b> You reached level ${Number(S.levelUp.to)}. <button type="button" class="btn small" data-act="levelUpAck">Got it</button></div>` : '';
     return `<section class="progress-card" aria-label="Progress">${levelUp}
-      <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
-        <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>
+      ${levelBlock}
       ${games ? `<h3 class="stat-h">Game XP${interactive ? ' <small>(tap a game for details)</small>' : ''}</h3><ul class="plain-list pg-games">${games}</ul>` : ''}${left}</section>`;
   }
 
@@ -2960,7 +2968,14 @@
       const xpRows = (r.outcome && r.outcome.xp) || [];
       // Lifetime game XP comes from the server once per finished game (the table's own game only)
       const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.totals : null;
-      if (xpRows.length && !gotTotals && !f.totalsAsked) { f.totalsAsked = true; send({ t: 'gameTotals' }); }
+      // Asked again if the answer did not come (not connected, or the server could not save the game yet): at most three
+      // tries, five seconds apart, so a failed request never leaves the saved players on an ellipsis for good.
+      const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
+      const due = !f.totalsAsked || (Date.now() - f.totalsAsked.at >= 5000);
+      if (xpRows.length && !gotTotals && due && tries < 3 && send({ t: 'gameTotals' })) {
+        f.totalsAsked = { at: Date.now(), tries: tries + 1 };
+        setTimeout(() => render(), 5100); // one re-render later: endFlow asks again only if the answer is still missing
+      }
       if (xpRows.length && !$app.querySelector('.end-xp')) {
         const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
