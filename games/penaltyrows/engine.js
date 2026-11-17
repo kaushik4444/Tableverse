@@ -223,6 +223,7 @@ function viewFor(g, playerId) {
   return {
     game: 'penaltyrows',
     phase: g.phase,
+    batch: `${g.round}:${g.turn}`, // each simultaneous turn is its own batch for the time limit
     round: g.round,
     turn: over ? HAND : g.turn,
     handSize: HAND,

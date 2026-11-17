@@ -47,7 +47,7 @@ module.exports = {
       botAction: (playerId) => engine.botAction(g, playerId),
       forcedPlay: () => engine.forcedPlay(g),
       // lets the table show the played cards before the next turn is asked for
-      stamp: () => ({ round: g.round, turn: g.turn, seq: g.seq }),
+      stamp: () => g.seq, // a number that changes once per finished turn (the server compares stamps with !==)
       botDelayMs: () => 700 + g.rng() * 900,
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
