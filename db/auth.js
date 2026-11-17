@@ -222,6 +222,58 @@ async function registerEmail({ email, username, password, displayName, avatar, a
   }
 }
 
+/**
+ * Turns a guest (an is_anonymous player) into a registered account, in place: the same player id, so every stat, match and
+ * friend the guest already has stays attached and nothing is copied. Adds the username, the e-mail identity and the password,
+ * and starts e-mail verification. The guest's session token is kept, so the game the guest is in is not interrupted.
+ * Refused (with the same messages as registration) when the username or e-mail is taken, or the password is weak.
+ */
+async function upgradeGuest({ playerId, email, username, password, adultConfirmed }) {
+  if (!db.hasDatabase()) throw new AuthError('Creating an account requires PostgreSQL (set DATABASE_URL).', 503);
+  if (!isEmail(email)) throw new AuthError('Please enter a valid email address.');
+  if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
+  const e = normEmail(email);
+  const u = normUsername(username);
+  if (!isUsername(u)) throw new AuthError('Username must be 3-24 chars: lowercase letters, numbers, underscore.');
+  const weak = passwordPolicy.check(password, { email: e, username: u });
+  if (weak) throw new AuthError(weak, 400);
+  const pwHash = await hashPassword(password);
+
+  try {
+    return await db.withTransaction(async (client) => {
+      // lock the guest's row so a second upgrade of the same guest cannot run at the same time
+      const g = await client.query('SELECT id FROM players WHERE id = $1 AND is_anonymous = TRUE AND suspended_at IS NULL FOR UPDATE', [playerId]);
+      if (!g.rows.length) throw new AuthError('Only a guest can create an account this way.', 403);
+      const existsUsername = await client.query('SELECT 1 FROM players WHERE LOWER(username) = LOWER($1) LIMIT 1', [u]);
+      if (existsUsername.rows.length) throw new AuthError('This username is already taken.');
+      const existsEmail = await client.query('SELECT 1 FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', [PROVIDER_EMAIL, e]);
+      if (existsEmail.rows.length) throw new AuthError('This email address already has an account. Log in instead, or use a different address.', 409);
+
+      const p = await client.query(
+        `UPDATE players SET username = $2, is_anonymous = FALSE, adult_confirmed_at = NOW(), last_seen_at = NOW()
+         WHERE id = $1
+         RETURNING id, username, display_name, avatar, created_at`,
+        [playerId, u]
+      );
+      const player = p.rows[0];
+      await client.query(
+        `INSERT INTO auth_identities (player_id, provider, provider_user_id, email, password_hash)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [player.id, PROVIDER_EMAIL, e, e, pwHash]
+      );
+      const verifyToken = await issueEmailToken(client, { playerId: player.id, purpose: 'verify_email', email: e, ttlMinutes: verifyTtlMin() });
+      return { player: makeSessionResult(player, null).player, verifyToken, email: e, username: u };
+    });
+  } catch (err) {
+    if (err instanceof AuthError) throw err;
+    if (err && err.code === '23505') {
+      if ((err.constraint || '').includes('username') || /username/i.test(err.message || '')) throw new AuthError('This username is already taken.');
+      throw new AuthError('This email address already has an account. Log in instead, or use a different address.', 409);
+    }
+    throw err;
+  }
+}
+
 async function checkUsernameAvailability({ username }) {
   if (!db.hasDatabase()) return { available: false, reason: 'requires_postgres' };
   const u = normUsername(username);
@@ -665,6 +717,7 @@ module.exports = {
   purgeExpired,
   isEmailVerificationRequired,
   registerEmail,
+  upgradeGuest,
   checkUsernameAvailability,
   loginEmail,
   resendVerification,
