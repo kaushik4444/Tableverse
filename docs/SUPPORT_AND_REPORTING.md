@@ -1,12 +1,12 @@
 # Support, bug reports, deletion requests and safety reports
 
-Status: **draft for the limited beta. Not published in the app.** The public support/contact address is the value configured in Render as `IMPRESSUM_EMAIL`; keep that value out of the repository. The owner must confirm that this inbox is monitored for support and deletion requests before relying on it. Nothing in this page is a legal commitment until the owner approves the final wording.
+Status: **draft for the limited beta. Not published in the app.** The public support/contact address is the value configured in Render as `PUBLIC_CONTACT_EMAIL` (or `IMPRESSUM_EMAIL` when `PUBLIC_CONTACT_EMAIL` is not set); keep that value out of the repository. The owner must confirm that this inbox is monitored for support and deletion requests before relying on it. Nothing in this page is a legal commitment until the owner approves the final wording.
 
 ## Routes to the owner
 
 For the Wave 1 and 2 beta there is **one** support address, used for manual bug reports, account deletion requests and safety reports:
 
-**Support contact:** use the address configured in Render as `IMPRESSUM_EMAIL` (the same address shown on the published legal pages). This address is not discoverable from the app while the legal pages are unpublished; do not direct users to this route until the Impressum is published and displays the contact.
+**Support contact:** use the address configured in Render as `PUBLIC_CONTACT_EMAIL` (the same address shown on the published legal pages). This address is not discoverable from the app while the legal pages are unpublished; do not direct users to this route until the Impressum is published and displays the contact.
 
 The in-app routes also reach the owner, and they stay in place:
 
@@ -56,4 +56,4 @@ Nothing in the code sets a response time, and one person runs the beta. The prop
 
 > We read reports ourselves, on a best-effort basis. We aim to reply within 3 working days. Safety and account-security reports are read as soon as we see them, but we cannot promise a reply time or a fix date during the beta.
 
-**Owner decisions before publishing this page:** approve the wording above; confirm the configured `IMPRESSUM_EMAIL` inbox is monitored for support; whether the 3-working-day target is kept.
+**Owner decisions before publishing this page:** approve the wording above; confirm the configured `PUBLIC_CONTACT_EMAIL` inbox is monitored for support; whether the 3-working-day target is kept.
