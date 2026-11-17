@@ -26,7 +26,7 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     'POST /api/me/avatar': ({ body }) => { const a = JSON.parse(body).avatar; if (a === '🐉') return { __status: 429, body: { ok: false, error: 'Too many changes. Try again later.' } }; profile.profile.avatar = a; return { ok: true, avatar: a }; },
     'GET /api/me/friends': () => ({ ok: true, friends: friendList }),
     'GET /api/me/friends/search': () => { searchCalls++; return searchCalls === 1 ? { ok: true, players: [{ id: 'p9', username: 'evie', display_name: 'Evie', avatar: '🦊' }] } : { __status: 500, body: { ok: false, error: 'Search is busy.' } }; },
-    'GET /api/players/ann': () => ({ ok: true, profile: { username: 'ann', displayName: 'Ann', avatar: '🦊', joinedAt: '2026-02-02T00:00:00Z', played: 12, wins: 5, winRate: 41.7 } }),
+    'GET /api/players/ann': () => ({ ok: true, profile: { username: 'ann', displayName: 'Ann', avatar: '🦊', joinedAt: '2026-02-02T00:00:00Z', played: 12, wins: 5, winRate: 41.7, progress: { account: { level: 7, minutes: 300, need: 100, into: 10 }, games: { wizard: { points: 50 } }, penalisedLeaves: 1 } } }),
     'GET /api/auth/session': () => sessionOk(),
     'POST /api/me/country': ({ body }) => { const c = JSON.parse(body).country; profile.profile.country = c || null; return { ok: true, country: c || null }; },
     'GET /api/me/profile': () => profile,
@@ -110,6 +110,16 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await second.page.waitForTimeout(300);
     assert.equal(await second.page.$('.pp-conn'), null, 'a stranger shows no status or ping');
     await second.ctx.close();
+  });
+
+  await test('a public profile shows win totals without progress even if it is supplied', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs });
+    try {
+      await page.goto(url + '/#u/ann');
+      await page.waitForSelector('.stat-grid');
+      assert.match(await page.textContent('.stat-grid'), /12\s*Games played\s*5\s*Wins\s*41\.7%\s*Win rate/);
+      assert.equal(await page.$('.progress-card'), null);
+    } finally { await ctx.close(); }
   });
 
   await test('a failed friend search clears the results it replaces, rather than leaving them on screen', async () => {
@@ -216,6 +226,8 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     const head = await page.textContent('.pcard-head');
     assert.match(head, /Ann/); assert.match(head, /@ann/); assert.match(head, /75 ms · Good/);
     await page.waitForFunction(() => /12\s*Games/.test(document.querySelector('.pcard-stats')?.textContent.replace(/\s+/g, '') ? document.querySelector('.pcard-stats').textContent.replace(/(\d)([A-Za-z])/g, '$1 $2') : ''));
+    assert.match(await page.textContent('.pcard-stats'), /5\s*Wins\s*41\.7%\s*Win rate/);
+    assert.doesNotMatch(await page.textContent('#modal-overlay .modal-body'), /Level 7|Lifetime Wizard XP/);
     const before = calls.filter((c) => c.method === 'POST' && c.path === '/api/me/friend-requests').length;
     await page.click('[data-modal-act="cardAdd"]');
     await page.waitForFunction(() => /Request sent/.test(document.querySelector('.pcard-actions')?.textContent || ''));

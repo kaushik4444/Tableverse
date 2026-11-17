@@ -6,7 +6,7 @@
  */
 const db = require('./pool');
 const dbAuth = require('./auth');
-const { isUuid, getPlayerProfile, getProgress } = require('./matches');
+const { isUuid, getPlayerProfile } = require('./matches');
 
 const { AuthError } = dbAuth;
 const RECENT_LIMIT = 6;
@@ -142,8 +142,8 @@ async function getPublicProfile(username, { viewerId = null } = {}) {
     const blocked = await db.query('SELECT 1 FROM player_blocks WHERE blocker_id = $1 AND blocked_id = $2 LIMIT 1', [viewerId, row.id]);
     blockedByMe = blocked.rows.length > 0;
   }
-  const [s, progress] = await Promise.all([getPlayerProfile(row.id, { memberSince: row.created_at }), getProgress(row.id)]);
-  return { progress, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate, blockedByMe };
+  const s = await getPlayerProfile(row.id, { memberSince: row.created_at });
+  return { username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate, blockedByMe };
 }
 
 // ---------------------------------------------------------------------------------------------- recent tables
