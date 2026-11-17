@@ -15,7 +15,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by [OWNE
 - A password. It is stored only as a one-way hash.
 - A username, a display name and an avatar. The username and display name are visible to other players.
 - The date you joined and the last time you were seen online.
-- Your match results: the games you finished, your seat, your score and your position. You can see your full history. Your public profile shows only your username, display name, avatar, join date and games played, wins and win rate.
+- Your match results: the games you finished, your seat, your score and your position. You can see your full history. Your public profile shows your username, display name, avatar, join date, games played, wins, win rate, your level, and your XP and games played in each game.
 - Your friends, friend requests, blocks, and tables you have recently visited.
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 
@@ -111,8 +111,10 @@ This draft was prepared from the official texts: the GDPR (Regulation (EU) 2016/
 ## How the pages are published (implemented)
 
 - The publishable text is `lib/legal/privacy.md` and `lib/legal/terms.md`. It was copied from the drafts above, without the status note and the open-question list. Those drafts remain the working files for the owner's decisions.
-- `/privacy` and `/terms` answer 404 unless `LEGAL_PAGES_PUBLISHED=true` **and** the text has no `[OWNER` or `[LEGAL` placeholder left. Today there are placeholders, so the pages stay hidden even with the switch on.
-- To publish: the owner approves each open question, the placeholders are filled in `lib/legal/*.md` through a reviewed PR, then `LEGAL_PAGES_PUBLISHED=true` is set on Render. The public URLs for Google's Branding page are `https://playtableverse.com/privacy` and `https://playtableverse.com/terms`.
+- `/privacy` answers 404 unless `LEGAL_PRIVACY_PUBLISHED=true`, the Impressum details are set **and** the text has no `[OWNER` or `[LEGAL` placeholder left. `/terms` follows `LEGAL_TERMS_PUBLISHED` the same way. The two are independent.
+- The controller name, address and e-mail are filled from the existing `IMPRESSUM_*` variables when the page renders, so they are not committed to Git.
+- Google sign-in is offered only while `/privacy` is live. Terms never block it.
+- To publish: the owner resolves each remaining `[OWNER`/`[LEGAL` item in `lib/legal/*.md` through a reviewed PR, then sets `LEGAL_PRIVACY_PUBLISHED=true` and/or `LEGAL_TERMS_PUBLISHED=true` on Render. The public URLs for Google's Branding page are `https://playtableverse.com/privacy` and `https://playtableverse.com/terms`.
 - The pages carry no script and are `noindex`. The raw files are never served from `public/`.
-- The app does not link to these pages yet. Footer links are a separate change once the text is approved.
+- The homepage footer and the sign-in and sign-up sheets link to each page only while that page is live. The server reports this through `/api/games` and the auth messages (`privacyPublished`, `termsPublished`).
 

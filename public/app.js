@@ -121,12 +121,18 @@
   const isSpectator = () => !!(S.room && (S.room.spectators || []).some((s) => s.id === S.id));
   /** Other people are still playing this game with us: leaving then counts as a loss. Against bots only it does not. */
   const otherHumansPlaying = () => !!(S.room && S.room.status === 'playing' && !isSpectator() && (S.room.members || []).some((m) => m.id !== S.id && !m.bot));
-  /** What leaving now does, as the server decides it: 'counts' (a loss), 'abandons' (the game is abandoned, nobody penalised) or 'abandoned'. */
-  const leaveState = () => (S.room && S.room.leaveState) || 'counts';
+  /** What leaving now does, as the server decides it: 'counts' (a loss), 'abandons' (the game is abandoned, only final penalties count) or 'abandoned'. */
+  const leaveInfo = () => (S.room && S.room.leaveInfo) || { abandoned: false, pending: [], counts: {} };
+  /** What leaving now does for this player: 'counts' (a loss), 'abandons' (someone else's penalty is pending) or 'abandoned'. */
+  const leaveState = () => { const li = leaveInfo(); if (li.abandoned) return 'abandoned'; return li.pending.some((id) => id !== S.id) ? 'abandons' : 'counts'; };
+  /** How many times this player has left this game. The third leave is final: its penalty stays even after a rejoin. */
+  const leavesSoFar = () => leaveInfo().counts[S.id] || 0;
+  /** Extra sentence for the prompt when this leave would be the third (or a later) one. */
+  const finalLeaveNote = () => (leavesSoFar() >= 2 ? ' This would be your third leave in this game: the penalty is final, and coming back inside the time window does not remove it.' : '');
   /** One sentence for the profile and leave prompts, matching what leaving now actually does. */
   const leaveConsequence = () => {
     const state = leaveState();
-    if (state === 'abandons') return ' Another player has already left, so leaving now abandons the game: nobody is penalised.';
+    if (state === 'abandons') return ' Another player has already left, so leaving now abandons the game: only non-final penalties are removed; final penalties still count.';
     if (state === 'abandoned') return ' The game is already abandoned, so leaving costs nothing.';
     return ' Leaving counts as a loss for you.';
   };
@@ -152,10 +158,10 @@
       return;
     }
     if (state === 'abandons') {
-      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Nobody is penalised, and the people who stayed get no result. A bot takes your seat. You can watch the game from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
+      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Only non-final penalties are removed; final penalties still count, and the people who stayed get no result.' + finalLeaveNote() + ' A bot takes your seat. Once the game is abandoned, you cannot take your seat back. You can watch the game from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
       return;
     }
-    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes. A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can take your seat back from the home screen within ' + rejoinWithin() + ' of your first leave in this game. The time does not restart if you leave and come back again. After that the bot keeps the seat.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
+    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes.' + finalLeaveNote() + ' A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned: only non-final penalties are removed; final penalties still count. You can take your seat back from the home screen within ' + rejoinWithin() + ' of your first leave in this game. The time does not restart if you leave and come back again. After that the bot keeps the seat. Taking your seat back removes only non-final penalties; a final penalty still counts. Once the game is abandoned, you cannot take your seat back.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
   }
 
   window.CardTable = Object.assign(window.CardTable || {}, {
@@ -271,9 +277,10 @@
     render();
   }
   const send = (msg) => {
-    if (!(ws && ws.readyState === 1)) return;
+    if (!(ws && ws.readyState === 1)) return false; // nothing was sent (not connected)
     ws.send(JSON.stringify(msg));
     if (BUSY_LABELS[msg.t]) showBusy(BUSY_LABELS[msg.t], BUSY_FAST.has(msg.t) ? 8000 : 20000, msg.t);
+    return true;
   };
 
   // ------------------------------------------------------------ table voice chat (public/voice.js)
@@ -488,7 +495,7 @@
           <button class="btn big" type="submit">Create account</button>
         </form>
       `}
-      ${S.impressumPublished ? '<p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>' : ''}
+      ${legalLinksHtml()}
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     document.body.appendChild(overlay);
@@ -572,7 +579,9 @@
         <label class="auth-check"><input id="googleAdult" type="checkbox" required> I am 18 or older.</label>
         <label class="auth-check"><input id="googleKeep" type="checkbox"${info.remember ? ' checked' : ''}> Keep me signed in on this device <small class="hint">Only on a device you own.</small></label>
         <button class="btn big" type="submit">Create account</button>
-      </form></div>`;
+      </form>
+      ${legalLinksHtml()}
+    </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     overlay.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -954,13 +963,27 @@
   }
 
   /** Home data for visitors (no socket): the public games list, the live table directory and the site announcement. */
-  // A sign-in sheet that was already open when the flag arrived gets the link added (or removed) in place, so typed input survives.
+  // The server says which legal pages are live (privacy, terms, Impressum). Each link is shown only when its page answers 200.
+  function applyLegal(m) {
+    if (typeof m.impressumPublished === 'boolean') S.impressumPublished = m.impressumPublished;
+    if (typeof m.privacyPublished === 'boolean') S.privacyPublished = m.privacyPublished;
+    if (typeof m.termsPublished === 'boolean') S.termsPublished = m.termsPublished;
+  }
+  /** Links for the sign-in and sign-up sheet. Empty when no legal page is live. */
+  function legalLinksHtml() {
+    const links = [];
+    if (S.privacyPublished) links.push('<a href="/privacy">Privacy notice</a>');
+    if (S.termsPublished) links.push('<a href="/terms">Terms</a>');
+    if (S.impressumPublished) links.push('<a href="/impressum.html">Impressum</a>');
+    return links.length ? `<p class="hint auth-legal">${links.join(' · ')}</p>` : '';
+  }
+  // A sign-in sheet that was already open when the flags arrived gets the links added (or removed) in place, so typed input survives.
   function syncImpressumLink() {
     const sheet = document.querySelector('#auth-overlay .sheet');
     if (!sheet) return;
-    const link = sheet.querySelector('.auth-legal');
-    if (S.impressumPublished && !link) sheet.insertAdjacentHTML('beforeend', '<p class="hint auth-legal"><a href="/impressum.html">Impressum</a></p>');
-    else if (!S.impressumPublished && link) link.remove();
+    sheet.querySelectorAll('.auth-legal').forEach((el) => el.remove());
+    const html = legalLinksHtml();
+    if (html) sheet.insertAdjacentHTML('beforeend', html);
   }
 
   async function loadSnapshot() {
@@ -974,7 +997,7 @@
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
         // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
-        if (typeof out.impressumPublished === 'boolean') S.impressumPublished = out.impressumPublished;
+        applyLegal(out);
         syncImpressumLink();
       }
     } catch { /* offline: the home screen still renders, just without live data */ }
@@ -1099,7 +1122,7 @@
       case 'welcome': {
         S.id = m.id;
         if (S.page === 'player' && S.player && S.player.data) resyncPlayerBlock(); // the server's state after a drop, not the optimistic one
-        S.impressumPublished = m.impressumPublished === true; // the server decides (LEGAL_IMPRESSUM_PUBLISHED); no link while it is off
+        applyLegal(m); // the server decides each link (see server.js legalFlags)
         S.token = '';
         S.guest = false;
         refreshLevel(); // detect levels only after welcome confirms the signed-in account
@@ -1136,7 +1159,7 @@
         break;
       }
       case 'authRequired':
-        S.impressumPublished = m.impressumPublished === true; // signed-out sheet has no welcome, so the flag rides on this message too
+        applyLegal(m); // signed-out sheet has no welcome, so the flags ride on this message too
         S.signingIn = false;
         hideBusy();
         clearClientSession();
@@ -1245,6 +1268,10 @@
         if (S.pendingPage) { const pending = S.pendingPage; S.pendingPage = null; openPage(pending.page, pending.arg); break; }
         setHash('');
         render();
+        break;
+      case 'gameTotals':
+        // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
+        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
         break;
       case 'error':
         toast(m.message);
@@ -1479,6 +1506,19 @@
   }
   const roomPerson = (pid) => S.room && [...(S.room.members || []), ...(S.room.spectators || [])].find((x) => x.id === pid);
 
+  /**
+   * The game-related numbers on a player card: their overall level, and their lifetime XP in the game being played (their
+   * stored game points across all their matches). Time played is not a game amount, so it is not shown here.
+   */
+  function cardXpHTML(prof) {
+    const prog = prof && prof.progress;
+    if (!prog || prog.level == null) return '';
+    const gameId = S.room && S.room.gameId;
+    const row = gameId && prog.games ? prog.games[gameId] : null;
+    const name = esc(statsGame(gameId || '').name);
+    return `<p class="pcard-xp">Level ${Number(prog.level)} · Lifetime ${name} XP ${fmtXp(row ? row.xp : 0)}</p>`;
+  }
+
   function cardHTML() {
     const C = S.card;
     const person = roomPerson(C.pid) || C.last;
@@ -1489,7 +1529,7 @@
     const rel = relationTo(person);
     const here = Boolean(roomPerson(C.pid));
     const prof = C.profile;
-    const stats = prof ? `<div class="pcard-stats"><div><b>${prof.played}</b><span>Games</span></div><div><b>${prof.wins}</b><span>Wins</span></div><div><b>${prof.winRate === null ? '–' : prof.winRate + '%'}</b><span>Win rate</span></div></div>` : '';
+    const stats = prof ? `<div class="pcard-stats"><div><b>${prof.played}</b><span>Games</span></div><div><b>${prof.wins}</b><span>Wins</span></div><div><b>${prof.winRate === null ? '–' : prof.winRate + '%'}</b><span>Win rate</span></div></div>${cardXpHTML(prof)}` : '';
     const sub = person.bot ? 'Bot' : person.username ? `@${esc(person.username)}` : 'Guest player';
     const conn = !person.bot && here ? `<p class="pp-conn">📶 ${person.connected === false ? 'Disconnected' : pingBadge(person.ping, { label: true })}</p>` : '';
     const busy = C.busy ? ' disabled' : '';
@@ -1766,6 +1806,19 @@
     if (seen === null) { S.levelUp = null; store.set(k, String(S.account.level)); return; }
     S.levelUp = S.account.level > Number(seen) ? { username: S.username, from: Number(seen), to: S.account.level } : null;
   }
+  /**
+   * The level-up dialog: shown once, on the next menu (home) visit after a new level. The level is remembered on this
+   * device as soon as the dialog opens, so closing it in any way (OK, the close button, a click outside) counts as seen.
+   */
+  function showLevelUpDialog() {
+    const n = S.levelUp;
+    if (!n || n.username !== S.username || S.guest || S.room || S.page !== 'home') return;
+    if (document.getElementById('modal-overlay')) return; // one dialog at a time: the notice waits for the next visit
+    store.set('ct_level_seen_' + n.username, String(n.to));
+    S.levelUp = null;
+    const left = S.account ? Math.max(0, Number(S.account.need) - Number(S.account.into)) : null;
+    openModal('Level up', `<p>Congratulations on reaching level ${Number(n.to)}!</p>${left !== null ? `<p class="hint">Next level in ${left} min of play.</p>` : ''}<div class="row" style="margin-top:12px"><button class="btn" type="button" data-modal-close="1">OK</button></div>`);
+  }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
   let levelRequest = 0; // shared ordering for both profile loaders
   async function refreshLevel() {
@@ -2011,7 +2064,7 @@
             await withBusy('Deleting your account…', () => postJson('/api/me/delete-account', { credential }));
             finishDeletion();
           } catch (err) { msg.textContent = err.message || 'Could not delete the account.'; msg.hidden = false; }
-        }, () => { msg.textContent = 'Google could not be loaded. Try again later.'; msg.hidden = false; });
+        }, () => { msg.textContent = 'Google could not be loaded. Try again later.'; msg.hidden = false; }, { forDelete: true });
       }
       o.addEventListener('submit', async (e) => {
         if (e.target.id !== 'deleteForm') return;
@@ -2434,6 +2487,7 @@
     else renderGame();
     updateWatchers();
     if ($chat && S.chatOpen) drawChat();
+    showLevelUpDialog();
     for (const id of openFolds) { const d = document.getElementById(id); if (d && d.tagName === 'DETAILS') d.open = true; }
     if (focusedOpt) { const el = $app.querySelector(`[data-opt="${CSS.escape(focusedOpt)}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
     for (const id of KEEP_FIELDS) {
@@ -2489,7 +2543,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       ${publicTablesHTML()}
-      <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
+      <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.privacyPublished ? '<a href="/privacy">Privacy notice</a>' : '', S.termsPublished ? '<a href="/terms">Terms</a>' : '', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
     </main>`;
   }
 
@@ -2665,22 +2719,29 @@
 
   /** Account level (time played), Game XP per game (skill) and penalised leaves. `pr` is the progress the server sends; nothing when absent. */
   function progressHTML(pr, interactive = true) {
-    if (!pr || !pr.account) return '';
-    const a = pr.account;
-    const pct = a.need ? Math.min(100, Math.round((a.into / a.need) * 100)) : 0;
-    const games = Object.entries(pr.games || {}).sort((x, y) => y[1].points - x[1].points).map(([id, g]) => {
+    // Own profile: `account` carries the level bar. Another player's profile (getPublicProfile) has only `level` and each
+    // game's `xp`, so it shows the level and the game XP without the bar, minutes or leave counts.
+    if (!pr || (!pr.account && (pr.level === undefined || pr.level === null))) return '';
+    const a = pr.account || null;
+    const level = a ? a.level : pr.level;
+    const pct = a && a.need ? Math.min(100, Math.round((a.into / a.need) * 100)) : 0;
+    const gameXp = (g) => Number(g.points !== undefined ? g.points : g.xp) || 0;
+    const games = Object.entries(pr.games || {}).sort((x, y) => gameXp(y[1]) - gameXp(x[1])).map(([id, g]) => {
       const meta = statsGame(id);
-      const label = `<span>${esc(meta.icon || '🎴')} ${esc(meta.name)}</span><b>${fmtXp(g.points)} XP</b>`;
+      const label = `<span>${esc(meta.icon || '🎴')} ${esc(meta.name)}</span><b>${fmtXp(gameXp(g))} XP</b>`;
       // Another player's profile shows the same numbers but has no detail view for them, so its rows are plain text.
       return interactive
-        ? `<li class="pg-row"><button type="button" class="pg-btn" data-act="openGameStats" data-game="${esc(id)}" aria-label="${esc(meta.name)}: ${fmtXp(g.points)} Game XP, details">${label}</button></li>`
+        ? `<li class="pg-row"><button type="button" class="pg-btn" data-act="openGameStats" data-game="${esc(id)}" aria-label="${esc(meta.name)}: ${fmtXp(gameXp(g))} Game XP, details">${label}</button></li>`
         : `<li class="pg-row">${label}</li>`;
     }).join('');
+    const levelBlock = a
+      ? `<div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
+        <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>`
+      : `<div class="pg-level"><span class="stat-v">Level ${Number(level) || 0}</span></div>`;
     const left = pr.penalisedLeaves > 0 ? `<p class="hint" style="text-align:left">Left ${pr.penalisedLeaves} game${pr.penalisedLeaves === 1 ? '' : 's'} early (counted as a loss).</p>` : '';
     const levelUp = interactive && S.levelUp && S.levelUp.username === S.username ? `<div class="levelup-note" role="status"><b>Level up!</b> You reached level ${Number(S.levelUp.to)}. <button type="button" class="btn small" data-act="levelUpAck">Got it</button></div>` : '';
     return `<section class="progress-card" aria-label="Progress">${levelUp}
-      <div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
-        <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>
+      ${levelBlock}
       ${games ? `<h3 class="stat-h">Game XP${interactive ? ' <small>(tap a game for details)</small>' : ''}</h3><ul class="plain-list pg-games">${games}</ul>` : ''}${left}</section>`;
   }
 
@@ -2828,38 +2889,32 @@
   const END_WINNER_MS = 2800; // then the "<name> won" pop-up
   /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
   /**
-   * Game over: two amounts, never added together. Player Progress is time played (1 XP per full minute): it is the only
-   * thing that moves the overall level. Game XP is this game's own skill, named after the game. Every person is listed
-   * with both amounts side by side; there is no combined total.
+   * Game over: one table for every person at the table. Per game only: this game's skill XP, and the lifetime skill XP
+   * this person has earned in this same game across all their stored matches. Time-played (Player Progress) XP is not
+   * shown here. `totals` maps player id to lifetime game XP, or is null while the server has not answered yet.
    */
-  function endXpHTML(rows, gameName) {
+  function endXpHTML(rows, gameName, totals, gaveUp = false) {
     const people = rows.filter((x) => !x.isBot);
     if (!people.length) return '';
     const game = esc(gameName || 'Game');
     const mine = people.find((x) => x.id === S.id);
-    const time = (x) => Math.max(0, Number(x.timeXp) || 0);
     const unranked = (x) => x.gameXp === null || x.gameXp === undefined;
-    const summary = mine ? `<div class="xp-summary">
-        <div class="xp-card xp-progress">
-          <span class="xp-kind">Player Progress</span>
-          <b class="xp-num">+${time(mine)} XP</b>
-          <small>1 XP per full minute played${S.account ? ` · Level ${Number(S.account.level)}, ${Number(S.account.into)} / ${Number(S.account.need)} to the next` : ''}</small>
-        </div>
-        <div class="xp-card xp-game">
-          <span class="xp-kind">${game} Experience</span>
-          <b class="xp-num">${unranked(mine) ? 'Not ranked' : `${fmtXp(mine.gameXp)} XP`}</b>
-          <small>Counts only in ${game}${mine.penalised ? ' · left early (−30)' : ''}</small>
-        </div>
-      </div>${mine.saved ? '' : '<p class="xp-note">Guest games are not kept. Sign in to keep your progress and game XP.</p>'}` : '';
+    const lifetime = (x) => {
+      if (!x.saved) return '–'; // guests have no stored history
+      // "…" while the answer may still come; "n/a" once every try has gone unanswered (a late answer still replaces it)
+      if (!totals) return gaveUp ? 'n/a' : '…';
+      return fmtXp(totals[x.id] || 0);
+    };
+    const note = mine && !mine.saved ? '<p class="xp-note">Guest games are not kept. Sign in to keep your game XP.</p>' : '';
     const body = people.map((x) => {
       const me = Boolean(mine) && x.id === S.id;
       const name = me ? 'You' : esc(x.name || 'Player');
       const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
-      const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
-      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">+${time(x)}</span><span class="xp-c" role="cell">${unranked(x) ? '–' : fmtXp(x.gameXp)}</span></div>`;
+      const left = x.penalised ? '<small class="xp-tag">left early (−30)</small>' : '';
+      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${unranked(x) ? '–' : fmtXp(x.gameXp)}</span><span class="xp-c" role="cell">${lifetime(x)}</span></div>`;
     }).join('');
-    const table = `<div class="xp-table" role="table" aria-label="XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">Progress</span><span class="xp-c" role="columnheader">${game}</span></div>${body}</div>`;
-    return `<section class="end-xp" aria-label="XP for this game">${summary}${table}</section>`;
+    const table = `<div class="xp-table" role="table" aria-label="${game} XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">${game} XP</span><span class="xp-c" role="columnheader">Lifetime ${game} XP</span></div>${body}</div>`;
+    return `<section class="end-xp" aria-label="${game} XP for this game">${note}${table}</section>`;
   }
 
   function endFlow() {
@@ -2912,8 +2967,20 @@
         else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
       }
       const xpRows = (r.outcome && r.outcome.xp) || [];
+      // Lifetime game XP comes from the server once per finished game (the table's own game only)
+      const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.totals : null;
+      // Asked again if the answer did not come (not connected, or the server could not save the game yet): at most three
+      // tries, five seconds apart, so a failed request never leaves the saved players on an ellipsis for good.
+      const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
+      const due = !f.totalsAsked || (Date.now() - f.totalsAsked.at >= 5000);
+      if (xpRows.length && !gotTotals && due && tries < 3 && send({ t: 'gameTotals' })) {
+        f.totalsAsked = { at: Date.now(), tries: tries + 1 };
+        setTimeout(() => render(), 5100); // one re-render later: endFlow asks again only if the answer is still missing
+      }
       if (xpRows.length && !$app.querySelector('.end-xp')) {
-        const card = endXpHTML(xpRows, statsGame(r.gameId).name);
+        // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
+        const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
+        const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals, gaveUp);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.

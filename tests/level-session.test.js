@@ -17,7 +17,7 @@ function client() {
     hashCode: () => '', policyRequiresVerification: () => false,
   });
   for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
-  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'loadProfile', 'onMessage']) {
+  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'loadProfile', 'applyLegal', 'onMessage']) {
     const match = source.match(new RegExp('^  (?:async )?function ' + name + '\\([^]*?^  }', 'm'));
     assert.ok(match, name);
     vm.runInContext(match[0], c);
@@ -127,3 +127,31 @@ for (const seedCache of ['refreshLevel', 'loadProfile']) {
     });
   }
 }
+
+test('the level-up dialog waits for a menu visit, shows once, and counts as seen when it opens', () => {
+  const opened = [];
+  const values = new Map();
+  const c = vm.createContext({
+    S: { username: 'alice', guest: false, room: null, page: 'player', levelUp: { username: 'alice', from: 2, to: 3 }, account: { level: 3, into: 10, need: 140 } },
+    store: { get: (k) => values.get(k) ?? null, set: (k, v) => values.set(k, v) },
+    document: { getElementById: () => null },
+    openModal: (title, body) => opened.push({ title, body }),
+  });
+  const match = source.match(/^  function showLevelUpDialog\([^]*?^  }/m);
+  assert.ok(match, 'showLevelUpDialog');
+  vm.runInContext(match[0], c);
+  c.showLevelUpDialog(); // not on the menu yet: the notice waits
+  assert.equal(opened.length, 0);
+  assert.ok(c.S.levelUp, 'still pending');
+  c.S.page = 'home';
+  c.S.username = 'bob'; c.showLevelUpDialog(); // another account's notice never shows here
+  assert.equal(opened.length, 0);
+  c.S.username = 'alice'; c.showLevelUpDialog();
+  assert.equal(opened.length, 1);
+  assert.match(opened[0].body, /reaching level 3/);
+  assert.match(opened[0].body, /Next level in 130 min of play/);
+  assert.equal(values.get('ct_level_seen_alice'), '3', 'seen as soon as it opens');
+  assert.equal(c.S.levelUp, null);
+  c.showLevelUpDialog();
+  assert.equal(opened.length, 1, 'not shown again');
+});

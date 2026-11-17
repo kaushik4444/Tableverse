@@ -116,7 +116,17 @@ async function setRole({ actorId, targetId, role }) {
   });
 }
 
-async function listUsers({ q = '', page: p = 1, staleDays = 0 } = {}) {
+// Column sorts for the users list. Fixed expressions only: no request text reaches the SQL. `verified` is the output alias.
+const USER_SORTS = {
+  joined: { by: 'p.created_at', dir: 'DESC' },
+  seen: { by: 'COALESCE(p.last_seen_at, p.created_at)', dir: 'DESC' },
+  name: { by: 'LOWER(p.display_name)', dir: 'ASC' },
+  role: { by: 'p.role', dir: 'ASC' },
+  verified: { by: 'verified', dir: 'DESC' },
+};
+async function listUsers({ q = '', page: p = 1, staleDays = 0, sort = '', dir = '' } = {}) {
+  const key = Object.hasOwn(USER_SORTS, sort) ? sort : '';
+  const direction = dir === 'asc' ? 'ASC' : dir === 'desc' ? 'DESC' : (key ? USER_SORTS[key].dir : '');
   const term = String(q || '').trim().slice(0, 40);
   const days = Math.min(3650, Math.max(0, Math.floor(Number(staleDays)) || 0));
   const conds = [];
@@ -133,11 +143,11 @@ async function listUsers({ q = '', page: p = 1, staleDays = 0 } = {}) {
     `SELECT p.id, p.username, p.display_name, p.role, p.is_anonymous, p.country, p.created_at, p.last_seen_at, p.suspended_at,
             EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified
        FROM players p ${where}
-      ORDER BY ${days ? 'COALESCE(p.last_seen_at, p.created_at) ASC' : 'p.created_at DESC'}, p.id
+      ORDER BY ${key ? `${USER_SORTS[key].by} ${direction}` : days ? 'COALESCE(p.last_seen_at, p.created_at) ASC' : 'p.created_at DESC'}, p.id
       LIMIT ${PAGE} OFFSET $${args.length + 1}`,
     [...args, pg * PAGE]
   );
-  return { total, pageSize: PAGE, page: pg + 1, users: r.rows };
+  return { total, pageSize: PAGE, page: pg + 1, users: r.rows, sort: key, dir: key ? direction.toLowerCase() : '' };
 }
 
 async function signOutUser({ actorId, targetId }) {

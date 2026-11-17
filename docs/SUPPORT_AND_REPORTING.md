@@ -1,12 +1,12 @@
 # Support, bug reports, deletion requests and safety reports
 
-Status: **draft for the limited beta. Not published in the app.** The support address below is a placeholder until the owner provides it. Nothing in this page is a legal commitment until the owner approves the final wording.
+Status: **draft for the limited beta. Not published in the app.** The public support/contact address is the value configured in Render as `IMPRESSUM_EMAIL`; keep that value out of the repository. The owner must confirm that this inbox is monitored for support and deletion requests before relying on it. Nothing in this page is a legal commitment until the owner approves the final wording.
 
 ## Routes to the owner
 
 For the Wave 1 and 2 beta there is **one** support address, used for manual bug reports, account deletion requests and safety reports:
 
-**[SUPPORT EMAIL: to be provided by the owner]**
+**Support contact:** use the address configured in Render as `IMPRESSUM_EMAIL` (the same address shown on the published legal pages). This address is not discoverable from the app while the legal pages are unpublished; do not direct users to this route until the Impressum is published and displays the contact.
 
 The in-app routes also reach the owner, and they stay in place:
 
@@ -26,8 +26,8 @@ The in-app routes also reach the owner, and they stay in place:
 
 1. **Bug reports and feedback:** read in the Feedback tab; mark each item new, read or resolved.
 2. **Chat reports (safety):** the owner reviews every report, not only the newest. Each day, read the reports created after the checkpoint (the `created_at` and `id` of the last report reviewed, kept in the owner's private notes), oldest first, in pages of 50 with `ORDER BY created_at, id` and a keyset condition on that checkpoint. Decide each one, record the decision, and move the checkpoint to the last report reviewed. The query in `docs/CHAT_MODERATION.md` returns only the newest 50 and must not be used as the review. Suspensions go through the console (reason required).
-3. **Account deletion requests that cannot be done in the app** (for example, the account holder has lost the password): the owner replies from the support address, confirms the request came from the registered address, and then deletes the account only after taking a database backup and with the approval recorded in the runbook ("Decisions that always need explicit owner approval"). The owner account is never deleted this way.
-4. **Security or privacy reports:** handled in the same inbox, as a priority. Suspected compromise of an account: the owner follows "Suspected account compromise" in the runbook.
+3. **Account deletion requests that cannot be done in the app:** while the legal pages are unpublished, manual deletion requests are not an available route because users cannot discover the support address in the app. Do not rely on or advertise this route until the Impressum is published with the contact address and the owner has confirmed the inbox is monitored. Once available, the owner sends a confirmation message with a unique one-time code to the registered e-mail address and deletes the account only after receiving a reply from that address that quotes the code. The code is at least 128 bits from a cryptographically secure random generator, is used once, and expires with the request. A sender address alone is not proof of identity. The owner then takes a database backup and records approval in the runbook ("Decisions that always need explicit owner approval"). The owner account is never deleted this way.
+4. **Security or privacy reports:** handled in the same inbox, as a priority, once the contact is publicly available. Suspected compromise of an account: the owner follows "Suspected account compromise" in the runbook.
 
 ## How to report a bug (for beta users)
 
@@ -56,4 +56,4 @@ Nothing in the code sets a response time, and one person runs the beta. The prop
 
 > We read reports ourselves, on a best-effort basis. We aim to reply within 3 working days. Safety and account-security reports are read as soon as we see them, but we cannot promise a reply time or a fix date during the beta.
 
-**Owner decisions before publishing this page:** approve the wording above; the support address; whether the 3-working-day target is kept.
+**Owner decisions before publishing this page:** approve the wording above; confirm the configured `IMPRESSUM_EMAIL` inbox is monitored for support; whether the 3-working-day target is kept.
