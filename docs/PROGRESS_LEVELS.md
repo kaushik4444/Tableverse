@@ -40,6 +40,7 @@ There are two kinds of result:
 | Ludo | Placing | Finishing order. |
 | Snakes & Ladders | Placing | Finishing order. |
 | Penalty Rows | Placing | Lowest penalty total is first. |
+| Stage Rummy | Placing | Most stages completed, then fewest points. |
 | Twenty-nine | Win or lose | Your team wins or loses (both players on a team get the same points). |
 | Line Games | Win or lose | Your side wins, draws or loses. |
 | The Mind | Win or lose | Everyone plays together: cleared together is a win for all, lost together is a loss for all. |
