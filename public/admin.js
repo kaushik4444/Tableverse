@@ -219,29 +219,41 @@
       <p class="ad-muted">${Math.max(...hourly) ? `${noun === 'games' ? 'Usually starts around' : 'Busiest around'} <b>${hh(peak)}</b>` : 'No games yet'} (${esc(zone)}). Left is midnight, right is 23:00.</p>
       <details><summary>Data table</summary><table class="ad-t"><thead><tr><th>Hour</th><th>${noun === 'games' ? 'Games' : 'Connections'}</th></tr></thead><tbody>${hourly.map((v, h) => `<tr><td>${hh(h)}</td><td>${v}</td></tr>`).join('')}</tbody></table></details></figure>`;
   };
-  const playerSel = { q: '', sort: 'seen', page: 1, tz: 'UTC' };
+  const playerSel = { q: '', sort: 'seen', dir: '', page: 1, tz: 'UTC' };
+  // The table headers sort by these keys (the server's column keys). Clicking the active header flips its direction.
+  const COLUMN_SORTS = [['player', 'Player'], ['games', 'Games'], ['wins', 'Wins'], ['winrate', 'Win rate'], ['leftrate', 'Left early'], ['minutes', 'Played'], ['seen', 'Last seen']];
 
-  async function players(q = playerSel.q, sort = playerSel.sort, pageNo = playerSel.page) {
+  async function players(q = playerSel.q, sort = playerSel.sort, pageNo = playerSel.page, dir = playerSel.dir) {
     const gen = state.gen;
-    Object.assign(playerSel, { q, sort, page: pageNo });
-    const o = await api(`/api/admin/players?q=${encodeURIComponent(q)}&sort=${encodeURIComponent(sort)}&page=${pageNo}`);
+    Object.assign(playerSel, { q, sort, page: pageNo, dir: dir || '' });
+    // `dir` is added only when a header chose a direction, so the preset buttons keep their own request
+    const o = await api(`/api/admin/players?q=${encodeURIComponent(q)}&sort=${encodeURIComponent(sort)}${dir ? `&dir=${encodeURIComponent(dir)}` : ''}&page=${pageNo}`);
     if (gen !== state.gen) return;
     const pages = Math.max(1, Math.ceil(o.total / o.pageSize));
     const sortButtons = SORTS.map(([k, n]) => `<button class="ad-btn ${k === o.sort ? 'primary' : ''}" data-sort="${k}" aria-pressed="${k === o.sort}">${n}</button>`).join('');
+    const head = (key, label) => {
+      const active = key === o.sort;
+      const arrow = active ? (o.dir === 'asc' ? ' ▲' : ' ▼') : '';
+      const aria = active ? (o.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+      return `<th aria-sort="${aria}"><button type="button" class="ad-sortbtn" data-col="${key}">${label}${arrow}</button></th>`;
+    };
+    const headers = COLUMN_SORTS.map(([k, label]) => head(k, label)).join('');
     const rows = o.players.map((p) => `<tr><td data-l="Player"><b>${esc(p.displayName)}</b><br><small class="ad-muted">@${esc(p.username)}${p.country ? ' · ' + esc(countryName(p.country)) : ''}</small>${p.suspended ? ' <span class="ad-pill danger">suspended</span>' : ''}</td>
       <td data-l="Games">${p.games}</td><td data-l="Wins">${p.wins}</td><td data-l="Win rate">${pctText(p.wins, p.rated - p.draws)}</td><td data-l="Left early">${pctText(p.leftEarly, p.games)}</td><td data-l="Played">${mins(p.minutes)}</td>
       <td data-l="Last seen">${esc(when(p.lastSeenAt))}</td><td><button class="ad-btn" data-view="${esc(p.username)}" aria-label="Open the profile of ${esc(p.username)}">Open</button></td></tr>`).join('');
     main.innerHTML = `<h2>Players <small class="ad-muted">${o.total} registered</small></h2>
       <form class="ad-search ad-row" id="pForm"><input name="q" value="${esc(q)}" placeholder="Search username or name" maxlength="40" aria-label="Search players" style="flex:1"><button class="ad-btn primary" type="submit">Search</button></form>
       <div class="ad-row" role="group" aria-label="Sort by" style="margin:8px 0 12px">${sortButtons}</div>
-      ${o.players.length ? `<table class="ad-t stack"><thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Win rate</th><th>Left early</th><th>Played</th><th>Last seen</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="ad-muted">No players match.</p>'}
+      ${o.players.length ? `<table class="ad-t stack"><thead><tr>${headers}<th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="ad-muted">No players match.</p>'}
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="pPrev" ${pageNo <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${pageNo} of ${pages}</span><button class="ad-btn" id="pNext" ${pageNo >= pages ? 'disabled' : ''}>Next</button></div>
       <p class="ad-muted">Registered players only. Wins and win rate count only games with a recorded result that the player stayed to the end of, and leave out draws; time played leaves out games a player left early. Opening a profile is recorded in the audit log.</p>`;
-    const go = (a, b, c) => { state.gen += 1; const mine = state.gen; players(a, b, c).catch((e) => { if (mine === state.gen) fail(e); }); };
-    document.getElementById('pForm').onsubmit = (e) => { e.preventDefault(); go(new FormData(e.target).get('q') || '', o.sort, 1); };
+    const go = (a, b, c, d = '') => { state.gen += 1; const mine = state.gen; players(a, b, c, d).catch((e) => { if (mine === state.gen) fail(e); }); };
+    document.getElementById('pForm').onsubmit = (e) => { e.preventDefault(); go(new FormData(e.target).get('q') || '', o.sort, 1, o.dir); };
     main.querySelectorAll('[data-sort]').forEach((b) => { b.onclick = () => go(q, b.dataset.sort, 1); });
-    document.getElementById('pPrev').onclick = () => go(q, o.sort, pageNo - 1);
-    document.getElementById('pNext').onclick = () => go(q, o.sort, pageNo + 1);
+    // A header sorts its column in its default direction; the active header flips it
+    main.querySelectorAll('[data-col]').forEach((b) => { b.onclick = () => { const k = b.dataset.col; const flip = k === o.sort ? (o.dir === 'asc' ? 'desc' : 'asc') : ''; go(q, k, 1, flip); }; });
+    document.getElementById('pPrev').onclick = () => go(q, o.sort, pageNo - 1, o.dir);
+    document.getElementById('pNext').onclick = () => go(q, o.sort, pageNo + 1, o.dir);
     main.querySelectorAll('[data-view]').forEach((b) => { b.onclick = () => { state.gen += 1; const mine = state.gen; playerProfile(b.dataset.view, 'UTC').catch((e) => { if (mine === state.gen) fail(e); }); }; });
   }
 
