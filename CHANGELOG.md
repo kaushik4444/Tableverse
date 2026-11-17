@@ -2,6 +2,7 @@
 
 ## Unreleased (on `development`, not yet on `main`)
 - Privacy notice rewritten from the owner's decisions (not published): legal basis per purpose, provider locations and transfers, retention checked against the code, staff and production access, the manual data-request process, and a corrected usage-statistics statement. Open items stay as markers in the text. Owner decisions, code check and open items: `docs/PRIVACY_NOTICE_OWNER_DECISIONS.md`. Consistency tests: `tests/privacy-notice.test.js`.
+- Game switches: the owner can turn any game off and on from the admin console (Games tab), without a redeploy. A switched-off game stays listed but locked; new tables, starts and rematches are refused. Changes are audited.
 - Public contact address: the Impressum, privacy notice and terms show `PUBLIC_CONTACT_EMAIL` when it is set (Render), otherwise `IMPRESSUM_EMAIL`. No address is written into the code or the legal texts. Sign-in, Google and outgoing mail are unchanged.
 - Fixes from the release review: Penalty Rows uses its own style scope and keeps its phase when a deleted player's name is scrubbed; one awaited seat keeps its turn deadline; the account and reports wording in the privacy and retention docs now matches the code.
 - Profile: the minutes to the next level and a one-time level-up notice (the notice is remembered on this device, for each account).

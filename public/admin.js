@@ -483,6 +483,28 @@
       ${o.games.length ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Last 7 days</th><th>Signed-in players</th><th>Player-games</th><th>Avg minutes each</th><th>Penalised leaves</th><th>Penalised leave rate</th><th>Left, no penalty</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="ad-muted">No finished games in this range.</p>'}
       <p class="ad-muted">Counts and averages only; no player is named. A penalised leave is leaving while others were still playing. Guests count as player-games but not as signed-in players.</p>`;
     main.querySelectorAll('[data-gd]').forEach((b) => { b.onclick = () => { state.gen += 1; const mine = state.gen; gamesTab(Number(b.dataset.gd)).catch((e) => { if (mine === state.gen) fail(e); }); }; });
+    if (state.me.isOwner) await gameSwitches();
+  }
+
+  // ---------------------------------------------------------------- game switches (owner only; the server checks the role too)
+  async function gameSwitches() {
+    const gen = state.gen;
+    const o = await api('/api/admin/game-flags');
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available"><span class="ad-pill ${g.enabled ? '' : 'warn'}">${g.enabled ? 'on' : 'off'}</span></td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td><button class="ad-btn ${g.enabled ? 'danger' : 'primary'}" data-gflag="${esc(g.id)}" data-on="${g.enabled ? '0' : '1'}">${g.enabled ? 'Switch off' : 'Switch on'}</button></td></tr>`).join('');
+    main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Game switches</h3>
+      <p class="ad-muted">Off keeps the game listed but locked for players, and refuses new tables, starts and rematches. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
+      <p id="gMsg" class="ad-msg" role="status"></p>
+      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`);
+    main.querySelectorAll('[data-gflag]').forEach((b) => { b.onclick = async () => {
+      if (b.disabled) return;
+      b.disabled = true; // one request at a time: a second click would only repeat the same change
+      try {
+        await api('/api/admin/game-flags', { gameId: b.dataset.gflag, enabled: b.dataset.on === '1' });
+        state.gen += 1; // a redraw still in flight is dropped
+        gamesTab().catch(fail); // redraw with the new state
+      } catch (e) { b.disabled = false; say('gMsg', e.message, 'err'); }
+    }; });
   }
 
   // ---------------------------------------------------------------- chat reports (read-only queue)

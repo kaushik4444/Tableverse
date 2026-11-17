@@ -21,6 +21,7 @@ const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
+const gameFlags = require('./lib/gameFlags');
 const { makeAuthEmailSender } = require('./lib/email');
 const { cspFor } = require('./lib/googleAuth');
 const { createAuthRoutes } = require('./lib/authRoutes');
@@ -204,6 +205,10 @@ function start(opts = {}) {
   }
   let purgeTimer = null;
   let spoolTimer = null;
+  let flagTimer = null; // reads the owner's game switches (lib/gameFlags.js)
+  let flagsStopped = false;
+  let flagsReady = Promise.resolve(); // resolves after the first switch read, so no game starts before the switches are known
+  let unsubscribeGames = () => {};
   let broadcastTimer = null;
   let shuttingDown = false; // set when the process is asked to stop: readiness fails, no new tables, players are told
   // Readiness: the database must answer within 3 s; an outage is logged once when it starts and once when it ends (lib/health.js).
@@ -477,7 +482,7 @@ function start(opts = {}) {
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
     if (rel === '/api/games') {
-      return sendJson(res, 200, { ok: true, games: games.list(), tables: publicTables(), announcement, ...legalFlags });
+      return sendJson(res, 200, { ok: true, games: gameFlags.withFlags(games.list()), tables: publicTables(), announcement, ...legalFlags });
     }
     if (rel.includes('\0')) {
       res.writeHead(400);
@@ -700,6 +705,12 @@ function start(opts = {}) {
   }
 
   /** The table directory: every public lobby or running table. A block never hides a table (blocked players may share one). */
+  // Sends the game list (with each game's switch) to every connected socket when a switch changes.
+  function broadcastGames() {
+    const msg = { t: 'games', games: gameFlags.withFlags(games.list()) };
+    for (const ws of wss.clients) send(ws, msg);
+  }
+
   function publicTables() {
     return [...rooms.values()]
       .filter((room) => room.visibility === 'public' && (room.status === 'lobby' || room.status === 'playing'))
@@ -1468,6 +1479,7 @@ function start(opts = {}) {
     create(p, msg) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
+      if (!gameFlags.isEnabled(msg.gameId)) return sendError(p, 'That game is not available right now.');
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
@@ -1750,6 +1762,7 @@ function start(opts = {}) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
       const def = games.get(room.gameId);
+      if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.');
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
@@ -1809,8 +1822,10 @@ function start(opts = {}) {
     async rematch(p) {
       const room = hostRoom(p, 'finished');
       if (!room) return;
+      if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.');
       // Anyone who lost access to a private table while the game was running leaves now, before the next round forms.
       await enforceAccess(room);
+      if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.'); // it may have been switched off while the access check ran
       if (rooms.get(room.code) !== room || room.status !== 'finished' || room.hostId !== p.id) return; // the table changed while we checked
       clearTimeout(room.timer);
       room.game = null;
@@ -1987,7 +2002,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: gameFlags.withFlags(games.list()), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
@@ -2275,6 +2290,9 @@ function start(opts = {}) {
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
+    clearInterval(flagTimer);
+    flagsStopped = true; // a read still in flight must not publish after shutdown
+    unsubscribeGames();
     clearInterval(broadcastTimer);
     // Running games stop here: no timer may move them on (schedule and act refuse once shuttingDown is set), so the snapshot
     // below is the final state of each table.
@@ -2311,6 +2329,21 @@ function start(opts = {}) {
       // a result whose retries ran out (database down for a while) is tried again every 10 minutes, not only at the next start
       spoolTimer = setInterval(() => matchQueue.replaySpool(), 10 * 60 * 1000);
       spoolTimer.unref();
+      // the owner's game switches: read now and every 15 seconds (lib/gameFlags.js); a change in this process is applied at once
+      if (dbAdmin && dbAdmin.listGameFlags) {
+        flagsStopped = false;
+        const refreshFlags = () => {
+          if (flagsStopped) return Promise.resolve();
+          const token = gameFlags.begin(); // reads are applied in the order they started
+          return dbAdmin.listGameFlags()
+            .then((rows) => { if (!flagsStopped) gameFlags.apply(rows, token); })
+            .catch((e) => (opts.log || console).error('[games] switches not loaded (games stay unavailable until they are): ' + e.message));
+        };
+        unsubscribeGames = gameFlags.onChange(broadcastGames); // connected players get the new list at once
+        flagsReady = refreshFlags();
+        flagTimer = setInterval(refreshFlags, gameFlags.REFRESH_MS);
+        flagTimer.unref();
+      }
       // old rate-limit rows, expired sessions and used tokens: once now, then every 6 hours (best effort)
       const purge = () => dbAuth.purgeExpired().catch((e) => (opts.log || console).error('[auth] housekeeping failed: ' + e.message));
       const purgeAdmin = () => dbAdmin.purge().catch((e) => (opts.log || console).error('[admin] retention housekeeping failed: ' + e.message));
@@ -2326,8 +2359,10 @@ function start(opts = {}) {
         broadcastTimer.unref();
       }
     }
+    // no database (memory mode): there are no switches, so every game is on; with a database the switches were read above
+    if (!(info && info.mode === 'postgres')) gameFlags.apply([]);
     if (metered) metered.start(); // both modes: the credential is fetched ahead of the first welcome, and refreshed in the background
-    return new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine })));
+    return flagsReady.then(() => new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine }))));
   });
 }
 
