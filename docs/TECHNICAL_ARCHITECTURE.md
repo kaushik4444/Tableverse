@@ -294,6 +294,10 @@ Render dashboard or GitHub settings.
 | `CLEANUP_DRYRUN_DATABASE_URL` | Connection for the cleanup dry run | Only for dry run | GitHub secret | `.github/workflows/cleanup-unverified.yml` | Rotate, update secret | Next run |
 | `CLEANUP_EXECUTE` | Must be `true` before the deletion job can run | Only for deletion | GitHub repository variable | `.github/workflows/cleanup-unverified.yml` | Owner sets it; unset it to disable deletion | Next run |
 | `RESTORE_TEST_DATABASE_URL` | Scratch database for restore checks | Only for restore check | Local or CI secret | `scripts/db-restore-check.js` | Use a scratch database only | Next run |
+| `GUEST_PLAY_ENABLED` | `true` allows new guest sessions (`POST /api/auth/guest`). Anything else, including unset, refuses them. Off by default; not set in production | Optional | Render (not `render.yaml`) | `lib/guestPolicy.js`, `lib/authRoutes.js` | Owner sets it in Render only after the guest decisions in `docs/GUEST_PLAY.md` | Redeploy or restart |
+| `GUEST_SESSION_TTL_HOURS` | Guest session length in hours (1–168, default 72) | Optional | Render | `lib/guestPolicy.js`, `db/players.js` | Owner, in Render | Redeploy or restart |
+| `RL_GUEST_IP_LIMIT` | Guest sessions per IP address per hour | Optional | Render | `lib/authRoutes.js` | Owner, in Render | Redeploy or restart |
+| `RL_GUEST_ALL_LIMIT` | Guest sessions in total per hour | Optional | Render | `lib/authRoutes.js` | Owner, in Render | Redeploy or restart |
 | `PORT` | Listening port (Render sets it) | Optional | Render | `server.js` | none | Redeploy |
 | `TRUST_PROXY` | Number of proxy hops whose `X-Forwarded-For` is trusted (`1` on Render) | Yes on Render | `render.yaml` | `lib/clientIp.js` | Edit `render.yaml` | Redeploy |
 | `EMAIL_PROVIDER` | `resend` | Yes in production | `render.yaml` | `lib/email.js` | Edit `render.yaml` | Redeploy |

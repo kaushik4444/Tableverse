@@ -295,3 +295,16 @@ Auth endpoints are rate limited per address and account in `auth_rate_limits`; W
 - Keep `?sslmode=require` (or `verify-full`) in the Neon URL. `db/poolConfig.js` rewrites `require`, `prefer` and `verify-ca` to `verify-full` at start-up, which is what they already mean: TLS with the certificate and host name checked. The connection is the same; only the library's deprecation warning goes away.
 - Do not change it to `disable`. In production a remote host whose URL has no `sslmode` at all is still forced to verified TLS.
 - A URL that also sets `ssl`, `sslrootcert` or similar, or `uselibpqcompat`, is passed on unchanged, so the warning can still appear for those. That is expected.
+
+---
+
+## Guest play: turn on, turn off, check
+
+Guest play is off unless `GUEST_PLAY_ENABLED` is exactly `true` in Render. Do not turn it on until the owner decisions in `docs/GUEST_PLAY.md` (guest match names, the privacy notice, the beta decision D-1) are recorded and the privacy notice is approved.
+
+- **Turn on:** Render dashboard, environment, set `GUEST_PLAY_ENABLED` to `true`, save, let it redeploy. Check `/api/games` returns `"guestPlay": true`, then play one guest game and one registered game.
+- **Turn off (stop new guests):** set `GUEST_PLAY_ENABLED` to anything other than `true`, or unset it. Existing guest sessions keep working until they expire.
+- **Stop one game for guests only:** Games tab in the admin console, "Disabled for guests only". Takes effect within about 15 seconds. No redeploy.
+- **Check the number of guest records (read-only):** `SELECT count(*) FROM players WHERE is_anonymous;`. The housekeeping job removes guest rows more than one day old after their session ends, so the number should stay small.
+- **Rate limits:** `RL_GUEST_IP_LIMIT` and `RL_GUEST_ALL_LIMIT` in Render. Raise them only if real players hit them.
+- **Rollback:** turning the variable off is the rollback. Do not run any SQL to remove guest rows or match names without an owner decision.
