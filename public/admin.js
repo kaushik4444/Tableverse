@@ -491,19 +491,23 @@
     const gen = state.gen;
     const o = await api('/api/admin/game-flags');
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
-    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available"><span class="ad-pill ${g.enabled ? '' : 'warn'}">${g.enabled ? 'on' : 'off'}</span></td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td><button class="ad-btn ${g.enabled ? 'danger' : 'primary'}" data-gflag="${esc(g.id)}" data-on="${g.enabled ? '0' : '1'}">${g.enabled ? 'Switch off' : 'Switch on'}</button></td></tr>`).join('');
+    const labels = o.labels || {};
+    const label = (m) => labels[m] || m;
+    const opts = (cur) => o.modes.map((m) => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(label(m))}</option>`).join('');
+    const pill = (g) => (g.access === 'on' ? '<span class="ad-pill">on</span>' : `<span class="ad-pill warn">${esc(label(g.access))}</span>`);
+    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}">${opts(g.access)}</select></td></tr>`).join('');
     main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Game switches</h3>
-      <p class="ad-muted">Off keeps the game listed but locked for players, and refuses new tables, starts and rematches. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
+      <p class="ad-muted">Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players play and refuses guests. "Disabled for all" keeps the game for the owner only. A game that is switched off stays listed, and new tables, starts and rematches are refused for the roles it excludes. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
       <p id="gMsg" class="ad-msg" role="status"></p>
-      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`);
-    main.querySelectorAll('[data-gflag]').forEach((b) => { b.onclick = async () => {
-      if (b.disabled) return;
-      b.disabled = true; // one request at a time: a second click would only repeat the same change
+      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+    main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = async () => {
+      if (sel.disabled) return;
+      sel.disabled = true; // one request at a time: a second change would only repeat the same one
       try {
-        await api('/api/admin/game-flags', { gameId: b.dataset.gflag, enabled: b.dataset.on === '1' });
+        await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value });
         state.gen += 1; // a redraw still in flight is dropped
         gamesTab().catch(fail); // redraw with the new state
-      } catch (e) { b.disabled = false; say('gMsg', e.message, 'err'); }
+      } catch (e) { sel.disabled = false; say('gMsg', e.message, 'err'); gamesTab().catch(fail); }
     }; });
   }
 

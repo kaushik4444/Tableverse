@@ -28,7 +28,7 @@ function open(port, token) {
 const sent = (o, t) => o.msgs.filter((m) => m.t === t);
 
 (async () => {
-  const off = await start({ port: 0, env: { ...process.env, GUEST_PLAY_ENABLED: 'false', WIZARD_GUESTSONLY: 'true' } });
+  const off = await start({ port: 0, env: { ...process.env, GUEST_PLAY_ENABLED: 'false' } });
   const offPort = off.port;
   try {
     await test('guest play off: a new guest is refused with 403 and no session cookie', async () => {
@@ -41,8 +41,10 @@ const sent = (o, t) => o.msgs.filter((m) => m.t === t);
     });
   } finally { await off.close(); }
 
-  const on = await start({ port: 0, env: { ...process.env, GUEST_PLAY_ENABLED: 'true', WIZARD_GUESTSONLY: 'true', GUEST_SESSION_TTL_HOURS: '24' } });
+  const on = await start({ port: 0, env: { ...process.env, GUEST_PLAY_ENABLED: 'true', GUEST_SESSION_TTL_HOURS: '24' } });
   const port = on.port;
+  // The owner's access mode for wizard: guests are refused, registered players may play it (set in-process, as the admin route does).
+  require('../lib/gameFlags').apply([{ game_id: 'wizard', access: 'guests' }]);
   try {
     let guest;
     await test('guest play on: POST /api/auth/guest needs the CSRF token like every POST', async () => {
@@ -75,8 +77,9 @@ const sent = (o, t) => o.msgs.filter((m) => m.t === t);
       assert.equal(welcome.name, 'Ann');
       const wizard = welcome.games.find((g) => g.id === 'wizard');
       const ludo = welcome.games.find((g) => g.id === 'ludo');
-      assert.equal(wizard.guestLocked, true, 'wizard is locked for guests');
-      assert.equal(ludo.guestLocked, false, 'ludo is open to guests');
+      assert.equal(wizard.access, 'guests', 'wizard is set to "disabled for guests only"');
+      assert.equal(wizard.enabled, false, 'so it is locked for this guest');
+      assert.equal(ludo.enabled, true, 'ludo is open to guests');
       o.ws.close();
     });
 
@@ -109,6 +112,21 @@ const sent = (o, t) => o.msgs.filter((m) => m.t === t);
       o.ws.close();
     });
 
+    await test('a game disabled for all (owner only) is refused to a guest with the plain message, not the account prompt', async () => {
+      const gameFlags = require('../lib/gameFlags');
+      gameFlags.apply([{ game_id: 'ludo', access: 'owner' }]);
+      try {
+        const token = decodeURIComponent(guest.browser.cookies.get('ct_session'));
+        const o = await open(port, token);
+        o.ws.send(JSON.stringify({ t: 'create', gameId: 'ludo' }));
+        await wait(200);
+        const err = sent(o, 'error')[0];
+        assert.ok(err && err.message === 'That game is not available right now.', JSON.stringify(o.msgs.slice(-3)));
+        assert.equal(err.code, undefined, 'no account prompt: a registered player could not play it either');
+        o.ws.close();
+      } finally { gameFlags.apply([{ game_id: 'ludo', access: 'on' }]); }
+    });
+
     await test('guests are asked to verify nothing: a guest session is not stopped by the e-mail gate', async () => {
       const token = decodeURIComponent(guest.browser.cookies.get('ct_session'));
       const o = await open(port, token);
@@ -123,7 +141,7 @@ const sent = (o, t) => o.msgs.filter((m) => m.t === t);
       const none = await b.post('/api/auth/upgrade-guest', { email: 'x@test.local', username: 'xyzzy', password: 'TestPass123!', adultConfirmed: true });
       assert.equal(none.status, 403);
     });
-  } finally { await on.close(); }
+  } finally { require('../lib/gameFlags').apply([]); await on.close(); }
 
   clearTimeout(guard);
   console.log(`\n${passed} passed`);
