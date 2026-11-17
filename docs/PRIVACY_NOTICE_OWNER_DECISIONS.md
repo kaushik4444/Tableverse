@@ -1,3 +1,7 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:efef4951e8b8ab49ff0b499ed8f20356d14c974a36bbee4802b730702f10f5e3 -->
+
 # Privacy notice: owner decisions, code check and open items
 
 Status: **prepared 2026-11-17 on `docs/privacy-notice-owner-decisions`. Not approved, not published.** Nothing here enables `LEGAL_PRIVACY_PUBLISHED`, sets `GOOGLE_CLIENT_ID`, publishes the Impressum, or changes any Render variable. The Terms stay unpublished. This is engineering documentation, not a legal opinion, and it does not claim legal approval or GDPR certification.
@@ -13,7 +17,7 @@ The published wording is `lib/legal/privacy.md`. Each statement in it was checke
 | International transfers | Stated per provider. The Singapore database transfer is stated as relying on contractual safeguards, with a marker to verify Neon's clauses. Canada is not described as adequate (the owner did not ask for it; legal to confirm). |
 | Retention | Each period is stated only where the code enforces it, or marked where it does not (see section 2). |
 | Production access | Owner is the only routine authorised person, with a marker because the code has an `admin` role. Providers may have limited technical access under their safeguards; the notice does not say they have none. |
-| Data requests | Manual process through the privacy contact (`{{IMPRESSUM_EMAIL}}`, which resolves to `PUBLIC_CONTACT_EMAIL` on Render, the same address as `playtableverse@gmail.com`). Identity check by a one-time code sent to the account's e-mail address and quoted in a reply, one-month response (with the GDPR extension rule). No export feature is claimed. |
+| Data requests | Manual process through the privacy contact (`{{IMPRESSUM_EMAIL}}`, which resolves to `PUBLIC_CONTACT_EMAIL` on Render, the same address as `playtableverse@gmail.com`). Identity check by a one-time code sent to the account's e-mail address and quoted in a reply, one-month response (with the GDPR extension rule). The live privacy page exposes this contact independently of Impressum publication; manual deletion is available when either page publicly exposes it and the owner confirms the inbox is monitored. No export feature is claimed. |
 | Usage statistics | Not stated as "no identifying information". The notice says the figures shown to staff contain no names, addresses or messages, and discloses the keyed daily hash behind the active-player count (see section 2). |
 | Publication date | Left as a marker. The notice is not approved yet, so 18 November 2026 is not used. |
 | Google sign-in and deletion | Documented in `docs/ACCOUNT_DELETION_AND_RETENTION.md` (section 4 below). The safeguard is unchanged. |
@@ -22,10 +26,10 @@ The published wording is `lib/legal/privacy.md`. Each statement in it was checke
 
 | Statement | Code evidence | Result |
 |---|---|---|
-| Rate-limit records (with the network address) deleted after 1 day | `db/auth.js` `purgeExpired`: `auth_rate_limits` where `window_start < NOW() - INTERVAL '1 day'` | Matches code. **Owner proposed 30 days; the code is 1 day. The notice states the code's period.** Owner to decide whether to keep 1 day (recommended, shorter) or change the code. |
-| Login sessions 30 days by default | `db/players.js`: `AUTH_SESSION_TTL_DAYS`, default 30 | Matches. Expired sessions removed after 7 days, revoked after 30 days (`db/auth.js`), so "within 30 days after they end". |
-| "Keep me signed in" device logins removed 30 days after expiry or revocation | `db/auth.js` `purgeExpired` | Matches. |
-| Verification links 24 h; reset links 30 min; both deleted 7 days after expiry or use | `db/auth.js`: `AUTH_VERIFY_TTL_MIN` default 60×24, `AUTH_RESET_TTL_MIN` default 30; token purge at 7 days | Matches. |
+| Rate-limit records (with the network address) eligible for purge after 1 day | `db/auth.js` `purgeExpired`: `auth_rate_limits` where `window_start < NOW() - INTERVAL '1 day'` | Matches code. **Owner proposed 30 days; the code is 1 day. The notice states the code's period.** Owner to decide whether to keep 1 day (recommended, shorter) or change the code. |
+| Login sessions 30 days by default | `db/players.js`: `AUTH_SESSION_TTL_DAYS`, default 30 | Matches. Purge eligibility begins more than 7 days after expiry **or** more than 30 days after revocation (`db/auth.js`); either condition suffices, so removal may occur less than 30 days after revocation. These are purge-eligibility thresholds, not deletion deadlines: periodic housekeeping can remove rows later and retry failures. |
+| "Keep me signed in" device logins eligible for purge more than 30 days after expiry or revocation | `db/auth.js` `purgeExpired` | Matches. |
+| Verification links 24 h; reset links 30 min; both eligible for purge more than 7 days after expiry or use | `db/auth.js`: `AUTH_VERIFY_TTL_MIN` default 60×24, `AUTH_RESET_TTL_MIN` default 30; token purge at 7 days | Matches. |
 | Active-player counts: 35 days | `db/admin.js` `RETENTION.activeDays = 35` | Matches. |
 | Active-player rows are a **keyed hash**, one per player per day | `db/admin.js` `actorHash`: HMAC-SHA256 with a server secret, truncated | Matches, but it is **pseudonymous data**, not anonymous. The owner's "no identifying information" is therefore stated only for the aggregate figures shown to staff, and the notice discloses the hash. |
 | Daily totals 400 days; analytics write batches 3 days | `RETENTION.dailyDays = 400`; batches purged at 3 days | Matches. |
@@ -54,8 +58,8 @@ The published wording is `lib/legal/privacy.md`. Each statement in it was checke
 - Google sign-in is offered only when `googleAllowed` is true, which means the privacy notice is published (`server.js`). The client ID (`GOOGLE_CLIENT_ID`) is also needed.
 - Google-only accounts can delete themselves through Google confirmation. This needs only the client ID, and the deletion verifier is created whenever the client ID is set.
 - While the notice is unpublished, a signed-out Google-only user cannot reach the deletion dialog, because they cannot sign in. This is the edge case the owner described, and it stays until the notice is published and the client ID is set.
-- Once both are set, the flow is: sign in with Google, open the account page, delete, confirm with a fresh Google sign-in for the same identity. The server checks the identity. The safeguard is not removed.
-- The manual deletion route (for a user who cannot sign in) stays unavailable while the Impressum is unpublished, as documented in `docs/ACCOUNT_DELETION_AND_RETENTION.md`.
+- Once both are set and the notice passes its publication checks (complete controller details and no unresolved `[OWNER]` or `[LEGAL]` markers), the flow is: sign in with Google, open the account page, delete, confirm with a fresh Google sign-in for the same identity. The server checks the identity. The safeguard is not removed.
+- The manual deletion route (for a user who cannot sign in) is available when either the live privacy notice or the published Impressum publicly exposes the contact and the owner confirms the inbox is monitored. The privacy page exposes `{{IMPRESSUM_EMAIL}}` independently of the Impressum publication switch. Until either page exposes it, do not direct users to that address. Use the identity check and database-backup and recorded-approval process in `docs/ACCOUNT_DELETION_AND_RETENTION.md`.
 - **Nothing here sets the client ID or the publication switch.** Both are owner actions on Render, after approval.
 
 ## 4. Unresolved items (engineering)
@@ -92,3 +96,6 @@ The published wording is `lib/legal/privacy.md`. Each statement in it was checke
 ## 7. Tests
 
 `tests/privacy-notice.test.js` checks, without a server or database, that: the notice has no literal e-mail address and uses the contact token; each retention figure stated in the notice matches the constant in the code; the "Deleted player" name matches; the providers and locations are named; the legal bases are present; the response period is stated; the usage statistics are described as pseudonymous; the publication date is not filled in; the notice still cannot be published while markers remain; and the Google gating and deletion text in the docs match `server.js`.
+
+
+<!-- /coderabbit-ai-generated:v1 -->

@@ -29,14 +29,22 @@ test('the notice cannot be published while owner or legal markers remain', () =>
   assert.equal(legal.legalPageLive(notice, { ...DETAILS }, false), false, 'switch off');
 });
 
+test('generated prose provenance stays out of the rendered privacy notice', () => {
+  const approved = notice.replace(/\[(?:OWNER|LEGAL)\b[^\]]*\]/g, 'Approved');
+  const html = legal.renderLegal(approved, DETAILS);
+  assert.ok(html);
+  assert.equal(html.includes('coderabbit-ai-generated'), false);
+  assert.ok(html.includes('purge-eligibility thresholds'));
+});
+
 test('the publication date is not filled in before approval', () => {
   assert.equal(/18 November 2026/.test(notice), false);
   assert.ok(notice.includes('Last updated: [OWNER:'));
 });
 
-test('retention: rate-limit records are deleted after one day, as the code does', () => {
+test('retention: rate-limit records qualify for purge after one day, as the code does', () => {
   assert.ok(read('db/auth.js').includes("DELETE FROM auth_rate_limits WHERE window_start < NOW() - INTERVAL '1 day'"));
-  assert.ok(notice.includes('deleted after one day'));
+  assert.ok(/Network-address rate-limit records[^\n]*eligible for purge after one day/.test(notice));
 });
 
 test('retention: verification 24 hours and password reset 30 minutes match the code defaults', () => {
@@ -57,7 +65,16 @@ test('retention: usage, feedback, audit and daily-total periods match the RETENT
   assert.ok(/dailyDays: 400\b/.test(admin), 'daily totals');
   assert.ok(/feedbackDays: 180\b/.test(admin), 'feedback');
   assert.ok(/auditDays: 365\b/.test(admin), 'audit');
-  assert.ok(notice.includes('35 days') && notice.includes('400 days') && notice.includes('180 days') && notice.includes('365 days'));
+  const retention = notice.split('## How long we keep data')[1].split('## Your choices and rights')[0];
+  const usage = retention.split('\n').find((line) => line.startsWith('- **Aggregate usage statistics**:'));
+  assert.ok(usage, 'usage statistics category');
+  assert.match(usage, /hashes[^.]*\b35 days\b/i, 'active-player hashes');
+  assert.match(usage, /daily totals[^.]*\b400 days\b/i, 'daily totals');
+  for (const [category, days] of [['Feedback', 180], ['Staff audit log', 365]]) {
+    const entry = retention.split('\n').find((line) => line.startsWith(`- **${category}**:`));
+    assert.ok(entry, category + ' category');
+    assert.match(entry, new RegExp(`\\b${days} days\\b`), category + ' duration');
+  }
 });
 
 test('usage statistics: the notice describes the keyed hash as pseudonymous, which the code confirms', () => {

@@ -1,3 +1,7 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:8e01bd2700931167ab0a49fe4d6afcbcbb8184cf45cb3b725440ed805818419a -->
+
 # Tableverse privacy notice
 
 ## Who we are
@@ -81,7 +85,9 @@ We do not sell your data. The game pages do not load advertising or analytics sc
 
 The owner is the only person with routine, authorised access to player data in production. [OWNER: the code also has an admin role, which gives access to the admin console. Confirm whether any admin accounts exist. If they do, this paragraph must say so.]
 
-Staff accounts use an admin console. For each player it shows the username, display name, country, join and last-seen dates, games played, wins, time played, games left early and the account level. It does not show your e-mail address or your password. A staff member can ask for a new verification e-mail to be sent to an account that has not yet verified its address. The address itself is not shown to them. Staff actions on an account, such as opening its profile or suspending it, are written to an audit log that records the action but not the e-mail address. The audit log is kept for 365 days.
+Staff accounts use an admin console. For each player it shows the username, display name, country, join and last-seen dates, games played, wins, time played, games left early and the account level. It does not show your e-mail address or your password. A staff member can ask for a new verification e-mail to be sent to an account that has not yet verified its address. The address itself is not shown to them. Staff actions on an account, such as opening its profile or suspending it, are written to an audit log that records the action but not the e-mail address.
+
+The audit log becomes eligible for purge after 365 days (see "How long we keep data").
 
 ## Promotional e-mail
 
@@ -89,14 +95,16 @@ We do not send promotional e-mail during the beta. The e-mails we send are accou
 
 ## How long we keep data
 
+The scheduled retention periods below are purge-eligibility thresholds. Housekeeping removes eligible records after they cross the threshold; it runs at startup and every six hours. Delays or failed runs can extend retention until a later successful run; failures are retried at the next run.
 - **Your account**: until you delete it. See "Your choices and rights" below.
-- **Login sessions**: last 30 days from sign-in by default. Expired or revoked sessions are deleted within 30 days after they end.
-- **"Keep me signed in" device logins**: deleted 30 days after they expire or are revoked.
-- **Verification links**: valid for 24 hours. Password-reset links: valid for 30 minutes. Both kinds of link are deleted 7 days after they expire or are used.
-- **Network-address rate-limit records**: deleted after one day.
-- **Aggregate usage statistics**: the keyed daily hashes of active players are deleted after 35 days. Daily totals are kept for 400 days.
-- **Feedback**: kept for 180 days.
-- **Staff audit log**: kept for 365 days.
+
+- **Login sessions**: last 30 days from sign-in by default. Sessions become eligible for purge more than 7 days after expiry or more than 30 days after revocation. Either condition suffices, so a session can be removed less than 30 days after revocation.
+- **"Keep me signed in" device logins**: eligible for purge more than 30 days after they expire or are revoked.
+- **Verification links**: valid for 24 hours. Password-reset links: valid for 30 minutes. Both kinds of link become eligible for purge more than 7 days after they expire or are used.
+- **Network-address rate-limit records**: eligible for purge after one day.
+- **Aggregate usage statistics**: the keyed daily hashes of active players become eligible for purge after 35 days. Daily totals become eligible after 400 days.
+- **Feedback**: eligible for purge after 180 days.
+- **Staff audit log**: eligible for purge after 365 days.
 - **Operational logs held by our hosting provider**: [OWNER: retention period to be confirmed with Render. Owner decision: 30 days.]
 - **Finished match results**: we intend to keep them for 24 months after the match, and then delete them. [OWNER: this period is not yet enforced. The code has no match-history deletion job. Do not publish this sentence until a job exists, or change the wording to "kept until your account is deleted".]
 - **Chat reports**: 12 months after they are resolved (see the reports section above). [OWNER: not yet enforced. See the reports section above.]
@@ -127,3 +135,6 @@ Passwords are stored as one-way hashes. Sign-in sessions are stored as hashes an
 We will update this notice when our practices change and state the date of the change at the top of the page.
 
 Last updated: [OWNER: publication date. Use the actual date of approval and publication, not a planned date.]
+
+
+<!-- /coderabbit-ai-generated:v1 -->
