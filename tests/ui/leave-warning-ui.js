@@ -39,6 +39,26 @@ function messagesFor(humanIds) {
       } finally { await ctx.close(); }
     });
 
+    for (const abandons of [false, true]) {
+      await test(`a final leave prompt explains penalties and rejoining (abandons=${abandons})`, async () => {
+        const messages = messagesFor(['me', 'p1']);
+        messages[1].room.leaveInfo = { abandoned: false, pending: abandons ? ['p2'] : [], counts: { me: 2 } };
+        const { page, ctx } = await scriptedPage(browser, { viewport: { width: 393, height: 852 }, messages });
+        try {
+          await page.goto(url + '/');
+          await page.waitForSelector('.wz-top', { timeout: 8000 });
+          await page.evaluate(() => document.querySelector('[data-t9="leave"]').click());
+          await page.waitForSelector('.overlay .sheet', { timeout: 4000 });
+          const text = await page.locator('.overlay .sheet').innerText();
+          assert.ok(text.includes('non-final penalties are removed; final penalties still count'));
+          assert.ok(text.includes('the penalty is final, and coming back inside the time window does not remove it'));
+          assert.ok(text.includes('Once the game is abandoned, you cannot take your seat back'));
+          assert.ok(!text.includes('nobody is penalised'));
+          assert.equal((await page.evaluate(() => window.__sent)).filter((m) => m.t === 'leave').length, 0);
+        } finally { await ctx.close(); }
+      });
+    }
+
     await test('against bots only, Leave does not ask and leaves at once', async () => {
       const { page, ctx } = await scriptedPage(browser, { viewport: { width: 393, height: 852 }, messages: messagesFor([]) });
       try {

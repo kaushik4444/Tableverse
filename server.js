@@ -119,8 +119,15 @@ function start(opts = {}) {
   // The Impressum is off unless LEGAL_IMPRESSUM_PUBLISHED=true (fail closed); see lib/legalPages.js.
   // Reported as on only when the page can actually be rendered (flag on and every detail set), so the links never point at a 404.
   const impressumOn = (opts.impressumPublished ?? legalPages.impressumPublished(env)) && legalPages.detailsComplete(env);
-  // The privacy notice and terms are off unless LEGAL_PAGES_PUBLISHED=true (fail closed); the text is read once from lib/legal.
-  const legalPagesOn = opts.legalPagesPublished ?? legalPages.legalPagesPublished(env);
+  // The privacy notice and the terms have separate switches (LEGAL_PRIVACY_PUBLISHED, LEGAL_TERMS_PUBLISHED), each off unless
+  // exactly "true". A page is live only when its switch is on AND its text is complete (see lib/legalPages.js). Google
+  // sign-in is offered only while the privacy notice is live, so the Terms never block it.
+  const privacyOn = opts.legalPrivacyPublished ?? legalPages.privacyPublished(env);
+  const termsOn = opts.legalTermsPublished ?? legalPages.termsPublished(env);
+  const privacyLive = legalPages.legalPageLive(LEGAL_TEXT.privacy, env, privacyOn);
+  const termsLive = legalPages.legalPageLive(LEGAL_TEXT.terms, env, termsOn);
+  // Sent to the client and in the welcome/authRequired messages, so the links only appear when the pages answer 200.
+  const legalFlags = { impressumPublished: impressumOn, privacyPublished: privacyLive, termsPublished: termsLive };
   const iceFor = (playerId) => opts.iceServers ?? voiceRelay.iceServers(env, { playerId, metered });
   /** The ICE list for one player, with the time its TURN login stops working (null when it does not expire). */
   // A list given through opts (tests, or a fixed deployment) is static: nothing in it is treated as expiring.
@@ -153,6 +160,11 @@ function start(opts = {}) {
     onGiveUp: (rec) => {
       const room = rooms.get(rec.roomCode);
       if (room && room.matchKey === rec.matchKey) sys(room, '⚠ The result of this game could not be saved right now, so it may be missing from stats.');
+    },
+    // A result saved later by a replay (after its retries ran out) is no longer "not saved": the game-over totals must see that.
+    onSaved: (rec) => {
+      const room = rooms.get(rec.roomCode);
+      if (room && room.matchKey === rec.matchKey) room.matchSaved = Promise.resolve({ status: 'saved' });
     },
   });
   const MAX_SPECTATORS = opts.maxSpectators ?? DEFAULT_MAX_SPECTATORS; // tests lower it
@@ -367,6 +379,7 @@ function start(opts = {}) {
   const authRoutes = createAuthRoutes({
     env,
     googleVerifier: opts.googleVerifier || null, // tests only: a verifier with a local key instead of Google's
+    googleAllowed: privacyLive, // Google sign-in is offered only while the privacy notice is live
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
@@ -464,16 +477,17 @@ function start(opts = {}) {
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
     if (rel === '/api/games') {
-      return sendJson(res, 200, { ok: true, games: games.list(), tables: publicTables(), announcement, impressumPublished: impressumOn });
+      return sendJson(res, 200, { ok: true, games: games.list(), tables: publicTables(), announcement, ...legalFlags });
     }
     if (rel.includes('\0')) {
       res.writeHead(400);
       return res.end();
     }
-    // The privacy notice and the terms (/privacy, /terms): shown only when LEGAL_PAGES_PUBLISHED=true and the text has no
-    // owner placeholders left (fail closed). Served from lib/legal, never from public/, so the raw drafts are not reachable.
+    // The privacy notice and the terms (/privacy, /terms): each shown only when its own switch is on and its text is complete
+    // (fail closed). Served from lib/legal, never from public/, so the raw drafts are not reachable.
     if (rel === '/privacy' || rel === '/terms') {
-      const body = legalPagesOn ? legalPages.renderLegal(LEGAL_TEXT[rel.slice(1)]) : null;
+      const live = rel === '/privacy' ? privacyLive : termsLive;
+      const body = live ? legalPages.renderLegal(LEGAL_TEXT[rel.slice(1)], env) : null;
       if (!body) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('Not found');
@@ -671,12 +685,15 @@ function start(opts = {}) {
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
       members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m), standIn: isStandIn(room, m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
-      outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
+      outcome: room.status === 'finished' && room.outcome ? { id: room.outcome.at, winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
       // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
       leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
+      // Per person: who has a penalty pending, and how many times each person has left this game. The client works out what
+      // leaving means for its own player from this (a rejoin does not reset the count; the third leave is final).
+      leaveInfo: room.status === 'playing' ? { abandoned: Boolean(room.abandoned), pending: [...(room.forfeits || [])], counts: Object.fromEntries(room.leaveCounts || []) } : null,
       rejoinWindowSeconds: Math.round(rejoinWindowMs / 1000), // how long a person who leaves may take the seat back
       now: Date.now(), // lets clients correct for clock differences
     };
@@ -856,7 +873,7 @@ function start(opts = {}) {
    */
   /** The public state the deadline logic reads (phase, multiplier, whose turn). The adapter exposes it through view(). */
   function publicState(g) {
-    try { const v = g.view(null) || {}; return { phase: v.phase, multiplier: v.multiplier || 1, turn: v.turn }; } catch (_) { return {}; }
+    try { const v = g.view(null) || {}; return { phase: v.phase, multiplier: v.multiplier || 1, turn: v.turn, batch: v.batch }; } catch (_) { return {}; }
   }
   function touchTimer(room) {
     const g = room.game;
@@ -866,8 +883,9 @@ function start(opts = {}) {
     // A batch is one set of people answering the same question. A change of phase or multiplier (a double, a redouble, or the
     // challenge ending) starts a new one, so the answering side is never left with a deadline that was almost up.
     const ps = publicState(g);
-    const key = ps.phase + ':' + ps.multiplier;
-    const sameBatch = prev.length > 1 && room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id));
+    const key = ps.phase + ':' + ps.multiplier + ':' + (ps.batch === undefined ? '' : ps.batch); // a game may add `batch` so each simultaneous turn gets its own deadline
+    const batched = ps.batch !== undefined;
+    const sameBatch = room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id)) && (batched || prev.length > 1);
     room.waitingKey = key;
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
     if (!limit || !humanWaiting) room.deadline = null;
@@ -904,7 +922,9 @@ function start(opts = {}) {
           const record = buildMatchRecord(room, g);
           if (!record) console.error(`[server] ${room.gameId} cannot report results; match not recorded`);
           else {
-            matchQueue.enqueue(record); // never blocks the game and never rejects; failures are retried and logged by the queue
+            // never blocks the game and never rejects; failures are retried and logged by the queue. The promise is kept so the
+            // game-over totals wait for this game's own save (not the whole queue).
+            room.matchSaved = matchQueue.enqueue(record);
             // The XP each seat earned, from the same record: the game-over screen shows exactly what is stored
             const seats = room.seated || room.members;
             // Only signed-in accounts at the table keep their XP; guests and anonymous players are shown but not kept.
@@ -1606,6 +1626,41 @@ function start(opts = {}) {
       broadcast(room);
     },
 
+    // Game over: the lifetime game XP of each signed-in person at this table, for this game (their stored game points across
+    // all matches). Only the table's own finished game is answered, so nobody can ask for totals outside their table.
+    gameTotals(p) {
+      const room = rooms.get(p.room);
+      if (!room || room.status !== 'finished' || !room.outcome || !Array.isArray(room.outcome.xp)) return;
+      const now = Date.now();
+      if (p.totalsAt && now - p.totalsAt < 1000) return;
+      p.totalsAt = now;
+      const gameId = room.gameId;
+      const matchId = room.outcome.at;
+      const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
+      (async () => {
+        if (!ids.length) return {};
+        // This game's own save, waited for at most three seconds. The queue resolves { status: 'failed' } when its retries run
+        // out, and a missing promise means nothing was queued: both count as "not saved".
+        const saved = await new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(null), 3000);
+          Promise.resolve(room.matchSaved).then((res) => { clearTimeout(timer); resolve(res || null); });
+        });
+        if (!saved || saved.status === 'failed') throw new Error('this game is not saved yet');
+        const totals = {};
+        await Promise.all(ids.map(async (id) => {
+          const progress = await dbMatches.getProgress(id);
+          totals[id] = (progress.games[gameId] || {}).points || 0;
+        }));
+        return totals;
+      })().then(
+        (totals) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, totals }),
+        (err) => {
+          console.error('[server] game totals failed:', err.message);
+          sendError(p, 'Game totals are unavailable right now');
+        }
+      );
+    },
+
     // Profile statistics for the asking player only (nobody can request somebody else's)
     getStats(p) {
       const now = Date.now();
@@ -1717,6 +1772,8 @@ function start(opts = {}) {
       for (const m of room.seated) if (!m.bot && isConnected(m)) startPlay(room, m.id, room.startedAt);
       room.leftEarly = new Set();
       room.forfeits = new Set();
+      room.finalForfeits = new Set();
+      room.leaveCounts = new Map();
       room.abandoned = false;
       room.deadline = null;
       room.waiting = [];
@@ -1838,7 +1895,7 @@ function start(opts = {}) {
     // accepted: anything a page can send can then never be mistaken for a session.
     const presentedToken = ws.cookieToken || null;
     if (!presentedToken) {
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Please log in to play.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Please log in to play.' });
       return ws.close(1008, 'auth required');
     }
 
@@ -1877,7 +1934,7 @@ function start(opts = {}) {
     }
 
     if (!p) {
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
 
@@ -1892,11 +1949,11 @@ function start(opts = {}) {
     // the authoritative PostgreSQL session state.
     if (!auth.authenticated) {
       tokens.delete(p.token);
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
     if (dbPool.hasDatabase() && dbAuth.isEmailVerificationRequired(env) && !auth.emailVerified) {
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Please verify your email before entering the lobby.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Please verify your email before entering the lobby.' });
       return ws.close(1008, 'email verification required');
     }
 
@@ -1909,7 +1966,7 @@ function start(opts = {}) {
     // The account may have been deleted, or its record dropped, while the checks above were pending. Only the player
     // record that is still registered on this server can be taken over.
     if (players.get(p.id) !== p) {
-      send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session is invalid or expired. Please log in again.' });
+      send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
     if (p.ws && p.ws !== ws) {
@@ -1930,7 +1987,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, impressumPublished: impressumOn, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
@@ -2015,7 +2072,7 @@ function start(opts = {}) {
       const current = await dbPlayers.authenticateToken(ws.authToken);
       if (ws.revoked || ws.player !== p) return; // ended while the check was running
       if (!current || current.id !== p.id) {
-        send(ws, { t: 'authRequired', impressumPublished: impressumOn, message: 'Your session has ended. Please log in again.' });
+        send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session has ended. Please log in again.' });
         revokeSocket(ws, 4001, 'session ended');
       }
     } catch (err) {

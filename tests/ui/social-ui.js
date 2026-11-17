@@ -26,7 +26,7 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     'POST /api/me/avatar': ({ body }) => { const a = JSON.parse(body).avatar; if (a === '🐉') return { __status: 429, body: { ok: false, error: 'Too many changes. Try again later.' } }; profile.profile.avatar = a; return { ok: true, avatar: a }; },
     'GET /api/me/friends': () => ({ ok: true, friends: friendList }),
     'GET /api/me/friends/search': () => { searchCalls++; return searchCalls === 1 ? { ok: true, players: [{ id: 'p9', username: 'evie', display_name: 'Evie', avatar: '🦊' }] } : { __status: 500, body: { ok: false, error: 'Search is busy.' } }; },
-    'GET /api/players/ann': () => ({ ok: true, profile: { username: 'ann', displayName: 'Ann', avatar: '🦊', joinedAt: '2026-02-02T00:00:00Z', played: 12, wins: 5, winRate: 41.7 } }),
+    'GET /api/players/ann': () => ({ ok: true, profile: { username: 'ann', displayName: 'Ann', avatar: '🦊', joinedAt: '2026-02-02T00:00:00Z', played: 12, wins: 5, winRate: 41.7, progress: { level: 7, games: { wizard: { xp: 35, played: 6 } } } } }),
     'GET /api/auth/session': () => sessionOk(),
     'POST /api/me/country': ({ body }) => { const c = JSON.parse(body).country; profile.profile.country = c || null; return { ok: true, country: c || null }; },
     'GET /api/me/profile': () => profile,
@@ -215,6 +215,9 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await page.waitForSelector('.pcard-head');
     const head = await page.textContent('.pcard-head');
     assert.match(head, /Ann/); assert.match(head, /@ann/); assert.match(head, /75 ms · Good/);
+    // the card shows the player's level and their lifetime XP in the game being played (wizard)
+    await page.waitForSelector('.pcard-xp');
+    assert.match(await page.textContent('.pcard-xp'), /Level 7 · Lifetime Wizard XP \+35/);
     await page.waitForFunction(() => /12\s*Games/.test(document.querySelector('.pcard-stats')?.textContent.replace(/\s+/g, '') ? document.querySelector('.pcard-stats').textContent.replace(/(\d)([A-Za-z])/g, '$1 $2') : ''));
     const before = calls.filter((c) => c.method === 'POST' && c.path === '/api/me/friend-requests').length;
     await page.click('[data-modal-act="cardAdd"]');

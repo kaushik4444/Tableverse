@@ -1,19 +1,19 @@
 'use strict';
 // The daily release decision (scripts/release/promote.js): every gate, the Berlin time slot, the health check and one full flow.
 const assert = require('node:assert/strict');
-const { decide, berlinHour, checkHealth, main, REQUIRED_CHECKS, COPILOT_CHECK } = require('../scripts/release/promote');
+const { decide, berlinHour, checkHealth, main, REQUIRED_CHECKS, REVIEW_CHECK } = require('../scripts/release/promote');
 let passed = 0;
 const test = async (name, fn) => {
   try { await fn(); passed += 1; console.log('  ok  ' + name); } catch (e) { console.error('  FAIL  ' + name + '\n' + (e && e.stack)); process.exitCode = 1; }
 };
 
-const RULES = ['required_status_checks', 'pull_request', 'non_fast_forward', 'deletion', 'copilot_code_review'];
-// A Copilot check run belongs to one commit; GitHub returns head_sha on every check run, and the gate reads only the PR head's.
-const greenChecks = (sha = 'abc1234') => [...REQUIRED_CHECKS.map((name) => ({ name, status: 'completed', conclusion: 'success' })), { name: COPILOT_CHECK, status: 'completed', conclusion: 'success', head_sha: sha, id: 1 }];
+const RULES = ['required_status_checks', 'pull_request', 'non_fast_forward', 'deletion'];
+// A CodeRabbit check run belongs to one commit; GitHub returns head_sha on every check run, and the gate reads only the PR head's.
+const greenChecks = (sha = 'abc1234') => [...REQUIRED_CHECKS.map((name) => ({ name, status: 'completed', conclusion: 'success' })), { name: REVIEW_CHECK, status: 'completed', conclusion: 'success', head_sha: sha, id: 1 }];
 const shaOf = (url) => (url.match(/\/commits\/([0-9a-f]+)\//) || [])[1];
 const goodPr = (over = {}) => ({
   number: 130, base: 'main', head: 'development', head_sha: 'abc1234', mergeable: true,
-  checks: greenChecks(), copilotConclusion: 'success', threads: { unresolved: 0, hasNextPage: false }, ...over,
+  checks: greenChecks(), reviewConclusion: 'success', threads: { unresolved: 0, hasNextPage: false }, ...over,
 });
 const base = (over = {}) => ({
   frozen: false, scheduled: true, berlinHour: 2, devTree: 'T1', mainTree: 'T0', mergeTree: 'T1',
@@ -78,11 +78,11 @@ const base = (over = {}) => ({
     const missing = greenChecks().filter((c) => c.name !== 'Browser layout and interaction checks');
     assert.match(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ checks: missing }) })).reasons.join(' '), /missing: "Browser layout/);
   });
-  await test('an incomplete Copilot review blocks, with the owner note', async () => {
-    const d = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: undefined }) }));
+  await test('an incomplete CodeRabbit review blocks, with the owner note', async () => {
+    const d = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ reviewConclusion: undefined }) }));
     assert.equal(d.action, 'block');
-    assert.match(d.reasons.join(' '), /Copilot review has not run/);
-    assert.equal(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: 'in_progress' }) })).action, 'block');
+    assert.match(d.reasons.join(' '), /CodeRabbit review has not run/);
+    assert.equal(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ reviewConclusion: 'in_progress' }) })).action, 'block');
   });
   await test('an unresolved conversation blocks, and so does a list too long to confirm', async () => {
     assert.match(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ threads: { unresolved: 1, hasNextPage: false } }) })).reasons.join(' '), /1 review conversation/);
@@ -431,17 +431,17 @@ const base = (over = {}) => ({
   await test('only the newest run per check name counts: an older green run cannot pass a newer running one', async () => {
     const { latestRuns } = require('../scripts/release/promote');
     const runs = [
-      { id: 10, name: COPILOT_CHECK, status: 'completed', conclusion: 'success' },
-      { id: 42, name: COPILOT_CHECK, status: 'in_progress', conclusion: null },
+      { id: 10, name: REVIEW_CHECK, status: 'completed', conclusion: 'success' },
+      { id: 42, name: REVIEW_CHECK, status: 'in_progress', conclusion: null },
       { id: 7, name: 'Build and test (Node 20)', status: 'completed', conclusion: 'success' },
       { id: 8, name: 'Build and test (Node 20)', status: 'completed', conclusion: 'failure' },
     ];
     const newest = latestRuns(runs);
     assert.equal(newest.length, 2);
-    assert.equal(newest.find((r) => r.name === COPILOT_CHECK).status, 'in_progress');
+    assert.equal(newest.find((r) => r.name === REVIEW_CHECK).status, 'in_progress');
     assert.equal(newest.find((r) => r.name === 'Build and test (Node 20)').conclusion, 'failure');
     const checks = newest.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion }));
-    const d = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ checks, copilotConclusion: 'in_progress' }) }));
+    const d = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ checks, reviewConclusion: 'in_progress' }) }));
     assert.equal(d.action, 'block');
   });
   await test('a duplicate run after the release finds no changes and does nothing', async () => {
@@ -460,11 +460,10 @@ const base = (over = {}) => ({
     assert.equal(r.outcome, 'skip');
   });
 
-  // A fake GitHub for one release run. checkRuns({ requested, sha }) returns the check runs for the PR head; refuseReview makes
-  // the Copilot request fail. Returns the outcome of main() and every call made.
-  const releaseRun = ({ checkRuns, refuseReview = false, productionUrl = true }) => {
+  // A fake GitHub for one release run. checkRuns({ sha }) returns the check runs for the PR head. Returns the outcome of main()
+  // and every call made.
+  const releaseRun = ({ checkRuns, productionUrl = true }) => {
     const calls = [];
-    let requested = false;
     const pr = { number: 130, base: { ref: 'main' }, head: { ref: 'development', sha: 'abc1234', repo: { full_name: 'kaushik4444/Tableverse' } }, mergeable: true };
     const json = (data, status = 200) => ({ status, ok: status < 300, text: async () => JSON.stringify(data), json: async () => data });
     const fetchFn = async (url, opts = {}) => {
@@ -475,12 +474,7 @@ const base = (over = {}) => ({
       if (url.endsWith('/rules/branches/main?per_page=100') || url.endsWith('/rules/branches/development?per_page=100')) return json(RULES.map((type) => ({ type })));
       if (url.includes('/pulls?state=open')) return json([pr]);
       if (url.endsWith('/pulls/130') && method === 'GET') return json(pr);
-      if (url.endsWith('/requested_reviewers') && method === 'POST') {
-        if (refuseReview) return json({ message: 'Resource not accessible by integration' }, 403);
-        requested = true;
-        return json({}, 201);
-      }
-      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: checkRuns({ requested, sha: shaOf(url) }) });
+      if (url.includes('/check-runs?per_page=100')) return json({ total_count: 6, check_runs: checkRuns({ sha: shaOf(url) }) });
       if (url.endsWith('/git/ref/heads/development')) return json({ object: { sha: 'abc1234' } });
       if (url.endsWith('/git/ref/heads/main')) return json({ object: { sha: 'M0' } });
       if (url.endsWith('/pulls/130/merge') && method === 'PUT') return json({ sha: 'fff0001' });
@@ -498,77 +492,18 @@ const base = (over = {}) => ({
     const env = { GITHUB_REPOSITORY: 'kaushik4444/Tableverse', GITHUB_TOKEN: 't', GITHUB_EVENT_NAME: 'schedule', ...(productionUrl ? { PRODUCTION_URL: 'https://example.test' } : {}) };
     return { calls, run: () => main({ env, fetchFn, now: new Date('2026-12-01T01:30:00Z'), git, sleep: async () => {} }) };
   };
-  const copilotRequests = (calls) => calls.filter((c) => c.endsWith('/pulls/130/requested_reviewers'));
 
-  await test('the gate asks for a Copilot review when it is missing or failed, and only waits while one is running', async () => {
-    assert.equal(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: undefined }) })).requestCopilot, true);
-    assert.equal(decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: 'failure' }) })).requestCopilot, true);
-    const running = decide(base({ openPrs: [{ number: 130 }], pr: goodPr({ copilotConclusion: 'in_progress' }) }));
-    assert.equal(running.requestCopilot, false);
-    assert.equal(running.copilotRunning, true);
-    const done = decide(base({ openPrs: [{ number: 130 }], pr: goodPr() }));
-    assert.equal(done.action, 'merge');
-    assert.equal(done.requestCopilot, false);
-  });
-  await test('a missing Copilot review is requested, awaited on this head, and the release merges in the same run; the open PR is reused', async () => {
-    const f = releaseRun({ checkRuns: ({ requested, sha }) => greenChecks(sha).filter((c) => c.name !== COPILOT_CHECK || requested) });
-    const r = await f.run();
-    assert.equal(r.outcome, 'released');
-    assert.equal(copilotRequests(f.calls).length, 1, 'one request');
-    assert.ok(!f.calls.some((c) => c === 'POST https://api.github.com/repos/kaushik4444/Tableverse/pulls'), 'the existing PR is reused, not duplicated');
-  });
-  await test('a Copilot review already running is waited for, not requested again', async () => {
-    let reads = 0;
-    const f = releaseRun({ checkRuns: ({ sha }) => {
-      reads += 1;
-      return greenChecks(sha).map((c) => (c.name === COPILOT_CHECK && reads < 3 ? { ...c, status: 'in_progress', conclusion: null } : c));
-    } });
-    const r = await f.run();
-    assert.equal(r.outcome, 'released');
-    assert.equal(copilotRequests(f.calls).length, 0);
-  });
-  await test('a Copilot review of an older commit never counts: this head is requested and the run blocks until it is reviewed', async () => {
-    const f = releaseRun({ checkRuns: () => greenChecks('oldcommit1') });
+  await test('a missing CodeRabbit review blocks the release, and nothing is requested from GitHub', async () => {
+    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha).filter((c) => c.name !== REVIEW_CHECK) });
     const r = await f.run();
     assert.equal(r.outcome, 'block');
-    assert.equal(r.code, 1, 'a blocked release fails the run');
-    assert.equal(copilotRequests(f.calls).length, 1);
-    assert.match(r.decision.reasons.join(' '), /has not run on this PR head/);
+    assert.equal(f.calls.filter((c) => c.includes('requested_reviewers')).length, 0, 'no review is requested');
   });
-  await test('a failed Copilot review is requested again on the next run, and the run is reported as blocked', async () => {
-    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha).map((c) => (c.name === COPILOT_CHECK ? { ...c, conclusion: 'failure' } : c)) });
+  await test('a CodeRabbit review still running blocks until it finishes; it is not requested again', async () => {
+    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha).map((c) => (c.name === REVIEW_CHECK ? { ...c, status: 'in_progress', conclusion: null } : c)) });
     const r = await f.run();
     assert.equal(r.outcome, 'block');
-    assert.equal(r.code, 1);
-    assert.equal(copilotRequests(f.calls).length, 1, 'asked again on this run');
-  });
-  await test('a refused Copilot request blocks the release, says why, and merges nothing', async () => {
-    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha).filter((c) => c.name !== COPILOT_CHECK), refuseReview: true });
-    const r = await f.run();
-    assert.equal(r.outcome, 'block');
-    assert.equal(r.code, 1);
-    assert.ok(!f.calls.some((c) => c.includes('/pulls/130/merge')), 'nothing is merged');
-  });
-
-  await test('after a retry request the old failed Copilot run may stay visible; a newer run that succeeds still releases in the same run', async () => {
-    let reads = 0;
-    const f = releaseRun({ checkRuns: ({ requested, sha }) => {
-      const copilot = (extra) => greenChecks(sha).map((c) => (c.name === COPILOT_CHECK ? { ...c, ...extra } : c));
-      if (!requested) return copilot({ id: 1, conclusion: 'failure' });
-      reads += 1;
-      if (reads <= 3) return copilot({ id: 1, conclusion: 'failure' }); // GitHub still shows the old failed run
-      if (reads === 4) return copilot({ id: 2, status: 'in_progress', conclusion: null });
-      return copilot({ id: 2, conclusion: 'success' });
-    } });
-    const r = await f.run();
-    assert.equal(r.outcome, 'released', 'the retry result, not the old failure, decides');
-    assert.equal(copilotRequests(f.calls).length, 1);
-  });
-  await test('a retry whose new run never starts is blocked, not read as the old failure', async () => {
-    const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha).map((c) => (c.name === COPILOT_CHECK ? { ...c, id: 1, conclusion: 'failure' } : c)) });
-    const r = await f.run();
-    assert.equal(r.outcome, 'block');
-    assert.equal(r.code, 1);
+    assert.equal(f.calls.filter((c) => c.includes('requested_reviewers')).length, 0, 'no review is requested');
   });
   await test('every blocked release fails the run with a Release blocked error, including a missing PRODUCTION_URL', async () => {
     const f = releaseRun({ checkRuns: ({ sha }) => greenChecks(sha), productionUrl: false });

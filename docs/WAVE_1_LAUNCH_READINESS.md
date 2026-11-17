@@ -106,7 +106,7 @@ Companion: `docs/STAGE_20_6_BETA_READINESS.md` (the Stage 20.6 record and the re
 | Beta Terms | Pending owner action | Draft only, unpublished. Approval needed (C-B) |
 | Support and reporting contact | Pending owner action | Placeholder (D-4). Not written into any document |
 | Impressum | Pending owner action | Implemented and merged (PR #101, `bc79130`), behind a publication gate; not published. The owner has decided to use their real legal name and home address on it (owner decision, 2026-11-11). This is **not** a legal approval: the Impressum text, its placeholders and its publication stay pending owner approval, and the page stays unpublished. Those details are **not** recorded in Git |
-| Legal review gate (tracking) | **Mandatory before any public beta in Germany** | The Impressum is implemented but **not published**: `/impressum.html` returns 404 and the sign-in and footer links are hidden unless the server runs with `LEGAL_IMPRESSUM_PUBLISHED=true`. Merging PR #101 (done 2026-11-12) did not publish it. To publish, a lawyer must approve the text, the draft banner and its comment must be removed from `public/impressum.html`, and the owner must set `LEGAL_IMPRESSUM_PUBLISHED=true` in Render. `render.yaml` deliberately does not set it. The owner's name, address and email are **not in Git**: set `IMPRESSUM_NAME`, `IMPRESSUM_ADDRESS` and `IMPRESSUM_EMAIL` in Render (dashboard only). The page stays 404 unless all three are set. Tests fail if personal data or `render.yaml` flags appear in the repository. |
+| Legal review gate (tracking) | **Mandatory before any public beta in Germany** | The Impressum is implemented but **not published**: `/impressum.html` returns 404 and the sign-in and footer links are hidden unless the server runs with `LEGAL_IMPRESSUM_PUBLISHED=true`. Merging PR #101 (done 2026-11-12) did not publish it. To publish, a lawyer must approve the text, the draft banner and its comment must be removed from `public/impressum.html`, and the owner must set `LEGAL_IMPRESSUM_PUBLISHED=true` in Render. `render.yaml` deliberately does not set it. The owner's name, address and email are **not in Git**: set `IMPRESSUM_NAME`, `IMPRESSUM_ADDRESS` and `PUBLIC_CONTACT_EMAIL` in Render (dashboard only; `IMPRESSUM_EMAIL` also works as the fallback). The page stays 404 unless all three are set. Tests fail if personal data or `render.yaml` flags appear in the repository. |
 | Owner identity and contact details | Pending owner action | Owner supplies. Nothing is invented |
 | Remaining legal questions and risk acceptance | Pending owner action | The 14 questions in the privacy draft (O-6). Any remaining risk is accepted in writing by the owner before Wave 1 |
 
@@ -156,6 +156,9 @@ Test accounts must not be the testers' accounts. Record times and account ids, n
 | O-8 | Retention for chat reports and broadcast history | Pending owner action |
 | O-9 | Who reads reports, how often, appeals | Owner, daily during the beta, by query. No appeals route yet |
 | O-10 | Approval of the four policy documents and who answers beta reports | Pending owner action |
+| O-11 | Privacy notice: the remaining owner and legal items in `lib/legal/privacy.md` (see section 7) | Pending owner action. Blocks `LEGAL_PRIVACY_PUBLISHED` and therefore Google sign-in |
+| O-12 | Google sign-in: web client ID, consent scopes (openid, email, profile only), Branding privacy URL, and the Render variable `GOOGLE_CLIENT_ID` | Pending owner action. Set after O-11 |
+| O-13 | Terms: approval of the wording and open items in `lib/legal/terms.md` | Pending owner action. Does not block Google sign-in |
 
 ## 7. Blockers, grouped
 
@@ -171,12 +174,28 @@ Test accounts must not be the testers' accounts. Record times and account ids, n
 1. Live smoke tests in section 5, after the deployed commit is confirmed.
 2. After any deploy, repeat S-1, S-6 and S-13 (as in STAGE_20_6 section 5): health endpoints and logs, and a short game with its results in both histories. Do not reuse gameplay evidence from an earlier deployment.
 3. Optional before Wave 1: C-E (database-name confirmation for the cleanup job), unless the owner accepts the gap.
-4. To publish the Impressum: legal approval of the text, remove the draft banner and comment from `public/impressum.html` through a PR, then set `LEGAL_IMPRESSUM_PUBLISHED`, `IMPRESSUM_NAME`, `IMPRESSUM_ADDRESS` and `IMPRESSUM_EMAIL` in Render. Do not do this without owner approval.
+4. To publish the Impressum: legal approval of the text, remove the draft banner and comment from `public/impressum.html` through a PR, then set `LEGAL_IMPRESSUM_PUBLISHED`, `IMPRESSUM_NAME` and `IMPRESSUM_ADDRESS` in Render, and the public contact address in `PUBLIC_CONTACT_EMAIL` (or `IMPRESSUM_EMAIL` if that is what is set). Do not do this without owner approval.
 
 **Legal and policy decisions**
 1. Approve the Privacy Notice, Beta Terms and Impressum wording and the 14 open questions (O-6).
 2. Owner identity and contact details (O-5, D-4).
 3. Accept any remaining risk in writing.
+
+**Privacy and Google sign-in (launch blockers)**
+Google sign-in stays off until the privacy notice is live. The notice is live only when `LEGAL_PRIVACY_PUBLISHED=true`, the `IMPRESSUM_*` details are set on Render (already configured; the values are not in Git) and no `[OWNER`/`[LEGAL` item is left in the text. Owner or legal decisions still needed:
+1. Legal basis for each purpose (EU and UK users). Legal item in the privacy notice.
+2. Hosting and database regions, and confirmation of processor terms for Render, Neon, GitHub, Resend, Metered and Google.
+3. Retention for chat reports, match history, rate-limit records and hosting logs.
+4. Who has access to production data, and how access and copy requests are handled, with a response time.
+5. Confirm that the usage counts contain no names, addresses or messages.
+6. The "Last updated" date.
+Then, on Render (owner action, not done by the code): set `GOOGLE_CLIENT_ID`, set `LEGAL_PRIVACY_PUBLISHED=true`, and set the Google Branding privacy URL to `https://playtableverse.com/privacy`. Keep the consent scopes to openid, email and profile.
+
+**Privacy and Terms (complete before wider launch; not Google blockers)**
+- Terms approval items: wording of the warranty and limitation section, multiple accounts, notice period, and the report and appeal wording.
+- 18+ self-declaration adequacy for each country where there are users (legal review).
+- Breach notification commitments (legal review).
+- Confirm: no legacy guest records exist; usernames cannot be changed in the app; no owner announcement e-mails are sent during the beta.
 
 ## 8. Go / no-go
 

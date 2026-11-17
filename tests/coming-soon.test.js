@@ -41,9 +41,14 @@ assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history 
 const newest = releases[0];
 const highlights = newest.items.slice(0, 3).map((i) => i.title).join('\n');
 assert.equal(newest.items.slice(0, 3).length, 3, 'the home page shows three highlights');
-assert.match(highlights, /See how far you are to the next level/);
-assert.match(highlights, /A level-up notice, once/);
-assert.match(highlights, /Follow @playtableverse on Instagram/);
+// The newest release is the game-over table entry (its first three items). The older highlights stay in the history.
+assert.match(highlights, /Game XP at the end of a game, in one table/);
+assert.match(highlights, /Your lifetime XP in each game/);
+assert.match(highlights, /Level-up dialog/);
+const history = releases.flatMap((r) => r.items.map((i) => i.title)).join('\n');
+assert.match(history, /See how far you are to the next level/);
+assert.match(history, /A level-up notice, once/);
+assert.match(history, /Follow @playtableverse on Instagram/);
 assert.ok(releases.some((r) => r.items.some((i) => /Leaving a game with others counts as a loss/.test(i.title))), 'the earlier release stays in the history');
 assert.ok(releases.every((r) => r.version && r.title && Array.isArray(r.items) && r.items.length > 0), 'every release has a version, title and items');
 assert.equal(new Set(releases.map((r) => r.version)).size, releases.length, 'versions are unique');

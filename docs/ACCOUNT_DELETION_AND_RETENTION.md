@@ -7,7 +7,13 @@ Each statement below names the code that does it. Where a number is a default th
 ## How a user deletes their account (self-service, implemented)
 
 1. Signed in, open the profile page and choose **Delete account** (`public/app.js`).
-2. Enter the account password. The server checks it (`db/account.js` `deleteAccount`). A wrong password changes nothing.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:7c37762c3c3541a7148a5cbdffbd6378a46a074749ffe385fb31eee08773c41b -->
+
+2. Confirm with the account password, or, for a Google-only account, a fresh Google sign-in for the same identity. The server checks the confirmation (`db/account.js` `deleteAccount` / `deleteAccountWithGoogle`). A failed confirmation changes nothing.
+
+<!-- /coderabbit-ai-generated:v1 -->
 3. `POST /api/me/delete-account` runs. It is rate limited to 5 attempts an hour per account (`RL_ME_DELETE_LIMIT`).
 4. The account is removed in one transaction. The player's open game socket is closed.
 
@@ -16,7 +22,21 @@ Limits:
 - A deletion is final. There is no undo and no grace period.
 - A user cannot delete someone else's account. Only the owner can suspend an ordinary registered account, and no one can delete an account from the console.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:4e29bf811d4f6dc0cc75d0b2b4bae2fd1ea819e553dff6e615b38fb4a077e0c3 -->
+
+## Google-only accounts: how they delete their account
+
+Google-only accounts delete through **Google confirmation**, which needs only a configured `GOOGLE_CLIENT_ID`. It does not depend on the privacy notice being live. The privacy notice gates only the offer of Google **sign-in and account creation**: `googleAllowed` in `server.js` controls the sign-in routes and the `enabled` flag of `GET /api/auth/google/config`. The deletion verifier is created whenever the client ID is set, and the config reports `deleteConfirm: true` in that case. The page's Content Security Policy allows Google's script whenever the client ID is set, and the page loads it only for sign-in (when offered) or for confirming a deletion.
+
+Consequence: an existing Google-only account can delete itself in the app while the client ID is set, but only from a signed-in session: while the privacy notice is unpublished, a signed-out Google-only account cannot reach the in-app deletion dialog. If the client ID is removed, Google confirmation is unavailable and no in-app route remains. That is a release decision for the owner, see the manual route below.
+
+**Manual deletion is not an available route while the legal pages are unpublished.** This route depends only on the Impressum. While the Impressum is unpublished, the app does not display the support address: `/impressum.html` returns 404 and the Impressum link is not shown. The privacy notice and the terms do not change this. Do not tell Google-only users to contact `PUBLIC_CONTACT_EMAIL` (or `IMPRESSUM_EMAIL` when that is the one set) until the Impressum is published and visibly exposes that contact. Once the contact is publicly available and the owner has confirmed the inbox is monitored, a manual request may be handled as follows: the owner sends a confirmation message with a unique one-time code to the registered e-mail address and deletes the account only after receiving a reply from that address that quotes the code. The owner then follows the existing database-backup and recorded-approval process. A sender address alone is not proof of identity. Password reset does not provide a password for a Google-only account.
+
 ## What is removed when an account is deleted
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Removed by the deletion itself or by foreign-key cascade (`ON DELETE CASCADE` in the migrations):
 
@@ -78,7 +98,7 @@ These are kept until the account is deleted or someone deletes them by hand. No 
 - **Neon (PostgreSQL)**: holds every table above. Backup and restore facts are recorded as unverified in `docs/OPERATIONS_RUNBOOK.md`.
 - **Resend**: sends verification, password-reset and (owner-approved) broadcast e-mail. Receives the address and the message.
 - **Metered**: TURN relay for voice. Players' network addresses and relayed voice traffic pass through it when a relay is used. Voice media is encrypted between the peers; the relay still carries it.
-- **Google and Cloudflare STUN servers** (`lib/voiceRelay.js`): receive the player's network address during voice setup.
+- **Google and Cloudflare STUN servers (`lib/voiceRelay.js`)**: receive the player's network address during voice setup.
 - **GitHub**: holds the source code and runs the scheduled cleanup workflow (`.github/workflows/cleanup-unverified.yml`). That workflow holds two database credentials as repository secrets: a read-only one for the daily dry run (counts only), and one for the deletion job, which runs only when started by hand with `CLEANUP_EXECUTE=true` and an approval in the `production-cleanup` environment. Job summaries keep counts. The workflow is not meant to print individual player records, but a player's data is reachable by anyone with those secrets, so their boundary is part of this disclosure.
 
 ## Open items for the owner

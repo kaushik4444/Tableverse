@@ -32,7 +32,7 @@ Nothing here is "production verified" unless it says so; production verification
 
 | Area | Status | Notes and evidence |
 |---|---|---|
-| Games: Wizard, 29, Poker, The Mind, Ludo (2-6), Snakes and Ladders (2-6), Property Rivals, Go Fish, Tic-Tac-Toe / Four in a Row | DONE | Engine tests in `npm test`; browser checks in `npm run test:ui`. Live smoke test by the owner: PENDING OWNER ACTION (S-6) |
+| Games: Wizard, 29, Poker, The Mind, Ludo (2-6), Snakes and Ladders (2-6), Property Rivals, Go Fish, Penalty Rows (2-8), Tic-Tac-Toe / Four in a Row | DONE | Engine tests in `npm test`; browser checks in `npm run test:ui`. Live smoke test by the owner: PENDING OWNER ACTION (S-6) |
 | 29 double/redouble by the whole answering side, 29 and Wizard options on by default | DONE IN DEVELOPMENT | #167, #170 (`tests/twentynine.test.js`, `tests/seat-order.test.js`) |
 | Accounts, sessions, 18+ confirmation, password policy, keep-me-signed-in | DONE | Code and CI (PostgreSQL suites run in CI only). Live sign-up/login smoke tests: PENDING OWNER ACTION (S-2 to S-7) |
 | Friends, invitations, public-by-default tables, private tables, host tools | DONE | In `main` since #165. Live two-account check: PENDING OWNER ACTION (S-6) |

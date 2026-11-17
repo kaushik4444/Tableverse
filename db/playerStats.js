@@ -20,16 +20,25 @@ const like = (q) => `%${String(q).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 const num = (v) => Number(v) || 0;
 const round1 = (v) => Math.round(num(v) * 10) / 10;
 
-// Only these orderings exist, so no request text ever reaches the SQL.
+// Only these orderings exist, so no request text ever reaches the SQL. `by` is the expression, `dir` the default direction,
+// and `account` marks an ordering by an account field alone (it can then be applied to the displayed page only).
+// The column keys (player, games, wins, winrate, leftrate, minutes, seen, joined) match the table headers; the preset keys
+// (leaving counts early leaves, the rest are the same as their columns) keep the older sort buttons working.
+// Ratios are NULL when there is nothing to divide by, and NULLs always sort last.
 const SORTS = {
-  seen: 'p.last_seen_at DESC NULLS LAST',
-  joined: 'p.created_at DESC',
-  games: 's.games DESC',
-  wins: 's.wins DESC',
-  minutes: 's.minutes DESC',
-  leaving: 's.left_early DESC',
+  seen: { by: 'p.last_seen_at', dir: 'DESC', account: true },
+  joined: { by: 'p.created_at', dir: 'DESC', account: true },
+  player: { by: 'LOWER(p.username)', dir: 'ASC', account: true },
+  games: { by: 's.games', dir: 'DESC' },
+  wins: { by: 's.wins', dir: 'DESC' },
+  winrate: { by: '(s.wins::float / NULLIF(s.rated - s.draws, 0))', dir: 'DESC' },
+  leftrate: { by: '(s.left_early::float / NULLIF(s.games, 0))', dir: 'DESC' },
+  minutes: { by: 's.minutes', dir: 'DESC' },
+  leaving: { by: 's.left_early', dir: 'DESC' },
 };
 const clampSort = (s) => (Object.hasOwn(SORTS, s) ? s : 'seen');
+const clampDir = (d, key) => (d === 'asc' ? 'ASC' : d === 'desc' ? 'DESC' : SORTS[key].dir);
+const orderBy = (key, dir) => `${SORTS[key].by} ${dir} NULLS LAST, p.username`;
 
 // A game has a RATED result for a player only if the player stayed to the end and the match was recorded with results.
 // Same rule as the player's own history and stats (db/matches.js): a bot that took over a seat can carry a win on the
@@ -54,28 +63,32 @@ const STATS = `
 
 // Sorts by an account field need only the displayed page's statistics, so the page is chosen first and then joined. Sorts by a
 // statistic need every player's figures before they can be ordered, so they keep the full aggregation.
-const ACCOUNT_SORTS = new Set(['seen', 'joined']);
 
-async function listPlayers({ q = '', sort = 'seen', page: pg = 1 } = {}) {
+async function listPlayers({ q = '', sort = 'seen', dir = '', page: pg = 1 } = {}) {
   const term = String(q || '').trim().slice(0, 40);
   const key = clampSort(sort);
+  const direction = clampDir(dir, key);
+  const order = orderBy(key, direction);
   const args = [];
   let where = 'WHERE p.is_anonymous = FALSE AND p.username IS NOT NULL';
   if (term) { args.push(like(term)); where += ` AND (p.username ILIKE $1 ESCAPE '\\' OR p.display_name ILIKE $1 ESCAPE '\\')`; }
   const total = (await db.query(`SELECT COUNT(*)::int AS n FROM players p ${where}`, args)).rows[0].n;
   const offset = `LIMIT ${PAGE} OFFSET $${args.length + 1}`;
-  const cols = `SELECT p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
+  const cols = `SELECT p.id, p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
             COALESCE(s.games, 0) AS games, COALESCE(s.rated, 0) AS rated, COALESCE(s.wins, 0) AS wins, COALESCE(s.draws, 0) AS draws,
             COALESCE(s.left_early, 0) AS left_early, COALESCE(s.minutes, 0) AS minutes, s.last_game`;
-  const r = ACCOUNT_SORTS.has(key)
+  const r = SORTS[key].account
     ? await db.query(
-      `${cols} FROM (SELECT p.* FROM players p ${where} ORDER BY ${SORTS[key]}, p.username ${offset}) p ${STATS}
-        ORDER BY ${SORTS[key]}, p.username`,
+      `${cols} FROM (SELECT p.* FROM players p ${where} ORDER BY ${order} ${offset}) p ${STATS}
+        ORDER BY ${order}`,
       [...args, page(pg) * PAGE])
-    : await db.query(`${cols} FROM players p ${STATS} ${where} ORDER BY ${SORTS[key]}, p.username ${offset}`, [...args, page(pg) * PAGE]);
+    : await db.query(`${cols} FROM players p ${STATS} ${where} ORDER BY ${order} ${offset}`, [...args, page(pg) * PAGE]);
+  // Level is shown for the players on this page only (one progress read each): it is not a sort key
+  const { getProgress } = require('./matches');
+  const levels = await Promise.all(r.rows.map((x) => getProgress(x.id).then((g) => g.account.level, () => null)));
   return {
-    total, pageSize: PAGE, sort: key,
-    players: r.rows.map((x) => ({ username: x.username, displayName: x.display_name, country: x.country || null, role: x.role, joinedAt: x.created_at, lastSeenAt: x.last_seen_at,
+    total, pageSize: PAGE, sort: key, dir: direction === 'ASC' ? 'asc' : 'desc',
+    players: r.rows.map((x, i) => ({ level: levels[i], username: x.username, displayName: x.display_name, country: x.country || null, role: x.role, joinedAt: x.created_at, lastSeenAt: x.last_seen_at,
       suspended: Boolean(x.suspended_at), games: num(x.games), rated: num(x.rated), wins: num(x.wins), draws: num(x.draws), leftEarly: num(x.left_early), minutes: round1(x.minutes), lastGameAt: x.last_game })),
   };
 }
@@ -143,4 +156,4 @@ async function playerProfile({ username, actorId }) {
   return profile;
 }
 
-module.exports = { listPlayers, playerProfile, PAGE, SORTS, clampSort, clampZone };
+module.exports = { listPlayers, playerProfile, PAGE, SORTS, clampSort, clampDir, orderBy, clampZone };

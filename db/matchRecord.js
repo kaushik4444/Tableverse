@@ -21,7 +21,8 @@ function tableShape(room) {
  */
 function buildMatchRecord(room, game) {
   // A leave is only a loss if the game is finished without a second leaver. In an abandoned game nobody is penalised.
-  const leavers = room.abandoned ? new Set() : room.forfeits || new Set();
+  // An abandoned game penalises nobody, except a third leave, which is final (lib/leavePolicy.js).
+  const leavers = room.abandoned ? new Set(room.finalForfeits || []) : room.forfeits || new Set();
   const results = typeof game.results === 'function' ? game.results() : null;
   // Results are indexed by seat; room.seated lists the member in each seat (shuffled games), else the join order.
   const seated = room.seated || room.members;
@@ -42,8 +43,9 @@ function buildMatchRecord(room, game) {
     participants: seated
       .map((m, seat) => {
         const r = results[seat] || {};
-        const leftEarly = Boolean(m.bot && left.has(m.id));
-        const forfeit = leftEarly && leavers.has(m.id); // left with other people still playing: a loss
+        // A penalised leave is a loss even if the person took the seat back later (a final third leave).
+        const forfeit = left.has(m.id) && leavers.has(m.id); // left with other people still playing: a loss
+        const leftEarly = Boolean((m.bot && left.has(m.id)) || forfeit);
         return {
           playerId: m.id,
           name: String(m.name || 'Player').slice(0, 32),
@@ -71,8 +73,8 @@ function buildMatchRecord(room, game) {
  * written, as losses; nobody else gets a result. Returns null when nobody forfeited.
  */
 function buildForfeitRecord(room) {
-  const leavers = room.forfeits || new Set();
-  if (room.abandoned || !leavers.size || !room.matchKey) return null;
+  const leavers = room.abandoned ? new Set(room.finalForfeits || []) : room.forfeits || new Set();
+  if (!leavers.size || !room.matchKey) return null;
   const seated = room.seated || room.members;
   const now = Date.now();
   return {

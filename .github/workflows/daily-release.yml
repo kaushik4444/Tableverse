@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Check every gate and write the result to the summary. Requests a Copilot review if one is missing (its only change); opens and merges nothing.'
+        description: 'Check every gate and write the result to the summary. Reads the CodeRabbit review check on the PR head; it requests nothing and opens or merges nothing unless every gate passes.'
         type: boolean
         default: true
 
