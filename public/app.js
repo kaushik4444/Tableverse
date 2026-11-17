@@ -177,6 +177,15 @@
   });
 
   const gameMeta = (id) => S.games.find((g) => g.id === id);
+  /** May this viewer play the game now: the owner's access mode (public/game-access.js) for this viewer's role. Before the
+   *  viewer is known (the public page), only a game open to everybody counts. The server is the authority. */
+  const gameOpenFor = (g) => {
+    if (!g) return false;
+    if (S.role && window.TvGameAccess && g.access) return window.TvGameAccess.allows(g.access, S.role);
+    return g.enabled !== false;
+  };
+  /** Locked only because this viewer is a guest: a registered player could play it, so the account prompt applies. */
+  const guestLockedFor = (g) => !!g && !gameOpenFor(g) && S.role === 'guest' && !!window.TvGameAccess && window.TvGameAccess.allows(g.access, 'user');
   const inviteUrl = () => `${location.origin}/#${S.room.code}`;
   const safeTableUrl = () => S.room && S.room.visibility === 'public' ? inviteUrl() : `${location.origin}/`;
 
@@ -1127,6 +1136,7 @@
       }
       case 'welcome': {
         S.id = m.id;
+        S.role = m.role || 'user'; // owner | admin | user | guest: decides which games are open (see gameOpenFor)
         if (S.page === 'player' && S.player && S.player.data) resyncPlayerBlock(); // the server's state after a drop, not the optimistic one
         applyLegal(m); // the server decides each link (see server.js legalFlags)
         S.token = '';
@@ -1280,6 +1290,7 @@
         if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
         break;
       case 'error':
+        if (m.code === 'guest_locked') { openAuthSheet('register', m.message || 'Create a free account to play this game.'); break; }
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
         if (S.page === 'player') resyncPlayerBlock(true, m.message); // a refused block or unblock must not stay on the page
@@ -2509,19 +2520,24 @@
   }
 
   function renderHome() {
-    const tiles = S.games.map((g) => `
-      <article class="game-card${g.enabled === false ? ' is-locked' : ''}" style="--accent:${esc(g.accent || '#7b4bd0')}">
+    const tiles = S.games.map((g) => {
+      const open = gameOpenFor(g);
+      const guestLocked = guestLockedFor(g); // a tap opens the account prompt (the button stays enabled)
+      const note = open ? '' : guestLocked && window.TvGuest ? window.TvGuest.lockedLabel(g.name) : '<p class="game-off" role="status">Unavailable right now.</p>';
+      return `
+      <article class="game-card${open ? '' : ' is-locked'}" style="--accent:${esc(g.accent || '#7b4bd0')}">
         <div class="game-art" aria-hidden="true">${esc(g.icon || '🎴')}</div>
         <div class="game-body">
           <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
-          <p>${esc(g.tagline)}</p>${g.enabled === false ? '<p class="game-off" role="status">Unavailable right now.</p>' : ''}
+          <p>${esc(g.tagline)}</p>${note}
           <div class="row game-actions">
-            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}" ${g.enabled === false ? 'disabled aria-disabled="true"' : ''}>Create table</button>
+            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}" ${open || guestLocked ? '' : 'disabled aria-disabled="true"'}>Create table</button>
             <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
             ${g.id === 'wizard' ? (S.guest ? `<button class="btn ghost small" type="button" data-act="showLogin">Log in for offline scorecard</button>` : `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>`) : ''}
           </div>
         </div>
-      </article>`).join('');
+      </article>`;
+    }).join('');
     const name = S.guest ? '' : (S.named ? S.name : '');
     $app.innerHTML = `
     ${topbarHTML()}
@@ -3124,7 +3140,11 @@
     create: (el) => {
       if (!authed()) return gateLogin(() => actions.create(el));
       const game = el.dataset.game;
-      if (gameMeta(game) && gameMeta(game).enabled === false) return toast('That game is unavailable right now.');
+      const meta = gameMeta(game);
+      if (meta && !gameOpenFor(meta)) {
+        if (guestLockedFor(meta)) return openAuthSheet('register', `Create a free account to play ${meta.name}.`);
+        return toast('That game is unavailable right now.');
+      }
       // New tables are public by default. The host can make the table private from the table screen (Make private).
       send({ t: 'create', gameId: game, visibility: 'public', name: S.name || undefined, avatar: S.avatar || undefined });
     },

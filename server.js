@@ -729,8 +729,8 @@ function start(opts = {}) {
   /** The table directory: every public lobby or running table. A block never hides a table (blocked players may share one). */
   // Sends the game list (with each game's switch) to every connected socket when a switch changes.
   function broadcastGames() {
-    const msg = { t: 'games', games: gameListFor(games.list(), p) };
-    for (const ws of wss.clients) send(ws, msg);
+    // Each socket gets the list for its own player (a guest and a registered player may see different locks).
+    for (const ws of wss.clients) send(ws, { t: 'games', games: gameListFor(games.list(), ws.player || undefined) });
   }
 
   function publicTables() {
@@ -2028,7 +2028,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: gameListFor(games.list(), p), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, role: roleOf(p), games: gameListFor(games.list(), p), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
