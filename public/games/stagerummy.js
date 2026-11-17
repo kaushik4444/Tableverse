@@ -128,6 +128,7 @@
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.latest = v;
     react(v); sync(v);
+    const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null; // keep keyboard focus on the same card across redraws
     const me = v.me >= 0 ? v.players[v.me] : null;
     const mine = v.myTurn;
     const goalLine = me ? `Stage ${Math.min(me.stage, v.stageCount)}: ${goalText(v.goals[Math.min(me.stage, v.stageCount) - 1])}${me.laid ? ' ✓' : ''}` : `${v.stageCount} stages`;
@@ -148,6 +149,7 @@
       ${overlayHTML(v)}
     </div>`;
     root.onclick = onClick;
+    if (focused) { const el = root.querySelector(`.sr-hand [data-id="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
   }
 
   function onClick(e) {

@@ -45,7 +45,7 @@ module.exports = {
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId),
       forcedPlay: () => null,
-      stamp: () => ({ round: g.round, turn: g.turn, phase: g.phase, seq: g.seq }),
+      stamp: () => g.round + ':' + g.turn, // changes when the turn passes (the server compares stamps with !==)
       botDelayMs: () => 900 + g.rng() * 900,
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
