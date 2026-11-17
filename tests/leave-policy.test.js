@@ -244,6 +244,28 @@ test('a final penalty still counts when another person later abandons the game',
   assert.equal(byId(rec).B.forfeit, false, 'a non-final leaver is not penalised in an abandoned game');
 });
 
+for (const priorLeaves of [FINAL_LEAVE - 1, FINAL_LEAVE]) {
+  test(`leave ${priorLeaves + 1} retains its final penalty when it triggers abandonment`, () => {
+    const r = playingTable(['A', 'B', 'C'], ['D']);
+    // Seed the counter to exercise the threshold and the branch above it independently.
+    r.leaveCounts = new Map([['B', priorLeaves]]);
+    // A's pending penalty causes B's next departure to abandon the game.
+    departure(r, 'A', 10000);
+    const outcome = leave(r, 'B');
+    assert.deepEqual(outcome, { penalised: false, abandoned: true });
+    assert.equal(r.finalForfeits.has('B'), true);
+    assert.equal(leaveCountOf(r, 'B'), priorLeaves + 1);
+    assert.equal(takeSeatBack(r, 'B', 11000).reason, 'abandoned');
+    const rec = finishRecord(r);
+    assert.equal(byId(rec).B.forfeit, true);
+    assert.equal(byId(rec).A.forfeit, false);
+    assert.ok(!('C' in byId(rec)));
+    const closed = buildForfeitRecord(r);
+    assert.deepEqual(closed.participants.map((p) => p.playerId), ['B']);
+    assert.equal(closed.participants[0].forfeit, true);
+  });
+}
+
 test('the leave prompt state for a player: others pending means abandons; their own final penalty does not', () => {
   const r = playingTable(['A', 'B', 'C'], ['D']);
   for (let i = 0; i < 3; i += 1) { departure(r, 'A', 1000 + i * 1000); if (i < 2) takeSeatBack(r, 'A', 1500 + i * 1000); }

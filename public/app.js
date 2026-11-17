@@ -121,7 +121,7 @@
   const isSpectator = () => !!(S.room && (S.room.spectators || []).some((s) => s.id === S.id));
   /** Other people are still playing this game with us: leaving then counts as a loss. Against bots only it does not. */
   const otherHumansPlaying = () => !!(S.room && S.room.status === 'playing' && !isSpectator() && (S.room.members || []).some((m) => m.id !== S.id && !m.bot));
-  /** What leaving now does, as the server decides it: 'counts' (a loss), 'abandons' (the game is abandoned, nobody penalised) or 'abandoned'. */
+  /** What leaving now does, as the server decides it: 'counts' (a loss), 'abandons' (the game is abandoned, only final penalties count) or 'abandoned'. */
   const leaveInfo = () => (S.room && S.room.leaveInfo) || { abandoned: false, pending: [], counts: {} };
   /** What leaving now does for this player: 'counts' (a loss), 'abandons' (someone else's penalty is pending) or 'abandoned'. */
   const leaveState = () => { const li = leaveInfo(); if (li.abandoned) return 'abandoned'; return li.pending.some((id) => id !== S.id) ? 'abandons' : 'counts'; };
@@ -132,7 +132,7 @@
   /** One sentence for the profile and leave prompts, matching what leaving now actually does. */
   const leaveConsequence = () => {
     const state = leaveState();
-    if (state === 'abandons') return ' Another player has already left, so leaving now abandons the game: nobody is penalised.';
+    if (state === 'abandons') return ' Another player has already left, so leaving now abandons the game: only non-final penalties are removed; final penalties still count.';
     if (state === 'abandoned') return ' The game is already abandoned, so leaving costs nothing.';
     return ' Leaving counts as a loss for you.';
   };
@@ -158,10 +158,10 @@
       return;
     }
     if (state === 'abandons') {
-      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Nobody is penalised, and the people who stayed get no result. A bot takes your seat. You can watch the game from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
+      openModal('Leave game?', '<p class="hint">Another player has already left, so leaving now abandons the game. Only non-final penalties are removed; final penalties still count, and the people who stayed get no result.' + finalLeaveNote() + ' A bot takes your seat. Once the game is abandoned, you cannot take your seat back. You can watch the game from the home screen.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and abandon the game</button></div>');
       return;
     }
-    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes.' + finalLeaveNote() + ' A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned and nobody is penalised. You can take your seat back from the home screen within ' + rejoinWithin() + ' of your first leave in this game. The time does not restart if you leave and come back again. After that the bot keeps the seat.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
+    openModal('Leave game?', '<p class="hint">Are you sure? Leaving counts as a loss for you if the game finishes.' + finalLeaveNote() + ' A bot takes your seat, and the others keep playing. If another player also leaves, the game is abandoned: only non-final penalties are removed; final penalties still count. You can take your seat back from the home screen within ' + rejoinWithin() + ' of your first leave in this game. The time does not restart if you leave and come back again. After that the bot keeps the seat. Taking your seat back removes only non-final penalties; a final penalty still counts. Once the game is abandoned, you cannot take your seat back.</p><div class="row" style="margin-top:12px;gap:10px"><button type="button" class="btn ghost small" data-modal-close>Stay</button><button type="button" class="btn danger" data-modal-act="leaveGameConfirm">Leave and count as a loss</button></div>');
   }
 
   window.CardTable = Object.assign(window.CardTable || {}, {
