@@ -497,10 +497,13 @@
       <p id="gMsg" class="ad-msg" role="status"></p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`);
     main.querySelectorAll('[data-gflag]').forEach((b) => { b.onclick = async () => {
+      if (b.disabled) return;
+      b.disabled = true; // one request at a time: a second click would only repeat the same change
       try {
         await api('/api/admin/game-flags', { gameId: b.dataset.gflag, enabled: b.dataset.on === '1' });
+        state.gen += 1; // a redraw still in flight is dropped
         gamesTab().catch(fail); // redraw with the new state
-      } catch (e) { say('gMsg', e.message, 'err'); }
+      } catch (e) { b.disabled = false; say('gMsg', e.message, 'err'); }
     }; });
   }
 

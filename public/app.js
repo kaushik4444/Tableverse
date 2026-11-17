@@ -1119,6 +1119,12 @@
     if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
+      case 'games': {
+        // the owner switched a game on or off: the home page and the create buttons update at once
+        S.games = m.games;
+        render();
+        break;
+      }
       case 'welcome': {
         S.id = m.id;
         if (S.page === 'player' && S.player && S.player.data) resyncPlayerBlock(); // the server's state after a drop, not the optimistic one

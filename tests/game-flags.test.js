@@ -69,4 +69,63 @@ test('withFlags adds the enabled state to each game and keeps the rest of the en
   flags.apply([]);
 });
 
+console.log('snapshot rules');
+
+test('nothing is enabled before the first complete read (fail closed)', () => {
+  flags.reset();
+  assert.equal(flags.isReady(), false);
+  assert.equal(flags.isEnabled('wizard'), false);
+  flags.apply([]);
+  assert.equal(flags.isEnabled('wizard'), true);
+});
+
+test('a read started earlier that finishes later does not overwrite a newer read', () => {
+  flags.reset();
+  const older = flags.begin();
+  const newer = flags.begin();
+  assert.equal(flags.apply([{ game_id: 'ludo', enabled: false }], newer), true);
+  assert.equal(flags.apply([], older), false, 'the older read is dropped');
+  assert.equal(flags.isEnabled('ludo'), false);
+  flags.apply([]);
+});
+
+test('a single write applies at once and drops reads that started before it', () => {
+  flags.reset();
+  flags.apply([]);
+  const before = flags.begin();
+  assert.equal(flags.setOne('gofish', false), true);
+  assert.equal(flags.isEnabled('gofish'), false);
+  assert.equal(flags.apply([{ game_id: 'gofish', enabled: true }], before), false, 'a read from before the write is stale');
+  assert.equal(flags.isEnabled('gofish'), false);
+  flags.apply([]);
+});
+
+test('listeners are told only about real changes', () => {
+  flags.reset();
+  flags.apply([{ game_id: 'poker', enabled: false }]);
+  let calls = 0;
+  const off = flags.onChange(() => { calls++; });
+  flags.apply([{ game_id: 'poker', enabled: false }]); // same as before
+  assert.equal(calls, 0);
+  flags.apply([{ game_id: 'poker', enabled: true }]);
+  assert.equal(calls, 1);
+  flags.setOne('poker', true); // already on
+  assert.equal(calls, 1);
+  off();
+  flags.setOne('poker', false);
+  assert.equal(calls, 1, 'a removed listener is not called');
+  flags.apply([]);
+});
+
+test('a listener that throws does not stop the others', () => {
+  flags.reset();
+  let second = 0;
+  flags.onChange(() => { throw new Error('boom'); });
+  flags.onChange(() => { second++; });
+  const quiet = console.error; console.error = () => {};
+  try { flags.apply([{ game_id: 'ludo', enabled: false }]); } finally { console.error = quiet; }
+  assert.equal(second, 1);
+  flags.reset();
+});
+
 console.log(`\n${passed} passed`);

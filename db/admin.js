@@ -529,12 +529,15 @@ async function listGameFlags() {
 /** Turns one game on or off. Audited in the same transaction. */
 async function setGameFlag({ actorId, gameId, enabled }) {
   await db.withTransaction(async (c) => {
-    await c.query(
+    // Only a real change is written and audited: repeating the same value leaves no second entry.
+    const r = await c.query(
       `INSERT INTO game_flags (game_id, enabled, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
-       ON CONFLICT (game_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
+       ON CONFLICT (game_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+       WHERE game_flags.enabled IS DISTINCT FROM EXCLUDED.enabled
+       RETURNING game_id`,
       [gameId, Boolean(enabled), actorId]
     );
-    await audit(c, { actorId, action: 'game.switch', targetType: 'game', targetId: gameId, detail: { enabled: Boolean(enabled) } });
+    if (r.rows.length) await audit(c, { actorId, action: 'game.switch', targetType: 'game', targetId: gameId, detail: { enabled: Boolean(enabled) } });
   });
 }
 
