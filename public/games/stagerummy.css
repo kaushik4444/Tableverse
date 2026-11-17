@@ -3,9 +3,9 @@
 .sr .sr-card b { font-size: clamp(15px, 4.8vw, 24px); font-weight: 800; }
 .sr .sr-card i { position: absolute; left: 3px; top: 2px; font-style: normal; font-size: 11px; }
 .sr .sr-card u { position: absolute; right: 3px; bottom: 2px; font-size: 10px; text-decoration: none; opacity: .9; }
-.sr .sr-card.cR { background: #d64541; }
+.sr .sr-card.cR { background: #b93633; }
 .sr .sr-card.cB { background: #2f6fd0; }
-.sr .sr-card.cG { background: #2c9a55; }
+.sr .sr-card.cG { background: #21763f; }
 .sr .sr-card.cY { background: #e8b923; color: #3b2c00; }
 .sr .sr-card.wild { background: linear-gradient(135deg, #7b4bd6, #d6498c); }
 .sr .sr-card.skip { background: #3a3f4f; }
@@ -39,7 +39,7 @@
 .sr .sr-tray.done .sr-tlabel { color: #7fe0a0; }
 .sr .sr-tlabel { font-size: 12px; opacity: .9; }
 .sr .sr-tcards { display: flex; flex-wrap: wrap; gap: 3px; min-height: 28px; }
-.sr .sr-tcards .sr-card { cursor: pointer; }
+.sr .sr-tcards .sr-card { cursor: pointer; min-width: 44px; }
 .sr .sr-hand { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; margin-top: 10px; }
 .sr .sr-hand .sr-card { cursor: pointer; min-height: 56px; }
 .sr .sr-hand .sr-card.sel { transform: translateY(-6px); box-shadow: 0 0 0 3px var(--gold, #f2c14e), 0 6px 12px rgba(0, 0, 0, .35); }

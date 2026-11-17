@@ -231,5 +231,36 @@ test('the plugin: id, seats, options and the stage formatter', () => {
   assert.equal(g.isOver(), false);
 });
 
+test('solver uses wilds to reserve specific natural cards for another group', () => {
+  for (const kind of ['set', 'colour']) {
+    const hand = kind === 'set'
+      ? [R(5), B(5), G(5), W(), W(1), W(2)]
+      : [R(5), R(4), R(6), W(), W(1), W(2)];
+    const req = [{ kind, size: 3 }, { kind: 'run', size: 3 }];
+    const groups = e.solve(hand, req);
+    assert.ok(groups, kind);
+    assert.equal(new Set(groups.flat()).size, 6);
+    groups.forEach((group, i) => assert.ok(e.classify(group.map((id) => hand.find((c) => c.id === id)), req[i])));
+    assert.ok(groups[0].includes(W().id));
+    assert.ok(groups[1].some((id) => id < 96));
+  }
+});
+
+test('solver can reserve naturals across three groups and rejects wild-only groups', () => {
+  const req = Array.from({ length: 3 }, () => ({ kind: 'set', size: 3 }));
+  const hand = [R(5), B(5), G(5), ...Array.from({ length: 6 }, (_, i) => W(i))];
+  const groups = e.solve(hand, req);
+  assert.ok(groups);
+  assert.equal(new Set(groups.flat()).size, 9);
+  for (const group of groups) assert.ok(e.classify(group.map((id) => hand.find((c) => c.id === id)), req[0]));
+  assert.equal(e.solve([W(), W(1), W(2)], [req[0]]), null);
+});
+
+test('solver keeps existing maximum-natural choices ahead of wild substitutions', () => {
+  const hand = [R(1), B(1), G(1), R(5), B(5), G(5), W()];
+  assert.deepEqual(e.solve(hand, [{ kind: 'set', size: 3 }]), [ids(hand.slice(0, 3))]);
+  assert.deepEqual(e.solve(hand, [{ kind: 'colour', size: 2 }]), [ids([R(1), R(5)])]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

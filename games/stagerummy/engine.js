@@ -259,9 +259,11 @@ function candidates(pool, req) {
   const wild = pool.filter((c) => c.k === 'w');
   const out = [];
   const fill = (chosen, need) => (need <= wild.length ? chosen.concat(wild.slice(0, need)) : null);
+  const matching = [];
   if (req.kind === 'set') {
     for (let v = 1; v <= MAXV; v++) {
       const same = nat.filter((c) => c.v === v);
+      matching.push(same);
       if (!same.length) continue;
       const take = same.slice(0, req.size);
       const g = fill(take, req.size - take.length);
@@ -270,6 +272,7 @@ function candidates(pool, req) {
   } else if (req.kind === 'colour') {
     for (const col of COLOURS) {
       const same = nat.filter((c) => c.c === col);
+      matching.push(same);
       if (!same.length) continue;
       const take = same.slice(0, req.size);
       const g = fill(take, req.size - take.length);
@@ -282,6 +285,17 @@ function candidates(pool, req) {
       if (!chosen.length) continue;
       const g = fill(chosen, req.size - chosen.length);
       if (g) out.push(g);
+    }
+  }
+  // Keep the original maximum-natural candidates first. Then try every smaller
+  // natural subset that wilds can complete, reserving other cards for later parts.
+  for (const same of matching) {
+    for (let count = Math.min(same.length, req.size) - 1; count >= Math.max(1, req.size - wild.length); count--) {
+      const choose = (start, chosen) => {
+        if (chosen.length === count) { out.push(fill(chosen, req.size - count)); return; }
+        for (let j = start; j <= same.length - (count - chosen.length); j++) choose(j + 1, chosen.concat(same[j]));
+      };
+      choose(0, []);
     }
   }
   return out;
