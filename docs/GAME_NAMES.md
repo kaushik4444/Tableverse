@@ -6,9 +6,9 @@ each name in the target markets (a trademark search or a short lawyer review is 
 
 ## The rule we follow
 
-- **Game rules and mechanics are not protected** by copyright or trademark. Anyone may implement "a game where you ..." .
+- **Game rules and mechanics are not protected** by copyright or trademark (those two only: a specific mechanic can still be covered by a **patent**, so check for patents on anything unusual before building it). Implementing "a game where you ..." is generally allowed under those two.
 - **Names, logos, artwork, card designs, rule-book wording, and distinctive component sets** are protected.
-- So: our own implementation, our own wording, our own art, and a **name that is not another company's brand**.
+- So: our own implementation, our own wording, our own art, and a **name that is neither another company's brand nor confusingly similar to it** (spelling variants, sound-alikes and added words can still infringe: check similar marks, not only exact names).
   Where a well-known brand is the natural name, we use a neutral name instead.
 
 ## Audit
