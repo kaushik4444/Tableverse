@@ -39,7 +39,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by {{IMP
 - Your network address, which we record when you make requests, so that we can limit repeated attempts (rate limiting). These records are deleted after one day.
 - A login session cookie. A "keep me signed in" device cookie, only if you choose it.
 - Aggregate usage statistics, such as how many players were active on a day and how many games finished. The figures shown to staff contain no names, e-mail addresses, IP addresses or messages. Behind the daily counts of active players, the server keeps one keyed hash per player per day, so that each player is counted once. The hash is not your account ID, but it is linked to your account by the server's secret key, so this data is pseudonymous, not anonymous. It is deleted after 35 days.
-- Operational logs held by our hosting provider, which record technical events such as errors and requests. [OWNER: confirm the log retention period with Render. The owner decision is 30 days, which the repository cannot verify.]
+- Operational logs held by our hosting provider, which record technical events such as errors and requests. These logs are kept for up to 7 days.
 
 **Reports and feedback you send:**
 - A chat report includes the reported message (up to 200 characters), the reason and, optionally, a short note. Reports you file are removed when your account is deleted. Reports made against your account are kept, with the link to your account cleared, and the name at the time of the report stays on them: deleting your account does not remove that name from those reports.
@@ -83,15 +83,15 @@ We do not sell your data. The game pages do not load advertising or analytics sc
 
 ## Who can access your data inside Tableverse
 
-The owner is the only person with routine, authorised access to player data in production. [OWNER: the code also has an admin role, which gives access to the admin console. Confirm whether any admin accounts exist. If they do, this paragraph must say so.]
+The owner is the only person with routine, authorised access to player data in production. No other person holds an administrator account for production.
 
-Staff accounts use an admin console. For each player it shows the username, display name, country, join and last-seen dates, games played, wins, time played, games left early and the account level. It does not show your e-mail address or your password. A staff member can ask for a new verification e-mail to be sent to an account that has not yet verified its address. The address itself is not shown to them. Staff actions on an account, such as opening its profile or suspending it, are written to an audit log that records the action but not the e-mail address.
+The owner uses an admin console. For each player it shows the username, display name, country, join and last-seen dates, games played, wins, time played, games left early and the account level. It does not show your e-mail address or your password. The owner can ask for a new verification e-mail to be sent to an account that has not yet verified its address. The address itself is not shown in the console. Actions taken on an account in the console, such as opening its profile or suspending it, are written to an audit log that records the action but not the e-mail address.
 
 The audit log becomes eligible for purge after 365 days (see "How long we keep data").
 
 ## Promotional e-mail
 
-We do not send promotional e-mail during the beta. The e-mails we send are account e-mails: the verification e-mail, sent to the address you give when you register (and when you ask for it again), and the password-reset e-mail, sent only to a verified address. These are not marketing and carry no unsubscribe link. Owner announcement e-mails are not sent during the beta. [OWNER: confirm that no owner e-mail broadcast will be sent during the beta.]
+We do not send promotional e-mail during the beta. The e-mails we send are account e-mails: the verification e-mail, sent to the address you give when you register (and when you ask for it again), and the password-reset e-mail, sent only to a verified address. These are not marketing and carry no unsubscribe link. No owner broadcast e-mails are sent during the beta.
 
 ## How long we keep data
 
@@ -105,12 +105,12 @@ The scheduled retention periods below are purge-eligibility thresholds. Housekee
 - **Aggregate usage statistics**: the keyed daily hashes of active players become eligible for purge after 35 days. Daily totals become eligible after 400 days.
 - **Feedback**: eligible for purge after 180 days.
 - **Staff audit log**: eligible for purge after 365 days.
-- **Operational logs held by our hosting provider**: [OWNER: retention period to be confirmed with Render. Owner decision: 30 days.]
+- **Operational logs held by our hosting provider**: kept for up to 7 days.
 - **Finished match results**: we intend to keep them for 24 months after the match, and then delete them. [OWNER: this period is not yet enforced. The code has no match-history deletion job. Do not publish this sentence until a job exists, or change the wording to "kept until your account is deleted".]
 - **Chat reports**: 12 months after they are resolved (see the reports section above). [OWNER: not yet enforced. See the reports section above.]
-- **Broadcast history (owner e-mail)**: no period is set. [OWNER: set a period, or confirm that no broadcasts are sent during the beta.]
-- **Database backups**: copies of the database are kept by Neon for its backup and point-in-time retention window, and any copy the owner makes is kept for the same purpose. Data you delete can stay in these backups until the backups expire. If a backup is restored, data deleted after the backup was taken can return, and it is then deleted again. [OWNER: record Neon's backup and point-in-time retention window for the current plan. Not verified in the repository. Confirm the restore process.]
-- **Records needed for a serious ongoing incident or a legal claim**: we keep the relevant records only for as long as they are needed for that matter, and then delete them. [LEGAL: confirm this wording.]
+- **Owner broadcast e-mail**: none is sent during the beta, so no broadcast history is expected. If broadcasts are used later, this notice will be updated and a retention period set before they are sent.
+- **Database backups**: Neon keeps point-in-time restore history for 6 hours, so data you delete can remain in that history for up to 6 hours. Copies that the owner makes by hand are kept for [OWNER: state how long manual database backup files are kept]. If a database is restored from a backup, data deleted after that backup was taken can reappear.
+- **Records needed for a serious ongoing incident or a legal claim**: we keep the relevant records only for as long as they are needed for that matter, and then delete them.
 
 **Match results after account deletion.** When you delete your account, your finished matches stay, so that other players' results and histories remain correct. Your seat is shown as "Deleted player" and the link to your account is removed. The match records still contain the game, the scores, the positions and the times. [LEGAL: confirm whether these records count as anonymous under the GDPR, and whether they can be linked back to you through backups or other records. This has not been assessed.]
 
@@ -119,7 +119,7 @@ The scheduled retention periods below are purge-eligibility thresholds. Housekee
 - **Delete your account**: in the app, open your profile and choose Delete account. If you have a password, you confirm with your password. If you only use Google sign-in, you confirm by signing in with Google again. Deletion removes your account, sign-in details, sessions, devices, friends, blocks and recent tables. Your past match results remain, but are shown under the name "Deleted player". Chat messages you sent at a table that is open are not removed by deletion: they show as "Deleted player" and stay in that table's memory until the table closes or the server restarts. Please do not put identifying details in chat.
 - **Access to your data, a copy of it, correction, erasure, restriction, objection and portability**: you have these rights under the GDPR. To make a request, write to {{IMPRESSUM_EMAIL}} from the e-mail address on your account. To protect your data, we will verify your identity before we act: we send a one-time code to the e-mail address on the account, and you confirm the request by replying from that address with the code. We respond within one month of receiving a complete request. For a complex request we may take up to two further months, and we will tell you why. There is no automatic export tool in the beta. We prepare a copy of your data by hand, when you ask for one. [OWNER: confirm that you can retrieve each category of data (profile, sign-in e-mail, matches, friends, blocks, reports, feedback) with read-only queries before you promise a copy.]
 - **Correct your profile**: change your display name and avatar in the app. Usernames cannot be changed in the app.
-- **Complain**: you may complain to a data protection supervisory authority, for example in the country where you live or work. [LEGAL: name the competent supervisory authority once the owner's location is confirmed.]
+- **Complain**: you may lodge a complaint with a data protection supervisory authority, in particular in the EU or EEA Member State where you live, where you work or where the alleged infringement took place.
 - **Opt out of promotional e-mail**: none is sent during the beta.
 
 ## Children
@@ -128,7 +128,7 @@ Tableverse is for adults aged 18 and over during the beta. Registration, and Goo
 
 ## Security
 
-Passwords are stored as one-way hashes. Sign-in sessions are stored as hashes and expire. The database connection uses verified TLS in production. Access to production data is limited as described in "Who can access your data inside Tableverse". No system is perfectly secure. If we learn of a breach affecting your data, we will tell you, and the relevant authorities, as the law requires. [LEGAL: confirm the notification procedure and timings.]
+Passwords are stored as one-way hashes. Sign-in sessions are stored as hashes and expire. The database connection uses verified TLS in production. Access to production data is limited as described in "Who can access your data inside Tableverse". No system is perfectly secure. If we learn of a breach affecting your data, we will notify the relevant supervisory authority and, where the GDPR requires, you.
 
 ## Changes to this notice
 

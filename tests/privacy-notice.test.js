@@ -135,4 +135,41 @@ test('the superseded draft says it is superseded and points to the live notice',
   assert.ok(draft.includes('lib/legal/privacy.md'));
 });
 
+test('owner-confirmed facts (2026-11-17): owner-only production access, no other admin accounts', () => {
+  assert.ok(notice.includes('The owner is the only person with routine, authorised access to player data in production.'));
+  assert.ok(notice.includes('No other person holds an administrator account for production.'));
+  assert.equal(/admin role/i.test(notice), false, 'the notice does not describe the code role as staff access');
+});
+
+test('owner-confirmed facts: Render logs up to 7 days and Neon point-in-time history 6 hours', () => {
+  assert.ok(notice.includes('These logs are kept for up to 7 days.'));
+  assert.ok(notice.includes('**Operational logs held by our hosting provider**: kept for up to 7 days.'));
+  assert.ok(notice.includes('Neon keeps point-in-time restore history for 6 hours'));
+  assert.equal(notice.split('\n').some((line) => /\blogs\b/i.test(line) && /30 days/.test(line)), false, 'no 30-day log period remains');
+  assert.ok(read('docs/OPERATIONS_RUNBOOK.md').includes('point-in-time restore history is **6 hours**'));
+});
+
+test('owner-confirmed facts: no promotional or owner broadcast e-mail is sent during the beta', () => {
+  assert.ok(notice.includes('No owner broadcast e-mails are sent during the beta.'));
+  assert.ok(notice.includes('none is sent during the beta'));
+});
+
+test('complaints follow GDPR Art. 77 and name no authority that the owner has not confirmed', () => {
+  assert.ok(notice.includes('lodge a complaint with a data protection supervisory authority'));
+  assert.equal(/\[LEGAL: name the competent/.test(notice), false);
+});
+
+test('the contact is only the token, and no date is filled in before publication', () => {
+  assert.equal(/playtableverse@gmail\.com/.test(notice), false);
+  assert.equal(/Last updated: 18 November 2026/.test(notice), false);
+});
+
+test('the notice marks every unresolved item that section 9 of the decisions doc lists', () => {
+  const doc = read('docs/PRIVACY_NOTICE_OWNER_DECISIONS.md');
+  assert.ok(doc.includes('## 9. Publication blockers'));
+  assert.ok(doc.includes('Guest count M-7'));
+  const markers = notice.match(/\[(OWNER|LEGAL)\b/g) || [];
+  assert.ok(markers.length > 0, 'publication stays blocked until the owner resolves the open items');
+});
+
 console.log(`\n${passed} privacy notice checks passed`);

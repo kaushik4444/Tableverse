@@ -93,7 +93,8 @@ These are kept until the account is deleted or someone deletes them by hand. No 
 1. **Guest accounts (`players.is_anonymous = TRUE`).** No route in the current code creates them: guests cannot play, because the game socket requires a signed-in session. Rows that exist can only come from earlier code. Check with a read-only count, `SELECT count(*) FROM players WHERE is_anonymous;`. If the count is above zero, decide a retention rule before inviting anyone. The unverified cleanup excludes guests by design.
 2. **Chat reports and player reports.** A report is kept indefinitely, with its reason, until the account that made it is deleted; deleting that account removes the reports it made (`ON DELETE CASCADE` on `chat_reports` and `player_reports`). A report about an account that is later deleted stays, with the account link cleared and the name at the time kept. The reported message text (up to 200 characters, chat reports only) is kept too. No retention period is set.
 3. **Finished match records.** Kept indefinitely, by design, so results stay correct. Players are told they are kept with the name `Deleted player`.
-4. **Recorded broadcasts** (subject and message history, `email_broadcasts`). No retention period found in the code.
+4. **Recorded broadcasts** (subject and message history, `email_broadcasts`). No retention period found in the code. Owner-confirmed 2026-11-17: no promotional or owner broadcast e-mail is sent during the beta, so no history is expected. A period must be set before any broadcast is used.
+5. **Chat reports and finished matches have no deletion job.** The owner's periods (12 months after a report is resolved; 24 months after a match) are not enforced, and the code has no resolved state for reports. The privacy notice keeps these periods marked until a job exists or the owner accepts indefinite retention. See `docs/PRIVACY_NOTICE_OWNER_DECISIONS.md`, section 4.
 
 ## Access and export
 
@@ -102,8 +103,8 @@ These are kept until the account is deleted or someone deletes them by hand. No 
 
 ## Third parties that hold or process data (from current configuration)
 
-- **Render**: hosts the application server and its logs (`render.yaml`). Log retention on the current plan is not verified.
-- **Neon (PostgreSQL)**: holds every table above. Backup and restore facts are recorded as unverified in `docs/OPERATIONS_RUNBOOK.md`.
+- **Render**: hosts the application server and its logs (`render.yaml`). Owner-confirmed 2026-11-17 (Render Hobby): logs are kept up to 7 days. Not verifiable in the repository. Application region Oregon, USA, owner-stated.
+- **Neon (PostgreSQL)**: holds every table above. Production region AWS Asia Pacific 1 (Singapore), owner-stated. Owner-confirmed 2026-11-17: point-in-time restore history is 6 hours. Record this in `docs/OPERATIONS_RUNBOOK.md`. Copies the owner makes by hand (`npm run db:backup`) have no retention period yet.
 - **Resend**: sends verification, password-reset and (owner-approved) broadcast e-mail. Receives the address and the message.
 - **Metered**: TURN relay for voice. Players' network addresses and relayed voice traffic pass through it when a relay is used. Voice media is encrypted between the peers; the relay still carries it.
 - **Google and Cloudflare STUN servers (`lib/voiceRelay.js`)**: receive the player's network address during voice setup.

@@ -141,7 +141,8 @@ Only with owner approval. Recovery replaces what players see; decide first, then
 ## Neon backups — what is verified and what is not
 - **Verified in code and tests:** the dump, verification and restore-rehearsal scripts above, including refusals.
 - **Owner-recorded (2026-11-06):** a branch created "from point-in-time history" matched production's `matches` row count, and the test branch was deleted. This was checked in the Neon dashboard by the owner; it was not re-run as part of this change.
-- **Manual, not yet recorded:** the plan name, whether automatic backups and point-in-time restore are included on the current plan, and the exact retention window. Record them here after checking: Neon > project > Settings. Plan: `____`. Retention window: `____`. Checked on: `____`.
+- **Owner-recorded (2026-11-17):** production point-in-time restore history is **6 hours**. This is the owner's statement from the Neon console and is not re-run here.
+- **Manual, not yet recorded:** the plan name and whether automatic backups are included on the current plan. Record them here after checking: Neon > project > Settings. Plan: `____`. Checked on: `____`.
 - Do not assume a window: free-tier history is typically short. Re-check periodically.
 
 ## Monitoring and alerts
