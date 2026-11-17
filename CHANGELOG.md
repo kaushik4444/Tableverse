@@ -7,6 +7,7 @@
 - Sign in with Google (optional, off until `GOOGLE_CLIENT_ID` is set). Google-only accounts delete with a fresh Google sign-in. "Keep me signed in" works on Google sign-in and sign-up.
 - Owner can permanently delete a stale ordinary account (typed username confirmation, audited without e-mail); Users tab filter for accounts not seen for 30+ days.
 - Leaving a game with others still playing counts as a loss, unless a second person also leaves (then the game is abandoned). Bots-only leaves do not count.
+- The third leave of one person in a game is a final penalty: rejoining inside the window still works, but it no longer removes the penalty.
 - Take your seat back within `REJOIN_GRACE_SECONDS` (default 120) of your first departure: the penalty goes. After that the bot keeps the seat.
 - Active play time: XP and `seconds_played` count only the time a person was seated and connected. A dropped connection pauses it.
 - Progress levels, per-game skill points, version history, shutdown saves leavers' losses (migration 025 and 026).

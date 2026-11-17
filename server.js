@@ -686,6 +686,9 @@ function start(opts = {}) {
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
       // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
       leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
+      // Per person: who has a penalty pending, and how many times each person has left this game. The client works out what
+      // leaving means for its own player from this (a rejoin does not reset the count; the third leave is final).
+      leaveInfo: room.status === 'playing' ? { abandoned: Boolean(room.abandoned), pending: [...(room.forfeits || [])], counts: Object.fromEntries(room.leaveCounts || []) } : null,
       rejoinWindowSeconds: Math.round(rejoinWindowMs / 1000), // how long a person who leaves may take the seat back
       now: Date.now(), // lets clients correct for clock differences
     };
@@ -1726,6 +1729,8 @@ function start(opts = {}) {
       for (const m of room.seated) if (!m.bot && isConnected(m)) startPlay(room, m.id, room.startedAt);
       room.leftEarly = new Set();
       room.forfeits = new Set();
+      room.finalForfeits = new Set();
+      room.leaveCounts = new Map();
       room.abandoned = false;
       room.deadline = null;
       room.waiting = [];
