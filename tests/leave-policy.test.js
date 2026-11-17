@@ -253,5 +253,207 @@ test('the leave prompt state for a player: others pending means abandons; their 
 });
 
 
+// Repeat real departures/reclaims rather than the legacy rejoin() helper above:
+// that helper intentionally clears every penalty and cannot model a final leave.
+function leaveThreeTimes(room, id = 'A') {
+  for (let i = 0; i < 3; i += 1) {
+    departure(room, id, 1000 + i * 2000);
+    if (i < 2) assert.equal(takeSeatBack(room, id, 2000 + i * 2000).seat, true);
+  }
+}
+
+test('reading an unknown leave count neither initialises nor changes the room', () => {
+  const r = table(['A', 'B'], []);
+  const before = structuredClone(r);
+  assert.equal(leaveCountOf(r, 'A'), 0);
+  assert.equal(leaveStateOf(r, 'A'), 'counts');
+  assert.deepEqual(r, before);
+  departure(r, 'A', 1000);
+  assert.equal(leaveCountOf(r, 'missing'), 0);
+  assert.equal(r.leaveCounts.has('missing'), false);
+});
+
+test('leave counts and deadlines belong to each player, not the table', () => {
+  const r = table(['A', 'B', 'C'], []);
+  departure(r, 'A', 1000);
+  takeSeatBack(r, 'A', 2000);
+  departure(r, 'A', 3000);
+  takeSeatBack(r, 'A', 4000);
+  departure(r, 'B', 5000);
+  assert.equal(leaveCountOf(r, 'A'), 2);
+  assert.equal(leaveCountOf(r, 'B'), 1);
+  assert.equal(leaveCountOf(r, 'C'), 0);
+  assert.equal(r.leaveDeadlines.get('A'), 1000 + WINDOW_MS);
+  assert.equal(r.leaveDeadlines.get('B'), 5000 + WINDOW_MS);
+  assert.deepEqual([...r.forfeits], ['B']);
+  assert.equal(r.finalForfeits.size, 0);
+  assert.equal(takeSeatBack(r, 'B', 6000).seat, true);
+  assert.equal(r.forfeits.size, 0);
+});
+
+test('third and later departures against bots never become final penalties', () => {
+  const r = table(['A'], ['B', 'C']);
+  for (let i = 0; i < 4; i += 1) {
+    departure(r, 'A', 1000 + i * 2000);
+    assert.equal(r.forfeits.size, 0);
+    assert.equal(r.finalForfeits.size, 0);
+    assert.equal(takeSeatBack(r, 'A', 2000 + i * 2000).seat, true);
+  }
+  assert.equal(leaveCountOf(r, 'A'), 4);
+  assert.equal(r.abandoned, false);
+  assert.equal(buildForfeitRecord(r), null);
+  assert.equal(byId(finish(r)).A.forfeit, false);
+});
+
+test('a third departure that abandons the game does not create a new final penalty', () => {
+  const r = table(['A', 'B', 'C'], []);
+  for (let i = 0; i < 2; i += 1) {
+    departure(r, 'B', 1000 + i * 2000);
+    takeSeatBack(r, 'B', 2000 + i * 2000);
+  }
+  departure(r, 'A', 5000);
+  departure(r, 'B', 6000);
+  assert.equal(leaveCountOf(r, 'B'), 3);
+  assert.equal(r.abandoned, true);
+  assert.equal(r.finalForfeits.size, 0);
+  assert.equal(buildForfeitRecord(r), null);
+  assert.ok(finish(r).participants.every((p) => !p.forfeit));
+});
+
+test('further departures in an abandoned game cannot promote pending penalties to final', () => {
+  const r = table(['A', 'B', 'C'], []);
+  departure(r, 'A', 1000);
+  departure(r, 'B', 2000);
+  const member = r.members.find((m) => m.id === 'C');
+  // Exercise bookkeeping directly: the abandoned guard must precede promotion.
+  for (let i = 0; i < 3; i += 1) {
+    assert.deepEqual(leaveRunningGame(r, member.id), { penalised: false, abandoned: true });
+  }
+  assert.equal(leaveCountOf(r, 'C'), 3);
+  assert.deepEqual([...r.forfeits], ['A']);
+  assert.equal(r.finalForfeits.size, 0);
+});
+
+for (const offset of [WINDOW_MS, WINDOW_MS + 1]) {
+  test(`a final leaver reclaiming at window offset ${offset} preserves the original deadline and penalty`, () => {
+    const r = table(['A', 'B'], ['C']);
+    leaveThreeTimes(r);
+    const deadline = 1000 + WINDOW_MS;
+    const decision = takeSeatBack(r, 'A', 1000 + offset);
+    assert.equal(decision.seat, offset === WINDOW_MS);
+    assert.equal(decision.reason, offset === WINDOW_MS ? 'in-time' : 'expired');
+    assert.equal(r.members[0].bot, offset !== WINDOW_MS);
+    assert.equal(r.leftEarly.has('A'), true);
+    assert.deepEqual([...r.forfeits], ['A']);
+    assert.deepEqual([...r.finalForfeits], ['A']);
+    assert.equal(leaveCountOf(r, 'A'), 3);
+    assert.equal(r.leaveDeadlines.get('A'), deadline);
+  });
+}
+
+for (const state of ['abandoned', 'finished']) {
+  test(`a refused final leaver reclaim in a ${state} game changes no state`, () => {
+    const r = table(['A', 'B', 'C'], []);
+    leaveThreeTimes(r);
+    if (state === 'abandoned') departure(r, 'B', 6000);
+    else r.status = 'finished';
+    const before = structuredClone(r);
+    assert.deepEqual(takeSeatBack(r, 'A', 7000), {
+      seat: false, reason: state === 'abandoned' ? 'abandoned' : 'not-playing',
+    });
+    assert.deepEqual(r, before);
+  });
+}
+
+test('a returned final leaver cannot win or draw and is recorded as a human forfeit', () => {
+  const r = table(['A', 'B'], ['C']);
+  leaveThreeTimes(r);
+  assert.equal(takeSeatBack(r, 'A', 6000).seat, true);
+  const rec = buildMatchRecord(r, { results: () => [
+    { score: 99, winner: true, draw: true }, { score: 10 }, { score: 0 },
+  ] });
+  const a = byId(rec).A;
+  assert.equal(a.forfeit, true);
+  assert.equal(a.leftEarly, true);
+  assert.equal(a.isBot, false);
+  assert.equal(a.isWinner, false);
+  assert.equal(a.isDraw, false);
+  assert.equal(a.score, 99, 'the game score remains available despite the loss');
+  assert.equal(rec.tableHumans, 2);
+  assert.equal(rec.tableBots, 1);
+  assert.equal(byId(rec).B.leftEarly, false);
+});
+
+test('a returned final leaver remains in a finished abandoned record while stayers are excluded', () => {
+  const r = table(['A', 'B', 'C'], ['D']);
+  leaveThreeTimes(r);
+  takeSeatBack(r, 'A', 6000);
+  departure(r, 'B', 7000);
+  const players = byId(finish(r));
+  assert.deepEqual(Object.keys(players), ['A', 'B', 'D']);
+  assert.equal(players.A.forfeit, true);
+  assert.equal(players.A.isBot, false);
+  assert.equal(players.A.leftEarly, true);
+  assert.equal(players.A.isWinner, false);
+  assert.equal(players.B.forfeit, false);
+  assert.equal(players.D.isBot, true);
+});
+
+for (const abandoned of [false, true]) {
+  test(`closing a table after a final leaver returns records only their loss (abandoned=${abandoned})`, () => {
+    const r = table(['A', 'B', 'C'], ['D']);
+    leaveThreeTimes(r);
+    takeSeatBack(r, 'A', 6000);
+    if (abandoned) departure(r, 'B', 7000);
+    // Use shuffled seat order: records must keep the game seat, not the member index.
+    r.seated = [r.members[1], r.members[2], r.members[0], r.members[3]];
+    const rec = buildForfeitRecord(r);
+    assert.equal(rec.completed, false);
+    assert.equal(rec.matchKey, r.matchKey);
+    assert.equal(rec.tableHumans, 3);
+    assert.equal(rec.tableBots, 1);
+    assert.deepEqual(rec.participants.map((p) => p.playerId), ['A']);
+    const a = rec.participants[0];
+    assert.equal(a.seat, 2);
+    assert.equal(a.forfeit, true);
+    assert.equal(a.leftEarly, true);
+    assert.equal(a.isBot, false);
+    assert.equal(a.isWinner, false);
+    assert.equal(a.isDraw, false);
+    assert.equal(a.score, 0);
+    const before = structuredClone(r);
+    buildForfeitRecord(r);
+    assert.deepEqual(r, before, 'building a record does not consume final penalties');
+    r.matchKey = null;
+    assert.equal(buildForfeitRecord(r), null, 'a final penalty still requires a match identity');
+  });
+}
+
+test('shutdown preserves a final penalty from an abandoned running game', () => {
+  const { buildShutdownForfeitRecords } = require('../db/matchRecord');
+  const r = table(['A', 'B', 'C'], []);
+  leaveThreeTimes(r);
+  takeSeatBack(r, 'A', 6000);
+  departure(r, 'B', 7000);
+  const records = buildShutdownForfeitRecords([r]);
+  assert.equal(records.length, 1);
+  assert.deepEqual(records[0].participants.map((p) => p.playerId), ['A']);
+  assert.equal(records[0].participants[0].forfeit, true);
+  assert.equal(records[0].completed, false);
+});
+
+test('prompt state checks every pending player and gives abandonment priority without mutation', () => {
+  const r = table(['A', 'B', 'C'], []);
+  r.forfeits = new Set(['A', 'B']);
+  const before = structuredClone(r);
+  assert.equal(leaveStateOf(r, 'A'), 'abandons');
+  assert.equal(leaveStateOf(r, 'B'), 'abandons');
+  assert.equal(leaveStateOf(r, 'C'), 'abandons');
+  assert.deepEqual(r, before);
+  r.abandoned = true;
+  assert.equal(leaveStateOf(r, 'A'), 'abandoned');
+});
+
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
