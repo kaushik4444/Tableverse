@@ -209,5 +209,19 @@ test('the plugin: id, seats, options and a lowest-wins "best" formatter', () => 
   assert.equal(g.isOver(), false);
 });
 
+test('timer: every simultaneous turn is a new batch, and the stamp is a primitive that changes once per finished turn', () => {
+  const g = setup(2, [[10], [30], [50], [70]], [[40, 41], [42, 43]]);
+  const b1 = e.viewFor(g, null).batch;
+  const s1 = def.create(people(2), {}, rngFor(4));
+  assert.equal(typeof s1.stamp(), 'number');
+  pick(g, 0, 40); pick(g, 1, 42);
+  assert.notEqual(e.viewFor(g, null).batch, b1, 'the next turn is a new batch even though the same players are awaited');
+  const t = def.create(people(2), {}, rngFor(4));
+  const before = t.stamp();
+  const [a, b] = ['p0', 'p1'];
+  t.act(a, t.botAction(a)); assert.equal(t.stamp(), before, 'a single pick does not change it');
+  t.act(b, t.botAction(b)); assert.notEqual(t.stamp(), before, 'a finished turn does');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

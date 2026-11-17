@@ -91,6 +91,7 @@
     ui.ctx = ctx;
     ui.latest = v;
     react(v);
+    const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);
     root.innerHTML = `
     <div class="wz pr">
@@ -107,6 +108,7 @@
       ${overlayHTML(v)}
     </div>`;
     root.onclick = onClick;
+    if (focused) { const el = root.querySelector(`.pr-hand [data-n="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
   }
 
   function onClick(e) {

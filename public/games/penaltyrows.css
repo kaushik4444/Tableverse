@@ -6,7 +6,8 @@
 .pr .pr-card.pen2 { background: #ffe9a8; }
 .pr .pr-card.pen3 { background: #ffc97a; }
 .pr .pr-card.pen5 { background: #ff9d7a; }
-.pr .pr-card.pen6, .pr .pr-card.pen7 { background: #f26b6b; color: #fff; }
+.pr .pr-card.pen6, .pr .pr-card.pen7 { background: #f26b6b; color: #111; }
+.pr .pr-card i { opacity: 1; }
 .pr .pr-card.tiny { display: inline-grid; width: 30px; vertical-align: middle; }
 .pr .pr-card.tiny b { font-size: 13px; }
 .pr .pr-rows { display: grid; gap: 6px; margin-top: 8px; }
