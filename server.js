@@ -483,7 +483,7 @@ function start(opts = {}) {
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
     if (rel === '/api/games') {
-      return sendJson(res, 200, { ok: true, games: gameListFor(games.list()), tables: publicTables(), announcement, ...legalFlags });
+      return sendJson(res, 200, { ok: true, games: gameListFor(games.list()), tables: publicTables(), announcement, guestPlay: guestPolicy.guestPlayEnabled(env), ...legalFlags });
     }
     if (rel.includes('\0')) {
       res.writeHead(400);
