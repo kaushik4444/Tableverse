@@ -680,7 +680,7 @@ function start(opts = {}) {
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
       members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m), standIn: isStandIn(room, m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
-      outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
+      outcome: room.status === 'finished' && room.outcome ? { id: room.outcome.at, winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
@@ -1630,7 +1630,9 @@ function start(opts = {}) {
       const gameId = room.gameId;
       const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
       (async () => {
-        await matchQueue.drain(3000); // this game's own record may still be on its way to the database
+        const matchId = room.outcome.at;
+        const flushed = await matchQueue.drain(3000); // this game's own record may still be on its way to the database
+        if (flushed === false) throw new Error('this game is not saved yet');
         const totals = {};
         await Promise.all(ids.map(async (id) => {
           const progress = await dbMatches.getProgress(id);
@@ -1638,7 +1640,7 @@ function start(opts = {}) {
         }));
         return totals;
       })().then(
-        (totals) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, totals }),
+        (totals) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, totals }),
         (err) => {
           console.error('[server] game totals failed:', err.message);
           sendError(p, 'Game totals are unavailable right now');

@@ -22,7 +22,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by {{IMP
 
 **For all signed-in accounts:**
 - Your match results: the games you finished, your seat, your score and your position. You can see your full history. Your public profile shows your username, display name, avatar, join date, win totals, your level, and your XP and games played in each game.
-- Your level and your game XP. These are calculated from your finished games. They are shown on your profile, on your public profile, and on your player card when you sit at a table. Time played and leave counts are not shown publicly.
+- Your level and your game XP. These are calculated from your finished games. They are shown on your profile, on your public profile, and on your player card when you sit at a table. When a game you played finishes, your lifetime XP in that game is also shown to the other people at that table. Time played and leave counts are not shown publicly.
 - The weekly board, if you turn it on. It is off by default. When it is on, your display name and your game XP in that game are shown to all players for the last 7 days.
 - Your friends, friend requests, blocks, and tables you have recently visited.
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).

@@ -17,6 +17,8 @@
   const sortValue = (cell) => {
     const raw = (cell.dataset.v != null ? cell.dataset.v : cell.textContent).replace(/\s+/g, ' ').trim();
     if (EMPTY.has(raw)) return null;
+    const dur = /^([\d.]+)\s*(h|min)$/.exec(raw);
+    if (dur) return { n: Number(dur[1]) * (dur[2] === 'h' ? 60 : 1) };
     const bare = raw.replace(/[%+,·]|XP/g, '').replace(/−/g, '-').trim();
     if (bare !== '' && /^-?\d*\.?\d+$/.test(bare)) return { n: Number(bare) };
     if (/\b\d{4}\b/.test(raw) && !Number.isNaN(Date.parse(raw))) return { n: Date.parse(raw) };

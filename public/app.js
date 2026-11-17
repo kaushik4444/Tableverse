@@ -1270,7 +1270,7 @@
         break;
       case 'gameTotals':
         // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
-        if (S.room && S.room.code === m.code) { S.gameTotals = { code: m.code, totals: m.totals || {} }; render(); }
+        if (S.room && S.room.code === m.code) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
         break;
       case 'error':
         toast(m.message);
@@ -2959,7 +2959,7 @@
       }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       // Lifetime game XP comes from the server once per finished game (the table's own game only)
-      const gotTotals = S.gameTotals && S.gameTotals.code === r.code ? S.gameTotals.totals : null;
+      const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.totals : null;
       if (xpRows.length && !gotTotals && !f.totalsAsked) { f.totalsAsked = true; send({ t: 'gameTotals' }); }
       if (xpRows.length && !$app.querySelector('.end-xp')) {
         const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals);
