@@ -141,6 +141,14 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 
 `ADMIN_OWNER_ID`, `ADMIN_OWNER_EMAIL` (owner bootstrap), `ANALYTICS_ENABLED` (`0` disables). E-mail: `PUBLIC_APP_URL` (needed for promotional mail), `RL_BROADCAST_LIMIT` (queued sends per owner per day, default 20), `RL_UNSUBSCRIBE_IP_LIMIT`. Rate limits can be tuned with `RL_ADMIN_IP_LIMIT`, `RL_ADMIN_PLAYER_LIMIT`, `RL_ANNOUNCE_IP_LIMIT`, `RL_FEEDBACK_IP_LIMIT`, `RL_FEEDBACK_PLAYER_LIMIT`. `ANNOUNCEMENT_CACHE_MS` changes the 15 s banner cache (tests use 0).
 
+## Player directory sorting
+
+The Players tab can be sorted by any visible column: Player, Games, Wins, Win rate, Left early (rate), Played and Last seen. A header button sorts its column in its default direction; clicking the active header flips it. The request adds `dir=asc|desc` only when a header chose a direction. The preset sort buttons (Last seen, Newest, Games, Wins, Time played, Left early count) are unchanged. Sort keys are a fixed server-side map, so no request text reaches the SQL.
+
+The Users tab sorts on the server too (Player, Role, Verified, Joined, Last seen; `sort` and `dir` on `GET /api/admin/users`). The other tables (Insights, Games, Announcements, Logs, Audit log, E-mail history) sort in the page: their rows are drawn in full, so a header click reorders the rows already on screen. Paged or limited tables (Users, Audit log, E-mail history, Logs) are marked `data-paged`, and the player directory is marked `data-server-sort`; the page-sorter leaves those alone.
+
+The player directory's Level column shows the level for the players on the current page only (one progress read each). It is not a sort key.
+
 ## Not included (limits of the free beta)
 
 - No owner transfer in the UI, no two-factor step for admins, no e-mail alerts.
@@ -160,3 +168,13 @@ The game server counts, per day, how many connections opened in each UTC hour (`
 ## First-login welcome
 
 `players.welcomed_at` (migration 027) records when an account has seen the welcome dialog. `GET /api/auth/session` returns `welcome: true` only while it is still NULL. The dialog is shown once after sign-in, and it is marked seen when it opens (`POST /api/me/welcome-seen`, signed in, CSRF header). Accounts that existed before the migration were marked as seen, so only new accounts see it.
+
+## Game switches (owner only)
+
+The Games tab lists each game with an on/off switch. The owner can turn any game off and on at any time, without a redeploy.
+
+- **Off** keeps the game on the home page, greyed out and locked ("Unavailable right now"). New tables, starts and rematches of that game are refused by the server. Games already in progress finish normally.
+- **On** is the default for every game. No row in `game_flags` means on.
+- Changes are stored in `game_flags` (migration `029_game_flags.sql`) and written to the audit log (`game.switch`). The server re-reads the switches every 15 seconds and applies a change in its own process at once.
+- Only the owner can change a switch. Admins can read the list. The server checks the role on every change, not only the UI.
+- Code: `lib/gameFlags.js` (the snapshot and the rule), `lib/adminRoutes.js` (`GET` and `POST /api/admin/game-flags`), `db/admin.js` (`listGameFlags`, `setGameFlag`), `tests/game-flags.test.js`.

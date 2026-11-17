@@ -30,10 +30,18 @@ Limits:
 
 Google-only accounts delete through **Google confirmation**, which needs only a configured `GOOGLE_CLIENT_ID`. It does not depend on the privacy notice being live. The privacy notice gates only the offer of Google **sign-in and account creation**: `googleAllowed` in `server.js` controls the sign-in routes and the `enabled` flag of `GET /api/auth/google/config`. The deletion verifier is created whenever the client ID is set, and the config reports `deleteConfirm: true` in that case. The page's Content Security Policy allows Google's script whenever the client ID is set, and the page loads it only for sign-in (when offered) or for confirming a deletion.
 
-Consequence: an existing Google-only account can always delete itself in the app while the client ID is set. If the client ID is removed, Google confirmation is unavailable and no in-app route remains. That is a release decision for the owner, see the manual route below.
+Consequence: an existing Google-only account can delete itself in the app while the client ID is set, but only from a signed-in session: while the privacy notice is unpublished, a signed-out Google-only account cannot reach the in-app deletion dialog. If the client ID is removed, Google confirmation is unavailable and no in-app route remains. That is a release decision for the owner, see the manual route below.
 
-**Manual deletion is not an available route while the legal pages are unpublished.** In that state the app does not display the support address: `/impressum.html`, `/privacy` and `/terms` return 404, and the support page is not published in the app. Do not tell Google-only users to contact `IMPRESSUM_EMAIL` until the Impressum is published and visibly exposes that contact. Once the contact is publicly available and the owner has confirmed the inbox is monitored, a manual request may be handled as follows: the owner sends a confirmation message to the registered e-mail address and deletes the account only after receiving a reply from that address. The owner then follows the existing database-backup and recorded-approval process. A sender address alone is not proof of identity. Password reset does not provide a password for a Google-only account.
+<!-- coderabbit-ai-generated:v1 -->
 
+<!-- coderabbit-ai-generated-section:v1:94e350ae431ed86f87444b1926faf6929f887dc2f73acb317d2da832f5c903cc -->
+
+**Once the privacy notice is published and Google sign-in is enabled** (`LEGAL_PRIVACY_PUBLISHED=true` and `GOOGLE_CLIENT_ID` set on Render, both owner actions, and the notice is live after passing its publication checks: complete controller details and no unresolved `[OWNER]` or `[LEGAL]` markers), the edge case goes away: a Google-only user signs in with Google (`googleAllowed` is then true), reaches the account page, and can delete the account through the same Google confirmation. The deletion safeguard does not change: deletion still needs a fresh Google sign-in for the same identity, and the server checks it. Until both settings are on and the notice passes those checks, the edge case above applies. Nothing in this document enables either setting.
+
+**Manual deletion is available when either the live privacy notice or the published Impressum visibly exposes the contact and the owner confirms the inbox is monitored.** The privacy notice displays `{{IMPRESSUM_EMAIL}}`, resolved from `PUBLIC_CONTACT_EMAIL` (or `IMPRESSUM_EMAIL` when that is the one set), independently of the Impressum publication switch. While the Impressum is unpublished, `/impressum.html` returns 404 and its link is hidden, but a live privacy notice can still expose the contact. Do not direct users to that address until one of these pages publicly exposes it. Once the contact is publicly available and the owner has confirmed the inbox is monitored, a manual request may be handled as follows: the owner sends a confirmation message with a unique one-time code to the registered e-mail address and deletes the account only after receiving a reply from that address that quotes the code. The owner then follows the existing database-backup and recorded-approval process. A sender address alone is not proof of identity. Password reset does not provide a password for a Google-only account.
+
+
+<!-- /coderabbit-ai-generated:v1 -->
 ## What is removed when an account is deleted
 
 <!-- /coderabbit-ai-generated:v1 -->
@@ -85,7 +93,8 @@ These are kept until the account is deleted or someone deletes them by hand. No 
 1. **Guest accounts (`players.is_anonymous = TRUE`).** No route in the current code creates them: guests cannot play, because the game socket requires a signed-in session. Rows that exist can only come from earlier code. Check with a read-only count, `SELECT count(*) FROM players WHERE is_anonymous;`. If the count is above zero, decide a retention rule before inviting anyone. The unverified cleanup excludes guests by design.
 2. **Chat reports and player reports.** A report is kept indefinitely, with its reason, until the account that made it is deleted; deleting that account removes the reports it made (`ON DELETE CASCADE` on `chat_reports` and `player_reports`). A report about an account that is later deleted stays, with the account link cleared and the name at the time kept. The reported message text (up to 200 characters, chat reports only) is kept too. No retention period is set.
 3. **Finished match records.** Kept indefinitely, by design, so results stay correct. Players are told they are kept with the name `Deleted player`.
-4. **Recorded broadcasts** (subject and message history, `email_broadcasts`). No retention period found in the code.
+4. **Recorded broadcasts** (subject and message history, `email_broadcasts`). No retention period found in the code. Owner-confirmed 2026-11-17: no promotional or owner broadcast e-mail is sent during the beta, so no history is expected. A period must be set before any broadcast is used.
+5. **Chat reports and finished matches have no deletion job.** The owner's periods (12 months after a report is resolved; 24 months after a match) are not enforced, and the code has no resolved state for reports. The privacy notice keeps these periods marked until a job exists or the owner accepts indefinite retention. See `docs/PRIVACY_NOTICE_OWNER_DECISIONS.md`, section 4.
 
 ## Access and export
 
@@ -94,8 +103,8 @@ These are kept until the account is deleted or someone deletes them by hand. No 
 
 ## Third parties that hold or process data (from current configuration)
 
-- **Render**: hosts the application server and its logs (`render.yaml`). Log retention on the current plan is not verified.
-- **Neon (PostgreSQL)**: holds every table above. Backup and restore facts are recorded as unverified in `docs/OPERATIONS_RUNBOOK.md`.
+- **Render**: hosts the application server and its logs (`render.yaml`). Owner-confirmed 2026-11-17 (Render Hobby): logs are kept up to 7 days. Not verifiable in the repository. Application region Oregon, USA, owner-stated.
+- **Neon (PostgreSQL)**: holds every table above. Production region AWS Asia Pacific 1 (Singapore), owner-stated. Owner-confirmed 2026-11-17: point-in-time restore history is 6 hours. Record this in `docs/OPERATIONS_RUNBOOK.md`. Copies the owner makes by hand (`npm run db:backup`) have no retention period yet.
 - **Resend**: sends verification, password-reset and (owner-approved) broadcast e-mail. Receives the address and the message.
 - **Metered**: TURN relay for voice. Players' network addresses and relayed voice traffic pass through it when a relay is used. Voice media is encrypted between the peers; the relay still carries it.
 - **Google and Cloudflare STUN servers (`lib/voiceRelay.js`)**: receive the player's network address during voice setup.

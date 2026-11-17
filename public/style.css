@@ -398,6 +398,8 @@ html { scroll-behavior: auto; }
 @media (min-width: 640px) { .game-grid { grid-template-columns: 1fr 1fr; } }
 .game-card { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--panel-line); border-radius: 18px; background: var(--panel); border-left: 4px solid var(--accent, #7b4bd0); transition: border-color .15s, background .15s; }
 .game-card:hover { background: rgba(255, 255, 255, .07); }
+.game-card.is-locked { opacity: .55; filter: grayscale(.85); }
+.game-card .game-off { margin: 0; font-size: 14px; font-weight: 600; }
 .game-card .game-art { font-size: 34px; line-height: 1; width: 48px; flex: none; text-align: center; padding-top: 2px; }
 .game-card .game-body { display: grid; gap: 6px; min-width: 0; flex: 1; }
 .game-card h3 { font-size: 19px; }
@@ -474,6 +476,7 @@ html { scroll-behavior: auto; }
 .pcard-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
 .pcard-stats > div { text-align: center; padding: 8px 4px; border-radius: 12px; background: var(--panel); }
 .pcard-stats b { display: block; font-size: 20px; }
+.pcard-xp { margin: -4px 0 14px; text-align: center; font-size: 14px; opacity: .85; }
 .pcard-stats span { font-size: 12px; color: var(--muted); }
 .pcard-actions { display: grid; gap: 8px; margin-top: 12px; }
 .pcard-actions .btn { width: 100%; justify-content: center; }

@@ -8,15 +8,22 @@ penalty), `lib/playTime.js` (active play time), `db/matchRecord.js` (what is sto
 - With other people still playing, leaving asks first. A bot takes the seat and the others keep playing.
 - If the game finishes without a second person leaving, the leaver's result is a **loss** (and the game penalty, see
   `docs/PROGRESS_LEVELS.md`). Against bots only, leaving is not penalised.
-- A second person leaving while a penalty is pending **abandons** the game: nobody is penalised, the people who stayed get
-  no result, and nobody can take a seat back in it.
+- A second person leaving while a penalty is pending **abandons** the game: no first or second leave is penalised, the people
+  who stayed get no result, and nobody can take a seat back in it. A third leave is final and stays penalised, even when it is
+  the leave that abandons the game.
+- **Counting leaves:** each time a person leaves the same game counts, and taking the seat back does not reset the count.
+  - Their **first and second** leave are pending penalties. Taking the seat back inside the window removes them.
+  - Their **third** leave in the game is **final**: the penalty is applied directly and stays even after they come back, and
+    it is still written if the game is abandoned later by someone else. Coming back inside the window is still allowed.
+  - Further leaves by the same person are final too and never abandon the game by themselves.
 
 ## The rejoin window
 - A person who leaves on purpose can take their own seat back during a window of **2 minutes** by default. Set it with
   `REJOIN_GRACE_SECONDS` (0 to 600; a missing or invalid value uses 120).
 - The window starts at the **first** departure of that person in that game. Leaving and rejoining again does not restart
   it, so repeated attempts cannot extend it. The deadline itself is still in time; one millisecond after is too late.
-- Taking the seat back within the window removes the pending penalty (it was only pending) and play resumes.
+- Taking the seat back within the window removes the pending penalty of a first or second leave, and play resumes. A
+  final (third) penalty is not removed.
 - After the window, the bot keeps the seat for the rest of the game and the penalty stands. The person may still watch as
   a spectator. Once a window has passed it cannot be reopened.
 - A game can only be rejoined while it is running and not abandoned.

@@ -38,7 +38,7 @@
   function scoreHTML(v) {
     return `<ul class="pr-score" aria-label="Scores">${v.players.map((p, i) => {
       const state = v.phase === 'takeRow' && v.pending && v.pending.by === i ? '⚠' : (p.picked ? '✓' : '…');
-      return `<li class="${i === v.me ? 'me' : ''}"><span class="pr-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span>`
+      return `<li data-pid="${esc(p.id)}" class="${i === v.me ? 'me' : ''}"><span class="pr-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span>`
         + `<span class="pr-tot" title="Total penalty points">${p.total}<small>/${v.target}</small></span>`
         + `<span class="pr-rnd" title="Taken this round">+${p.penalty}</span><span class="pr-state" aria-label="${state === '⚠' ? 'must take a row' : p.picked ? 'has picked' : 'still choosing'}">${state}</span></li>`;
     }).join('')}</ul>`;
@@ -94,7 +94,7 @@
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);
     root.innerHTML = `
-    <div class="wz pr">
+    <div class="wz prt">
       <div class="wz-top">
         <div class="wz-round"><b>Penalty Rows</b><span class="label"> · round ${v.round} · turn ${v.turn}/${v.handSize}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-pr="rules">Rules</button>', 'pr')}

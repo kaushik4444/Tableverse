@@ -90,3 +90,5 @@ section.ad-card + section.ad-card { margin-top: 16px; }
 .ad-key{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
 .ad-key.r{margin-left:10px}
 .ad-chart details{margin-top:6px}
+.ad-sortbtn { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; white-space: nowrap; }
+.ad-sortbtn:hover, .ad-sortbtn:focus-visible { text-decoration: underline; }

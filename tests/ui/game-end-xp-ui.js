@@ -69,11 +69,11 @@ function finishedTable(gameId, n) {
               sideways: document.documentElement.scrollWidth > innerWidth + 1,
               names: [...document.querySelectorAll('.xp-name')].length,
               // Two amounts side by side, labelled, and never a combined total (there is no total element or heading)
+              // one table: no progress cards, and the headers are the game's skill XP and its lifetime
               cards: document.querySelectorAll('.end-xp .xp-card').length,
-              kinds: [...document.querySelectorAll('.end-xp .xp-kind')].map((k) => k.textContent.trim()),
+              progressShown: /Player Progress/.test(document.querySelector('.end-xp')?.textContent || ''),
+              headers: [...document.querySelectorAll('.end-xp .xp-th [role=columnheader]')].map((h) => h.textContent.trim()),
               noTotal: !document.querySelector('.end-xp .xp-total, .end-xp .xp-bar') && !/XP this game/.test(document.querySelector('.end-xp')?.textContent || ''),
-              // Ludo's podium rule (.ludo-end b, 18px) must not shrink the amounts' own size
-              numberSizes: [...document.querySelectorAll('.end-xp .xp-num')].map((n) => getComputedStyle(n).fontSize),
               nameWide: [...document.querySelectorAll('.xp-name')].every((n) => { const b = n.getBoundingClientRect(); return b.width > 0 && b.height < 30; }), // a name is a line of text, not a 22px circle
             };
           });
@@ -84,10 +84,11 @@ function finishedTable(gameId, n) {
           assert.ok(r.leaveVisible, 'the Leave game action is on screen');
           assert.equal(r.sideways, false, 'no sideways scroll');
           assert.ok(r.names >= 1, 'the XP rows render');
-          assert.equal(r.cards, 2, 'two amounts: Player Progress and the game');
-          assert.ok(r.kinds.some((k) => /Player Progress/.test(k)) && r.kinds.some((k) => /Experience/.test(k)), 'both amounts are labelled: ' + r.kinds.join(' | '));
+          assert.equal(r.cards, 0, 'no progress cards on the game-over screen');
+          assert.equal(r.progressShown, false, 'Player Progress is not shown on the game-over screen');
+          assert.equal(r.headers.length, 3, 'table has Player, this game and lifetime columns: ' + r.headers.join(' | '));
+          assert.ok(/Lifetime/.test(r.headers[2]), 'the third column is the lifetime game XP: ' + r.headers.join(' | '));
           assert.equal(r.noTotal, true, 'there is no combined total on the game-over card');
-          assert.ok(r.numberSizes.length >= 2 && r.numberSizes.every((f) => f !== '18px'), 'the amounts keep their own size, not the podium size: ' + r.numberSizes.join(','));
           assert.ok(r.nameWide, 'the XP names keep their width');
           passed++; console.log('  ok  ' + name);
         } finally { await ctx.close(); }

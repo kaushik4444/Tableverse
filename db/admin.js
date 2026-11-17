@@ -116,7 +116,17 @@ async function setRole({ actorId, targetId, role }) {
   });
 }
 
-async function listUsers({ q = '', page: p = 1, staleDays = 0 } = {}) {
+// Column sorts for the users list. Fixed expressions only: no request text reaches the SQL. `verified` is the output alias.
+const USER_SORTS = {
+  joined: { by: 'p.created_at', dir: 'DESC' },
+  seen: { by: 'COALESCE(p.last_seen_at, p.created_at)', dir: 'DESC' },
+  name: { by: 'LOWER(p.display_name)', dir: 'ASC' },
+  role: { by: 'p.role', dir: 'ASC' },
+  verified: { by: 'verified', dir: 'DESC' },
+};
+async function listUsers({ q = '', page: p = 1, staleDays = 0, sort = '', dir = '' } = {}) {
+  const key = Object.hasOwn(USER_SORTS, sort) ? sort : '';
+  const direction = dir === 'asc' ? 'ASC' : dir === 'desc' ? 'DESC' : (key ? USER_SORTS[key].dir : '');
   const term = String(q || '').trim().slice(0, 40);
   const days = Math.min(3650, Math.max(0, Math.floor(Number(staleDays)) || 0));
   const conds = [];
@@ -133,11 +143,11 @@ async function listUsers({ q = '', page: p = 1, staleDays = 0 } = {}) {
     `SELECT p.id, p.username, p.display_name, p.role, p.is_anonymous, p.country, p.created_at, p.last_seen_at, p.suspended_at,
             EXISTS (SELECT 1 FROM auth_identities i WHERE i.player_id = p.id AND i.email_verified_at IS NOT NULL) AS verified
        FROM players p ${where}
-      ORDER BY ${days ? 'COALESCE(p.last_seen_at, p.created_at) ASC' : 'p.created_at DESC'}, p.id
+      ORDER BY ${key ? `${USER_SORTS[key].by} ${direction}` : days ? 'COALESCE(p.last_seen_at, p.created_at) ASC' : 'p.created_at DESC'}, p.id
       LIMIT ${PAGE} OFFSET $${args.length + 1}`,
     [...args, pg * PAGE]
   );
-  return { total, pageSize: PAGE, page: pg + 1, users: r.rows };
+  return { total, pageSize: PAGE, page: pg + 1, users: r.rows, sort: key, dir: key ? direction.toLowerCase() : '' };
 }
 
 async function signOutUser({ actorId, targetId }) {
@@ -510,10 +520,31 @@ async function purge() {
   };
 }
 
+// ---------------------------------------------------------------- game switches (owner)
+/** Every explicit switch: { game_id, enabled, updated_at }. A game without a row is enabled (lib/gameFlags.js). */
+async function listGameFlags() {
+  return (await db.query('SELECT game_id, enabled, updated_at FROM game_flags')).rows;
+}
+
+/** Turns one game on or off. Audited in the same transaction. */
+async function setGameFlag({ actorId, gameId, enabled }) {
+  await db.withTransaction(async (c) => {
+    // Only a real change is written and audited: repeating the same value leaves no second entry.
+    const r = await c.query(
+      `INSERT INTO game_flags (game_id, enabled, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
+       ON CONFLICT (game_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+       WHERE game_flags.enabled IS DISTINCT FROM EXCLUDED.enabled
+       RETURNING game_id`,
+      [gameId, Boolean(enabled), actorId]
+    );
+    if (r.rows.length) await audit(c, { actorId, action: 'game.switch', targetType: 'game', targetId: gameId, detail: { enabled: Boolean(enabled) } });
+  });
+}
+
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health, gameStats,
+  addCounters, addActive, forgetActor, overview, health, gameStats, listGameFlags, setGameFlag,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)

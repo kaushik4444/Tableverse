@@ -1,6 +1,8 @@
 # Tableverse privacy notice — BETA DRAFT
 
-**Status: DRAFT for the limited beta. Not approved for publication, and not shown in the app. Requires the owner's written approval of each open question listed at the end before publication (no lawyer review is planned; see the list at the end). The beta decisions it reflects are in `docs/STAGE_20_6_BETA_READINESS.md`.**
+> **Superseded (2026-11-17).** The text the app publishes is `lib/legal/privacy.md`, rewritten from the owner's decisions. The owner decisions, the code check behind them and the open items are in `docs/PRIVACY_NOTICE_OWNER_DECISIONS.md`. This draft is kept only as the history of the earlier questions. Do not copy wording from it; where the two differ, `lib/legal/privacy.md` and the code win.
+
+**Status (earlier draft): DRAFT for the limited beta. Not approved for publication, and not shown in the app. Requires the owner's written approval of each open question listed at the end before publication (no lawyer review is planned; see the list at the end). The beta decisions it reflects are in `docs/STAGE_20_6_BETA_READINESS.md`.**
 
 This draft is written from what the Tableverse code does today (`main`, 2026-11-10). Where a fact is not verified, the text says so, or leaves a placeholder in square brackets for the owner to complete. Details of retention and deletion are in `docs/ACCOUNT_DELETION_AND_RETENTION.md`.
 
@@ -15,7 +17,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by [OWNE
 - A password. It is stored only as a one-way hash.
 - A username, a display name and an avatar. The username and display name are visible to other players.
 - The date you joined and the last time you were seen online.
-- Your match results: the games you finished, your seat, your score and your position. You can see your full history. Your public profile shows only your username, display name, avatar, join date and games played, wins and win rate.
+- Your match results: the games you finished, your seat, your score and your position. You can see your full history. Your public profile shows your username, display name, avatar, join date, games played, wins, win rate, your level, and your XP and games played in each game.
 - Your friends, friend requests, blocks, and tables you have recently visited.
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 
