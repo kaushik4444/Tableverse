@@ -20,6 +20,10 @@ const HAND = 10;
 const START_ROWS = 4;
 const ROW_LIMIT = 5; // a row holds five cards: the sixth takes it
 const TARGETS = { short: 35, standard: 66, long: 100 };
+const TARGETS_SIMPLE = { short: 20, standard: 35, long: 50 }; // with one point per card the totals grow about half as fast
+const ROW_SIZES = [4, 5, 6];
+const HAND_SIZES = [6, 8, 10];
+const PACE = { relaxed: 1.35, normal: 1, quick: 0.6 }; // how long the table lingers on each step, as a factor
 const MAX_PLAYERS = 8;
 
 /** Penalty points of a card: 1, plus 1 for a multiple of 5, 1 more for a multiple of 10, 4 more for 11, 22, ... 99. */
@@ -30,29 +34,46 @@ function penaltyOf(n) {
   if (n % 11 === 0) p += 4;
   return p;
 }
-const card = (n) => ({ n, p: penaltyOf(n) });
+const card = (n, simple) => ({ n, p: simple ? 1 : penaltyOf(n) });
 const sum = (cards) => cards.reduce((s, c) => s + c.p, 0);
 const lastOf = (row) => row[row.length - 1];
 
-function shuffledDeck(rng) {
-  const d = Array.from({ length: DECK }, (_, i) => card(i + 1));
+function shuffledDeck(rng, simple) {
+  const d = Array.from({ length: DECK }, (_, i) => card(i + 1, simple));
   for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
   return d;
 }
 
+/** A public event for the floating feed (kind decides the icon). */
+function say(g, by, text, kind) {
+  g.logN += 1;
+  g.log.push({ n: g.logN, by, card: text, kind });
+  if (g.log.length > 40) g.log.shift();
+}
+const pts = (n) => `${n} point${n === 1 ? '' : 's'}`;
 const indexOf = (g, id) => g.players.findIndex((p) => p.id === id);
 
 function createGame(players, options, rng = Math.random) {
   const n = players.length;
   if (n < 2 || n > MAX_PLAYERS) throw new Error(`Penalty Rows is for 2 to ${MAX_PLAYERS} players`);
-  const key = options && Object.hasOwn(TARGETS, options.target) ? options.target : 'standard';
+  const o = options || {};
+  const key = Object.hasOwn(TARGETS, o.target) ? o.target : 'standard';
+  const scoring = o.scoring === 'simple' ? 'simple' : 'standard';
+  const rowSize = ROW_SIZES.includes(Number(o.rowSize)) ? Number(o.rowSize) : ROW_LIMIT;
+  const hand = HAND_SIZES.includes(Number(o.hand)) ? Number(o.hand) : HAND;
+  const lowCard = o.lowCard === 'cheapest' ? 'cheapest' : 'choose';
+  const pace = Object.hasOwn(PACE, o.pace) ? o.pace : 'relaxed';
   const g = {
     game: 'penaltyrows',
     n,
     players: players.map((p) => ({ id: p.id, name: p.name })),
     rng,
-    options: { target: key },
-    target: TARGETS[key],
+    options: { target: key, scoring, rowSize, hand, lowCard, pace },
+    target: (scoring === 'simple' ? TARGETS_SIMPLE : TARGETS)[key],
+    simple: scoring === 'simple', rowLimit: rowSize, handSize: hand, lowCard,
+    history: [], // [{ round, penalties, totals }] one per finished round
+    log: [], logN: 0, // public events for the floating feed
+    before: [], after: [], // the rows at the start and the end of the last turn, so the table can replay it step by step
     round: 0,
     turn: 0, // 1..HAND within a round
     phase: 'choose', // choose | takeRow | gameOver
@@ -73,9 +94,9 @@ function createGame(players, options, rng = Math.random) {
 
 function startRound(g) {
   g.round += 1;
-  const deck = shuffledDeck(g.rng);
+  const deck = shuffledDeck(g.rng, g.simple);
   g.hands = g.players.map(() => []);
-  for (let k = 0; k < HAND; k++) for (let i = 0; i < g.n; i++) g.hands[i].push(deck.pop());
+  for (let k = 0; k < g.handSize; k++) for (let i = 0; i < g.n; i++) g.hands[i].push(deck.pop());
   g.hands.forEach((h) => h.sort((a, b) => a.n - b.n));
   g.rows = Array.from({ length: START_ROWS }, () => [deck.pop()]);
   g.piles = g.players.map(() => []);
@@ -115,6 +136,7 @@ function reveal(g) {
   g.reveal = g.picks.map((n, by) => ({ by, card: g.hands[by].find((c) => c.n === n) })).sort((a, b) => a.card.n - b.card.n);
   g.hands = g.hands.map((h, i) => h.filter((c) => c.n !== g.picks[i]));
   g.resolved = 0; g.lastTurn = [];
+  g.before = g.rows.map((r) => r.map((c) => ({ n: c.n, p: c.p })));
   play(g);
 }
 
@@ -127,29 +149,45 @@ function play(g) {
       const end = lastOf(g.rows[k]).n;
       if (end < r.card.n && (best < 0 || end > lastOf(g.rows[best]).n)) best = k;
     }
-    if (best < 0) { g.phase = 'takeRow'; g.pending = { by: r.by, card: r.card }; return; } // fits no row: its player chooses
-    if (g.rows[best].length >= ROW_LIMIT) {
+    if (best < 0) {
+      if (g.lowCard === 'cheapest') { // variant: the row that costs least is taken for you
+        let row = 0;
+        for (let k = 1; k < g.rows.length; k++) if (sum(g.rows[k]) < sum(g.rows[row])) row = k;
+        takeIt(g, r.by, row, r.card);
+        g.resolved += 1;
+        continue;
+      }
+      g.phase = 'takeRow'; g.pending = { by: r.by, card: r.card }; return; // fits no row: its player chooses
+    }
+    if (g.rows[best].length >= g.rowLimit) {
       const taken = g.rows[best];
       g.piles[r.by].push(...taken);
       g.rows[best] = [r.card];
-      g.lastTurn.push({ by: r.by, n: r.card.n, row: best, kind: 'sweep', took: sum(taken) });
+      g.lastTurn.push({ by: r.by, n: r.card.n, p: r.card.p, row: best, kind: 'sweep', took: sum(taken) });
+      say(g, g.players[r.by].name, `played the ${g.rowLimit + 1}th card: took row ${best + 1}, ${pts(sum(taken))}`, 'sweep');
     } else {
       g.rows[best].push(r.card);
-      g.lastTurn.push({ by: r.by, n: r.card.n, row: best, kind: 'place', took: 0 });
+      g.lastTurn.push({ by: r.by, n: r.card.n, p: r.card.p, row: best, kind: 'place', took: 0 });
     }
     g.resolved += 1;
   }
   endTurn(g);
 }
 
+/** Player `i` takes row `row`; their card starts it again. */
+function takeIt(g, i, row, card) {
+  const taken = g.rows[row];
+  g.piles[i].push(...taken);
+  g.rows[row] = [card];
+  g.lastTurn.push({ by: i, n: card.n, p: card.p, row, kind: 'take', took: sum(taken) });
+  say(g, g.players[i].name, `${card.n} fits no row: took row ${row + 1}, ${pts(sum(taken))}`, 'take');
+}
+
 function takeRow(g, i, action) {
   if (g.phase !== 'takeRow' || !g.pending) return { ok: false, error: 'Nothing to take now' };
   if (g.pending.by !== i) return { ok: false, error: 'Another player is choosing a row' };
   if (!Number.isInteger(action.row) || action.row < 0 || action.row >= g.rows.length) return { ok: false, error: 'Choose one of the rows' };
-  const taken = g.rows[action.row];
-  g.piles[i].push(...taken);
-  g.rows[action.row] = [g.pending.card];
-  g.lastTurn.push({ by: i, n: g.pending.card.n, row: action.row, kind: 'take', took: sum(taken) });
+  takeIt(g, i, action.row, g.pending.card);
   g.pending = null; g.resolved += 1; g.phase = 'choose';
   play(g);
   return { ok: true };
@@ -160,15 +198,19 @@ function endTurn(g) {
   g.reveal = []; g.resolved = 0;
   g.picks = g.players.map(() => null);
   g.seq += 1;
-  if (g.turn < HAND) { g.turn += 1; return; }
+  g.after = g.rows.map((r) => r.map((c) => ({ n: c.n, p: c.p })));
+  if (g.turn < g.handSize) { g.turn += 1; return; }
   // the round is over: score it
   const penalties = g.piles.map(sum);
   g.totals = g.totals.map((t, i) => t + penalties[i]);
   g.lastRound = { round: g.round, penalties };
+  g.history.push({ round: g.round, penalties: penalties.slice(), totals: g.totals.slice() });
+  say(g, 'Table', `Round ${g.round} is over`, 'roundEnd');
   if (Math.max(...g.totals) >= g.target) {
     const low = Math.min(...g.totals);
     g.winners = g.totals.map((t, i) => (t === low ? i : -1)).filter((i) => i >= 0);
     g.phase = 'gameOver';
+    say(g, g.winners.map((i) => g.players[i].name).join(' & '), g.winners.length > 1 ? 'share the win!' : 'wins!', 'win');
     return;
   }
   startRound(g);
@@ -183,10 +225,10 @@ function costOf(g, n) {
   }
   if (best < 0) return Math.min(...g.rows.map(sum)) + 1; // it must take the cheapest row
   const row = g.rows[best];
-  if (row.length >= ROW_LIMIT) return sum(row); // the sixth card takes the row
+  if (row.length >= g.rowLimit) return sum(row); // the sixth card takes the row
   // otherwise it is free now, but a nearly full row and a wide gap make it risky when others play in between
   const gap = n - lastOf(row).n;
-  return (row.length === ROW_LIMIT - 1 ? 1.5 : 0) + gap / 40;
+  return (row.length === g.rowLimit - 1 ? 1.5 : 0) + gap / 40;
 }
 
 function botAction(g, playerId) {
@@ -225,8 +267,14 @@ function viewFor(g, playerId) {
     phase: g.phase,
     batch: `${g.round}:${g.turn}`, // each simultaneous turn is its own batch for the time limit
     round: g.round,
-    turn: over ? HAND : g.turn,
-    handSize: HAND,
+    turn: over ? g.handSize : g.turn,
+    handSize: g.handSize,
+    rowLimit: g.rowLimit,
+    options: { ...g.options },
+    paceK: PACE[g.options.pace],
+    history: g.history.map((h) => ({ round: h.round, penalties: h.penalties.slice(), totals: h.totals.slice() })),
+    log: g.log.slice(-30),
+    before: g.before, after: g.after,
     target: g.target,
     me,
     myTurn: me >= 0 && waiting.includes(playerId),
@@ -257,4 +305,4 @@ function results(g) {
   return g.players.map((_, i) => ({ score: -g.totals[i], winner: g.phase === 'gameOver' && g.totals[i] === low }));
 }
 
-module.exports = { DECK, HAND, START_ROWS, ROW_LIMIT, TARGETS, MAX_PLAYERS, penaltyOf, createGame, applyAction, awaiting, botAction, forcedPlay, viewFor, results };
+module.exports = { DECK, HAND, START_ROWS, ROW_LIMIT, TARGETS, TARGETS_SIMPLE, ROW_SIZES, HAND_SIZES, PACE, MAX_PLAYERS, penaltyOf, createGame, applyAction, awaiting, botAction, forcedPlay, viewFor, results };
