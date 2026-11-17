@@ -22,6 +22,7 @@ const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
 const gameFlags = require('./lib/gameFlags');
+const guestPolicy = require('./lib/guestPolicy');
 const { makeAuthEmailSender } = require('./lib/email');
 const { cspFor } = require('./lib/googleAuth');
 const { createAuthRoutes } = require('./lib/authRoutes');
@@ -482,7 +483,7 @@ function start(opts = {}) {
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
     if (rel === '/api/games') {
-      return sendJson(res, 200, { ok: true, games: gameFlags.withFlags(games.list()), tables: publicTables(), announcement, ...legalFlags });
+      return sendJson(res, 200, { ok: true, games: gameListFor(games.list()), tables: publicTables(), announcement, ...legalFlags });
     }
     if (rel.includes('\0')) {
       res.writeHead(400);
@@ -565,6 +566,14 @@ function start(opts = {}) {
   // ------------------------------------------------------------ helpers
   const send = (ws, obj) => sendBounded(ws, obj, maxBufferedBytes);
   const sendError = (p, message) => send(p.ws, { t: 'error', message });
+  // Guest play policy (lib/guestPolicy.js): a guest who taps a locked game gets a code the page turns into an account dialog.
+  const guestLocked = (p, gameId) => !guestPolicy.gameAllowed({ isGuest: Boolean(p.isAnonymous), gameId, env }).allowed;
+  /** The game list with `enabled` and `guestLocked` on each entry (lib/guestPolicy.js; the page greys out guest-locked games for guests). */
+  const gameListFor = (list) => {
+    const locks = guestPolicy.lockMap(list.map((g) => g.id), env);
+    return gameFlags.withFlags(list).map((g) => ({ ...g, guestLocked: Boolean(locks[g.id]) }));
+  };
+  const sendGuestLocked = (p, gameId) => send(p.ws, { t: 'error', code: 'guest_locked', gameId, message: 'Create a free account to play this game.' });
   function notifyAccount(playerId, event) {
     const recipient = players.get(playerId);
     if (!recipient || !recipient.connected) return; // live-only; DB records remain authoritative
@@ -707,7 +716,7 @@ function start(opts = {}) {
   /** The table directory: every public lobby or running table. A block never hides a table (blocked players may share one). */
   // Sends the game list (with each game's switch) to every connected socket when a switch changes.
   function broadcastGames() {
-    const msg = { t: 'games', games: gameFlags.withFlags(games.list()) };
+    const msg = { t: 'games', games: gameListFor(games.list()) };
     for (const ws of wss.clients) send(ws, msg);
   }
 
@@ -1480,6 +1489,7 @@ function start(opts = {}) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
       if (!gameFlags.isEnabled(msg.gameId)) return sendError(p, 'That game is not available right now.');
+      if (guestLocked(p, msg.gameId)) return sendGuestLocked(p, msg.gameId);
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
@@ -1520,6 +1530,7 @@ function start(opts = {}) {
       const room = rooms.get(code);
       applyProfile(p, msg);
       if (!room) return sendError(p, `No table with code ${code || '?'}`);
+      if (guestLocked(p, room.gameId)) return sendGuestLocked(p, room.gameId);
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
@@ -1763,6 +1774,7 @@ function start(opts = {}) {
       if (!room) return;
       const def = games.get(room.gameId);
       if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.');
+      if (guestLocked(p, room.gameId)) return sendGuestLocked(p, room.gameId);
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
@@ -1823,6 +1835,7 @@ function start(opts = {}) {
       const room = hostRoom(p, 'finished');
       if (!room) return;
       if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.');
+      if (guestLocked(p, room.gameId)) return sendGuestLocked(p, room.gameId);
       // Anyone who lost access to a private table while the game was running leaves now, before the next round forms.
       await enforceAccess(room);
       if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.'); // it may have been switched off while the access check ran
@@ -1967,7 +1980,8 @@ function start(opts = {}) {
       send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
-    if (dbPool.hasDatabase() && dbAuth.isEmailVerificationRequired(env) && !auth.emailVerified) {
+    // A guest has no email to verify (its session is an is_anonymous player); the verification gate is for registered accounts.
+    if (dbPool.hasDatabase() && dbAuth.isEmailVerificationRequired(env) && !auth.emailVerified && !(auth.player && auth.player.is_anonymous)) {
       send(ws, { t: 'authRequired', ...legalFlags, message: 'Please verify your email before entering the lobby.' });
       return ws.close(1008, 'email verification required');
     }
@@ -2002,7 +2016,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: gameFlags.withFlags(games.list()), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: gameListFor(games.list()), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
