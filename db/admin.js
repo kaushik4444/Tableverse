@@ -147,7 +147,7 @@ async function listUsers({ q = '', page: p = 1, staleDays = 0, sort = '', dir = 
       LIMIT ${PAGE} OFFSET $${args.length + 1}`,
     [...args, pg * PAGE]
   );
-  return { total, pageSize: PAGE, page: pg + 1, users: r.rows, sort: key, dir: direction ? direction.toLowerCase() : '' };
+  return { total, pageSize: PAGE, page: pg + 1, users: r.rows, sort: key, dir: key ? direction.toLowerCase() : '' };
 }
 
 async function signOutUser({ actorId, targetId }) {

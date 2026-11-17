@@ -1628,9 +1628,9 @@ function start(opts = {}) {
       if (p.totalsAt && now - p.totalsAt < 1000) return;
       p.totalsAt = now;
       const gameId = room.gameId;
+      const matchId = room.outcome.at;
       const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
       (async () => {
-        const matchId = room.outcome.at;
         const flushed = await matchQueue.drain(3000); // this game's own record may still be on its way to the database
         if (flushed === false) throw new Error('this game is not saved yet');
         const totals = {};

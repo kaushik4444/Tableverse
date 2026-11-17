@@ -1270,7 +1270,7 @@
         break;
       case 'gameTotals':
         // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
-        if (S.room && S.room.code === m.code) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
+        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
         break;
       case 'error':
         toast(m.message);
