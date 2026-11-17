@@ -1,6 +1,6 @@
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:8e01bd2700931167ab0a49fe4d6afcbcbb8184cf45cb3b725440ed805818419a -->
+<!-- coderabbit-ai-generated-section:v1:230a8359faf12ba4b688798700d74c74c4e4710474ab3cc62dfd68ca96c1d2c4 -->
 
 # Tableverse privacy notice
 
@@ -71,7 +71,7 @@ We use the following providers. Some of them are located outside the European Ec
 - **Neon** (AWS Asia Pacific, Singapore): hosts the PostgreSQL database that holds account and game data. The primary database is in Singapore, which is outside the EEA. Singapore does not have an EU adequacy decision, so the transfer relies on the contractual safeguards in Neon's terms. [OWNER: confirm Neon's data processing terms and the standard contractual clauses it uses. Not verified.]
 - **GitHub** (global, including the United States): holds the source code and runs a scheduled maintenance workflow that has read access to the database (see `docs/ACCOUNT_DELETION_AND_RETENTION.md`). [OWNER: confirm GitHub's data processing terms. Not verified.]
 - **Resend** (United States): delivers verification and password-reset e-mail. [OWNER: confirm Resend's data processing terms and transfer mechanism. Not verified.]
-- **Google** (global infrastructure): provides Google sign-in, and Google confirmation for account deletion. Google receives the request needed for that step and returns your Google account details to us. Google's own privacy policy applies to Google's handling of your data.
+- **Google** (global infrastructure): provides Google sign-in, and Google confirmation for account deletion. Google receives the request needed for that step and returns your Google account details to us. Google's own privacy policy applies to Google's handling of your data. [OWNER: confirm Google's data processing terms and transfer mechanism. Not verified.]
 - **Metered** (primary systems in Canada): relays voice traffic when a direct connection cannot be made. Relay processing can occur in regions that serve traffic, including outside the EEA. Used only when voice is switched on. [OWNER: confirm Metered's data processing terms and transfer mechanism before voice is switched on. Not verified.]
 - **Google and Cloudflare**: STUN servers used during voice setup. They receive your network address. Used only when voice is switched on.
 
@@ -135,6 +135,5 @@ Passwords are stored as one-way hashes. Sign-in sessions are stored as hashes an
 We will update this notice when our practices change and state the date of the change at the top of the page.
 
 Last updated: [OWNER: publication date. Use the actual date of approval and publication, not a planned date.]
-
 
 <!-- /coderabbit-ai-generated:v1 -->

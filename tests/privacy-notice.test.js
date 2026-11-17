@@ -166,10 +166,38 @@ test('the contact is only the token, and no date is filled in before publication
 
 test('the notice marks every unresolved item that section 9 of the decisions doc lists', () => {
   const doc = read('docs/PRIVACY_NOTICE_OWNER_DECISIONS.md');
-  assert.ok(doc.includes('## 9. Publication blockers'));
-  assert.ok(doc.includes('Guest count M-7'));
-  const markers = notice.match(/\[(OWNER|LEGAL)\b/g) || [];
-  assert.ok(markers.length > 0, 'publication stays blocked until the owner resolves the open items');
+  const section = doc.split('## 9. Publication blockers')[1];
+  assert.ok(section, 'section 9 exists');
+  const blockers = section.split('\n').filter((line) => line.startsWith('- '));
+  // Each section 9 item maps to its marker-bearing notice lines. Extra markers are allowed.
+  const required = [
+    ['Provider DPA and transfer mechanism:', ['Render', 'Neon', 'GitHub', 'Resend', 'Metered', 'Google'].map((provider) => new RegExp('^- \\*\\*' + provider + '\\*\\*.*\\[OWNER:', 'm'))],
+    ['Manual backup retention', [/Copies that the owner makes by hand[^\n]*\[OWNER:/]],
+    ['Guest count M-7', [/\*\*Guests:\*\*[^\n]*\[OWNER:/]],
+    ['Chat reports, player reports and finished matches:', [
+      /Reports are kept until[^\n]*\[OWNER:/,
+      /\*\*Chat reports\*\*[^\n]*\[OWNER:/,
+      /\*\*Finished match results\*\*[^\n]*\[OWNER:/,
+    ]],
+    ['`[LEGAL]` legal-basis and related entries', [
+      /Keeping you signed in on a device[^\n]*\[LEGAL:/,
+      /Confirming that you are 18 or over[^\n]*\[LEGAL:/,
+      /Operational diagnostics, logs and aggregate usage statistics[^\n]*\[LEGAL:/,
+      /Feedback you send\*\*[^\n]*\[LEGAL:/,
+      /Keeping records we must keep by law[^\n]*\[LEGAL:/,
+      /Staff audit log of administrative actions[^\n]*\[LEGAL:/,
+      /The match records still contain[^\n]*\[LEGAL:/,
+      /Tableverse is for adults aged 18[^\n]*\[LEGAL:/,
+    ]],
+    ['Publication date', [/Last updated: \[OWNER:/]],
+  ];
+  assert.equal(blockers.length, required.length, 'map every section 9 blocker');
+  for (const [item, patterns] of required) {
+    assert.ok(blockers.some((line) => line.startsWith('- ' + item)), item + ' is listed');
+    for (const pattern of patterns) assert.match(notice, pattern, item + ' has its corresponding marker');
+  }
+  assert.equal(legal.legalPageLive(notice, DETAILS, true), false,
+    'publication stays blocked until the owner resolves the open items');
 });
 
 console.log(`\n${passed} privacy notice checks passed`);
