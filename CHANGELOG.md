@@ -12,7 +12,9 @@
 - Active play time: XP and `seconds_played` count only the time a person was seated and connected. A dropped connection pauses it.
 - Game over: no progress cards. One table shows each person's XP in this game and their lifetime XP in the same game (`gameTotals`, read from stored matches after this game is written).
 - Level-up dialog: when you reach a new level, the next menu visit shows "Congratulations on reaching level X" with the XP to the next level, and an OK button. Shown once per level, per device.
-- Player card at the table: shows the player's level and their lifetime XP in the game being played.
+- Admin console: every table can be sorted by its columns. The player directory and the users list sort on the server; the other tables sort in the page. The player directory shows each player's level (for the players on the page).
+- Privacy notice: states that level and game XP are shown only on the player's own profile, describes the opt-in weekly board, and describes what staff see in the admin console.
+- Leave rule: a third leave keeps its final penalty even when it is the leave that abandons the game (a test that asserted the opposite was corrected).
 - Progress levels, per-game skill points, version history, shutdown saves leavers' losses (migration 025 and 026).
 
 Details: `docs/LEAVING_AND_REJOINING.md`, `docs/PROGRESS_LEVELS.md`.

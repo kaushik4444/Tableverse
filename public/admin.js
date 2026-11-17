@@ -10,6 +10,46 @@
   const countryName = (c) => { if (!c) return ''; try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(c) || c; } catch { return c; } };
   const when = (v) => (v ? new Date(v).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
+  // Column sorting for every table the page draws in full. A header click sorts ascending, the next click descending. Empty
+  // values (—, –, …) always sort last. Tables the server pages or limits carry data-paged, and the player directory carries
+  // data-server-sort (its order comes from the server): those keep their own order here.
+  const EMPTY = new Set(['', '—', '–', '…']);
+  const sortValue = (cell) => {
+    const raw = (cell.dataset.v != null ? cell.dataset.v : cell.textContent).replace(/\s+/g, ' ').trim();
+    if (EMPTY.has(raw)) return null;
+    const bare = raw.replace(/[%+,·]|XP/g, '').replace(/−/g, '-').trim();
+    if (bare !== '' && /^-?\d*\.?\d+$/.test(bare)) return { n: Number(bare) };
+    if (/\b\d{4}\b/.test(raw) && !Number.isNaN(Date.parse(raw))) return { n: Date.parse(raw) };
+    return { s: raw.toLowerCase() };
+  };
+  function enhanceTable(table) {
+    const head = table.tHead && table.tHead.rows[0];
+    const body = table.tBodies[0];
+    if (!head || !body || table.dataset.sorted || table.hasAttribute('data-paged') || table.hasAttribute('data-server-sort')) return;
+    table.dataset.sorted = '1';
+    [...head.cells].forEach((th, col) => {
+      const label = th.textContent.trim();
+      if (!label) return;
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'ad-sortbtn'; btn.textContent = label;
+      th.textContent = ''; th.appendChild(btn); th.setAttribute('aria-sort', 'none');
+      btn.addEventListener('click', () => {
+        const dir = th.getAttribute('aria-sort') === 'ascending' ? -1 : 1;
+        [...head.cells].forEach((h) => h.setAttribute('aria-sort', 'none'));
+        th.setAttribute('aria-sort', dir === 1 ? 'ascending' : 'descending');
+        const keyed = [...body.rows].map((tr) => ({ tr, v: tr.cells[col] ? sortValue(tr.cells[col]) : null }));
+        keyed.sort((a, b) => {
+          if (!a.v || !b.v) return (a.v ? 0 : 1) - (b.v ? 0 : 1); // empty values last, whatever the direction
+          const c = a.v.n !== undefined && b.v.n !== undefined ? a.v.n - b.v.n
+            : String(a.v.s ?? a.v.n).localeCompare(String(b.v.s ?? b.v.n), undefined, { numeric: true });
+          return c * dir;
+        });
+        keyed.forEach((k) => body.appendChild(k.tr));
+      });
+    });
+  }
+  new MutationObserver(() => main.querySelectorAll('table.ad-t').forEach(enhanceTable)).observe(main, { childList: true, subtree: true });
+
   async function csrf(force) {
     if (state.csrf && !force) return state.csrf;
     const r = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
@@ -240,11 +280,11 @@
     const headers = COLUMN_SORTS.map(([k, label]) => head(k, label)).join('');
     const rows = o.players.map((p) => `<tr><td data-l="Player"><b>${esc(p.displayName)}</b><br><small class="ad-muted">@${esc(p.username)}${p.country ? ' · ' + esc(countryName(p.country)) : ''}</small>${p.suspended ? ' <span class="ad-pill danger">suspended</span>' : ''}</td>
       <td data-l="Games">${p.games}</td><td data-l="Wins">${p.wins}</td><td data-l="Win rate">${pctText(p.wins, p.rated - p.draws)}</td><td data-l="Left early">${pctText(p.leftEarly, p.games)}</td><td data-l="Played">${mins(p.minutes)}</td>
-      <td data-l="Last seen">${esc(when(p.lastSeenAt))}</td><td><button class="ad-btn" data-view="${esc(p.username)}" aria-label="Open the profile of ${esc(p.username)}">Open</button></td></tr>`).join('');
+      <td data-l="Last seen">${esc(when(p.lastSeenAt))}</td><td data-l="Level">${p.level == null ? '–' : Number(p.level)}</td><td><button class="ad-btn" data-view="${esc(p.username)}" aria-label="Open the profile of ${esc(p.username)}">Open</button></td></tr>`).join('');
     main.innerHTML = `<h2>Players <small class="ad-muted">${o.total} registered</small></h2>
       <form class="ad-search ad-row" id="pForm"><input name="q" value="${esc(q)}" placeholder="Search username or name" maxlength="40" aria-label="Search players" style="flex:1"><button class="ad-btn primary" type="submit">Search</button></form>
       <div class="ad-row" role="group" aria-label="Sort by" style="margin:8px 0 12px">${sortButtons}</div>
-      ${o.players.length ? `<table class="ad-t stack"><thead><tr>${headers}<th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="ad-muted">No players match.</p>'}
+      ${o.players.length ? `<table class="ad-t stack" data-server-sort><thead><tr>${headers}<th>Level</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="ad-muted">No players match.</p>'}
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="pPrev" ${pageNo <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${pageNo} of ${pages}</span><button class="ad-btn" id="pNext" ${pageNo >= pages ? 'disabled' : ''}>Next</button></div>
       <p class="ad-muted">Registered players only. Wins and win rate count only games with a recorded result that the player stayed to the end of, and leave out draws; time played leaves out games a player left early. Opening a profile is recorded in the audit log.</p>`;
     const go = (a, b, c, d = '') => { state.gen += 1; const mine = state.gen; players(a, b, c, d).catch((e) => { if (mine === state.gen) fail(e); }); };
@@ -308,7 +348,7 @@
         <button class="ad-btn primary">Filter</button>
       </form>
       <p class="ad-muted">Recent lines of this server since its last restart, secrets masked. Buffer capacity ${esc(o.capacity)}; ${esc(o.dropped)} older lines dropped. Render's log view keeps the full history.</p>
-      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Time</th><th>Level</th><th>Component</th><th>Event</th><th>Details</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="ad-muted">No lines match.</td></tr>'}</tbody></table></div>`;
+      <div class="ad-scroll"><table class="ad-t stack" data-paged><thead><tr><th>Time</th><th>Level</th><th>Component</th><th>Event</th><th>Details</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="ad-muted">No lines match.</td></tr>'}</tbody></table></div>`;
     document.getElementById('lFilter').onsubmit = (e) => {
       e.preventDefault();
       const d = new FormData(e.target);
@@ -322,21 +362,29 @@
   // ---------------------------------------------------------------- users
   // each search, filter or page change gets a number: only the newest request may draw the list or report an error
   let usersSeq = 0;
-  async function users(q = '', page = 1, stale = 0) {
+  async function users(q = '', page = 1, stale = 0, sort = '', dir = '') {
     const gen = state.gen;
     const req = ++usersSeq;
-    state.usersSel = { q, page, stale }; // the last selection asked for: what a refresh after an action reloads
+    state.usersSel = { q, page, stale, sort, dir }; // the last selection asked for: what a refresh after an action reloads
     let o;
     try {
-      o = await api(`/api/admin/users?q=${encodeURIComponent(q)}&page=${page}${stale ? '&stale=' + encodeURIComponent(stale) : ''}`);
+      o = await api(`/api/admin/users?q=${encodeURIComponent(q)}&page=${page}${stale ? '&stale=' + encodeURIComponent(stale) : ''}${sort ? `&sort=${encodeURIComponent(sort)}${dir ? `&dir=${encodeURIComponent(dir)}` : ''}` : ''}`);
     } catch (e) {
       if (req !== usersSeq) return; // a newer request has replaced this one
       throw e;
     }
     if (gen !== state.gen || req !== usersSeq) return; // the admin has switched tabs, or asked for something newer, since this was asked
     if (o.page) page = o.page; // the server answers with the last page that exists when this one has gone past the end
-    state.usersSel = { q, page, stale };
+    state.usersSel = { q, page, stale, sort: o.sort || sort, dir: o.dir || dir };
     const owner = state.me.isOwner;
+    // column headers: the server sorts the whole list, so a click asks for page 1 in the new order
+    const uHead = (key, label) => {
+      const active = (o.sort || sort) === key;
+      const aria = active ? ((o.dir || dir) === 'asc' ? 'ascending' : 'descending') : 'none';
+      const arrow = active ? (aria === 'ascending' ? ' ▲' : ' ▼') : '';
+      return `<th aria-sort="${aria}"><button type="button" class="ad-sortbtn" data-ucol="${key}">${label}${arrow}</button></th>`;
+    };
+    const uHeaders = uHead('name', 'Player') + uHead('role', 'Role') + uHead('verified', 'Verified') + uHead('joined', 'Joined') + uHead('seen', 'Last seen');
     const rows = o.users.map((u) => {
       const staff = u.role !== 'user';
       const acts = [];
@@ -356,16 +404,17 @@
       <form class="ad-search ad-row" id="lookupForm"><input name="username" placeholder="Exact username for lookup" maxlength="24" aria-label="Look up a username" style="flex:1"><button class="ad-btn">Look up</button></form>
       <div id="lookupOut" aria-live="polite"></div>
       <p id="uMsg" class="ad-msg" role="status"></p>
-      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Player</th><th>Role</th><th>Verified</th><th>Joined</th><th>Last seen</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="ad-muted">No players found.</td></tr>'}</tbody></table></div>
+      <div class="ad-scroll"><table class="ad-t stack" data-paged><thead><tr>${uHeaders}<th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="ad-muted">No players found.</td></tr>'}</tbody></table></div>
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="uPrev" ${page <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${page} of ${pages}</span><button class="ad-btn" id="uNext" ${page >= pages ? 'disabled' : ''}>Next</button></div>
       <p class="ad-muted">E-mail addresses are never shown here. ${owner ? 'As the owner you manage admin roles; the owner role itself cannot be changed.' : 'Only the owner can manage admin roles.'}</p>`;
     document.getElementById('uSearch').onsubmit = (e) => { e.preventDefault(); { const d = new FormData(e.target); users(d.get('q'), 1, Number(d.get('stale')) || 0).catch(fail); } };
     // Refreshes the list the admin is looking at now (their latest search or filter), not the one this view was drawn with
     const reloadUsers = () => {
       const sel = state.usersSel || { q, page, stale };
-      return users(sel.q, sel.page, sel.stale);
+      return users(sel.q, sel.page, sel.stale, sel.sort || '', sel.dir || '');
     };
-    document.getElementById('uPrev').onclick = () => users(q, page - 1, stale).catch(fail);
+    main.querySelectorAll('[data-ucol]').forEach((b) => { b.onclick = () => { const k = b.dataset.ucol; const cur = state.usersSel || {}; const flip = k === (cur.sort || '') ? (cur.dir === 'asc' ? 'desc' : 'asc') : ''; users(q, 1, stale, k, flip).catch(fail); }; });
+    document.getElementById('uPrev').onclick = () => users(q, page - 1, stale, o.sort || sort, o.dir || dir).catch(fail);
     document.getElementById('lookupForm').onsubmit = async (e) => {
       e.preventDefault();
       const name = String(new FormData(e.target).get('username') || '').trim().toLowerCase();
@@ -383,7 +432,7 @@
       } catch (err) { if (seq === lookupSeq) out.innerHTML = `<p class="ad-msg err">${esc(err.message)}</p>`; }
     };
     let lookupSeq = 0;
-    document.getElementById('uNext').onclick = () => users(q, page + 1, stale).catch(fail);
+    document.getElementById('uNext').onclick = () => users(q, page + 1, stale, o.sort || sort, o.dir || dir).catch(fail);
     main.querySelectorAll('[data-rv]').forEach((b) => { b.onclick = async () => { if (!confirm('Send this player a new verification e-mail?')) return; try { await api('/api/admin/users/resend-verification', { playerId: b.dataset.rv }); say('uMsg', 'Verification e-mail sent.', 'ok'); } catch (e) { say('uMsg', e.message, 'err'); } }; });
     main.querySelectorAll('[data-susp]').forEach((b) => { b.onclick = async () => {
       const reason = prompt('Reason for the suspension (kept in the audit log; staff with lookup access can also see it):', '');
@@ -554,7 +603,7 @@
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const rows = o.items.map((a) => `<tr><td data-l="When">${esc(when(a.at))}</td><td data-l="Who">${a.actor ? '@' + esc(a.actor) : '<span class="ad-muted">(removed account)</span>'}</td><td data-l="Action"><code>${esc(a.action)}</code></td><td data-l="Target">${esc(a.target_type || '')} <small class="ad-muted">${esc((a.target_id || '').slice(0, 8))}</small></td><td data-l="Detail"><small class="ad-muted">${esc(a.detail && Object.keys(a.detail).length ? JSON.stringify(a.detail) : '')}</small></td></tr>`).join('');
     main.innerHTML = `<h2>Audit log <small class="ad-muted">${o.total}</small></h2>
-      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="ad-muted">Nothing recorded yet.</td></tr>'}</tbody></table></div>
+      <div class="ad-scroll"><table class="ad-t stack" data-paged><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="ad-muted">Nothing recorded yet.</td></tr>'}</tbody></table></div>
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="pPrev" ${page <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${page}</span><button class="ad-btn" id="pNext" ${page * o.pageSize >= o.total ? 'disabled' : ''}>Next</button></div>
       <p class="ad-muted">The log can only be added to from this console; entries are removed automatically after one year.</p>`;
     document.getElementById('pPrev').onclick = () => audit(page - 1).catch(fail);
@@ -656,7 +705,7 @@
       ? `<div class="ad-row"><button type="button" class="ad-btn" id="mNewer" ${page <= 1 ? 'disabled' : ''}>Newer</button><span class="ad-muted">Page ${page} of ${last}</span><button type="button" class="ad-btn" id="mOlder" ${page >= last ? 'disabled' : ''}>Older</button></div>`
       : '';
     box.innerHTML = (o.items.length
-      ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Subject</th><th>Status</th><th>Recipients</th><th>Sent / failed</th><th>By</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      ? `<div class="ad-scroll"><table class="ad-t stack" data-paged><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Subject</th><th>Status</th><th>Recipients</th><th>Sent / failed</th><th>By</th></tr></thead><tbody>${rows}</tbody></table></div>`
       : '<p class="ad-muted">Nothing has been sent yet.</p>') + nav;
     box.querySelector('#mNewer')?.addEventListener('click', () => history(page - 1).catch(() => {}));
     box.querySelector('#mOlder')?.addEventListener('click', () => history(page + 1).catch(() => {}));
@@ -684,7 +733,7 @@
       if (r.error) { out.innerHTML = `<p class="ad-msg err">${esc(r.error)}</p>`; return; }
       const rows = r.items.map((e) => `<tr><td data-l="Time">${esc(when(e.time))}</td><td data-l="Level"><span class="ad-pill ${e.level === 'error' ? 'danger' : e.level === 'warn' ? 'warn' : ''}">${esc(e.level)}</span></td><td data-l="Source">${esc(e.source)}</td><td data-l="Line" style="word-break:break-word">${esc(e.text)}</td></tr>`).join('');
       out.innerHTML = rows
-        ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Time</th><th>Level</th><th>Source</th><th>Line</th></tr></thead><tbody>${rows}</tbody></table></div>${r.hasMore ? '<p class="ad-muted">More lines exist; narrow the filter to see them.</p>' : ''}`
+        ? `<div class="ad-scroll"><table class="ad-t stack" data-paged><thead><tr><th>Time</th><th>Level</th><th>Source</th><th>Line</th></tr></thead><tbody>${rows}</tbody></table></div>${r.hasMore ? '<p class="ad-muted">More lines exist; narrow the filter to see them.</p>' : ''}`
         : '<p class="ad-muted">No lines in the last 24 hours for this filter.</p>';
     } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen && seq === renderSeq) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
   }

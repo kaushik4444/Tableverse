@@ -145,6 +145,10 @@ Resend verification (staff): `POST /api/admin/users/resend-verification` with `{
 
 The Players tab can be sorted by any visible column: Player, Games, Wins, Win rate, Left early (rate), Played and Last seen. A header button sorts its column in its default direction; clicking the active header flips it. The request adds `dir=asc|desc` only when a header chose a direction. The preset sort buttons (Last seen, Newest, Games, Wins, Time played, Left early count) are unchanged. Sort keys are a fixed server-side map, so no request text reaches the SQL.
 
+The Users tab sorts on the server too (Player, Role, Verified, Joined, Last seen; `sort` and `dir` on `GET /api/admin/users`). The other tables (Insights, Games, Announcements, Logs, Audit log, E-mail history) sort in the page: their rows are drawn in full, so a header click reorders the rows already on screen. Paged or limited tables (Users, Audit log, E-mail history, Logs) are marked `data-paged`, and the player directory is marked `data-server-sort`; the page-sorter leaves those alone.
+
+The player directory's Level column shows the level for the players on the current page only (one progress read each). It is not a sort key.
+
 ## Not included (limits of the free beta)
 
 - No owner transfer in the UI, no two-factor step for admins, no e-mail alerts.

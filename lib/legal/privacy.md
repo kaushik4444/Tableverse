@@ -22,6 +22,8 @@ Tableverse is a free, beta multiplayer card and board game service, run by {{IMP
 
 **For all signed-in accounts:**
 - Your match results: the games you finished, your seat, your score and your position. You can see your full history. Your public profile shows only your username, display name, avatar, join date and win totals.
+- Your level and your game XP. These are calculated from your finished games. They are shown on your own profile only; your public profile does not show them.
+- The weekly board, if you turn it on. It is off by default. When it is on, your display name and your game XP in that game are shown to all players for the last 7 days.
 - Your friends, friend requests, blocks, and tables you have recently visited.
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 
@@ -55,6 +57,10 @@ To run the service you asked for: signing you in, keeping your games and results
 [OWNER: hosting and database regions, and confirmation of processor terms with each provider above.]
 
 We do not sell your data. The game pages do not load advertising or analytics scripts. The page loads Google's sign-in script only when you sign in with Google or confirm an account deletion with Google. If you choose to share a table link through the share button, the text is opened in WhatsApp and is sent only where you send it.
+
+## Staff access
+
+Staff accounts (admins and the owner) use an admin console. For each player it shows the username, display name, country, join and last-seen dates, games played, wins, minutes played, games left early and the account level. It does not show your e-mail address or your password. Staff actions on an account, such as opening its profile or suspending it, are written to an audit log, kept for 365 days.
 
 ## Promotional e-mail
 

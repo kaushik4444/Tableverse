@@ -74,7 +74,7 @@ async function listPlayers({ q = '', sort = 'seen', dir = '', page: pg = 1 } = {
   if (term) { args.push(like(term)); where += ` AND (p.username ILIKE $1 ESCAPE '\\' OR p.display_name ILIKE $1 ESCAPE '\\')`; }
   const total = (await db.query(`SELECT COUNT(*)::int AS n FROM players p ${where}`, args)).rows[0].n;
   const offset = `LIMIT ${PAGE} OFFSET $${args.length + 1}`;
-  const cols = `SELECT p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
+  const cols = `SELECT p.id, p.username, p.display_name, p.country, p.role, p.created_at, p.last_seen_at, p.suspended_at,
             COALESCE(s.games, 0) AS games, COALESCE(s.rated, 0) AS rated, COALESCE(s.wins, 0) AS wins, COALESCE(s.draws, 0) AS draws,
             COALESCE(s.left_early, 0) AS left_early, COALESCE(s.minutes, 0) AS minutes, s.last_game`;
   const r = SORTS[key].account
@@ -83,9 +83,12 @@ async function listPlayers({ q = '', sort = 'seen', dir = '', page: pg = 1 } = {
         ORDER BY ${order}`,
       [...args, page(pg) * PAGE])
     : await db.query(`${cols} FROM players p ${STATS} ${where} ORDER BY ${order} ${offset}`, [...args, page(pg) * PAGE]);
+  // Level is shown for the players on this page only (one progress read each): it is not a sort key
+  const { getProgress } = require('./matches');
+  const levels = await Promise.all(r.rows.map((x) => getProgress(x.id).then((g) => g.account.level, () => null)));
   return {
     total, pageSize: PAGE, sort: key, dir: direction === 'ASC' ? 'asc' : 'desc',
-    players: r.rows.map((x) => ({ username: x.username, displayName: x.display_name, country: x.country || null, role: x.role, joinedAt: x.created_at, lastSeenAt: x.last_seen_at,
+    players: r.rows.map((x, i) => ({ level: levels[i], username: x.username, displayName: x.display_name, country: x.country || null, role: x.role, joinedAt: x.created_at, lastSeenAt: x.last_seen_at,
       suspended: Boolean(x.suspended_at), games: num(x.games), rated: num(x.rated), wins: num(x.wins), draws: num(x.draws), leftEarly: num(x.left_early), minutes: round1(x.minutes), lastGameAt: x.last_game })),
   };
 }
