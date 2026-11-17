@@ -1,6 +1,7 @@
 'use strict';
+const pacing = require('../pacing');
 /**
- * Penalty Rows: the rules only (no sockets, no timers).
+ * Penalty Rows: the rules only (no sockets, no timers; the walk-time holds go through games/pacing.js).
  *
  * 2-8 players, a deck of the numbers 1 to 104. Every number carries penalty points (see penaltyOf). Each round every
  * player gets 10 cards and four cards start four rows. In each of the 10 turns everybody secretly picks one card; when
@@ -24,6 +25,8 @@ const TARGETS_SIMPLE = { short: 20, standard: 35, long: 50 }; // with one point 
 const ROW_SIZES = [4, 5, 6];
 const HAND_SIZES = [6, 8, 10];
 const PACE = { relaxed: 1.35, normal: 1, quick: 0.6 }; // how long the table lingers on each step, as a factor
+const STEP_MS = 900; // a card placed on a row stays on the table this long before the next one is played
+const SWEEP_MS = 500; // a row taken (or swept) lingers this much longer, so the cards can be read
 const MAX_PLAYERS = 8;
 
 /** Penalty points of a card: 1, plus 1 for a multiple of 5, 1 more for a multiple of 10, 4 more for 11, 22, ... 99. */
@@ -52,6 +55,8 @@ function say(g, by, text, kind) {
 }
 const pts = (n) => `${n} point${n === 1 ? '' : 's'}`;
 const indexOf = (g, id) => g.players.findIndex((p) => p.id === id);
+/** Keep the table on a played card for a moment (scaled by the pace option; the server waits for it before the next move). */
+function linger(g, ms) { pacing.hold(g, ms * PACE[g.options.pace]); }
 
 function createGame(players, options, rng = Math.random) {
   const n = players.length;
@@ -165,9 +170,11 @@ function play(g) {
       g.rows[best] = [r.card];
       g.lastTurn.push({ by: r.by, n: r.card.n, p: r.card.p, row: best, kind: 'sweep', took: sum(taken) });
       say(g, g.players[r.by].name, `played the ${g.rowLimit + 1}th card: took row ${best + 1}, ${pts(sum(taken))}`, 'sweep');
+      linger(g, STEP_MS + SWEEP_MS);
     } else {
       g.rows[best].push(r.card);
       g.lastTurn.push({ by: r.by, n: r.card.n, p: r.card.p, row: best, kind: 'place', took: 0 });
+      linger(g, STEP_MS);
     }
     g.resolved += 1;
   }
@@ -181,6 +188,7 @@ function takeIt(g, i, row, card) {
   g.rows[row] = [card];
   g.lastTurn.push({ by: i, n: card.n, p: card.p, row, kind: 'take', took: sum(taken) });
   say(g, g.players[i].name, `${card.n} fits no row: took row ${row + 1}, ${pts(sum(taken))}`, 'take');
+  linger(g, STEP_MS + SWEEP_MS);
 }
 
 function takeRow(g, i, action) {
@@ -305,4 +313,4 @@ function results(g) {
   return g.players.map((_, i) => ({ score: -g.totals[i], winner: g.phase === 'gameOver' && g.totals[i] === low }));
 }
 
-module.exports = { DECK, HAND, START_ROWS, ROW_LIMIT, TARGETS, TARGETS_SIMPLE, ROW_SIZES, HAND_SIZES, PACE, MAX_PLAYERS, penaltyOf, createGame, applyAction, awaiting, botAction, forcedPlay, viewFor, results };
+module.exports = { DECK, HAND, START_ROWS, ROW_LIMIT, TARGETS, TARGETS_SIMPLE, ROW_SIZES, HAND_SIZES, PACE, STEP_MS, SWEEP_MS, MAX_PLAYERS, penaltyOf, createGame, applyAction, awaiting, botAction, forcedPlay, viewFor, results };

@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const e = require('../games/penaltyrows/engine');
 const def = require('../games/penaltyrows');
+const pacing = require('../games/pacing');
 
 let passed = 0; let failed = 0;
 function test(name, fn) { try { fn(); passed++; console.log('  ok  ' + name); } catch (err) { failed++; console.error('FAIL  ' + name + '\n' + err.stack); } }
@@ -221,6 +222,81 @@ test('timer: every simultaneous turn is a new batch, and the stamp is a primitiv
   const [a, b] = ['p0', 'p1'];
   t.act(a, t.botAction(a)); assert.equal(t.stamp(), before, 'a single pick does not change it');
   t.act(b, t.botAction(b)); assert.notEqual(t.stamp(), before, 'a finished turn does');
+});
+
+test('table option: four cards per row, so the fifth card takes a full row', () => {
+  const g = setup(2, [[10, 11, 12, 13], [30], [50], [70]], [[20, 99], [80, 98]], { rowSize: '4' });
+  assert.equal(g.rowLimit, 4);
+  pick(g, 0, 20); pick(g, 1, 80);
+  assert.equal(g.piles[0].length, 4, 'the four cards on row 1 are taken');
+  assert.deepEqual(g.rows[0].map((x) => x.n), [20]);
+});
+
+test('table option: six cards per row, so a fifth card is only added', () => {
+  const g = setup(2, [[10, 11, 12, 13, 14], [30], [50], [70]], [[20, 99], [80, 98]], { rowSize: '6' });
+  pick(g, 0, 20); pick(g, 1, 80);
+  assert.equal(g.rows[0].length, 6);
+  assert.equal(g.piles[0].length, 0);
+});
+
+test('table option: a hand of six cards gives six turns and a new round is dealt with six cards', () => {
+  const g = e.createGame(people(2), { hand: '6', target: 'long' }, rngFor(21));
+  assert.equal(g.handSize, 6);
+  assert.ok(g.hands.every((h) => h.length === 6));
+  for (let i = 0; i < 400 && g.round === 1; i++) {
+    for (const id of e.awaiting(g)) { const f = e.forcedPlay(g); e.applyAction(g, f ? f.playerId : id, f ? f.action : e.botAction(g, id)); }
+  }
+  assert.equal(g.round, 2);
+  assert.ok(g.hands.every((h) => h.length === 6), 'the next round is dealt six cards too');
+});
+
+test('table option: simple scoring is one point per card, and the game length goes with it', () => {
+  const g = e.createGame(people(2), { scoring: 'simple', target: 'short' }, rngFor(8));
+  assert.equal(g.simple, true);
+  assert.equal(g.target, 20);
+  assert.ok([...g.rows.flat(), ...g.hands.flat()].every((c) => c.p === 1));
+});
+
+test('table option: with the cheapest row, a card below every row takes the cheapest row without asking', () => {
+  // rows cost 8 (10 and 11), 3, 3 and 3: the first row that costs least is row 2
+  const g = setup(2, [[10, 11], [30], [50], [70]], [[5, 99], [80, 98]], { lowCard: 'cheapest' });
+  pick(g, 0, 5); pick(g, 1, 80);
+  assert.equal(g.phase, 'choose', 'nobody has to choose');
+  assert.deepEqual(g.rows[1].map((x) => x.n), [5], 'the cheapest row restarts with 5');
+  assert.equal(g.piles[0].map((x) => x.n).join(), '30');
+  assert.deepEqual(g.rows[3].map((x) => x.n), [70, 80]);
+});
+
+test('table options: unknown values fall back to the defaults', () => {
+  const g = e.createGame(people(2), { rowSize: '7', hand: '9', scoring: 'x', lowCard: 'y', pace: 'slow', target: 'huge' }, rngFor(2));
+  assert.deepEqual(g.options, { target: 'standard', scoring: 'standard', rowSize: 5, hand: 10, lowCard: 'choose', pace: 'relaxed' });
+  assert.equal(g.handSize, 10);
+  assert.equal(g.rowLimit, 5);
+});
+
+test('pace: each card on the table holds the table (the server waits for it), and quick holds less than relaxed', () => {
+  const held = (pace) => {
+    const g = setup(2, [[10], [30], [50], [70]], [[40, 41], [42, 43]], { pace });
+    assert.equal(pacing.remaining(g), 0, 'nothing is held before the cards are played');
+    pick(g, 0, 40); pick(g, 1, 42);
+    return pacing.remaining(g);
+  };
+  const quick = held('quick');
+  const relaxed = held('relaxed');
+  assert.ok(quick > 0, 'a played turn is held');
+  assert.ok(relaxed > quick, 'relaxed holds longer than quick');
+});
+
+test('the plugin exposes every table option, each with a valid default, and the holds are scaled for tests', () => {
+  const keys = def.options.map((o) => o.key);
+  for (const k of ['target', 'scoring', 'rowSize', 'hand', 'lowCard', 'pace', 'timeLimit']) assert.ok(keys.includes(k), k);
+  for (const o of def.options.filter((x) => x.type === 'select')) {
+    assert.ok(o.choices.some((c) => c.value === o.default), `${o.key} default is one of its choices`);
+  }
+  const g = def.create(people(2), {}, rngFor(6));
+  assert.equal(typeof g.holdMs, 'function');
+  assert.equal(g.holdMs(), 0);
+  assert.equal(typeof g.setPacingScale, 'function');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
