@@ -2503,13 +2503,13 @@
 
   function renderHome() {
     const tiles = S.games.map((g) => `
-      <article class="game-card" style="--accent:${esc(g.accent || '#7b4bd0')}">
+      <article class="game-card${g.enabled === false ? ' is-locked' : ''}" style="--accent:${esc(g.accent || '#7b4bd0')}">
         <div class="game-art" aria-hidden="true">${esc(g.icon || '🎴')}</div>
         <div class="game-body">
           <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
-          <p>${esc(g.tagline)}</p>
+          <p>${esc(g.tagline)}</p>${g.enabled === false ? '<p class="game-off" role="status">Unavailable right now.</p>' : ''}
           <div class="row game-actions">
-            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}">Create table</button>
+            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}" ${g.enabled === false ? 'disabled aria-disabled="true"' : ''}>Create table</button>
             <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
             ${g.id === 'wizard' ? (S.guest ? `<button class="btn ghost small" type="button" data-act="showLogin">Log in for offline scorecard</button>` : `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>`) : ''}
           </div>
@@ -3100,6 +3100,7 @@
     create: (el) => {
       if (!authed()) return gateLogin(() => actions.create(el));
       const game = el.dataset.game;
+      if (gameMeta(game) && gameMeta(game).enabled === false) return toast('That game is unavailable right now.');
       // New tables are public by default. The host can make the table private from the table screen (Make private).
       send({ t: 'create', gameId: game, visibility: 'public', name: S.name || undefined, avatar: S.avatar || undefined });
     },

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Game switches: the owner can turn any game off and on from the admin console (Games tab), without a redeploy. A switched-off game stays listed but locked; new tables, starts and rematches are refused. Changes are audited.
 - Fixes from the release review: Penalty Rows uses its own style scope and keeps its phase when a deleted player's name is scrubbed; one awaited seat keeps its turn deadline; the account and reports wording in the privacy and retention docs now matches the code.
 - Profile: the minutes to the next level and a one-time level-up notice (the notice is remembered on this device, for each account).
 - Home footer: a link to @playtableverse on Instagram, opened in a new tab.

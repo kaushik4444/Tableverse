@@ -21,6 +21,7 @@ const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
+const gameFlags = require('./lib/gameFlags');
 const { makeAuthEmailSender } = require('./lib/email');
 const { cspFor } = require('./lib/googleAuth');
 const { createAuthRoutes } = require('./lib/authRoutes');
@@ -472,7 +473,7 @@ function start(opts = {}) {
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
     if (rel === '/api/games') {
-      return sendJson(res, 200, { ok: true, games: games.list(), tables: publicTables(), announcement, ...legalFlags });
+      return sendJson(res, 200, { ok: true, games: gameFlags.withFlags(games.list()), tables: publicTables(), announcement, ...legalFlags });
     }
     if (rel.includes('\0')) {
       res.writeHead(400);
@@ -1461,6 +1462,7 @@ function start(opts = {}) {
     create(p, msg) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
+      if (!gameFlags.isEnabled(msg.gameId)) return sendError(p, 'That game is not available right now.');
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
@@ -1737,6 +1739,7 @@ function start(opts = {}) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
       const def = games.get(room.gameId);
+      if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.');
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
@@ -1796,6 +1799,7 @@ function start(opts = {}) {
     async rematch(p) {
       const room = hostRoom(p, 'finished');
       if (!room) return;
+      if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.');
       // Anyone who lost access to a private table while the game was running leaves now, before the next round forms.
       await enforceAccess(room);
       if (rooms.get(room.code) !== room || room.status !== 'finished' || room.hostId !== p.id) return; // the table changed while we checked
@@ -1974,7 +1978,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: games.list(), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: gameFlags.withFlags(games.list()), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
@@ -2298,6 +2302,15 @@ function start(opts = {}) {
       // a result whose retries ran out (database down for a while) is tried again every 10 minutes, not only at the next start
       spoolTimer = setInterval(() => matchQueue.replaySpool(), 10 * 60 * 1000);
       spoolTimer.unref();
+      // the owner's game switches: read now and every 15 seconds (lib/gameFlags.js); a change in this process is applied at once
+      if (dbAdmin && dbAdmin.listGameFlags) {
+        const refreshFlags = () => dbAdmin.listGameFlags()
+          .then((rows) => gameFlags.apply(rows))
+          .catch((e) => (opts.log || console).error('[games] switches not loaded: ' + e.message));
+        refreshFlags();
+        const flagTimer = setInterval(refreshFlags, gameFlags.REFRESH_MS);
+        flagTimer.unref();
+      }
       // old rate-limit rows, expired sessions and used tokens: once now, then every 6 hours (best effort)
       const purge = () => dbAuth.purgeExpired().catch((e) => (opts.log || console).error('[auth] housekeeping failed: ' + e.message));
       const purgeAdmin = () => dbAdmin.purge().catch((e) => (opts.log || console).error('[admin] retention housekeeping failed: ' + e.message));
