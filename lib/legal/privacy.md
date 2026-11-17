@@ -35,7 +35,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by {{IMP
 - Aggregate usage statistics, such as how many players were active on a day. [OWNER: confirm that these counts contain no names, addresses or messages.]
 
 **Reports and feedback you send:**
-- A chat report includes the reported message (up to 200 characters), the reason and, optionally, a short note. Reports you file are removed when your account is deleted. Reports made against your account are kept, with the link to your account cleared. [OWNER: retention period for reports.]
+- A chat report includes the reported message (up to 200 characters), the reason and, optionally, a short note. Reports you file are removed when your account is deleted. Reports made against your account are kept, with the link to your account cleared, and the name at the time of the report stays on them: deleting your account does not remove that name from those reports. [OWNER: retention period for reports.]
 - Feedback you send through the in-app form is kept with your account link. The form asks you not to include personal details.
 
 **Voice chat** is switched off in the beta. While it is off, no voice connection details are handed out and voice messages are refused. When voice is switched on, audio is set up directly between players where possible, and relayed through Metered's TURN servers when a direct connection is not possible. Tableverse does not record or store voice audio.
