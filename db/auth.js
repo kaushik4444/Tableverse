@@ -693,7 +693,7 @@ async function forgetDevice(rawDevice) {
 }
 
 async function purgeExpired() {
-  if (!db.hasDatabase()) return { rateLimits: 0, tokens: 0, sessions: 0 };
+  if (!db.hasDatabase()) return { rateLimits: 0, tokens: 0, sessions: 0, guests: 0 };
   // trusted devices that ended or expired more than 30 days ago are removed
   await db.query("DELETE FROM auth_devices WHERE expires_at < NOW() - INTERVAL '30 days' OR revoked_at < NOW() - INTERVAL '30 days'");
   const run = async (sql) => (await db.query(sql)).rowCount;
@@ -702,6 +702,11 @@ async function purgeExpired() {
     tokens: await run("DELETE FROM auth_email_tokens WHERE expires_at < NOW() - INTERVAL '7 days' OR used_at < NOW() - INTERVAL '7 days'"),
     // migration 011 revoked the legacy rows that had no expiry; revoked rows are removed here after 30 days like the rest
     sessions: await run("DELETE FROM auth_sessions WHERE (expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days') OR revoked_at < NOW() - INTERVAL '30 days'"),
+    // A guest with no live session has ended: its temporary account is removed. Its finished games stay in the match
+    // records (match_players.player_id becomes NULL). A guest that has an account now (is_anonymous = FALSE) is never touched.
+    guests: await run(`DELETE FROM players p
+                       WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day'
+                         AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())`),
   };
 }
 
