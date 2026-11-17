@@ -327,7 +327,8 @@ test('third and later departures against bots never become final penalties', () 
   assert.equal(byId(finish(r)).A.forfeit, false);
 });
 
-test('a third departure that abandons the game does not create a new final penalty', () => {
+test('a third departure that abandons the game keeps its final penalty; the first leaver is not penalised', () => {
+  // The third leave is final and is written even when it is the one that abandons the game (same rule as the tests above).
   const r = table(['A', 'B', 'C'], []);
   for (let i = 0; i < 2; i += 1) {
     departure(r, 'B', 1000 + i * 2000);
@@ -337,9 +338,11 @@ test('a third departure that abandons the game does not create a new final penal
   departure(r, 'B', 6000);
   assert.equal(leaveCountOf(r, 'B'), 3);
   assert.equal(r.abandoned, true);
-  assert.equal(r.finalForfeits.size, 0);
-  assert.equal(buildForfeitRecord(r), null);
-  assert.ok(finish(r).participants.every((p) => !p.forfeit));
+  assert.equal(r.finalForfeits.has('B'), true);
+  assert.equal(r.finalForfeits.has('A'), false);
+  const rec = finishRecord(r);
+  assert.equal(byId(rec).B.forfeit, true);
+  assert.equal(byId(rec).A.forfeit, false);
 });
 
 test('further departures in an abandoned game cannot promote pending penalties to final', () => {
