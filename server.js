@@ -162,6 +162,11 @@ function start(opts = {}) {
       const room = rooms.get(rec.roomCode);
       if (room && room.matchKey === rec.matchKey) sys(room, '⚠ The result of this game could not be saved right now, so it may be missing from stats.');
     },
+    // A result saved later by a replay (after its retries ran out) is no longer "not saved": the game-over totals must see that.
+    onSaved: (rec) => {
+      const room = rooms.get(rec.roomCode);
+      if (room && room.matchKey === rec.matchKey) room.matchSaved = Promise.resolve({ status: 'saved' });
+    },
   });
   const MAX_SPECTATORS = opts.maxSpectators ?? DEFAULT_MAX_SPECTATORS; // tests lower it
   const timeScale = opts.timeScale ?? 1; // tests shrink the turn time limit with this
