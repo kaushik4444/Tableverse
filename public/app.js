@@ -1505,6 +1505,19 @@
   }
   const roomPerson = (pid) => S.room && [...(S.room.members || []), ...(S.room.spectators || [])].find((x) => x.id === pid);
 
+  /**
+   * The game-related numbers on a player card: their overall level, and their lifetime XP in the game being played (their
+   * stored game points across all their matches). Time played is not a game amount, so it is not shown here.
+   */
+  function cardXpHTML(prof) {
+    const prog = prof && prof.progress;
+    if (!prog || prog.level == null) return '';
+    const gameId = S.room && S.room.gameId;
+    const row = gameId && prog.games ? prog.games[gameId] : null;
+    const name = esc(statsGame(gameId || '').name);
+    return `<p class="pcard-xp">Level ${Number(prog.level)} · Lifetime ${name} XP ${fmtXp(row ? row.xp : 0)}</p>`;
+  }
+
   function cardHTML() {
     const C = S.card;
     const person = roomPerson(C.pid) || C.last;
@@ -1515,7 +1528,7 @@
     const rel = relationTo(person);
     const here = Boolean(roomPerson(C.pid));
     const prof = C.profile;
-    const stats = prof ? `<div class="pcard-stats"><div><b>${prof.played}</b><span>Games</span></div><div><b>${prof.wins}</b><span>Wins</span></div><div><b>${prof.winRate === null ? '–' : prof.winRate + '%'}</b><span>Win rate</span></div></div>` : '';
+    const stats = prof ? `<div class="pcard-stats"><div><b>${prof.played}</b><span>Games</span></div><div><b>${prof.wins}</b><span>Wins</span></div><div><b>${prof.winRate === null ? '–' : prof.winRate + '%'}</b><span>Win rate</span></div></div>${cardXpHTML(prof)}` : '';
     const sub = person.bot ? 'Bot' : person.username ? `@${esc(person.username)}` : 'Guest player';
     const conn = !person.bot && here ? `<p class="pp-conn">📶 ${person.connected === false ? 'Disconnected' : pingBadge(person.ping, { label: true })}</p>` : '';
     const busy = C.busy ? ' disabled' : '';
@@ -2008,6 +2021,7 @@
     else {
       const d = P.data;
       inner = `<header class="pp-head">${avatar({ name: d.displayName, avatar: d.avatar }, 'big')}<div class="pp-id"><h1>${esc(d.displayName)}</h1><p>@${esc(d.username)} · ${esc(joinedText(d.joinedAt))}</p>${d.blockedByMe ? '<p class="pp-blocked"><b>Blocked</b></p>' : friendLine(d.username)}</div></header>
+        ${progressHTML(d.progress, false)}
         <div class="stat-grid"><div class="stat-tile"><span class="stat-v">${d.played}</span><span class="stat-l">Games played</span></div><div class="stat-tile good"><span class="stat-v">${d.wins}</span><span class="stat-l">Wins</span></div><div class="stat-tile"><span class="stat-v">${d.winRate === null ? '–' : d.winRate + '%'}</span><span class="stat-l">Win rate</span></div></div>
         ${!S.guest && S.username && S.username.toLowerCase() !== String(d.username).toLowerCase() ? playerActionsHTML(P, d) : ''}`;
     }
@@ -2710,6 +2724,7 @@
     const games = Object.entries(pr.games || {}).sort((x, y) => y[1].points - x[1].points).map(([id, g]) => {
       const meta = statsGame(id);
       const label = `<span>${esc(meta.icon || '🎴')} ${esc(meta.name)}</span><b>${fmtXp(g.points)} XP</b>`;
+      // Another player's profile shows the same numbers but has no detail view for them, so its rows are plain text.
       return interactive
         ? `<li class="pg-row"><button type="button" class="pg-btn" data-act="openGameStats" data-game="${esc(id)}" aria-label="${esc(meta.name)}: ${fmtXp(g.points)} Game XP, details">${label}</button></li>`
         : `<li class="pg-row">${label}</li>`;
