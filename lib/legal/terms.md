@@ -11,7 +11,7 @@ Tableverse is a beta service. It is provided free of charge, and features may ch
 
 ## 2. Your account
 
-- You must be 18 or over to create an account. Once approved and built, registration will ask you to confirm this; it is a self-declaration. [OWNER: approve the wording.]
+- You must be 18 or over to create an account. Registration asks you to confirm this; it is a self-declaration. [OWNER: approve the wording.]
 - You need a working e-mail address. You must verify it before you can play. You can look at the public pages without an account, but playing needs a signed-in account.
 - You are responsible for keeping your password and your signed-in devices safe. Tell us at once if you think someone else has used your account (see the contact in `docs/SUPPORT_AND_REPORTING.md`). In your settings, **Sessions** lets you sign out of this device or of every device, which you should do if a device you no longer control is signed in.
 - You may delete your account at any time from your profile. The steps and what is removed are in `docs/ACCOUNT_DELETION_AND_RETENTION.md`. Deletion cannot be undone.
@@ -59,6 +59,6 @@ We may change these terms during the beta. We will say the date of the change at
 
 ## 8. Contact
 
-Questions about these terms, and reports of breaches: [OWNER: contact address — not yet provided; see docs/SUPPORT_AND_REPORTING.md].
+Questions about these terms, and reports of breaches: {{IMPRESSUM_EMAIL}}.
 
 Last updated: [OWNER: date].

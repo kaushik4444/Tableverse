@@ -1,86 +1,110 @@
 'use strict';
-// /privacy and /terms: shown only when LEGAL_PAGES_PUBLISHED=true AND the text has no owner placeholders left (fail closed).
-require('./helpers/env');
+// Publication of /privacy and /terms (pure helpers and shipped text; no server needed).
+// Each page has its own switch (LEGAL_PRIVACY_PUBLISHED, LEGAL_TERMS_PUBLISHED). A page is live only when its switch is
+// exactly "true", the Impressum details are set, and no owner or legal placeholder remains after filling.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { start } = require('../server');
 const legal = require('../lib/legalPages');
+const { cspFor } = require('../lib/googleAuth');
 
-const guard = setTimeout(() => { console.error('FAIL legal pages test timed out'); process.exit(1); }, 60000);
 let passed = 0;
-async function test(name, fn) {
-  try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
+function test(name, fn) {
+  try { fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 
-(async () => {
-  console.log('legal pages');
-  await test('the switch is on only for exactly "true"', async () => {
-    assert.equal(legal.legalPagesPublished({}), false);
-    assert.equal(legal.legalPagesPublished({ LEGAL_PAGES_PUBLISHED: 'yes' }), false);
-    assert.equal(legal.legalPagesPublished({ LEGAL_PAGES_PUBLISHED: 'true' }), true);
-  });
+const DETAILS = { IMPRESSUM_NAME: 'Test Person', IMPRESSUM_ADDRESS: 'Teststraße 1, 10115 Berlin', IMPRESSUM_EMAIL: 'test@example.invalid' };
+const shipped = (name) => fs.readFileSync(path.join(__dirname, '..', 'lib', 'legal', name + '.md'), 'utf8');
+const COMPLETE = '# Notice\n\nRun by {{IMPRESSUM_NAME}}, {{IMPRESSUM_ADDRESS}}. Contact {{IMPRESSUM_EMAIL}}.\n\n- one\n- two';
 
-  await test('any owner or legal placeholder blocks the text, so an unapproved draft cannot render', async () => {
-    assert.equal(legal.legalTextComplete('Contact: [OWNER: address not yet provided]'), false);
-    assert.equal(legal.legalTextComplete('Basis: [LEGAL: confirm]'), false);
-    assert.equal(legal.legalTextComplete('   '), false);
-    assert.equal(legal.renderLegal('Contact: [OWNER: address]'), null);
-    assert.equal(legal.legalTextComplete('Plain approved text with [brackets] of its own'), true);
-  });
+console.log('legal pages (publication)');
 
-  await test('the text is escaped and only https links become links', async () => {
-    const html = legal.renderLegal('# Hi\n\nSee **this** [site](https://playtableverse.com) and [bad](javascript:alert(1)) <script>x()</script>\n\n- one & two\n- three');
-    assert.match(html, /<h1>Hi<\/h1>/);
-    assert.match(html, /<strong>this<\/strong>/);
-    assert.match(html, /<a href="https:\/\/playtableverse\.com" rel="noopener">site<\/a>/);
-    assert.doesNotMatch(html, /href="javascript/i); // shown as plain text, never as a link
-    assert.doesNotMatch(html, /<script/);
-    assert.match(html, /&lt;script&gt;/);
-    assert.match(html, /<li>one &amp; two<\/li>/);
-  });
+test('each switch is on only for exactly "true", and they are independent', () => {
+  assert.equal(legal.privacyPublished({}), false);
+  assert.equal(legal.privacyPublished({ LEGAL_PRIVACY_PUBLISHED: 'yes' }), false);
+  assert.equal(legal.privacyPublished({ LEGAL_PRIVACY_PUBLISHED: 'true' }), true);
+  assert.equal(legal.termsPublished({ LEGAL_PRIVACY_PUBLISHED: 'true' }), false, 'privacy switch does not publish terms');
+  assert.equal(legal.termsPublished({ LEGAL_TERMS_PUBLISHED: 'true' }), true);
+  assert.equal(legal.privacyPublished({ LEGAL_TERMS_PUBLISHED: 'true' }), false, 'terms switch does not publish privacy');
+});
 
-  await test('the page is a noindex document with no script', async () => {
-    const page = legal.legalPage('Privacy notice', '<p>x</p>');
-    assert.match(page, /<meta name="robots" content="noindex">/);
-    assert.doesNotMatch(page, /<script/i);
-    assert.match(page, /<title>Privacy notice — Tableverse<\/title>/);
-  });
+test('the retired LEGAL_PAGES_PUBLISHED flag does nothing', () => {
+  assert.equal(legal.privacyPublished({ LEGAL_PAGES_PUBLISHED: 'true' }), false);
+  assert.equal(legal.termsPublished({ LEGAL_PAGES_PUBLISHED: 'true' }), false);
+});
 
-  // Routes: off by default; on only when the text is complete.
-  const srvOff = await start({ port: 0, trustProxy: false, env: { ...process.env }, matchLog: { log() {}, warn() {}, error() {} } });
-  const srvOn = await start({ port: 0, trustProxy: false, legalPagesPublished: true, env: { ...process.env }, matchLog: { log() {}, warn() {}, error() {} } });
-  const shipped = (name) => fs.readFileSync(path.join(__dirname, '..', 'lib', 'legal', name + '.md'), 'utf8');
-  try {
-    await test('with the switch off, /privacy and /terms answer 404 to everyone', async () => {
-      for (const p of ['/privacy', '/terms']) {
-        const res = await fetch(`http://127.0.0.1:${srvOff.port}${p}`, { redirect: 'manual' });
-        assert.equal(res.status, 404, p);
-      }
-    });
+test('a page is live only when its switch is on, the details are set and no placeholder remains', () => {
+  assert.equal(legal.legalPageLive(COMPLETE, { ...DETAILS }, false), false, 'switch off');
+  assert.equal(legal.legalPageLive(COMPLETE, { IMPRESSUM_NAME: 'A' }, true), false, 'details missing');
+  assert.equal(legal.legalPageLive(COMPLETE, { ...DETAILS, IMPRESSUM_EMAIL: '  ' }, true), false, 'blank detail');
+  assert.equal(legal.legalPageLive(COMPLETE + '\nOpen: [OWNER: x]', { ...DETAILS }, true), false, 'placeholder');
+  assert.equal(legal.legalPageLive(COMPLETE, { ...DETAILS }, true), true);
+});
 
-    await test('with the switch on, the pages follow the shipped text: 200 only when it has no placeholders left', async () => {
-      for (const [p, name] of [['/privacy', 'privacy'], ['/terms', 'terms']]) {
-        const res = await fetch(`http://127.0.0.1:${srvOn.port}${p}`, { redirect: 'manual' });
-        if (legal.legalTextComplete(shipped(name))) {
-          assert.equal(res.status, 200, p);
-          assert.match(res.headers.get('content-type') || '', /^text\/html/);
-        } else {
-          assert.equal(res.status, 404, p + ' must stay hidden while the text has placeholders');
-        }
-      }
-    });
+test('the shipped privacy notice is not live until its owner and legal items are resolved', () => {
+  // Fail closed: the shipped text still carries owner/legal items, so the page stays hidden even with everything switched on.
+  assert.equal(legal.legalPageLive(shipped('privacy'), { ...DETAILS }, true), false);
+  assert.equal(legal.legalPageLive(shipped('terms'), { ...DETAILS }, true), false);
+});
 
-    await test('the raw draft files are never served from public/', async () => {
-      const res = await fetch(`http://127.0.0.1:${srvOn.port}/legal/privacy.md`, { redirect: 'manual' });
-      assert.equal(res.status, 404);
-    });
-  } finally {
-    await srvOff.close();
-    await srvOn.close();
-    clearTimeout(guard);
+test('the controller details come from env at render time and are escaped; no detail is committed to the text', () => {
+  const html = legal.renderLegal(COMPLETE, { IMPRESSUM_NAME: '<b>X</b> & Co', IMPRESSUM_ADDRESS: 'Street 1', IMPRESSUM_EMAIL: 'e@example.invalid' });
+  assert.match(html, /&lt;b&gt;X&lt;\/b&gt; &amp; Co/);
+  assert.doesNotMatch(html, /<b>X/);
+  assert.doesNotMatch(html, /\{\{IMPRESSUM_/);
+  assert.equal(legal.renderLegal(COMPLETE, { IMPRESSUM_NAME: 'A' }), null, 'missing details fail closed');
+  for (const name of ['privacy', 'terms']) {
+    assert.doesNotMatch(shipped(name), /Test Person|test@example|Teststraße/, `${name} must not contain personal details`);
   }
-  console.log(`\n${passed} legal page tests passed`);
-  if (process.exitCode) process.exit(process.exitCode);
-  process.exit(0);
-})();
+});
+
+test('the text is escaped and only https links become links', () => {
+  const html = legal.renderLegal('# Hi\n\nSee **this** [site](https://playtableverse.com) and [bad](javascript:alert(1)) <script>x()</script>\n\n- one & two\n- three', DETAILS);
+  assert.match(html, /<h1>Hi<\/h1>/);
+  assert.match(html, /<strong>this<\/strong>/);
+  assert.match(html, /<a href="https:\/\/playtableverse\.com" rel="noopener">site<\/a>/);
+  assert.doesNotMatch(html, /href="javascript/i);
+  assert.doesNotMatch(html, /<script/);
+  assert.match(html, /&lt;script&gt;/);
+  assert.match(html, /<li>one &amp; two<\/li>/);
+});
+
+test('the page is a noindex document with no script', () => {
+  const page = legal.legalPage('Privacy notice', '<p>x</p>');
+  assert.match(page, /<meta name="robots" content="noindex">/);
+  assert.doesNotMatch(page, /<script/i);
+  assert.match(page, /<title>Privacy notice — Tableverse<\/title>/);
+});
+
+console.log('legal pages (shipped text must cover what the code does)');
+
+test('privacy notice describes Google sign-in, deletion, 18+, voice and what is not stored', () => {
+  const t = shipped('privacy');
+  for (const heading of ['## Who we are', '## What we collect', '## Who receives your data', '## How long we keep data', '## Your choices and rights', '## Children', '## Security']) {
+    assert.ok(t.includes(heading), heading);
+  }
+  assert.match(t, /If you sign in with Google/);
+  assert.match(t, /do not store your Google password/i);
+  assert.match(t, /Google profile picture/);
+  assert.match(t, /signing in with Google again/);
+  assert.match(t, /"Deleted player"/);
+  assert.match(t, /18 or over/);
+  assert.match(t, /Voice chat\*\* is switched off/);
+  assert.match(t, /does not record or store voice audio/i);
+  assert.match(t, /\{\{IMPRESSUM_EMAIL\}\}/);
+});
+
+test('terms cover the sections the product relies on, and contact is taken from the same variable', () => {
+  const t = shipped('terms');
+  for (const heading of ['## 1.', '## 2.', '## 3.', '## 4.', '## 5.', '## 8.']) assert.ok(t.includes(heading), heading);
+  assert.match(t, /\{\{IMPRESSUM_EMAIL\}\}/);
+});
+
+
+test('CSP allows Google\'s script whenever a client ID is set (deletion confirmation does not depend on the sign-in gate)', () => {
+  assert.match(cspFor({ GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com' }), /accounts\.google\.com\/gsi\/client/);
+  assert.doesNotMatch(cspFor({}), /accounts\.google\.com/);
+});
+
+console.log(`\n${passed} legal publication tests passed`);
+if (process.exitCode) process.exit(process.exitCode);

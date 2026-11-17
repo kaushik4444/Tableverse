@@ -11,8 +11,8 @@
     try {
       const r = await fetch('/api/auth/google/config', { credentials: 'same-origin' });
       const c = await r.json();
-      config = c && c.enabled && c.clientId && c.nonce ? c : { enabled: false };
-    } catch { config = { enabled: false }; }
+      config = c && c.clientId && c.nonce && (c.enabled || c.deleteConfirm) ? c : { enabled: false, deleteConfirm: false };
+    } catch { config = { enabled: false, deleteConfirm: false }; }
     return config;
   }
 
@@ -33,11 +33,12 @@
   /** True when the server offers it. Asked once per page load. */
   async function available() { return (config || (await fetchConfig())).enabled === true; }
 
-  /** Puts Google's button into `el`. `onCredential(idToken)` runs when the person finishes Google's own dialog. */
-  async function mount(el, onCredential, onError) {
+  /** Puts Google's button into `el`. `onCredential(idToken)` runs when the person finishes Google's own dialog.
+   *  `forDelete` mounts it for confirming an account deletion, which the server offers even when sign-in is not. */
+  async function mount(el, onCredential, onError, { forDelete = false } = {}) {
     try {
       const c = await fetchConfig(); // fresh each time: the nonce follows this browser's CSRF cookie, which can be replaced
-      if (!c.enabled || !el || !el.isConnected) return false;
+      if (!(forDelete ? c.deleteConfirm : c.enabled) || !el || !el.isConnected) return false;
       await loadScript();
       const id = window.google.accounts.id;
       // a new nonce is fetched when the page's CSRF cookie changed since: the server only accepts tokens minted for this browser

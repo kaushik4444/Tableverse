@@ -17,7 +17,7 @@ function client() {
     hashCode: () => '', policyRequiresVerification: () => false,
   });
   for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
-  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'loadProfile', 'onMessage']) {
+  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'loadProfile', 'applyLegal', 'onMessage']) {
     const match = source.match(new RegExp('^  (?:async )?function ' + name + '\\([^]*?^  }', 'm'));
     assert.ok(match, name);
     vm.runInContext(match[0], c);

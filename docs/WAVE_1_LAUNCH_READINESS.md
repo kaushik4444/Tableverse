@@ -156,6 +156,9 @@ Test accounts must not be the testers' accounts. Record times and account ids, n
 | O-8 | Retention for chat reports and broadcast history | Pending owner action |
 | O-9 | Who reads reports, how often, appeals | Owner, daily during the beta, by query. No appeals route yet |
 | O-10 | Approval of the four policy documents and who answers beta reports | Pending owner action |
+| O-11 | Privacy notice: the remaining owner and legal items in `lib/legal/privacy.md` (see section 7) | Pending owner action. Blocks `LEGAL_PRIVACY_PUBLISHED` and therefore Google sign-in |
+| O-12 | Google sign-in: web client ID, consent scopes (openid, email, profile only), Branding privacy URL, and the Render variable `GOOGLE_CLIENT_ID` | Pending owner action. Set after O-11 |
+| O-13 | Terms: approval of the wording and open items in `lib/legal/terms.md` | Pending owner action. Does not block Google sign-in |
 
 ## 7. Blockers, grouped
 
@@ -177,6 +180,22 @@ Test accounts must not be the testers' accounts. Record times and account ids, n
 1. Approve the Privacy Notice, Beta Terms and Impressum wording and the 14 open questions (O-6).
 2. Owner identity and contact details (O-5, D-4).
 3. Accept any remaining risk in writing.
+
+**Privacy and Google sign-in (launch blockers)**
+Google sign-in stays off until the privacy notice is live. The notice is live only when `LEGAL_PRIVACY_PUBLISHED=true`, the `IMPRESSUM_*` details are set on Render (already configured; the values are not in Git) and no `[OWNER`/`[LEGAL` item is left in the text. Owner or legal decisions still needed:
+1. Legal basis for each purpose (EU and UK users). Legal item in the privacy notice.
+2. Hosting and database regions, and confirmation of processor terms for Render, Neon, GitHub, Resend, Metered and Google.
+3. Retention for chat reports, match history, rate-limit records and hosting logs.
+4. Who has access to production data, and how access and copy requests are handled, with a response time.
+5. Confirm that the usage counts contain no names, addresses or messages.
+6. The "Last updated" date.
+Then, on Render (owner action, not done by the code): set `GOOGLE_CLIENT_ID`, set `LEGAL_PRIVACY_PUBLISHED=true`, and set the Google Branding privacy URL to `https://playtableverse.com/privacy`. Keep the consent scopes to openid, email and profile.
+
+**Privacy and Terms (complete before wider launch; not Google blockers)**
+- Terms approval items: wording of the warranty and limitation section, multiple accounts, notice period, and the report and appeal wording.
+- 18+ self-declaration adequacy for each country where there are users (legal review).
+- Breach notification commitments (legal review).
+- Confirm: no legacy guest records exist; usernames cannot be changed in the app; no owner announcement e-mails are sent during the beta.
 
 ## 8. Go / no-go
 
