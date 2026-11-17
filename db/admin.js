@@ -521,23 +521,26 @@ async function purge() {
 }
 
 // ---------------------------------------------------------------- game switches (owner)
-/** Every explicit switch: { game_id, enabled, updated_at }. A game without a row is enabled (lib/gameFlags.js). */
+/** Every explicit switch: { game_id, access, enabled, updated_at }. A game without a row is on for everyone (lib/gameFlags.js). */
 async function listGameFlags() {
-  return (await db.query('SELECT game_id, enabled, updated_at FROM game_flags')).rows;
+  return (await db.query('SELECT game_id, access, enabled, updated_at FROM game_flags')).rows;
 }
 
-/** Turns one game on or off. Audited in the same transaction. */
-async function setGameFlag({ actorId, gameId, enabled }) {
+/**
+ * Sets one game's access mode ('on' | 'admins' | 'guests' | 'owner'). `enabled` is kept in step (true only for 'on'), so an
+ * older application version reads a restricted game as off. Audited in the same transaction.
+ */
+async function setGameFlag({ actorId, gameId, access }) {
   await db.withTransaction(async (c) => {
     // Only a real change is written and audited: repeating the same value leaves no second entry.
     const r = await c.query(
-      `INSERT INTO game_flags (game_id, enabled, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
-       ON CONFLICT (game_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW(), updated_by = EXCLUDED.updated_by
-       WHERE game_flags.enabled IS DISTINCT FROM EXCLUDED.enabled
+      `INSERT INTO game_flags (game_id, enabled, access, updated_at, updated_by) VALUES ($1, $2, $3, NOW(), $4)
+       ON CONFLICT (game_id) DO UPDATE SET access = EXCLUDED.access, enabled = EXCLUDED.enabled, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+       WHERE game_flags.access IS DISTINCT FROM EXCLUDED.access
        RETURNING game_id`,
-      [gameId, Boolean(enabled), actorId]
+      [gameId, access === 'on', access, actorId]
     );
-    if (r.rows.length) await audit(c, { actorId, action: 'game.switch', targetType: 'game', targetId: gameId, detail: { enabled: Boolean(enabled) } });
+    if (r.rows.length) await audit(c, { actorId, action: 'game.switch', targetType: 'game', targetId: gameId, detail: { access } });
   });
 }
 
