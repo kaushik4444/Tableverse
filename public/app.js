@@ -68,6 +68,10 @@
     wnSeen: store.get('ct_wn_seen') || '', // the last What's new version this person opened
     sessionListOpen: store.get('ct_sessions_open') !== '0',
     guest: false, // true when the home screen is the public snapshot (no socket, no session)
+    isGuest: false, // a guest session: a temporary account made by "Play as a guest" (lib/guestPolicy.js)
+    role: null, // owner | admin | user | guest, once known (decides which games are open, see gameOpenFor)
+    guestPlay: false, // the server allows new guest sessions (GUEST_PLAY_ENABLED)
+    guestHours: 72, // how long a guest session lasts, from the server
     signingIn: false, // logged in on the server, waiting for the socket's welcome: the top bar shows the profile and taps are blocked
     auth: null, // the open auth sheet: 'login' or 'register'
     requireEmailVerification: true, // current server policy; secure default until the server says otherwise
@@ -177,6 +181,9 @@
   });
 
   const gameMeta = (id) => S.games.find((g) => g.id === id);
+  /** The account reminder for a guest on this page (lib/guest.js decides whether it may show now); '' for everybody else. */
+  const guestNudge = (ctx) => (S.isGuest && window.TvGuest ? window.TvGuest.nudgeHTML(ctx, { guest: true, hours: S.guestHours }) : '');
+  const addNudge = (ctx) => { const host = $app.querySelector('main, .page'); const n = guestNudge(ctx); if (host && n) host.insertAdjacentHTML('afterbegin', n); };
   /** May this viewer play the game now: the owner's access mode (public/game-access.js) for this viewer's role. Before the
    *  viewer is known (the public page), only a game open to everybody counts. The server is the authority. */
   const gameOpenFor = (g) => {
@@ -396,6 +403,8 @@
       if (!out || !out.ok || !out.authenticated) return false;
       adoptPlayer(out.player);
       S.emailVerified = !!out.emailVerified;
+      S.isGuest = out.isGuest === true;
+      S.role = out.role || (S.isGuest ? 'guest' : 'user');
       S.welcomeDue = out.welcome === true; // first login: the welcome dialog is shown once, after the lobby starts
       refreshLevel();
       return true;
@@ -411,6 +420,7 @@
     S.csrf = '';
     S.emailVerified = false;
     S.email = '';
+    S.isGuest = false; S.role = null;
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
     S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; levelRequest += 1; S.latestProgress = null; S.latestProgressUser = null; S.latestProgressRequest = 0; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
@@ -656,7 +666,53 @@
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
 
+  /** "Play as a guest": the server makes a temporary account and a session cookie. The page connects as that guest. */
+  function finishGuestSignIn(out) {
+    S.token = '';
+    if (out.csrfToken) S.csrf = out.csrfToken;
+    adoptPlayer(out.player || {});
+    S.isGuest = true; S.role = 'guest';
+    S.guestHours = Number(out.expiresInHours) || 72;
+    S.requireEmailVerification = false; S.emailVerified = false;
+    S.signedOutIntentionally = false;
+    S.welcomeDue = false;
+    closeOverlay();
+    beginSignIn();
+    connect();
+  }
+  async function doPlayAsGuest(name) {
+    const out = await withBusy('Starting your guest visit…', () => postJson('/api/auth/guest', { displayName: name || undefined, avatar: S.avatar || undefined }));
+    finishGuestSignIn(out);
+  }
+  function openGuestSheet(msg = '') {
+    closeOverlay();
+    const overlay = document.createElement('div');
+    overlay.id = 'auth-overlay';
+    overlay.className = 'overlay';
+    overlay.innerHTML = window.TvGuest.guestSheetHTML({ hours: S.guestHours }) + (msg ? `<p class="auth-msg" role="status">${esc(msg)}</p>` : '');
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeOverlay(); });
+    document.body.appendChild(overlay);
+    const first = document.getElementById('guestName');
+    if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
+  }
+  // The guest sheet's "create a free account" and the reminder's button both open the register sheet.
+  if (window.TvGuest) window.TvGuest.hooks.upgrade = () => openAuthSheet('register');
+
+  /** A guest turns into an account in place: the same player row (stats and games stay). The server then asks for the email check. */
+  async function doUpgradeGuest(username, email, password, adultConfirmed) {
+    const out = await withBusy('Creating your account…', () => postJson('/api/auth/upgrade-guest', { username, email, password, adultConfirmed: adultConfirmed === true }));
+    S.isGuest = false; S.role = 'user';
+    if (out.csrfToken) S.csrf = out.csrfToken;
+    S.requireEmailVerification = policyRequiresVerification(out);
+    S.emailVerified = false;
+    S.signedOutIntentionally = false;
+    closeOverlay();
+    connect(); // reconnect as the registered account; the server re-reads it (and asks for verification when required)
+    toast(out.message || 'Your account is ready. Check your email to verify it.');
+  }
+
   async function doRegister(name, username, email, password, adultConfirmed) {
+    if (S.isGuest) return doUpgradeGuest(username, email, password, adultConfirmed);
     const out = await withBusy('Creating your account…', () => postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined, adultConfirmed: adultConfirmed === true }));
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
@@ -1003,6 +1059,7 @@
       const out = await r.json();
       if (out && out.ok) {
         S.games = out.games || [];
+        S.guestPlay = out.guestPlay === true;
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
         // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
@@ -1319,6 +1376,13 @@
         loginBusy = false;
       }
     }
+    if (e.target.id === 'guestForm') {
+      e.preventDefault();
+      const name = String((document.getElementById('guestName') || {}).value || '').trim();
+      const btn = e.target.querySelector('[type="submit"]');
+      if (btn) btn.disabled = true;
+      try { await doPlayAsGuest(name); } catch (err) { toast(err.message || 'Could not start a guest visit'); if (btn) btn.disabled = false; }
+    }
     if (e.target.id === 'registerForm') {
       e.preventDefault();
       const name = (document.getElementById('registerName') || {}).value;
@@ -1342,6 +1406,7 @@
     if (!a) return;
     if (a.dataset.act === 'showLogin') return openAuthSheet('login');
     if (a.dataset.act === 'showRegister') return openAuthSheet('register');
+    if (a.dataset.act === 'playAsGuest') return openGuestSheet();
     if (a.dataset.act === 'showAuth') return openAuthSheet(S.auth || 'login');
     if (a.dataset.act === 'forgotPassword') return doForgotPassword();
     if (a.dataset.act === 'resendVerification') return doResendVerification();
@@ -2502,6 +2567,10 @@
     else if (!S.room) renderHome();
     else if (S.room.status === 'lobby') renderLobby();
     else renderGame();
+    // Account reminders for a guest: never over a game in progress (the game-over card has its own, see endFlow)
+    if (S.isGuest && !S.room && S.page === 'profile') addNudge('profile');
+    if (S.isGuest && !S.room && S.page === 'friends') addNudge('friends');
+    if (S.isGuest && S.room && S.room.status === 'lobby' && S.room.hostId === S.id) addNudge('create');
     updateWatchers();
     if ($chat && S.chatOpen) drawChat();
     showLevelUpDialog();
@@ -2546,8 +2615,9 @@
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
           <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
-          ${S.guest ? '<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button></div>' : ''}
+          ${S.guest ? `<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button>${S.guestPlay ? '<button type="button" class="btn ghost" data-act="playAsGuest">Play as a guest</button>' : ''}</div>` : ''}
         </div>
+        ${guestNudge('home')}
         <form class="join-form" id="joinForm" aria-label="Join a table">
           <label class="label" for="code">Have a table code?</label>
           <div class="join-row"><input id="code" type="text" maxlength="6" placeholder="ABCDEF" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc(S.draftCode)}"><button class="btn" type="submit">Join</button></div>
@@ -2988,6 +3058,9 @@
         if (inSheet) inSheet.insertAdjacentHTML('beforeend', `<div class="end-bar end-bar-in">${html}</div>`);
         else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
       }
+      // The game-over reminder: the one stronger prompt for a guest, placed by the end actions (never during play)
+      const gameNudge = guestNudge('gameover');
+      if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       // Lifetime game XP comes from the server once per finished game (the table's own game only)
       const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.totals : null;
