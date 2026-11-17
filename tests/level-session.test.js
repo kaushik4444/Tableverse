@@ -149,7 +149,7 @@ test('the level-up dialog waits for a menu visit, shows once, and counts as seen
   c.S.username = 'alice'; c.showLevelUpDialog();
   assert.equal(opened.length, 1);
   assert.match(opened[0].body, /reaching level 3/);
-  assert.match(opened[0].body, /Next level in 130 XP/);
+  assert.match(opened[0].body, /Next level in 130 min of play/);
   assert.equal(values.get('ct_level_seen_alice'), '3', 'seen as soon as it opens');
   assert.equal(c.S.levelUp, null);
   c.showLevelUpDialog();

@@ -918,7 +918,9 @@ function start(opts = {}) {
           const record = buildMatchRecord(room, g);
           if (!record) console.error(`[server] ${room.gameId} cannot report results; match not recorded`);
           else {
-            matchQueue.enqueue(record); // never blocks the game and never rejects; failures are retried and logged by the queue
+            // never blocks the game and never rejects; failures are retried and logged by the queue. The promise is kept so the
+            // game-over totals wait for this game's own save (not the whole queue).
+            room.matchSaved = matchQueue.enqueue(record);
             // The XP each seat earned, from the same record: the game-over screen shows exactly what is stored
             const seats = room.seated || room.members;
             // Only signed-in accounts at the table keep their XP; guests and anonymous players are shown but not kept.
@@ -1633,8 +1635,14 @@ function start(opts = {}) {
       const matchId = room.outcome.at;
       const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
       (async () => {
-        const flushed = await matchQueue.drain(3000); // this game's own record may still be on its way to the database
-        if (flushed === false) throw new Error('this game is not saved yet');
+        if (!ids.length) return {};
+        // This game's own save, waited for at most three seconds. The queue resolves { status: 'failed' } when its retries run
+        // out, and a missing promise means nothing was queued: both count as "not saved".
+        const saved = await new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(null), 3000);
+          Promise.resolve(room.matchSaved).then((res) => { clearTimeout(timer); resolve(res || null); });
+        });
+        if (!saved || saved.status === 'failed') throw new Error('this game is not saved yet');
         const totals = {};
         await Promise.all(ids.map(async (id) => {
           const progress = await dbMatches.getProgress(id);

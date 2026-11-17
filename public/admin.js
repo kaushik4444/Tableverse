@@ -409,7 +409,7 @@
       <div class="ad-scroll"><table class="ad-t stack" data-paged><thead><tr>${uHeaders}<th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="ad-muted">No players found.</td></tr>'}</tbody></table></div>
       <div class="ad-row" style="margin-top:12px"><button class="ad-btn" id="uPrev" ${page <= 1 ? 'disabled' : ''}>Previous</button><span class="ad-muted">Page ${page} of ${pages}</span><button class="ad-btn" id="uNext" ${page >= pages ? 'disabled' : ''}>Next</button></div>
       <p class="ad-muted">E-mail addresses are never shown here. ${owner ? 'As the owner you manage admin roles; the owner role itself cannot be changed.' : 'Only the owner can manage admin roles.'}</p>`;
-    document.getElementById('uSearch').onsubmit = (e) => { e.preventDefault(); { const d = new FormData(e.target); users(d.get('q'), 1, Number(d.get('stale')) || 0).catch(fail); } };
+    document.getElementById('uSearch').onsubmit = (e) => { e.preventDefault(); { const d = new FormData(e.target); const cur = state.usersSel || {}; users(d.get('q'), 1, Number(d.get('stale')) || 0, cur.sort || '', cur.dir || '').catch(fail); } };
     // Refreshes the list the admin is looking at now (their latest search or filter), not the one this view was drawn with
     const reloadUsers = () => {
       const sel = state.usersSel || { q, page, stale };
