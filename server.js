@@ -2338,8 +2338,6 @@ function start(opts = {}) {
         flagsReady = refreshFlags();
         flagTimer = setInterval(refreshFlags, gameFlags.REFRESH_MS);
         flagTimer.unref();
-      } else {
-        gameFlags.apply([]); // no database, so there are no switches: every game is on
       }
       // old rate-limit rows, expired sessions and used tokens: once now, then every 6 hours (best effort)
       const purge = () => dbAuth.purgeExpired().catch((e) => (opts.log || console).error('[auth] housekeeping failed: ' + e.message));
@@ -2356,6 +2354,8 @@ function start(opts = {}) {
         broadcastTimer.unref();
       }
     }
+    // no database (memory mode): there are no switches, so every game is on; with a database the switches were read above
+    if (!(info && info.mode === 'postgres')) gameFlags.apply([]);
     if (metered) metered.start(); // both modes: the credential is fetched ahead of the first welcome, and refreshed in the background
     return flagsReady.then(() => new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine }))));
   });
