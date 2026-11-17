@@ -2893,7 +2893,7 @@
    * this person has earned in this same game across all their stored matches. Time-played (Player Progress) XP is not
    * shown here. `totals` maps player id to lifetime game XP, or is null while the server has not answered yet.
    */
-  function endXpHTML(rows, gameName, totals) {
+  function endXpHTML(rows, gameName, totals, gaveUp = false) {
     const people = rows.filter((x) => !x.isBot);
     if (!people.length) return '';
     const game = esc(gameName || 'Game');
@@ -2901,7 +2901,8 @@
     const unranked = (x) => x.gameXp === null || x.gameXp === undefined;
     const lifetime = (x) => {
       if (!x.saved) return '–'; // guests have no stored history
-      if (!totals) return '…';
+      // "…" while the answer may still come; "n/a" once every try has gone unanswered (a late answer still replaces it)
+      if (!totals) return gaveUp ? 'n/a' : '…';
       return fmtXp(totals[x.id] || 0);
     };
     const note = mine && !mine.saved ? '<p class="xp-note">Guest games are not kept. Sign in to keep your game XP.</p>' : '';
@@ -2977,7 +2978,8 @@
         setTimeout(() => render(), 5100); // one re-render later: endFlow asks again only if the answer is still missing
       }
       if (xpRows.length && !$app.querySelector('.end-xp')) {
-        const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals);
+        const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3;
+        const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals, gaveUp);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
