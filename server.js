@@ -865,7 +865,7 @@ function start(opts = {}) {
    */
   /** The public state the deadline logic reads (phase, multiplier, whose turn). The adapter exposes it through view(). */
   function publicState(g) {
-    try { const v = g.view(null) || {}; return { phase: v.phase, multiplier: v.multiplier || 1, turn: v.turn }; } catch (_) { return {}; }
+    try { const v = g.view(null) || {}; return { phase: v.phase, multiplier: v.multiplier || 1, turn: v.turn, batch: v.batch }; } catch (_) { return {}; }
   }
   function touchTimer(room) {
     const g = room.game;
@@ -875,7 +875,7 @@ function start(opts = {}) {
     // A batch is one set of people answering the same question. A change of phase or multiplier (a double, a redouble, or the
     // challenge ending) starts a new one, so the answering side is never left with a deadline that was almost up.
     const ps = publicState(g);
-    const key = ps.phase + ':' + ps.multiplier;
+    const key = ps.phase + ':' + ps.multiplier + ':' + (ps.batch === undefined ? '' : ps.batch); // a game may add `batch` so each simultaneous turn gets its own deadline
     const sameBatch = prev.length > 1 && room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id));
     room.waitingKey = key;
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));

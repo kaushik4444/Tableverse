@@ -1,0 +1,52 @@
+/* Penalty Rows: four rows of numbered cards, scoreboard, hand. Builds on table.css (panels, status bar, overlay). */
+.pr .pr-card { display: grid; place-items: center; position: relative; aspect-ratio: 3 / 4; min-width: 0; padding: 0; border-radius: 8px; border: 2px solid rgba(0, 0, 0, .25); background: #fff; color: #1d2433; font: inherit; line-height: 1; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.pr .pr-card b { font-size: clamp(14px, 4.6vw, 22px); font-weight: 800; }
+.pr .pr-card i { position: absolute; right: 3px; bottom: 2px; font-style: normal; font-size: 10px; font-weight: 800; opacity: .8; }
+.pr .pr-card.pen1 { background: #f4f7fb; }
+.pr .pr-card.pen2 { background: #ffe9a8; }
+.pr .pr-card.pen3 { background: #ffc97a; }
+.pr .pr-card.pen5 { background: #ff9d7a; }
+.pr .pr-card.pen6, .pr .pr-card.pen7 { background: #f26b6b; color: #111; }
+.pr .pr-card i { opacity: 1; }
+.pr .pr-card.tiny { display: inline-grid; width: 30px; vertical-align: middle; }
+.pr .pr-card.tiny b { font-size: 13px; }
+.pr .pr-rows { display: grid; gap: 6px; margin-top: 8px; }
+.pr .pr-row { display: grid; grid-template-columns: 54px 1fr; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 12px; background: var(--panel); border: 2px solid var(--panel-line); color: var(--ink); font: inherit; text-align: left; }
+.pr .pr-row.full { border-color: rgba(242, 107, 107, .8); }
+.pr .pr-rowhead { display: grid; gap: 2px; }
+.pr .pr-rowhead small { font-size: 11px; opacity: .8; }
+.pr .pr-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.pr .pr-slot { aspect-ratio: 3 / 4; border-radius: 8px; border: 2px dashed var(--panel-line); opacity: .6; }
+.pr button.pr-row.take { cursor: pointer; border-color: var(--gold, #f2c14e); min-height: 44px; }
+.pr button.pr-row.take:hover { background: rgba(242, 193, 78, .18); }
+.pr button.pr-row.take:focus-visible, .pr .pr-hand .pr-card:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; }
+.pr .pr-pending { margin: 6px 0 0; text-align: center; font-weight: 700; font-size: 14px; }
+.pr .pr-score { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; }
+.pr .pr-score li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 22px; gap: 8px; align-items: center; padding: 5px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-line); font-size: 14px; }
+.pr .pr-score li.me { border-color: var(--gold, #f2c14e); }
+.pr .pr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr .pr-tot { font-weight: 800; }
+.pr .pr-tot small { font-weight: 600; opacity: .65; }
+.pr .pr-rnd { opacity: .8; font-size: 13px; }
+.pr .pr-state { text-align: center; font-weight: 800; }
+.pr .pr-last { overflow-wrap: anywhere; margin: 8px 0 0; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-size: 13px; color: var(--ink); line-height: 1.35; }
+.pr .pr-hand { display: grid; grid-template-columns: repeat(5, minmax(44px, 64px)); justify-content: center; gap: 6px; margin-top: 10px; }
+.pr .pr-hand .pr-card { cursor: pointer; min-height: 44px; }
+.pr .pr-hand .pr-card.sel { transform: translateY(-6px); border-color: var(--gold, #f2c14e); box-shadow: 0 0 0 3px var(--gold, #f2c14e), 0 6px 12px rgba(0, 0, 0, .35); }
+.pr .pr-hand .pr-card.dim { opacity: .55; cursor: default; }
+.pr .pr-empty { text-align: center; padding: 14px 8px; opacity: .75; }
+.pr .pr-final { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.pr .pr-final li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .06); }
+.pr .pr-final li.win { background: rgba(242, 193, 78, .2); }
+@media (max-width: 520px) and (max-height: 700px) {
+  .pr .pr-rows { gap: 3px; margin-top: 4px; }
+  .pr .pr-row { padding: 3px 6px; grid-template-columns: 44px 1fr; }
+  .pr .pr-cards { gap: 3px; }
+  .pr .pr-cards .pr-card, .pr .pr-slot { aspect-ratio: 1 / 1; }
+  .pr .pr-card b { font-size: 14px; }
+  .pr .pr-score { gap: 2px; margin-top: 4px; }
+  .pr .pr-score li { padding: 2px 8px; font-size: 13px; }
+  .pr .pr-hand { gap: 4px; margin-top: 6px; }
+  .pr .pr-hand .pr-card { aspect-ratio: 1 / 1; }
+  .pr .pr-last { display: none; }
+}

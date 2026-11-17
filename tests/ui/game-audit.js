@@ -19,6 +19,7 @@ const PUBLIC = path.join(__dirname, '..', '..', 'public');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/json' };
 const CASES = process.env.UI_GAME ? [[process.env.UI_GAME, Number(process.env.UI_SEATS || 4)]]
   : [['wizard', 3], ['wizard', 6], ['twentynine', 4], ['poker', 2], ['poker', 6], ['poker', 8], ['themind', 2], ['themind', 4], ['gofish', 2], ['gofish', 4], ['gofish', 6]].concat(games.get('snakesladders') ? [['snakesladders', 2], ['snakesladders', 4]] : []).concat(['ludo'].filter((id) => games.get(id)).flatMap((id) => [[id, 2], [id, 4], [id, 6]]))
+    .concat([['penaltyrows', 2], ['penaltyrows', 4], ['penaltyrows', 8]].filter(([id]) => games.get(id)))
     .concat(['propertyrivals', 'tictactoe', 'fourinarow'].filter((id) => games.get(id)).flatMap((id) => (id === 'propertyrivals' ? [[id, 2], [id, 4], [id, 6]] : [[id, 2]])));
 const SIZES = [
   { name: '320x568', width: 320, height: 568 }, { name: '360x640', width: 360, height: 640 }, { name: '390x844', width: 390, height: 844 },
