@@ -879,7 +879,8 @@ function start(opts = {}) {
     // challenge ending) starts a new one, so the answering side is never left with a deadline that was almost up.
     const ps = publicState(g);
     const key = ps.phase + ':' + ps.multiplier + ':' + (ps.batch === undefined ? '' : ps.batch); // a game may add `batch` so each simultaneous turn gets its own deadline
-    const sameBatch = prev.length > 1 && room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id));
+    const batched = ps.batch !== undefined;
+    const sameBatch = room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id)) && (batched || prev.length > 1);
     room.waitingKey = key;
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
     if (!limit || !humanWaiting) room.deadline = null;

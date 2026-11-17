@@ -15,7 +15,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
   const open = async (messages, viewport) => {
     const { page, ctx } = await scriptedPage(browser, { messages, viewport });
     await page.goto(url + '/');
-    await page.waitForSelector('.pr', { timeout: 8000 });
+    await page.waitForSelector('.prt', { timeout: 8000 });
     return { page, ctx };
   };
 
