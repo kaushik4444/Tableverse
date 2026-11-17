@@ -21,7 +21,9 @@ Tableverse is a free, beta multiplayer card and board game service, run by {{IMP
 - Your confirmation that you are 18 or over, and when you gave it.
 
 **For all signed-in accounts:**
-- Your match results: the games you finished, your seat, your score and your position. You can see your full history. Your public profile shows only your username, display name, avatar, join date and win totals.
+- Your match results: the games you finished, your seat, your score and your position. You can see your full history. Your public profile shows your username, display name, avatar, join date, win totals, your level, and your XP and games played in each game.
+- Your level and your game XP. These are calculated from your finished games. They are shown on your profile, on your public profile, and on your player card when you sit at a table. When a game you played finishes, your lifetime XP in that game is also shown to the other people at that table. Time played and leave counts are not shown publicly.
+- The weekly board, if you turn it on. It is off by default. When it is on, your display name and your game XP in that game are shown to all players for the last 7 days.
 - Your friends, friend requests, blocks, and tables you have recently visited.
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 
@@ -33,7 +35,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by {{IMP
 - Aggregate usage statistics, such as how many players were active on a day. [OWNER: confirm that these counts contain no names, addresses or messages.]
 
 **Reports and feedback you send:**
-- A chat report includes the reported message (up to 200 characters), the reason and, optionally, a short note. Reports you file are removed when your account is deleted. Reports made against your account are kept, with the link to your account cleared. [OWNER: retention period for reports.]
+- A chat report includes the reported message (up to 200 characters), the reason and, optionally, a short note. Reports you file are removed when your account is deleted. Reports made against your account are kept, with the link to your account cleared, and the name at the time of the report stays on them: deleting your account does not remove that name from those reports. [OWNER: retention period for reports.]
 - Feedback you send through the in-app form is kept with your account link. The form asks you not to include personal details.
 
 **Voice chat** is switched off in the beta. While it is off, no voice connection details are handed out and voice messages are refused. When voice is switched on, audio is set up directly between players where possible, and relayed through Metered's TURN servers when a direct connection is not possible. Tableverse does not record or store voice audio.
@@ -55,6 +57,10 @@ To run the service you asked for: signing you in, keeping your games and results
 [OWNER: hosting and database regions, and confirmation of processor terms with each provider above.]
 
 We do not sell your data. The game pages do not load advertising or analytics scripts. The page loads Google's sign-in script only when you sign in with Google or confirm an account deletion with Google. If you choose to share a table link through the share button, the text is opened in WhatsApp and is sent only where you send it.
+
+## Staff access
+
+Staff accounts (admins and the owner) use an admin console. For each player it shows the username, display name, country, join and last-seen dates, games played, wins, minutes played, games left early and the account level. It does not show your e-mail address or your password. Staff actions on an account, such as opening its profile or suspending it, are written to an audit log, kept for 365 days.
 
 ## Promotional e-mail
 

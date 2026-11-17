@@ -8,6 +8,17 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-17-game-over-table',
+      date: '2026-11-17',
+      title: 'One table at the end of a game',
+      items: [
+        { ico: '🏁', title: 'Game XP at the end of a game, in one table', text: 'The game-over screen no longer shows progress cards. It lists everyone at the table with the XP they earned in that game.' },
+        { ico: '📈', title: 'Your lifetime XP in each game', text: 'The same table shows each player’s lifetime XP in that game across all their finished matches. Guests show a dash, since their games are not kept.' },
+        { ico: '🎉', title: 'Level-up dialog', text: 'When you reach a new level, the next time you open the menu shows your new level and how much XP is left to the next one.' },
+        { ico: '🗂️', title: 'Admin console sorting', text: 'Admin tables can be sorted by their columns, and the player directory shows each player’s level.' },
+      ],
+    },
+    {
       version: '2026-11-15-level-and-follow',
       date: '2026-11-15',
       title: 'Your level, and where to follow us',

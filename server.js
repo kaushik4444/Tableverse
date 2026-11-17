@@ -680,12 +680,15 @@ function start(opts = {}) {
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
       members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m), standIn: isStandIn(room, m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
-      outcome: room.status === 'finished' && room.outcome ? { winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
+      outcome: room.status === 'finished' && room.outcome ? { id: room.outcome.at, winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
       // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
       leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
+      // Per person: who has a penalty pending, and how many times each person has left this game. The client works out what
+      // leaving means for its own player from this (a rejoin does not reset the count; the third leave is final).
+      leaveInfo: room.status === 'playing' ? { abandoned: Boolean(room.abandoned), pending: [...(room.forfeits || [])], counts: Object.fromEntries(room.leaveCounts || []) } : null,
       rejoinWindowSeconds: Math.round(rejoinWindowMs / 1000), // how long a person who leaves may take the seat back
       now: Date.now(), // lets clients correct for clock differences
     };
@@ -1616,6 +1619,35 @@ function start(opts = {}) {
       broadcast(room);
     },
 
+    // Game over: the lifetime game XP of each signed-in person at this table, for this game (their stored game points across
+    // all matches). Only the table's own finished game is answered, so nobody can ask for totals outside their table.
+    gameTotals(p) {
+      const room = rooms.get(p.room);
+      if (!room || room.status !== 'finished' || !room.outcome || !Array.isArray(room.outcome.xp)) return;
+      const now = Date.now();
+      if (p.totalsAt && now - p.totalsAt < 1000) return;
+      p.totalsAt = now;
+      const gameId = room.gameId;
+      const matchId = room.outcome.at;
+      const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
+      (async () => {
+        const flushed = await matchQueue.drain(3000); // this game's own record may still be on its way to the database
+        if (flushed === false) throw new Error('this game is not saved yet');
+        const totals = {};
+        await Promise.all(ids.map(async (id) => {
+          const progress = await dbMatches.getProgress(id);
+          totals[id] = (progress.games[gameId] || {}).points || 0;
+        }));
+        return totals;
+      })().then(
+        (totals) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, totals }),
+        (err) => {
+          console.error('[server] game totals failed:', err.message);
+          sendError(p, 'Game totals are unavailable right now');
+        }
+      );
+    },
+
     // Profile statistics for the asking player only (nobody can request somebody else's)
     getStats(p) {
       const now = Date.now();
@@ -1727,6 +1759,8 @@ function start(opts = {}) {
       for (const m of room.seated) if (!m.bot && isConnected(m)) startPlay(room, m.id, room.startedAt);
       room.leftEarly = new Set();
       room.forfeits = new Set();
+      room.finalForfeits = new Set();
+      room.leaveCounts = new Map();
       room.abandoned = false;
       room.deadline = null;
       room.waiting = [];

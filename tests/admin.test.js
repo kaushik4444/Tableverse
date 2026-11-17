@@ -198,7 +198,7 @@ const ADMIN_POSTS = [
       assert.equal((await user.b.get('/api/admin/players/profile?username=ann')).status, 403);
       const r = await admin.b.get('/api/admin/players?q=an&sort=games&page=2');
       assert.equal(r.status, 200);
-      assert.deepEqual(s.store.playerCalls.at(-1), { q: 'an', sort: 'games', page: '2' });
+      assert.deepEqual(s.store.playerCalls.at(-1), { q: 'an', sort: 'games', dir: '', page: '2' }); // dir is empty unless a header chose one
       assert.equal(r.json.players[0].username, 'ann');
       assert.ok(!JSON.stringify(r.json).match(/email|token|password|ip/i), 'no address, token or secret in the answer');
       const target = [...s.store.players.values()].find((x) => x.username && !x.is_anonymous);

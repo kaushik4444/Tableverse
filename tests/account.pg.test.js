@@ -81,9 +81,9 @@ function socket(port, cookie) {
       const pub = await anon.get(`/api/players/${u.username}`);
       assert.equal(pub.status, 200);
       assert.deepEqual(Object.keys(pub.json.profile).sort(), ['avatar', 'blockedByMe', 'displayName', 'joinedAt', 'played', 'progress', 'username', 'winRate', 'wins']);
-      // progress is the only addition, and it holds levels and counts, nothing personal
-      assert.deepEqual(Object.keys(pub.json.profile.progress).sort(), ['account', 'games', 'penalisedLeaves']);
-      assert.equal(pub.json.profile.progress.account.level, 1);
+      // progress is the only addition: the level, and each game's XP and games played. No minutes, leave counts or matches.
+      assert.deepEqual(Object.keys(pub.json.profile.progress).sort(), ['games', 'level']);
+      assert.equal(pub.json.profile.progress.level, 1);
       assert.equal(pub.json.profile.blockedByMe, false, 'an anonymous viewer has blocked nobody');
       const raw = JSON.stringify(pub.json);
       for (const secret of [u.email, u.id, 'password', 'token', 'session', 'hash']) assert.ok(!raw.toLowerCase().includes(String(secret).toLowerCase()), 'public profile leaks ' + secret);
