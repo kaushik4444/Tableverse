@@ -11,6 +11,7 @@
 - Take your seat back within `REJOIN_GRACE_SECONDS` (default 120) of your first departure: the penalty goes. After that the bot keeps the seat.
 - Active play time: XP and `seconds_played` count only the time a person was seated and connected. A dropped connection pauses it.
 - Game over: no progress cards. One table shows each person's XP in this game and their lifetime XP in the same game (`gameTotals`, read from stored matches after this game is written).
+- Level-up dialog: when you reach a new level, the next menu visit shows "Congratulations on reaching level X" with the XP to the next level, and an OK button. Shown once per level, per device.
 - Progress levels, per-game skill points, version history, shutdown saves leavers' losses (migration 025 and 026).
 
 Details: `docs/LEAVING_AND_REJOINING.md`, `docs/PROGRESS_LEVELS.md`.
