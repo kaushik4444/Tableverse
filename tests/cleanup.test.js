@@ -24,8 +24,8 @@ test('it covers exactly the tables the migrations create, and every one is eithe
   assert.deepEqual([...created].sort(), c.KNOWN_TABLES, 'a new table must be classified in db/cleanup.js (and given a test) before this script may run again');
   assert.ok(c.CLEAN_TABLES.every((t) => !c.PRESERVE.some((p) => p.table === t)), 'no table is both');
 });
-test('schema_migrations is preserved and is not in the delete list', () => {
-  assert.deepEqual(c.PRESERVE.map((p) => p.table), ['schema_migrations']);
+test('schema_migrations and the game switches are preserved and are not in the delete list', () => {
+  assert.deepEqual(c.PRESERVE.map((p) => p.table), ['schema_migrations', 'game_flags']);
   assert.ok(!c.CLEAN_TABLES.includes('schema_migrations'));
 });
 test('the delete order puts every table before the tables it references', () => {
