@@ -2978,7 +2978,8 @@
         setTimeout(() => render(), 5100); // one re-render later: endFlow asks again only if the answer is still missing
       }
       if (xpRows.length && !$app.querySelector('.end-xp')) {
-        const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3;
+        // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
+        const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
         const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals, gaveUp);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
