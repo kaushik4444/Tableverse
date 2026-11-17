@@ -168,3 +168,13 @@ The game server counts, per day, how many connections opened in each UTC hour (`
 ## First-login welcome
 
 `players.welcomed_at` (migration 027) records when an account has seen the welcome dialog. `GET /api/auth/session` returns `welcome: true` only while it is still NULL. The dialog is shown once after sign-in, and it is marked seen when it opens (`POST /api/me/welcome-seen`, signed in, CSRF header). Accounts that existed before the migration were marked as seen, so only new accounts see it.
+
+## Game switches (owner only)
+
+The Games tab lists each game with an on/off switch. The owner can turn any game off and on at any time, without a redeploy.
+
+- **Off** keeps the game on the home page, greyed out and locked ("Unavailable right now"). New tables, starts and rematches of that game are refused by the server. Games already in progress finish normally.
+- **On** is the default for every game. No row in `game_flags` means on.
+- Changes are stored in `game_flags` (migration `029_game_flags.sql`) and written to the audit log (`game.switch`). The server re-reads the switches every 15 seconds and applies a change in its own process at once.
+- Only the owner can change a switch. Admins can read the list. The server checks the role on every change, not only the UI.
+- Code: `lib/gameFlags.js` (the snapshot and the rule), `lib/adminRoutes.js` (`GET` and `POST /api/admin/game-flags`), `db/admin.js` (`listGameFlags`, `setGameFlag`), `tests/game-flags.test.js`.
