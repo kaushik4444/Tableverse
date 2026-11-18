@@ -670,7 +670,7 @@
   function finishGuestSignIn(out) {
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
-    adoptPlayer(out.player || {});
+    adoptPlayer(out.player || {}, { name: out.player && out.player.name });
     S.isGuest = true; S.role = 'guest';
     S.guestHours = Number(out.expiresInHours) || 72;
     S.requireEmailVerification = false; S.emailVerified = false;
@@ -1194,6 +1194,7 @@
       case 'welcome': {
         S.id = m.id;
         S.role = m.role || 'user'; // owner | admin | user | guest: decides which games are open (see gameOpenFor)
+        S.isGuest = S.role === 'guest'; // the server's role decides guest reminders and the upgrade path, not an earlier sign-in
         if (S.page === 'player' && S.player && S.player.data) resyncPlayerBlock(); // the server's state after a drop, not the optimistic one
         applyLegal(m); // the server decides each link (see server.js legalFlags)
         S.token = '';
