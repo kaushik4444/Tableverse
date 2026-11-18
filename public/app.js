@@ -474,6 +474,16 @@
     return '<p class="auth-policy-hint optional" role="status">Friend-testing mode: email verification is optional right now. You can play immediately after creating your account.</p>';
   }
 
+  /** What a guest is told when the owner has locked an area for guests (server code guest_locked, with the feature name). */
+  const GUEST_LOCK_TEXT = {
+    private_tables: 'Create a free account to open a private table.',
+    rejoin: 'Create a free account to go back to a table you left.',
+    profiles: 'Create a free account to see player profiles and stats.',
+    blocking: 'Create a free account to block players.',
+    reports: 'Create a free account to report players or messages.',
+  };
+  const guestLockedHere = (feature) => !!S.isGuest && Array.isArray(S.guestLocked) && S.guestLocked.includes(feature);
+
   // The auth sheet: a small dialog over the (public) home page. Logging in is never a place you get sent to —
   // it is a step you take when you try to play, and afterwards you land where you were heading.
   // `isError` makes the message an alert, so a failed login or sign-up is announced at once by screen readers.
@@ -1193,6 +1203,7 @@
         S.id = m.id;
         S.role = m.role || 'user'; // owner | admin | user | guest: decides which games are open (see gameOpenFor)
         S.isGuest = S.role === 'guest'; // the server's role decides guest reminders and the upgrade path, not an earlier sign-in
+        S.guestLocked = Array.isArray(m.guestLocked) ? m.guestLocked : []; // areas the owner has locked for guests
         if (S.page === 'player' && S.player && S.player.data) resyncPlayerBlock(); // the server's state after a drop, not the optimistic one
         applyLegal(m); // the server decides each link (see server.js legalFlags)
         S.token = '';
@@ -1346,7 +1357,7 @@
         if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
         break;
       case 'error':
-        if (m.code === 'guest_locked') { openAuthSheet('register', m.message || 'Create a free account to play this game.'); break; }
+        if (m.code === 'guest_locked') { openAuthSheet('register', (m.feature && GUEST_LOCK_TEXT[m.feature]) || m.message || 'Create a free account to play this game.'); break; }
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
         if (S.page === 'player') resyncPlayerBlock(true, m.message); // a refused block or unblock must not stay on the page
@@ -1840,6 +1851,10 @@
     let out = null;
     try { out = await r.json(); } catch { /* not json */ }
     if (r.status === 401) { const e = new Error('Please log in again.'); e.status = 401; throw e; }
+    if (r.status === 403 && out && out.code === 'guest_locked') {
+      openAuthSheet('register', GUEST_LOCK_TEXT[out.feature] || out.error || 'Create a free account to use this.');
+      const e = new Error(out.error || 'Create a free account to use this.'); e.status = 403; e.code = 'guest_locked'; throw e;
+    }
     if (!r.ok || !out || out.ok === false) { const e = new Error((out && out.error) || `Request failed (${r.status})`); e.status = r.status; throw e; }
     return out;
   }
@@ -1855,8 +1870,8 @@
   }
   function applyRoute() {
     const r = routeFromHash();
-    if (r.page === 'profile' && S.guest) { S.page = 'home'; openAuthSheet('login', 'Log in to see your profile.'); return; }
-    if (r.page === 'friends' && S.guest) { S.page = 'home'; openAuthSheet('login', 'Log in to see your friends.'); return; }
+    if (r.page === 'profile' && S.guest) { S.page = 'home'; openAuthSheet('register', GUEST_LOCK_TEXT.profiles); return; }
+    if (r.page === 'friends' && S.guest) { S.page = 'home'; openAuthSheet('register', 'Create a free account to use friends.'); return; }
     if (r.page === 'profile') return void openPage('profile', null, true);
     if (r.page === 'friends') return void openPage('friends', null, true);
     if (r.page === 'player') return void openPage('player', r.username, true);
@@ -2762,7 +2777,7 @@
           <button class="btn small wa" data-act="whatsapp">WhatsApp</button>
           ${navigator.share ? '<button class="btn ghost small" data-act="share">Share…</button>' : ''}
         </div>` : ''}
-        ${isHost ? `<div class="visibility-control"><span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
+        ${isHost ? `<div class="visibility-control">${guestLockedHere('private_tables') ? '<p class="guest-lock-note" role="note">🔒 Private tables need a free account. Tap Private to create one.</p>' : ''}<span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
         ${inviteFriendsHTML()}
       </section>
       <section class="panel">
@@ -3222,6 +3237,7 @@
     },
     toggleVisibility: () => {
       const cur = S.room && S.room.visibility;
+      if (cur === 'public' && guestLockedHere('private_tables')) return openAuthSheet('register', GUEST_LOCK_TEXT.private_tables);
       send({ t: 'setVisibility', visibility: cur === 'public' ? 'private' : 'public' });
     },
     // The server decides: your old seat if you had one (a bot is playing it), otherwise a seat in a lobby, otherwise watching.
