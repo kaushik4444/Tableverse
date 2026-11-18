@@ -164,12 +164,29 @@ test('the contact is only the token, and no date is filled in before publication
   assert.equal(/Last updated: 18 November 2026/.test(notice), false);
 });
 
-test('the notice marks every unresolved item that section 9 of the decisions doc lists', () => {
+test('marker gate (fixture): a copy with markers cannot publish, and the same copy with markers resolved can', () => {
+  const withMarkers = notice + '\n\nOpen: [OWNER: example open item]';
+  const resolved = notice.replace(/\[(?:OWNER|LEGAL)\b[^\]]*\]/g, 'Approved');
+  assert.equal(legal.legalPageLive(withMarkers, { ...DETAILS }, true), false, 'a marker blocks publication');
+  assert.equal(legal.legalPageLive(resolved, { ...DETAILS }, true), true, 'no markers and complete details publish');
+});
+
+test('section 9 blockers: each unresolved item in the decisions doc has its marker in the notice', () => {
   const doc = read('docs/PRIVACY_NOTICE_OWNER_DECISIONS.md');
   assert.ok(doc.includes('## 9. Publication blockers'));
-  assert.ok(doc.includes('Guest count M-7'));
-  const markers = notice.match(/\[(OWNER|LEGAL)\b/g) || [];
-  assert.ok(markers.length > 0, 'publication stays blocked until the owner resolves the open items');
+  // Each blocker in section 9 is matched to the text the notice uses for it. Extra markers are allowed.
+  const blockers = [
+    ['provider DPA and transfer mechanisms', () => (notice.match(/data processing terms|transfer mechanism/g) || []).length >= 4],
+    ['manual backup retention', () => notice.includes('Copies that the owner makes by hand are kept for [OWNER:')],
+    ['guest count M-7', () => notice.includes('confirm there are no guest records')],
+    ['chat reports, player reports and matches have no deletion job', () => (notice.match(/not yet enforced/g) || []).length >= 2],
+    ['legal-basis entries', () => (notice.match(/\[LEGAL: this purpose is not in the owner/g) || []).length >= 4],
+    ['match records anonymity', () => notice.includes('[LEGAL: confirm whether these records count as anonymous')],
+    ['data-request retrieval check', () => notice.includes('confirm that you can retrieve each category of data')],
+    ['age self-declaration', () => notice.includes('[LEGAL: confirm that this approach is adequate')],
+    ['publication date', () => notice.includes('Last updated: [OWNER:')],
+  ];
+  for (const [name, present] of blockers) assert.ok(present(), 'blocker has its marker: ' + name);
 });
 
 console.log(`\n${passed} privacy notice checks passed`);

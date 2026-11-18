@@ -109,11 +109,11 @@ The publication switch and Google sign-in are not in this PR. The code's names a
 
 **Stage A (this PR, #234).** Merge into `development` once CI and CodeRabbit pass and threads are resolved. No switch is changed. The notice stays unpublished, `/privacy` returns 404, and Google sign-in stays off.
 
-**Stage B (owner, before publication).** Clear every item in section 5 and the publication blockers in section 9. Each open provider DPA or transfer check, the guest count, the retention decision, and the `[LEGAL]` entries. Then open a reviewed PR that removes the last markers and sets the publication date.
+**Stage B (owner, before publication).** Clear every item in section 5 and the publication blockers in section 9. The publication PR must also update `tests/privacy-notice.test.js`: the assertions that require markers to remain and the unfilled date must change to match the approved text. The fixture test (markers appended to a copy of the notice must block publication) stays. Each open provider DPA or transfer check, the guest count, the retention decision, and the `[LEGAL]` entries. Then open a reviewed PR that removes the last markers and sets the publication date.
 
 **Stage C (release `development` to `main`).** Use the existing promotion process, with owner approval. The switches are still off, so this release changes no public page and enables no sign-in. Verify after deploy: `/privacy` returns 404, and `GET /api/games` reports `privacyPublished: false`.
 
-**Stage D (owner, Render production).** In this order:
+**Stage D (owner, Render production).** First, confirm `GOOGLE_CLIENT_ID` is unset. If it is set, unset it before anything else, so Google sign-in cannot switch on as soon as the privacy switch is set. Then, in this order:
 1. Set every value the legal pages need (`IMPRESSUM_NAME` and `IMPRESSUM_ADDRESS`, both in `TOKENS`) and `PUBLIC_CONTACT_EMAIL=playtableverse@gmail.com`. Without them the page stays unpublished (`detailsComplete` fails closed).
 2. Set `LEGAL_PRIVACY_PUBLISHED=true`. Verify: `/privacy` returns 200, with no `[OWNER` or `[LEGAL` text, and the contact shows `playtableverse@gmail.com`. `GET /api/games` reports `privacyPublished: true`.
 3. Google sign-in now follows the privacy switch (`googleAllowed`) but stays disabled until the client ID is set. `GET /api/auth/google/config` should show `enabled: false`. Production never passes the test-only `googleVerifier` override (`server.js`), so the client ID alone does not turn sign-in on.
