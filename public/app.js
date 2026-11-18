@@ -496,7 +496,11 @@
   // The auth sheet: a small dialog over the (public) home page. Logging in is never a place you get sent to —
   // it is a step you take when you try to play, and afterwards you land where you were heading.
   // `isError` makes the message an alert, so a failed login or sign-up is announced at once by screen readers.
+  // the display name the owner typed when a sign-up was refused: the sheet is rebuilt with it, not with the guest's old name
+  let pendingRegisterName = null;
   function openAuthSheet(tab = 'login', msg = '', isError = false) {
+    const draftName = pendingRegisterName;
+    pendingRegisterName = null;
     S.auth = tab;
     closeOverlay();
     const loginOn = tab === 'login';
@@ -522,7 +526,7 @@
         <div class="row auth-links"><button class="btn ghost small" data-act="forgotPassword">Forgot password?</button>${resend}</div>
       ` : `
         <form id="registerForm" class="auth-form">
-          <input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname" value="${esc(S.isGuest ? (S.name || '') : '')}">
+          <input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname" value="${esc(draftName ?? (S.isGuest ? (S.name || '') : ''))}">
           <input id="registerUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -1440,6 +1444,7 @@
       try {
         await doRegister(name, username, email, password, adultConfirmed);
       } catch (err) {
+        pendingRegisterName = name; // keep what was typed; the password is left blank
         openAuthSheet('register', err.message || 'Registration failed', true);
       }
     }

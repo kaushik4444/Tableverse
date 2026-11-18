@@ -431,11 +431,21 @@ function start(opts = {}) {
     // a guest's e-mail link was used: the same player is now an account, so the live session is no longer a guest for game gates
     // A guest's account was confirmed (from the e-mail link, in any browser): the live player and every open socket of it
     // see the account at once, so the page drops its guest state and the guest restrictions stop applying.
-    onGuestUpgraded: ({ playerId, username }) => {
+    onGuestUpgraded: ({ playerId, username, displayName }) => {
       const p = players.get(playerId);
       if (!p) return;
       p.isAnonymous = false;
       p.username = username || p.username || null;
+      if (displayName) {
+        // the name chosen on the account step is the live name at once (same rule as a profile change: running seats keep theirs)
+        p.name = displayName;
+        const room = rooms.get(p.room);
+        const m = room && room.members.find((x) => x.id === p.id);
+        if (m && room.status !== 'playing') m.name = p.name;
+        const s = room && room.spectators.find((x) => x.id === p.id);
+        if (s) s.name = p.name;
+        if (room) broadcast(room);
+      }
       if (!p.role || p.role === 'guest') p.role = 'user'; // owner and admin keep their role
       for (const ws of wss.clients) {
         const owner = ws.player || ws.pendingPlayer;

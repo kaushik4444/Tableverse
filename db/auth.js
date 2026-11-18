@@ -241,6 +241,8 @@ async function requestGuestUpgrade({ playerId, email, username, password, adultC
   if (!isUsername(u)) throw new AuthError('Username must be 3-24 chars: lowercase letters, numbers, underscore.');
   const weak = passwordPolicy.check(password, { email: e, username: u });
   if (weak) throw new AuthError(weak, 400);
+  // the display name is optional text; anything else is refused before any work (String() would coerce objects)
+  if (displayName !== undefined && displayName !== null && typeof displayName !== 'string') throw new AuthError('Display name must be text.', 400);
   const pwHash = await hashPassword(password);
 
   try {
@@ -257,7 +259,7 @@ async function requestGuestUpgrade({ playerId, email, username, password, adultC
 
       const raw = dbPlayers.generateToken();
       // the name the guest chose on the account step; blank keeps the current name (applied when the link is used)
-      const name = String(displayName || '').trim() ? cleanName(displayName) : null;
+      const name = typeof displayName === 'string' && displayName.trim() ? cleanName(displayName) : null;
       await client.query(
         `INSERT INTO guest_upgrades (player_id, email, username, password_hash, token_hash, expires_at, display_name)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -309,7 +311,7 @@ async function completeGuestUpgrade(rawToken) {
         `UPDATE players SET username = $2, is_anonymous = FALSE, adult_confirmed_at = NOW(), last_seen_at = NOW(),
                 display_name = COALESCE($3, display_name)
          WHERE id = $1
-         RETURNING id, username`,
+         RETURNING id, username, display_name`,
         [pending.player_id, pending.username, pending.display_name]
       );
       // the session the guest has now was short (the guest lifetime); the account gets the normal session length
@@ -323,7 +325,7 @@ async function completeGuestUpgrade(rawToken) {
          VALUES ($1, $2, $3, $3, $4, NOW())`,
         [p.rows[0].id, PROVIDER_EMAIL, pending.email, pending.password_hash]
       );
-      return { upgraded: true, playerId: p.rows[0].id, username: p.rows[0].username };
+      return { upgraded: true, playerId: p.rows[0].id, username: p.rows[0].username, displayName: p.rows[0].display_name };
     });
   } catch (err) {
     if (err && err.code === '23505') {
