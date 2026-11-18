@@ -126,7 +126,7 @@ A reminder is a small box that says a guest can keep their progress with an acco
 Nothing below is done by the code. Each step is in the owner's hands.
 
 1. **Database.** Migrations 030 to 032 (game access, guest upgrades, guest features) apply on the next deploy. Check the deploy log shows them applied. No data is deleted.
-2. **Privacy first.** Keep guest play off until the owner has approved `lib/legal/privacy.md`, the notice the app publishes, with every `[OWNER]` and `[LEGAL]` marker resolved. The notice is not published yet.
+2. **Decisions first.** Keep guest play off until the owner has approved `lib/legal/privacy.md`, the notice the app publishes, with every `[OWNER]` and `[LEGAL]` marker resolved, and has recorded the guest retention decision: the 72-hour session and the removal one day after it, or other periods (then change the text too). The notice is not published yet.
 3. **Email.** The guest-to-account upgrade sends a confirmation link through the e-mail provider. Check that Resend sends mail from production before turning guest play on. If the mail fails, the player sees an error, but the request still replaces any earlier confirmation link, so the player can ask again.
 4. **Choose who may play** in the admin console. Games default to "Enabled" for everyone, so set any game you want kept for registered players in the Games tab. Guest features (private tables, rejoining, profiles, blocking and reports) are locked for guests until you open them in the Guests tab. Table chat stays open to guests.
 5. **To turn on:** Render, environment, set `GUEST_PLAY_ENABLED` to `true`, save, wait for the redeploy. Check that `GET /api/games` shows `"guestPlay": true`.
