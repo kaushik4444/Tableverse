@@ -397,7 +397,7 @@
     S.email = '';
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
-    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
+    S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; latestProgress = null; S.country = undefined; sessionGen += 1; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
     if (location.hash === '#profile') { try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ } }
   }
 
@@ -1764,34 +1764,48 @@
     S.levelUp = S.account.level > Number(seen) ? { username: S.username, from: Number(seen), to: S.account.level } : null;
   }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
-  let levelRequest = 0; // the newest refresh; an answer from an older refresh must not overwrite it
+  // One counter for both progress loaders (refreshLevel and loadProfile): the newest request wins, and an older answer never
+  // replaces progress that a newer answer already applied. latestProgress is the progress last applied, from either loader.
+  let levelRequest = 0;
+  let latestProgress = null;
+  function applyProgress(progress) {
+    latestProgress = progress;
+    setAccount(progress);
+    noteLevelUp(); // every accepted progress update is checked for a new level, whichever loader brought it
+  }
+  function pageProgressKey() { return JSON.stringify(S.profile && S.profile.data && S.profile.data.stats ? S.profile.data.stats.progress : null); }
   async function refreshLevel() {
     const gen = sessionGen;
     const mine = ++levelRequest;
     try {
       const me = await getJson('/api/me/profile');
-      if (gen !== sessionGen || mine !== levelRequest) return; // another account is signed in, or a newer refresh has started
+      if (gen !== sessionGen || mine !== levelRequest) return; // another account is signed in, or a newer refresh or profile load has started
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
       const noticeBefore = JSON.stringify(S.levelUp);
-      setAccount(me && me.stats && me.stats.progress);
-      noteLevelUp();
+      const pageBefore = pageProgressKey();
+      const progress = me && me.stats && me.stats.progress;
+      applyProgress(progress);
       // The profile page draws its own copy of the progress: keep it in step with the level shown in the header
-      if (S.profile && S.profile.data && S.profile.data.stats && me && me.stats && me.stats.progress) S.profile.data.stats.progress = me.stats.progress;
-      if (key(S.account) !== before || JSON.stringify(S.levelUp) !== noticeBefore) render(); // the game-over card shows into and need too
+      if (S.profile && S.profile.data && S.profile.data.stats && progress) S.profile.data.stats.progress = progress;
+      if (key(S.account) !== before || JSON.stringify(S.levelUp) !== noticeBefore || pageProgressKey() !== pageBefore) render(); // the game-over card and the profile show into, need and Game XP
     } catch { /* the level badge is optional */ }
   }
 
   async function loadProfile(historyPage = 1) {
     const keepTab = S.profile && S.profile.tab;
     const gen = sessionGen; // an answer for an account that has since signed out (or changed) is dropped
+    const mine = ++levelRequest; // the same counter as refreshLevel: the newest progress request wins
     S.profile = { loading: true, error: '', data: null, history: null, tab: keepTab || 'overview', historyPage };
     render();
     try {
       const [me, hist] = await Promise.all([getJson('/api/me/profile'), getJson(`/api/me/history?page=${historyPage}`)]);
       if (gen !== sessionGen) return;
+      const progress = me.stats && me.stats.progress;
+      if (mine === levelRequest) applyProgress(progress); // a newer refresh that started after this load has the say
+      // The page always shows the newest progress that was applied, so an older answer cannot move Game XP or the level backwards
+      if (me.stats && latestProgress) me.stats.progress = latestProgress;
       S.profile = { ...S.profile, loading: false, data: me, history: hist };
-      setAccount(me.stats && me.stats.progress);
       S.name = me.profile.displayName; S.named = true;
     } catch (e) {
       if (gen !== sessionGen) return;

@@ -10,14 +10,14 @@ function client() {
   const c = vm.createContext({
     S: { guest: true, username: 'alice', pending: [], routed: true },
     sessionGen: 0, httpBusy: false,
-    levelRequest: 0, // the newest refresh counter lives at app scope (`let levelRequest` next to refreshLevel), so the sandbox needs its own
+    levelRequest: 0, latestProgress: null, // the shared progress counter and the last applied progress live at app scope, so the sandbox needs its own
     store: { get: (key) => values.get(key) ?? null, set: (key, value) => values.set(key, value) },
     location: { hash: '' },
     getJson: async () => ({ stats: { progress: { account: { level: 3, into: 10, need: 140 } } } }),
     hashCode: () => '', policyRequiresVerification: () => false,
   });
   for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
-  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'onMessage']) {
+  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'applyProgress', 'pageProgressKey', 'refreshLevel', 'loadProfile', 'onMessage']) {
     const match = source.match(new RegExp('^  (?:async )?function ' + name + '\\([^]*?^  }', 'm'));
     assert.ok(match, name);
     vm.runInContext(match[0], c);
@@ -88,4 +88,40 @@ test('a notice cannot acknowledge a level under another account and baseline cle
   c.noteLevelUp();
   assert.equal(values.get('ct_level_seen_bob'), '3');
   assert.equal(c.S.levelUp, null);
+});
+
+test('opening the profile detects a new level too, not only the header refresh', async () => {
+  const { c, values } = client();
+  c.S.guest = false;
+  values.set('ct_level_seen_alice', '2');
+  c.getJson = async (url) => (url.includes('/api/me/history') ? {} : { profile: { displayName: 'Alice' }, stats: { progress: { account: { level: 3, into: 10, need: 140 } } } });
+  await c.loadProfile();
+  assert.ok(c.S.levelUp, 'a level reached in the profile is announced');
+  assert.equal(c.S.levelUp.to, 3);
+});
+
+test('an older header refresh cannot replace progress a newer profile load already applied', async () => {
+  const { c } = client();
+  c.S.guest = false;
+  const pending = [];
+  c.getJson = (url) => new Promise((resolve) => pending.push({ url, resolve }));
+  const refresh = c.refreshLevel();   // older request: answers level 2
+  const load = c.loadProfile();      // newer request: answers level 5
+  pending[1].resolve({ profile: { displayName: 'Alice' }, stats: { progress: { account: { level: 5, into: 0, need: 200 } } } });
+  pending[2].resolve({});
+  await load;
+  pending[0].resolve({ stats: { progress: { account: { level: 2, into: 0, need: 90 } } } });
+  await refresh;
+  assert.equal(c.S.account.level, 5, 'the older answer does not move the level back');
+});
+
+test('a Game XP change alone redraws the open profile', async () => {
+  const { c } = client();
+  c.S.guest = false;
+  let renders = 0; c.render = () => { renders++; };
+  c.S.profile = { loading: false, data: { stats: { progress: { account: { level: 3, into: 10, need: 140 }, games: { ludo: { points: 0, played: 0 } } } } } };
+  c.getJson = async () => ({ stats: { progress: { account: { level: 3, into: 10, need: 140 }, games: { ludo: { points: 20, played: 1 } } } } });
+  const before = renders;
+  await c.refreshLevel();
+  assert.ok(renders > before, 'the profile redraws when its Game XP changes, even if the level is the same');
 });

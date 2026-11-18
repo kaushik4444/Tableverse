@@ -183,6 +183,31 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
     assert.equal(b[0].username, 'amy', 'a win first');
   });
 
+  await test('the one-pass weekly board equals the per-player numbers on the same rows (including bots, leaves and ties)', () => {
+    // A seeded generator keeps the test repeatable; each match has 2-4 seats, some are bots, some are unranked leaves.
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const games = ['tictactoe', 'twentynine'];
+    const people = Array.from({ length: 12 }, (_, i) => ({ id: 'p' + i, username: 'user' + i, displayName: 'User ' + i }));
+    const rows = [];
+    for (let m = 0; m < 60; m++) {
+      const gameId = games[m % 2];
+      const seats = 2 + Math.floor(rnd() * 3);
+      for (let s = 0; s < seats; s++) {
+        const bot = rnd() < 0.2;
+        const pid = people[Math.floor(rnd() * people.length)].id;
+        rows.push(row(String(m), gameId, s, bot ? null : pid, { isBot: bot, isWinner: rnd() < 0.3, forfeit: rnd() < 0.1, leftEarly: rnd() < 0.15, secondsPlayed: 300 + Math.floor(rnd() * 900) }));
+      }
+    }
+    for (const gameId of games) {
+      const reference = people
+        .map((p) => ({ p, g: computeProgress(rows, p.id).games[gameId] }))
+        .filter((x) => x.g && x.g.played)
+        .map((x) => ({ username: x.p.username, displayName: x.p.displayName, points: x.g.points, played: x.g.played }))
+        .sort((a, b) => b.points - a.points || b.played - a.played || a.username.localeCompare(b.username))
+        .slice(0, 10);
+      assert.deepEqual(boardFor(rows, people, gameId, 10), reference, gameId);
+    }
+  });
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();

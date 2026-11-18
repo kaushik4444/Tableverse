@@ -311,21 +311,31 @@ async function gameStats({ days = 30 } = {}) {
            COUNT(DISTINCT mp.player_id) FILTER (WHERE NOT mp.is_bot AND NOT pl.is_anonymous)::int AS signed_in_players,
            COUNT(*) FILTER (WHERE NOT mp.is_bot AND mp.forfeit)::int AS penalised_leaves,
            COUNT(*) FILTER (WHERE NOT mp.is_bot AND mp.left_early AND NOT mp.forfeit)::int AS left_without_penalty,
-           COALESCE(AVG(mp.seconds_played) FILTER (WHERE NOT mp.is_bot), 0)::float AS avg_seconds,
-           COUNT(DISTINCT m.id) FILTER (WHERE m.finished_at > NOW() - INTERVAL '7 days')::int AS finished_7d
+           COALESCE(AVG(mp.seconds_played) FILTER (WHERE NOT mp.is_bot), 0)::float AS avg_seconds
       FROM matches m JOIN match_participants mp ON mp.match_id = m.id
       LEFT JOIN players pl ON pl.id = mp.player_id
      WHERE m.finished_at > NOW() - ($1::int * INTERVAL '1 day')
-     GROUP BY m.game_id
-     ORDER BY finished DESC, m.game_id`, [n]);
-  return {
-    days: n,
-    games: perGame.rows.map((r) => ({
-      gameId: r.game_id, finished: r.finished, playerGames: r.player_games, signedInPlayers: r.signed_in_players,
-      penalisedLeaves: r.penalised_leaves, leftWithoutPenalty: r.left_without_penalty,
-      avgMinutes: Math.round((r.avg_seconds / 60) * 10) / 10, finished7d: r.finished_7d,
-    })),
-  };
+     GROUP BY m.game_id`, [n]);
+  // The last-7-days count is its own query: the range above must not narrow it (a game finished 3 days ago still counts
+  // in finished7d when the range is 1 day). A game that only finished inside the 7 days is listed with zero range figures.
+  const sevenDay = await db.query(`
+    SELECT m.game_id, COUNT(*)::int AS finished_7d
+      FROM matches m
+     WHERE m.finished_at > NOW() - INTERVAL '7 days'
+     GROUP BY m.game_id`);
+  const sevenBy = new Map(sevenDay.rows.map((r) => [r.game_id, r.finished_7d]));
+  const rows = perGame.rows.map((r) => ({
+    gameId: r.game_id, finished: r.finished, playerGames: r.player_games, signedInPlayers: r.signed_in_players,
+    penalisedLeaves: r.penalised_leaves, leftWithoutPenalty: r.left_without_penalty,
+    avgMinutes: Math.round((r.avg_seconds / 60) * 10) / 10, finished7d: sevenBy.get(r.game_id) || 0,
+  }));
+  const listed = new Set(rows.map((r) => r.gameId));
+  for (const [gameId, count] of sevenBy) {
+    if (listed.has(gameId)) continue;
+    rows.push({ gameId, finished: 0, playerGames: 0, signedInPlayers: 0, penalisedLeaves: 0, leftWithoutPenalty: 0, avgMinutes: 0, finished7d: count });
+  }
+  rows.sort((a, b) => b.finished - a.finished || (a.gameId < b.gameId ? -1 : a.gameId > b.gameId ? 1 : 0));
+  return { days: n, games: rows };
 }
 
 async function health() {

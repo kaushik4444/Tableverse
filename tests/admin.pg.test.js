@@ -796,6 +796,24 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal(row.sent_count, expected);
       assert.ok(!('body' in row), 'the history carries no text');
     });
+    await test('game statistics: the last-7-days count is not narrowed by a shorter range', async () => {
+      const a = await newUser('Gsa'); const b = await newUser('Gsb');
+      const mk = async (game, agoMinutes) => {
+        const m = (await q(`INSERT INTO matches (room_code, game_id, seats, started_at, finished_at) VALUES ('GST1', $1, 2, NOW() - (($2::int + 10) * INTERVAL '1 minute'), NOW() - ($2::int * INTERVAL '1 minute')) RETURNING id`, [game, agoMinutes]))[0].id;
+        await q('INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot, left_early, is_draw) VALUES ($1, $2, $3, 0, TRUE, FALSE, FALSE, FALSE), ($1, $4, $5, 1, FALSE, FALSE, FALSE, FALSE)', [m, a.id, 'a', b.id, 'b']);
+      };
+      await mk('gs-old', 60 * 24 * 3);     // three days ago: outside a 1-day range, inside the 7-day count
+      await mk('gs-today', 30);           // inside both
+      const day1 = await dbAdmin.gameStats({ days: 1 });
+      const old = day1.games.find((g) => g.gameId === 'gs-old');
+      const today = day1.games.find((g) => g.gameId === 'gs-today');
+      assert.ok(old, 'a game finished within 7 days is listed even when the range is 1 day');
+      assert.equal(old.finished, 0, 'the range figure is zero outside the range');
+      assert.equal(old.finished7d, 1, 'the 7-day count still sees it');
+      assert.equal(today.finished, 1); assert.equal(today.finished7d, 1);
+      const day7 = await dbAdmin.gameStats({ days: 7 });
+      assert.equal(day7.games.find((g) => g.gameId === 'gs-old').finished, 1, 'inside a 7-day range the range figure counts it');
+    });
     await test('a finished broadcast keeps its totals when a recipient deletes the account afterwards', async () => {
       const ownerId = (await q("SELECT id FROM players WHERE role = 'owner'"))[0].id;
       const gone = await mk('gone', { verified: true });
