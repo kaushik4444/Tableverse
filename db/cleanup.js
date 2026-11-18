@@ -55,6 +55,7 @@ const PLAN = [
 const PRESERVE = [
   { table: 'schema_migrations', stores: 'Migration history: which db/migrations files were applied (the application checks it on every start)' },
   { table: 'game_flags', stores: 'Owner switches: which games are on or off (configuration, not player data)' },
+  { table: 'guest_features', stores: 'Owner switches: which guest features are open to guests (configuration, not player data)' },
 ];
 const CLEAN_TABLES = PLAN.map((p) => p.table);
 const KNOWN_TABLES = [...CLEAN_TABLES, ...PRESERVE.map((p) => p.table)].sort();

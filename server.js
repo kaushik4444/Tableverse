@@ -22,6 +22,7 @@ const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
 const gameFlags = require('./lib/gameFlags');
+const guestFeatures = require('./lib/guestFeatures'); // what guests may do, switched by the owner (Guests tab)
 const guestPolicy = require('./lib/guestPolicy');
 const gameAccess = require('./public/game-access');
 const { makeAuthEmailSender } = require('./lib/email');
@@ -586,6 +587,18 @@ function start(opts = {}) {
    */
   const gameListFor = (list, p) => gameFlags.withFlags(list, p ? roleOf(p) : undefined);
   const sendGuestLocked = (p, gameId) => send(p.ws, { t: 'error', code: 'guest_locked', gameId, message: 'Create a free account to play this game.' });
+  /** Account-only for guests, always (not a switch): reporting. Sends the account prompt; true when refused. */
+  const guestBarred = (p, feature) => {
+    if (roleOf(p) !== 'guest') return false;
+    send(p.ws, { t: 'error', code: 'guest_locked', feature, message: 'Create a free account to use this.' });
+    return true;
+  };
+  /** A guest asks for something the owner has locked for guests (lib/guestFeatures.js). Sends the account prompt; true when refused. */
+  const guestLocked = (p, feature) => {
+    if (roleOf(p) !== 'guest' || guestFeatures.allowed(feature)) return false;
+    send(p.ws, { t: 'error', code: 'guest_locked', feature, message: 'Create a free account to use this.' });
+    return true;
+  };
   /**
    * Refuse a game for this player when the owner's access mode excludes their role. A guest who could play the game as a
    * registered player gets the account prompt (guest_locked); anyone else gets the plain refusal. Returns true when refused.
@@ -1453,6 +1466,7 @@ function start(opts = {}) {
     // A report about a player (from their card or profile). Needs an account; the reported account is checked on the server.
     async reportPlayer(p, msg) {
       const self = players.get(p.id);
+      if (guestBarred(p, 'reports')) return;
       if (!self || !self.username) return sendError(p, 'Sign in to report a player.'); // guests have no account to report from
       const resolved = await resolveTarget(msg);
       const checked = moderation.validatePlayerReport(p.id, resolved ? { ...msg, id: resolved.id } : msg);
@@ -1470,6 +1484,7 @@ function start(opts = {}) {
     },
 
     async report(p, msg) {
+      if (guestBarred(p, 'reports')) return;
       const room = rooms.get(p.room);
       if (!room) return sendError(p, 'Join a table to report a message.');
       const checked = moderation.validateReport(msg);
@@ -1521,6 +1536,7 @@ function start(opts = {}) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
       if (refuseGame(p, msg.gameId)) return;
+      if (msg.visibility === 'private' && guestLocked(p, 'private_tables')) return;
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
@@ -1562,6 +1578,7 @@ function start(opts = {}) {
       applyProfile(p, msg);
       if (!room) return sendError(p, `No table with code ${code || '?'}`);
       if (refuseGame(p, room.gameId)) return;
+      if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin')) return;
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
@@ -1654,6 +1671,9 @@ function start(opts = {}) {
     },
 
     leave(p) {
+      // a guest who leaves on purpose may be locked out of getting back in (feature 'rejoin'). A dropped connection never reaches here.
+      const left = rooms.get(p.room);
+      if (left && roleOf(p) === 'guest') (left.guestLeavers || (left.guestLeavers = new Set())).add(p.id);
       leaveRoom(p);
       send(p.ws, { t: 'left' });
       send(p.ws, tablesMsg(p)); // the home screen can offer "Rejoin" straight away
@@ -1780,6 +1800,7 @@ function start(opts = {}) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
       const next = msg.visibility === 'public' ? 'public' : 'private';
+      if (next === 'private' && guestLocked(p, 'private_tables')) return;
       if (next === 'private' && room.visibility !== 'private') { // whoever is already here was let in as a public guest and stays
         room.admitted = new Set([...room.members.filter((m) => !m.bot).map((m) => m.id), ...room.spectators.map((x) => x.id)]);
       }
@@ -2051,7 +2072,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, role: roleOf(p), games: gameListFor(games.list(), p), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, role: roleOf(p), guestLocked: roleOf(p) === 'guest' ? guestFeatures.FEATURES.map((f) => f.key).filter((k) => !guestFeatures.allowed(k)) : [], games: gameListFor(games.list(), p), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
@@ -2384,8 +2405,9 @@ function start(opts = {}) {
         const refreshFlags = () => {
           if (flagsStopped) return Promise.resolve();
           const token = gameFlags.begin(); // reads are applied in the order they started
-          return dbAdmin.listGameFlags()
-            .then((rows) => { if (!flagsStopped) gameFlags.apply(rows, token); })
+          const gToken = guestFeatures.begin();
+          const guestRead = dbAdmin.listGuestFeatures ? dbAdmin.listGuestFeatures().then((rows) => { if (!flagsStopped) guestFeatures.apply(rows, gToken); }) : Promise.resolve();
+          return Promise.all([dbAdmin.listGameFlags().then((rows) => { if (!flagsStopped) gameFlags.apply(rows, token); }), guestRead])
             .catch((e) => (opts.log || console).error('[games] switches not loaded (games stay unavailable until they are): ' + e.message));
         };
         unsubscribeGames = gameFlags.onChange(broadcastGames); // connected players get the new list at once
@@ -2409,7 +2431,7 @@ function start(opts = {}) {
       }
     }
     // no database (memory mode): there are no switches, so every game is on; with a database the switches were read above
-    if (!(info && info.mode === 'postgres')) gameFlags.apply([]);
+    if (!(info && info.mode === 'postgres')) { gameFlags.apply([]); guestFeatures.apply([]); }
     if (metered) metered.start(); // both modes: the credential is fetched ahead of the first welcome, and refreshed in the background
     return flagsReady.then(() => new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine }))));
   });

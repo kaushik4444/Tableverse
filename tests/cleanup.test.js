@@ -25,7 +25,7 @@ test('it covers exactly the tables the migrations create, and every one is eithe
   assert.ok(c.CLEAN_TABLES.every((t) => !c.PRESERVE.some((p) => p.table === t)), 'no table is both');
 });
 test('schema_migrations and the game switches are preserved and are not in the delete list', () => {
-  assert.deepEqual(c.PRESERVE.map((p) => p.table), ['schema_migrations', 'game_flags']);
+  assert.deepEqual(c.PRESERVE.map((p) => p.table), ['schema_migrations', 'game_flags', 'guest_features']);
   assert.ok(!c.CLEAN_TABLES.includes('schema_migrations'));
 });
 test('the delete order puts every table before the tables it references', () => {

@@ -530,6 +530,30 @@ async function listGameFlags() {
  * Sets one game's access mode ('on' | 'admins' | 'guests' | 'owner'). `enabled` is kept in step (true only for 'on'), so an
  * older application version reads a restricted game as off. Audited in the same transaction.
  */
+/** Guest feature switches (lib/guestFeatures.js): rows as stored. */
+async function listGuestFeatures() {
+  return (await db.query('SELECT feature, enabled, updated_at FROM guest_features')).rows;
+}
+
+/** Opens (enabled true) or locks (false) one guest feature. Audited in the same transaction; a repeat of the same value is not. */
+async function setGuestFeature({ actorId, feature, enabled }) {
+  await db.withTransaction(async (c) => {
+    const r = await c.query(
+      `INSERT INTO guest_features (feature, enabled, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
+       ON CONFLICT (feature) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+       WHERE guest_features.enabled IS DISTINCT FROM EXCLUDED.enabled
+       RETURNING feature`,
+      [feature, enabled === true, actorId]
+    );
+    if (r.rows.length) await audit(c, { actorId, action: 'guest.feature', targetType: 'guest_feature', targetId: feature, detail: { enabled: enabled === true } });
+  });
+}
+
+/** Writes one audit row on its own (used by the owner's Render redeploy, which changes no table). */
+async function recordAudit({ actorId, action, targetType = null, targetId = null, detail = {} }) {
+  await db.withTransaction((c) => audit(c, { actorId, action, targetType, targetId, detail }));
+}
+
 async function setGameFlag({ actorId, gameId, access }) {
   await db.withTransaction(async (c) => {
     // Only a real change is written and audited: repeating the same value leaves no second entry.
@@ -547,7 +571,7 @@ async function setGameFlag({ actorId, gameId, access }) {
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health, gameStats, listGameFlags, setGameFlag,
+  addCounters, addActive, forgetActor, overview, health, gameStats, listGameFlags, setGameFlag, listGuestFeatures, setGuestFeature, recordAudit,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)
