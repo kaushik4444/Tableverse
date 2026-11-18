@@ -103,14 +103,8 @@ const sent = (o, t) => o.msgs.filter((m) => m.t === t);
       o.ws.close();
     });
 
-    await test('a registered player can still create the locked game', async () => {
-      const acct = await registerAndVerify(port, { email: 'regular@test.local', username: 'regularplayer', displayName: 'Regular' });
-      const o = await open(port, acct.token);
-      o.ws.send(JSON.stringify({ t: 'create', gameId: 'wizard' }));
-      await wait(200);
-      assert.equal(sent(o, 'error').filter((m) => m.code === 'guest_locked').length, 0);
-      o.ws.close();
-    });
+    // A registered player playing a game disabled for guests only is covered in guest-play.pg.test.js: in memory mode there is
+    // no real registration (the helper falls back to a guest row), so a "registered" player here would be a guest.
 
     await test('a game disabled for all (owner only) is refused to a guest with the plain message, not the account prompt', async () => {
       const gameFlags = require('../lib/gameFlags');
