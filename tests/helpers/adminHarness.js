@@ -12,7 +12,7 @@ const { createMemoryAdminStore } = require('./memoryAdminStore');
 const { Browser } = require('./auth');
 const dbPlayers = require('../../db/players');
 
-async function start({ env = {}, analytics = null, store: given = null, clock = { t: Date.parse('2026-11-08T10:00:00Z') }, mail = [], broadcastMail = [] } = {}) {
+async function start({ env = {}, analytics = null, store: given = null, clock = { t: Date.parse('2026-11-08T10:00:00Z') }, mail = [], broadcastMail = [], renderDeploy = null, renderLogs = null } = {}) {
   require('../../db/rateLimit').resetMemoryCountersForTests();
   const now = () => new Date(clock.t);
   const e = { NODE_ENV: 'test', ...env };
@@ -38,7 +38,7 @@ async function start({ env = {}, analytics = null, store: given = null, clock = 
     env: e, production: false, trustProxy: false, emailSender: {}, sendJson, sendText, readJsonBody, log: { error() {}, warn() {}, log() {} },
     extraRoutes: (ctx) => createAdminRoutes({ env: e, store, analytics, now, ctx, platform: () => ({ rooms: 0 }), idPattern: /^(p_)?[0-9a-f-]{36}$/i, // in-memory players have p_<uuid> ids; production uses plain UUIDs
        auth, emailSender, onSignedOut: (o) => signedOutCalls.push(o), onAccountDeleted: (o) => deletedCalls.push(o),
-       onBroadcastQueued: () => { queued.count++; }, makeUnsubscribeUrl: (t) => 'https://app.test/api/email/unsubscribe?token=' + t }).routes,
+       onBroadcastQueued: () => { queued.count++; }, makeUnsubscribeUrl: (t) => 'https://app.test/api/email/unsubscribe?token=' + t, renderDeploy, renderLogs }).routes,
     onEvent: () => {},
   });
   const server = http.createServer((req, res) => {
