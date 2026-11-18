@@ -305,6 +305,7 @@ function start(opts = {}) {
     if (!p || typeof role !== 'string' || !role) return;
     p.role = role;
     p.roleUnverified = unverified === true; // set when the stored role could not be read back (fail closed)
+    p.roleVersion = (p.roleVersion || 0) + 1; // a later read that started before this change must not overwrite it
     // the browser keeps the role it was given at the welcome: send the new role and the games it may now play
     send(p.ws, { t: 'role', role: roleOf(p) });
     send(p.ws, { t: 'games', games: gameListFor(games.list(), p) });
@@ -2020,7 +2021,10 @@ function start(opts = {}) {
 
     let p = tokens.get(presentedToken) || null;
     // a cached session whose role could not be read back is read again from the database, so a promotion is not lost
-    if (p && p.roleUnverified) p = null;
+    // a live role change that lands while this re-read is in flight is newer than the stored role it reads: keep the live one
+    const cachedUnverified = p && p.roleUnverified ? p : null;
+    const roleSeenBefore = cachedUnverified ? cachedUnverified.roleVersion || 0 : 0;
+    if (cachedUnverified) p = null;
     if (!p) {
       const dbPlayer = await dbPlayers.authenticateToken(presentedToken);
       if (dbPlayer) {
@@ -2033,8 +2037,10 @@ function start(opts = {}) {
           p.username = dbPlayer.username || null;
           p.createdAt = dbPlayer.created_at;
           p.isAnonymous = Boolean(dbPlayer.is_anonymous);
-          p.role = dbPlayer.role || 'user';
-          p.roleUnverified = false;
+          if (!cachedUnverified || (known.roleVersion || 0) === roleSeenBefore) {
+            p.role = dbPlayer.role || 'user';
+            p.roleUnverified = false;
+          }
         } else {
           p = {
             id: dbPlayer.id,

@@ -496,6 +496,15 @@
   // The auth sheet: a small dialog over the (public) home page. Logging in is never a place you get sent to —
   // it is a step you take when you try to play, and afterwards you land where you were heading.
   // `isError` makes the message an alert, so a failed login or sign-up is announced at once by screen readers.
+  // the sign-in sheet may already be open when the server's answer arrives: add or remove its guest option to match
+  function syncGuestOption() {
+    const overlay = document.getElementById('auth-overlay');
+    if (!overlay) return;
+    const want = S.guestPlay && !S.isGuest;
+    const have = overlay.querySelector('[data-act="playAsGuest"]');
+    if (want && !have) { const tabs = overlay.querySelector('.auth-tabs'); if (tabs) tabs.insertAdjacentHTML('afterend', '<button type="button" class="btn ghost auth-guest" data-act="playAsGuest">Play as a guest</button>'); }
+    if (!want && have) have.remove();
+  }
   // the display name the owner typed when a sign-up was refused: the sheet is rebuilt with it, not with the guest's old name
   let pendingRegisterName = null;
   function openAuthSheet(tab = 'login', msg = '', isError = false) {
@@ -1090,6 +1099,7 @@
       if (out && out.ok) {
         S.games = out.games || [];
         S.guestPlay = out.guestPlay === true;
+        syncGuestOption();
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
         // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it

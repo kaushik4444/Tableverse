@@ -61,9 +61,10 @@
   let view = null; // AbortController of the tab on screen: switching tabs cancels the requests of the one before
   let generation = 0; // counts tab switches: an answer that arrives for an earlier tab is dropped, even without AbortController
   const cancelled = () => { const e = new Error('cancelled'); e.name = 'AbortError'; return e; };
-  async function api(path, body, retried) {
+  // keep: the request finishes even if the owner leaves the tab (a save that the server has already accepted must be seen)
+  async function api(path, body, retried, keep = false) {
     const mine = generation;
-    const opts = { credentials: 'same-origin', headers: {}, signal: view ? view.signal : undefined };
+    const opts = { credentials: 'same-origin', headers: {}, signal: view && !keep ? view.signal : undefined };
     if (body !== undefined) {
       opts.method = 'POST';
       opts.headers = { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrf() };
@@ -72,8 +73,8 @@
     const r = await fetch(path, opts);
     // an abort while the body is read must reach the cancellation guard, not look like an empty answer
     const out = await r.json().catch((e) => { if (e && e.name === 'AbortError') throw e; return {}; });
-    if (mine !== generation) throw cancelled(); // the tab changed while this request was in flight
-    if (r.status === 403 && /CSRF/i.test(out.error || '') && !retried && body !== undefined) { await csrf(true); return api(path, body, true); }
+    if (mine !== generation && !keep) throw cancelled(); // the tab changed while this request was in flight
+    if (r.status === 403 && /CSRF/i.test(out.error || '') && !retried && body !== undefined) { await csrf(true); return api(path, body, true, keep); }
     if (!r.ok || out.ok === false) { const e = new Error(out.error || `Request failed (${r.status})`); e.status = r.status; throw e; }
     return out;
   }
@@ -505,12 +506,13 @@
       const visit = generation; // the Games visit this save belongs to
       sel.disabled = true; // one request at a time: a second change would only repeat the same one
       try {
-        await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value });
+        await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value }, false, true);
+        // the save is on the server whichever visit started it: a Games view still open shows the committed flags
         if (state.tab !== 'games') return; // the owner has moved to another view: leave it alone
         state.gen += 1; // a redraw still in flight is dropped; each completed change starts a fresh redraw after its save
         gamesTab().catch(fail); // redraw with the new state
       } catch (e) {
-        if (visit !== generation || e.name === 'AbortError' || state.tab !== 'games') return; // a save from an earlier visit is not shown here
+        if (visit !== generation || e.name === 'AbortError' || state.tab !== 'games') return; // an error from an earlier visit is not shown here
         sel.disabled = false; say('gMsg', e.message, 'err'); gamesTab().catch(fail);
       }
     }; });
