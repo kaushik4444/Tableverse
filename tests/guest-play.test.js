@@ -111,7 +111,7 @@ const until = async (fn, ms = 3000) => { const end = Date.now() + ms; while (Dat
       // wait for the table itself, not a fixed sleep: an unrelated error would otherwise pass this check
       const made = await until(() => sent(o, 'state').some((m) => m.room && m.room.gameId === 'ludo'));
       assert.ok(made, 'the ludo table is created: ' + JSON.stringify(o.msgs.slice(-3)));
-      assert.equal(sent(o, 'error').filter((m) => m.code === 'guest_locked').length, 0);
+      assert.equal(sent(o, 'error').length, 0, 'no error at all: ' + JSON.stringify(sent(o, 'error')));
       o.ws.close();
     });
 
@@ -187,16 +187,19 @@ const until = async (fn, ms = 3000) => { const end = Date.now() + ms; while (Dat
       await wait(200);
       o.ws.send(JSON.stringify({ t: 'leave' }));
       await wait(200);
+      // only messages that arrive after this point count: the create response already names this room
+      const beforeRejoin = o.msgs.length;
       o.ws.send(JSON.stringify({ t: 'join', code }));
       await wait(200);
-      const refused = sent(o, 'error').find((m) => m.code === 'guest_locked' && m.feature === 'rejoin');
-      assert.ok(refused, 'rejoin refused: ' + JSON.stringify(o.msgs.slice(-3)));
+      const refused = o.msgs.slice(beforeRejoin).filter((m) => m.t === 'error' && m.code === 'guest_locked' && m.feature === 'rejoin');
+      assert.equal(refused.length, 1, 'rejoin refused: ' + JSON.stringify(o.msgs.slice(beforeRejoin)));
       guestFeatures.setOne('rejoin', true);
       try {
+        const beforeOpen = o.msgs.length;
         o.ws.send(JSON.stringify({ t: 'join', code }));
-        const back = await until(() => sent(o, 'state').some((m) => m.room && m.room.code === code));
-        assert.ok(back, 'once open, the guest reaches the table again: ' + JSON.stringify(o.msgs.slice(-3)));
-        assert.equal(sent(o, 'error').filter((m) => m.feature === 'rejoin').length, 1, 'no second refusal once open');
+        const back = await until(() => o.msgs.slice(beforeOpen).some((m) => m.t === 'state' && m.room && m.room.code === code));
+        assert.ok(back, 'once open, the guest reaches the table again: ' + JSON.stringify(o.msgs.slice(beforeOpen)));
+        assert.equal(o.msgs.slice(beforeOpen).filter((m) => m.t === 'error' && m.feature === 'rejoin').length, 0, 'no refusal once open');
       } finally { guestFeatures.setOne('rejoin', false); }
       o.ws.close();
     });

@@ -658,10 +658,13 @@
     if (!matchMedia('(pointer: coarse)').matches) overlay.querySelector('#googleUsername').focus();
   }
 
+  let authOpener = null; // the control that opened the sheet: focus returns to it when the sheet closes
   function closeOverlay() {
     const el = document.getElementById('auth-overlay');
     if (el) el.remove();
     S.auth = null;
+    const back = authOpener; authOpener = null;
+    if (back && back.isConnected && back.focus) back.focus();
   }
 
   // Only retry a database lookup explicitly marked safe by the server; ambiguous responses may have created a session.
@@ -726,6 +729,17 @@
     overlay.className = 'overlay';
     overlay.innerHTML = window.TvGuest.guestSheetHTML({ hours: S.guestHours }) + (msg ? `<p class="auth-msg" role="status">${esc(msg)}</p>` : '');
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeOverlay(); });
+    // Tab stays inside the sheet, as in the other dialogs
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const items = [...overlay.querySelectorAll('button, input, select, textarea, a[href]')].filter((el) => !el.disabled);
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      const inside = overlay.contains(document.activeElement);
+      if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
+    });
+    authOpener = document.activeElement;
     document.body.appendChild(overlay);
     const first = document.getElementById('guestName');
     if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
@@ -1099,6 +1113,7 @@
       if (out && out.ok) {
         S.games = out.games || [];
         S.guestPlay = out.guestPlay === true;
+        if (Number(out.guestHours) > 0) S.guestHours = Number(out.guestHours);
         syncGuestOption();
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';

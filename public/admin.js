@@ -523,7 +523,7 @@
         if (state.tab !== 'games') return; // the owner has moved to another view: leave it alone
         // the current view is redrawn so the selector unlocks; an error from an earlier visit is not shown in this one
         if (visit !== generation || e.name === 'AbortError') { redrawGames(); return; }
-        redrawGames().then(() => say('gMsg', e.message, 'err'));
+        redrawGames().then(() => { if (visit === generation && state.tab === 'games') say('gMsg', e.message, 'err'); });
       });
     }; });
   }

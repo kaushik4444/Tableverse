@@ -66,6 +66,9 @@ assert.deepEqual(Array.from(gameOverRelease.items, (item) => item.title), [
   'Your lifetime XP in each game',
   'Level-up dialog',
 ], 'the historical release keeps all three player-facing items in order');
+// each explanation still says what the item is about, so an edit cannot quietly change the topic
+const topics = [/XP|game/i, /XP|game/i, /level/i];
+gameOverRelease.items.forEach((item, i) => assert.match(`${item.title}\n${item.text}`, topics[i], `${item.title} explains its topic`));
 for (const item of gameOverRelease.items) {
   assert.ok(typeof item.ico === 'string' && item.ico.trim(), `${item.title} has an icon`);
   assert.ok(typeof item.text === 'string' && item.text.trim(), `${item.title} has explanatory text`);
