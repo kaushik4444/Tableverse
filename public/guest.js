@@ -79,7 +79,7 @@
         <small id="guestNameHint" class="hint">If someone already uses that name, a number is added to the end.</small>
         <button class="btn big" type="submit">Play as a guest</button>
       </form>
-      <div class="row" style="margin-top:10px"><button class="btn ghost" type="button" data-guest-act="upgrade">Create a free account instead</button></div>
+      <div class="row" style="margin-top:10px"><button class="btn ghost" type="button" data-guest-act="upgrade">Create a free account instead</button> <button class="btn ghost" type="button" data-guest-act="close">Close</button></div>
     </div>`;
   }
 
@@ -95,6 +95,7 @@
       hooks.dismissed(ctx);
       return;
     }
+    if (el.dataset.guestAct === 'close') { document.dispatchEvent(new CustomEvent('tv:guest-close')); return; }
     if (el.dataset.guestAct === 'upgrade') {
       hooks.upgrade();
       if (typeof CustomEvent === 'function' && document.dispatchEvent) document.dispatchEvent(new CustomEvent('tv:guest-upgrade'));

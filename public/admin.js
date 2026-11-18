@@ -502,12 +502,17 @@
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
     main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = async () => {
       if (sel.disabled) return;
+      const gen = state.gen;
       sel.disabled = true; // one request at a time: a second change would only repeat the same one
       try {
         await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value });
+        if (gen !== state.gen) return; // the owner has moved to another view: leave it alone
         state.gen += 1; // a redraw still in flight is dropped
         gamesTab().catch(fail); // redraw with the new state
-      } catch (e) { sel.disabled = false; say('gMsg', e.message, 'err'); gamesTab().catch(fail); }
+      } catch (e) {
+        if (gen !== state.gen || e.name === 'AbortError') return; // a cancelled request belongs to a view that is gone
+        sel.disabled = false; say('gMsg', e.message, 'err'); gamesTab().catch(fail);
+      }
     }; });
   }
 
@@ -788,10 +793,10 @@
       // Redeploy needs the same Render settings as this history: without them the button stays off and says why.
       const rdForm = document.getElementById('rdForm');
       if (rdForm) {
-        rdForm.dataset.ready = r.configured ? '1' : '0';
-        if (!r.configured) say('rdMsg', 'Redeploy is not set up on this server (RENDER_API_KEY, RENDER_SERVICE_ID and RENDER_OWNER_ID are needed).', 'err');
+        rdForm.dataset.ready = r.redeployReady ? '1' : '0';
+        if (!r.redeployReady) say('rdMsg', 'Redeploy is not set up on this server (RENDER_API_KEY and RENDER_SERVICE_ID are needed).', 'err');
         const rdBtn = document.getElementById('rdBtn');
-        if (rdBtn) rdBtn.disabled = !r.configured || rdForm.confirm.value !== 'REDEPLOY';
+        if (rdBtn) rdBtn.disabled = !r.redeployReady || rdForm.confirm.value !== 'REDEPLOY';
       }
       if (!r.configured) { out.innerHTML = '<p class="ad-muted">Render history is not set up on this server. Set RENDER_API_KEY, RENDER_SERVICE_ID and RENDER_OWNER_ID in the Render service\'s environment.</p>'; return; }
       if (r.error) { out.innerHTML = `<p class="ad-msg err">${esc(r.error)}</p>`; return; }

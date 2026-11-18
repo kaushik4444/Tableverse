@@ -766,7 +766,8 @@ async function purgeExpired() {
     upgrades: await run("DELETE FROM guest_upgrades WHERE expires_at < NOW() - INTERVAL '1 day'"),
     guests: await run(`DELETE FROM players p
                        WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day'
-                         AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())`),
+                         AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())
+                         AND NOT EXISTS (SELECT 1 FROM guest_upgrades u WHERE u.player_id = p.id AND u.expires_at > NOW())`),
   };
 }
 

@@ -302,7 +302,11 @@ function start(opts = {}) {
   /** A role changed in the admin console: the live player takes it at once, so restricted games are judged by the new role. */
   const applyLiveRole = ({ playerId, role }) => {
     const p = players.get(playerId);
-    if (p && typeof role === 'string' && role) p.role = role;
+    if (!p || typeof role !== 'string' || !role) return;
+    p.role = role;
+    // the browser keeps the role it was given at the welcome: send the new role and the games it may now play
+    send(p.ws, { t: 'role', role: roleOf(p) });
+    send(p.ws, { t: 'games', games: gameListFor(games.list(), p) });
   };
   const closeSignedOutSockets = ({ playerId, token, tokenHash, exceptToken, replaced }) => {
     for (const ws of wss.clients) {
@@ -1489,7 +1493,7 @@ function start(opts = {}) {
     // A report about a player (from their card or profile). Needs an account; the reported account is checked on the server.
     async reportPlayer(p, msg) {
       const self = players.get(p.id);
-      if (guestBarred(p, 'reports')) return;
+      if (guestLocked(p, 'reports')) return;
       if (!self || !self.username) return sendError(p, 'Sign in to report a player.'); // guests have no account to report from
       const resolved = await resolveTarget(msg);
       const checked = moderation.validatePlayerReport(p.id, resolved ? { ...msg, id: resolved.id } : msg);
@@ -1507,7 +1511,7 @@ function start(opts = {}) {
     },
 
     async report(p, msg) {
-      if (guestBarred(p, 'reports')) return;
+      if (guestLocked(p, 'reports')) return;
       const room = rooms.get(p.room);
       if (!room) return sendError(p, 'Join a table to report a message.');
       const checked = moderation.validateReport(msg);

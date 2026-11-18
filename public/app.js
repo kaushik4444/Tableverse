@@ -522,7 +522,7 @@
         <div class="row auth-links"><button class="btn ghost small" data-act="forgotPassword">Forgot password?</button>${resend}</div>
       ` : `
         <form id="registerForm" class="auth-form">
-          <input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname">
+          ${S.isGuest ? '<p class="hint" id="registerNameNote">Your guest name stays on your account.</p>' : '<input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname">'}
           <input id="registerUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -719,6 +719,7 @@
   // The guest sheet's "create a free account" and the reminder's button both open the register sheet. guest.js loads after this
   // file, so it announces the tap with an event rather than through a hook that would not exist yet.
   document.addEventListener('tv:guest-upgrade', () => openAuthSheet('register'));
+  document.addEventListener('tv:guest-close', () => closeOverlay());
 
   /**
    * Asks to turn the guest into an account. Nothing changes yet: the server e-mails a confirmation link, and the guest stays a
@@ -1205,6 +1206,12 @@
     if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
+      case 'role': {
+        // the owner changed this account's role while it was connected
+        S.role = m.role; S.isGuest = m.role === 'guest';
+        render();
+        break;
+      }
       case 'games': {
         // the owner switched a game on or off: the home page and the create buttons update at once
         S.games = m.games;
@@ -1450,7 +1457,7 @@
   document.addEventListener('keydown', (e) => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.pseat[role="button"]')) { e.preventDefault(); openPlayerCard(e.target.dataset.pid); return; }
     if (e.key !== 'Escape') return;
-    if (S.auth) closeOverlay();
+    if (S.auth || document.getElementById('auth-overlay')) closeOverlay();
     else if (document.getElementById('modal-overlay')) closeModal();
     else if (S.toolsOpen) { setTools(false); document.querySelector('.tb-more-btn')?.focus(); }
     else if (S.bellOpen) { S.bellOpen = false; render(); document.querySelector('.tb-bell')?.focus(); }
