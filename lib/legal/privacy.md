@@ -33,7 +33,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by {{IMP
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 - A few settings kept in your browser, such as which one-time notices you have already seen. They stay on your device and are not sent to us for tracking.
 
-**Guests:** guest accounts cannot be created in the current version. Browsing the public pages does not create a record. [OWNER: confirm there are no guest records in the database. See docs/ACCOUNT_DELETION_AND_RETENTION.md.]
+**Guests:** where the owner has turned guest play on, you can play without creating an account. A guest visit keeps a temporary record: a display name, an avatar, a login session kept in your browser, and the seats and scores of the games you play. A guest has no e-mail address and no password. The record lasts as long as the guest session (3 days unless the owner sets otherwise, [OWNER: confirm the session length]) and is removed one day after that. Finished games keep the name shown at the table, but are no longer linked to any account. If you create an account from a guest visit, the same record becomes your account and your games stay with it. Browsing the public pages does not create a record.
 
 **Technical and security data:**
 - Your network address, which we record when you make requests, so that we can limit repeated attempts (rate limiting). These records are deleted after one day.
