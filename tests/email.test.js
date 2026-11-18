@@ -88,6 +88,43 @@ const ENV = { EMAIL_PROVIDER: 'resend', EMAIL_FROM: 'Tableverse <noreply@example
     assert.doesNotMatch(keys.join(' '), /t1|t2/);
   });
 
+  await test('guest upgrade confirmation asks for confirmation and encodes the verification link in both bodies', async () => {
+    const sent = [];
+    const log = quietLog();
+    const sender = makeAuthEmailSender({ env: ENV, logger: log, fetch: async (url, options) => {
+      sent.push({ headers: options.headers, body: JSON.parse(options.body) });
+      return { ok: true, status: 200, text: async () => '{"id":"upgrade_1"}' };
+    } });
+    const message = { email: 'Guest.Player@example.test', token: 'guest&token=#secret' };
+    assert.deepEqual(await sender.sendUpgradeConfirmation(message), { provider: 'resend', id: 'upgrade_1' });
+    const body = sent[0].body;
+    assert.deepEqual(body.to, [message.email]);
+    assert.equal(body.subject, 'Confirm your Tableverse account');
+    for (const content of [body.html, body.text]) {
+      assert.ok(content.includes('https://play.example.test/verify-email.html?token=guest%26token%3D%23secret'));
+      assert.match(content, /Until you do, nothing changes/);
+      assert.doesNotMatch(content, /reset-password/);
+    }
+    await sender.sendUpgradeConfirmation(message);
+    await sender.sendVerification(message);
+    assert.equal(sent[0].headers['Idempotency-Key'], sent[1].headers['Idempotency-Key']);
+    assert.notEqual(sent[0].headers['Idempotency-Key'], sent[2].headers['Idempotency-Key'], 'upgrade and verification are distinct deliveries');
+    assert.doesNotMatch(log.lines.log.join('\n'), /Guest\.Player@|guest&token|secret-api-key/);
+  });
+
+  await test('upgrade delivery failures reject and redact sensitive provider echoes', async () => {
+    const log = quietLog();
+    const sender = makeAuthEmailSender({ env: ENV, logger: log, fetch: async () => ({
+      ok: false, status: 429,
+      text: async () => 'Guest.Player@example.test token=upgrade-secret secret-api-key',
+    }) });
+    await assert.rejects(sender.sendUpgradeConfirmation({ email: 'Guest.Player@example.test', token: 'upgrade-secret' }),
+      (error) => error.status === 429 && /Email delivery failed/.test(error.message));
+    assert.equal(log.lines.log.length, 0);
+    assert.match(log.lines.error.join('\n'), /confirm_upgrade/);
+    assert.doesNotMatch(log.lines.error.join('\n'), /Guest\.Player@|upgrade-secret|secret-api-key/);
+  });
+
   console.log('production domain links');
   const LIVE = { ...ENV, PUBLIC_APP_URL: 'https://playtableverse.com/' }; // trailing slash must not produce "//"
   const capture = () => {

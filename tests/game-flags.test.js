@@ -195,4 +195,31 @@ test('withFlags gives each viewer their own enabled flag and the mode', () => {
   flags.reset();
 });
 
+test('explicit access modes take precedence over contradictory legacy booleans', () => {
+  flags.reset();
+  flags.apply([{ game_id: 'ludo', access: 'guests', enabled: false }, { game_id: 'wizard', access: 'owner', enabled: true }]);
+  assert.equal(flags.isEnabled('ludo', 'user'), true);
+  assert.equal(flags.isEnabled('ludo', 'guest'), false);
+  assert.equal(flags.isEnabled('wizard', 'admin'), false);
+  assert.equal(flags.isEnabled('wizard', 'owner'), true);
+  flags.reset();
+});
+
+test('role-specific lists do not mutate input entries or leak one viewer permission to another', () => {
+  flags.reset();
+  const input = Object.freeze([Object.freeze({ id: 'ludo', name: 'Ludo', enabled: true }), Object.freeze({ id: 'unknown' })]);
+  const unread = flags.withFlags(input, 'owner');
+  assert.deepEqual(unread.map(({ access, enabled }) => [access, enabled]), [['owner', false], ['owner', false]]);
+  flags.apply([{ game_id: 'ludo', access: 'admins' }]);
+  const admin = flags.withFlags(input, 'admin');
+  const guest = flags.withFlags(input, 'guest');
+  assert.equal(admin[0].enabled, true);
+  assert.equal(guest[0].enabled, false);
+  assert.equal(admin[0].enabled, true, 'rendering a guest list leaves the admin result intact');
+  assert.equal(admin[0].name, 'Ludo');
+  assert.notEqual(admin[0], input[0]);
+  for (const role of ['guest', 'user', 'admin', 'owner', 'toString']) assert.equal(flags.isEnabled('unknown', role), false);
+  flags.reset();
+});
+
 console.log(`\n${passed} passed`);
