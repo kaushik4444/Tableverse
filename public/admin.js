@@ -474,6 +474,9 @@
   }
 
   // ---------------------------------------------------------------- games (counts and averages only)
+  // per game: the value still being saved (kept across redraws) and the queue that saves each game's changes one at a time
+  const gameFlagPending = new Map();
+  const gameFlagQueue = new Map();
   async function gamesTab(days = 30) {
     const gen = state.gen;
     const o = await api(`/api/admin/games?days=${days}`);
@@ -496,25 +499,29 @@
     const label = (m) => labels[m] || m;
     const opts = (cur) => o.modes.map((m) => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(label(m))}</option>`).join('');
     const pill = (g) => (g.access === 'on' ? '<span class="ad-pill">on</span>' : `<span class="ad-pill warn">${esc(label(g.access))}</span>`);
-    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}">${opts(g.access)}</select></td></tr>`).join('');
+    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${gameFlagPending.has(g.id) ? ' disabled aria-disabled="true"' : ''}>${opts(gameFlagPending.has(g.id) ? gameFlagPending.get(g.id) : g.access)}</select></td></tr>`).join('');
     main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Game switches</h3>
       <p class="ad-muted">Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players play and refuses guests. "Disabled for all" keeps the game for the owner only. A game that is switched off stays listed, and new tables, starts and rematches are refused for the roles it excludes. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
       <p id="gMsg" class="ad-msg" role="status"></p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
-    main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = async () => {
-      if (sel.disabled) return;
-      const visit = generation; // the Games visit this save belongs to
-      sel.disabled = true; // one request at a time: a second change would only repeat the same one
-      try {
-        await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value }, false, true);
-        // the save is on the server whichever visit started it: a Games view still open shows the committed flags
-        if (state.tab !== 'games') return; // the owner has moved to another view: leave it alone
-        state.gen += 1; // a redraw still in flight is dropped; each completed change starts a fresh redraw after its save
-        gamesTab().catch(fail); // redraw with the new state
-      } catch (e) {
+    // a redraw shows only its newest request's result: an older redraw that fails must not replace the current view
+    const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab().catch((e) => { if (mine === state.gen) fail(e); }); };
+    main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
+      const id = sel.dataset.gaccess; const value = sel.value; const visit = generation;
+      gameFlagPending.set(id, value); sel.disabled = true; // the newest choice stays shown and locked until it is saved
+      // one save per game at a time, in the order the owner chose them, so an earlier save cannot land after a later one
+      const run = (gameFlagQueue.get(id) || Promise.resolve()).then(() => api('/api/admin/game-flags', { gameId: id, access: value }, false, true));
+      const settled = run.catch(() => {});
+      gameFlagQueue.set(id, settled);
+      settled.then(() => { if (gameFlagQueue.get(id) === settled) gameFlagQueue.delete(id); });
+      run.then(() => {
+        if (gameFlagPending.get(id) === value) gameFlagPending.delete(id);
+        if (state.tab === 'games') redrawGames(); // the committed flags are shown, whichever visit started the save
+      }, (e) => {
+        if (gameFlagPending.get(id) === value) gameFlagPending.delete(id);
         if (visit !== generation || e.name === 'AbortError' || state.tab !== 'games') return; // an error from an earlier visit is not shown here
-        sel.disabled = false; say('gMsg', e.message, 'err'); gamesTab().catch(fail);
-      }
+        redrawGames().then(() => say('gMsg', e.message, 'err'));
+      });
     }; });
   }
 

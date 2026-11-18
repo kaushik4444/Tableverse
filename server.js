@@ -300,12 +300,14 @@ function start(opts = {}) {
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
   /** A role changed in the admin console: the live player takes it at once, so restricted games are judged by the new role. */
+  // counts live role changes: a stored-role read that overlaps one is read again, so an older stored role cannot replace it
+  let roleEpoch = 0;
   const applyLiveRole = ({ playerId, role, unverified = false }) => {
+    roleEpoch += 1;
     const p = players.get(playerId);
     if (!p || typeof role !== 'string' || !role) return;
     p.role = role;
     p.roleUnverified = unverified === true; // set when the stored role could not be read back (fail closed)
-    p.roleVersion = (p.roleVersion || 0) + 1; // a later read that started before this change must not overwrite it
     // the browser keeps the role it was given at the welcome: send the new role and the games it may now play
     send(p.ws, { t: 'role', role: roleOf(p) });
     send(p.ws, { t: 'games', games: gameListFor(games.list(), p) });
@@ -2021,12 +2023,17 @@ function start(opts = {}) {
 
     let p = tokens.get(presentedToken) || null;
     // a cached session whose role could not be read back is read again from the database, so a promotion is not lost
-    // a live role change that lands while this re-read is in flight is newer than the stored role it reads: keep the live one
-    const cachedUnverified = p && p.roleUnverified ? p : null;
-    const roleSeenBefore = cachedUnverified ? cachedUnverified.roleVersion || 0 : 0;
-    if (cachedUnverified) p = null;
+    if (p && p.roleUnverified) p = null;
     if (!p) {
-      const dbPlayer = await dbPlayers.authenticateToken(presentedToken);
+      // a live role change that lands while the stored role is read is newer than what was read: read again (three tries at most)
+      let dbPlayer = null;
+      let liveChanged = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const epochBefore = roleEpoch;
+        dbPlayer = await dbPlayers.authenticateToken(presentedToken);
+        liveChanged = roleEpoch !== epochBefore;
+        if (!liveChanged) break;
+      }
       if (dbPlayer) {
         const known = players.get(dbPlayer.id);
         if (known) {
@@ -2037,7 +2044,7 @@ function start(opts = {}) {
           p.username = dbPlayer.username || null;
           p.createdAt = dbPlayer.created_at;
           p.isAnonymous = Boolean(dbPlayer.is_anonymous);
-          if (!cachedUnverified || (known.roleVersion || 0) === roleSeenBefore) {
+          if (!liveChanged) {
             p.role = dbPlayer.role || 'user';
             p.roleUnverified = false;
           }
