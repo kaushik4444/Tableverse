@@ -424,9 +424,20 @@ function start(opts = {}) {
     },
     onSignedOut: closeSignedOutSockets,
     // a guest's e-mail link was used: the same player is now an account, so the live session is no longer a guest for game gates
-    onGuestUpgraded: ({ playerId }) => {
+    // A guest's account was confirmed (from the e-mail link, in any browser): the live player and every open socket of it
+    // see the account at once, so the page drops its guest state and the guest restrictions stop applying.
+    onGuestUpgraded: ({ playerId, username }) => {
       const p = players.get(playerId);
-      if (p) p.isAnonymous = false;
+      if (!p) return;
+      p.isAnonymous = false;
+      p.username = username || p.username || null;
+      if (!p.role || p.role === 'guest') p.role = 'user'; // owner and admin keep their role
+      for (const ws of wss.clients) {
+        const owner = ws.player || ws.pendingPlayer;
+        if (!owner || owner.id !== playerId) continue;
+        send(ws, { t: 'identity', isGuest: false, role: roleOf(p), username: p.username, guestLocked: [] });
+      }
+      broadcastGames();
     },
     // the display name and/or avatar was changed over HTTP (profile page): same effect as the lobby's own change
     onProfileChanged: ({ playerId, displayName, avatar }) => {
@@ -1161,6 +1172,16 @@ function start(opts = {}) {
     return true;
   }
 
+  /**
+   * A player who leaves a table on purpose (leave, create, or join another table) is remembered for a guest: a guest may be
+   * locked out of getting back in (feature 'rejoin'). A dropped connection never comes through here.
+   */
+  function leaveByChoice(p) {
+    const room = rooms.get(p.room);
+    if (room && roleOf(p) === 'guest') (room.guestLeavers || (room.guestLeavers = new Set())).add(p.id);
+    leaveRoom(p);
+  }
+
   function leaveRoom(p) {
     const room = rooms.get(p.room);
     p.room = null;
@@ -1544,7 +1565,7 @@ function start(opts = {}) {
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
-      if (p.room) leaveRoom(p);
+      if (p.room) leaveByChoice(p);
       const room = {
         code: newCode(),
         createdAt: Date.now(),
@@ -1600,7 +1621,7 @@ function start(opts = {}) {
       // line is written. A stale p.room that points elsewhere is repaired.
       if ((seat && !seat.bot) || isSpec(room, p.id)) {
         if (p.room === code) return broadcast(room);
-        if (p.room) leaveRoom(p);
+        if (p.room) leaveByChoice(p);
         p.room = code;
         broadcast(room);
         return sendChatLog(p, room);
@@ -1614,7 +1635,7 @@ function start(opts = {}) {
       const now = Date.now();
       const seatDecision = seat && room.status === 'playing' && seat.bot ? rejoinDecision(room, p.id, now) : null;
       if (seatDecision && seatDecision.seat) {
-        if (p.room && p.room !== room.code) leaveRoom(p);
+        if (p.room && p.room !== room.code) leaveByChoice(p);
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
         reclaimSeat(room, seat, now); // back in time: the bot gives the seat back, no loss, play resumes
@@ -1633,7 +1654,7 @@ function start(opts = {}) {
         // the game is already running: the newcomer watches
         if (seatDecision && seatDecision.reason === 'expired') send(p.ws, { t: 'notice', text: 'Your time to take your seat back has passed, so the bot keeps it to the end. You can watch as a spectator.' });
         if (room.spectators.length >= MAX_SPECTATORS) return sendError(p, 'Too many spectators at that table');
-        if (p.room && p.room !== room.code) leaveRoom(p);
+        if (p.room && p.room !== room.code) leaveByChoice(p);
         addSpectator(room, p);
         sys(room, `👁 ${p.name} is watching`);
         notifyOthers(room, p.id, `👁 ${p.name} is watching the game`);
@@ -1643,7 +1664,7 @@ function start(opts = {}) {
       }
       if (wantsSpectate) {
         if (room.spectators.length >= MAX_SPECTATORS) return sendError(p, 'Too many spectators at that table');
-        if (p.room && p.room !== room.code) leaveRoom(p);
+        if (p.room && p.room !== room.code) leaveByChoice(p);
         addSpectator(room, p);
         sys(room, `👁 ${p.name} is watching`);
         notifyOthers(room, p.id, `👁 ${p.name} is watching the lobby`);
@@ -1652,7 +1673,7 @@ function start(opts = {}) {
         return;
       }
       if (room.members.length >= room.seats) return sendError(p, 'That table is full');
-      if (p.room) leaveRoom(p);
+      if (p.room) leaveByChoice(p);
       addMember(room, p);
       sys(room, `🙋 ${p.name} joined the table`);
       notifyOthers(room, p.id, `🙋 ${p.name} joined the table`);
@@ -1675,10 +1696,7 @@ function start(opts = {}) {
     },
 
     leave(p) {
-      // a guest who leaves on purpose may be locked out of getting back in (feature 'rejoin'). A dropped connection never reaches here.
-      const left = rooms.get(p.room);
-      if (left && roleOf(p) === 'guest') (left.guestLeavers || (left.guestLeavers = new Set())).add(p.id);
-      leaveRoom(p);
+      leaveByChoice(p);
       send(p.ws, { t: 'left' });
       send(p.ws, tablesMsg(p)); // the home screen can offer "Rejoin" straight away
     },

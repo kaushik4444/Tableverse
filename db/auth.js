@@ -311,7 +311,8 @@ async function completeGuestUpgrade(rawToken) {
       );
       // the session the guest has now was short (the guest lifetime); the account gets the normal session length
       await client.query(
-        `UPDATE auth_sessions SET expires_at = NOW() + ($2::text || ' days')::interval WHERE player_id = $1 AND revoked_at IS NULL`,
+        `UPDATE auth_sessions SET expires_at = NOW() + ($2::text || ' days')::interval
+         WHERE player_id = $1 AND revoked_at IS NULL AND expires_at > NOW()`,
         [p.rows[0].id, String(sessionTtlDays())]
       );
       await client.query(
