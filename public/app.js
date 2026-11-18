@@ -552,7 +552,7 @@
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
     authOpener = origin;
-    authOpenerAct = origin && origin.getAttribute ? origin.getAttribute('data-act') : null;
+    authOpenerSel = openerSelector(origin);
     document.body.appendChild(overlay);
     mountGoogle();
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');
@@ -662,13 +662,20 @@
   }
 
   let authOpener = null; // the control that opened the sheet: focus returns to it when the sheet closes
-  let authOpenerAct = null; // its data-act, used when a redraw has replaced that control
+  let authOpenerSel = null; // a selector for that control (data-act and data-game), used when a redraw has replaced it
+  // The selector finds the same control again after a redraw: the action and, for a per-game button, its game.
+  const openerSelector = (el) => {
+    const act = el && el.getAttribute ? el.getAttribute('data-act') : null;
+    if (!act) return null;
+    const game = el.getAttribute('data-game');
+    return `[data-act="${act}"]` + (game ? `[data-game="${game}"]` : '');
+  };
   function closeOverlay() {
     const el = document.getElementById('auth-overlay');
     if (el) el.remove();
     S.auth = null;
-    const back = authOpener, act = authOpenerAct; authOpener = null; authOpenerAct = null;
-    const target = back && back.isConnected ? back : (act ? document.querySelector(`[data-act="${act}"]`) : null);
+    const back = authOpener, sel = authOpenerSel; authOpener = null; authOpenerSel = null;
+    const target = back && back.isConnected ? back : (sel ? document.querySelector(sel) : null);
     if (target && target.focus) target.focus();
   }
 
@@ -747,7 +754,7 @@
       else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
     });
     authOpener = origin;
-    authOpenerAct = origin && origin.getAttribute ? origin.getAttribute('data-act') : null;
+    authOpenerSel = openerSelector(origin);
     document.body.appendChild(overlay);
     // a text field would open the on-screen keyboard on touch screens, so focus a button there
     const coarse = matchMedia('(pointer: coarse)').matches;
