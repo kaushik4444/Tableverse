@@ -154,7 +154,7 @@ async function createAnonymousPlayer({ displayName, avatar, ttlHours }) {
 
     const player = playerRes.rows[0];
 
-    // the session expires after the guest lifetime (ttlHours) or, when none is given, like any other session
+    // the session expires after the guest lifetime (ttlHours) or, when none is given, like any other session (AUTH_SESSION_TTL_DAYS, default 30 days)
     await client.query(
       `INSERT INTO auth_sessions (player_id, token_hash, expires_at)
        VALUES ($1, $2, NOW() + $3::interval)`,

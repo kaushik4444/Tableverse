@@ -53,12 +53,16 @@ A guest who upgrades (below) keeps the same row, so nothing is lost and nothing 
 
 ## Upgrading a guest to an account
 
-Guests use the same register sheet. `POST /api/auth/upgrade-guest` with a username, an e-mail, a password and the 18+ confirmation:
+Guests use the same register sheet. It is a two-step process, so nothing about the guest changes until the owner of the e-mail address has proven it:
 
-- The **same player row** becomes the account (`is_anonymous` becomes false). The player id, the match history and the stats stay as they are. Nothing is copied, so nothing is duplicated.
-- The same password, username and e-mail rules apply as for a new account. A taken username gives 400; a taken e-mail gives 409 (the same answer as registration, so it does not reveal accounts).
-- The e-mail verification rule applies from then on, exactly as for a new account. The page reconnects as the account.
-- A registered player gets 403 on this route.
+1. `POST /api/auth/upgrade-guest` with a username, an e-mail, a password and the 18+ confirmation (`db/auth.js` `requestGuestUpgrade`). The details are stored as a **pending request** in `guest_upgrades` (the password is stored only as a hash), and a one-time link is e-mailed (`confirm_upgrade` template, same page as e-mail verification). The guest stays a guest, in the same game, with the same locks.
+   - The same password and username rules apply as for a new account. A taken **username** gives 400 (usernames are public).
+   - A taken **e-mail** is not reported. The response is the same as for a new address (`pending: true`), and the owner of the address gets the "account already exists" e-mail instead of a link. Registration does the same.
+   - A new request replaces the earlier pending one, so only the latest link works.
+2. The link is used (`POST /api/auth/verify-email`, `completeGuestUpgrade`). Then the **same player row** becomes the account (`is_anonymous` becomes false, the username is set, the e-mail identity is created **already verified**, the password hash is stored). The player id, the match history and the stats stay as they are. Nothing is copied. The guest's session continues as the account, with the normal session length. Live sockets of that player stop counting as guests at once (`onGuestUpgraded`).
+   - The link is single-use and expires with its time limit. An expired link, a name or address taken in the meantime, or a guest that has already ended gives 400 and changes nothing.
+   - Pending requests are removed a day after their link ends (`purgeExpired`).
+3. A registered player gets 403 on this route.
 
 ## Reminders (on the page)
 

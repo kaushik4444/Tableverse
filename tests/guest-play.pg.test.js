@@ -1,8 +1,8 @@
 'use strict';
 require('./helpers/env');
-// Guest play on a REAL PostgreSQL (throw-away database, tests/helpers/testdb.js): a guest's own row becomes the account on
-// upgrade (same id, same matches), a refused upgrade changes nothing, and expiry removes only ended guests.
-// Runs only with TEST_DATABASE_URL.
+// Guest play on a REAL PostgreSQL (throw-away database, tests/helpers/testdb.js): a guest's own row becomes the account when the
+// e-mail link is used (same id, same matches), asking for an upgrade changes nothing by itself, a refused or used link changes
+// nothing, and expiry removes only ended guests. Runs only with TEST_DATABASE_URL.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -49,6 +49,12 @@ const PW = 'TestPass123!';
       const u = await registerAndVerify(srv.port, { email, username, displayName: tag, password: PW });
       return { ...u, email, id: (await u.browser.get("/api/auth/session")).json.player.id };
     };
+    // Uses a confirmation link from another browser, as the owner of the address would (no session needed).
+    const useLink = async (token) => {
+      const b = new Browser(srv.port); await b.csrf();
+      return b.post('/api/auth/verify-email', { token }, { csrf: true });
+    };
+    const requestUpgrade = (g, email, username) => g.browser.post('/api/auth/upgrade-guest', { email, username, password: PW, adultConfirmed: true }, { csrf: true });
 
     await test('a guest is an is_anonymous row with a session that lasts the guest lifetime, not 30 days', async () => {
       const g = await newGuest('Ann');
@@ -66,40 +72,110 @@ const PW = 'TestPass123!';
       assert.match(second.name, /^Sam\d{4}$/);
     });
 
-    await test('upgrade keeps the same player row and its matches (nothing copied, nothing lost)', async () => {
+    const pending = {};
+
+    await test('asking for an upgrade changes nothing yet: the guest stays a guest and is e-mailed a link', async () => {
       const g = await newGuest('Gina');
       await record({ participants: [part(g.id, 'Gina', { score: 40, isWinner: true }), part(null, 'Bot', { isBot: true, seat: 1 })] });
-      const before = await q('SELECT match_id FROM match_participants WHERE player_id = $1', [g.id]);
+      const r = await requestUpgrade(g, `gina.${seq}@test.local`, `gina${seq++}`);
+      assert.equal(r.status, 200);
+      assert.equal(r.json.pending, true);
+      assert.equal(r.json.upgraded, false);
+      assert.ok(r.json.debug && r.json.debug.verifyToken, 'the test build returns the link token');
+      pending.gina = r.json.debug.verifyToken;
+      const [row] = await q('SELECT is_anonymous, username FROM players WHERE id = $1', [g.id]);
+      assert.equal(row.is_anonymous, true, 'still a guest');
+      assert.equal(row.username, null, 'no username yet');
+      assert.equal((await q('SELECT count(*)::int AS n FROM auth_identities WHERE player_id = $1', [g.id]))[0].n, 0, 'no sign-in identity yet');
+      assert.equal((await q('SELECT count(*)::int AS n FROM guest_upgrades WHERE player_id = $1', [g.id]))[0].n, 1, 'one pending request');
+    });
+
+    await test('using the link makes the guest\'s own row the account: same id, same matches, verified e-mail, session kept', async () => {
+      const [g] = await q("SELECT id FROM players WHERE display_name = 'Gina'");
+      const before = (await q('SELECT match_id FROM match_participants WHERE player_id = $1', [g.id])).map((r2) => r2.match_id);
       assert.equal(before.length, 1);
-      const r = await g.browser.must('/api/auth/upgrade-guest', { email: `gina.${seq}@test.local`, username: `gina${seq++}`, password: PW, adultConfirmed: true }, { csrf: true });
-      assert.equal(r.json.upgraded, true);
-      assert.equal(r.json.player.id, g.id, 'same id');
+      const c = await useLink(pending.gina);
+      assert.equal(c.status, 200, JSON.stringify(c.json));
+      assert.equal(c.json.upgraded, true);
       const [row] = await q('SELECT is_anonymous, username FROM players WHERE id = $1', [g.id]);
       assert.equal(row.is_anonymous, false);
       assert.ok(row.username, 'username set');
-      const after = await q('SELECT match_id FROM match_participants WHERE player_id = $1', [g.id]);
-      assert.deepEqual(after.map((r2) => r2.match_id), before.map((r2) => r2.match_id), 'the same match is still attached');
+      const after = (await q('SELECT match_id FROM match_participants WHERE player_id = $1', [g.id])).map((r2) => r2.match_id);
+      assert.deepEqual(after, before, 'the same match is still attached');
       assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE display_name = $1', ['Gina']))[0].n, 1, 'no duplicate row');
+      const [ident] = await q('SELECT email_verified_at FROM auth_identities WHERE player_id = $1', [g.id]);
+      assert.ok(ident && ident.email_verified_at, 'the e-mail is verified by the link');
+      const [s] = await q('SELECT EXTRACT(EPOCH FROM (expires_at - NOW()))::int AS secs FROM auth_sessions WHERE player_id = $1 AND revoked_at IS NULL', [g.id]);
+      assert.ok(s.secs > 6 * 24 * 3600, 'the account session gets the normal session length: ' + s.secs);
     });
 
-    await test('the session survives the upgrade; the e-mail is unverified until the link is used', async () => {
+    await test('the guest\'s own session continues after confirmation, as the account', async () => {
       const g = await newGuest('Hal');
-      await g.browser.must('/api/auth/upgrade-guest', { email: `hal.${seq}@test.local`, username: `hal${seq++}`, password: PW, adultConfirmed: true });
+      const r = await requestUpgrade(g, `hal.${seq}@test.local`, `hal${seq++}`);
+      const c = await useLink(r.json.debug.verifyToken);
+      assert.equal(c.json.upgraded, true);
       const s = (await g.browser.get('/api/auth/session')).json;
       assert.equal(s.authenticated, true, 'still signed in');
+      assert.equal(s.player.id, g.id, 'same player');
       assert.equal(s.player.username !== null, true);
-      assert.equal(s.emailVerified, false);
+      assert.equal(s.emailVerified, true);
     });
 
-    await test('an upgrade with a taken username or e-mail is refused and changes nothing', async () => {
+    await test('a link can be used once', async () => {
+      const g = await newGuest('Once');
+      const r = await requestUpgrade(g, `once.${seq}@test.local`, `once${seq++}`);
+      assert.equal((await useLink(r.json.debug.verifyToken)).status, 200);
+      const again = await useLink(r.json.debug.verifyToken);
+      assert.notEqual(again.status, 200, 'the second use is refused');
+    });
+
+    await test('a new request replaces the earlier link, which stops working', async () => {
+      const g = await newGuest('Replace');
+      const first = await requestUpgrade(g, `rep1.${seq}@test.local`, `rep${seq++}`);
+      const second = await requestUpgrade(g, `rep2.${seq}@test.local`, `rep${seq++}`);
+      assert.equal((await q('SELECT count(*)::int AS n FROM guest_upgrades WHERE player_id = $1', [g.id]))[0].n, 1, 'one pending request');
+      assert.notEqual((await useLink(first.json.debug.verifyToken)).status, 200, 'the earlier link is refused');
+      assert.equal((await useLink(second.json.debug.verifyToken)).status, 200, 'the latest link works');
+    });
+
+    await test('an expired link is refused, removed, and the guest is unchanged', async () => {
+      const g = await newGuest('Late');
+      const r = await requestUpgrade(g, `late.${seq}@test.local`, `late${seq++}`);
+      await q("UPDATE guest_upgrades SET expires_at = NOW() - INTERVAL '1 minute' WHERE player_id = $1", [g.id]);
+      const c = await useLink(r.json.debug.verifyToken);
+      assert.equal(c.status, 400);
+      assert.match(c.json.error, /expired/);
+      assert.equal((await q('SELECT count(*)::int AS n FROM guest_upgrades WHERE player_id = $1', [g.id]))[0].n, 0, 'the link is removed');
+      assert.equal((await q('SELECT is_anonymous FROM players WHERE id = $1', [g.id]))[0].is_anonymous, true, 'still a guest');
+    });
+
+    await test('a username taken after the request is refused at confirmation, and the guest stays a guest', async () => {
+      const g = await newGuest('Race');
+      const name = `race${seq++}`;
+      const r = await requestUpgrade(g, `race.${seq}@test.local`, name);
+      await registerAndVerify(srv.port, { email: `racer.${seq++}@test.local`, username: name, displayName: 'Racer', password: PW });
+      const c = await useLink(r.json.debug.verifyToken);
+      assert.equal(c.status, 400);
+      assert.match(c.json.error, /taken before you confirmed/);
+      assert.equal((await q('SELECT is_anonymous FROM players WHERE id = $1', [g.id]))[0].is_anonymous, true, 'still a guest');
+    });
+
+    await test('a taken username is refused at the request; a taken e-mail gets the same answer as a new one, and no link', async () => {
       const taken = await newUser('taken');
       const g = await newGuest('Ivy');
-      const e1 = await g.browser.post('/api/auth/upgrade-guest', { email: `ivy.${seq}@test.local`, username: taken.username, password: PW, adultConfirmed: true });
+      const e1 = await g.browser.post('/api/auth/upgrade-guest', { email: `ivy.${seq}@test.local`, username: taken.username, password: PW, adultConfirmed: true }, { csrf: true });
       assert.equal(e1.status, 400);
       assert.match(e1.json.error, /already taken/);
-      const e2 = await g.browser.post('/api/auth/upgrade-guest', { email: taken.email, username: `ivy${seq++}`, password: PW, adultConfirmed: true });
-      assert.equal(e2.status, 409);
+      const e2 = await g.browser.post('/api/auth/upgrade-guest', { email: taken.email, username: `ivy${seq++}`, password: PW, adultConfirmed: true }, { csrf: true });
+      const e3 = await g.browser.post('/api/auth/upgrade-guest', { email: `ivynew.${seq}@test.local`, username: `ivy${seq++}`, password: PW, adultConfirmed: true }, { csrf: true });
+      assert.equal(e2.status, 200, 'a taken address is not reported');
+      assert.equal(e3.status, 200);
+      assert.equal(e2.json.message, e3.json.message, 'the same message either way');
+      assert.equal(e2.json.pending, e3.json.pending, 'the same answer either way');
       assert.equal((await q('SELECT is_anonymous FROM players WHERE id = $1', [g.id]))[0].is_anonymous, true, 'still a guest');
+      // the taken address got no link: only the new address's request is pending
+      assert.equal((await q('SELECT count(*)::int AS n FROM guest_upgrades WHERE player_id = $1', [g.id]))[0].n, 1);
+      assert.equal((await q('SELECT email FROM guest_upgrades WHERE player_id = $1', [g.id]))[0].email, `ivynew.${seq - 1}@test.local`);
     });
 
     await test('a registered player can still create a game that is disabled for guests only', async () => {
@@ -128,8 +204,20 @@ const PW = 'TestPass123!';
 
     await test('a registered player cannot use the guest upgrade', async () => {
       const u = await newUser('reg');
-      const r = await u.browser.post('/api/auth/upgrade-guest', { email: `x.${seq}@test.local`, username: `xx${seq++}`, password: PW, adultConfirmed: true });
+      const r = await u.browser.post('/api/auth/upgrade-guest', { email: `x.${seq}@test.local`, username: `xx${seq++}`, password: PW, adultConfirmed: true }, { csrf: true });
       assert.equal(r.status, 403);
+    });
+
+    await test('pending requests whose link ended are removed by expiry; a live request is kept', async () => {
+      const g = await newGuest('Pend');
+      await requestUpgrade(g, `pend.${seq}@test.local`, `pend${seq++}`);
+      await q("UPDATE guest_upgrades SET expires_at = NOW() - INTERVAL '2 days' WHERE player_id = $1", [g.id]);
+      const h = await newGuest('Pend2');
+      await requestUpgrade(h, `pend2.${seq}@test.local`, `pend${seq++}`);
+      const out = await dbAuth.purgeExpired();
+      assert.ok(out.upgrades >= 1, JSON.stringify(out));
+      assert.equal((await q('SELECT count(*)::int AS n FROM guest_upgrades WHERE player_id = $1', [g.id]))[0].n, 0, 'the ended request is removed');
+      assert.equal((await q('SELECT count(*)::int AS n FROM guest_upgrades WHERE player_id = $1', [h.id]))[0].n, 1, 'the live request is kept');
     });
 
     await test('expiry removes an ended guest, keeps its finished games (unlinked), and never touches a registered account', async () => {

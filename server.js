@@ -420,6 +420,11 @@ function start(opts = {}) {
       onEvent: (event) => (event.type === 'friend-removed' ? onFriendRemoved(event.playerId, event.friendId) : notifyAccount(event.playerId, event)),
     },
     onSignedOut: closeSignedOutSockets,
+    // a guest's e-mail link was used: the same player is now an account, so the live session is no longer a guest for game gates
+    onGuestUpgraded: ({ playerId }) => {
+      const p = players.get(playerId);
+      if (p) p.isAnonymous = false;
+    },
     // the display name and/or avatar was changed over HTTP (profile page): same effect as the lobby's own change
     onProfileChanged: ({ playerId, displayName, avatar }) => {
       const p = players.get(playerId);

@@ -698,17 +698,15 @@
   // The guest sheet's "create a free account" and the reminder's button both open the register sheet.
   if (window.TvGuest) window.TvGuest.hooks.upgrade = () => openAuthSheet('register');
 
-  /** A guest turns into an account in place: the same player row (stats and games stay). The server then asks for the email check. */
+  /**
+   * Asks to turn the guest into an account. Nothing changes yet: the server e-mails a confirmation link, and the guest stays a
+   * guest (same game, same locks) until that link is used. The account then takes effect on the server at once.
+   */
   async function doUpgradeGuest(username, email, password, adultConfirmed) {
-    const out = await withBusy('Creating your account…', () => postJson('/api/auth/upgrade-guest', { username, email, password, adultConfirmed: adultConfirmed === true }));
-    S.isGuest = false; S.role = 'user';
+    const out = await withBusy('Sending your confirmation…', () => postJson('/api/auth/upgrade-guest', { username, email, password, adultConfirmed: adultConfirmed === true }));
     if (out.csrfToken) S.csrf = out.csrfToken;
-    S.requireEmailVerification = policyRequiresVerification(out);
-    S.emailVerified = false;
-    S.signedOutIntentionally = false;
     closeOverlay();
-    connect(); // reconnect as the registered account; the server re-reads it (and asks for verification when required)
-    toast(out.message || 'Your account is ready. Check your email to verify it.');
+    toast(out.message || 'Check your email to confirm your account.');
   }
 
   async function doRegister(name, username, email, password, adultConfirmed) {
