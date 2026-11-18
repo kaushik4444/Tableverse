@@ -670,6 +670,8 @@
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     adoptPlayer(out.player);
+    // a registered sign-in is not a guest, even if this page was a guest a moment ago (the welcome message confirms the role)
+    S.isGuest = false; S.role = null;
     S.requireEmailVerification = policyRequiresVerification(out);
     S.emailVerified = !!(out.player && out.player.email_verified);
     S.signedOutIntentionally = false;
@@ -1205,6 +1207,16 @@
       case 'games': {
         // the owner switched a game on or off: the home page and the create buttons update at once
         S.games = m.games;
+        render();
+        break;
+      }
+      case 'identity': {
+        // this guest's account was confirmed (from the e-mail link, in this tab or another): the page drops its guest state now
+        S.isGuest = m.isGuest === true;
+        S.role = m.role || S.role;
+        S.guestLocked = Array.isArray(m.guestLocked) ? m.guestLocked : [];
+        if (m.username) { S.username = m.username; store.set('ct_username', S.username); }
+        if (!S.isGuest) toast('Your account is confirmed. Your games and history are yours.');
         render();
         break;
       }
