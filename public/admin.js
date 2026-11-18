@@ -478,6 +478,7 @@
   const gameFlagPending = new Map();
   const gameFlagQueue = new Map();
   async function gamesTab(days = 30) {
+    state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
     const gen = state.gen;
     const o = await api(`/api/admin/games?days=${days}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
@@ -505,7 +506,7 @@
       <p id="gMsg" class="ad-msg" role="status"></p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
     // a redraw shows only its newest request's result: an older redraw that fails must not replace the current view
-    const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab().catch((e) => { if (mine === state.gen) fail(e); }); };
+    const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab(state.gamesDays || 30).catch((e) => { if (mine === state.gen) fail(e); }); };
     main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
       const id = sel.dataset.gaccess; const value = sel.value; const visit = generation;
       gameFlagPending.set(id, value); sel.disabled = true; // the newest choice stays shown and locked until it is saved

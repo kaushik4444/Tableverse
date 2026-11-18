@@ -2036,6 +2036,8 @@ function start(opts = {}) {
         liveChanged = Boolean(dbPlayer) && (roleVersions.get(dbPlayer.id) || 0) !== (before.get(dbPlayer.id) || 0);
         if (!liveChanged) break;
       }
+      // every read overlapped a role change to this account and no live record holds the newer role: do not guess; the client reconnects
+      if (liveChanged && dbPlayer && !players.get(dbPlayer.id)) return ws.close(1013, 'role changed while signing in; reconnect');
       if (dbPlayer) {
         const known = players.get(dbPlayer.id);
         if (known) {
