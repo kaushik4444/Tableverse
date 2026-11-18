@@ -35,6 +35,8 @@ async function until(fn, label, ms = 4000) {
 (async () => {
   if (db.hasDatabase()) { console.log('challenge automation (memory) checks skipped: DATABASE_URL is set'); return; }
   const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 40, env: { ...process.env } });
+  // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
+  require('./helpers/openGuestFeatures')();
   const { rawToken } = await dbPlayers.createAnonymousPlayer({ displayName: 'Ann', avatar: '🧙' });
   const ann = socketFor(srv.port, rawToken);
   try {
@@ -63,6 +65,8 @@ async function until(fn, label, ms = 4000) {
     });
     await test('reclaiming a bot seat restores the timeout during a challenge', async () => {
       const timedSrv = await start({ port: 0, trustProxy: false, botDelay: [150, 1700], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 40, env: { ...process.env } });
+      // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
+      require('./helpers/openGuestFeatures')();
       const { rawToken: tokenA } = await dbPlayers.createAnonymousPlayer({ displayName: 'Ada', avatar: '🧙' });
       const { rawToken: tokenB } = await dbPlayers.createAnonymousPlayer({ displayName: 'Ben', avatar: '🧙' });
       const bid = (c) => {

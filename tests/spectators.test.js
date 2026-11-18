@@ -41,6 +41,8 @@ function client(port, token) {
 
 (async () => {
   const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, maxSpectators: 2, matchLog: { log() {}, warn() {}, error() {} } });
+  // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
+  require('./helpers/openGuestFeatures')();
   const all = [];
   const mk = async (name) => {
     const u = await registerAndVerify(srv.port, { email: `${name.toLowerCase()}@test.local`, displayName: name, password: 'TestPass123!' });

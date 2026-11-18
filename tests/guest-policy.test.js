@@ -52,7 +52,7 @@ function featureTest(name, fn) {
 featureTest('features fail closed before the first read, including unknown keys', (f) => {
   assert.equal(f.isReady(), false);
   for (const key of ['private_tables', 'rejoin', 'unknown', 'toString', '__proto__']) assert.equal(f.allowed(key), false);
-  assert.deepEqual(f.list().map(({ key, enabled }) => [key, enabled]), [['private_tables', false], ['rejoin', false]]);
+  assert.deepEqual(f.list().map(({ key, enabled }) => [key, enabled]), [['private_tables', false], ['rejoin', false], ['profiles', false], ['blocking', false], ['reports', false]]);
 });
 
 featureTest('a complete read only opens recognized features with a boolean true', (f) => {
@@ -143,7 +143,7 @@ featureTest('admin list entries cannot mutate the policy or later list results',
   entry.label = 'changed';
   list.pop();
   assert.equal(f.allowed('rejoin'), true);
-  assert.equal(f.list().length, 2);
+  assert.equal(f.list().length, 5);
   assert.notEqual(f.list().find(({ key }) => key === 'rejoin').label, 'changed');
 });
 
