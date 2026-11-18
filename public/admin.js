@@ -476,6 +476,7 @@
   // ---------------------------------------------------------------- games (counts and averages only)
   // per game: the value still being saved (kept across redraws) and the queue that saves each game's changes one at a time
   const gameFlagPending = new Map();
+  let gameFlagError = null; // { visit, text }: a save error that belongs to one visit of the Games tab, shown on each redraw of it
   const gameFlagQueue = new Map();
   async function gamesTab(days = 30) {
     state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
@@ -507,8 +508,9 @@
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
     // a redraw shows only its newest request's result: an older redraw that fails must not replace the current view
     const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab(state.gamesDays || 30).catch((e) => { if (mine === state.gen) fail(e); }); };
-    main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
-      const id = sel.dataset.gaccess; const value = sel.value; const visit = generation;
+    if (gameFlagError && gameFlagError.visit === generation) say('gMsg', gameFlagError.text, 'err');
+  main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
+      const id = sel.dataset.gaccess; const value = sel.value; const visit = generation; gameFlagError = null;
       gameFlagPending.set(id, value); sel.disabled = true; // the newest choice stays shown and locked until it is saved
       // one save per game at a time, in the order the owner chose them, so an earlier save cannot land after a later one
       const run = (gameFlagQueue.get(id) || Promise.resolve()).then(() => api('/api/admin/game-flags', { gameId: id, access: value }, false, true));
@@ -523,7 +525,8 @@
         if (state.tab !== 'games') return; // the owner has moved to another view: leave it alone
         // the current view is redrawn so the selector unlocks; an error from an earlier visit is not shown in this one
         if (visit !== generation || e.name === 'AbortError') { redrawGames(); return; }
-        redrawGames().then(() => say('gMsg', e.message, 'err'));
+        gameFlagError = { visit, text: e.message };
+        redrawGames();
       });
     }; });
   }

@@ -511,6 +511,7 @@
     const draftName = pendingRegisterName;
     pendingRegisterName = null;
     S.auth = tab;
+    const origin = authOpener || document.activeElement; // the control that started this sheet keeps focus-return
     closeOverlay();
     const loginOn = tab === 'login';
     const resend = S.requireEmailVerification ? '<button class="btn ghost small" data-act="resendVerification">Resend verification email</button>' : '';
@@ -550,6 +551,8 @@
       ${legalLinksHtml()}
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
+    authOpener = origin;
+    authOpenerSel = openerSelector(origin);
     document.body.appendChild(overlay);
     mountGoogle();
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');
@@ -658,10 +661,22 @@
     if (!matchMedia('(pointer: coarse)').matches) overlay.querySelector('#googleUsername').focus();
   }
 
+  let authOpener = null; // the control that opened the sheet: focus returns to it when the sheet closes
+  let authOpenerSel = null; // a selector for that control (data-act and data-game), used when a redraw has replaced it
+  // The selector finds the same control again after a redraw: the action and, for a per-game button, its game.
+  const openerSelector = (el) => {
+    const act = el && el.getAttribute ? el.getAttribute('data-act') : null;
+    if (!act) return null;
+    const game = el.getAttribute('data-game');
+    return `[data-act="${act}"]` + (game ? `[data-game="${game}"]` : '');
+  };
   function closeOverlay() {
     const el = document.getElementById('auth-overlay');
     if (el) el.remove();
     S.auth = null;
+    const back = authOpener, sel = authOpenerSel; authOpener = null; authOpenerSel = null;
+    const target = back && back.isConnected ? back : (sel ? document.querySelector(sel) : null);
+    if (target && target.focus) target.focus();
   }
 
   // Only retry a database lookup explicitly marked safe by the server; ambiguous responses may have created a session.
@@ -720,15 +735,31 @@
     finishGuestSignIn(out);
   }
   function openGuestSheet(msg = '') {
+    // the control that started this (even through the login sheet) gets focus back when the guest sheet closes
+    const origin = authOpener || document.activeElement;
     closeOverlay();
     const overlay = document.createElement('div');
     overlay.id = 'auth-overlay';
     overlay.className = 'overlay';
     overlay.innerHTML = window.TvGuest.guestSheetHTML({ hours: S.guestHours }) + (msg ? `<p class="auth-msg" role="status">${esc(msg)}</p>` : '');
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeOverlay(); });
+    // Tab stays inside the sheet, as in the other dialogs
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const items = [...overlay.querySelectorAll('button, input, select, textarea, a[href]')].filter((el) => !el.disabled);
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      const inside = overlay.contains(document.activeElement);
+      if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
+    });
+    authOpener = origin;
+    authOpenerSel = openerSelector(origin);
     document.body.appendChild(overlay);
-    const first = document.getElementById('guestName');
-    if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
+    // a text field would open the on-screen keyboard on touch screens, so focus a button there
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const target = coarse ? overlay.querySelector('button') : document.getElementById('guestName');
+    if (target && target.focus) target.focus();
   }
   // The guest sheet's "create a free account" and the reminder's button both open the register sheet. guest.js loads after this
   // file, so it announces the tap with an event rather than through a hook that would not exist yet.
@@ -1099,6 +1130,7 @@
       if (out && out.ok) {
         S.games = out.games || [];
         S.guestPlay = out.guestPlay === true;
+        if (Number(out.guestHours) > 0) S.guestHours = Number(out.guestHours);
         syncGuestOption();
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
