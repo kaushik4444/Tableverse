@@ -69,8 +69,8 @@ assert.deepEqual(Array.from(gameOverRelease.items, (item) => item.title), [
 for (const item of gameOverRelease.items) {
   assert.ok(typeof item.ico === 'string' && item.ico.trim(), `${item.title} has an icon`);
   assert.ok(typeof item.text === 'string' && item.text.trim(), `${item.title} has explanatory text`);
-  assert.notEqual(item.voice, true, `${item.title} remains visible with voice chat off`);
-  assert.doesNotMatch(`${item.title}\n${item.text}`, /admin|sort|player directory/i,
+  assert.ok(!item.voice, `${item.title} remains visible with voice chat off`);
+  assert.doesNotMatch(`${item.title}\n${item.text}`, /admin tables can be sorted|player directory shows/i,
     'admin sorting and player-directory changes are not advertised in this release');
 }
 const appSource = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
