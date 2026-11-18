@@ -300,10 +300,11 @@ function start(opts = {}) {
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
   /** A role changed in the admin console: the live player takes it at once, so restricted games are judged by the new role. */
-  const applyLiveRole = ({ playerId, role }) => {
+  const applyLiveRole = ({ playerId, role, unverified = false }) => {
     const p = players.get(playerId);
     if (!p || typeof role !== 'string' || !role) return;
     p.role = role;
+    p.roleUnverified = unverified === true; // set when the stored role could not be read back (fail closed)
     // the browser keeps the role it was given at the welcome: send the new role and the games it may now play
     send(p.ws, { t: 'role', role: roleOf(p) });
     send(p.ws, { t: 'games', games: gameListFor(games.list(), p) });
@@ -2008,6 +2009,8 @@ function start(opts = {}) {
     }
 
     let p = tokens.get(presentedToken) || null;
+    // a cached session whose role could not be read back is read again from the database, so a promotion is not lost
+    if (p && p.roleUnverified) p = null;
     if (!p) {
       const dbPlayer = await dbPlayers.authenticateToken(presentedToken);
       if (dbPlayer) {
@@ -2021,6 +2024,7 @@ function start(opts = {}) {
           p.createdAt = dbPlayer.created_at;
           p.isAnonymous = Boolean(dbPlayer.is_anonymous);
           p.role = dbPlayer.role || 'user';
+          p.roleUnverified = false;
         } else {
           p = {
             id: dbPlayer.id,

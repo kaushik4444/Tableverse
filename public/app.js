@@ -991,10 +991,14 @@
       if (JSON.stringify(next) !== JSON.stringify(S.banners)) { S.banners = next; render(); }
     } catch { /* offline: keep what is shown */ }
   }
+  // only the newest request may set the staff flag, so a delayed older answer cannot undo a newer role change
+  let staffHintSeq = 0;
   async function loadStaffHint() {
+    const seq = ++staffHintSeq;
     try {
       const r = await fetch('/api/admin/me', { credentials: 'same-origin' });
       const out = await r.json();
+      if (seq !== staffHintSeq) return;
       const staff = !!(out && out.ok && out.isAdmin);
       if (staff !== S.isStaff) { S.isStaff = staff; render(); }
     } catch { /* ignore */ }

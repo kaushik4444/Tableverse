@@ -770,7 +770,12 @@ async function purgeExpired() {
     guests: await db.withTransaction(async (client) => {
       // lock each candidate row first (a row another request holds is skipped and kept for the next run),
       // then re-check the rule in a new statement, so a link made while the row was locked is seen before the delete
-      const locked = await client.query("SELECT p.id FROM players p WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day' FOR UPDATE OF p SKIP LOCKED");
+      // the same keep-rules as the DELETE below, so a guest with a live session or a valid link is never locked by housekeeping
+      const locked = await client.query(
+        "SELECT p.id FROM players p WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day'" +
+        " AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())" +
+        " AND NOT EXISTS (SELECT 1 FROM guest_upgrades u WHERE u.player_id = p.id AND u.expires_at > NOW())" +
+        " FOR UPDATE OF p SKIP LOCKED");
       if (locked.rowCount === 0) return 0;
       return (await client.query(
         "DELETE FROM players p WHERE p.id = ANY($1)" +

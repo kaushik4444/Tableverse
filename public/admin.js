@@ -502,7 +502,6 @@
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
     main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = async () => {
       if (sel.disabled) return;
-      const gen = state.gen;
       sel.disabled = true; // one request at a time: a second change would only repeat the same one
       try {
         await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value });
@@ -510,7 +509,7 @@
         state.gen += 1; // a redraw still in flight is dropped; each completed change starts a fresh redraw after its save
         gamesTab().catch(fail); // redraw with the new state
       } catch (e) {
-        if (gen !== state.gen || e.name === 'AbortError') return; // a cancelled request belongs to a view that is gone
+        if (e.name === 'AbortError' || state.tab !== 'games') return;
         sel.disabled = false; say('gMsg', e.message, 'err'); gamesTab().catch(fail);
       }
     }; });
