@@ -491,19 +491,23 @@
     const gen = state.gen;
     const o = await api('/api/admin/game-flags');
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
-    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available"><span class="ad-pill ${g.enabled ? '' : 'warn'}">${g.enabled ? 'on' : 'off'}</span></td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td><button class="ad-btn ${g.enabled ? 'danger' : 'primary'}" data-gflag="${esc(g.id)}" data-on="${g.enabled ? '0' : '1'}">${g.enabled ? 'Switch off' : 'Switch on'}</button></td></tr>`).join('');
+    const labels = o.labels || {};
+    const label = (m) => labels[m] || m;
+    const opts = (cur) => o.modes.map((m) => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(label(m))}</option>`).join('');
+    const pill = (g) => (g.access === 'on' ? '<span class="ad-pill">on</span>' : `<span class="ad-pill warn">${esc(label(g.access))}</span>`);
+    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}">${opts(g.access)}</select></td></tr>`).join('');
     main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Game switches</h3>
-      <p class="ad-muted">Off keeps the game listed but locked for players, and refuses new tables, starts and rematches. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
+      <p class="ad-muted">Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players play and refuses guests. "Disabled for all" keeps the game for the owner only. A game that is switched off stays listed, and new tables, starts and rematches are refused for the roles it excludes. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
       <p id="gMsg" class="ad-msg" role="status"></p>
-      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`);
-    main.querySelectorAll('[data-gflag]').forEach((b) => { b.onclick = async () => {
-      if (b.disabled) return;
-      b.disabled = true; // one request at a time: a second click would only repeat the same change
+      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+    main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = async () => {
+      if (sel.disabled) return;
+      sel.disabled = true; // one request at a time: a second change would only repeat the same one
       try {
-        await api('/api/admin/game-flags', { gameId: b.dataset.gflag, enabled: b.dataset.on === '1' });
+        await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value });
         state.gen += 1; // a redraw still in flight is dropped
         gamesTab().catch(fail); // redraw with the new state
-      } catch (e) { b.disabled = false; say('gMsg', e.message, 'err'); }
+      } catch (e) { sel.disabled = false; say('gMsg', e.message, 'err'); gamesTab().catch(fail); }
     }; });
   }
 
@@ -746,13 +750,49 @@
       main.insertAdjacentHTML('beforeend', `<section class="ad-card" id="rHistWrap" aria-labelledby="rHead" style="margin-top:16px">
         <h2 id="rHead">Render history <small class="ad-muted">last 24 hours</small></h2>
         <form class="ad-search ad-row" id="rForm"><input name="text" maxlength="100" placeholder="Contains, e.g. error" aria-label="Filter Render lines" style="flex:1"><button class="ad-btn">Load</button></form>
-        <div id="rHist"><p class="ad-muted">Loading…</p></div></section>`);
+        <div id="rHist"><p class="ad-muted">Loading…</p></div>
+        <div class="ad-redeploy" style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+          <h3>Redeploy the app</h3>
+          <p class="ad-muted">Asks Render to build and start the latest version of this app. Connected players are disconnected for a few minutes and then reconnect. Use it when the app is stuck, not for ordinary changes.</p>
+          <form class="ad-row" id="rdForm">
+            <input name="confirm" autocomplete="off" placeholder="Type REDEPLOY" aria-label="Type REDEPLOY to confirm" maxlength="10">
+            <button class="ad-btn danger" id="rdBtn" disabled>Redeploy app</button>
+          </form>
+          <div id="rdMsg" class="ad-msg" role="status"></div>
+        </div>
+      </section>`);
       document.getElementById('rForm').onsubmit = (e) => { e.preventDefault(); renderHistory(new FormData(e.target).get('text') || '').catch(() => {}); };
+      const rdForm = document.getElementById('rdForm');
+      const rdBtn = document.getElementById('rdBtn');
+      rdForm.confirm.oninput = () => { rdBtn.disabled = rdForm.confirm.value !== 'REDEPLOY' || rdForm.dataset.ready !== '1'; };
+      rdForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const word = rdForm.confirm.value;
+        if (word !== 'REDEPLOY') return say('rdMsg', 'Type REDEPLOY exactly to confirm.', 'err');
+        if (!confirm('Redeploy the app now? Connected players will be disconnected and reconnect in a few minutes.')) return;
+        rdBtn.disabled = true;
+        try {
+          const o = await api('/api/admin/render/redeploy', { confirm: word });
+          say('rdMsg', o.message || 'Redeploy requested.', 'ok');
+          rdForm.reset();
+        } catch (err) {
+          say('rdMsg', err.message, 'err');
+          rdBtn.disabled = rdForm.dataset.ready !== '1';
+        }
+      };
     }
     const out = document.getElementById('rHist');
     try {
       const r = await api('/api/admin/render-logs?' + new URLSearchParams({ text, limit: '100' }).toString());
       if (gen !== state.gen || seq !== renderSeq) return;
+      // Redeploy needs the same Render settings as this history: without them the button stays off and says why.
+      const rdForm = document.getElementById('rdForm');
+      if (rdForm) {
+        rdForm.dataset.ready = r.configured ? '1' : '0';
+        if (!r.configured) say('rdMsg', 'Redeploy is not set up on this server (RENDER_API_KEY, RENDER_SERVICE_ID and RENDER_OWNER_ID are needed).', 'err');
+        const rdBtn = document.getElementById('rdBtn');
+        if (rdBtn) rdBtn.disabled = !r.configured || rdForm.confirm.value !== 'REDEPLOY';
+      }
       if (!r.configured) { out.innerHTML = '<p class="ad-muted">Render history is not set up on this server. Set RENDER_API_KEY, RENDER_SERVICE_ID and RENDER_OWNER_ID in the Render service\'s environment.</p>'; return; }
       if (r.error) { out.innerHTML = `<p class="ad-msg err">${esc(r.error)}</p>`; return; }
       const rows = r.items.map((e) => `<tr><td data-l="Time">${esc(when(e.time))}</td><td data-l="Level"><span class="ad-pill ${e.level === 'error' ? 'danger' : e.level === 'warn' ? 'warn' : ''}">${esc(e.level)}</span></td><td data-l="Source">${esc(e.source)}</td><td data-l="Line" style="word-break:break-word">${esc(e.text)}</td></tr>`).join('');
@@ -762,7 +802,38 @@
     } catch (e) { if (e && e.name !== 'AbortError' && gen === state.gen && seq === renderSeq) out.innerHTML = `<p class="ad-msg err">${esc(e.message)}</p>`; }
   }
 
-  const views = { overview: () => overview(), insights: () => insights(), games: () => gamesTab(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
+  // Guests (staff, Stage 20.9): which things a guest may use. The server decides and reads the stored switch on every request;
+  // this page only shows the switches and sends a change. A change applies to the server at once; a guest already connected
+  // sees it when they next reconnect or load the page.
+  async function guestsTab() {
+    const gen = state.gen;
+    const o = await api('/api/admin/guest-features');
+    if (gen !== state.gen) return;
+    const rows = o.features.map((f) => `<tr>
+        <td data-l="Feature"><b>${esc(f.label)}</b><div class="ad-muted">${esc(f.hint)}</div></td>
+        <td data-l="Guests"><label class="ad-row"><input type="checkbox" data-gfeat="${esc(f.key)}" ${f.enabled ? 'checked' : ''} aria-label="Allow guests: ${esc(f.label)}"> <span>${f.enabled ? 'Allowed' : 'Locked'}</span></label></td>
+        <td data-l="Last changed">${esc(f.updatedAt ? when(f.updatedAt) : 'Never changed')}</td></tr>`).join('');
+    main.innerHTML = `<section class="ad-card" aria-labelledby="gHead">
+      <h2 id="gHead">Guests</h2>
+      <p class="ad-muted">Guests can always read and send table chat. Everything below stays locked until you allow it. Friend requests always need an account and are not listed here.</p>
+      <div id="gMsg" class="ad-msg" role="status"></div>
+      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Feature</th><th>Guests</th><th>Last changed</th></tr></thead><tbody>${rows}</tbody></table></div>
+    </section>`;
+    main.querySelectorAll('input[data-gfeat]').forEach((box) => {
+      box.onchange = async () => {
+        const want = box.checked;
+        box.disabled = true;
+        try {
+          await api('/api/admin/guest-features', { feature: box.dataset.gfeat, enabled: want });
+          box.closest('label').querySelector('span').textContent = want ? 'Allowed' : 'Locked';
+          say('gMsg', 'Saved. Guests who are already connected see the change after they reconnect.', 'ok');
+        } catch (e) { box.checked = !want; say('gMsg', e.message, 'err'); }
+        finally { box.disabled = false; }
+      };
+    });
+  }
+
+  const views = { guests: () => guestsTab(), overview: () => overview(), insights: () => insights(), games: () => gamesTab(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive

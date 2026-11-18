@@ -38,6 +38,8 @@ function wsClient(port, token) {
 (async () => {
   if (dbPool.hasDatabase()) throw new Error('private-tables.test.js requires DB-free environment');
   const app = await start({ port: 0, trustProxy: false, maxMsgsPerSec: Infinity, matchLog: { log() {}, warn() {}, error() {} } });
+  // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
+  require('./helpers/openGuestFeatures')();
   const clients = [];
   try {
     let n = 0;

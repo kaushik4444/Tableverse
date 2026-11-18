@@ -294,6 +294,10 @@ Render dashboard or GitHub settings.
 | `CLEANUP_DRYRUN_DATABASE_URL` | Connection for the cleanup dry run | Only for dry run | GitHub secret | `.github/workflows/cleanup-unverified.yml` | Rotate, update secret | Next run |
 | `CLEANUP_EXECUTE` | Must be `true` before the deletion job can run | Only for deletion | GitHub repository variable | `.github/workflows/cleanup-unverified.yml` | Owner sets it; unset it to disable deletion | Next run |
 | `RESTORE_TEST_DATABASE_URL` | Scratch database for restore checks | Only for restore check | Local or CI secret | `scripts/db-restore-check.js` | Use a scratch database only | Next run |
+| `GUEST_PLAY_ENABLED` | `true` allows new guest sessions (`POST /api/auth/guest`). Anything else, including unset, refuses them. Off by default; not set in production | Optional | Render (not `render.yaml`) | `lib/guestPolicy.js`, `lib/authRoutes.js` | Owner sets it in Render only after the guest decisions in `docs/GUEST_PLAY.md` | Redeploy or restart |
+| `GUEST_SESSION_TTL_HOURS` | Guest session length in hours (1–168, default 72) | Optional | Render | `lib/guestPolicy.js`, `db/players.js` | Owner, in Render | Redeploy or restart |
+| `RL_GUEST_IP_LIMIT` | Guest sessions per IP address per hour | Optional | Render | `lib/authRoutes.js` | Owner, in Render | Redeploy or restart |
+| `RL_GUEST_ALL_LIMIT` | Guest sessions in total per hour | Optional | Render | `lib/authRoutes.js` | Owner, in Render | Redeploy or restart |
 | `PORT` | Listening port (Render sets it) | Optional | Render | `server.js` | none | Redeploy |
 | `TRUST_PROXY` | Number of proxy hops whose `X-Forwarded-For` is trusted (`1` on Render) | Yes on Render | `render.yaml` | `lib/clientIp.js` | Edit `render.yaml` | Redeploy |
 | `EMAIL_PROVIDER` | `resend` | Yes in production | `render.yaml` | `lib/email.js` | Edit `render.yaml` | Redeploy |
@@ -328,7 +332,7 @@ Render dashboard or GitHub settings.
 | `RELEASE_MERGE_METHOD` | `merge` (default when unset) or `squash` | Optional | GitHub repository variable | `scripts/release/promote.js` | Owner decision | Next release run |
 | `RELEASE_FREEZE` | `true` stops releases | Optional | GitHub repository variable | `scripts/release/promote.js` | Owner, during incidents | Next run |
 | `GITHUB_TOKEN` | Built-in workflow token | Provided by GitHub | Workflow | release and cleanup jobs | none; not a secret you set | per run |
-| `RENDER_API_KEY`, `RENDER_SERVICE_ID`, `RENDER_OWNER_ID` | Render API access for the admin log view | Optional | Render (secret for the key) | `lib/renderLogs.js` | Rotate in Render | Redeploy |
+| `RENDER_API_KEY`, `RENDER_SERVICE_ID`, `RENDER_OWNER_ID` | Render API access: the admin Logs view (`lib/renderLogs.js`) and the owner's redeploy (`lib/renderDeploy.js`, which needs the key to have deploy rights on the service). `RENDER_OWNER_ID` is used by the log view only. | Optional | Render (secret for the key) | `lib/renderLogs.js`, `lib/renderDeploy.js` | Rotate in Render | Redeploy |
 | `RENDER_GIT_COMMIT` | Commit that Render built (set by Render) | Set by Render | Render | `server.js` | none | none |
 
 Local development uses `.env.local` (copy of `.env.local.example`, git-ignored). `.env.example` is created in the local development PR
@@ -399,6 +403,7 @@ Tables (from `db/migrations/*.sql`, which run in order and are recorded in `sche
 - Matches: `matches`, `match_participants`.
 - Moderation and support: `chat_reports`, `feedback`, `player_blocks`.
 - Admin and communication: `admin_audit_log`, `announcements`, `announcement_dismissals`, `email_broadcasts`, `email_broadcast_recipients`.
+- Guest play: `guest_upgrades` (pending guest-to-account requests, migration 031), `guest_features` (the owner's guest switches, migration 032; locked by default; `updated_by` is the staff account's id, with no foreign key, so it is kept as a plain id when that account is deleted; the table is configuration and is kept by cleanup).
 - Analytics: `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`.
 
 Relationships in short: `players` is the root. `auth_identities`, `auth_sessions` and `auth_devices` reference a player. `matches` has many

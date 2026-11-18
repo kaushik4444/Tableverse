@@ -222,6 +222,116 @@ async function registerEmail({ email, username, password, displayName, avatar, a
   }
 }
 
+/**
+ * A guest becomes an account in two steps, so the upgrade route cannot be used to find out who has an account, and nothing
+ * about the guest changes until the owner of the address has proven it.
+ *
+ * Step 1, requestGuestUpgrade: checks the details and stores them as a pending upgrade with a one-time link. An address that
+ * already has an account gets no pending row; the caller answers the same way either way.
+ * Step 2, completeGuestUpgrade (from the e-mail link): the guest's own player row becomes the account, in place, with the same
+ * id, so every match and friend stays attached and nothing is copied. The e-mail is verified at that moment, so the account is
+ * never left unverified. The guest's session token is kept, so the game in progress is not interrupted.
+ */
+async function requestGuestUpgrade({ playerId, email, username, password, adultConfirmed }) {
+  if (!db.hasDatabase()) throw new AuthError('Creating an account requires PostgreSQL (set DATABASE_URL).', 503);
+  if (!isEmail(email)) throw new AuthError('Please enter a valid email address.');
+  if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
+  const e = normEmail(email);
+  const u = normUsername(username);
+  if (!isUsername(u)) throw new AuthError('Username must be 3-24 chars: lowercase letters, numbers, underscore.');
+  const weak = passwordPolicy.check(password, { email: e, username: u });
+  if (weak) throw new AuthError(weak, 400);
+  const pwHash = await hashPassword(password);
+
+  try {
+    return await db.withTransaction(async (client) => {
+      // lock the guest's row so two requests from one guest cannot interleave (completeGuestUpgrade locks in the same order)
+      const g = await client.query('SELECT id FROM players WHERE id = $1 AND is_anonymous = TRUE AND suspended_at IS NULL FOR UPDATE', [playerId]);
+      if (!g.rows.length) throw new AuthError('Only a guest can create an account this way.', 403);
+      const existsUsername = await client.query('SELECT 1 FROM players WHERE LOWER(username) = LOWER($1) LIMIT 1', [u]);
+      if (existsUsername.rows.length) throw new AuthError('This username is already taken.');
+      // one pending request per guest: a new request replaces the earlier link
+      await client.query('DELETE FROM guest_upgrades WHERE player_id = $1', [playerId]);
+      const existsEmail = await client.query('SELECT 1 FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', [PROVIDER_EMAIL, e]);
+      if (existsEmail.rows.length) return { pending: false, alreadyRegistered: true, email: e };
+
+      const raw = dbPlayers.generateToken();
+      await client.query(
+        `INSERT INTO guest_upgrades (player_id, email, username, password_hash, token_hash, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [playerId, e, u, pwHash, hashToken(raw), expiresAt(verifyTtlMin())]
+      );
+      return { pending: true, alreadyRegistered: false, verifyToken: raw, email: e, username: u };
+    });
+  } catch (err) {
+    if (err instanceof AuthError) throw err;
+    if (err && err.code === '23505' && /username/i.test(`${err.constraint || ''} ${err.message || ''}`)) throw new AuthError('This username is already taken.');
+    throw err;
+  }
+}
+
+const UPGRADE_CHANGED = 'That username or email address was taken before you confirmed. Start the account step again with a different one.';
+
+/**
+ * Step 2, from the e-mail link. Returns null when the token is not a pending guest upgrade (the caller then treats it as an
+ * ordinary e-mail verification). Otherwise returns { upgraded: true, playerId, username }, or { upgraded: false, error } when
+ * the link can no longer be used. The link is single-use: it is removed whatever the outcome.
+ */
+async function completeGuestUpgrade(rawToken) {
+  if (!db.hasDatabase()) return null;
+  if (!rawToken || typeof rawToken !== 'string') return null;
+  const tokenHash = hashToken(rawToken);
+  try {
+    return await db.withTransaction(async (client) => {
+      // lock order matches requestGuestUpgrade: the guest's row first, then the pending request
+      const owner = await client.query('SELECT player_id FROM guest_upgrades WHERE token_hash = $1', [tokenHash]);
+      if (!owner.rows.length) return null;
+      await client.query('SELECT id FROM players WHERE id = $1 FOR UPDATE', [owner.rows[0].player_id]);
+      const found = await client.query(
+        `SELECT id, player_id, email, username, password_hash, (expires_at > NOW()) AS live
+           FROM guest_upgrades WHERE token_hash = $1 FOR UPDATE`,
+        [tokenHash]
+      );
+      if (!found.rows.length) return null; // already used, or removed meanwhile
+      const pending = found.rows[0];
+      await client.query('DELETE FROM guest_upgrades WHERE id = $1', [pending.id]);
+      if (!pending.live) return { upgraded: false, error: 'This link has expired. Start the account step again from the game.' };
+
+      const guest = await client.query('SELECT 1 FROM players WHERE id = $1 AND is_anonymous = TRUE AND suspended_at IS NULL', [pending.player_id]);
+      if (!guest.rows.length) return { upgraded: false, error: 'This link can no longer be used.' };
+      const takenUsername = await client.query('SELECT 1 FROM players WHERE LOWER(username) = LOWER($1) LIMIT 1', [pending.username]);
+      const takenEmail = await client.query('SELECT 1 FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', [PROVIDER_EMAIL, pending.email]);
+      if (takenUsername.rows.length || takenEmail.rows.length) return { upgraded: false, error: UPGRADE_CHANGED };
+
+      const p = await client.query(
+        `UPDATE players SET username = $2, is_anonymous = FALSE, adult_confirmed_at = NOW(), last_seen_at = NOW()
+         WHERE id = $1
+         RETURNING id, username`,
+        [pending.player_id, pending.username]
+      );
+      // the session the guest has now was short (the guest lifetime); the account gets the normal session length
+      await client.query(
+        `UPDATE auth_sessions SET expires_at = NOW() + ($2::text || ' days')::interval
+         WHERE player_id = $1 AND revoked_at IS NULL AND expires_at > NOW()`,
+        [p.rows[0].id, String(sessionTtlDays())]
+      );
+      await client.query(
+        `INSERT INTO auth_identities (player_id, provider, provider_user_id, email, password_hash, email_verified_at)
+         VALUES ($1, $2, $3, $3, $4, NOW())`,
+        [p.rows[0].id, PROVIDER_EMAIL, pending.email, pending.password_hash]
+      );
+      return { upgraded: true, playerId: p.rows[0].id, username: p.rows[0].username };
+    });
+  } catch (err) {
+    if (err && err.code === '23505') {
+      // lost a race for the name or address: the link is gone with the attempt
+      await db.query('DELETE FROM guest_upgrades WHERE token_hash = $1', [tokenHash]).catch(() => {});
+      return { upgraded: false, error: UPGRADE_CHANGED };
+    }
+    throw err;
+  }
+}
+
 async function checkUsernameAvailability({ username }) {
   if (!db.hasDatabase()) return { available: false, reason: 'requires_postgres' };
   const u = normUsername(username);
@@ -470,7 +580,7 @@ async function resetPassword({ token, newPassword }) {
 /** The answer for a player whose session a device restore has just started, from the player rather than the token (which a racing restore may already have retired). */
 async function sessionInfoForPlayer(playerId) {
   const r = await db.query(
-    `SELECT id, username, display_name, avatar, is_anonymous, created_at, last_seen_at, welcomed_at
+    `SELECT id, username, display_name, avatar, is_anonymous, role, created_at, last_seen_at, welcomed_at
      FROM players WHERE id = $1 AND suspended_at IS NULL`,
     [playerId]
   );
@@ -641,7 +751,7 @@ async function forgetDevice(rawDevice) {
 }
 
 async function purgeExpired() {
-  if (!db.hasDatabase()) return { rateLimits: 0, tokens: 0, sessions: 0 };
+  if (!db.hasDatabase()) return { rateLimits: 0, tokens: 0, sessions: 0, guests: 0, upgrades: 0 };
   // trusted devices that ended or expired more than 30 days ago are removed
   await db.query("DELETE FROM auth_devices WHERE expires_at < NOW() - INTERVAL '30 days' OR revoked_at < NOW() - INTERVAL '30 days'");
   const run = async (sql) => (await db.query(sql)).rowCount;
@@ -650,6 +760,13 @@ async function purgeExpired() {
     tokens: await run("DELETE FROM auth_email_tokens WHERE expires_at < NOW() - INTERVAL '7 days' OR used_at < NOW() - INTERVAL '7 days'"),
     // migration 011 revoked the legacy rows that had no expiry; revoked rows are removed here after 30 days like the rest
     sessions: await run("DELETE FROM auth_sessions WHERE (expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days') OR revoked_at < NOW() - INTERVAL '30 days'"),
+    // A guest with no live session has ended: its temporary account is removed. Its finished games stay in the match
+    // records (match_players.player_id becomes NULL). A guest that has an account now (is_anonymous = FALSE) is never touched.
+    // a pending guest upgrade is removed a day after its link ended (a used link is removed at once)
+    upgrades: await run("DELETE FROM guest_upgrades WHERE expires_at < NOW() - INTERVAL '1 day'"),
+    guests: await run(`DELETE FROM players p
+                       WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day'
+                         AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())`),
   };
 }
 
@@ -665,6 +782,8 @@ module.exports = {
   purgeExpired,
   isEmailVerificationRequired,
   registerEmail,
+  requestGuestUpgrade,
+  completeGuestUpgrade,
   checkUsernameAvailability,
   loginEmail,
   resendVerification,

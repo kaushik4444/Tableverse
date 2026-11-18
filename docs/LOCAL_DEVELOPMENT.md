@@ -17,7 +17,7 @@ any other non-local host, and they refuse `NODE_ENV=production`. Never copy the 
 | Match records, player statistics, insights | no | yes |
 | Admin console, moderation reports, announcements, feedback | no | yes |
 
-Guest play is in-memory only. Everything that stores an account, a session or a result needs PostgreSQL. The functions involved are in
+Guest play is off unless `GUEST_PLAY_ENABLED=true` is set (see `docs/GUEST_PLAY.md`); to try it locally, set it in `.env.local`. Guest play is in-memory only without a database. Everything that stores an account, a session or a result needs PostgreSQL. The functions involved are in
 `db/auth.js`, `db/account.js`, `db/friends.js`, `db/matches.js`, `db/admin.js` and `db/moderation.js`.
 
 Without a mail service nothing is sent: when no provider is configured the verification e-mail is skipped, and `REQUIRE_EMAIL_VERIFICATION=false`

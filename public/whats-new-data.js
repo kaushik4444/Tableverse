@@ -8,6 +8,16 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-18-guest-play',
+      date: '2026-11-18',
+      title: 'Play as a guest',
+      items: [
+        { ico: '👋', title: 'Play without an account', text: 'Try a game as a guest from the home page. A guest visit lasts a few days in this browser, and you can turn it into a full account at any time without losing your games.' },
+        { ico: '🔒', title: 'Some games need an account', text: 'The owner can keep a game for registered players only. Where that applies to you, the game shows a note and you can create an account from it.' },
+        { ico: '🔔', title: 'Quiet reminders', text: 'Guests see a short reminder that an account keeps their progress. It never interrupts a game, and you can dismiss it.' },
+      ],
+    },
+    {
       version: '2026-11-17-game-over-table',
       date: '2026-11-17',
       title: 'One table at the end of a game',

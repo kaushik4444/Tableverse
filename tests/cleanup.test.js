@@ -25,13 +25,13 @@ test('it covers exactly the tables the migrations create, and every one is eithe
   assert.ok(c.CLEAN_TABLES.every((t) => !c.PRESERVE.some((p) => p.table === t)), 'no table is both');
 });
 test('schema_migrations and the game switches are preserved and are not in the delete list', () => {
-  assert.deepEqual(c.PRESERVE.map((p) => p.table), ['schema_migrations', 'game_flags']);
+  assert.deepEqual(c.PRESERVE.map((p) => p.table), ['schema_migrations', 'game_flags', 'guest_features']);
   assert.ok(!c.CLEAN_TABLES.includes('schema_migrations'));
 });
 test('the delete order puts every table before the tables it references', () => {
   const fks = c.EXPECTED_FKS.map((f) => ({ ...f, name: `${f.child}_fk` }));
   assert.doesNotThrow(() => c.validateOrder(c.CLEAN_TABLES, fks));
-  assert.deepEqual(c.CLEAN_TABLES, ['announcement_dismissals', 'admin_audit_log', 'feedback', 'announcements', 'email_broadcast_recipients', 'email_broadcasts', 'analytics_active', 'analytics_batches', 'analytics_meta', 'analytics_daily', 'match_participants', 'private_table_invitations', 'chat_reports', 'player_reports', 'player_blocks', 'friend_requests', 'friendships', 'matches', 'auth_email_tokens', 'auth_sessions', 'auth_devices', 'auth_identities', 'player_recent_tables', 'auth_rate_limits', 'players']);
+  assert.deepEqual(c.CLEAN_TABLES, ['announcement_dismissals', 'admin_audit_log', 'feedback', 'announcements', 'email_broadcast_recipients', 'email_broadcasts', 'analytics_active', 'analytics_batches', 'analytics_meta', 'analytics_daily', 'match_participants', 'private_table_invitations', 'chat_reports', 'player_reports', 'player_blocks', 'friend_requests', 'friendships', 'matches', 'auth_email_tokens', 'auth_sessions', 'auth_devices', 'auth_identities', 'guest_upgrades', 'player_recent_tables', 'auth_rate_limits', 'players']);
   assert.equal(c.CLEAN_TABLES[c.CLEAN_TABLES.length - 1], 'players', 'accounts last: everything refers to them');
 });
 test('an order that deletes a parent before its child is refused', () => {

@@ -50,6 +50,17 @@ Watch `rssMB` (Render free has 512 MB), `pending`/`failed` (a database problem) 
 ## What happens to players on a restart
 Tables, games in progress, chat and presence live in memory and are **lost** on every restart or deploy. Players get a notice and a normal reconnect; they must create a new table. Unfinished games are not recorded. Finished matches are written to PostgreSQL (retried, idempotent) and the server waits up to 15 s for pending writes on SIGTERM. Deploy when few tables are active.
 
+## Guest switches and owner redeploy (admin console)
+
+**Lock or unlock a guest area (staff: admin or owner).** Open the admin console, **Guests** tab, and tick or untick a feature. The change is stored and applied to the server at once, and written to the audit log. Guests who are already connected see it after they reconnect. Areas and defaults are listed in `docs/GUEST_PLAY.md` ("What guests may do"). Chat is never locked.
+
+**Redeploy the app (owner only).** Open **Logs**, scroll to **Redeploy the app**, and type `REDEPLOY`. The button stays off until the word is typed and Render is set up.
+- What it does: asks Render to build and start the latest commit of the service. Connected players are disconnected for a few minutes and then reconnect. Use it when the app is stuck, not for ordinary changes; a new commit reaches production by the usual release process.
+- A cooldown of five minutes applies. A second request inside it gets 429 with the time to wait. A request that Render refused also starts the cooldown.
+- Every request that gets past the role and the typed word is written to the audit log (`render.redeploy`) with whether Render accepted it. The audit row is best effort: if writing it fails, the error is logged and the redeploy result is still returned. Requests refused for the role, the typed word or the cooldown are not written to the audit log. Read the audit log with that in mind; it is not a complete record of every attempt.
+- **Render settings needed:** `RENDER_API_KEY` (an API key with permission to deploy this service) and `RENDER_SERVICE_ID`. `RENDER_OWNER_ID` is used by the log view only. If the key lacks deploy rights, the page shows "Render answered with HTTP <status>. Check that the API key can deploy this service." and the fix is to create a key with deploy rights in Render's account settings and set it in the service's environment. Do not paste the key anywhere else.
+- Whether these variables are set in production is not checked by the code or the tests. Check the Render dashboard before relying on the button.
+
 ## Deploy
 1. CI must be green on the PR (build, unit, PostgreSQL, browser, Docker, audit).
 2. Merge to `main`; Render redeploys from the blueprint (`npm ci`, `npm start`).
@@ -295,3 +306,16 @@ Auth endpoints are rate limited per address and account in `auth_rate_limits`; W
 - Keep `?sslmode=require` (or `verify-full`) in the Neon URL. `db/poolConfig.js` rewrites `require`, `prefer` and `verify-ca` to `verify-full` at start-up, which is what they already mean: TLS with the certificate and host name checked. The connection is the same; only the library's deprecation warning goes away.
 - Do not change it to `disable`. In production a remote host whose URL has no `sslmode` at all is still forced to verified TLS.
 - A URL that also sets `ssl`, `sslrootcert` or similar, or `uselibpqcompat`, is passed on unchanged, so the warning can still appear for those. That is expected.
+
+---
+
+## Guest play: turn on, turn off, check
+
+Guest play is off unless `GUEST_PLAY_ENABLED` is exactly `true` in Render (lowercase, no spaces; `TRUE` or ` true ` do not count and leave it off). Do not turn it on until the owner decisions in `docs/GUEST_PLAY.md` (guest match names, the privacy notice, the beta decision D-1) are recorded and the privacy notice is approved.
+
+- **Turn on:** Render dashboard, environment, set `GUEST_PLAY_ENABLED` to `true`, save, let it redeploy. Check `/api/games` returns `"guestPlay": true`, then play one guest game and one registered game.
+- **Turn off (stop new guests):** set `GUEST_PLAY_ENABLED` to `false`, or unset it (any value other than exactly `true` turns it off). Existing guest sessions keep working until they expire.
+- **Stop one game for guests only:** Games tab in the admin console, "Disabled for guests only". Takes effect within about 15 seconds. No redeploy.
+- **Check the number of guest records (read-only):** `SELECT count(*) FROM players WHERE is_anonymous;`. The housekeeping job removes guest rows more than one day old after their session ends, so the number should stay small.
+- **Rate limits:** `RL_GUEST_IP_LIMIT` and `RL_GUEST_ALL_LIMIT` in Render. Raise them only if real players hit them.
+- **Rollback:** turning the variable off is the rollback. Do not run any SQL to remove guest rows or match names without an owner decision.

@@ -252,6 +252,7 @@ const DAY = 24 * 60 * 60 * 1000;
         feedback: ['n'],
         friend_requests: ['c'],
         friendships: ['c'],
+        guest_upgrades: ['c'],
         match_participants: ['n'],
         player_blocks: ['c'],
         player_recent_tables: ['c'],

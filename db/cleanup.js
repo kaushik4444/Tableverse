@@ -47,6 +47,7 @@ const PLAN = [
   { table: 'auth_sessions', stores: 'Hashed session tokens (registered and legacy anonymous), expiry and revocation', references: ['players'] },
   { table: 'auth_devices', stores: 'Trusted devices: hashed device tokens for "keep me signed in on this device", label (browser and system only), dates', references: ['players'] },
   { table: 'auth_identities', stores: 'Login methods: email address, Argon2 password hash, verification time', references: ['players'] },
+  { table: 'guest_upgrades', stores: 'Pending guest-to-account requests: the chosen e-mail and username, the password hash and a hash of the one-time link (removed when the link is used or ends)', references: ['players'] },
   { table: 'player_recent_tables', stores: 'Recently visited table codes per account', references: ['players'] },
   { table: 'auth_rate_limits', stores: 'Hashed per-address / per-email rate-limit counters', references: [] },
   { table: 'players', stores: 'Accounts: registered players and legacy anonymous players (username, display name, avatar, timestamps)', references: [] },
@@ -54,6 +55,7 @@ const PLAN = [
 const PRESERVE = [
   { table: 'schema_migrations', stores: 'Migration history: which db/migrations files were applied (the application checks it on every start)' },
   { table: 'game_flags', stores: 'Owner switches: which games are on or off (configuration, not player data)' },
+  { table: 'guest_features', stores: 'Owner switches: which guest features are open to guests (configuration, not player data)' },
 ];
 const CLEAN_TABLES = PLAN.map((p) => p.table);
 const KNOWN_TABLES = [...CLEAN_TABLES, ...PRESERVE.map((p) => p.table)].sort();
@@ -61,6 +63,7 @@ const KNOWN_TABLES = [...CLEAN_TABLES, ...PRESERVE.map((p) => p.table)].sort();
 /** The only foreign keys the application schema has. A different set means the schema changed and this plan needs a review. */
 const EXPECTED_FKS = [
   { child: 'auth_email_tokens', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'guest_upgrades', parent: 'players', onDelete: 'CASCADE' },
   { child: 'auth_identities', parent: 'players', onDelete: 'CASCADE' },
   { child: 'auth_sessions', parent: 'players', onDelete: 'CASCADE' },
   { child: 'auth_devices', parent: 'players', onDelete: 'CASCADE' },

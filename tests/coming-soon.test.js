@@ -41,11 +41,14 @@ assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history 
 const newest = releases[0];
 const highlights = newest.items.slice(0, 3).map((i) => i.title).join('\n');
 assert.equal(newest.items.slice(0, 3).length, 3, 'the home page shows three highlights');
-// The newest release is the game-over table entry (its first three items). The older highlights stay in the history.
-assert.match(highlights, /Game XP at the end of a game, in one table/);
-assert.match(highlights, /Your lifetime XP in each game/);
-assert.match(highlights, /Level-up dialog/);
+// The newest release is the guest play release (its first three items). The older highlights stay in the history.
+assert.equal(newest.version, '2026-11-18-guest-play');
+assert.match(highlights, /Play without an account/);
+assert.match(highlights, /Some games need an account/);
+assert.match(highlights, /Quiet reminders/);
 const history = releases.flatMap((r) => r.items.map((i) => i.title)).join('\n');
+assert.match(history, /Game XP at the end of a game, in one table/);
+assert.match(history, /Level-up dialog/);
 assert.match(history, /See how far you are to the next level/);
 assert.match(history, /A level-up notice, once/);
 assert.match(history, /Follow @playtableverse on Instagram/);
