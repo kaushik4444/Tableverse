@@ -232,7 +232,7 @@ async function registerEmail({ email, username, password, displayName, avatar, a
  * id, so every match and friend stays attached and nothing is copied. The e-mail is verified at that moment, so the account is
  * never left unverified. The guest's session token is kept, so the game in progress is not interrupted.
  */
-async function requestGuestUpgrade({ playerId, email, username, password, adultConfirmed }) {
+async function requestGuestUpgrade({ playerId, email, username, password, adultConfirmed, displayName }) {
   if (!db.hasDatabase()) throw new AuthError('Creating an account requires PostgreSQL (set DATABASE_URL).', 503);
   if (!isEmail(email)) throw new AuthError('Please enter a valid email address.');
   if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
@@ -256,10 +256,12 @@ async function requestGuestUpgrade({ playerId, email, username, password, adultC
       if (existsEmail.rows.length) return { pending: false, alreadyRegistered: true, email: e };
 
       const raw = dbPlayers.generateToken();
+      // the name the guest chose on the account step; blank keeps the current name (applied when the link is used)
+      const name = String(displayName || '').trim() ? cleanName(displayName) : null;
       await client.query(
-        `INSERT INTO guest_upgrades (player_id, email, username, password_hash, token_hash, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [playerId, e, u, pwHash, hashToken(raw), expiresAt(verifyTtlMin())]
+        `INSERT INTO guest_upgrades (player_id, email, username, password_hash, token_hash, expires_at, display_name)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [playerId, e, u, pwHash, hashToken(raw), expiresAt(verifyTtlMin()), name]
       );
       return { pending: true, alreadyRegistered: false, verifyToken: raw, email: e, username: u };
     });
@@ -288,7 +290,7 @@ async function completeGuestUpgrade(rawToken) {
       if (!owner.rows.length) return null;
       await client.query('SELECT id FROM players WHERE id = $1 FOR UPDATE', [owner.rows[0].player_id]);
       const found = await client.query(
-        `SELECT id, player_id, email, username, password_hash, (expires_at > NOW()) AS live
+        `SELECT id, player_id, email, username, password_hash, display_name, (expires_at > NOW()) AS live
            FROM guest_upgrades WHERE token_hash = $1 FOR UPDATE`,
         [tokenHash]
       );
@@ -304,10 +306,11 @@ async function completeGuestUpgrade(rawToken) {
       if (takenUsername.rows.length || takenEmail.rows.length) return { upgraded: false, error: UPGRADE_CHANGED };
 
       const p = await client.query(
-        `UPDATE players SET username = $2, is_anonymous = FALSE, adult_confirmed_at = NOW(), last_seen_at = NOW()
+        `UPDATE players SET username = $2, is_anonymous = FALSE, adult_confirmed_at = NOW(), last_seen_at = NOW(),
+                display_name = COALESCE($3, display_name)
          WHERE id = $1
          RETURNING id, username`,
-        [pending.player_id, pending.username]
+        [pending.player_id, pending.username, pending.display_name]
       );
       // the session the guest has now was short (the guest lifetime); the account gets the normal session length
       await client.query(

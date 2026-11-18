@@ -522,7 +522,7 @@
         <div class="row auth-links"><button class="btn ghost small" data-act="forgotPassword">Forgot password?</button>${resend}</div>
       ` : `
         <form id="registerForm" class="auth-form">
-          ${S.isGuest ? '<p class="hint" id="registerNameNote">Your guest name stays on your account.</p>' : '<input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname">'}
+          <input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname" value="${esc(S.isGuest ? (S.name || '') : '')}">
           <input id="registerUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -725,15 +725,15 @@
    * Asks to turn the guest into an account. Nothing changes yet: the server e-mails a confirmation link, and the guest stays a
    * guest (same game, same locks) until that link is used. The account then takes effect on the server at once.
    */
-  async function doUpgradeGuest(username, email, password, adultConfirmed) {
-    const out = await withBusy('Sending your confirmation…', () => postJson('/api/auth/upgrade-guest', { username, email, password, adultConfirmed: adultConfirmed === true }));
+  async function doUpgradeGuest(name, username, email, password, adultConfirmed) {
+    const out = await withBusy('Sending your confirmation…', () => postJson('/api/auth/upgrade-guest', { displayName: name, username, email, password, adultConfirmed: adultConfirmed === true }));
     if (out.csrfToken) S.csrf = out.csrfToken;
     closeOverlay();
     toast(out.message || 'Check your email to confirm your account.');
   }
 
   async function doRegister(name, username, email, password, adultConfirmed) {
-    if (S.isGuest) return doUpgradeGuest(username, email, password, adultConfirmed);
+    if (S.isGuest) return doUpgradeGuest(name, username, email, password, adultConfirmed);
     const out = await withBusy('Creating your account…', () => postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined, adultConfirmed: adultConfirmed === true }));
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
