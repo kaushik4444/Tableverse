@@ -76,12 +76,24 @@ function scene(phase, handIds, tweak) {
   });
 
   await test('after laying down: select a card, tap a laid group to add it', async () => {
-    const { page, ctx } = await open(scene('play', [53, 9], (v) => {
+    const { page, ctx } = await open(scene('play', [76, 9], (v) => {
       v.players[0].laid = [{ kind: 'set', num: 5, cards: [card(4), card(28), card(52)] }, { kind: 'run', lo: 2, hi: 4, cards: [card(1), card(2), card(3)] }];
     }));
-    await page.click('.sr-hand [data-id="53"]');
+    await page.click('.sr-hand [data-id="76"]');
     await page.click('[data-sr="hit"][data-owner="0"][data-group="0"]');
-    assert.deepEqual((await sent(page)).at(-1).action, { type: 'hit', card: 53, owner: 0, group: 0 });
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'hit', card: 76, owner: 0, group: 0 });
+    await ctx.close();
+  });
+
+  await test('a wild card on a run: the player chooses the low or high end', async () => {
+    const { page, ctx } = await open(scene('play', [96, 9], (v) => {
+      v.players[0].laid = [{ kind: 'run', lo: 2, hi: 4, cards: [card(1), card(2), card(3)] }];
+    }));
+    await page.click('.sr-hand [data-id="96"]');
+    assert.equal(await page.locator('[data-sr="hit"][data-end="low"]').count(), 1, 'low end offered');
+    assert.equal(await page.locator('[data-sr="hit"][data-end="high"]').count(), 1, 'high end offered');
+    await page.click('[data-sr="hit"][data-end="low"]');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'hit', card: 96, owner: 0, group: 0, end: 'low' });
     await ctx.close();
   });
 

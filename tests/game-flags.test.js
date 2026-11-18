@@ -222,4 +222,14 @@ test('role-specific lists do not mutate input entries or leak one viewer permiss
   flags.reset();
 });
 
+test('a read that started before a reset cannot apply after it', () => {
+  const flags = require('../lib/gameFlags');
+  flags.reset();
+  const stale = flags.begin();
+  flags.reset();
+  assert.equal(flags.apply([{ game_id: 'wizard', access: 'owner', enabled: false }], stale), false, 'stale read refused');
+  assert.equal(flags.isReady(), false, 'still no snapshot');
+  assert.equal(flags.apply([], flags.begin()), true, 'a newer read applies');
+});
+
 console.log(`\n${passed} passed`);

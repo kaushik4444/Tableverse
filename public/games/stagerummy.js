@@ -49,6 +49,14 @@
     const me = v.players[v.me];
     const canHit = v.myTurn && v.phase === 'play' && me && me.laid && ui.sel.size === 1;
     const inner = `<span class="sr-glabel">${esc(label)}</span><span class="sr-gcards">${grp.cards.map((c) => cardHTML(c, { cls: 'mini' })).join('')}</span>`;
+    // A wild card on a run can go to either end, so the player picks the end. Other cards go where their value fits.
+    const selected = canHit && grp.kind === 'run' ? v.hand.find((c) => c.id === [...ui.sel][0]) : null;
+    if (selected && selected.k === 'w') {
+      const ends = [];
+      if (grp.lo > 1) ends.push(`<button type="button" class="btn small ghost" data-sr="hit" data-owner="${owner}" data-group="${k}" data-end="low">Wild to low end (${grp.lo - 1})</button>`);
+      if (grp.hi < 12) ends.push(`<button type="button" class="btn small ghost" data-sr="hit" data-owner="${owner}" data-group="${k}" data-end="high">Wild to high end (${grp.hi + 1})</button>`);
+      return `<div class="sr-group" role="group" aria-label="${esc(label)}">${inner}<div class="sr-ends">${ends.join('')}</div></div>`;
+    }
     return canHit
       ? `<button type="button" class="sr-group hit" data-sr="hit" data-owner="${owner}" data-group="${k}" aria-label="${esc('Add the selected card to ' + label)}">${inner}</button>`
       : `<div class="sr-group" role="group" aria-label="${esc(label)}">${inner}</div>`;
@@ -169,7 +177,7 @@
       }
       case 'unassign': ui.groups = ui.groups.map((g) => g.filter((x) => x !== id)); ctx.rerender(); break;
       case 'lay': if (play) ctx.act({ type: 'lay', groups: ui.groups.map((g) => g.slice()) }); break;
-      case 'hit': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); ctx.act({ type: 'hit', card, owner: Number(el.dataset.owner), group: Number(el.dataset.group) }); } break;
+      case 'hit': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); const end = el.dataset.end === 'low' || el.dataset.end === 'high' ? el.dataset.end : undefined; ctx.act({ type: 'hit', card, owner: Number(el.dataset.owner), group: Number(el.dataset.group), ...(end ? { end } : {}) }); } break;
       case 'discard': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); ctx.act({ type: 'discard', card }); } break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
