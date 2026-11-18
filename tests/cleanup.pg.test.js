@@ -61,6 +61,7 @@ function cookieSocket(port, cookie) {
       await q("INSERT INTO auth_identities (player_id, provider, provider_user_id, email, password_hash, email_verified_at) VALUES ($1,'email','ada@example.com','ada@example.com','$argon2id$fake', NOW()), ($2,'email','bo@example.com','bo@example.com','$argon2id$fake', NULL)", reg);
       await q("INSERT INTO auth_sessions (player_id, token_hash, expires_at, revoked_at) VALUES ($1, repeat('a',64), NOW() + INTERVAL '5 days', NULL), ($1, repeat('b',64), NOW() - INTERVAL '1 day', NOW()), ($2, repeat('c',64), NULL, NULL), ($3, repeat('d',64), NULL, NULL)", [reg[0], anon[0], anon[1]]);
       await q("INSERT INTO auth_email_tokens (player_id, purpose, email, token_hash, expires_at) VALUES ($1,'verify_email','bo@example.com', repeat('e',64), NOW() + INTERVAL '1 day'), ($1,'password_reset','bo@example.com', repeat('f',64), NOW() - INTERVAL '1 day')", [reg[1]]);
+      await q("INSERT INTO guest_upgrades (player_id, email, username, password_hash, token_hash, expires_at) VALUES ($1,'cy@example.com','cy_pending','$argon2id$fake', repeat('g',64), NOW() + INTERVAL '1 hour')", [reg[1]]);
       await q("INSERT INTO auth_devices (player_id, token_hash, expires_at) VALUES ($1, repeat('d',64), NOW() + INTERVAL '30 days')", [reg[0]]); // a trusted device: its hash must never be shown
       await q("INSERT INTO auth_rate_limits (scope, key, window_start, count) VALUES ('auth:login:ip','k1',NOW(),3), ('auth:login:email','k2',NOW(),1), ('auth:register:ip','k3',NOW() - INTERVAL '3 days',9)");
       for (const [game, key] of [['wizard', 1], ['twentynine', 2], ['poker', 3]]) {
@@ -80,9 +81,9 @@ function cookieSocket(port, cookie) {
       await q("INSERT INTO analytics_daily (day, metric, dim, total) VALUES (CURRENT_DATE, 'session', '', 2)");
       await q("INSERT INTO analytics_active (day, actor) VALUES (CURRENT_DATE, repeat('a', 32))");
       await q("INSERT INTO analytics_meta (key, value) VALUES ('salt', 'x') ON CONFLICT DO NOTHING");
-      return { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, players: 5, auth_identities: 2, auth_sessions: 4, auth_email_tokens: 2, auth_rate_limits: 3, matches: 3, match_participants: 12, player_recent_tables: 0, friendships: 1, friend_requests: 1, private_table_invitations: 1, player_blocks: 1, chat_reports: 1, player_reports: 1, auth_devices: 1, email_broadcasts: 0, email_broadcast_recipients: 0 };
+      return { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, players: 5, auth_identities: 2, auth_sessions: 4, auth_email_tokens: 2, guest_upgrades: 1, auth_rate_limits: 3, matches: 3, match_participants: 12, player_recent_tables: 0, friendships: 1, friend_requests: 1, private_table_invitations: 1, player_blocks: 1, chat_reports: 1, player_reports: 1, auth_devices: 1, email_broadcasts: 0, email_broadcast_recipients: 0 };
     }
-    const SEEDED = { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, match_participants: 12, private_table_invitations: 1, friend_requests: 1, friendships: 1, matches: 3, auth_email_tokens: 2, auth_sessions: 4, auth_identities: 2, player_recent_tables: 0, auth_rate_limits: 3, players: 5, player_blocks: 1, chat_reports: 1, player_reports: 1, auth_devices: 1, email_broadcasts: 0, email_broadcast_recipients: 0 };
+    const SEEDED = { announcement_dismissals: 1, admin_audit_log: 1, feedback: 1, announcements: 1, analytics_daily: 1, analytics_active: 1, analytics_batches: 0, analytics_meta: 1, match_participants: 12, private_table_invitations: 1, friend_requests: 1, friendships: 1, matches: 3, auth_email_tokens: 2, guest_upgrades: 1, auth_sessions: 4, auth_identities: 2, player_recent_tables: 0, auth_rate_limits: 3, players: 5, player_blocks: 1, chat_reports: 1, player_reports: 1, auth_devices: 1, email_broadcasts: 0, email_broadcast_recipients: 0 };
     // Derived, not typed in: the fixture and the plan are the source of truth for these totals.
     const SEEDED_ROWS = Object.values(SEEDED).reduce((a, b) => a + b, 0);
     const TABLE_COUNT = cleanup.CLEAN_TABLES.length;
@@ -114,7 +115,7 @@ function cookieSocket(port, cookie) {
       assert.deepEqual(report.before, SEEDED);
       assert.equal(report.totalRows, SEEDED_ROWS);
       assert.deepEqual(report.order, cleanup.CLEAN_TABLES);
-      assert.deepEqual(report.preserved, ['schema_migrations']);
+      assert.deepEqual(report.preserved, ['schema_migrations', 'game_flags', 'guest_features']);
       assert.deepEqual(report.breakdowns.players, { anonymous: 3, registered: 2 });
       assert.deepEqual(await dump(), before, 'every table is byte-identical afterwards');
       assert.equal(log[0], 'BEGIN READ ONLY');

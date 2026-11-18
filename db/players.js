@@ -38,12 +38,13 @@ class MemoryPlayerStore {
     const hash = hashToken(rawToken);
     const session = this.sessions.get(hash);
     if (!session || session.revokedAt) return null;
+    if (session.expiresAt && session.expiresAt.getTime() <= Date.now()) return null; // a guest session past its lifetime
     const player = this.players.get(session.playerId);
     if (player) player.last_seen_at = new Date();
     return player ? { ...player } : null;
   }
 
-  async createAnonymousPlayer({ displayName, avatar }) {
+  async createAnonymousPlayer({ displayName, avatar, ttlHours }) {
     const id = 'p_' + crypto.randomUUID();
     const rawToken = generateToken();
     const hash = hashToken(rawToken);
@@ -59,7 +60,9 @@ class MemoryPlayerStore {
     };
 
     this.players.set(id, player);
-    this.sessions.set(hash, { playerId: id, createdAt: new Date(), revokedAt: null });
+    // a guest session has a lifetime when the caller gives one (ttlHours); without one it never expires here, as before
+    const expiresAt = Number.isFinite(ttlHours) && ttlHours > 0 ? new Date(Date.now() + Math.round(ttlHours) * 3600 * 1000) : null;
+    this.sessions.set(hash, { playerId: id, createdAt: new Date(), revokedAt: null, expiresAt });
 
     return { player: { ...player }, rawToken };
   }
@@ -106,7 +109,7 @@ async function authenticateToken(rawToken) {
 
   const tokenHash = hashToken(rawToken);
   const sql = `
-    SELECT p.id, p.username, p.display_name, p.avatar, p.is_anonymous, p.created_at, p.last_seen_at, p.welcomed_at
+    SELECT p.id, p.username, p.display_name, p.avatar, p.is_anonymous, p.role, p.created_at, p.last_seen_at, p.welcomed_at
     FROM auth_sessions s
     JOIN players p ON s.player_id = p.id
     WHERE s.token_hash = $1
@@ -131,10 +134,12 @@ async function authenticateToken(rawToken) {
 /**
  * Create a new anonymous player account with a secure session bearer token.
  */
-async function createAnonymousPlayer({ displayName, avatar }) {
+async function createAnonymousPlayer({ displayName, avatar, ttlHours }) {
   if (!db.hasDatabase()) {
-    return memoryStore.createAnonymousPlayer({ displayName, avatar });
+    return memoryStore.createAnonymousPlayer({ displayName, avatar, ttlHours });
   }
+  // a guest session has its own, shorter lifetime (GUEST_SESSION_TTL_HOURS, lib/guestPolicy.js)
+  const ttl = Number.isFinite(ttlHours) && ttlHours > 0 ? `${Math.round(ttlHours)} hours` : `${sessionTtlDays()} days`;
 
   const rawToken = generateToken();
   const tokenHash = hashToken(rawToken);
@@ -149,15 +154,25 @@ async function createAnonymousPlayer({ displayName, avatar }) {
 
     const player = playerRes.rows[0];
 
-    // guest sessions expire like every other session (AUTH_SESSION_TTL_DAYS, default 30 days)
+    // the session expires after the guest lifetime (ttlHours) or, when none is given, like any other session (AUTH_SESSION_TTL_DAYS, default 30 days)
     await client.query(
       `INSERT INTO auth_sessions (player_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + ($3::text || ' days')::interval)`,
-      [player.id, tokenHash, String(sessionTtlDays())]
+       VALUES ($1, $2, NOW() + $3::interval)`,
+      [player.id, tokenHash, ttl]
     );
 
     return { player, rawToken };
   });
+}
+
+/** True when someone who was around in the last week already uses this display name (case-insensitive). */
+async function displayNameInUse(name) {
+  if (!db.hasDatabase()) return false;
+  const r = await db.query(
+    `SELECT 1 FROM players WHERE LOWER(display_name) = LOWER($1) AND last_seen_at > NOW() - INTERVAL '7 days' LIMIT 1`,
+    [String(name)]
+  );
+  return r.rows.length > 0;
 }
 
 /**
@@ -198,6 +213,7 @@ module.exports = {
   revokeMemoryToken,
   authenticateToken,
   createAnonymousPlayer,
+  displayNameInUse,
   updateProfile,
   updateLastSeen,
 };

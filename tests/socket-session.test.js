@@ -45,6 +45,8 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
   if (db.hasDatabase()) { console.log('socket session (memory) checks skipped: DATABASE_URL is set'); return; }
   const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 40 };
   const srv = await start({ ...fast, env: { ...process.env, RL_LOGOUT_IP_LIMIT: '1000', VOICE_ENABLED: 'true' } });
+  // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
+  require('./helpers/openGuestFeatures')();
   const open = [];
   try {
     await test('an open socket ends within a check interval after its session is revoked, with 4001 and a notice', async () => {

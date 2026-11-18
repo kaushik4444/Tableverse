@@ -68,6 +68,10 @@
     wnSeen: store.get('ct_wn_seen') || '', // the last What's new version this person opened
     sessionListOpen: store.get('ct_sessions_open') !== '0',
     guest: false, // true when the home screen is the public snapshot (no socket, no session)
+    isGuest: false, // a guest session: a temporary account made by "Play as a guest" (lib/guestPolicy.js)
+    role: null, // owner | admin | user | guest, once known (decides which games are open, see gameOpenFor)
+    guestPlay: false, // the server allows new guest sessions (GUEST_PLAY_ENABLED)
+    guestHours: 72, // how long a guest session lasts, from the server
     signingIn: false, // logged in on the server, waiting for the socket's welcome: the top bar shows the profile and taps are blocked
     auth: null, // the open auth sheet: 'login' or 'register'
     requireEmailVerification: true, // current server policy; secure default until the server says otherwise
@@ -177,6 +181,18 @@
   });
 
   const gameMeta = (id) => S.games.find((g) => g.id === id);
+  /** The account reminder for a guest on this page (lib/guest.js decides whether it may show now); '' for everybody else. */
+  const guestNudge = (ctx) => (S.isGuest && window.TvGuest ? window.TvGuest.nudgeHTML(ctx, { guest: true, hours: S.guestHours }) : '');
+  const addNudge = (ctx) => { const host = $app.querySelector('main, .page'); const n = guestNudge(ctx); if (host && n) host.insertAdjacentHTML('afterbegin', n); };
+  /** May this viewer play the game now: the owner's access mode (public/game-access.js) for this viewer's role. Before the
+   *  viewer is known (the public page), only a game open to everybody counts. The server is the authority. */
+  const gameOpenFor = (g) => {
+    if (!g) return false;
+    if (S.role && window.TvGameAccess && g.access) return window.TvGameAccess.allows(g.access, S.role);
+    return g.enabled !== false;
+  };
+  /** Locked only because this viewer is a guest: a registered player could play it, so the account prompt applies. */
+  const guestLockedFor = (g) => !!g && !gameOpenFor(g) && S.role === 'guest' && !!window.TvGameAccess && window.TvGameAccess.allows(g.access, 'user');
   const inviteUrl = () => `${location.origin}/#${S.room.code}`;
   const safeTableUrl = () => S.room && S.room.visibility === 'public' ? inviteUrl() : `${location.origin}/`;
 
@@ -387,6 +403,8 @@
       if (!out || !out.ok || !out.authenticated) return false;
       adoptPlayer(out.player);
       S.emailVerified = !!out.emailVerified;
+      S.isGuest = out.isGuest === true;
+      S.role = out.role || (S.isGuest ? 'guest' : 'user');
       S.welcomeDue = out.welcome === true; // first login: the welcome dialog is shown once, after the lobby starts
       refreshLevel();
       return true;
@@ -402,6 +420,7 @@
     S.csrf = '';
     S.emailVerified = false;
     S.email = '';
+    S.isGuest = false; S.role = null;
     S.id = null;
     store.set('ct_csrf', ''); // older versions kept it in localStorage
     S.ping = null; S.page = 'home'; S.profile = null; S.account = null; S.levelUp = null; S.country = undefined; sessionGen += 1; levelRequest += 1; S.latestProgress = null; S.latestProgressUser = null; S.latestProgressRequest = 0; closeModal(); S.player = null; S.recentTables = []; // nothing of the old account stays on screen
@@ -455,11 +474,44 @@
     return '<p class="auth-policy-hint optional" role="status">Friend-testing mode: email verification is optional right now. You can play immediately after creating your account.</p>';
   }
 
+  /** What a guest is told when the owner has locked an area for guests (server code guest_locked, with the feature name). */
+  const GUEST_LOCK_TEXT = {
+    private_tables: 'Create a free account to open a private table.',
+    rejoin: 'Create a free account to go back to a table you left.',
+    profiles: 'Create a free account to see player profiles and stats.',
+    blocking: 'Create a free account to block players.',
+    reports: 'Create a free account to report players or messages.',
+  };
+  const guestLockedHere = (feature) => !!S.isGuest && Array.isArray(S.guestLocked) && S.guestLocked.includes(feature);
+  /** Marks a control as locked for this guest (styled by [data-guest-lock]). Empty when the area is open. */
+  const lockAttr = (feature) => guestLockedHere(feature) ? ` data-guest-lock="${feature}" aria-disabled="true"` : '';
+  // A tap on a locked control shows the account reminder and sends nothing (the server would refuse it anyway).
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest && e.target.closest('[data-guest-lock]');
+    if (!el || !guestLockedHere(el.dataset.guestLock)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    openAuthSheet('register', GUEST_LOCK_TEXT[el.dataset.guestLock]);
+  }, true);
+
   // The auth sheet: a small dialog over the (public) home page. Logging in is never a place you get sent to —
   // it is a step you take when you try to play, and afterwards you land where you were heading.
   // `isError` makes the message an alert, so a failed login or sign-up is announced at once by screen readers.
+  // the sign-in sheet may already be open when the server's answer arrives: add or remove its guest option to match
+  function syncGuestOption() {
+    const overlay = document.getElementById('auth-overlay');
+    if (!overlay) return;
+    const want = S.guestPlay && !S.isGuest;
+    const have = overlay.querySelector('[data-act="playAsGuest"]');
+    if (want && !have) { const tabs = overlay.querySelector('.auth-tabs'); if (tabs) tabs.insertAdjacentHTML('afterend', '<button type="button" class="btn ghost auth-guest" data-act="playAsGuest">Play as a guest</button>'); }
+    if (!want && have) have.remove();
+  }
+  // the display name the owner typed when a sign-up was refused: the sheet is rebuilt with it, not with the guest's old name
+  let pendingRegisterName = null;
   function openAuthSheet(tab = 'login', msg = '', isError = false) {
+    const draftName = pendingRegisterName;
+    pendingRegisterName = null;
     S.auth = tab;
+    const origin = authOpener || document.activeElement; // the control that started this sheet keeps focus-return
     closeOverlay();
     const loginOn = tab === 'login';
     const resend = S.requireEmailVerification ? '<button class="btn ghost small" data-act="resendVerification">Resend verification email</button>' : '';
@@ -473,6 +525,7 @@
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
       </div>
+      ${S.guestPlay && !S.isGuest ? '<button type="button" class="btn ghost auth-guest" data-act="playAsGuest">Play as a guest</button>' : ''}
       <div id="googleSlot" class="google-slot" hidden><div id="googleBtn"></div><label class="check-row"><input id="googleRemember" type="checkbox"> Keep me signed in on this device</label><p class="auth-or"><span>or use your email</span></p></div>
       ${loginOn ? `
         <form id="loginForm" class="auth-form">
@@ -484,7 +537,7 @@
         <div class="row auth-links"><button class="btn ghost small" data-act="forgotPassword">Forgot password?</button>${resend}</div>
       ` : `
         <form id="registerForm" class="auth-form">
-          <input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname">
+          <input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname" value="${esc(draftName ?? (S.isGuest ? (S.name || '') : ''))}">
           <input id="registerUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -498,6 +551,8 @@
       ${legalLinksHtml()}
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
+    authOpener = origin;
+    authOpenerSel = openerSelector(origin);
     document.body.appendChild(overlay);
     mountGoogle();
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');
@@ -606,10 +661,22 @@
     if (!matchMedia('(pointer: coarse)').matches) overlay.querySelector('#googleUsername').focus();
   }
 
+  let authOpener = null; // the control that opened the sheet: focus returns to it when the sheet closes
+  let authOpenerSel = null; // a selector for that control (data-act and data-game), used when a redraw has replaced it
+  // The selector finds the same control again after a redraw: the action and, for a per-game button, its game.
+  const openerSelector = (el) => {
+    const act = el && el.getAttribute ? el.getAttribute('data-act') : null;
+    if (!act) return null;
+    const game = el.getAttribute('data-game');
+    return `[data-act="${act}"]` + (game ? `[data-game="${game}"]` : '');
+  };
   function closeOverlay() {
     const el = document.getElementById('auth-overlay');
     if (el) el.remove();
     S.auth = null;
+    const back = authOpener, sel = authOpenerSel; authOpener = null; authOpenerSel = null;
+    const target = back && back.isConnected ? back : (sel ? document.querySelector(sel) : null);
+    if (target && target.focus) target.focus();
   }
 
   // Only retry a database lookup explicitly marked safe by the server; ambiguous responses may have created a session.
@@ -632,6 +699,8 @@
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
     adoptPlayer(out.player);
+    // a registered sign-in is not a guest, even if this page was a guest a moment ago (the welcome message confirms the role)
+    S.isGuest = false; S.role = null;
     S.requireEmailVerification = policyRequiresVerification(out);
     S.emailVerified = !!(out.player && out.player.email_verified);
     S.signedOutIntentionally = false;
@@ -647,7 +716,69 @@
     if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
   }
 
+  /** "Play as a guest": the server makes a temporary account and a session cookie. The page connects as that guest. */
+  function finishGuestSignIn(out) {
+    S.token = '';
+    if (out.csrfToken) S.csrf = out.csrfToken;
+    adoptPlayer(out.player || {}, { name: out.player && out.player.name });
+    S.isGuest = true; S.role = 'guest';
+    S.guestHours = Number(out.expiresInHours) || 72;
+    S.requireEmailVerification = false; S.emailVerified = false;
+    S.signedOutIntentionally = false;
+    S.welcomeDue = false;
+    closeOverlay();
+    beginSignIn();
+    connect();
+  }
+  async function doPlayAsGuest(name) {
+    const out = await withBusy('Starting your guest visit…', () => postJson('/api/auth/guest', { displayName: name || undefined, avatar: S.avatar || undefined }));
+    finishGuestSignIn(out);
+  }
+  function openGuestSheet(msg = '') {
+    // the control that started this (even through the login sheet) gets focus back when the guest sheet closes
+    const origin = authOpener || document.activeElement;
+    closeOverlay();
+    const overlay = document.createElement('div');
+    overlay.id = 'auth-overlay';
+    overlay.className = 'overlay';
+    overlay.innerHTML = window.TvGuest.guestSheetHTML({ hours: S.guestHours }) + (msg ? `<p class="auth-msg" role="status">${esc(msg)}</p>` : '');
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeOverlay(); });
+    // Tab stays inside the sheet, as in the other dialogs
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const items = [...overlay.querySelectorAll('button, input, select, textarea, a[href]')].filter((el) => !el.disabled);
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      const inside = overlay.contains(document.activeElement);
+      if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
+    });
+    authOpener = origin;
+    authOpenerSel = openerSelector(origin);
+    document.body.appendChild(overlay);
+    // a text field would open the on-screen keyboard on touch screens, so focus a button there
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const target = coarse ? overlay.querySelector('button') : document.getElementById('guestName');
+    if (target && target.focus) target.focus();
+  }
+  // The guest sheet's "create a free account" and the reminder's button both open the register sheet. guest.js loads after this
+  // file, so it announces the tap with an event rather than through a hook that would not exist yet.
+  document.addEventListener('tv:guest-upgrade', () => openAuthSheet('register'));
+  document.addEventListener('tv:guest-close', () => closeOverlay());
+
+  /**
+   * Asks to turn the guest into an account. Nothing changes yet: the server e-mails a confirmation link, and the guest stays a
+   * guest (same game, same locks) until that link is used. The account then takes effect on the server at once.
+   */
+  async function doUpgradeGuest(name, username, email, password, adultConfirmed) {
+    const out = await withBusy('Sending your confirmation…', () => postJson('/api/auth/upgrade-guest', { displayName: name, username, email, password, adultConfirmed: adultConfirmed === true }));
+    if (out.csrfToken) S.csrf = out.csrfToken;
+    closeOverlay();
+    toast(out.message || 'Check your email to confirm your account.');
+  }
+
   async function doRegister(name, username, email, password, adultConfirmed) {
+    if (S.isGuest) return doUpgradeGuest(name, username, email, password, adultConfirmed);
     const out = await withBusy('Creating your account…', () => postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined, adultConfirmed: adultConfirmed === true }));
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
@@ -905,10 +1036,14 @@
       if (JSON.stringify(next) !== JSON.stringify(S.banners)) { S.banners = next; render(); }
     } catch { /* offline: keep what is shown */ }
   }
+  // only the newest request may set the staff flag, so a delayed older answer cannot undo a newer role change
+  let staffHintSeq = 0;
   async function loadStaffHint() {
+    const seq = ++staffHintSeq;
     try {
       const r = await fetch('/api/admin/me', { credentials: 'same-origin' });
       const out = await r.json();
+      if (seq !== staffHintSeq) return;
       const staff = !!(out && out.ok && out.isAdmin);
       if (staff !== S.isStaff) { S.isStaff = staff; render(); }
     } catch { /* ignore */ }
@@ -994,6 +1129,9 @@
       const out = await r.json();
       if (out && out.ok) {
         S.games = out.games || [];
+        S.guestPlay = out.guestPlay === true;
+        if (Number(out.guestHours) > 0) S.guestHours = Number(out.guestHours);
+        syncGuestOption();
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
         // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
@@ -1119,8 +1257,34 @@
     if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
+      case 'role': {
+        // the owner changed this account's role while it was connected
+        S.role = m.role; S.isGuest = m.role === 'guest';
+        loadStaffHint();
+        render();
+        break;
+      }
+      case 'games': {
+        // the owner switched a game on or off: the home page and the create buttons update at once
+        S.games = m.games;
+        render();
+        break;
+      }
+      case 'identity': {
+        // this guest's account was confirmed (from the e-mail link, in this tab or another): the page drops its guest state now
+        S.isGuest = m.isGuest === true;
+        S.role = m.role || S.role;
+        S.guestLocked = Array.isArray(m.guestLocked) ? m.guestLocked : [];
+        if (m.username) { S.username = m.username; store.set('ct_username', S.username); }
+        if (!S.isGuest) toast('Your account is confirmed. Your games and history are yours.');
+        render();
+        break;
+      }
       case 'welcome': {
         S.id = m.id;
+        S.role = m.role || 'user'; // owner | admin | user | guest: decides which games are open (see gameOpenFor)
+        S.isGuest = S.role === 'guest'; // the server's role decides guest reminders and the upgrade path, not an earlier sign-in
+        S.guestLocked = Array.isArray(m.guestLocked) ? m.guestLocked : []; // areas the owner has locked for guests
         if (S.page === 'player' && S.player && S.player.data) resyncPlayerBlock(); // the server's state after a drop, not the optimistic one
         applyLegal(m); // the server decides each link (see server.js legalFlags)
         S.token = '';
@@ -1274,6 +1438,7 @@
         if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
         break;
       case 'error':
+        if (m.code === 'guest_locked') { openAuthSheet('register', (m.feature && GUEST_LOCK_TEXT[m.feature]) || m.message || 'Create a free account to play this game.'); break; }
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
         if (S.page === 'player') resyncPlayerBlock(true, m.message); // a refused block or unblock must not stay on the page
@@ -1302,6 +1467,13 @@
         loginBusy = false;
       }
     }
+    if (e.target.id === 'guestForm') {
+      e.preventDefault();
+      const name = String((document.getElementById('guestName') || {}).value || '').trim();
+      const btn = e.target.querySelector('[type="submit"]');
+      if (btn) btn.disabled = true;
+      try { await doPlayAsGuest(name); } catch (err) { toast(err.message || 'Could not start a guest visit'); if (btn) btn.disabled = false; }
+    }
     if (e.target.id === 'registerForm') {
       e.preventDefault();
       const name = (document.getElementById('registerName') || {}).value;
@@ -1315,6 +1487,7 @@
       try {
         await doRegister(name, username, email, password, adultConfirmed);
       } catch (err) {
+        pendingRegisterName = name; // keep what was typed; the password is left blank
         openAuthSheet('register', err.message || 'Registration failed', true);
       }
     }
@@ -1325,6 +1498,7 @@
     if (!a) return;
     if (a.dataset.act === 'showLogin') return openAuthSheet('login');
     if (a.dataset.act === 'showRegister') return openAuthSheet('register');
+    if (a.dataset.act === 'playAsGuest') return openGuestSheet();
     if (a.dataset.act === 'showAuth') return openAuthSheet(S.auth || 'login');
     if (a.dataset.act === 'forgotPassword') return doForgotPassword();
     if (a.dataset.act === 'resendVerification') return doResendVerification();
@@ -1336,7 +1510,7 @@
   document.addEventListener('keydown', (e) => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.pseat[role="button"]')) { e.preventDefault(); openPlayerCard(e.target.dataset.pid); return; }
     if (e.key !== 'Escape') return;
-    if (S.auth) closeOverlay();
+    if (S.auth || document.getElementById('auth-overlay')) closeOverlay();
     else if (document.getElementById('modal-overlay')) closeModal();
     else if (S.toolsOpen) { setTools(false); document.querySelector('.tb-more-btn')?.focus(); }
     else if (S.bellOpen) { S.bellOpen = false; render(); document.querySelector('.tb-bell')?.focus(); }
@@ -1547,12 +1721,12 @@
     if (here && rel.kind !== 'me' && rel.kind !== 'bot') {
       others.push(prof && prof.blockedByMe
         ? `<button type="button" class="btn ghost"${busy} data-modal-act="cardUnblock">Unblock</button>`
-        : `<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock">🚫 Block</button>`);
+        : `<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock"${lockAttr('blocking')}>🚫 Block</button>`);
     }
     // A report about a registered player (their conduct, not one message): a reason menu, like the chat report's.
     if (person.username && rel.kind !== 'me' && rel.kind !== 'bot' && rel.kind !== 'guest') {
       if (C.reporting) others.push(`<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-modal-act="cardReportSend" data-reason="${k}">${l}</button>`).join('')}<button type="button" class="btn ghost" data-modal-act="cardReport">Cancel</button></div>`);
-      else others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardReport" aria-expanded="false">🚩 Report player</button>`);
+      else others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardReport" aria-expanded="false"${lockAttr('reports')}>🚩 Report player</button>`);
     }
     if (rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost" data-modal-act="cardMute">${muted.has(person.id) ? '🔔 Unmute in chat' : '🔇 Mute in chat'}</button>`);
     return `<div class="pcard-head">${avatar(person, 'big')}<div><h3>${esc(person.name)}</h3><p>${sub}${person.id === S.id ? ' · you' : ''}</p>${conn}</div></div>${stats}${C.error ? `<p class="auth-msg" role="alert">${esc(C.error)}</p>` : ''}<div class="pcard-actions">${add.join('')}${others.join('')}</div>${S.guest && rel.kind === 'none' ? '<p class="pcard-note">Log in to add friends.</p>' : ''}`;
@@ -1625,7 +1799,7 @@
     if (m.sys) return `<div class="msg sys">${esc(m.text)}</div>`;
     const mine = m.id === S.id;
     // Block and report are enforced by the server; these buttons only send the request.
-    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}" data-mid="${esc(m.mid || '')}" title="Hide this player's table chat and voice from you, and stop invitations between you. You can still share a table. They are not told." aria-label="Block ${esc(m.name)}">Block</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}">Report</button>` : ''}</span>`;
+    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}"${lockAttr('blocking')} data-mid="${esc(m.mid || '')}" title="Hide this player's table chat and voice from you, and stop invitations between you. You can still share a table. They are not told." aria-label="Block ${esc(m.name)}">Block</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}"${lockAttr('reports')}>Report</button>` : ''}</span>`;
     const menu = !mine && m.mid && S.reportMenuFor === m.mid ? reportMenuHTML(m.mid) : '';
     return `<div class="msg ${mine ? 'mine' : ''}"><span class="mav" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span><div class="mb"><b>${esc(m.name)}${m.spec ? ' <i title="Spectator">👁</i>' : ''}</b><p>${esc(m.text)}</p>${actions}${menu}</div></div>`;
   }
@@ -1759,6 +1933,10 @@
     let out = null;
     try { out = await r.json(); } catch { /* not json */ }
     if (r.status === 401) { const e = new Error('Please log in again.'); e.status = 401; throw e; }
+    if (r.status === 403 && out && out.code === 'guest_locked') {
+      openAuthSheet('register', GUEST_LOCK_TEXT[out.feature] || out.error || 'Create a free account to use this.');
+      const e = new Error(out.error || 'Create a free account to use this.'); e.status = 403; e.code = 'guest_locked'; throw e;
+    }
     if (!r.ok || !out || out.ok === false) { const e = new Error((out && out.error) || `Request failed (${r.status})`); e.status = r.status; throw e; }
     return out;
   }
@@ -1774,8 +1952,8 @@
   }
   function applyRoute() {
     const r = routeFromHash();
-    if (r.page === 'profile' && S.guest) { S.page = 'home'; openAuthSheet('login', 'Log in to see your profile.'); return; }
-    if (r.page === 'friends' && S.guest) { S.page = 'home'; openAuthSheet('login', 'Log in to see your friends.'); return; }
+    if (r.page === 'profile' && S.guest) { S.page = 'home'; openAuthSheet('register', GUEST_LOCK_TEXT.profiles); return; }
+    if (r.page === 'friends' && S.guest) { S.page = 'home'; openAuthSheet('register', 'Create a free account to use friends.'); return; }
     if (r.page === 'profile') return void openPage('profile', null, true);
     if (r.page === 'friends') return void openPage('friends', null, true);
     if (r.page === 'player') return void openPage('player', r.username, true);
@@ -2007,10 +2185,10 @@
     // Unblock only for a block this viewer made; a block the other player made is theirs to lift.
     const blockBtn = d.blockedByMe
       ? '<button type="button" class="btn ghost small" data-act="playerUnblock">Unblock</button>'
-      : '<button type="button" class="btn ghost small" data-act="playerBlock">🚫 Block</button>';
+      : `<button type="button" class="btn ghost small" data-act="playerBlock"${lockAttr('blocking')}>🚫 Block</button>`;
     const reportPart = P.reporting
       ? `<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-act="playerReportSend" data-reason="${k}">${l}</button>`).join('')}<button type="button" class="btn ghost small" data-act="playerReport" aria-expanded="true">Cancel</button></div>`
-      : '<button type="button" class="btn ghost small" data-act="playerReport" aria-expanded="false">🚩 Report player</button>';
+          : `<button type="button" class="btn ghost small" data-act="playerReport" aria-expanded="false"${lockAttr('reports')}>🚩 Report player</button>`;
     return `<div class="pp-actions">${blockBtn}${reportPart}</div>`;
   }
 
@@ -2485,6 +2663,10 @@
     else if (!S.room) renderHome();
     else if (S.room.status === 'lobby') renderLobby();
     else renderGame();
+    // Account reminders for a guest: never over a game in progress (the game-over card has its own, see endFlow)
+    if (S.isGuest && !S.room && S.page === 'profile') addNudge('profile');
+    if (S.isGuest && !S.room && S.page === 'friends') addNudge('friends');
+    if (S.isGuest && S.room && S.room.status === 'lobby' && S.room.hostId === S.id) addNudge('create');
     updateWatchers();
     if ($chat && S.chatOpen) drawChat();
     showLevelUpDialog();
@@ -2503,19 +2685,24 @@
   }
 
   function renderHome() {
-    const tiles = S.games.map((g) => `
-      <article class="game-card" style="--accent:${esc(g.accent || '#7b4bd0')}">
+    const tiles = S.games.map((g) => {
+      const open = gameOpenFor(g);
+      const guestLocked = guestLockedFor(g); // a tap opens the account prompt (the button stays enabled)
+      const note = open ? '' : guestLocked && window.TvGuest ? window.TvGuest.lockedLabel(g.name) : '<p class="game-off" role="status">Unavailable right now.</p>';
+      return `
+      <article class="game-card${open ? '' : ' is-locked'}" style="--accent:${esc(g.accent || '#7b4bd0')}">
         <div class="game-art" aria-hidden="true">${esc(g.icon || '🎴')}</div>
         <div class="game-body">
           <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
-          <p>${esc(g.tagline)}</p>
+          <p>${esc(g.tagline)}</p>${note}
           <div class="row game-actions">
-            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}">Create table</button>
+            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}" ${open || guestLocked ? '' : 'disabled aria-disabled="true"'}>Create table</button>
             <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
             ${g.id === 'wizard' ? (S.guest ? `<button class="btn ghost small" type="button" data-act="showLogin">Log in for offline scorecard</button>` : `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>`) : ''}
           </div>
         </div>
-      </article>`).join('');
+      </article>`;
+    }).join('');
     const name = S.guest ? '' : (S.named ? S.name : '');
     $app.innerHTML = `
     ${topbarHTML()}
@@ -2524,8 +2711,9 @@
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
           <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
-          ${S.guest ? '<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button></div>' : ''}
+          ${S.guest ? `<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button>${S.guestPlay ? '<button type="button" class="btn ghost" data-act="playAsGuest">Play as a guest</button>' : ''}</div>` : ''}
         </div>
+        ${guestNudge('home')}
         <form class="join-form" id="joinForm" aria-label="Join a table">
           <label class="label" for="code">Have a table code?</label>
           <div class="join-row"><input id="code" type="text" maxlength="6" placeholder="ABCDEF" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc(S.draftCode)}"><button class="btn" type="submit">Join</button></div>
@@ -2671,7 +2859,7 @@
           <button class="btn small wa" data-act="whatsapp">WhatsApp</button>
           ${navigator.share ? '<button class="btn ghost small" data-act="share">Share…</button>' : ''}
         </div>` : ''}
-        ${isHost ? `<div class="visibility-control"><span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
+        ${isHost ? `<div class="visibility-control">${guestLockedHere('private_tables') ? '<p class="guest-lock-note" role="note">🔒 Private tables need a free account. Tap Private to create one.</p>' : ''}<span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
         ${inviteFriendsHTML()}
       </section>
       <section class="panel">
@@ -2966,6 +3154,9 @@
         if (inSheet) inSheet.insertAdjacentHTML('beforeend', `<div class="end-bar end-bar-in">${html}</div>`);
         else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
       }
+      // The game-over reminder: the one stronger prompt for a guest, placed by the end actions (never during play)
+      const gameNudge = guestNudge('gameover');
+      if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       // Lifetime game XP comes from the server once per finished game (the table's own game only)
       const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.totals : null;
@@ -3118,11 +3309,17 @@
     create: (el) => {
       if (!authed()) return gateLogin(() => actions.create(el));
       const game = el.dataset.game;
+      const meta = gameMeta(game);
+      if (meta && !gameOpenFor(meta)) {
+        if (guestLockedFor(meta)) return openAuthSheet('register', `Create a free account to play ${meta.name}.`);
+        return toast('That game is unavailable right now.');
+      }
       // New tables are public by default. The host can make the table private from the table screen (Make private).
       send({ t: 'create', gameId: game, visibility: 'public', name: S.name || undefined, avatar: S.avatar || undefined });
     },
     toggleVisibility: () => {
       const cur = S.room && S.room.visibility;
+      if (cur === 'public' && guestLockedHere('private_tables')) return openAuthSheet('register', GUEST_LOCK_TEXT.private_tables);
       send({ t: 'setVisibility', visibility: cur === 'public' ? 'private' : 'public' });
     },
     // The server decides: your old seat if you had one (a bot is playing it), otherwise a seat in a lobby, otherwise watching.

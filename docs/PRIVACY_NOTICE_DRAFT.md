@@ -1,6 +1,8 @@
 # Tableverse privacy notice — BETA DRAFT
 
-**Status: DRAFT for the limited beta. Not approved for publication, and not shown in the app. Requires the owner's written approval of each open question listed at the end before publication (no lawyer review is planned; see the list at the end). The beta decisions it reflects are in `docs/STAGE_20_6_BETA_READINESS.md`.**
+> **Superseded (2026-11-17).** The text the app publishes is `lib/legal/privacy.md`, rewritten from the owner's decisions. The owner decisions, the code check behind them and the open items are in `docs/PRIVACY_NOTICE_OWNER_DECISIONS.md`. This draft is kept only as the history of the earlier questions. Do not copy wording from it; where the two differ, `lib/legal/privacy.md` and the code win.
+
+**Status (earlier draft): DRAFT for the limited beta. Not approved for publication, and not shown in the app. Requires the owner's written approval of each open question listed at the end before publication (no lawyer review is planned; see the list at the end). The beta decisions it reflects are in `docs/STAGE_20_6_BETA_READINESS.md`.**
 
 This draft is written from what the Tableverse code does today (`main`, 2026-11-10). Where a fact is not verified, the text says so, or leaves a placeholder in square brackets for the owner to complete. Details of retention and deletion are in `docs/ACCOUNT_DELETION_AND_RETENTION.md`.
 
@@ -19,7 +21,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by [OWNE
 - Your friends, friend requests, blocks, and tables you have recently visited.
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 
-**Guests:** the beta is for signed-in players only. Browsing the public home screen and table list does not create an account or a record. [OWNER: confirm there are no guest records in the database; see docs/ACCOUNT_DELETION_AND_RETENTION.md.]
+**Guests (only when the owner turns guest play on, see docs/GUEST_PLAY.md):** a guest is a visitor who plays without registering. The app keeps a temporary record for them: a display name, an avatar, a session, and the seats and scores of the games they play. A guest has no e-mail address and no password. The record lasts as long as the guest session (default 72 hours) and is then removed after one more day; the game results stay, with the guest's name, but are no longer linked to anyone. Browsing the public home screen and table list does not create any record. [OWNER: decide whether guest names on game results are kept as they are or replaced by "Deleted player"; set the session length; confirm before publishing.]
 
 **Technical and security data (all users):**
 - Your network address is recorded for rate limiting, for a short time (deleted after one day).
@@ -99,7 +101,7 @@ This draft was prepared from the official texts: the GDPR (Regulation (EU) 2016/
 6. **Complaints (GDPR Art. 77).** Users must be told they may complain to a supervisory authority. The competent authority depends on the owner's Land. [OWNER: name the authority once the Land is confirmed.]
 7. **Processors and transfers (GDPR Art. 28, Art. 44–49).** Render, Neon, Resend, Metered, Google and Cloudflare (STUN) are processors or recipients. Their contract terms, data locations and any transfer outside the EU/EEA have not been checked. [OWNER: check each provider's data processing terms and data location before publication.]
 8. **Age (GDPR Art. 8).** Art. 8 covers consent for information society services offered directly to children. The beta is 18+ with a self-declaration and no date of birth. [OWNER: approve relying on the self-declaration, and accept that it is not an age check.]
-9. **Retention (GDPR Art. 5(1)(e)).** Chat reports, broadcast history and any legacy guest records have no automatic deletion yet. [OWNER: set periods or accept indefinite retention for the beta.]
+9. **Retention (GDPR Art. 5(1)(e)).** Chat reports and broadcast history have no automatic deletion yet. Guest records are removed by the housekeeping job after the session ends (see docs/GUEST_PLAY.md). [OWNER: set periods or accept indefinite retention for the beta.]
 10. **Live chat after deletion (GDPR Art. 17).** Table chat stays in server memory after the author deletes the account, with the author shown as "Deleted player". [OWNER: accept and disclose, or change the code.]
 11. **Breach notification (GDPR Art. 33–34).** Notice to the supervisory authority within 72 hours of awareness where required, and to users where the risk is high. [OWNER: approve the procedure in the runbook.]
 12. **Voice relay (Metered).** Voice audio passes through Metered when a direct connection fails. In the beta, voice is withheld. [OWNER: confirm voice stays withheld until Metered is verified and the processor terms are checked.]

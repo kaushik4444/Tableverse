@@ -8,6 +8,16 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-18-guest-play',
+      date: '2026-11-18',
+      title: 'Play as a guest',
+      items: [
+        { ico: '👋', title: 'Play without an account', text: 'Try a game as a guest from the home page. A guest visit lasts a few days in this browser, and you can turn it into a full account at any time without losing your games.' },
+        { ico: '🔒', title: 'Some games need an account', text: 'The owner can keep a game for registered players only. Where that applies to you, the game shows a note and you can create an account from it.' },
+        { ico: '🔔', title: 'Quiet reminders', text: 'Guests see a short reminder that an account keeps their progress. It never interrupts a game, and you can dismiss it.' },
+      ],
+    },
+    {
       version: '2026-11-17-game-over-table',
       date: '2026-11-17',
       title: 'One table at the end of a game',
@@ -15,7 +25,6 @@
         { ico: '🏁', title: 'Game XP at the end of a game, in one table', text: 'The game-over screen no longer shows progress cards. It lists everyone at the table with the XP they earned in that game.' },
         { ico: '📈', title: 'Your lifetime XP in each game', text: 'The same table shows each player’s lifetime XP in that game across all their finished matches. Guests show a dash, since their games are not kept.' },
         { ico: '🎉', title: 'Level-up dialog', text: 'When you reach a new level, the next time you open the menu shows your new level and how much XP is left to the next one.' },
-        { ico: '🗂️', title: 'Admin console sorting', text: 'Admin tables can be sorted by their columns, and the player directory shows each player’s level.' },
       ],
     },
     {

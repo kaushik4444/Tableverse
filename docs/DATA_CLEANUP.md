@@ -9,7 +9,7 @@ with `--execute` and the confirmation. The script was developed and tested only 
 
 ## 1. Every table in the database (from `db/migrations/001` to `015`)
 
-There are 25 tables and 26 foreign keys: 24 tables are emptied and `schema_migrations` is preserved. The list below is the
+There are 26 tables and 26 foreign keys: 24 tables are emptied, and `schema_migrations` and `game_flags` are preserved. The list below is the
 plan in `db/cleanup.js` (`PLAN`, `PRESERVE`, `EXPECTED_FKS`). The script re-discovers the live schema on every run and
 **refuses** if it finds a table or foreign key that is not in this list, a trigger, or a migration set that differs from
 this code version.
@@ -39,9 +39,11 @@ this code version.
 | 21 | `auth_devices` | Trusted devices for "keep me signed in on this device" (migration 018): hashed device tokens, browser and system label, dates | **Empty** | `players` (CASCADE) |
 | 22 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
 | 23 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
+| – | `guest_upgrades` | Pending guest-to-account requests (migration 031): chosen username and e-mail, password hash, hash of the one-time link, expiry | **Empty** | `players` (CASCADE) |
 | 24 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
 | 25 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
 | – | `schema_migrations` | Which migration files were applied | **PRESERVE, never touched** | none, not in the plan |
+| – | `game_flags` | Owner switches: which games are on or off (configuration, not player data) | **PRESERVE, never touched** | none, not in the plan |
 
 **Migration 018 (keep me signed in on this device, Stage 20.9) adds one table**, `auth_devices`, emptied in the plan above.
 
@@ -69,7 +71,7 @@ It never uses `TRUNCATE`, `DROP`, `ALTER`, `CREATE` or `CASCADE`.
 * **Dry run by default**: read-only transaction (`BEGIN READ ONLY`), always rolled back. Prints the row count of every table, breakdowns and a masked sample of the records.
 * **Two things are needed to delete**: `--execute` and `--confirm=<exact database name>`.
 * **The target is named on purpose**: `CLEANUP_DATABASE_URL` only. `DATABASE_URL` and `.env` files are ignored. A remote host must also be repeated with `--expect-host=<host>`. The connected `current_database()` must equal the URL's database. A running migration (advisory lock) blocks it.
-* **Expected state only**: same 25 tables (24 emptied and `schema_migrations`), same 26 foreign keys, no triggers, no other schema, and exactly the migrations in `db/migrations` applied. Anything else is refused with the list of differences.
+* **Expected state only**: same 26 tables (24 emptied, `schema_migrations` and `game_flags`), same 26 foreign keys, no triggers, no other schema, and exactly the migrations in `db/migrations` applied. Anything else is refused with the list of differences.
 * **One transaction**: tables are locked (`SHARE ROW EXCLUSIVE`: readers keep working, writers wait), counted, deleted in the order above and checked; a schema and migration-history fingerprint taken before and after must be identical. Any error, mismatch or timeout rolls everything back (`lock_timeout` 10 s, `statement_timeout` 5 min).
 * **Nothing sensitive is printed**: emails are masked (`a***@example.com`), token hashes are never selected, chat-report message text and user-supplied details are excluded from samples, the connection password is never shown, and the snapshot file holds only structure digests and counts.
 

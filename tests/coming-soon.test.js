@@ -41,17 +41,41 @@ assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history 
 const newest = releases[0];
 const highlights = newest.items.slice(0, 3).map((i) => i.title).join('\n');
 assert.equal(newest.items.slice(0, 3).length, 3, 'the home page shows three highlights');
-// The newest release is the game-over table entry (its first three items). The older highlights stay in the history.
-assert.match(highlights, /Game XP at the end of a game, in one table/);
-assert.match(highlights, /Your lifetime XP in each game/);
-assert.match(highlights, /Level-up dialog/);
+// The newest release is the guest play release (its first three items). The older highlights stay in the history.
+assert.equal(newest.version, '2026-11-18-guest-play');
+assert.match(highlights, /Play without an account/);
+assert.match(highlights, /Some games need an account/);
+assert.match(highlights, /Quiet reminders/);
 const history = releases.flatMap((r) => r.items.map((i) => i.title)).join('\n');
+assert.match(history, /Game XP at the end of a game, in one table/);
+assert.match(history, /Level-up dialog/);
 assert.match(history, /See how far you are to the next level/);
 assert.match(history, /A level-up notice, once/);
 assert.match(history, /Follow @playtableverse on Instagram/);
 assert.ok(releases.some((r) => r.items.some((i) => /Leaving a game with others counts as a loss/.test(i.title))), 'the earlier release stays in the history');
 assert.ok(releases.every((r) => r.version && r.title && Array.isArray(r.items) && r.items.length > 0), 'every release has a version, title and items');
 assert.equal(new Set(releases.map((r) => r.version)).size, releases.length, 'versions are unique');
+// Release cleanup: inspect the full historical entry, not just the home highlights.
+// A fourth admin-only item would otherwise escape the first-three assertions above.
+const gameOverRelease = releases.find((r) => r.version === '2026-11-17-game-over-table');
+assert.ok(gameOverRelease, 'the game-over release remains in version history');
+assert.equal(gameOverRelease.date, '2026-11-17');
+assert.equal(gameOverRelease.title, 'One table at the end of a game');
+assert.deepEqual(Array.from(gameOverRelease.items, (item) => item.title), [
+  'Game XP at the end of a game, in one table',
+  'Your lifetime XP in each game',
+  'Level-up dialog',
+], 'the historical release keeps all three player-facing items in order');
+// each explanation still says what the item is about, so an edit cannot quietly change the topic
+const topics = [/XP/i, /lifetime XP/i, /level/i];
+gameOverRelease.items.forEach((item, i) => assert.match(item.text, topics[i], `${item.title} explains its topic`));
+for (const item of gameOverRelease.items) {
+  assert.ok(typeof item.ico === 'string' && item.ico.trim(), `${item.title} has an icon`);
+  assert.ok(typeof item.text === 'string' && item.text.trim(), `${item.title} has explanatory text`);
+  assert.ok(!item.voice, `${item.title} remains visible with voice chat off`);
+  assert.doesNotMatch(`${item.title}\n${item.text}`, /admin tables can be sorted|player directory shows/i,
+    'admin sorting and player-directory changes are not advertised in this release');
+}
 const appSource = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
 assert.match(appSource, /window\.TV_RELEASES/, 'the app reads the release history');
 assert.match(appSource, /openVersionHistory/, 'the account menu opens the version history');

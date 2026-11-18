@@ -62,6 +62,8 @@ function client(port, name, token) {
 
 (async () => {
   const app = await start({ port: 0, botDelay: [0, 3], autoAdvanceMs: 20, absentMs: 150, maxMsgsPerSec: Infinity, trickPauseMs: 0, forcedMs: 0 });
+  // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
+  require('./helpers/openGuestFeatures')();
   const { port } = app;
   let seq = 1;
   const authClient = async (name, p = port) => {
@@ -267,6 +269,8 @@ function client(port, name, token) {
 
   assert.equal(a.announcement, '');
   const ann = await start({ port: 0, announcement: '  Maintenance\n at 22:00 ' + 'x'.repeat(400) });
+  // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
+  require('./helpers/openGuestFeatures')();
   const an = await authClient('Ann2', ann.port);
   await an.until(() => an.id, 'welcome announcement');
   assert.ok(an.announcement.startsWith('Maintenance at 22:00'));
