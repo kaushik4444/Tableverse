@@ -39,6 +39,7 @@ this code version.
 | 21 | `auth_devices` | Trusted devices for "keep me signed in on this device" (migration 018): hashed device tokens, browser and system label, dates | **Empty** | `players` (CASCADE) |
 | 22 | `auth_identities` | Login methods: email, Argon2 password hash, verification time | **Empty** | `players` (CASCADE) |
 | 23 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
+| – | `guest_upgrades` | Pending guest-to-account requests (migration 031): chosen username and e-mail, password hash, hash of the one-time link, expiry | **Empty** | `players` (CASCADE) |
 | 24 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
 | 25 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
 | – | `schema_migrations` | Which migration files were applied | **PRESERVE, never touched** | none, not in the plan |
