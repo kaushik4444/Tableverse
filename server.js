@@ -2424,6 +2424,9 @@ function start(opts = {}) {
       // the owner's game switches: read now and every 15 seconds (lib/gameFlags.js); a change in this process is applied at once
       if (dbAdmin && dbAdmin.listGameFlags) {
         flagsStopped = false;
+        // a new server lifecycle in this process starts with no snapshot: a failed first read must not leave the last one in force
+        gameFlags.reset();
+        guestFeatures.reset();
         const refreshFlags = () => {
           if (flagsStopped) return Promise.resolve();
           const token = gameFlags.begin(); // reads are applied in the order they started

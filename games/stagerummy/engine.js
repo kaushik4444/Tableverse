@@ -189,7 +189,10 @@ function hit(g, i, action) {
   if (!c) return { ok: false, error: 'That card is not in your hand' };
   if (c.k === 's') return { ok: false, error: 'A skip card cannot be added to a group' };
   const owner = action.owner;
-  const grp = Number.isInteger(owner) && owner >= 0 && owner < g.n && g.laid[owner] ? g.laid[owner][action.group] : null;
+  // Only real indexes of this player's laid groups: a name such as "__proto__" must never reach an array's inherited properties.
+  const groups = Number.isInteger(owner) && owner >= 0 && owner < g.n && g.laid[owner] ? g.laid[owner] : null;
+  const gi = Number.isInteger(action.group) && action.group >= 0 && groups && action.group < groups.length ? action.group : -1;
+  const grp = gi >= 0 ? groups[gi] : null;
   if (!grp) return { ok: false, error: 'No such group' };
   if (grp.kind === 'set') {
     if (c.k === 'n' && c.v !== grp.num) return { ok: false, error: 'That card does not match the set' };

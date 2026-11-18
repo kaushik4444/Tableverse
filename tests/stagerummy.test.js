@@ -262,5 +262,25 @@ test('solver keeps existing maximum-natural choices ahead of wild substitutions'
   assert.deepEqual(e.solve(hand, [{ kind: 'colour', size: 2 }]), [ids([R(1), R(5)])]);
 });
 
+test('a group named by an inherited property (__proto__) is refused, and no array prototype is changed', () => {
+  const g = setup(2, [[Y(5), R(1), W(0)], [R(2), B(3)]]);
+  act(g, 0, { type: 'draw', from: 'stock' });
+  g.laid = [[{ kind: 'set', num: 5, cards: [R(5), B(5), G(5)] }], []];
+  g.phase = 'play';
+  const before = Object.getOwnPropertyNames(Array.prototype).length;
+  const res = act(g, 0, { type: 'hit', card: Y(5).id, owner: 0, group: '__proto__' });
+  assert.equal(res.ok, false, 'refused');
+  assert.equal(Object.getOwnPropertyNames(Array.prototype).length, before, 'Array.prototype is unchanged');
+  assert.equal(Array.prototype.lo, undefined);
+  assert.equal(Array.prototype.hi, undefined);
+});
+
+test('scrubbing a deleted player\'s name never changes the internal phase, even when the name is "draw"', () => {
+  const game = def.create(people(2), {}, rngFor(4));
+  assert.equal(game.view('p0').phase, 'draw', 'the game starts in the draw phase');
+  game.scrub(['draw'], 'Removed player');
+  assert.equal(game.view('p0').phase, 'draw', 'the phase is still draw after the scrub');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
