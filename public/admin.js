@@ -519,7 +519,9 @@
         if (state.tab === 'games') redrawGames(); // the committed flags are shown, whichever visit started the save
       }, (e) => {
         if (gameFlagPending.get(id) === value) gameFlagPending.delete(id);
-        if (visit !== generation || e.name === 'AbortError' || state.tab !== 'games') return; // an error from an earlier visit is not shown here
+        if (state.tab !== 'games') return; // the owner has moved to another view: leave it alone
+        // the current view is redrawn so the selector unlocks; an error from an earlier visit is not shown in this one
+        if (visit !== generation || e.name === 'AbortError') { redrawGames(); return; }
         redrawGames().then(() => say('gMsg', e.message, 'err'));
       });
     }; });

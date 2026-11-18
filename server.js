@@ -300,10 +300,11 @@ function start(opts = {}) {
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
   /** A role changed in the admin console: the live player takes it at once, so restricted games are judged by the new role. */
-  // counts live role changes: a stored-role read that overlaps one is read again, so an older stored role cannot replace it
-  let roleEpoch = 0;
+  // role changes per account, kept even when the account is not connected: a stored-role read that overlaps a change to
+  // that same account is read again, so an older stored role cannot replace it (changes to other accounts do not matter)
+  const roleVersions = new Map();
   const applyLiveRole = ({ playerId, role, unverified = false }) => {
-    roleEpoch += 1;
+    roleVersions.set(playerId, (roleVersions.get(playerId) || 0) + 1);
     const p = players.get(playerId);
     if (!p || typeof role !== 'string' || !role) return;
     p.role = role;
@@ -2029,9 +2030,10 @@ function start(opts = {}) {
       let dbPlayer = null;
       let liveChanged = false;
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        const epochBefore = roleEpoch;
+        const before = new Map(roleVersions);
         dbPlayer = await dbPlayers.authenticateToken(presentedToken);
-        liveChanged = roleEpoch !== epochBefore;
+        if (ws.readyState !== 1 || ws.revoked) return; // the socket closed or was revoked during the lookup: no more lookups for it
+        liveChanged = Boolean(dbPlayer) && (roleVersions.get(dbPlayer.id) || 0) !== (before.get(dbPlayer.id) || 0);
         if (!liveChanged) break;
       }
       if (dbPlayer) {
