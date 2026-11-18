@@ -55,6 +55,24 @@ assert.match(history, /Follow @playtableverse on Instagram/);
 assert.ok(releases.some((r) => r.items.some((i) => /Leaving a game with others counts as a loss/.test(i.title))), 'the earlier release stays in the history');
 assert.ok(releases.every((r) => r.version && r.title && Array.isArray(r.items) && r.items.length > 0), 'every release has a version, title and items');
 assert.equal(new Set(releases.map((r) => r.version)).size, releases.length, 'versions are unique');
+// Release cleanup: inspect the full historical entry, not just the home highlights.
+// A fourth admin-only item would otherwise escape the first-three assertions above.
+const gameOverRelease = releases.find((r) => r.version === '2026-11-17-game-over-table');
+assert.ok(gameOverRelease, 'the game-over release remains in version history');
+assert.equal(gameOverRelease.date, '2026-11-17');
+assert.equal(gameOverRelease.title, 'One table at the end of a game');
+assert.deepEqual(Array.from(gameOverRelease.items, (item) => item.title), [
+  'Game XP at the end of a game, in one table',
+  'Your lifetime XP in each game',
+  'Level-up dialog',
+], 'the historical release keeps all three player-facing items in order');
+for (const item of gameOverRelease.items) {
+  assert.ok(typeof item.ico === 'string' && item.ico.trim(), `${item.title} has an icon`);
+  assert.ok(typeof item.text === 'string' && item.text.trim(), `${item.title} has explanatory text`);
+  assert.notEqual(item.voice, true, `${item.title} remains visible with voice chat off`);
+  assert.doesNotMatch(`${item.title}\n${item.text}`, /admin|sort|player directory/i,
+    'admin sorting and player-directory changes are not advertised in this release');
+}
 const appSource = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
 assert.match(appSource, /window\.TV_RELEASES/, 'the app reads the release history');
 assert.match(appSource, /openVersionHistory/, 'the account menu opens the version history');
