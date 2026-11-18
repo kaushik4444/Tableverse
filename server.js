@@ -297,6 +297,11 @@ function start(opts = {}) {
   // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
+  /** A role changed in the admin console: the live player takes it at once, so restricted games are judged by the new role. */
+  const applyLiveRole = ({ playerId, role }) => {
+    const p = players.get(playerId);
+    if (p && typeof role === 'string' && role) p.role = role;
+  };
   const closeSignedOutSockets = ({ playerId, token, tokenHash, exceptToken, replaced }) => {
     for (const ws of wss.clients) {
       const owner = ws.player || ws.pendingPlayer; // a socket still being checked belongs to its session too
@@ -390,7 +395,7 @@ function start(opts = {}) {
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
       env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
-      onSignedOut: closeSignedOutSockets, onAccountDeleted: handleAccountDeleted, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
+      onSignedOut: closeSignedOutSockets, onAccountDeleted: handleAccountDeleted, onRoleChanged: applyLiveRole, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
     }).routes,
     production,
     trustProxy,
@@ -587,6 +592,15 @@ function start(opts = {}) {
     else sendError(p, 'That game is not available right now.');
     return true;
   };
+  /**
+   * Human seats at a table whose current role may not play its game. Each person is judged by their live role (a demoted
+   * admin or a guest who upgraded is judged as they are now). A person with no live record is treated as not allowed.
+   */
+  const ineligibleHumans = (room) => room.members.filter((m) => {
+    if (m.bot) return false;
+    const mp = players.get(m.id);
+    return !mp || !gameFlags.isEnabled(room.gameId, roleOf(mp));
+  });
   function notifyAccount(playerId, event) {
     const recipient = players.get(playerId);
     if (!recipient || !recipient.connected) return; // live-only; DB records remain authoritative
@@ -1548,6 +1562,8 @@ function start(opts = {}) {
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
       // The socket may have closed while we waited: an offline person must not take a seat or start a play-time clock.
       if (!p.connected) return;
+      // The owner may restrict the game while the admission check was waiting: refuse again before any seat changes
+      if (refuseGame(p, room.gameId)) return;
       // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
@@ -1786,6 +1802,7 @@ function start(opts = {}) {
       if (!room) return;
       const def = games.get(room.gameId);
       if (refuseGame(p, room.gameId)) return;
+      if (ineligibleHumans(room).length) return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.');
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
@@ -1849,6 +1866,7 @@ function start(opts = {}) {
       // Anyone who lost access to a private table while the game was running leaves now, before the next round forms.
       await enforceAccess(room);
       if (refuseGame(p, room.gameId)) return; // it may have been switched off while the access check ran
+      if (ineligibleHumans(room).length) return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then rematch.');
       if (rooms.get(room.code) !== room || room.status !== 'finished' || room.hostId !== p.id) return; // the table changed while we checked
       clearTimeout(room.timer);
       room.game = null;
