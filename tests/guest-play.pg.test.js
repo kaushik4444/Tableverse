@@ -17,6 +17,7 @@ async function test(name, fn) {
 }
 const quiet = () => ({ log() {}, warn() {}, error() {} });
 const PW = 'TestPass123!';
+const until = async (fn, ms = 3000) => { const end = Date.now() + ms; while (Date.now() < end) { if (fn()) return true; await new Promise((r) => setTimeout(r, 25)); } return Boolean(fn()); }; // bounded wait: never passes by timing alone
 
 (async () => {
   const t = await testdb.create(); // exits (SKIPPED) when PostgreSQL tests are not configured
@@ -153,7 +154,8 @@ const PW = 'TestPass123!';
       const g = await newGuest('Race');
       const name = `race${seq++}`;
       const r = await requestUpgrade(g, `race.${seq}@test.local`, name);
-      await registerAndVerify(srv.port, { email: `racer.${seq++}@test.local`, username: name, displayName: 'Racer', password: PW });
+      // the other player takes the exact name while the request waits (exactUsername: no random digits added)
+      await registerAndVerify(srv.port, { email: `racer.${seq++}@test.local`, username: name, exactUsername: true, displayName: 'Racer', password: PW });
       const c = await useLink(r.json.debug.verifyToken);
       assert.equal(c.status, 400);
       assert.match(c.json.error, /taken before you confirmed/);
@@ -192,8 +194,9 @@ const PW = 'TestPass123!';
         ws.on('message', (d) => msgs.push(JSON.parse(d)));
         await new Promise((resolve) => ws.on('open', () => { ws.send(JSON.stringify({ t: 'hello' })); setTimeout(resolve, 300); }));
         ws.send(JSON.stringify({ t: 'create', gameId: 'wizard' }));
-        await new Promise((r) => setTimeout(r, 300));
+        const created = await until(() => msgs.some((m) => m.t === 'state' && m.room && m.room.gameId === 'wizard'));
         ws.close();
+        assert.ok(created, 'the registered player created the table: ' + JSON.stringify(msgs.slice(-3)));
         assert.equal(msgs.filter((m) => m.t === 'error' && m.code === 'guest_locked').length, 0, 'no account prompt for a registered player');
         assert.equal(msgs.filter((m) => m.t === 'error' && /not available/.test(m.message || '')).length, 0, 'not refused either');
       } finally {

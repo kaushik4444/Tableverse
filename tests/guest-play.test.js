@@ -26,6 +26,7 @@ function open(port, token) {
   });
 }
 const sent = (o, t) => o.msgs.filter((m) => m.t === t);
+const until = async (fn, ms = 3000) => { const end = Date.now() + ms; while (Date.now() < end) { if (fn()) return true; await new Promise((r) => setTimeout(r, 25)); } return Boolean(fn()); }; // bounded wait: never passes by timing alone
 
 (async () => {
   const off = await start({ port: 0, env: { ...process.env, GUEST_PLAY_ENABLED: 'false' } });
@@ -191,7 +192,8 @@ const sent = (o, t) => o.msgs.filter((m) => m.t === t);
       guestFeatures.setOne('rejoin', true);
       try {
         o.ws.send(JSON.stringify({ t: 'join', code }));
-        await wait(200);
+        const back = await until(() => sent(o, 'state').some((m) => m.room && m.room.code === code));
+        assert.ok(back, 'once open, the guest reaches the table again: ' + JSON.stringify(o.msgs.slice(-3)));
         assert.equal(sent(o, 'error').filter((m) => m.feature === 'rejoin').length, 1, 'no second refusal once open');
       } finally { guestFeatures.setOne('rejoin', false); }
       o.ws.close();

@@ -10,7 +10,7 @@ A guest is a visitor who plays without registering. The app makes a temporary ac
 
 | Setting | Where | Default | Effect |
 |---|---|---|---|
-| `GUEST_PLAY_ENABLED` | Render environment (never in a file) | unset = off | Only `true` allows new guest sessions (case-insensitive; surrounding spaces are ignored). Any other value, or unset, refuses `POST /api/auth/guest` with 403. To stop new guests, set `false` or unset it. |
+| `GUEST_PLAY_ENABLED` | Render environment (never in a file) | unset = off | Only the exact value `true` allows new guest sessions (lowercase, no spaces; `TRUE` or ` true ` do not count). Any other value, or unset, refuses `POST /api/auth/guest` with 403. To stop new guests, set `false` or unset it. |
 | `GUEST_SESSION_TTL_HOURS` | Render environment | 72 | How long a guest session lasts. Clamped to 1–168. Bad values use 72. |
 | `RL_GUEST_IP_LIMIT` | Render environment | built-in default | Guest sessions per IP address per hour. |
 | `RL_GUEST_ALL_LIMIT` | Render environment | built-in default | Guest sessions in total per hour (a cap on the whole service). |

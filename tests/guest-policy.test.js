@@ -11,7 +11,8 @@ test('guest play is off unless GUEST_PLAY_ENABLED is exactly "true" (fails close
   assert.equal(p.guestPlayEnabled({ GUEST_PLAY_ENABLED: 'false' }), false);
   assert.equal(p.guestPlayEnabled({ GUEST_PLAY_ENABLED: '1' }), false, '1 is not accepted');
   assert.equal(p.guestPlayEnabled({ GUEST_PLAY_ENABLED: 'yes' }), false);
-  assert.equal(p.guestPlayEnabled({ GUEST_PLAY_ENABLED: ' TRUE ' }), true, 'case and spaces are forgiven');
+  assert.equal(p.guestPlayEnabled({ GUEST_PLAY_ENABLED: 'TRUE' }), false, 'only the exact value enables it (fails closed)');
+  assert.equal(p.guestPlayEnabled({ GUEST_PLAY_ENABLED: ' true ' }), false, 'spaces are not forgiven either');
   assert.equal(p.guestPlayEnabled({ GUEST_PLAY_ENABLED: 'true' }), true);
 });
 
