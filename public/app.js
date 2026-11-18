@@ -483,6 +483,15 @@
     reports: 'Create a free account to report players or messages.',
   };
   const guestLockedHere = (feature) => !!S.isGuest && Array.isArray(S.guestLocked) && S.guestLocked.includes(feature);
+  /** Marks a control as locked for this guest (styled by [data-guest-lock]). Empty when the area is open. */
+  const lockAttr = (feature) => guestLockedHere(feature) ? ` data-guest-lock="${feature}" aria-disabled="true"` : '';
+  // A tap on a locked control shows the account reminder and sends nothing (the server would refuse it anyway).
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest && e.target.closest('[data-guest-lock]');
+    if (!el || !guestLockedHere(el.dataset.guestLock)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    openAuthSheet('register', GUEST_LOCK_TEXT[el.dataset.guestLock]);
+  }, true);
 
   // The auth sheet: a small dialog over the (public) home page. Logging in is never a place you get sent to —
   // it is a step you take when you try to play, and afterwards you land where you were heading.
@@ -1639,12 +1648,12 @@
     if (here && rel.kind !== 'me' && rel.kind !== 'bot') {
       others.push(prof && prof.blockedByMe
         ? `<button type="button" class="btn ghost"${busy} data-modal-act="cardUnblock">Unblock</button>`
-        : `<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock">🚫 Block</button>`);
+        : `<button type="button" class="btn ghost"${busy} data-modal-act="cardBlock"${lockAttr('blocking')}>🚫 Block</button>`);
     }
     // A report about a registered player (their conduct, not one message): a reason menu, like the chat report's.
     if (person.username && rel.kind !== 'me' && rel.kind !== 'bot' && rel.kind !== 'guest') {
       if (C.reporting) others.push(`<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-modal-act="cardReportSend" data-reason="${k}">${l}</button>`).join('')}<button type="button" class="btn ghost" data-modal-act="cardReport">Cancel</button></div>`);
-      else others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardReport" aria-expanded="false">🚩 Report player</button>`);
+      else others.push(`<button type="button" class="btn ghost"${busy} data-modal-act="cardReport" aria-expanded="false"${lockAttr('reports')}>🚩 Report player</button>`);
     }
     if (rel.kind !== 'me' && rel.kind !== 'bot') others.push(`<button type="button" class="btn ghost" data-modal-act="cardMute">${muted.has(person.id) ? '🔔 Unmute in chat' : '🔇 Mute in chat'}</button>`);
     return `<div class="pcard-head">${avatar(person, 'big')}<div><h3>${esc(person.name)}</h3><p>${sub}${person.id === S.id ? ' · you' : ''}</p>${conn}</div></div>${stats}${C.error ? `<p class="auth-msg" role="alert">${esc(C.error)}</p>` : ''}<div class="pcard-actions">${add.join('')}${others.join('')}</div>${S.guest && rel.kind === 'none' ? '<p class="pcard-note">Log in to add friends.</p>' : ''}`;
@@ -1717,7 +1726,7 @@
     if (m.sys) return `<div class="msg sys">${esc(m.text)}</div>`;
     const mine = m.id === S.id;
     // Block and report are enforced by the server; these buttons only send the request.
-    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}" data-mid="${esc(m.mid || '')}" title="Hide this player's table chat and voice from you, and stop invitations between you. You can still share a table. They are not told." aria-label="Block ${esc(m.name)}">Block</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}">Report</button>` : ''}</span>`;
+    const actions = mine ? '' : `<span class="mod-actions"><button type="button" class="mod-btn" data-mod="block" data-id="${esc(m.id)}"${lockAttr('blocking')} data-mid="${esc(m.mid || '')}" title="Hide this player's table chat and voice from you, and stop invitations between you. You can still share a table. They are not told." aria-label="Block ${esc(m.name)}">Block</button>${m.mid ? `<button type="button" class="mod-btn" data-mod="report-open" data-mid="${esc(m.mid)}"${lockAttr('reports')}>Report</button>` : ''}</span>`;
     const menu = !mine && m.mid && S.reportMenuFor === m.mid ? reportMenuHTML(m.mid) : '';
     return `<div class="msg ${mine ? 'mine' : ''}"><span class="mav" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span><div class="mb"><b>${esc(m.name)}${m.spec ? ' <i title="Spectator">👁</i>' : ''}</b><p>${esc(m.text)}</p>${actions}${menu}</div></div>`;
   }
@@ -2103,10 +2112,10 @@
     // Unblock only for a block this viewer made; a block the other player made is theirs to lift.
     const blockBtn = d.blockedByMe
       ? '<button type="button" class="btn ghost small" data-act="playerUnblock">Unblock</button>'
-      : '<button type="button" class="btn ghost small" data-act="playerBlock">🚫 Block</button>';
+      : `<button type="button" class="btn ghost small" data-act="playerBlock"${lockAttr('blocking')}>🚫 Block</button>`;
     const reportPart = P.reporting
       ? `<div class="report-menu" role="group" aria-label="Reason for report">${REPORT_REASONS.map(([k, l]) => `<button type="button" class="mod-btn" data-act="playerReportSend" data-reason="${k}">${l}</button>`).join('')}<button type="button" class="btn ghost small" data-act="playerReport" aria-expanded="true">Cancel</button></div>`
-      : '<button type="button" class="btn ghost small" data-act="playerReport" aria-expanded="false">🚩 Report player</button>';
+          : `<button type="button" class="btn ghost small" data-act="playerReport" aria-expanded="false"${lockAttr('reports')}>🚩 Report player</button>`;
     return `<div class="pp-actions">${blockBtn}${reportPart}</div>`;
   }
 

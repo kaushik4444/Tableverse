@@ -692,5 +692,8 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .guest-nudge-text span, .guest-life { font-size: 14px; opacity: .9; }
 .guest-nudge-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .guest-locked { font-weight: 600; }
+/* A control the owner has locked for guests: still tappable (it opens the account reminder), but it says so. */
+[data-guest-lock] { opacity: .65; }
+[data-guest-lock]::after { content: " 🔒"; font-size: .9em; }
 .guest-sheet form input { width: 100%; box-sizing: border-box; }
 @media (max-width: 480px) { .guest-nudge { padding: 10px 12px; } .guest-nudge-actions .btn { flex: 1 1 auto; } }
