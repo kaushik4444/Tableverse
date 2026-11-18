@@ -716,8 +716,9 @@
     const first = document.getElementById('guestName');
     if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
   }
-  // The guest sheet's "create a free account" and the reminder's button both open the register sheet.
-  if (window.TvGuest) window.TvGuest.hooks.upgrade = () => openAuthSheet('register');
+  // The guest sheet's "create a free account" and the reminder's button both open the register sheet. guest.js loads after this
+  // file, so it announces the tap with an event rather than through a hook that would not exist yet.
+  document.addEventListener('tv:guest-upgrade', () => openAuthSheet('register'));
 
   /**
    * Asks to turn the guest into an account. Nothing changes yet: the server e-mails a confirmation link, and the guest stays a

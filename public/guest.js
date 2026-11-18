@@ -95,7 +95,10 @@
       hooks.dismissed(ctx);
       return;
     }
-    if (el.dataset.guestAct === 'upgrade') hooks.upgrade();
+    if (el.dataset.guestAct === 'upgrade') {
+      hooks.upgrade();
+      if (typeof CustomEvent === 'function' && document.dispatchEvent) document.dispatchEvent(new CustomEvent('tv:guest-upgrade'));
+    }
   });
 
   window.TvGuest = { canShow, markShown, dismiss, nudgeHTML, lockedLabel, guestSheetHTML, hooks, DISMISS, SHOW_GAP, KEY };
