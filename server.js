@@ -300,9 +300,18 @@ function start(opts = {}) {
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
   /** A role changed in the admin console: the live player takes it at once, so restricted games are judged by the new role. */
-  const applyLiveRole = ({ playerId, role }) => {
+  // role changes per account, kept even when the account is not connected: a stored-role read that overlaps a change to
+  // that same account is read again, so an older stored role cannot replace it (changes to other accounts do not matter)
+  const roleVersions = new Map();
+  const applyLiveRole = ({ playerId, role, unverified = false }) => {
+    roleVersions.set(playerId, (roleVersions.get(playerId) || 0) + 1);
     const p = players.get(playerId);
-    if (p && typeof role === 'string' && role) p.role = role;
+    if (!p || typeof role !== 'string' || !role) return;
+    p.role = role;
+    p.roleUnverified = unverified === true; // set when the stored role could not be read back (fail closed)
+    // the browser keeps the role it was given at the welcome: send the new role and the games it may now play
+    send(p.ws, { t: 'role', role: roleOf(p) });
+    send(p.ws, { t: 'games', games: gameListFor(games.list(), p) });
   };
   const closeSignedOutSockets = ({ playerId, token, tokenHash, exceptToken, replaced }) => {
     for (const ws of wss.clients) {
@@ -426,11 +435,21 @@ function start(opts = {}) {
     // a guest's e-mail link was used: the same player is now an account, so the live session is no longer a guest for game gates
     // A guest's account was confirmed (from the e-mail link, in any browser): the live player and every open socket of it
     // see the account at once, so the page drops its guest state and the guest restrictions stop applying.
-    onGuestUpgraded: ({ playerId, username }) => {
+    onGuestUpgraded: ({ playerId, username, displayName }) => {
       const p = players.get(playerId);
       if (!p) return;
       p.isAnonymous = false;
       p.username = username || p.username || null;
+      if (displayName) {
+        // the name chosen on the account step is the live name at once (same rule as a profile change: running seats keep theirs)
+        p.name = displayName;
+        const room = rooms.get(p.room);
+        const m = room && room.members.find((x) => x.id === p.id);
+        if (m && room.status !== 'playing') m.name = p.name;
+        const s = room && room.spectators.find((x) => x.id === p.id);
+        if (s) s.name = p.name;
+        if (room) broadcast(room);
+      }
       if (!p.role || p.role === 'guest') p.role = 'user'; // owner and admin keep their role
       for (const ws of wss.clients) {
         const owner = ws.player || ws.pendingPlayer;
@@ -1507,7 +1526,7 @@ function start(opts = {}) {
     },
 
     async report(p, msg) {
-      if (guestBarred(p, 'reports')) return;
+      if (guestLocked(p, 'reports')) return;
       const room = rooms.get(p.room);
       if (!room) return sendError(p, 'Join a table to report a message.');
       const checked = moderation.validateReport(msg);
@@ -2004,8 +2023,21 @@ function start(opts = {}) {
     }
 
     let p = tokens.get(presentedToken) || null;
+    // a cached session whose role could not be read back is read again from the database, so a promotion is not lost
+    if (p && p.roleUnverified) p = null;
     if (!p) {
-      const dbPlayer = await dbPlayers.authenticateToken(presentedToken);
+      // a live role change that lands while the stored role is read is newer than what was read: read again (three tries at most)
+      let dbPlayer = null;
+      let liveChanged = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const before = new Map(roleVersions);
+        dbPlayer = await dbPlayers.authenticateToken(presentedToken);
+        if (ws.readyState !== 1 || ws.revoked) return; // the socket closed or was revoked during the lookup: no more lookups for it
+        liveChanged = Boolean(dbPlayer) && (roleVersions.get(dbPlayer.id) || 0) !== (before.get(dbPlayer.id) || 0);
+        if (!liveChanged) break;
+      }
+      // every read overlapped a role change to this account and no live record holds the newer role: do not guess; the client reconnects
+      if (liveChanged && dbPlayer && !players.get(dbPlayer.id)) return ws.close(1013, 'role changed while signing in; reconnect');
       if (dbPlayer) {
         const known = players.get(dbPlayer.id);
         if (known) {
@@ -2016,7 +2048,10 @@ function start(opts = {}) {
           p.username = dbPlayer.username || null;
           p.createdAt = dbPlayer.created_at;
           p.isAnonymous = Boolean(dbPlayer.is_anonymous);
-          p.role = dbPlayer.role || 'user';
+          if (!liveChanged) {
+            p.role = dbPlayer.role || 'user';
+            p.roleUnverified = false;
+          }
         } else {
           p = {
             id: dbPlayer.id,

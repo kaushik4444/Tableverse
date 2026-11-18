@@ -108,7 +108,9 @@ const until = async (fn, ms = 3000) => { const end = Date.now() + ms; while (Dat
       const token = decodeURIComponent(guest.browser.cookies.get('ct_session'));
       const o = await open(port, token);
       o.ws.send(JSON.stringify({ t: 'create', gameId: 'ludo' }));
-      await wait(200);
+      // wait for the table itself, not a fixed sleep: an unrelated error would otherwise pass this check
+      const made = await until(() => sent(o, 'state').some((m) => m.room && m.room.gameId === 'ludo'));
+      assert.ok(made, 'the ludo table is created: ' + JSON.stringify(o.msgs.slice(-3)));
       assert.equal(sent(o, 'error').filter((m) => m.code === 'guest_locked').length, 0);
       o.ws.close();
     });

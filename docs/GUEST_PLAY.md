@@ -42,7 +42,7 @@ Guests can always **read and send table chat**, and play the games their access 
 | Rejoin a table they left (`rejoin`) | locked | A guest who leaves a table on purpose cannot get back in. A dropped connection still reconnects, whatever the switch says. |
 | Open player profiles and stats (`profiles`) | locked | Tapping a player opens the account reminder. The profile route answers 403 `guest_locked`. |
 | Block players (`blocking`) | locked | The Block buttons are marked with a lock and open the account reminder. The server refuses the block. |
-| Report players and chat messages (`reports`) | locked | The Report buttons are marked with a lock and open the account reminder. The server refuses the report. |
+| Report chat messages (`reports`) | locked | The Report buttons on chat messages are marked with a lock and open the account reminder. Reporting a player always needs an account, whatever this switch says. |
 
 - **Friend requests are always account-only.** They are not a switch. A guest gets 403 `guest_locked` (feature `friends`) on every friends route.
 - **Chat stays open** to guests. A locked switch never stops chat.

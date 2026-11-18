@@ -61,9 +61,10 @@
   let view = null; // AbortController of the tab on screen: switching tabs cancels the requests of the one before
   let generation = 0; // counts tab switches: an answer that arrives for an earlier tab is dropped, even without AbortController
   const cancelled = () => { const e = new Error('cancelled'); e.name = 'AbortError'; return e; };
-  async function api(path, body, retried) {
+  // keep: the request finishes even if the owner leaves the tab (a save that the server has already accepted must be seen)
+  async function api(path, body, retried, keep = false) {
     const mine = generation;
-    const opts = { credentials: 'same-origin', headers: {}, signal: view ? view.signal : undefined };
+    const opts = { credentials: 'same-origin', headers: {}, signal: view && !keep ? view.signal : undefined };
     if (body !== undefined) {
       opts.method = 'POST';
       opts.headers = { 'Content-Type': 'application/json', 'X-CSRF-Token': await csrf() };
@@ -72,8 +73,8 @@
     const r = await fetch(path, opts);
     // an abort while the body is read must reach the cancellation guard, not look like an empty answer
     const out = await r.json().catch((e) => { if (e && e.name === 'AbortError') throw e; return {}; });
-    if (mine !== generation) throw cancelled(); // the tab changed while this request was in flight
-    if (r.status === 403 && /CSRF/i.test(out.error || '') && !retried && body !== undefined) { await csrf(true); return api(path, body, true); }
+    if (mine !== generation && !keep) throw cancelled(); // the tab changed while this request was in flight
+    if (r.status === 403 && /CSRF/i.test(out.error || '') && !retried && body !== undefined) { await csrf(true); return api(path, body, true, keep); }
     if (!r.ok || out.ok === false) { const e = new Error(out.error || `Request failed (${r.status})`); e.status = r.status; throw e; }
     return out;
   }
@@ -473,7 +474,11 @@
   }
 
   // ---------------------------------------------------------------- games (counts and averages only)
+  // per game: the value still being saved (kept across redraws) and the queue that saves each game's changes one at a time
+  const gameFlagPending = new Map();
+  const gameFlagQueue = new Map();
   async function gamesTab(days = 30) {
+    state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
     const gen = state.gen;
     const o = await api(`/api/admin/games?days=${days}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
@@ -495,19 +500,31 @@
     const label = (m) => labels[m] || m;
     const opts = (cur) => o.modes.map((m) => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(label(m))}</option>`).join('');
     const pill = (g) => (g.access === 'on' ? '<span class="ad-pill">on</span>' : `<span class="ad-pill warn">${esc(label(g.access))}</span>`);
-    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}">${opts(g.access)}</select></td></tr>`).join('');
+    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${gameFlagPending.has(g.id) ? ' disabled aria-disabled="true"' : ''}>${opts(gameFlagPending.has(g.id) ? gameFlagPending.get(g.id) : g.access)}</select></td></tr>`).join('');
     main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Game switches</h3>
       <p class="ad-muted">Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players play and refuses guests. "Disabled for all" keeps the game for the owner only. A game that is switched off stays listed, and new tables, starts and rematches are refused for the roles it excludes. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
       <p id="gMsg" class="ad-msg" role="status"></p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
-    main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = async () => {
-      if (sel.disabled) return;
-      sel.disabled = true; // one request at a time: a second change would only repeat the same one
-      try {
-        await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value });
-        state.gen += 1; // a redraw still in flight is dropped
-        gamesTab().catch(fail); // redraw with the new state
-      } catch (e) { sel.disabled = false; say('gMsg', e.message, 'err'); gamesTab().catch(fail); }
+    // a redraw shows only its newest request's result: an older redraw that fails must not replace the current view
+    const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab(state.gamesDays || 30).catch((e) => { if (mine === state.gen) fail(e); }); };
+    main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
+      const id = sel.dataset.gaccess; const value = sel.value; const visit = generation;
+      gameFlagPending.set(id, value); sel.disabled = true; // the newest choice stays shown and locked until it is saved
+      // one save per game at a time, in the order the owner chose them, so an earlier save cannot land after a later one
+      const run = (gameFlagQueue.get(id) || Promise.resolve()).then(() => api('/api/admin/game-flags', { gameId: id, access: value }, false, true));
+      const settled = run.catch(() => {});
+      gameFlagQueue.set(id, settled);
+      settled.then(() => { if (gameFlagQueue.get(id) === settled) gameFlagQueue.delete(id); });
+      run.then(() => {
+        if (gameFlagPending.get(id) === value) gameFlagPending.delete(id);
+        if (state.tab === 'games') redrawGames(); // the committed flags are shown, whichever visit started the save
+      }, (e) => {
+        if (gameFlagPending.get(id) === value) gameFlagPending.delete(id);
+        if (state.tab !== 'games') return; // the owner has moved to another view: leave it alone
+        // the current view is redrawn so the selector unlocks; an error from an earlier visit is not shown in this one
+        if (visit !== generation || e.name === 'AbortError') { redrawGames(); return; }
+        redrawGames().then(() => say('gMsg', e.message, 'err'));
+      });
     }; });
   }
 
@@ -788,10 +805,10 @@
       // Redeploy needs the same Render settings as this history: without them the button stays off and says why.
       const rdForm = document.getElementById('rdForm');
       if (rdForm) {
-        rdForm.dataset.ready = r.configured ? '1' : '0';
-        if (!r.configured) say('rdMsg', 'Redeploy is not set up on this server (RENDER_API_KEY, RENDER_SERVICE_ID and RENDER_OWNER_ID are needed).', 'err');
+        rdForm.dataset.ready = r.redeployReady ? '1' : '0';
+        if (!r.redeployReady) say('rdMsg', 'Redeploy is not set up on this server (RENDER_API_KEY and RENDER_SERVICE_ID are needed).', 'err');
         const rdBtn = document.getElementById('rdBtn');
-        if (rdBtn) rdBtn.disabled = !r.configured || rdForm.confirm.value !== 'REDEPLOY';
+        if (rdBtn) rdBtn.disabled = !r.redeployReady || rdForm.confirm.value !== 'REDEPLOY';
       }
       if (!r.configured) { out.innerHTML = '<p class="ad-muted">Render history is not set up on this server. Set RENDER_API_KEY, RENDER_SERVICE_ID and RENDER_OWNER_ID in the Render service\'s environment.</p>'; return; }
       if (r.error) { out.innerHTML = `<p class="ad-msg err">${esc(r.error)}</p>`; return; }

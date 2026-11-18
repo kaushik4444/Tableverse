@@ -232,7 +232,7 @@ async function registerEmail({ email, username, password, displayName, avatar, a
  * id, so every match and friend stays attached and nothing is copied. The e-mail is verified at that moment, so the account is
  * never left unverified. The guest's session token is kept, so the game in progress is not interrupted.
  */
-async function requestGuestUpgrade({ playerId, email, username, password, adultConfirmed }) {
+async function requestGuestUpgrade({ playerId, email, username, password, adultConfirmed, displayName }) {
   if (!db.hasDatabase()) throw new AuthError('Creating an account requires PostgreSQL (set DATABASE_URL).', 503);
   if (!isEmail(email)) throw new AuthError('Please enter a valid email address.');
   if (adultConfirmed !== true) throw new AuthError('You must confirm that you are 18 or older to create an account.', 400);
@@ -241,6 +241,8 @@ async function requestGuestUpgrade({ playerId, email, username, password, adultC
   if (!isUsername(u)) throw new AuthError('Username must be 3-24 chars: lowercase letters, numbers, underscore.');
   const weak = passwordPolicy.check(password, { email: e, username: u });
   if (weak) throw new AuthError(weak, 400);
+  // the display name is optional text; anything else is refused before any work (String() would coerce objects)
+  if (displayName !== undefined && displayName !== null && typeof displayName !== 'string') throw new AuthError('Display name must be text.', 400);
   const pwHash = await hashPassword(password);
 
   try {
@@ -256,10 +258,12 @@ async function requestGuestUpgrade({ playerId, email, username, password, adultC
       if (existsEmail.rows.length) return { pending: false, alreadyRegistered: true, email: e };
 
       const raw = dbPlayers.generateToken();
+      // the name the guest chose on the account step; blank keeps the current name (applied when the link is used)
+      const name = typeof displayName === 'string' && displayName.trim() ? cleanName(displayName) : null;
       await client.query(
-        `INSERT INTO guest_upgrades (player_id, email, username, password_hash, token_hash, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [playerId, e, u, pwHash, hashToken(raw), expiresAt(verifyTtlMin())]
+        `INSERT INTO guest_upgrades (player_id, email, username, password_hash, token_hash, expires_at, display_name)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [playerId, e, u, pwHash, hashToken(raw), expiresAt(verifyTtlMin()), name]
       );
       return { pending: true, alreadyRegistered: false, verifyToken: raw, email: e, username: u };
     });
@@ -288,7 +292,7 @@ async function completeGuestUpgrade(rawToken) {
       if (!owner.rows.length) return null;
       await client.query('SELECT id FROM players WHERE id = $1 FOR UPDATE', [owner.rows[0].player_id]);
       const found = await client.query(
-        `SELECT id, player_id, email, username, password_hash, (expires_at > NOW()) AS live
+        `SELECT id, player_id, email, username, password_hash, display_name, (expires_at > NOW()) AS live
            FROM guest_upgrades WHERE token_hash = $1 FOR UPDATE`,
         [tokenHash]
       );
@@ -304,10 +308,11 @@ async function completeGuestUpgrade(rawToken) {
       if (takenUsername.rows.length || takenEmail.rows.length) return { upgraded: false, error: UPGRADE_CHANGED };
 
       const p = await client.query(
-        `UPDATE players SET username = $2, is_anonymous = FALSE, adult_confirmed_at = NOW(), last_seen_at = NOW()
+        `UPDATE players SET username = $2, is_anonymous = FALSE, adult_confirmed_at = NOW(), last_seen_at = NOW(),
+                display_name = COALESCE($3, display_name)
          WHERE id = $1
-         RETURNING id, username`,
-        [pending.player_id, pending.username]
+         RETURNING id, username, display_name`,
+        [pending.player_id, pending.username, pending.display_name]
       );
       // the session the guest has now was short (the guest lifetime); the account gets the normal session length
       await client.query(
@@ -320,7 +325,7 @@ async function completeGuestUpgrade(rawToken) {
          VALUES ($1, $2, $3, $3, $4, NOW())`,
         [p.rows[0].id, PROVIDER_EMAIL, pending.email, pending.password_hash]
       );
-      return { upgraded: true, playerId: p.rows[0].id, username: p.rows[0].username };
+      return { upgraded: true, playerId: p.rows[0].id, username: p.rows[0].username, displayName: p.rows[0].display_name };
     });
   } catch (err) {
     if (err && err.code === '23505') {
@@ -764,9 +769,22 @@ async function purgeExpired() {
     // records (match_players.player_id becomes NULL). A guest that has an account now (is_anonymous = FALSE) is never touched.
     // a pending guest upgrade is removed a day after its link ended (a used link is removed at once)
     upgrades: await run("DELETE FROM guest_upgrades WHERE expires_at < NOW() - INTERVAL '1 day'"),
-    guests: await run(`DELETE FROM players p
-                       WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day'
-                         AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())`),
+    guests: await db.withTransaction(async (client) => {
+      // lock each candidate row first (a row another request holds is skipped and kept for the next run),
+      // then re-check the rule in a new statement, so a link made while the row was locked is seen before the delete
+      // the same keep-rules as the DELETE below, so a guest with a live session or a valid link is never locked by housekeeping
+      const locked = await client.query(
+        "SELECT p.id FROM players p WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day'" +
+        " AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())" +
+        " AND NOT EXISTS (SELECT 1 FROM guest_upgrades u WHERE u.player_id = p.id AND u.expires_at > NOW())" +
+        " FOR UPDATE OF p SKIP LOCKED");
+      if (locked.rowCount === 0) return 0;
+      return (await client.query(
+        "DELETE FROM players p WHERE p.id = ANY($1)" +
+        " AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())" +
+        " AND NOT EXISTS (SELECT 1 FROM guest_upgrades u WHERE u.player_id = p.id AND u.expires_at > NOW())",
+        [locked.rows.map((r) => r.id)])).rowCount;
+    }),
   };
 }
 

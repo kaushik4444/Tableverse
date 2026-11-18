@@ -496,7 +496,20 @@
   // The auth sheet: a small dialog over the (public) home page. Logging in is never a place you get sent to —
   // it is a step you take when you try to play, and afterwards you land where you were heading.
   // `isError` makes the message an alert, so a failed login or sign-up is announced at once by screen readers.
+  // the sign-in sheet may already be open when the server's answer arrives: add or remove its guest option to match
+  function syncGuestOption() {
+    const overlay = document.getElementById('auth-overlay');
+    if (!overlay) return;
+    const want = S.guestPlay && !S.isGuest;
+    const have = overlay.querySelector('[data-act="playAsGuest"]');
+    if (want && !have) { const tabs = overlay.querySelector('.auth-tabs'); if (tabs) tabs.insertAdjacentHTML('afterend', '<button type="button" class="btn ghost auth-guest" data-act="playAsGuest">Play as a guest</button>'); }
+    if (!want && have) have.remove();
+  }
+  // the display name the owner typed when a sign-up was refused: the sheet is rebuilt with it, not with the guest's old name
+  let pendingRegisterName = null;
   function openAuthSheet(tab = 'login', msg = '', isError = false) {
+    const draftName = pendingRegisterName;
+    pendingRegisterName = null;
     S.auth = tab;
     closeOverlay();
     const loginOn = tab === 'login';
@@ -511,6 +524,7 @@
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
       </div>
+      ${S.guestPlay && !S.isGuest ? '<button type="button" class="btn ghost auth-guest" data-act="playAsGuest">Play as a guest</button>' : ''}
       <div id="googleSlot" class="google-slot" hidden><div id="googleBtn"></div><label class="check-row"><input id="googleRemember" type="checkbox"> Keep me signed in on this device</label><p class="auth-or"><span>or use your email</span></p></div>
       ${loginOn ? `
         <form id="loginForm" class="auth-form">
@@ -522,7 +536,7 @@
         <div class="row auth-links"><button class="btn ghost small" data-act="forgotPassword">Forgot password?</button>${resend}</div>
       ` : `
         <form id="registerForm" class="auth-form">
-          <input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname">
+          <input id="registerName" type="text" maxlength="20" required placeholder="Display name" autocomplete="nickname" value="${esc(draftName ?? (S.isGuest ? (S.name || '') : ''))}">
           <input id="registerUsername" type="text" maxlength="24" required pattern="[a-z0-9_]{3,24}" placeholder="Username (lowercase)" autocomplete="username" autocapitalize="off" spellcheck="false">
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
@@ -719,20 +733,21 @@
   // The guest sheet's "create a free account" and the reminder's button both open the register sheet. guest.js loads after this
   // file, so it announces the tap with an event rather than through a hook that would not exist yet.
   document.addEventListener('tv:guest-upgrade', () => openAuthSheet('register'));
+  document.addEventListener('tv:guest-close', () => closeOverlay());
 
   /**
    * Asks to turn the guest into an account. Nothing changes yet: the server e-mails a confirmation link, and the guest stays a
    * guest (same game, same locks) until that link is used. The account then takes effect on the server at once.
    */
-  async function doUpgradeGuest(username, email, password, adultConfirmed) {
-    const out = await withBusy('Sending your confirmation…', () => postJson('/api/auth/upgrade-guest', { username, email, password, adultConfirmed: adultConfirmed === true }));
+  async function doUpgradeGuest(name, username, email, password, adultConfirmed) {
+    const out = await withBusy('Sending your confirmation…', () => postJson('/api/auth/upgrade-guest', { displayName: name, username, email, password, adultConfirmed: adultConfirmed === true }));
     if (out.csrfToken) S.csrf = out.csrfToken;
     closeOverlay();
     toast(out.message || 'Check your email to confirm your account.');
   }
 
   async function doRegister(name, username, email, password, adultConfirmed) {
-    if (S.isGuest) return doUpgradeGuest(username, email, password, adultConfirmed);
+    if (S.isGuest) return doUpgradeGuest(name, username, email, password, adultConfirmed);
     const out = await withBusy('Creating your account…', () => postJson('/api/auth/register', { displayName: name, username, email, password, avatar: S.avatar || undefined, adultConfirmed: adultConfirmed === true }));
     S.token = '';
     if (out.csrfToken) S.csrf = out.csrfToken;
@@ -990,10 +1005,14 @@
       if (JSON.stringify(next) !== JSON.stringify(S.banners)) { S.banners = next; render(); }
     } catch { /* offline: keep what is shown */ }
   }
+  // only the newest request may set the staff flag, so a delayed older answer cannot undo a newer role change
+  let staffHintSeq = 0;
   async function loadStaffHint() {
+    const seq = ++staffHintSeq;
     try {
       const r = await fetch('/api/admin/me', { credentials: 'same-origin' });
       const out = await r.json();
+      if (seq !== staffHintSeq) return;
       const staff = !!(out && out.ok && out.isAdmin);
       if (staff !== S.isStaff) { S.isStaff = staff; render(); }
     } catch { /* ignore */ }
@@ -1080,6 +1099,7 @@
       if (out && out.ok) {
         S.games = out.games || [];
         S.guestPlay = out.guestPlay === true;
+        syncGuestOption();
         S.publicTables = out.tables || [];
         S.announcement = typeof out.announcement === 'string' ? out.announcement : '';
         // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
@@ -1205,6 +1225,13 @@
     if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
+      case 'role': {
+        // the owner changed this account's role while it was connected
+        S.role = m.role; S.isGuest = m.role === 'guest';
+        loadStaffHint();
+        render();
+        break;
+      }
       case 'games': {
         // the owner switched a game on or off: the home page and the create buttons update at once
         S.games = m.games;
@@ -1428,6 +1455,7 @@
       try {
         await doRegister(name, username, email, password, adultConfirmed);
       } catch (err) {
+        pendingRegisterName = name; // keep what was typed; the password is left blank
         openAuthSheet('register', err.message || 'Registration failed', true);
       }
     }
@@ -1450,7 +1478,7 @@
   document.addEventListener('keydown', (e) => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.pseat[role="button"]')) { e.preventDefault(); openPlayerCard(e.target.dataset.pid); return; }
     if (e.key !== 'Escape') return;
-    if (S.auth) closeOverlay();
+    if (S.auth || document.getElementById('auth-overlay')) closeOverlay();
     else if (document.getElementById('modal-overlay')) closeModal();
     else if (S.toolsOpen) { setTools(false); document.querySelector('.tb-more-btn')?.focus(); }
     else if (S.bellOpen) { S.bellOpen = false; render(); document.querySelector('.tb-bell')?.focus(); }

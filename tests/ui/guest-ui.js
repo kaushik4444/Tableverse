@@ -30,6 +30,19 @@ const guestSession = () => ({ ok: true, authenticated: true, isGuest: true, role
     }
   });
 
+  await test('a signed-out player who taps Create table is offered "Play as a guest" in the sign-in sheet', async () => {
+    const srv = await serve({ 'GET /api/auth/session': () => anonymous(), 'GET /api/auth/csrf': () => ({ csrfToken: 'c' }), 'GET /api/games': () => ({ ok: true, guestPlay: true, games: snapshotGames() }) });
+    const { page, ctx } = await scriptedPage(browser, { messages: [] });
+    await page.goto(srv.url + '/');
+    await page.waitForSelector('[data-act="create"]:not([disabled])', { timeout: 8000 });
+    await page.click('[data-act="create"]:not([disabled])');
+    await page.waitForSelector('#auth-overlay .auth-sheet', { timeout: 4000 });
+    assert.equal(await page.locator('#auth-overlay [data-act="playAsGuest"]').count(), 1, 'the sign-in sheet offers the guest option');
+    await page.click('#auth-overlay [data-act="playAsGuest"]');
+    await page.waitForSelector('#guestName', { timeout: 4000 });
+    await ctx.close(); srv.server.close();
+  });
+
   await test('"Play as a guest" opens the name sheet, and submitting it starts a guest visit', async () => {
     const seen = {};
     let signedIn = false;
