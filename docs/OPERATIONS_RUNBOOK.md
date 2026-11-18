@@ -50,6 +50,17 @@ Watch `rssMB` (Render free has 512 MB), `pending`/`failed` (a database problem) 
 ## What happens to players on a restart
 Tables, games in progress, chat and presence live in memory and are **lost** on every restart or deploy. Players get a notice and a normal reconnect; they must create a new table. Unfinished games are not recorded. Finished matches are written to PostgreSQL (retried, idempotent) and the server waits up to 15 s for pending writes on SIGTERM. Deploy when few tables are active.
 
+## Guest switches and owner redeploy (admin console)
+
+**Lock or unlock a guest area (staff: admin or owner).** Open the admin console, **Guests** tab, and tick or untick a feature. The change is stored and applied to the server at once, and written to the audit log. Guests who are already connected see it after they reconnect. Areas and defaults are listed in `docs/GUEST_PLAY.md` ("What guests may do"). Chat is never locked.
+
+**Redeploy the app (owner only).** Open **Logs**, scroll to **Redeploy the app**, and type `REDEPLOY`. The button stays off until the word is typed and Render is set up.
+- What it does: asks Render to build and start the latest commit of the service. Connected players are disconnected for a few minutes and then reconnect. Use it when the app is stuck, not for ordinary changes; a new commit reaches production by the usual release process.
+- A cooldown of five minutes applies. A second request inside it gets 429 with the time to wait. A request that Render refused also starts the cooldown.
+- Every request is written to the audit log (`render.redeploy`) with whether Render accepted it. The browser never shows Render's own answer, only a short message with the HTTP status.
+- **Render settings needed:** `RENDER_API_KEY` (an API key with permission to deploy this service) and `RENDER_SERVICE_ID`. `RENDER_OWNER_ID` is used by the log view only. If the key lacks deploy rights, the page shows "Render answered with HTTP <status>. Check that the API key can deploy this service." and the fix is to create a key with deploy rights in Render's account settings and set it in the service's environment. Do not paste the key anywhere else.
+- Whether these variables are set in production is not checked by the code or the tests. Check the Render dashboard before relying on the button.
+
 ## Deploy
 1. CI must be green on the PR (build, unit, PostgreSQL, browser, Docker, audit).
 2. Merge to `main`; Render redeploys from the blueprint (`npm ci`, `npm start`).

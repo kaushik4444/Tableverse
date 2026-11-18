@@ -332,7 +332,7 @@ Render dashboard or GitHub settings.
 | `RELEASE_MERGE_METHOD` | `merge` (default when unset) or `squash` | Optional | GitHub repository variable | `scripts/release/promote.js` | Owner decision | Next release run |
 | `RELEASE_FREEZE` | `true` stops releases | Optional | GitHub repository variable | `scripts/release/promote.js` | Owner, during incidents | Next run |
 | `GITHUB_TOKEN` | Built-in workflow token | Provided by GitHub | Workflow | release and cleanup jobs | none; not a secret you set | per run |
-| `RENDER_API_KEY`, `RENDER_SERVICE_ID`, `RENDER_OWNER_ID` | Render API access for the admin log view | Optional | Render (secret for the key) | `lib/renderLogs.js` | Rotate in Render | Redeploy |
+| `RENDER_API_KEY`, `RENDER_SERVICE_ID`, `RENDER_OWNER_ID` | Render API access: the admin Logs view (`lib/renderLogs.js`) and the owner's redeploy (`lib/renderDeploy.js`, which needs the key to have deploy rights on the service). `RENDER_OWNER_ID` is used by the log view only. | Optional | Render (secret for the key) | `lib/renderLogs.js`, `lib/renderDeploy.js` | Rotate in Render | Redeploy |
 | `RENDER_GIT_COMMIT` | Commit that Render built (set by Render) | Set by Render | Render | `server.js` | none | none |
 
 Local development uses `.env.local` (copy of `.env.local.example`, git-ignored). `.env.example` is created in the local development PR
@@ -403,6 +403,7 @@ Tables (from `db/migrations/*.sql`, which run in order and are recorded in `sche
 - Matches: `matches`, `match_participants`.
 - Moderation and support: `chat_reports`, `feedback`, `player_blocks`.
 - Admin and communication: `admin_audit_log`, `announcements`, `announcement_dismissals`, `email_broadcasts`, `email_broadcast_recipients`.
+- Guest play: `guest_upgrades` (pending guest-to-account requests, migration 031), `guest_features` (the owner's guest switches, migration 032; locked by default; `updated_by` is the staff account's id, with no foreign key, so it is kept as a plain id when that account is deleted; the table is configuration and is kept by cleanup).
 - Analytics: `analytics_daily`, `analytics_active`, `analytics_batches`, `analytics_meta`.
 
 Relationships in short: `players` is the root. `auth_identities`, `auth_sessions` and `auth_devices` reference a player. `matches` has many

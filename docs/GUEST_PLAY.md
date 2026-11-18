@@ -32,6 +32,27 @@ The server checks the role when a table is created, joined, started or rematched
 
 Code: `public/game-access.js` (rule, shared by server and page), `lib/gameFlags.js`, `lib/adminRoutes.js`, `db/admin.js`, migration `db/migrations/030_game_access.sql`.
 
+## What guests may do (switches in the admin console)
+
+Guests can always **read and send table chat**, and play the games their access mode allows. Everything else below is **locked for guests by default**. Staff (admin or owner) open or lock each area in the admin console, **Guests** tab. A switch is stored in the database (migration `032_guest_features`, table `guest_features`), not in an environment variable, and it takes effect on the server at once.
+
+| Area (switch key) | Default | What a locked guest sees |
+|---|---|---|
+| Create private tables (`private_tables`) | locked | The host's visibility control shows a note. Tapping "Private" opens the account reminder and sends nothing. The server also refuses the change (`guest_locked`). |
+| Rejoin a table they left (`rejoin`) | locked | A guest who leaves a table on purpose cannot get back in. A dropped connection still reconnects, whatever the switch says. |
+| Open player profiles and stats (`profiles`) | locked | Tapping a player opens the account reminder. The profile route answers 403 `guest_locked`. |
+| Block players (`blocking`) | locked | The Block buttons are marked with a lock and open the account reminder. The server refuses the block. |
+| Report players and chat messages (`reports`) | locked | The Report buttons are marked with a lock and open the account reminder. The server refuses the report. |
+
+- **Friend requests are always account-only.** They are not a switch. A guest gets 403 `guest_locked` (feature `friends`) on every friends route.
+- **Chat stays open** to guests. A locked switch never stops chat.
+- A guest's browser learns the locked areas when it connects (the welcome message, `guestLocked`). A change made while a guest is connected is seen after that guest reconnects. The admin console says so when a switch is saved.
+- The account reminder uses the same wording for each area (`GUEST_LOCK_TEXT` in `public/app.js`). Changing a switch does not change the wording.
+- Each change is written to the audit log (action `guest.feature`), and only a real change is recorded.
+- The switches are fail-closed: until the server has read them for the first time, every area is locked. The memory mode (no database) has no stored switches, so every area stays locked there.
+
+Code: `lib/guestFeatures.js` (the snapshot the server reads), `lib/adminRoutes.js` (`GET` and `POST /api/admin/guest-features`), `server.js` (`guestLocked`), `lib/accountRoutes.js`, `lib/friendRoutes.js`, `public/app.js`.
+
 ## Making a guest
 
 `POST /api/auth/guest` with a CSRF token. The display name is optional. It is trimmed, cleaned of control characters, and capped at 20 characters; an empty name becomes "Guest". If the name is already used by someone active in the last 7 days, a random 4-digit number is added (a longer one after several tries). The response sets an HttpOnly session cookie that lasts `GUEST_SESSION_TTL_HOURS`.
@@ -76,9 +97,14 @@ A reminder is a small box that says a guest can keep their progress with an acco
 ## Tests
 
 - `tests/guest-policy.test.js`, `tests/guest-names.test.js`, `tests/guest-nudge.test.js`, `tests/game-access.test.js`, `tests/game-flags.test.js`: pure, run locally with `node tests/<file>.js`.
-- `tests/guest-play.test.js`: HTTP and WebSocket tests in memory mode (switch off, switch on, CSRF, access modes, the account prompt, the plain refusal). Needs the server's npm dependencies (run in CI).
+- `tests/guest-play.test.js`: HTTP and WebSocket tests in memory mode (switch off, switch on, CSRF, access modes, the account prompt, the plain refusal, every locked area, welcome `guestLocked`). Needs the server's npm dependencies (run in CI).
+- `tests/guest-features.test.js`: the switch snapshot (locked by default, fail-closed before the first read, unknown keys ignored).
+- `tests/admin-guest-redeploy.test.js`: the admin routes for switches (staff only) and the owner-only redeploy (typed word, audit row, cooldown, not set up).
+- `tests/render-deploy.test.js`: the Render client with a fake fetch (not configured makes no call, path, header and body, status-only errors, cooldown).
+- `tests/ui/admin-ui.js`: the Guests tab and the redeploy control in a browser.
 - `tests/guest-play.pg.test.js`: PostgreSQL tests (creation, name suffix, upgrade in place, refused upgrades, expiry, match rows). Needs `TEST_DATABASE_URL` and a throwaway database, never production.
-- Not yet covered by automated browser tests: the home-page guest button, the locked tiles and the reminders.
+- Not yet covered by automated browser tests: the home-page guest button, the locked tiles, the reminders, and the guest lock wording in a real guest session.
+- `tests/guest-play.pg.test.js`: also checks the stored switches and the redeploy audit row (needs PostgreSQL; run in CI).
 
 ## Rolling out and rolling back
 
