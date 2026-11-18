@@ -515,6 +515,7 @@
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
       </div>
+      ${S.guestPlay && !S.isGuest ? '<button type="button" class="btn ghost auth-guest" data-act="playAsGuest">Play as a guest</button>' : ''}
       <div id="googleSlot" class="google-slot" hidden><div id="googleBtn"></div><label class="check-row"><input id="googleRemember" type="checkbox"> Keep me signed in on this device</label><p class="auth-or"><span>or use your email</span></p></div>
       ${loginOn ? `
         <form id="loginForm" class="auth-form">
