@@ -1,0 +1,59 @@
+/* Stage Rummy: goal line, scoreboard with laid groups, piles, hand. Builds on table.css (panels, status bar, overlay). */
+.sr .sr-card { display: grid; place-items: center; position: relative; width: 100%; aspect-ratio: 3 / 4; padding: 0; border-radius: 8px; border: 2px solid rgba(0, 0, 0, .25); background: #fff; color: #fff; font: inherit; line-height: 1; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.sr .sr-card b { font-size: clamp(15px, 4.8vw, 24px); font-weight: 800; }
+.sr .sr-card i { position: absolute; left: 3px; top: 2px; font-style: normal; font-size: 11px; }
+.sr .sr-card u { position: absolute; right: 3px; bottom: 2px; font-size: 10px; text-decoration: none; opacity: .9; }
+.sr .sr-card.cR { background: #b93633; }
+.sr .sr-card.cB { background: #2f6fd0; }
+.sr .sr-card.cG { background: #21763f; }
+.sr .sr-card.cY { background: #e8b923; color: #3b2c00; }
+.sr .sr-card.wild { background: linear-gradient(135deg, #7b4bd6, #d6498c); }
+.sr .sr-card.skip { background: #3a3f4f; }
+.sr .sr-card.mini { width: 28px; aspect-ratio: 3 / 4; }
+.sr .sr-card.mini b { font-size: 13px; }
+.sr .sr-card.mini i, .sr .sr-card.mini u { display: none; }
+.sr .sr-goal { margin: 8px 0 0; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-weight: 700; font-size: 14px; }
+.sr .sr-players { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.sr .sr-players li { padding: 6px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-line); }
+.sr .sr-players li.turn { border-color: var(--gold, #f2c14e); }
+.sr .sr-players li.me { border-left: 4px solid var(--gold, #f2c14e); }
+.sr .sr-phead { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.sr .sr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-weight: 700; }
+.sr .sr-meta { font-size: 12px; opacity: .85; white-space: nowrap; flex: none; }
+.sr .sr-laid { display: grid; gap: 4px; margin-top: 4px; }
+.sr .sr-group { display: grid; gap: 2px; padding: 4px 6px; border-radius: 8px; background: rgba(0, 0, 0, .18); border: 2px solid transparent; color: inherit; font: inherit; text-align: left; }
+.sr .sr-group.hit { cursor: pointer; border-color: var(--gold, #f2c14e); min-height: 44px; }
+.sr .sr-group.hit:focus-visible, .sr .sr-hand .sr-card:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; }
+.sr .sr-glabel { font-size: 11px; opacity: .85; }
+.sr .sr-gcards { display: flex; flex-wrap: wrap; gap: 2px; }
+.sr .sr-piles { display: flex; justify-content: center; gap: 18px; margin-top: 8px; }
+.sr .sr-pile { display: grid; justify-items: center; gap: 4px; width: 72px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.sr .sr-pile:disabled { cursor: default; opacity: .7; }
+.sr .sr-pile:not(:disabled) .sr-card, .sr .sr-pile:not(:disabled) .sr-back { box-shadow: 0 0 0 3px var(--gold, #f2c14e); }
+.sr .sr-back, .sr .sr-empty { display: grid; place-items: center; width: 100%; aspect-ratio: 3 / 4; border-radius: 8px; border: 2px solid rgba(255, 255, 255, .6); background: repeating-linear-gradient(45deg, #2a6f66 0 5px, #348c80 5px 10px); font-size: 22px; }
+.sr .sr-empty { background: transparent; border-style: dashed; }
+.sr .sr-pile small { font-size: 11px; opacity: .85; white-space: nowrap; }
+.sr .sr-event { margin: 8px 0 0; padding: 6px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+.sr .sr-trays { display: grid; gap: 8px; margin-top: 8px; }
+.sr .sr-tray { display: grid; gap: 4px; }
+.sr .sr-tray.done .sr-tlabel { color: #7fe0a0; }
+.sr .sr-tlabel { font-size: 12px; opacity: .9; }
+.sr .sr-tcards { display: flex; flex-wrap: wrap; gap: 3px; min-height: 28px; }
+.sr .sr-tcards .sr-card { cursor: pointer; min-width: 44px; }
+.sr .sr-hand { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; margin-top: 10px; }
+.sr .sr-hand .sr-card { cursor: pointer; min-height: 56px; }
+.sr .sr-hand .sr-card.sel { transform: translateY(-6px); box-shadow: 0 0 0 3px var(--gold, #f2c14e), 0 6px 12px rgba(0, 0, 0, .35); }
+.sr .sr-actions { display: flex; justify-content: center; margin-top: 8px; }
+.sr .sr-final { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.sr .sr-final li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .06); }
+.sr .sr-final li.win { background: rgba(242, 193, 78, .2); }
+@media (max-width: 520px) and (max-height: 700px) {
+  .sr .sr-goal { margin-top: 4px; padding: 4px 10px; font-size: 13px; }
+  .sr .sr-players { gap: 2px; margin-top: 4px; }
+  .sr .sr-players li { padding: 3px 8px; }
+  .sr .sr-piles { gap: 12px; margin-top: 4px; }
+  .sr .sr-pile { width: 60px; }
+  .sr .sr-event { display: none; }
+  .sr .sr-hand { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin-top: 6px; }
+  .sr .sr-hand .sr-card { min-height: 44px; aspect-ratio: 1 / 1; }
+}

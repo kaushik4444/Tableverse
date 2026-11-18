@@ -6,7 +6,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const text = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'cleanup-unverified.yml'), 'utf8');
+// Windows checkouts (core.autocrlf) turn line endings into CRLF: read the text with LF only, so the checks match on every platform.
+const text = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'cleanup-unverified.yml'), 'utf8').replace(/\r\n/g, '\n');
 
 // Split the jobs section into { name -> body }.
 function jobs() {

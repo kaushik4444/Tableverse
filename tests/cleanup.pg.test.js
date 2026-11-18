@@ -114,7 +114,7 @@ function cookieSocket(port, cookie) {
       assert.deepEqual(report.before, SEEDED);
       assert.equal(report.totalRows, SEEDED_ROWS);
       assert.deepEqual(report.order, cleanup.CLEAN_TABLES);
-      assert.deepEqual(report.preserved, ['schema_migrations']);
+      assert.deepEqual(report.preserved, ['schema_migrations', 'game_flags']);
       assert.deepEqual(report.breakdowns.players, { anonymous: 3, registered: 2 });
       assert.deepEqual(await dump(), before, 'every table is byte-identical afterwards');
       assert.equal(log[0], 'BEGIN READ ONLY');

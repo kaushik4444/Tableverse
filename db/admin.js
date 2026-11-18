@@ -520,10 +520,31 @@ async function purge() {
   };
 }
 
+// ---------------------------------------------------------------- game switches (owner)
+/** Every explicit switch: { game_id, enabled, updated_at }. A game without a row is enabled (lib/gameFlags.js). */
+async function listGameFlags() {
+  return (await db.query('SELECT game_id, enabled, updated_at FROM game_flags')).rows;
+}
+
+/** Turns one game on or off. Audited in the same transaction. */
+async function setGameFlag({ actorId, gameId, enabled }) {
+  await db.withTransaction(async (c) => {
+    // Only a real change is written and audited: repeating the same value leaves no second entry.
+    const r = await c.query(
+      `INSERT INTO game_flags (game_id, enabled, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
+       ON CONFLICT (game_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+       WHERE game_flags.enabled IS DISTINCT FROM EXCLUDED.enabled
+       RETURNING game_id`,
+      [gameId, Boolean(enabled), actorId]
+    );
+    if (r.rows.length) await audit(c, { actorId, action: 'game.switch', targetType: 'game', targetId: gameId, detail: { enabled: Boolean(enabled) } });
+  });
+}
+
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health, gameStats,
+  addCounters, addActive, forgetActor, overview, health, gameStats, listGameFlags, setGameFlag,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)
