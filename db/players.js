@@ -38,12 +38,13 @@ class MemoryPlayerStore {
     const hash = hashToken(rawToken);
     const session = this.sessions.get(hash);
     if (!session || session.revokedAt) return null;
+    if (session.expiresAt && session.expiresAt.getTime() <= Date.now()) return null; // a guest session past its lifetime
     const player = this.players.get(session.playerId);
     if (player) player.last_seen_at = new Date();
     return player ? { ...player } : null;
   }
 
-  async createAnonymousPlayer({ displayName, avatar }) {
+  async createAnonymousPlayer({ displayName, avatar, ttlHours }) {
     const id = 'p_' + crypto.randomUUID();
     const rawToken = generateToken();
     const hash = hashToken(rawToken);
@@ -59,7 +60,9 @@ class MemoryPlayerStore {
     };
 
     this.players.set(id, player);
-    this.sessions.set(hash, { playerId: id, createdAt: new Date(), revokedAt: null });
+    // a guest session has a lifetime when the caller gives one (ttlHours); without one it never expires here, as before
+    const expiresAt = Number.isFinite(ttlHours) && ttlHours > 0 ? new Date(Date.now() + Math.round(ttlHours) * 3600 * 1000) : null;
+    this.sessions.set(hash, { playerId: id, createdAt: new Date(), revokedAt: null, expiresAt });
 
     return { player: { ...player }, rawToken };
   }
@@ -133,7 +136,7 @@ async function authenticateToken(rawToken) {
  */
 async function createAnonymousPlayer({ displayName, avatar, ttlHours }) {
   if (!db.hasDatabase()) {
-    return memoryStore.createAnonymousPlayer({ displayName, avatar });
+    return memoryStore.createAnonymousPlayer({ displayName, avatar, ttlHours });
   }
   // a guest session has its own, shorter lifetime (GUEST_SESSION_TTL_HOURS, lib/guestPolicy.js)
   const ttl = Number.isFinite(ttlHours) && ttlHours > 0 ? `${Math.round(ttlHours)} hours` : `${sessionTtlDays()} days`;

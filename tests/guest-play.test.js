@@ -43,6 +43,15 @@ const sent = (o, t) => o.msgs.filter((m) => m.t === t);
 
   const on = await start({ port: 0, env: { ...process.env, GUEST_PLAY_ENABLED: 'true', GUEST_SESSION_TTL_HOURS: '24' } });
   const port = on.port;
+
+  await test('memory store: a guest session past its lifetime no longer authenticates; a live one does', async () => {
+    const dbPlayers = require('../db/players');
+    const live = await dbPlayers.createAnonymousPlayer({ displayName: 'Live', ttlHours: 24 });
+    assert.ok(await dbPlayers.authenticateToken(live.rawToken), 'a live guest authenticates');
+    // a lifetime that rounds to zero hours has already ended when it is checked
+    const ended = await dbPlayers.createAnonymousPlayer({ displayName: 'Ended', ttlHours: 0.0001 });
+    assert.equal(await dbPlayers.authenticateToken(ended.rawToken), null, 'an ended guest does not authenticate');
+  });
   // The owner's access mode for wizard: guests are refused, registered players may play it (set in-process, as the admin route does).
   require('../lib/gameFlags').apply([{ game_id: 'wizard', access: 'guests' }]);
   try {
