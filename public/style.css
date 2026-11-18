@@ -685,7 +685,7 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .auth-or span { white-space: nowrap; }
 
 /* Guest play (public/guest.js): the account reminder, the guest-locked label and the "play as a guest" sheet */
-.guest-nudge { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin: 12px 0; padding: 12px 14px; border: 1px solid var(--line, #d8d2c4); border-radius: 12px; background: var(--card, #fff); }
+.guest-nudge { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin: 12px 0; padding: 12px 14px; border: 1px solid var(--panel-line); border-radius: 12px; background: rgba(7, 21, 16, .88); }
 .guest-nudge.strong { border-color: var(--accent, #7b4bd0); }
 .guest-nudge-text { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; }
 .guest-nudge-text b { font-size: 15px; }
