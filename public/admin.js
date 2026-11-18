@@ -476,6 +476,7 @@
   // ---------------------------------------------------------------- games (counts and averages only)
   // per game: the value still being saved (kept across redraws) and the queue that saves each game's changes one at a time
   const gameFlagPending = new Map();
+  let gameFlagError = null; // { visit, text }: a save error that belongs to one visit of the Games tab, shown on each redraw of it
   const gameFlagQueue = new Map();
   async function gamesTab(days = 30) {
     state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
@@ -506,8 +507,7 @@
       <p id="gMsg" class="ad-msg" role="status"></p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
     // a redraw shows only its newest request's result: an older redraw that fails must not replace the current view
-    let gameFlagError = null; // { visit, text }: a save error that belongs to one visit of the Games tab, shown on each redraw of it
-  const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab(state.gamesDays || 30).catch((e) => { if (mine === state.gen) fail(e); }); };
+    const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab(state.gamesDays || 30).catch((e) => { if (mine === state.gen) fail(e); }); };
     if (gameFlagError && gameFlagError.visit === generation) say('gMsg', gameFlagError.text, 'err');
   main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
       const id = sel.dataset.gaccess; const value = sel.value; const visit = generation; gameFlagError = null;

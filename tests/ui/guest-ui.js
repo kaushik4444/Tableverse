@@ -9,11 +9,11 @@ const games = require('../../games').list();
 let failed = 0;
 // Everything a test opens is closed here, also when the test fails part way (a missing element must not leave a browser running).
 const live = [];
-const serveT = async (...args) => { const s = await serve(...args); live.push(() => s.server.close()); return s; };
+const serveT = async (...args) => { const s = await serve(...args); live.push(() => new Promise((done) => s.server.close(() => done()))); return s; };
 const test = async (name, fn) => {
   try { await fn(); console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + (e.stack || e)); } finally {
+    await closeOpenContexts(); // contexts first, so they release their connections
     while (live.length) await live.pop()();
-    await closeOpenContexts();
   }
 };
 

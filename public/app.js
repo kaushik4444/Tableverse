@@ -511,6 +511,7 @@
     const draftName = pendingRegisterName;
     pendingRegisterName = null;
     S.auth = tab;
+    const origin = authOpener || document.activeElement; // the control that started this sheet keeps focus-return
     closeOverlay();
     const loginOn = tab === 'login';
     const resend = S.requireEmailVerification ? '<button class="btn ghost small" data-act="resendVerification">Resend verification email</button>' : '';
@@ -550,6 +551,8 @@
       ${legalLinksHtml()}
     </div>`;
     overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-auth-close]')) closeOverlay(); });
+    authOpener = origin;
+    authOpenerAct = origin && origin.getAttribute ? origin.getAttribute('data-act') : null;
     document.body.appendChild(overlay);
     mountGoogle();
     const first = document.getElementById(loginOn ? 'loginEmail' : 'registerName');

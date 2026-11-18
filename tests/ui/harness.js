@@ -51,6 +51,7 @@ const openContexts = new Set();
 async function scriptedPage(browser, { viewport = { width: 390, height: 844 }, messages = [], hasTouch = viewport.width < 800 } = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, hasTouch });
   openContexts.add(ctx);
+  ctx.on('close', () => openContexts.delete(ctx));
   const page = await ctx.newPage();
   await page.addInitScript((msgs) => {
     window.__sent = [];
