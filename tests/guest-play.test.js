@@ -144,6 +144,89 @@ const sent = (o, t) => o.msgs.filter((m) => m.t === t);
       const none = await b.post('/api/auth/upgrade-guest', { email: 'x@test.local', username: 'xyzzy', password: 'TestPass123!', adultConfirmed: true });
       assert.equal(none.status, 403);
     });
+    // The owner's guest switches (lib/guestFeatures.js). Everything is locked until opened; guest chat is never locked.
+    const guestFeatures = require('../lib/guestFeatures');
+    const socketOf = (g) => open(port, decodeURIComponent(g.browser.cookies.get('ct_session')));
+
+    await test('a guest cannot create a private table; the account reminder is the reply (guest_locked, private_tables)', async () => {
+      const o = await socketOf(guest);
+      o.ws.send(JSON.stringify({ t: 'create', gameId: 'ludo', visibility: 'private' }));
+      await wait(200);
+      const err = sent(o, 'error').find((m) => m.code === 'guest_locked');
+      assert.ok(err, JSON.stringify(o.msgs.slice(-3)));
+      assert.equal(err.feature, 'private_tables');
+      o.ws.close();
+    });
+
+    await test('a guest in a public table can chat, and a locked feature does not stop chat', async () => {
+      const o = await socketOf(guest);
+      o.ws.send(JSON.stringify({ t: 'create', gameId: 'ludo' }));
+      await wait(200);
+      const state = sent(o, 'state').pop();
+      assert.ok(state && state.room && state.room.code, 'the guest is at a table');
+      o.ws.send(JSON.stringify({ t: 'chat', text: 'hello from a guest' }));
+      await wait(200);
+      assert.ok(sent(o, 'chat').some((m) => JSON.stringify(m).includes('hello from a guest')), 'the guest sees their own message');
+      assert.equal(sent(o, 'error').filter((m) => m.code === 'guest_locked').length, 0, 'chat is not locked');
+      o.ws.close();
+    });
+
+    await test('a guest who leaves a table on purpose cannot rejoin it while rejoin is locked; once opened, they can', async () => {
+      const o = await socketOf(guest);
+      o.ws.send(JSON.stringify({ t: 'create', gameId: 'ludo' }));
+      await wait(200);
+      const code = sent(o, 'state').pop().room.code;
+      // a second guest stays at the table, so it does not close when the first one leaves
+      const b2 = new Browser(port); await b2.csrf();
+      await b2.must('/api/auth/guest', { displayName: 'Stay' });
+      const stay = await open(port, decodeURIComponent(b2.cookies.get('ct_session')));
+      stay.ws.send(JSON.stringify({ t: 'join', code }));
+      await wait(200);
+      o.ws.send(JSON.stringify({ t: 'leave' }));
+      await wait(200);
+      o.ws.send(JSON.stringify({ t: 'join', code }));
+      await wait(200);
+      const refused = sent(o, 'error').find((m) => m.code === 'guest_locked' && m.feature === 'rejoin');
+      assert.ok(refused, 'rejoin refused: ' + JSON.stringify(o.msgs.slice(-3)));
+      guestFeatures.setOne('rejoin', true);
+      try {
+        o.ws.send(JSON.stringify({ t: 'join', code }));
+        await wait(200);
+        assert.equal(sent(o, 'error').filter((m) => m.feature === 'rejoin').length, 1, 'no second refusal once open');
+      } finally { guestFeatures.setOne('rejoin', false); }
+      o.ws.close();
+    });
+
+    await test('a guest cannot open a player profile (403 guest_locked, profiles) and cannot use friends (403 guest_locked, friends)', async () => {
+      const profile = await guest.browser.get('/api/players/someone');
+      assert.equal(profile.status, 403);
+      assert.equal(profile.json.code, 'guest_locked');
+      assert.equal(profile.json.feature, 'profiles');
+      const friends = await guest.browser.get('/api/me/friends');
+      assert.equal(friends.status, 403);
+      assert.equal(friends.json.code, 'guest_locked');
+      assert.equal(friends.json.feature, 'friends');
+    });
+
+    await test('a guest cannot block or report (guest_locked, blocking / reports) while those are locked', async () => {
+      const o = await socketOf(guest);
+      o.ws.send(JSON.stringify({ t: 'block', id: '00000000-0000-0000-0000-000000000000' }));
+      await wait(150);
+      assert.ok(sent(o, 'error').find((m) => m.code === 'guest_locked' && m.feature === 'blocking'), 'block refused');
+      o.ws.send(JSON.stringify({ t: 'report', messageId: 'x' }));
+      await wait(150);
+      assert.ok(sent(o, 'error').find((m) => m.code === 'guest_locked' && m.feature === 'reports'), 'report refused');
+      o.ws.close();
+    });
+
+    await test('welcome tells a guest which areas are locked', async () => {
+      const o = await socketOf(guest);
+      const welcome = sent(o, 'welcome')[0];
+      assert.ok(Array.isArray(welcome.guestLocked), 'welcome carries the locked list');
+      assert.ok(welcome.guestLocked.includes('profiles') && welcome.guestLocked.includes('private_tables'));
+      o.ws.close();
+    });
+
   } finally { require('../lib/gameFlags').apply([]); await on.close(); }
 
   clearTimeout(guard);

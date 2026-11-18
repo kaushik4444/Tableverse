@@ -51,6 +51,7 @@ const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
 const { createBroadcastWorker } = require('./lib/broadcast');
 const { createRenderLogs } = require('./lib/renderLogs');
+const { createRenderDeploy } = require('./lib/renderDeploy');
 const { createLogger, requestIdFrom } = require('./lib/log');
 const serverLog = createLogger({ component: 'server' });
 const httpLog = createLogger({ component: 'http' });
@@ -337,6 +338,7 @@ function start(opts = {}) {
     // players with a live socket right now; `players` above also counts records kept after a disconnect
     playersConnected: [...players.values()].filter((p) => p.connected).length,
   });
+  const renderDeploy = createRenderDeploy({ env }); // owner-only redeploy (admin console, Logs tab)
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   // the account no longer exists (deleted by its owner, or by the admin-console owner): leave the table, close the socket, forget the player
   const handleAccountDeleted = ({ playerId }) => {
@@ -395,7 +397,7 @@ function start(opts = {}) {
     googleAllowed: privacyLive, // Google sign-in is offered only while the privacy notice is live
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
-      env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
+      env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs, renderDeploy,
       onSignedOut: closeSignedOutSockets, onAccountDeleted: handleAccountDeleted, onRoleChanged: applyLiveRole, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
     }).routes,
     production,
@@ -1509,6 +1511,7 @@ function start(opts = {}) {
 
     // Blocking applies to table access, seating, chat, reactions and voice in both directions; it never signs either account out.
     async block(p, msg) {
+      if (guestLocked(p, 'blocking')) return;
       const byName = msg && msg.id === undefined && typeof msg.username === 'string';
       return inArrivalOrder(p, async () => {
         const id = byName ? await dbAccount.idForUsername(msg.username) : msg && msg.id;
@@ -1524,6 +1527,7 @@ function start(opts = {}) {
     blocks(p) { return sendBlocks(p); },
 
     async unblock(p, msg) {
+      if (guestLocked(p, 'blocking')) return;
       const byName = msg && msg.id === undefined && typeof msg.username === 'string';
       return inArrivalOrder(p, async () => {
         const id = byName ? await dbAccount.idForUsername(msg.username) : msg && msg.id;

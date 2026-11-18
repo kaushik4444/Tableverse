@@ -242,6 +242,23 @@ const PW = 'TestPass123!';
       assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE id = $1', [live.id]))[0].n, 1);
     });
 
+    await test('the owner\'s guest switches are stored, audited once per real change, and read back', async () => {
+      const dbAdmin = require('../db/admin');
+      await dbAdmin.setGuestFeature({ actorId: null, feature: 'profiles', enabled: true });
+      await dbAdmin.setGuestFeature({ actorId: null, feature: 'profiles', enabled: true }); // the same value again: no second audit row
+      assert.equal((await dbAdmin.listGuestFeatures()).find((r) => r.feature === 'profiles').enabled, true);
+      assert.equal((await q("SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'guest.feature' AND target_id = 'profiles'"))[0].n, 1);
+      await dbAdmin.setGuestFeature({ actorId: null, feature: 'profiles', enabled: false });
+      assert.equal((await dbAdmin.listGuestFeatures()).find((r) => r.feature === 'profiles').enabled, false);
+      assert.equal((await q("SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'guest.feature' AND target_id = 'profiles'"))[0].n, 2);
+    });
+
+    await test('the redeploy audit row is written on its own', async () => {
+      const dbAdmin = require('../db/admin');
+      await dbAdmin.recordAudit({ actorId: null, action: 'render.redeploy', targetType: 'service', detail: { ok: false, status: 503 } });
+      assert.equal((await q("SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'render.redeploy'"))[0].n, 1);
+    });
+
     await srv.close();
     await dbPool.close();
     console.log(`\n${passed} guest tests passed`);
