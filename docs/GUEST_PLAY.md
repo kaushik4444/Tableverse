@@ -116,17 +116,17 @@ A reminder is a small box that says a guest can keep their progress with an acco
 ## Open decisions (owner)
 
 - **Guest match names.** Decided by the owner: a finished match keeps the name shown at the table when a guest is removed. Nothing is replaced with "Deleted player".
-- **Privacy notice.** `docs/PRIVACY_NOTICE_DRAFT.md` still says there are no guest records. It must be updated and approved before guest play is turned on. It is not published.
+- **Privacy notice.** `lib/legal/privacy.md` is the privacy notice the app publishes. It must accurately describe guest records and be approved with every `[OWNER]` and `[LEGAL]` marker resolved before guest play is turned on. It is not published.
 - **Beta decision D-1.** Recorded as superseded in `docs/STAGE_20_6_BETA_READINESS.md`.
 - **What's New.** The entry "Play as a guest" (`public/whats-new-data.js`) ships with the release to `main`, while the switch stays off. Players will see the entry before guest play is on; the owner turns the switch on when ready.
-- **Retention period** for the guest session (default 72 hours) and the purge (one day after creation).
+- **Retention decision.** The default guest session lasts 72 hours. The purge rule is fixed in code: a guest row becomes eligible for deletion once it is more than one day old and has no live session; housekeeping runs every six hours. This is not one day after session expiry. Keep these defaults or change the purge code and privacy notice together before enabling guest play.
 
 ## Manual steps for the owner (after the release reaches `main`)
 
 Nothing below is done by the code. Each step is in the owner's hands.
 
 1. **Database.** Migrations 030 to 032 (game access, guest upgrades, guest features) apply on the next deploy. Check the deploy log shows them applied. No data is deleted.
-2. **Decisions first.** Keep guest play off until the owner has approved `lib/legal/privacy.md`, the notice the app publishes, with every `[OWNER]` and `[LEGAL]` marker resolved, and has recorded the guest retention decision: the 72-hour session and the removal one day after it, or other periods (then change the text too). The notice is not published yet.
+2. **Decisions first.** Keep guest play off until the owner has approved `lib/legal/privacy.md`, the notice the app publishes, with every `[OWNER]` and `[LEGAL]` marker resolved, and has recorded approval of the current retention behaviour: a 72-hour session by default, with deletion eligibility once the guest row is more than one day old and no live session remains (housekeeping runs every six hours). This is not one day after session expiry. If changing the purge period, update `purgeExpired` in `db/auth.js` and the privacy notice together before enabling guest play. The notice is not published yet.
 3. **Email.** The guest-to-account upgrade sends a confirmation link through the e-mail provider. Check that Resend sends mail from production before turning guest play on. If the mail fails, the player sees an error, but the request still replaces any earlier confirmation link, so the player can ask again.
 4. **Choose who may play** in the admin console. Games default to "Enabled" for everyone, so set any game you want kept for registered players in the Games tab. Guest features (private tables, rejoining, profiles, blocking and reports) are locked for guests until you open them in the Guests tab. Table chat stays open to guests.
 5. **To turn on:** Render, environment, set `GUEST_PLAY_ENABLED` to `true`, save, wait for the redeploy. Check that `GET /api/games` shows `"guestPlay": true`.
