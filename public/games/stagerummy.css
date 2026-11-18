@@ -57,3 +57,32 @@
   .sr .sr-hand { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin-top: 6px; }
   .sr .sr-hand .sr-card { min-height: 44px; aspect-ratio: 1 / 1; }
 }
+
+/* The table: the shared felt with the seats around it. Stage Rummy needs a little more room than the default for its laid groups. */
+.sr .sr-table { margin-top: 6px; }
+.sr .sr-table .pt { --pt-min: 400px; }
+.sr .sr-table .pseat { max-width: 40vw; }
+.sr .sr-table .sr-laid { display: grid; gap: 3px; margin-top: 4px; width: min(220px, 40vw); }
+.sr .sr-table .sr-laid .sr-group { padding: 3px 5px; }
+.sr .sr-table .sr-laid .sr-group.hit { min-height: 36px; }
+.sr .sr-table .sr-nolay { font-size: 11px; opacity: .7; text-align: center; }
+.sr .sr-table .sr-gcards .sr-card.mini { width: 24px; }
+/* a short message that floats over the centre of the table when a stage is laid, a turn is lost or a round ends */
+.sr .sr-float { position: absolute; left: 50%; top: -40px; transform: translateX(-50%); z-index: 2; white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis; padding: 5px 14px; border-radius: 999px; background: rgba(7, 21, 16, .9); border: 1px solid var(--gold, #f2c14e); color: var(--ink, #f0fdf4); font-weight: 700; font-size: 13px; pointer-events: none; animation: srFloat 2.6s ease-out forwards; }
+@keyframes srFloat { 0% { opacity: 0; transform: translate(-50%, 10px); } 12% { opacity: 1; transform: translate(-50%, 0); } 78% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -14px); } }
+.sr .sr-tip { margin: 0; font-size: 12px; opacity: .85; }
+.sr .sr-piles { position: relative; }
+@media (max-width: 520px) {
+  .sr .sr-table .pt { --pt-min: 360px; }
+  .sr .sr-table .sr-laid { width: min(170px, 42vw); }
+}
+@media (prefers-reduced-motion: reduce) { .sr .sr-float { animation: none; opacity: 1; } }
+@media (max-width: 520px) {
+  .sr .sr-table .pseat { max-width: 30vw; }
+  .sr .sr-table .sr-laid { width: 27vw; }
+  .sr .sr-table .sr-gcards .sr-card.mini { width: 19px; }
+  .sr .sr-table .sr-glabel { font-size: 10px; }
+  .sr .sr-table .plate span { display: none; }
+}
+/* the shared centre ignores the pointer so the felt is never in the way; the piles are the one thing in it you can press */
+.sr .pt-center .sr-piles { pointer-events: auto; }

@@ -100,7 +100,7 @@ function scene(phase, handIds, tweak) {
   await test('not your turn: nothing to press', async () => {
     const { page, ctx } = await open(scene('draw', [4, 5], (v) => { v.myTurn = false; v.turn = 1; }));
     assert.equal(await page.locator('[data-sr="draw"]:not([disabled])').count(), 0);
-    assert.match(await page.textContent('.wz-status'), /Bo is playing/);
+    assert.match(await page.textContent('.wz-status'), /Bo is taking a turn/);
     await ctx.close();
   });
 
