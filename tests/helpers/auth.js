@@ -53,7 +53,7 @@ async function registerAndVerify(port, { email, username, password = 'TestPass12
   if (!reg.ok) throw new Error(`register failed: ${reg.json.error || reg.status}`);
   await browser.must('/api/auth/verify-email', { token: reg.json.debug.verifyToken });
   const login = await browser.must('/api/auth/login', { email, password });
-  return { browser, token: login.json.token, player: login.json.player };
+  return { browser, token: login.json.token, player: login.json.player, username: handle };
 }
 
 /**

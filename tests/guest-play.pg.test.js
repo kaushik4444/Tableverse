@@ -47,7 +47,7 @@ const PW = 'TestPass123!';
     const newUser = async (tag) => {
       const email = `${tag}.${seq}@test.local`; const username = `${tag}${seq++}`.slice(0, 24);
       const u = await registerAndVerify(srv.port, { email, username, displayName: tag, password: PW });
-      return { ...u, id: (await u.browser.get('/api/auth/session')).json.player.id, username };
+      return { ...u, email, id: (await u.browser.get("/api/auth/session")).json.player.id };
     };
 
     await test('a guest is an is_anonymous row with a session that lasts the guest lifetime, not 30 days', async () => {
@@ -100,6 +100,30 @@ const PW = 'TestPass123!';
       const e2 = await g.browser.post('/api/auth/upgrade-guest', { email: taken.email, username: `ivy${seq++}`, password: PW, adultConfirmed: true });
       assert.equal(e2.status, 409);
       assert.equal((await q('SELECT is_anonymous FROM players WHERE id = $1', [g.id]))[0].is_anonymous, true, 'still a guest');
+    });
+
+    await test('a registered player can still create a game that is disabled for guests only', async () => {
+      const gameFlags = require('../lib/gameFlags');
+      const dbAdmin = require('../db/admin');
+      const WebSocket = require('ws');
+      const { sessionSocket } = require('./helpers/auth');
+      await x.query("INSERT INTO game_flags (game_id, enabled, access) VALUES ('wizard', FALSE, 'guests') ON CONFLICT (game_id) DO UPDATE SET access = 'guests', enabled = FALSE");
+      gameFlags.apply(await dbAdmin.listGameFlags(), gameFlags.begin());
+      try {
+        const u = await newUser('wiz');
+        const msgs = [];
+        const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws`, sessionSocket(u.token));
+        ws.on('message', (d) => msgs.push(JSON.parse(d)));
+        await new Promise((resolve) => ws.on('open', () => { ws.send(JSON.stringify({ t: 'hello' })); setTimeout(resolve, 300); }));
+        ws.send(JSON.stringify({ t: 'create', gameId: 'wizard' }));
+        await new Promise((r) => setTimeout(r, 300));
+        ws.close();
+        assert.equal(msgs.filter((m) => m.t === 'error' && m.code === 'guest_locked').length, 0, 'no account prompt for a registered player');
+        assert.equal(msgs.filter((m) => m.t === 'error' && /not available/.test(m.message || '')).length, 0, 'not refused either');
+      } finally {
+        await x.query("UPDATE game_flags SET access = 'on', enabled = TRUE WHERE game_id = 'wizard'");
+        gameFlags.apply(await dbAdmin.listGameFlags(), gameFlags.begin());
+      }
     });
 
     await test('a registered player cannot use the guest upgrade', async () => {
