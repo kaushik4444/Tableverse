@@ -506,8 +506,8 @@
       sel.disabled = true; // one request at a time: a second change would only repeat the same one
       try {
         await api('/api/admin/game-flags', { gameId: sel.dataset.gaccess, access: sel.value });
-        if (gen !== state.gen) return; // the owner has moved to another view: leave it alone
-        state.gen += 1; // a redraw still in flight is dropped
+        if (state.tab !== 'games') return; // the owner has moved to another view: leave it alone
+        state.gen += 1; // a redraw still in flight is dropped; each completed change starts a fresh redraw after its save
         gamesTab().catch(fail); // redraw with the new state
       } catch (e) {
         if (gen !== state.gen || e.name === 'AbortError') return; // a cancelled request belongs to a view that is gone

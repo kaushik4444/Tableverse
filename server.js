@@ -1493,7 +1493,7 @@ function start(opts = {}) {
     // A report about a player (from their card or profile). Needs an account; the reported account is checked on the server.
     async reportPlayer(p, msg) {
       const self = players.get(p.id);
-      if (guestLocked(p, 'reports')) return;
+      if (guestBarred(p, 'reports')) return;
       if (!self || !self.username) return sendError(p, 'Sign in to report a player.'); // guests have no account to report from
       const resolved = await resolveTarget(msg);
       const checked = moderation.validatePlayerReport(p.id, resolved ? { ...msg, id: resolved.id } : msg);

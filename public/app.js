@@ -1209,6 +1209,7 @@
       case 'role': {
         // the owner changed this account's role while it was connected
         S.role = m.role; S.isGuest = m.role === 'guest';
+        loadStaffHint();
         render();
         break;
       }

@@ -764,10 +764,17 @@ async function purgeExpired() {
     // records (match_players.player_id becomes NULL). A guest that has an account now (is_anonymous = FALSE) is never touched.
     // a pending guest upgrade is removed a day after its link ended (a used link is removed at once)
     upgrades: await run("DELETE FROM guest_upgrades WHERE expires_at < NOW() - INTERVAL '1 day'"),
-    guests: await run(`DELETE FROM players p
-                       WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day'
-                         AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())
-                         AND NOT EXISTS (SELECT 1 FROM guest_upgrades u WHERE u.player_id = p.id AND u.expires_at > NOW())`),
+    guests: await db.withTransaction(async (client) => {
+      // lock each candidate row first (a row another request holds is skipped and kept for the next run),
+      // then re-check the rule in a new statement, so a link made while the row was locked is seen before the delete
+      const locked = await client.query("SELECT p.id FROM players p WHERE p.is_anonymous = TRUE AND p.created_at < NOW() - INTERVAL '1 day' FOR UPDATE OF p SKIP LOCKED");
+      if (locked.rowCount === 0) return 0;
+      return (await client.query(
+        "DELETE FROM players p WHERE p.id = ANY($1)" +
+        " AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.player_id = p.id AND s.revoked_at IS NULL AND s.expires_at > NOW())" +
+        " AND NOT EXISTS (SELECT 1 FROM guest_upgrades u WHERE u.player_id = p.id AND u.expires_at > NOW())",
+        [locked.rows.map((r) => r.id)])).rowCount;
+    }),
   };
 }
 
