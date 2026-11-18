@@ -51,6 +51,7 @@ Tableverse is currently open for friend testing.
 
 ## What's new — unreleased (on `development`, not yet on `main`)
 
+- **Guest play (off by default).** With `GUEST_PLAY_ENABLED=true` a visitor can play without registering. A guest is a temporary account that lasts `GUEST_SESSION_TTL_HOURS` (default 72) and can later become a full account in place, keeping its games. The owner chooses per game who may play (enabled, disabled for non-admins, disabled for guests only, or disabled for all). See [docs/GUEST_PLAY.md](docs/GUEST_PLAY.md).
 - **Level-up notice and next-level minutes** on the profile, and the **Instagram footer link**, are described in What's new (version `2026-11-15-level-and-follow`).
 - **Accounts.** Sign in with Google (off until the owner sets `GOOGLE_CLIENT_ID`). Google-only accounts can delete themselves with a fresh Google sign-in. "Keep me signed in" is on the Google button and in the sign-up step; use it only on a device you own.
 - **Owner clean-up.** The owner can permanently delete a stale ordinary account from the Users tab (type the username to confirm). A filter shows accounts not seen for 30 to 180 days.
@@ -67,7 +68,6 @@ Tableverse is currently open for friend testing.
 
 ## Released 2026-11-14 (release PR #165): blocking and reports, the ⋯ menu, 29 rules, seat shuffle
 
-- **Guest play (off by default).** With `GUEST_PLAY_ENABLED=true` a visitor can play without registering. A guest is a temporary account that lasts `GUEST_SESSION_TTL_HOURS` (default 72) and can later become a full account in place, keeping its games. The owner chooses per game who may play (enabled, disabled for non-admins, disabled for guests only, or disabled for all). See [docs/GUEST_PLAY.md](docs/GUEST_PLAY.md).
 - **Block and report on the card and the profile.** A signed-in player can block (or unblock) and report someone from their table card, or from their profile page (`#u/<name>`). A report has a reason (harassment, hate, threats, sexual content, spam or other) and is stored once per reporter and player. Reports count toward the same daily limit as chat reports. Guests can’t report; a deleted account’s reports stay on record with its last name.
 - **Friend profiles open in the app.** Tapping a friend’s profile while seated in a game asks first, because it leaves the table. A dropped connection never moves you.
 - **⋯ menu.** How to play, the game log and game settings are in the ⋯ menu at the top right. The bottom bar keeps only the table controls, so it fits on phones.
