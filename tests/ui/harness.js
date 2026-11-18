@@ -47,8 +47,10 @@ function serve(api = {}) {
  * client's own outgoing messages are collected in page.__sent via window.__sent. Use page.evaluate to push more messages
  * later: window.__push({ t: 'latency', ms: 42 }).
  */
+const openContexts = new Set();
 async function scriptedPage(browser, { viewport = { width: 390, height: 844 }, messages = [], hasTouch = viewport.width < 800 } = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, hasTouch });
+  openContexts.add(ctx);
   const page = await ctx.newPage();
   await page.addInitScript((msgs) => {
     window.__sent = [];
@@ -79,4 +81,9 @@ function tableMessages(gameId, extras = [], { games = require('../../games'), se
   return [welcome({ id: 'me', name: players[0].name, games: games.list() }), { t: 'state', room, view: g.view('me') }];
 }
 
-module.exports = { tableMessages, serve, scriptedPage, loadPlaywright, welcome, sessionOk, PUBLIC };
+/** Closes every context scriptedPage opened and has not closed yet (a failed test may have left some open). */
+async function closeOpenContexts() {
+  for (const c of [...openContexts]) { openContexts.delete(c); await c.close().catch(() => {}); }
+}
+
+module.exports = { tableMessages, serve, scriptedPage, loadPlaywright, welcome, sessionOk, PUBLIC, closeOpenContexts };

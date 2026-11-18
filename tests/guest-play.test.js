@@ -190,9 +190,10 @@ const until = async (fn, ms = 3000) => { const end = Date.now() + ms; while (Dat
       // only messages that arrive after this point count: the create response already names this room
       const beforeRejoin = o.msgs.length;
       o.ws.send(JSON.stringify({ t: 'join', code }));
-      await wait(200);
+      const refusedInWindow = await until(() => o.msgs.slice(beforeRejoin).some((m) => m.t === 'error' && m.code === 'guest_locked' && m.feature === 'rejoin'));
+      assert.ok(refusedInWindow, 'rejoin refused: ' + JSON.stringify(o.msgs.slice(beforeRejoin)));
       const refused = o.msgs.slice(beforeRejoin).filter((m) => m.t === 'error' && m.code === 'guest_locked' && m.feature === 'rejoin');
-      assert.equal(refused.length, 1, 'rejoin refused: ' + JSON.stringify(o.msgs.slice(beforeRejoin)));
+      assert.equal(refused.length, 1, 'exactly one refusal');
       guestFeatures.setOne('rejoin', true);
       try {
         const beforeOpen = o.msgs.length;

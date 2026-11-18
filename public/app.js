@@ -659,12 +659,14 @@
   }
 
   let authOpener = null; // the control that opened the sheet: focus returns to it when the sheet closes
+  let authOpenerAct = null; // its data-act, used when a redraw has replaced that control
   function closeOverlay() {
     const el = document.getElementById('auth-overlay');
     if (el) el.remove();
     S.auth = null;
-    const back = authOpener; authOpener = null;
-    if (back && back.isConnected && back.focus) back.focus();
+    const back = authOpener, act = authOpenerAct; authOpener = null; authOpenerAct = null;
+    const target = back && back.isConnected ? back : (act ? document.querySelector(`[data-act="${act}"]`) : null);
+    if (target && target.focus) target.focus();
   }
 
   // Only retry a database lookup explicitly marked safe by the server; ambiguous responses may have created a session.
@@ -723,6 +725,8 @@
     finishGuestSignIn(out);
   }
   function openGuestSheet(msg = '') {
+    // the control that started this (even through the login sheet) gets focus back when the guest sheet closes
+    const origin = authOpener || document.activeElement;
     closeOverlay();
     const overlay = document.createElement('div');
     overlay.id = 'auth-overlay';
@@ -739,10 +743,13 @@
       if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
     });
-    authOpener = document.activeElement;
+    authOpener = origin;
+    authOpenerAct = origin && origin.getAttribute ? origin.getAttribute('data-act') : null;
     document.body.appendChild(overlay);
-    const first = document.getElementById('guestName');
-    if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
+    // a text field would open the on-screen keyboard on touch screens, so focus a button there
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const target = coarse ? overlay.querySelector('button') : document.getElementById('guestName');
+    if (target && target.focus) target.focus();
   }
   // The guest sheet's "create a free account" and the reminder's button both open the register sheet. guest.js loads after this
   // file, so it announces the tap with an event rather than through a hook that would not exist yet.
