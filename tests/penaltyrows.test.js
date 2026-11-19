@@ -1,5 +1,5 @@
 'use strict';
-// Penalty Rows: the rules, with hand-built positions so each rule is checked on its own. Pure, no sockets.
+// Take 5: the rules, with hand-built positions so each rule is checked on its own. Pure, no sockets.
 const assert = require('node:assert/strict');
 const e = require('../games/penaltyrows/engine');
 const def = require('../games/penaltyrows');

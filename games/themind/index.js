@@ -1,6 +1,6 @@
 'use strict';
 /**
- * The Mind plugin: adapts the pure engine to the server's game interface. Real-time: there is no turn clock
+ * Mind plugin: adapts the pure engine to the server's game interface. Real-time: there is no turn clock
  * (so no time-limit option) and bots play on a rhythm, timed by botDelayMs().
  */
 const engine = require('./engine');
@@ -8,7 +8,7 @@ const { scrubDeep } = require('../scrub');
 
 module.exports = {
   id: 'themind',
-  name: 'The Mind',
+  name: 'Mind',
   icon: '🧠',
   accent: '#4f6bff',
   tagline: 'No turns, no talking. Play your numbers in ascending order by feel alone.',
@@ -53,6 +53,7 @@ module.exports = {
     'Throwing star: any player can propose one. When everyone who still holds cards agrees (bots agree on their own), every player discards their lowest card face up. No life is lost.',
     'Team size decides the length: 2 players play 12 levels (start with 2 lives), 3 players 10 levels (3 lives), 4 players 8 levels (4 lives). You start with 1 star. Clearing level 2, 5 or 8 earns a star; clearing level 3, 6 or 9 earns a life (at most 5 lives and 3 stars).',
     'Clear the last level to win together. If your lives run out, the team loses.',
+    'Mind is Tableverse\'s own game, made with our own cards, wording and artwork. It is not affiliated with, endorsed by or licensed by the publisher of any similar game.',
   ],
 
   create(players, options, rng) {

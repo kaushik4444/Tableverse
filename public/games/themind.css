@@ -1,4 +1,4 @@
-/* The Mind. Number cards are tinted by range: low blue, middle violet, high magenta. */
+/* Mind. Number cards are tinted by range: low blue, middle violet, high magenta. */
 .tm { --cw: 64px; }
 .tm .wz-top { gap: 6px; }
 .tm .wz-top { justify-content: space-between; }
