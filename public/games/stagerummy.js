@@ -138,7 +138,7 @@
   function phasesHTML(v) {
     const now = v.me >= 0 ? v.players[v.me].stage - 1 : -1;
     const rows = v.goals.map((goal, i) => `<li class="${i === now ? 'ph-current' : ''}"${i === now ? ' aria-current="step"' : ''}><span class="ph-n">${i + 1}</span><span class="ph-body"><b>${esc(v.stageNames[i])}</b><small>${goal.map(groupLabel).join(' and ')}</small></span></li>`).join('');
-    return `<div class="overlay" data-sr="closePhases"><div class="sheet" data-stop="1"><h2>Stages</h2><p class="hint" style="text-align:left">Lay down the groups of your current stage to move on. Your stage is highlighted.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-sr="closePhases">Close</button></div></div></div>`;
+    return `<div class="overlay" data-sr="closePhases"><div class="sheet" data-stop="1" role="dialog" aria-modal="true" aria-labelledby="sr-phases-title"><h2 id="sr-phases-title">Stages</h2><p class="hint" style="text-align:left">Lay down the groups of your current stage to move on. Your stage is highlighted.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-sr="closePhases">Close</button></div></div></div>`;
   }
   function overlayHTML(v, ctx) {
     if (ui.phases) return phasesHTML(v);

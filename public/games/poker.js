@@ -182,7 +182,7 @@
   ];
   function ranksHTML() {
     const rows = HAND_RANKS.map(([name, text], i) => `<li><span class="ph-n">${i + 1}</span><span class="ph-body"><b>${esc(name)}</b><small>${esc(text)}</small></span></li>`).join('');
-    return `<div class="overlay" data-pk="closeRanks"><div class="sheet" data-stop="1"><h2>Hand rankings</h2><p class="hint" style="text-align:left">Best hand first. Ties are settled by the cards in the hand.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-pk="closeRanks">Close</button></div></div></div>`;
+    return `<div class="overlay" data-pk="closeRanks"><div class="sheet" data-stop="1" role="dialog" aria-modal="true" aria-labelledby="pk-ranks-title"><h2 id="pk-ranks-title">Hand rankings</h2><p class="hint" style="text-align:left">Best hand first. Ties are settled by the cards in the hand.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-pk="closeRanks">Close</button></div></div></div>`;
   }
   function overlayHTML(v) {
     if (ui.ranks) return ranksHTML();
@@ -253,6 +253,12 @@
     </div>`;
     root.onclick = onClick;
     root.oninput = onInput;
+    const ranksSheet = root.querySelector('[aria-labelledby="pk-ranks-title"]');
+    if (ranksSheet) ranksSheet.onkeydown = (e) => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      ranksSheet.querySelector('button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
+    };
   }
 
   function onInput(e) {
