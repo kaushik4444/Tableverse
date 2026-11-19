@@ -238,6 +238,9 @@
     const b = v.blinds;
     const rise = b.next && b.handsLeft ? ` · up to ${b.next[0]}/${b.next[1]} in ${b.handsLeft} hand${b.handsLeft === 1 ? '' : 's'}` : '';
     const limit = v.limit ? ` · of ${v.limit}` : '';
+    const oldSheet = root.querySelector('[aria-labelledby="pk-ranks-title"]');
+    const sheetScroll = oldSheet ? oldSheet.scrollTop : 0;
+    const sheetHadFocus = !!oldSheet && oldSheet.contains(document.activeElement);
     root.innerHTML = `
     <div class="wz pk" style="--bw:${z.board}px;--hw:${z.hand}px">
       <div class="wz-top">
@@ -254,6 +257,10 @@
     root.onclick = onClick;
     root.oninput = onInput;
     const ranksSheet = root.querySelector('[aria-labelledby="pk-ranks-title"]');
+    if (ranksSheet) {
+      ranksSheet.scrollTop = sheetScroll; // a re-render keeps the place in the list
+      if (sheetHadFocus) ranksSheet.querySelector('button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
+    }
     if (ranksSheet) ranksSheet.onkeydown = (e) => {
       if (e.key !== 'Tab') return;
       e.preventDefault();
