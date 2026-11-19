@@ -24,6 +24,7 @@ module.exports = {
         { value: 'short', label: 'Short', desc: 'The game ends when someone reaches 35 penalty points (20 with simple scoring).' },
         { value: 'standard', label: 'Standard', desc: 'The game ends when someone reaches 66 penalty points (35 with simple scoring).' },
         { value: 'long', label: 'Long', desc: 'The game ends when someone reaches 100 penalty points (50 with simple scoring).' },
+        { value: 'countdown', label: 'Starting score 66', desc: 'Everyone starts with 66 points and penalty points are taken away. When someone reaches 0 the round is played out, then the game ends: whoever reached 0 loses, and the player with the most points left wins.' },
       ],
     },
     {
@@ -87,7 +88,7 @@ module.exports = {
     'Placing a card: a card goes onto the row whose last card is the highest number still lower than it. A row is full at five cards by default (four or six under Cards per row). If a full row is the one your card would go onto, you take that whole row as penalty points, and your card starts a new row.',
     'Below every row: if your card is lower than the last card of every row, it fits nowhere. You then take one row of your choice (with the Cheapest row option the game chooses the row with the fewest penalty points for you). Your card starts that row.',
     'Scoring a round: when everyone has played their hand, the penalty points each player took are added to their total. A new round is dealt until someone reaches the game-length target: 66 by default, or as set under Game length.',
-    'Winning: the lowest total wins. If totals are equal, the players share the win.',
+    'Winning: the lowest total wins. If totals are equal, the players share the win. With Starting score 66 everyone starts with 66 points and penalty points are taken away: when someone reaches 0 the round is played out, then the game ends. Whoever reached 0 loses; the player with the most points left wins.',
     'The table options change these numbers: cards in hand, cards per row, scoring (simple scoring gives every card 1 point), game length, what happens to a card below every row, and pace (how long each card stays on the table).',
   ],
 

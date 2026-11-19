@@ -299,5 +299,55 @@ test('the plugin exposes every table option, each with a valid default, and the 
   assert.equal(typeof g.setPacingScale, 'function');
 });
 
+/** Plays out the last turn of a round with the given piles (what each player has taken so far) and totals. */
+function finishRound(totals, piles, picks) {
+  const g = setup(2, [[1], [2], [3], [4]], [[10], [20]], { target: 'countdown' });
+  g.totals = totals.slice(); g.piles = piles.map((p) => cards(...p)); g.turn = g.handSize;
+  pick(g, 0, picks[0]); pick(g, 1, picks[1]);
+  return g;
+}
+
+test('Starting score 66: the countdown option is accepted and everyone starts with 66 points', () => {
+  const g = e.createGame(people(3), { target: 'countdown' }, rngFor(4));
+  assert.equal(g.countdown, true);
+  assert.equal(g.target, 66);
+  assert.equal(g.options.target, 'countdown');
+  assert.equal(e.viewFor(g, 'p0').players[0].left, 66);
+});
+
+test('Starting score 66: someone at 0 does not end the game mid-round; the round is played out first', () => {
+  const g = setup(2, [[1], [2], [3], [4]], [[10, 30], [20, 40]], { target: 'countdown' });
+  g.totals = [60, 0]; g.piles = [cards(55), []]; // 6 points taken now: 66 total would be reached, but the round goes on
+  pick(g, 0, 10); pick(g, 1, 20);
+  assert.equal(g.phase, 'choose', 'the first turn of the round is not the end of it');
+  assert.equal(g.totals[0], 60, 'totals only change when the round is scored');
+});
+
+test('Starting score 66: whoever reached 0 loses, and the player with the most points left wins', () => {
+  const g = finishRound([60, 10], [[55], []], [10, 20]); // p0 takes 6 more: 66 reached, so p0 is at 0
+  assert.equal(g.phase, 'gameOver');
+  assert.deepEqual(g.losers, [0]);
+  assert.deepEqual(g.winners, [1]);
+  const res = e.results(g);
+  assert.equal(res[0].winner, false);
+  assert.equal(res[1].winner, true);
+});
+
+test('Starting score 66: equal points left share the win, and everyone at 0 means nobody wins', () => {
+  const shared = finishRound([60, 40], [[55], []], [10, 20]); // p0 at 0, p1 has 26 left
+  assert.deepEqual(shared.winners, [1]);
+  const all = finishRound([60, 60], [[55], [55]], [10, 20]); // both reach 0
+  assert.equal(all.phase, 'gameOver');
+  assert.deepEqual(all.losers, [0, 1]);
+  assert.deepEqual(all.winners, []);
+  assert.deepEqual(e.results(all).map((r) => r.winner), [false, false]);
+});
+
+test('Starting score 66: with points left on both sides the game goes on', () => {
+  const g = finishRound([30, 20], [[5], []], [10, 20]);
+  assert.equal(g.phase, 'choose');
+  assert.deepEqual(g.losers, []);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

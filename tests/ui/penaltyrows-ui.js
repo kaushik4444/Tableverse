@@ -23,7 +23,9 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     const { page, ctx } = await open(tableMessages('penaltyrows', four));
     assert.equal(await page.locator('.pr-row').count(), 4);
     assert.equal(await page.locator('.pr-hand .pr-card').count(), 10);
+    await page.locator('[data-pr="tab"][data-tab="scores"]').click();
     assert.equal(await page.locator('.pr-score li').count(), 4);
+    await page.locator('[data-pr="tab"][data-tab="table"]').click();
     const n = Number(await page.locator('.pr-hand .pr-card').first().getAttribute('data-n'));
     await page.locator('.pr-hand .pr-card').first().click();
     assert.deepEqual((await sent(page)).at(-1).action, { type: 'pick', card: n });
