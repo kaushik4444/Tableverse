@@ -55,9 +55,10 @@
     const rows = ui.anim && ui.anim.seq === v.seq ? ui.anim.steps[ui.anim.i] : v.rows;
     return `<div class="pr-rows">${rows.map((row, k) => {
       const slots = Array.from({ length: v.rowLimit }, (_, s) => (row[s] ? cardHTML(row[s]) : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
-      const full = row.length >= 5;
-      const label = `Row ${k + 1}: ${row.length} card${row.length === 1 ? '' : 's'}, ${penWord(v.rowPenalty[k])}`;
-      const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span><small>${v.rowPenalty[k]} pts${full ? ' · full' : ''}</small></span><div class="pr-cards">${slots}</div>`;
+      const full = row.length >= v.rowLimit;
+      const points = row.reduce((s, c) => s + c.p, 0); // from the row as shown, so a step mid-turn counts only the cards on it
+      const label = `Row ${k + 1}: ${row.length} card${row.length === 1 ? '' : 's'}, ${penWord(points)}`;
+      const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span><small>${points} pts${full ? ' · full' : ''}</small></span><div class="pr-cards">${slots}</div>`;
       return taking
         ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
         : `<div class="pr-row ${full ? 'full' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
