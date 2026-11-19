@@ -78,7 +78,7 @@ const seatsOf = (players) => players.map((p) => ({ id: p.id, name: p.name, bot: 
     res.forEach((r) => assert.equal(r.winner, r.score === top));
   });
 
-  await test('the mind: the team wins or loses together', async () => {
+  await test('mind: the team wins or loses together', async () => {
     const { g } = playOut('themind', 2, {}, 9);
     const res = g.results();
     assert.ok(res.every((r) => r.winner === res[0].winner));

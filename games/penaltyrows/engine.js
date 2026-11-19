@@ -1,7 +1,7 @@
 'use strict';
 const pacing = require('../pacing');
 /**
- * Penalty Rows: the rules only (no sockets, no timers; the walk-time holds go through games/pacing.js).
+ * Take 5: the rules only (no sockets, no timers; the walk-time holds go through games/pacing.js).
  *
  * 2-8 players, a deck of the numbers 1 to 104. Every number carries penalty points (see penaltyOf). Each round every
  * player gets 10 cards and four cards start four rows. In each of the 10 turns everybody secretly picks one card; when
@@ -61,7 +61,7 @@ function linger(g, ms) { pacing.hold(g, ms * PACE[g.options.pace]); }
 
 function createGame(players, options, rng = Math.random) {
   const n = players.length;
-  if (n < 2 || n > MAX_PLAYERS) throw new Error(`Penalty Rows is for 2 to ${MAX_PLAYERS} players`);
+  if (n < 2 || n > MAX_PLAYERS) throw new Error(`Take 5 is for 2 to ${MAX_PLAYERS} players`);
   const o = options || {};
   const countdown = o.target === 'countdown';
   const key = countdown || Object.hasOwn(TARGETS, o.target) ? o.target : 'standard';

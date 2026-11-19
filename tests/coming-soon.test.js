@@ -38,10 +38,12 @@ const sandbox = { window: {} };
 vm.runInNewContext(releaseSource, sandbox);
 const releases = sandbox.window.TV_RELEASES;
 assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history keeps every version (newest first)');
-const newest = releases[0];
+// The newest release is the game names release (one item); the guest play release follows it with three highlights.
+assert.equal(releases[0].version, '2026-11-20-game-names');
+assert.match(releases[0].items.map((i) => i.title).join('\n'), /Three games have new names/);
+const newest = releases[1];
 const highlights = newest.items.slice(0, 3).map((i) => i.title).join('\n');
 assert.equal(newest.items.slice(0, 3).length, 3, 'the home page shows three highlights');
-// The newest release is the guest play release (its first three items). The older highlights stay in the history.
 assert.equal(newest.version, '2026-11-18-guest-play');
 assert.match(highlights, /Play without an account/);
 assert.match(highlights, /Some games need an account/);
