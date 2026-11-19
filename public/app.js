@@ -2724,13 +2724,15 @@
       ${bannersHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
       ${friendsStripHTML()}
-      <section class="home-section" id="games">
-        <h2 class="section">Games</h2>
-        ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
-      </section>
+      <div class="home-split">
+        <section class="home-section" id="games">
+          <h2 class="section">Games</h2>
+          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
+        </section>
+        ${publicTablesHTML()}
+      </div>
       ${comingSoonHTML()}
       ${recentTablesHTML()}
-      ${publicTablesHTML()}
       <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.privacyPublished ? '<a href="/privacy">Privacy notice</a>' : '', S.termsPublished ? '<a href="/terms">Terms</a>' : '', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
     </main>`;
   }
