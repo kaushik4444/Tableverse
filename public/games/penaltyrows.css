@@ -54,7 +54,7 @@
 }
 .prt .pr-card b { margin-top: 18%; font-size: clamp(14px, 2.6vw, 22px); font-weight: 900; text-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
 .prt .pr-card em.pr-tl { position: absolute; left: 4px; top: 3px; font-style: normal; font-size: 10px; font-weight: 900; opacity: .92; }
-.prt .pr-pips { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font-size: 10px; line-height: 1; letter-spacing: 0; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, .6); white-space: nowrap; overflow: hidden; }
+.prt .pr-pips { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font-size: 9px; line-height: 1; letter-spacing: -0.5px; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, .6); white-space: nowrap; overflow: hidden; }
 .prt .pr-card.pen2 { background: linear-gradient(160deg, #3b9bf0, #1d5fb8); }
 .prt .pr-card.pen3 { background: linear-gradient(160deg, #5bd06f, #2c8f43); }
 .prt .pr-card.pen5 { background: linear-gradient(160deg, #ff6b5b, #c42a2a); }

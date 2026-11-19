@@ -105,7 +105,7 @@
       : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
     const callout = here && ev.kind !== 'place' ? `<span class="pr-callout">${nameOf(v, ev.by)} took ${ev.took}</span>` : '';
     const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span></span><span class="pr-cards" style="--cols:${v.rowLimit}">${slots}</span>`
-      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${starsOf(points) || '0'}</span></span>${callout}`;
+      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${points <= 5 ? (starsOf(points) || '0') : `★×${points}`}</span></span>${callout}`;
     return taking
       ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
       : `<div class="pr-row ${full ? 'full' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
