@@ -4,7 +4,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, seq: null, anim: null };
+  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null };
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
 
   /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
@@ -19,14 +19,18 @@
       steps.push(rows.map((r) => r.slice()));
     }
     const last = steps[steps.length - 1];
-    const same = last.length === v.rows.length && last.every((r, k) => r.length === v.rows[k].length && r.every((c, s) => c.n === v.rows[k][s].n));
+    if (!v.after) return null;
+    const same = last.length === v.after.length && last.every((r, k) => r.length === v.after[k].length && r.every((c, s) => c.n === v.after[k][s].n)); // compare with the completed table: at a round's end the rows are already the next deal
     return same && steps.length > 1 ? steps : null;
   }
+
+  /** The table this renderer is showing (the room code), so playback for one table never plays on another. */
+  const tableOf = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
 
   function scheduleStep(seq, paceK) {
     setTimeout(() => {
       const a = ui.anim;
-      if (!a || a.seq !== seq || !ui.ctx) return;
+      if (!a || a.seq !== seq || a.table !== tableOf() || !ui.ctx) return;
       a.i += 1;
       if (a.i >= a.steps.length - 1) ui.anim = null; // the last step is the table itself
       ui.ctx.rerender();
@@ -109,10 +113,11 @@
   function react(v) {
     const snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = v.seq; return; } // first render (load or reconnect): do not replay
+    if (v.phase === 'takeRow') ui.anim = null; // a row choice must show the rows as they stand, not a replay
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
     const steps = replaySteps(v);
-    ui.anim = steps ? { seq: v.seq, steps, i: 0 } : null;
+    ui.anim = steps ? { seq: v.seq, steps, i: 0, table: tableOf() } : null;
     if (ui.anim) scheduleStep(v.seq, v.paceK);
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
@@ -123,6 +128,7 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
+    if (ui.table !== tableOf()) { ui.table = tableOf(); ui.anim = null; ui.seq = null; } // a different table: start afresh, with no replay
     react(v);
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);

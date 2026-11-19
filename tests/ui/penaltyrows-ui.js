@@ -90,6 +90,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     second.view.rows = [[c(12), c(18)], [c(3), c(7)], [c(38)], [c(44)]];
     second.view.lastTurn = [{ kind: 'place', by: 1, n: 18, p: pen(18), row: 0, took: 0 }, { kind: 'place', by: 2, n: 7, p: pen(7), row: 1, took: 0 }];
     second.view.seq = 2;
+    second.view.after = second.view.rows; // the completed table at the end of the turn, as the engine sends it
     const stepMs = 900 * (first.view.paceK || 1);
     const { page, ctx } = await open([first]);
     const counts = () => page.evaluate(() => [...document.querySelectorAll('.pr-row')].map((r) => r.querySelectorAll('.pr-card').length));

@@ -68,12 +68,12 @@
     const selected = canHit && grp.kind === 'run' ? v.hand.find((c) => c.id === [...ui.sel][0]) : null;
     if (selected && selected.k === 'w') {
       const ends = [];
-      if (grp.lo > 1) ends.push(`<button type="button" class="btn small ghost" data-sr="hit" data-owner="${owner}" data-group="${k}" data-end="low">Wild to low end (${grp.lo - 1})</button>`);
-      if (grp.hi < 12) ends.push(`<button type="button" class="btn small ghost" data-sr="hit" data-owner="${owner}" data-group="${k}" data-end="high">Wild to high end (${grp.hi + 1})</button>`);
+      if (grp.lo > 1) ends.push(`<button type="button" class="btn small ghost" data-sr="hit" data-act="gameControl" data-owner="${owner}" data-group="${k}" data-end="low">Wild to low end (${grp.lo - 1})</button>`);
+      if (grp.hi < 12) ends.push(`<button type="button" class="btn small ghost" data-sr="hit" data-act="gameControl" data-owner="${owner}" data-group="${k}" data-end="high">Wild to high end (${grp.hi + 1})</button>`);
       return `<div class="sr-group" role="group" aria-label="${esc(label)}">${inner}<div class="sr-ends">${ends.join('')}</div></div>`;
     }
     return canHit
-      ? `<button type="button" class="sr-group hit" data-sr="hit" data-owner="${owner}" data-group="${k}" aria-label="${esc('Add the selected card to ' + label)}">${inner}</button>`
+      ? `<button type="button" class="sr-group hit" data-sr="hit" data-act="gameControl" data-owner="${owner}" data-group="${k}" aria-label="${esc('Add the selected card to ' + label)}">${inner}</button>`
       : `<div class="sr-group" role="group" aria-label="${esc(label)}">${inner}</div>`;
   }
 
