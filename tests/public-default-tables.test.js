@@ -63,6 +63,8 @@ async function guest(port, name) {
 
 (async () => {
   const app2 = await start({ port: 0, botDelay: [0, 3], autoAdvanceMs: 20, absentMs: 150, maxMsgsPerSec: Infinity, trickPauseMs: 0, forcedMs: 0 });
+  // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
+  require('./helpers/openGuestFeatures')();
   const { port } = app2;
   const clients = [];
   try {

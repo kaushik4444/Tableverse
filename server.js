@@ -22,6 +22,9 @@ const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
 const gameFlags = require('./lib/gameFlags');
+const guestFeatures = require('./lib/guestFeatures'); // what guests may do, switched by the owner (Guests tab)
+const guestPolicy = require('./lib/guestPolicy');
+const gameAccess = require('./public/game-access');
 const { makeAuthEmailSender } = require('./lib/email');
 const { cspFor } = require('./lib/googleAuth');
 const { createAuthRoutes } = require('./lib/authRoutes');
@@ -48,6 +51,7 @@ const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
 const { createBroadcastWorker } = require('./lib/broadcast');
 const { createRenderLogs } = require('./lib/renderLogs');
+const { createRenderDeploy } = require('./lib/renderDeploy');
 const { createLogger, requestIdFrom } = require('./lib/log');
 const serverLog = createLogger({ component: 'server' });
 const httpLog = createLogger({ component: 'http' });
@@ -295,6 +299,20 @@ function start(opts = {}) {
   // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
+  /** A role changed in the admin console: the live player takes it at once, so restricted games are judged by the new role. */
+  // role changes per account, kept even when the account is not connected: a stored-role read that overlaps a change to
+  // that same account is read again, so an older stored role cannot replace it (changes to other accounts do not matter)
+  const roleVersions = new Map();
+  const applyLiveRole = ({ playerId, role, unverified = false }) => {
+    roleVersions.set(playerId, (roleVersions.get(playerId) || 0) + 1);
+    const p = players.get(playerId);
+    if (!p || typeof role !== 'string' || !role) return;
+    p.role = role;
+    p.roleUnverified = unverified === true; // set when the stored role could not be read back (fail closed)
+    // the browser keeps the role it was given at the welcome: send the new role and the games it may now play
+    send(p.ws, { t: 'role', role: roleOf(p) });
+    send(p.ws, { t: 'games', games: gameListFor(games.list(), p) });
+  };
   const closeSignedOutSockets = ({ playerId, token, tokenHash, exceptToken, replaced }) => {
     for (const ws of wss.clients) {
       const owner = ws.player || ws.pendingPlayer; // a socket still being checked belongs to its session too
@@ -329,6 +347,7 @@ function start(opts = {}) {
     // players with a live socket right now; `players` above also counts records kept after a disconnect
     playersConnected: [...players.values()].filter((p) => p.connected).length,
   });
+  const renderDeploy = createRenderDeploy({ env }); // owner-only redeploy (admin console, Logs tab)
   const renderLogs = createRenderLogs({ env }); // Stage 20.8: Render's history for the owner (off until the RENDER_ settings exist)
   // the account no longer exists (deleted by its owner, or by the admin-console owner): leave the table, close the socket, forget the player
   const handleAccountDeleted = ({ playerId }) => {
@@ -387,8 +406,8 @@ function start(opts = {}) {
     googleAllowed: privacyLive, // Google sign-in is offered only while the privacy notice is live
     onEvent: (metric, dim, playerId) => { analytics.track(metric, dim || ''); if (playerId) analytics.active(playerId); },
     extraRoutes: (ctx) => createAdminRoutes({
-      env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs,
-      onSignedOut: closeSignedOutSockets, onAccountDeleted: handleAccountDeleted, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
+      env, store: adminStore, analytics, platform: adminPlatform, ctx, auth: dbAuth, emailSender, renderLogs, renderDeploy,
+      onSignedOut: closeSignedOutSockets, onAccountDeleted: handleAccountDeleted, onRoleChanged: applyLiveRole, onBroadcastQueued: kickBroadcasts, makeUnsubscribeUrl,
     }).routes,
     production,
     trustProxy,
@@ -413,6 +432,32 @@ function start(opts = {}) {
       onEvent: (event) => (event.type === 'friend-removed' ? onFriendRemoved(event.playerId, event.friendId) : notifyAccount(event.playerId, event)),
     },
     onSignedOut: closeSignedOutSockets,
+    // a guest's e-mail link was used: the same player is now an account, so the live session is no longer a guest for game gates
+    // A guest's account was confirmed (from the e-mail link, in any browser): the live player and every open socket of it
+    // see the account at once, so the page drops its guest state and the guest restrictions stop applying.
+    onGuestUpgraded: ({ playerId, username, displayName }) => {
+      const p = players.get(playerId);
+      if (!p) return;
+      p.isAnonymous = false;
+      p.username = username || p.username || null;
+      if (displayName) {
+        // the name chosen on the account step is the live name at once (same rule as a profile change: running seats keep theirs)
+        p.name = displayName;
+        const room = rooms.get(p.room);
+        const m = room && room.members.find((x) => x.id === p.id);
+        if (m && room.status !== 'playing') m.name = p.name;
+        const s = room && room.spectators.find((x) => x.id === p.id);
+        if (s) s.name = p.name;
+        if (room) broadcast(room);
+      }
+      if (!p.role || p.role === 'guest') p.role = 'user'; // owner and admin keep their role
+      for (const ws of wss.clients) {
+        const owner = ws.player || ws.pendingPlayer;
+        if (!owner || owner.id !== playerId) continue;
+        send(ws, { t: 'identity', isGuest: false, role: roleOf(p), username: p.username, guestLocked: [] });
+      }
+      broadcastGames();
+    },
     // the display name and/or avatar was changed over HTTP (profile page): same effect as the lobby's own change
     onProfileChanged: ({ playerId, displayName, avatar }) => {
       const p = players.get(playerId);
@@ -482,7 +527,7 @@ function start(opts = {}) {
     }
     // Public snapshot for visitors: the home page shows the game list and the table directory without a session or a socket.
     if (rel === '/api/games') {
-      return sendJson(res, 200, { ok: true, games: gameFlags.withFlags(games.list()), tables: publicTables(), announcement, ...legalFlags });
+      return sendJson(res, 200, { ok: true, games: gameListFor(games.list()), tables: publicTables(), announcement, guestPlay: guestPolicy.guestPlayEnabled(env), guestHours: guestPolicy.guestTtlHours(env), ...legalFlags });
     }
     if (rel.includes('\0')) {
       res.writeHead(400);
@@ -565,6 +610,47 @@ function start(opts = {}) {
   // ------------------------------------------------------------ helpers
   const send = (ws, obj) => sendBounded(ws, obj, maxBufferedBytes);
   const sendError = (p, message) => send(p.ws, { t: 'error', message });
+  // Guest play policy (lib/guestPolicy.js): a guest who taps a locked game gets a code the page turns into an account dialog.
+  /** The role that decides which games this player may use (public/game-access.js): owner, admin, user or guest. */
+  const roleOf = (p) => gameAccess.roleOf({ isGuest: Boolean(p.isAnonymous), role: p.role });
+  /**
+   * The game list for this viewer: `access` (the owner's mode for the game) and `enabled` (may this viewer play it now).
+   * Without a viewer (the public /api/games call) `enabled` means open to everybody.
+   */
+  const gameListFor = (list, p) => gameFlags.withFlags(list, p ? roleOf(p) : undefined);
+  const sendGuestLocked = (p, gameId) => send(p.ws, { t: 'error', code: 'guest_locked', gameId, message: 'Create a free account to play this game.' });
+  /** Account-only for guests, always (not a switch): reporting. Sends the account prompt; true when refused. */
+  const guestBarred = (p, feature) => {
+    if (roleOf(p) !== 'guest') return false;
+    send(p.ws, { t: 'error', code: 'guest_locked', feature, message: 'Create a free account to use this.' });
+    return true;
+  };
+  /** A guest asks for something the owner has locked for guests (lib/guestFeatures.js). Sends the account prompt; true when refused. */
+  const guestLocked = (p, feature) => {
+    if (roleOf(p) !== 'guest' || guestFeatures.allowed(feature)) return false;
+    send(p.ws, { t: 'error', code: 'guest_locked', feature, message: 'Create a free account to use this.' });
+    return true;
+  };
+  /**
+   * Refuse a game for this player when the owner's access mode excludes their role. A guest who could play the game as a
+   * registered player gets the account prompt (guest_locked); anyone else gets the plain refusal. Returns true when refused.
+   */
+  const refuseGame = (p, gameId) => {
+    const role = roleOf(p);
+    if (gameFlags.isEnabled(gameId, role)) return false;
+    if (role === 'guest' && gameFlags.isEnabled(gameId, 'user')) sendGuestLocked(p, gameId);
+    else sendError(p, 'That game is not available right now.');
+    return true;
+  };
+  /**
+   * Human seats at a table whose current role may not play its game. Each person is judged by their live role (a demoted
+   * admin or a guest who upgraded is judged as they are now). A person with no live record is treated as not allowed.
+   */
+  const ineligibleHumans = (room) => room.members.filter((m) => {
+    if (m.bot) return false;
+    const mp = players.get(m.id);
+    return !mp || !gameFlags.isEnabled(room.gameId, roleOf(mp));
+  });
   function notifyAccount(playerId, event) {
     const recipient = players.get(playerId);
     if (!recipient || !recipient.connected) return; // live-only; DB records remain authoritative
@@ -707,8 +793,8 @@ function start(opts = {}) {
   /** The table directory: every public lobby or running table. A block never hides a table (blocked players may share one). */
   // Sends the game list (with each game's switch) to every connected socket when a switch changes.
   function broadcastGames() {
-    const msg = { t: 'games', games: gameFlags.withFlags(games.list()) };
-    for (const ws of wss.clients) send(ws, msg);
+    // Each socket gets the list for its own player (a guest and a registered player may see different locks).
+    for (const ws of wss.clients) send(ws, { t: 'games', games: gameListFor(games.list(), ws.player || undefined) });
   }
 
   function publicTables() {
@@ -1105,6 +1191,16 @@ function start(opts = {}) {
     return true;
   }
 
+  /**
+   * A player who leaves a table on purpose (leave, create, or join another table) is remembered for a guest: a guest may be
+   * locked out of getting back in (feature 'rejoin'). A dropped connection never comes through here.
+   */
+  function leaveByChoice(p) {
+    const room = rooms.get(p.room);
+    if (room && roleOf(p) === 'guest') (room.guestLeavers || (room.guestLeavers = new Set())).add(p.id);
+    leaveRoom(p);
+  }
+
   function leaveRoom(p) {
     const room = rooms.get(p.room);
     p.room = null;
@@ -1412,6 +1508,7 @@ function start(opts = {}) {
     // A report about a player (from their card or profile). Needs an account; the reported account is checked on the server.
     async reportPlayer(p, msg) {
       const self = players.get(p.id);
+      if (guestBarred(p, 'reports')) return;
       if (!self || !self.username) return sendError(p, 'Sign in to report a player.'); // guests have no account to report from
       const resolved = await resolveTarget(msg);
       const checked = moderation.validatePlayerReport(p.id, resolved ? { ...msg, id: resolved.id } : msg);
@@ -1429,6 +1526,7 @@ function start(opts = {}) {
     },
 
     async report(p, msg) {
+      if (guestLocked(p, 'reports')) return;
       const room = rooms.get(p.room);
       if (!room) return sendError(p, 'Join a table to report a message.');
       const checked = moderation.validateReport(msg);
@@ -1453,6 +1551,7 @@ function start(opts = {}) {
 
     // Blocking applies to table access, seating, chat, reactions and voice in both directions; it never signs either account out.
     async block(p, msg) {
+      if (guestLocked(p, 'blocking')) return;
       const byName = msg && msg.id === undefined && typeof msg.username === 'string';
       return inArrivalOrder(p, async () => {
         const id = byName ? await dbAccount.idForUsername(msg.username) : msg && msg.id;
@@ -1468,6 +1567,7 @@ function start(opts = {}) {
     blocks(p) { return sendBlocks(p); },
 
     async unblock(p, msg) {
+      if (guestLocked(p, 'blocking')) return;
       const byName = msg && msg.id === undefined && typeof msg.username === 'string';
       return inArrivalOrder(p, async () => {
         const id = byName ? await dbAccount.idForUsername(msg.username) : msg && msg.id;
@@ -1479,11 +1579,12 @@ function start(opts = {}) {
     create(p, msg) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
-      if (!gameFlags.isEnabled(msg.gameId)) return sendError(p, 'That game is not available right now.');
+      if (refuseGame(p, msg.gameId)) return;
+      if (msg.visibility === 'private' && guestLocked(p, 'private_tables')) return;
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
-      if (p.room) leaveRoom(p);
+      if (p.room) leaveByChoice(p);
       const room = {
         code: newCode(),
         createdAt: Date.now(),
@@ -1520,11 +1621,15 @@ function start(opts = {}) {
       const room = rooms.get(code);
       applyProfile(p, msg);
       if (!room) return sendError(p, `No table with code ${code || '?'}`);
+      if (refuseGame(p, room.gameId)) return;
+      if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin')) return;
       if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
       // The socket may have closed while we waited: an offline person must not take a seat or start a play-time clock.
       if (!p.connected) return;
+      // The owner may restrict the game while the admission check was waiting: refuse again before any seat changes
+      if (refuseGame(p, room.gameId)) return;
       // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
@@ -1535,7 +1640,7 @@ function start(opts = {}) {
       // line is written. A stale p.room that points elsewhere is repaired.
       if ((seat && !seat.bot) || isSpec(room, p.id)) {
         if (p.room === code) return broadcast(room);
-        if (p.room) leaveRoom(p);
+        if (p.room) leaveByChoice(p);
         p.room = code;
         broadcast(room);
         return sendChatLog(p, room);
@@ -1549,7 +1654,7 @@ function start(opts = {}) {
       const now = Date.now();
       const seatDecision = seat && room.status === 'playing' && seat.bot ? rejoinDecision(room, p.id, now) : null;
       if (seatDecision && seatDecision.seat) {
-        if (p.room && p.room !== room.code) leaveRoom(p);
+        if (p.room && p.room !== room.code) leaveByChoice(p);
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
         reclaimSeat(room, seat, now); // back in time: the bot gives the seat back, no loss, play resumes
@@ -1568,7 +1673,7 @@ function start(opts = {}) {
         // the game is already running: the newcomer watches
         if (seatDecision && seatDecision.reason === 'expired') send(p.ws, { t: 'notice', text: 'Your time to take your seat back has passed, so the bot keeps it to the end. You can watch as a spectator.' });
         if (room.spectators.length >= MAX_SPECTATORS) return sendError(p, 'Too many spectators at that table');
-        if (p.room && p.room !== room.code) leaveRoom(p);
+        if (p.room && p.room !== room.code) leaveByChoice(p);
         addSpectator(room, p);
         sys(room, `👁 ${p.name} is watching`);
         notifyOthers(room, p.id, `👁 ${p.name} is watching the game`);
@@ -1578,7 +1683,7 @@ function start(opts = {}) {
       }
       if (wantsSpectate) {
         if (room.spectators.length >= MAX_SPECTATORS) return sendError(p, 'Too many spectators at that table');
-        if (p.room && p.room !== room.code) leaveRoom(p);
+        if (p.room && p.room !== room.code) leaveByChoice(p);
         addSpectator(room, p);
         sys(room, `👁 ${p.name} is watching`);
         notifyOthers(room, p.id, `👁 ${p.name} is watching the lobby`);
@@ -1587,7 +1692,7 @@ function start(opts = {}) {
         return;
       }
       if (room.members.length >= room.seats) return sendError(p, 'That table is full');
-      if (p.room) leaveRoom(p);
+      if (p.room) leaveByChoice(p);
       addMember(room, p);
       sys(room, `🙋 ${p.name} joined the table`);
       notifyOthers(room, p.id, `🙋 ${p.name} joined the table`);
@@ -1610,7 +1715,7 @@ function start(opts = {}) {
     },
 
     leave(p) {
-      leaveRoom(p);
+      leaveByChoice(p);
       send(p.ws, { t: 'left' });
       send(p.ws, tablesMsg(p)); // the home screen can offer "Rejoin" straight away
     },
@@ -1736,6 +1841,7 @@ function start(opts = {}) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
       const next = msg.visibility === 'public' ? 'public' : 'private';
+      if (next === 'private' && guestLocked(p, 'private_tables')) return;
       if (next === 'private' && room.visibility !== 'private') { // whoever is already here was let in as a public guest and stays
         room.admitted = new Set([...room.members.filter((m) => !m.bot).map((m) => m.id), ...room.spectators.map((x) => x.id)]);
       }
@@ -1762,7 +1868,8 @@ function start(opts = {}) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
       const def = games.get(room.gameId);
-      if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.');
+      if (refuseGame(p, room.gameId)) return;
+      if (ineligibleHumans(room).length) return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.');
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
@@ -1822,10 +1929,11 @@ function start(opts = {}) {
     async rematch(p) {
       const room = hostRoom(p, 'finished');
       if (!room) return;
-      if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.');
+      if (refuseGame(p, room.gameId)) return;
       // Anyone who lost access to a private table while the game was running leaves now, before the next round forms.
       await enforceAccess(room);
-      if (!gameFlags.isEnabled(room.gameId)) return sendError(p, 'That game is not available right now.'); // it may have been switched off while the access check ran
+      if (refuseGame(p, room.gameId)) return; // it may have been switched off while the access check ran
+      if (ineligibleHumans(room).length) return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then rematch.');
       if (rooms.get(room.code) !== room || room.status !== 'finished' || room.hostId !== p.id) return; // the table changed while we checked
       clearTimeout(room.timer);
       room.game = null;
@@ -1915,8 +2023,21 @@ function start(opts = {}) {
     }
 
     let p = tokens.get(presentedToken) || null;
+    // a cached session whose role could not be read back is read again from the database, so a promotion is not lost
+    if (p && p.roleUnverified) p = null;
     if (!p) {
-      const dbPlayer = await dbPlayers.authenticateToken(presentedToken);
+      // a live role change that lands while the stored role is read is newer than what was read: read again (three tries at most)
+      let dbPlayer = null;
+      let liveChanged = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const before = new Map(roleVersions);
+        dbPlayer = await dbPlayers.authenticateToken(presentedToken);
+        if (ws.readyState !== 1 || ws.revoked) return; // the socket closed or was revoked during the lookup: no more lookups for it
+        liveChanged = Boolean(dbPlayer) && (roleVersions.get(dbPlayer.id) || 0) !== (before.get(dbPlayer.id) || 0);
+        if (!liveChanged) break;
+      }
+      // every read overlapped a role change to this account and no live record holds the newer role: do not guess; the client reconnects
+      if (liveChanged && dbPlayer && !players.get(dbPlayer.id)) return ws.close(1013, 'role changed while signing in; reconnect');
       if (dbPlayer) {
         const known = players.get(dbPlayer.id);
         if (known) {
@@ -1927,6 +2048,10 @@ function start(opts = {}) {
           p.username = dbPlayer.username || null;
           p.createdAt = dbPlayer.created_at;
           p.isAnonymous = Boolean(dbPlayer.is_anonymous);
+          if (!liveChanged) {
+            p.role = dbPlayer.role || 'user';
+            p.roleUnverified = false;
+          }
         } else {
           p = {
             id: dbPlayer.id,
@@ -1936,6 +2061,7 @@ function start(opts = {}) {
             username: dbPlayer.username || null,
             createdAt: dbPlayer.created_at,
             isAnonymous: Boolean(dbPlayer.is_anonymous),
+            role: dbPlayer.role || 'user',
             room: null,
             ws: null,
             connected: false,
@@ -1967,7 +2093,8 @@ function start(opts = {}) {
       send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session is invalid or expired. Please log in again.' });
       return ws.close(1008, 'invalid session');
     }
-    if (dbPool.hasDatabase() && dbAuth.isEmailVerificationRequired(env) && !auth.emailVerified) {
+    // A guest has no email to verify (its session is an is_anonymous player); the verification gate is for registered accounts.
+    if (dbPool.hasDatabase() && dbAuth.isEmailVerificationRequired(env) && !auth.emailVerified && !(auth.player && auth.player.is_anonymous)) {
       send(ws, { t: 'authRequired', ...legalFlags, message: 'Please verify your email before entering the lobby.' });
       return ws.close(1008, 'email verification required');
     }
@@ -2002,7 +2129,7 @@ function start(opts = {}) {
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
     const stillOwner = () => ws.readyState === 1 && !ws.revoked && p.ws === ws;
-    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, games: gameFlags.withFlags(games.list()), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
+    send(ws, { t: 'welcome', id: p.id, token: includeDebugTokens ? p.token : undefined, name: p.name, avatar: p.avatar, avatars: AVATARS, emotes: EMOTES, role: roleOf(p), guestLocked: roleOf(p) === 'guest' ? guestFeatures.FEATURES.map((f) => f.key).filter((k) => !guestFeatures.allowed(k)) : [], games: gameListFor(games.list(), p), tables: publicTables(p.id), rejoin: rejoinFor(p), announcement, ...legalFlags, ...iceMsg(p.id) });
     markActive(p, ws);
     clearTimeout(p.dropTimer);
     const room = rooms.get(p.room);
@@ -2332,11 +2459,15 @@ function start(opts = {}) {
       // the owner's game switches: read now and every 15 seconds (lib/gameFlags.js); a change in this process is applied at once
       if (dbAdmin && dbAdmin.listGameFlags) {
         flagsStopped = false;
+        // a new server lifecycle in this process starts with no snapshot: a failed first read must not leave the last one in force
+        gameFlags.reset();
+        guestFeatures.reset();
         const refreshFlags = () => {
           if (flagsStopped) return Promise.resolve();
           const token = gameFlags.begin(); // reads are applied in the order they started
-          return dbAdmin.listGameFlags()
-            .then((rows) => { if (!flagsStopped) gameFlags.apply(rows, token); })
+          const gToken = guestFeatures.begin();
+          const guestRead = dbAdmin.listGuestFeatures ? dbAdmin.listGuestFeatures().then((rows) => { if (!flagsStopped) guestFeatures.apply(rows, gToken); }) : Promise.resolve();
+          return Promise.all([dbAdmin.listGameFlags().then((rows) => { if (!flagsStopped) gameFlags.apply(rows, token); }), guestRead])
             .catch((e) => (opts.log || console).error('[games] switches not loaded (games stay unavailable until they are): ' + e.message));
         };
         unsubscribeGames = gameFlags.onChange(broadcastGames); // connected players get the new list at once
@@ -2360,7 +2491,7 @@ function start(opts = {}) {
       }
     }
     // no database (memory mode): there are no switches, so every game is on; with a database the switches were read above
-    if (!(info && info.mode === 'postgres')) gameFlags.apply([]);
+    if (!(info && info.mode === 'postgres')) { gameFlags.apply([]); guestFeatures.apply([]); }
     if (metered) metered.start(); // both modes: the credential is fetched ahead of the first welcome, and refreshed in the background
     return flagsReady.then(() => new Promise((resolve) => server.listen(port, () => resolve({ server, port: server.address().port, close, database: info, matchQueue, statusLine }))));
   });

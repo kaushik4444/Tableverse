@@ -30,6 +30,11 @@ const STAGES = [
   [{ kind: 'set', size: 5 }, { kind: 'run', size: 4 }],
 ];
 const LENGTHS = { short: 5, full: 10 };
+/** A short name for each stage, shown on the table so players know which goal they are on. */
+const STAGE_NAMES = [
+  'Trio and run', 'Twin trios', 'Long run', 'Quad and run', 'Colour rush',
+  'Trio and long run', 'Run of seven', 'Twin quads', 'Colour storm', 'Grand finale',
+];
 
 /** Cards: ids 0-95 numbers (id = colour*24 + copy*12 + value-1), 96-103 wild, 104-107 skip. */
 function makeCard(id) {
@@ -40,8 +45,8 @@ function makeCard(id) {
 const points = (c) => (c.k === 'w' ? 25 : c.k === 's' ? 15 : c.v >= 10 ? 10 : 5);
 const sumPoints = (cards) => cards.reduce((s, c) => s + points(c), 0);
 
-function shuffled(rng) {
-  const d = Array.from({ length: 108 }, (_, i) => makeCard(i));
+function shuffled(rng, wildCards = true) {
+  const d = Array.from({ length: 108 }, (_, i) => makeCard(i)).filter((c) => wildCards || c.k !== 'w');
   for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
   return d;
 }
@@ -79,10 +84,11 @@ function createGame(players, options, rng = Math.random) {
   const n = players.length;
   if (n < 2 || n > MAX_PLAYERS) throw new Error(`Stage Rummy is for 2 to ${MAX_PLAYERS} players`);
   const length = options && Object.hasOwn(LENGTHS, options.length) ? options.length : 'full';
+  const wildCards = !(options && options.wildCards === false); // on unless the host turns them off
   const g = {
     game: 'stagerummy', n, rng,
     players: players.map((p) => ({ id: p.id, name: p.name })),
-    options: { length }, stageCount: LENGTHS[length],
+    options: { length, wildCards }, stageCount: LENGTHS[length],
     round: 0, dealer: n - 1, turn: 0,
     phase: 'draw', // draw | play | gameOver
     stock: [], discard: [], hands: [],
@@ -96,7 +102,7 @@ function createGame(players, options, rng = Math.random) {
 
 function startRound(g) {
   g.round += 1;
-  g.stock = shuffled(g.rng);
+  g.stock = shuffled(g.rng, g.options.wildCards);
   g.hands = g.players.map(() => []);
   for (let k = 0; k < HAND; k++) for (let i = 0; i < g.n; i++) g.hands[i].push(g.stock.pop());
   g.hands.forEach(sortHand);
@@ -189,7 +195,10 @@ function hit(g, i, action) {
   if (!c) return { ok: false, error: 'That card is not in your hand' };
   if (c.k === 's') return { ok: false, error: 'A skip card cannot be added to a group' };
   const owner = action.owner;
-  const grp = Number.isInteger(owner) && owner >= 0 && owner < g.n && g.laid[owner] ? g.laid[owner][action.group] : null;
+  // Only real indexes of this player's laid groups: a name such as "__proto__" must never reach an array's inherited properties.
+  const groups = Number.isInteger(owner) && owner >= 0 && owner < g.n && g.laid[owner] ? g.laid[owner] : null;
+  const gi = Number.isInteger(action.group) && action.group >= 0 && groups && action.group < groups.length ? action.group : -1;
+  const grp = gi >= 0 ? groups[gi] : null;
   if (!grp) return { ok: false, error: 'No such group' };
   if (grp.kind === 'set') {
     if (c.k === 'n' && c.v !== grp.num) return { ok: false, error: 'That card does not match the set' };
@@ -403,6 +412,8 @@ function viewFor(g, playerId) {
     myTurn: !over && me >= 0 && me === g.turn,
     stageCount: g.stageCount,
     goals: STAGES.slice(0, g.stageCount),
+    stageNames: STAGE_NAMES.slice(0, g.stageCount),
+    wildCards: g.options.wildCards,
     players: g.players.map((p, i) => ({
       id: p.id, name: p.name, cards: g.hands[i].length, stage: g.stage[i], score: g.scores[i],
       laid: g.laid[i] ? g.laid[i].map((grp) => ({ kind: grp.kind, num: grp.num, colour: grp.colour, lo: grp.lo, hi: grp.hi, cards: grp.cards.map(pub) })) : null,
@@ -422,4 +433,4 @@ function results(g) {
   return g.players.map((_, i) => ({ score: (g.stage[i] - 1) * 100000 - g.scores[i], winner: g.phase === 'gameOver' && best.includes(i) }));
 }
 
-module.exports = { HAND, MAX_PLAYERS, STAGES, LENGTHS, makeCard, points, classify, solve, createGame, applyAction, awaiting, botAction, viewFor, results };
+module.exports = { HAND, MAX_PLAYERS, STAGES, STAGE_NAMES, LENGTHS, makeCard, points, classify, solve, createGame, applyAction, awaiting, botAction, viewFor, results };

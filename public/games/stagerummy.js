@@ -1,15 +1,19 @@
-/* Stage Rummy table renderer: the stage goal, a scoreboard with every laid group, the two piles, and your hand.
- * Select cards, then: put them into the goal's groups and lay down, tap a laid group to add a selected card, or discard one card.
+/* Stage Rummy table renderer. The table is the shared felt: each player sits around it with the groups they have laid
+ * in front of them, the two piles are in the middle, and a short message floats over the table when something happens.
+ * You: the goal of your stage, your hand, and the groups you build before laying down.
+ * Select cards, then: put them into the goal's groups and lay down, tap a laid group to add a selected card, or discard one.
  * Styles in stagerummy.css. */
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null };
+  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0 };
+  const FLOAT_MS = 2600;
 
   const COL = { R: { name: 'Red', sym: '●' }, B: { name: 'Blue', sym: '■' }, G: { name: 'Green', sym: '▲' }, Y: { name: 'Yellow', sym: '◆' } };
-  const KIND = { set: 'set', run: 'run', colour: 'colour' };
-  const goalText = (g) => g.map((r) => `${r.kind === 'colour' ? 'colour' : KIND[r.kind]} of ${r.size}`).join(' + ');
+  const groupName = (r) => (r.kind === 'colour' ? `${r.size} of one colour` : `${r.kind} of ${r.size}`);
+  const goalText = (g) => g.map(groupName).join(' + ');
   const cardName = (c) => (c.k === 'w' ? 'Wild card' : c.k === 's' ? 'Skip card' : `${COL[c.c].name} ${c.v}`);
+  const stageName = (v, stage) => (v.stageNames && v.stageNames[stage - 1]) || `Stage ${stage}`;
 
   function cardHTML(c, { cls = '', attrs = '', tag = 'div' } = {}) {
     const face = c.k === 'w' ? '★' : c.k === 's' ? '⊘' : c.v;
@@ -19,29 +23,40 @@
   }
   const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
 
+  /** The line under the table: what just happened, in plain words. Kept for screen readers and the event log. */
   function eventText(v) {
     const e = v.event;
     if (!e) return '';
     const by = nameOf(v, e.by);
     switch (e.type) {
-      case 'draw': return e.from === 'discard' ? `${by} took the discard.` : `${by} drew from the stock.`;
-      case 'lay': return `<b>${by} laid down stage ${e.stage}!</b>`;
+      case 'draw': return e.from === 'discard' ? `${by} took the top discard.` : `${by} drew from the stock.`;
+      case 'lay': return `<b>${by} laid down stage ${e.stage}: ${esc(stageName(v, e.stage))}!</b>`;
       case 'hit': return `${by} added a card to a group.`;
-      case 'discard': return `${by} discarded.`;
-      case 'skip': return `${nameOf(v, e.who)} lost a turn (skip).`;
-      case 'roundEnd': return `<b>${by} went out. Round over.</b>`;
+      case 'discard': return `${by} discarded a card.`;
+      case 'skip': return `${nameOf(v, e.who)} loses a turn (a skip card was discarded).`;
+      case 'roundEnd': return `<b>${by} went out. The round is over.</b>`;
       default: return '';
     }
   }
 
+  /** The short message that floats over the table for the moments worth noticing (a stage laid, a turn lost, a round over). */
+  function floaterText(v) {
+    const e = v.event;
+    if (!e) return '';
+    if (e.type === 'lay') return `${nameOf(v, e.by)} laid down ${esc(stageName(v, e.stage))}!`;
+    if (e.type === 'skip') return `${nameOf(v, e.who)} loses a turn`;
+    if (e.type === 'roundEnd') return `${nameOf(v, e.by)} went out!`;
+    return '';
+  }
+
   function guidance(v) {
     if (v.phase === 'gameOver') return v.winners.includes(v.me) ? 'You won!' : 'Game over';
-    if (v.me < 0) return `Watching: ${nameOf(v, v.turn)} ${v.myTurn ? '' : 'to play'}`.trim();
-    if (!v.myTurn) return `${nameOf(v, v.turn)} is playing…`;
-    if (v.phase === 'draw') return 'Your turn: draw from the stock or take the discard';
+    if (v.me < 0) return `Watching. ${nameOf(v, v.turn)} is ${v.myTurn ? 'to play' : 'taking a turn'}.`;
+    if (!v.myTurn) return `${nameOf(v, v.turn)} is taking a turn…`;
+    if (v.phase === 'draw') return 'Your turn. Draw from the stock, or take the top discard.';
     const me = v.players[v.me];
-    if (!me.laid) return `Lay down: ${goalText(v.goals[Math.min(me.stage, v.stageCount) - 1])}, or discard to end your turn`;
-    return ui.sel.size === 1 ? 'Tap a laid group to add the card, or discard it' : 'Select a card to add to a group or discard';
+    if (!me.laid) return 'Build the goal in the trays below, then lay it down. Or discard one card to end your turn.';
+    return ui.sel.size === 1 ? 'Tap a group on the table to add the card, or discard it to end your turn.' : 'You are down. Select a card to add it to a group, or discard one.';
   }
 
   function groupHTML(v, owner, k, grp) {
@@ -49,24 +64,48 @@
     const me = v.players[v.me];
     const canHit = v.myTurn && v.phase === 'play' && me && me.laid && ui.sel.size === 1;
     const inner = `<span class="sr-glabel">${esc(label)}</span><span class="sr-gcards">${grp.cards.map((c) => cardHTML(c, { cls: 'mini' })).join('')}</span>`;
+    // A wild card on a run can go to either end, so the player picks the end. Other cards go where their value fits.
+    const selected = canHit && grp.kind === 'run' ? v.hand.find((c) => c.id === [...ui.sel][0]) : null;
+    if (selected && selected.k === 'w') {
+      const ends = [];
+      if (grp.lo > 1) ends.push(`<button type="button" class="btn small ghost" data-sr="hit" data-owner="${owner}" data-group="${k}" data-end="low">Wild to low end (${grp.lo - 1})</button>`);
+      if (grp.hi < 12) ends.push(`<button type="button" class="btn small ghost" data-sr="hit" data-owner="${owner}" data-group="${k}" data-end="high">Wild to high end (${grp.hi + 1})</button>`);
+      return `<div class="sr-group" role="group" aria-label="${esc(label)}">${inner}<div class="sr-ends">${ends.join('')}</div></div>`;
+    }
     return canHit
       ? `<button type="button" class="sr-group hit" data-sr="hit" data-owner="${owner}" data-group="${k}" aria-label="${esc('Add the selected card to ' + label)}">${inner}</button>`
       : `<div class="sr-group" role="group" aria-label="${esc(label)}">${inner}</div>`;
   }
 
-  function playersHTML(v) {
-    return `<ul class="sr-players">${v.players.map((p, i) => `<li class="${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${i === v.me ? 'me' : ''}">
-      <div class="sr-phead"><span class="sr-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><span class="sr-meta" title="Stage, cards in hand, points">S${p.stage} · ${p.cards}🂠 · ${p.score}pt</span></div>
-      ${p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>` : ''}</li>`).join('')}</ul>`;
+  /** One player's seat: name, stage, cards in hand, points, and the groups they have laid down. */
+  function seatHTML(v, ctx, i) {
+    const p = v.players[i];
+    const stage = Math.min(p.stage, v.stageCount);
+    const sub = `Stage ${stage} · ${p.cards} cards · ${p.score} pts`;
+    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>` : (v.phase === 'gameOver' ? '' : '<div class="sr-laid sr-nolay">Not down yet</div>');
+    return window.CardTable.pt.seatHTML({
+      pid: p.id,
+      name: p.name + (i === v.me ? ' (you)' : ''),
+      avatar: window.CardTable.pt.avatarOf(ctx.room, p.id),
+      turn: i === v.turn && v.phase !== 'gameOver',
+      me: i === v.me,
+      sub,
+      under,
+    });
   }
 
-  function pilesHTML(v) {
+  /** The middle of the table: the piles, and the floating message for the latest moment. */
+  function centreHTML(v) {
     const mine = v.myTurn && v.phase === 'draw';
     const top = v.discardTop;
     const canTake = mine && top && top.k !== 's';
-    return `<div class="sr-piles">
+    const elapsed = Date.now() - ui.floatAt;
+    const float = ui.floatText && elapsed < FLOAT_MS && v.phase !== 'gameOver'
+      ? `<div class="sr-float" style="animation-delay:-${Math.max(0, elapsed)}ms" role="status">${ui.floatText}</div>`
+      : '';
+    return `${float}<div class="sr-piles">
       <button type="button" class="sr-pile" data-sr="draw" data-from="stock" ${mine && v.stockCount + v.discardCount > 1 ? '' : 'disabled'} aria-label="Draw from the stock, ${v.stockCount} cards"><span class="sr-back">🪜</span><small>Stock · ${v.stockCount}</small></button>
-      <button type="button" class="sr-pile" data-sr="draw" data-from="discard" ${canTake ? '' : 'disabled'} aria-label="Take the top discard">${top ? cardHTML(top) : '<span class="sr-empty"></span>'}<small>Discard${top && top.k === 's' ? ' (skip)' : ''}</small></button>
+      <button type="button" class="sr-pile" data-sr="draw" data-from="discard" ${canTake ? '' : 'disabled'} aria-label="${top && top.k === 's' ? 'The top discard is a skip card and cannot be taken' : 'Take the top discard'}">${top ? cardHTML(top) : '<span class="sr-empty"></span>'}<small>${top && top.k === 's' ? 'Skip (can’t take)' : 'Discard'}</small></button>
     </div>`;
   }
 
@@ -78,11 +117,11 @@
     const full = goal.every((r, k) => ui.groups[k].length === r.size);
     const trays = goal.map((r, k) => {
       const cards = ui.groups[k].map((id) => v.hand.find((c) => c.id === id)).filter(Boolean);
-      return `<div class="sr-tray ${cards.length === r.size ? 'done' : ''}"><button type="button" class="btn small" data-sr="assign" data-group="${k}" ${ui.sel.size ? '' : 'disabled'}>Add selected to group ${k + 1}</button>
-        <span class="sr-tlabel">${r.kind === 'colour' ? 'Colour' : r.kind[0].toUpperCase() + r.kind.slice(1)} of ${r.size} · ${cards.length}/${r.size}</span>
+      return `<div class="sr-tray ${cards.length === r.size ? 'done' : ''}"><button type="button" class="btn small" data-sr="assign" data-group="${k}" ${ui.sel.size ? '' : 'disabled'}>Put selected cards in group ${k + 1}</button>
+        <span class="sr-tlabel">${esc(groupName(r))} · ${cards.length} of ${r.size}</span>
         <span class="sr-tcards">${cards.map((c) => cardHTML(c, { tag: 'button', cls: 'mini', attrs: `type="button" data-sr="unassign" data-id="${c.id}"` })).join('')}</span></div>`;
     }).join('');
-    return `<div class="sr-trays panel">${trays}<button class="btn big" data-sr="lay" ${full ? '' : 'disabled'}>Lay down stage ${me.stage}</button></div>`;
+    return `<div class="sr-trays panel"><p class="sr-tip">Select cards in your hand, then put them in a group. Every group must be complete before you can lay down.</p>${trays}<button class="btn big" data-sr="lay" ${full ? '' : 'disabled'}>${full ? `Lay down stage ${me.stage}` : `Lay down stage ${me.stage} (finish the groups first)`}</button></div>`;
   }
 
   function handHTML(v) {
@@ -90,17 +129,17 @@
     const assigned = new Set(ui.groups.flat());
     const can = v.myTurn && v.phase === 'play';
     const cards = v.hand.filter((c) => !assigned.has(c.id));
-    const discard = can && ui.sel.size === 1 ? '<button class="btn" data-sr="discard">Discard selected</button>' : '';
-    return `<div class="sr-hand" role="group" aria-label="Your hand">${cards.map((c) => cardHTML(c, { tag: 'button', cls: ui.sel.has(c.id) ? 'sel' : '', attrs: `type="button" data-sr="sel" data-id="${c.id}" aria-pressed="${ui.sel.has(c.id)}" ${v.phase === 'gameOver' ? 'disabled' : ''}` })).join('')}</div>${discard ? `<div class="sr-actions">${discard}</div>` : ''}`;
+    const discard = can && ui.sel.size === 1 ? '<button class="btn" data-sr="discard">Discard selected (ends your turn)</button>' : '';
+    return `<div class="sr-hand" role="group" aria-label="Your hand">${cards.map((c) => cardHTML(c, { tag: 'button', cls: ui.sel.has(c.id) ? 'sel' : '', attrs: `type="button" data-sr="sel" data-id="${c.id}" aria-pressed="${ui.sel.has(c.id)}" ${v.phase === 'gameOver' || !can ? 'disabled' : ''}` })).join('')}</div>${discard ? `<div class="sr-actions">${discard}</div>` : ''}`;
   }
 
-  function overlayHTML(v) {
+  function overlayHTML(v, ctx) {
     if (v.phase !== 'gameOver') return '';
     const rows = v.players.map((p, i) => ({ p, i })).sort((a, b) => (b.p.stage - a.p.stage) || (a.p.score - b.p.score))
       .map(({ p, i }) => `<li class="${v.winners.includes(i) ? 'win' : ''}"><span>${v.winners.includes(i) ? '🏆 ' : ''}<b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b></span><span>stage ${Math.min(p.stage - 1, v.stageCount)} · ${p.score} pts</span></li>`).join('');
     const title = v.me >= 0 && v.winners.includes(v.me) ? (v.winners.length > 1 ? 'You share the win! 🎉' : 'You won! 🎉') : 'Game over';
-    return `<div class="overlay"><div class="sheet"><h2>${title}</h2><p class="hint" style="text-align:left">Most stages completed, then the fewest points.</p><ul class="sr-final">${rows}</ul>
-      <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-sr="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-sr="leave">Leave table</button></div></div></div>`;
+    return `<div class="overlay"><div class="sheet"><h2>${title}</h2><p class="hint" style="text-align:left">Most stages completed first, then the fewest points.</p><ul class="sr-final">${rows}</ul>
+      <div class="row" style="margin-top:12px">${ctx.isHost ? '<button class="btn" data-sr="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-sr="leave">Leave table</button></div></div></div>`;
   }
 
   function react(v) {
@@ -109,6 +148,8 @@
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
+    ui.floatText = floaterText(v);
+    ui.floatAt = Date.now();
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     else snd.play(e.type === 'lay' || e.type === 'roundEnd' ? 'collect' : 'card');
@@ -130,26 +171,37 @@
     react(v); sync(v);
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null; // keep keyboard focus on the same card across redraws
     const me = v.me >= 0 ? v.players[v.me] : null;
-    const mine = v.myTurn;
-    const goalLine = me ? `Stage ${Math.min(me.stage, v.stageCount)}: ${goalText(v.goals[Math.min(me.stage, v.stageCount) - 1])}${me.laid ? ' ✓' : ''}` : `${v.stageCount} stages`;
+    const goalIdx = me ? Math.min(me.stage, v.stageCount) - 1 : -1;
+    const goalLine = me
+      ? `Your goal, stage ${goalIdx + 1} · ${esc(stageName(v, goalIdx + 1))}: ${esc(goalText(v.goals[goalIdx]))}${me.laid ? ' ✓ laid down' : ''}`
+      : `${v.stageCount} stages · watching`;
     const text = eventText(v);
+    const n = v.players.length;
+    const table = window.CardTable.pt.tableHTML({
+      n,
+      me: v.me,
+      seat: (i) => seatHTML(v, ctx, i),
+      card: () => null,
+      center: centreHTML(v),
+    });
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
         <div class="wz-round"><b>Stage Rummy</b><span class="label"> · round ${v.round}</span></div>
-        ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="rules">Rules</button>', 'sr')}
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
-      <p class="sr-goal" role="status">${esc(goalLine)}</p>
-      ${playersHTML(v)}
-      ${pilesHTML(v)}
+      <p class="sr-goal" role="status">${goalLine}</p>
+      <div class="sr-table">${table}</div>
       ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
-      <div class="wz-status ${mine ? 'mine' : ''}"><span>${guidance(v)}</span></div>
+      <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${traysHTML(v)}
       ${handHTML(v)}
-      ${overlayHTML(v)}
+      ${overlayHTML(v, ctx)}
     </div>`;
     root.onclick = onClick;
     if (focused) { const el = root.querySelector(`.sr-hand [data-id="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+    // once the float has faded, remove only that element: a full redraw would drop keyboard focus on the controls
+    if (ui.floatText && Date.now() - ui.floatAt < FLOAT_MS) setTimeout(() => { if (ui.latest === v && root.isConnected) { const f = root.querySelector('.sr-float'); if (f) f.remove(); } }, FLOAT_MS - (Date.now() - ui.floatAt) + 50);
   }
 
   function onClick(e) {
@@ -169,7 +221,7 @@
       }
       case 'unassign': ui.groups = ui.groups.map((g) => g.filter((x) => x !== id)); ctx.rerender(); break;
       case 'lay': if (play) ctx.act({ type: 'lay', groups: ui.groups.map((g) => g.slice()) }); break;
-      case 'hit': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); ctx.act({ type: 'hit', card, owner: Number(el.dataset.owner), group: Number(el.dataset.group) }); } break;
+      case 'hit': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); const end = el.dataset.end === 'low' || el.dataset.end === 'high' ? el.dataset.end : undefined; ctx.act({ type: 'hit', card, owner: Number(el.dataset.owner), group: Number(el.dataset.group), ...(end ? { end } : {}) }); } break;
       case 'discard': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); ctx.act({ type: 'discard', card }); } break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;

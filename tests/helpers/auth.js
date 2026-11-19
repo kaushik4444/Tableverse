@@ -40,10 +40,11 @@ class Browser {
  * responses contain: it is for test clients that are not browsers. In memory mode (no PostgreSQL) the email flow does not
  * exist, so an anonymous player is created instead; ONLY that specific "requires PostgreSQL" answer triggers the fallback.
  */
-async function registerAndVerify(port, { email, username, password = 'TestPass123!', displayName = 'Player', avatar = '🧙' }) {
+async function registerAndVerify(port, { email, username, exactUsername = false, password = 'TestPass123!', displayName = 'Player', avatar = '🧙' }) {
   const browser = new Browser(port);
   await browser.csrf();
-  const handle = ((username || String(displayName || 'player').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 18) || 'player') + Math.floor(Math.random() * 100000)).slice(0, 24);
+  // a random suffix keeps repeated test runs apart, unless the test needs the exact name (a race for that name)
+  const handle = exactUsername && username ? username : ((username || String(displayName || 'player').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 18) || 'player') + Math.floor(Math.random() * 100000)).slice(0, 24);
   const reg = await browser.post('/api/auth/register', { adultConfirmed: true, email, username: handle, password, displayName, avatar });
   if (reg.status === 503 && /requires PostgreSQL/i.test(reg.json.error || '')) {
     const dbPlayers = require('../../db/players');
@@ -53,7 +54,7 @@ async function registerAndVerify(port, { email, username, password = 'TestPass12
   if (!reg.ok) throw new Error(`register failed: ${reg.json.error || reg.status}`);
   await browser.must('/api/auth/verify-email', { token: reg.json.debug.verifyToken });
   const login = await browser.must('/api/auth/login', { email, password });
-  return { browser, token: login.json.token, player: login.json.player };
+  return { browser, token: login.json.token, player: login.json.player, username: handle };
 }
 
 /**

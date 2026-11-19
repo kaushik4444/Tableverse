@@ -33,7 +33,7 @@ Tableverse is a free, beta multiplayer card and board game service, run by {{IMP
 - Chat messages you send at a table. Chat is kept in memory while a table is open and is not stored as a history, except when a message is reported (see below).
 - A few settings kept in your browser, such as which one-time notices you have already seen. They stay on your device and are not sent to us for tracking.
 
-**Guests:** guest accounts cannot be created in the current version. Browsing the public pages does not create a record. [OWNER: confirm there are no guest records in the database. See docs/ACCOUNT_DELETION_AND_RETENTION.md.]
+**Guests:** where the owner has turned guest play on, you can play without creating an account. A guest visit keeps a temporary record: a display name, an avatar, a login session kept in your browser, and the seats and scores of the games you play. A guest has no e-mail address and no password until it asks for an account link. A pending link stores the e-mail address, the chosen username and a hash of the password (never the password itself), and that data is removed when the link expires (the day after it expires) or is used. The record lasts as long as the guest session (3 days unless the owner sets otherwise, [OWNER: confirm the session length]) and is removed by the next housekeeping run (every six hours) after the session has ended and the record is more than one day old. A pending account link keeps the record until that link expires. Finished games keep the name shown at the table, but are no longer linked to any account. If you create an account from a guest visit, the same record becomes your account and your games stay with it. Browsing the public pages does not create a record.
 
 **Technical and security data:**
 - Your network address, which we record when you make requests, so that we can limit repeated attempts (rate limiting). These records are deleted after one day.
@@ -96,7 +96,7 @@ We do not send promotional e-mail during the beta. The e-mails we send are accou
 ## How long we keep data
 
 The scheduled retention periods below are purge-eligibility thresholds. Housekeeping removes eligible records after they cross the threshold; it runs at startup and every six hours. Delays or failed runs can extend retention until a later successful run; failures are retried at the next run.
-- **Your account**: until you delete it. See "Your choices and rights" below.
+- **Your account**: until you delete it. Accounts that never verified their e-mail address and are more than 30 days old may be removed by a manual cleanup run by the operator; this is not a scheduled job. See "Your choices and rights" below.
 
 - **Login sessions**: last 30 days from sign-in by default. Sessions become eligible for purge more than 7 days after expiry or more than 30 days after revocation. Either condition suffices, so a session can be removed less than 30 days after revocation.
 - **"Keep me signed in" device logins**: eligible for purge more than 30 days after they expire or are revoked.
@@ -106,7 +106,7 @@ The scheduled retention periods below are purge-eligibility thresholds. Housekee
 - **Feedback**: eligible for purge after 180 days.
 - **Staff audit log**: eligible for purge after 365 days.
 - **Operational logs held by our hosting provider**: kept for up to 7 days.
-- **Finished match results**: we intend to keep them for 24 months after the match, and then delete them. [OWNER: this period is not yet enforced. The code has no match-history deletion job. Do not publish this sentence until a job exists, or change the wording to "kept until your account is deleted".]
+- **Finished match results**: we intend to keep them for 24 months after the match, and then delete them. [OWNER: this period is not yet enforced. The code has no match-history deletion job. Do not publish this sentence until a job exists, or state that finished matches are kept indefinitely, with the link to your account removed when you delete it.]
 - **Chat reports**: 12 months after they are resolved (see the reports section above). [OWNER: not yet enforced. See the reports section above.]
 - **Owner broadcast e-mail**: none is sent during the beta, so no broadcast history is expected. If broadcasts are used later, this notice will be updated and a retention period set before they are sent.
 - **Database backups**: Neon keeps point-in-time restore history for 6 hours, so data you delete can remain in that history for up to 6 hours. Copies that the owner makes by hand are kept for [OWNER: state how long manual database backup files are kept]. If a database is restored from a backup, data deleted after that backup was taken can reappear.

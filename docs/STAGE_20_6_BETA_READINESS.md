@@ -10,7 +10,7 @@
 
 | # | Decision (owner, 2026-11-10) | What it means for the work |
 |---|---|---|
-| D-1 | Beta is **signed-in only**. No guest play, no anonymous player creation. | Guest voice and guest TURN questions do not apply. Confirmed in code (section 2). |
+| D-1 | ~~Beta is signed-in only. No guest play, no anonymous player creation.~~ **Superseded 2026-11-18 by the owner's decision to offer guest play.** Guest play is built behind `GUEST_PLAY_ENABLED` (off by default; see `docs/GUEST_PLAY.md`). Until the owner sets it in Render, the beta stays signed-in only. | Guest voice and guest TURN questions now apply once guest play is on: they must be checked before the switch is set. Owner decisions on guest match names and the privacy notice are open. |
 | D-2 | Audience is **18+**. A clear 18+ confirmation at registration, enforced on the server if feasible. **No full date of birth.** | Implemented as C-A (PR #98). |
 | D-3 | **Voice withheld** from the beta until the Metered HTTP 401 is fixed and cross-network voice is verified. Do not rotate or delete static TURN credentials. | Implemented as C-D (PR #99): voice is off unless `VOICE_ENABLED` is exactly `true`. Metered work is deferred. |
 | D-4 | Support and privacy contact: the owner's existing secondary e-mail for Waves 1 and 2. | Placeholder until the owner provides the address. Not written into any document. |
@@ -25,7 +25,7 @@
 
 | Claim | Result | Evidence |
 |---|---|---|
-| Guest play does not exist | **Verified** | The socket answers "Please log in to play." (`server.js`, around line 1575). `createAnonymousPlayer` (`db/players.js`) has no caller outside its module and the memory store. |
+| Guest play does not exist (as of 2026-11-10; historical) | **Verified then** | The socket answers "Please log in to play." (`server.js`, around line 1575). `createAnonymousPlayer` (`db/players.js`) has no caller outside its module and the memory store. |
 | Play needs a verified e-mail | **Verified** | `server.js` around line 1633 ("Please verify your email before entering the lobby"). |
 | Privacy, terms or support pages are reachable from the app | **Not so** | No link in `public/` (checked). Task C-B. |
 | An age question exists | **Yes** (since PR #98, 2026-11) | Registration form has a required unticked box, "I am 18 or older." (`public/app.js` line 445). `registerEmail` refuses without it (`db/auth.js` line 166) and stores only `adult_confirmed_at` (migration `020_adult_confirmation.sql`). No date of birth is stored. |

@@ -229,4 +229,17 @@ test('match record: a finished game records every seat with a placing', () => {
   assert.deepEqual(rec.participants.map((p) => p.score).sort(), [1, 2, 3]);
 });
 
+test('a six that does not fit gives no extra roll (only a six that moves you does)', () => {
+  const g = game(2, {}, 6);
+  g.pos[0] = 96; // a six would overshoot 100
+  roll(g, 6);
+  assert.equal(g.pos[0], 96, 'stays put');
+  assert.equal(g.turn, 1, 'the turn passes to the next player: no extra roll');
+  const h = game(2, {}, 6);
+  h.pos[0] = 90;
+  roll(h, 6);
+  assert.equal(h.pos[0], 96);
+  assert.equal(h.turn, 0, 'a six that moves you rolls again');
+});
+
 console.log(`\n${passed} passed`);
