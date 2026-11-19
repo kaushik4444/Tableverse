@@ -2884,7 +2884,7 @@
   }
 
   // ------------------------------------------------------------ player stats
-  const statsGame = (id) => gameMeta(id) || { name: id, icon: '🎴' };
+  const statsGame = (id) => gameMeta(id) || { id, name: id, icon: '🎴' }; // the id too, so a game's mark still shows without its menu entry
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
