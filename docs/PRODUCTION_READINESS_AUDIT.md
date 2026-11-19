@@ -19,7 +19,7 @@ Audited against `main` at `c10f6a6` (includes PRs #26–#35, all shipped game mo
 | `wizard` | Wizard | `games/wizard` | `engine.test.js` | ✅ | `wizard-layout.js` |
 | `twentynine` | 29 | `games/twentynine` | `engine.test.js` | ✅ | `scorecard-layout.js` |
 | `poker` | Poker | `games/poker` | `poker.test.js` | ✅ | `lead-ui.js` |
-| `themind` | The Mind | `games/themind` | `themind.test.js` | ✅ | `feed-ui.js` |
+| `themind` | Mind | `games/themind` | `themind.test.js` | ✅ | `feed-ui.js` |
 | `ludo` | Ludo | `games/ludo` | `ludo.test.js` | ✅ | `ludo-ui.js` |
 | `gofish` | Go Fish | `games/gofish` | `gofish.test.js` | ✅ | `gofish-ui.js` |
 | `snakesladders` | Snakes & Ladders | `games/snakesladders` | `snakesladders.test.js` | ✅ | `snakesladders-ui.js` |
@@ -124,7 +124,7 @@ Audited against `main` at `c10f6a6` (includes PRs #26–#35, all shipped game mo
 - **Test:** `tests/unhandled-rejection.test.js` (no external deps; asserts exit code 1 and stderr log).
 
 ### F16 — Shared floating feed (new, Stage 18) 🔵 Reviewed
-- `public/feed.js` delivers floating action messages in Wizard, 29, Poker, Ludo, The Mind and Property Rivals.
+- `public/feed.js` delivers floating action messages in Wizard, 29, Poker, Ludo, Mind and Property Rivals.
 - Covered by `tests/ui/feed-ui.js` (UI integration) and `tests/ui/lead-ui.js` (leader crown).
 - **Not tested:** feed behaviour under rapid state changes at large tables (8 seats, fast bots).
 

@@ -27,12 +27,12 @@ Notes on the draft: it works as written. It says "we're building" and "just the 
 ## Alt text (one per slide)
 1. Tableverse logo, an oval green table seen from above with three mint seats and one gold seat, next to the name Tableverse. Below it the words "Friends beta" and "Your friends. Your games. One table." Three phone screenshots of Wizard, 29 and Ludo rise from the bottom edge.
 2. Slide titled "Pull up a seat." with the lines "Card and board games with the people you actually know", "Right in your browser", "No install" and "Bots fill empty seats". A phone screenshot shows the Tableverse home screen with a table-code field and the game list.
-3. Slide titled "Ten games. One table." Three overlapping phone screenshots show a Wizard hand, a Poker hand and the Property Rivals board. A footer lists Wizard, 29, Poker, The Mind, Ludo, Go Fish, Snakes and Ladders, Property Rivals, Tic-Tac-Toe and Four in a Row.
+3. Slide titled "Ten games. One table." Three overlapping phone screenshots show a Wizard hand, a Poker hand and the Property Rivals board. A footer lists Wizard, 29, Poker, Mind, Ludo, Go Fish, Snakes and Ladders, Property Rivals, Tic-Tac-Toe and Four in a Row.
 4. Slide titled "Make a table. Share the code." A phone screenshot shows a private Wizard lobby with the table code KQ7M2X and three players joined. A second phone shows the Wizard game in progress. The caption reads "Friends join with the code".
 5. The Tableverse table mark with a gold seat, the words "Come play with us.", the handle @playtableverse in a white pill, and "Follow for news and early seats. We are in friends beta."
 
 ## Claims check (what the post says and why it holds)
-- "Ten games": the ten games registered in `games/index.js` (Wizard, 29, Poker, The Mind, Ludo, Go Fish, Snakes and Ladders, Property Rivals, Tic-Tac-Toe, Four in a Row).
+- "Ten games": the ten games registered in `games/index.js` (Wizard, 29, Poker, Mind, Ludo, Go Fish, Snakes and Ladders, Property Rivals, Tic-Tac-Toe, Four in a Row).
 - "Right in your browser, no install": a web app with no download.
 - "Bots fill empty seats": the lobby text says empty seats become bots when the game starts.
 - "Share the code" / "join with the code": private tables use a table code (home screen "Have a table code?").

@@ -136,8 +136,8 @@ const SIZES = [
       }
       if (game === 'themind') {
         const guidance = document.querySelector('.tm-status-guidance');
-        if (!guidance) out.problems.push('The Mind current-state guidance is not announced accessibly');
-        else if (!guidance.textContent.includes('Confirm when ready to continue')) out.problems.push('The Mind star-pause guidance is missing while the last event is a star');
+        if (!guidance) out.problems.push('Mind current-state guidance is not announced accessibly');
+        else if (!guidance.textContent.includes('Confirm when ready to continue')) out.problems.push('Mind star-pause guidance is missing while the last event is a star');
       }
       if (!document.querySelector('#game-status-announcer[role="status"][aria-live="polite"]') || document.querySelector('#app #game-status-announcer')) {
         out.problems.push('persistent game status announcer is missing or nested inside the replaced app root');

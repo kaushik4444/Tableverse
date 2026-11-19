@@ -1,4 +1,4 @@
-/* The Mind table renderer: a shared pile, everybody's card counts, and your own sorted hand. Styles in themind.css. */
+/* Mind table renderer: a shared pile, everybody's card counts, and your own sorted hand. Styles in themind.css. */
 (() => {
   'use strict';
   const { esc, toast, pt } = window.CardTable;
