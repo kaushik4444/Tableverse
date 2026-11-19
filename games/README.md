@@ -47,6 +47,6 @@ Then:
 
 ## Optional pacing hooks
 
-- `botDelayMs(playerId)`: how long (ms) that bot waits before acting. Poker and The Mind use it so people can follow.
+- `botDelayMs(playerId)`: how long (ms) that bot waits before acting. Poker and Mind use it so people can follow.
 - `autoDelayMs()`: delay before `autoAction()` fires (e.g. Poker deals an all-in runout street by street).
 - `stamp()`: changes when a trick ends, so the server pauses for the collect animation.

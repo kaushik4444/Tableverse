@@ -65,7 +65,7 @@ test('ladder: 1st +20, last -10, in a straight line between; a lone player 0', (
   assert.equal(ladder(1, 1), 0);
 });
 
-test('Twenty-nine and The Mind: a win is +20, a draw 0, a loss -10 for everyone on that side', () => {
+test('Twenty-nine and Mind: a win is +20, a draw 0, a loss -10 for everyone on that side', () => {
   const pts = gameSkillPoints('twentynine', [w('A'), w('B'), l('C'), l('D')]);
   assert.deepEqual([pts.A, pts.B, pts.C, pts.D], [WIN, WIN, LOSS, LOSS]);
   const drawn = gameSkillPoints('themind', [d('A'), d('B')]);

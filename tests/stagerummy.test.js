@@ -1,5 +1,5 @@
 'use strict';
-// Stage Rummy: the rules, with hand-built positions. Pure, no sockets.
+// Stage 10: the rules, with hand-built positions. Pure, no sockets.
 const assert = require('node:assert/strict');
 const e = require('../games/stagerummy/engine');
 const def = require('../games/stagerummy');

@@ -1,4 +1,4 @@
-/* Penalty Rows table renderer. The table is a wooden table with the rows laid out as lanes: the cards played this turn
+/* Take 5 table renderer. The table is a wooden table with the rows laid out as lanes: the cards played this turn
  * sit in a strip above (lowest first, one name under each card), then each one drops into its row in turn, slowly. A row
  * that is taken shows an inline callout on the lane. A row's badge is its penalty points, shown as a bull's head.
  * Tabs: Table (the play) and Scores. Everyone picks at once, so tapping a card sends the pick and you may change it until
@@ -201,7 +201,7 @@
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);
     const tab = ui.tab === 'scores' ? 'scores' : 'table';
-    const tabs = `<nav class="pr-tabs" role="tablist" aria-label="Penalty Rows views">
+    const tabs = `<nav class="pr-tabs" role="tablist" aria-label="Take 5 views">
         <button type="button" role="tab" class="btn ghost small" data-pr="tab" data-tab="table" aria-selected="${tab === 'table'}">Table</button>
         <button type="button" role="tab" class="btn ghost small" data-pr="tab" data-tab="scores" aria-selected="${tab === 'scores'}">Scores</button></nav>`;
     const body = tab === 'scores'
@@ -210,7 +210,7 @@
     root.innerHTML = `
     <div class="wz prt">
       <div class="wz-top">
-        <div class="wz-round"><b>Penalty Rows</b><span class="label"> · round ${v.round} · turn ${v.turn}/${v.handSize}</span></div>
+        <div class="wz-round"><b>Take 5</b><span class="label"> · round ${v.round} · turn ${v.turn}/${v.handSize}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-pr="rules">Rules</button>', 'pr')}
       </div>
       ${tabs}

@@ -2320,7 +2320,7 @@
       const rb = document.createElement('button');
       rb.type = 'button'; rb.className = 'btn ghost small'; rb.dataset.act = 'rules'; rb.dataset.game = S.room.gameId;
       rb.setAttribute('aria-label', 'How to play'); rb.textContent = '📖 How to play';
-      // Space on a focused button must not reach the document-level Space shortcuts (The Mind plays a card on Space)
+      // Space on a focused button must not reach the document-level Space shortcuts (Mind plays a card on Space)
       rb.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
       extras.push(rb);
     }
@@ -2786,7 +2786,7 @@
     chip.title = `Game settings: ${summary}`;
     chip.setAttribute('aria-label', `Game settings: ${summary}. Open for details.`);
     chip.innerHTML = `<span aria-hidden="true">⚙</span> <span class="gs-sum">${esc(summary)}</span>`;
-    // Space on the focused chip opens the settings; it must not reach the document-level Space shortcuts (The Mind plays a card on Space)
+    // Space on the focused chip opens the settings; it must not reach the document-level Space shortcuts (Mind plays a card on Space)
     chip.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
     // Game settings live in the ⋯ menu (top right), not in the top bar. The menu item is a plain button with the summary.
     const pop = $app.querySelector('.tb-pop');
