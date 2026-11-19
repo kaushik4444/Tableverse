@@ -6,7 +6,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0 };
+  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0, phases: false };
   const FLOAT_MS = 2600;
 
   const COL = { R: { name: 'Red', sym: '●' }, B: { name: 'Blue', sym: '■' }, G: { name: 'Green', sym: '▲' }, Y: { name: 'Yellow', sym: '◆' } };
@@ -133,7 +133,15 @@
     return `<div class="sr-hand" role="group" aria-label="Your hand">${cards.map((c) => cardHTML(c, { tag: 'button', cls: ui.sel.has(c.id) ? 'sel' : '', attrs: `type="button" data-sr="sel" data-id="${c.id}" aria-pressed="${ui.sel.has(c.id)}" ${v.phase === 'gameOver' || !can ? 'disabled' : ''}` })).join('')}</div>${discard ? `<div class="sr-actions">${discard}</div>` : ''}`;
   }
 
+  /** One group in words, the same wording as the rules: "set of 3", "run of 5", "6 cards of one colour". */
+  const groupLabel = (r) => (r.kind === 'colour' ? `${r.size} cards of one colour` : `${r.kind} of ${r.size}`);
+  function phasesHTML(v) {
+    const now = v.me >= 0 ? v.players[v.me].stage - 1 : -1;
+    const rows = v.goals.map((goal, i) => `<li class="${i === now ? 'ph-current' : ''}"><span class="ph-n">${i + 1}</span><span class="ph-body"><b>${esc(v.stageNames[i])}</b><small>${goal.map(groupLabel).join(' and ')}</small></span></li>`).join('');
+    return `<div class="overlay" data-sr="closePhases"><div class="sheet" data-stop="1"><h2>Stages</h2><p class="hint" style="text-align:left">Lay down the groups of your current stage to move on. Your stage is highlighted.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-sr="closePhases">Close</button></div></div></div>`;
+  }
   function overlayHTML(v, ctx) {
+    if (ui.phases) return phasesHTML(v);
     if (v.phase !== 'gameOver') return '';
     const rows = v.players.map((p, i) => ({ p, i })).sort((a, b) => (b.p.stage - a.p.stage) || (a.p.score - b.p.score))
       .map(({ p, i }) => `<li class="${v.winners.includes(i) ? 'win' : ''}"><span>${v.winners.includes(i) ? '🏆 ' : ''}<b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b></span><span>stage ${Math.min(p.stage - 1, v.stageCount)} · ${p.score} pts</span></li>`).join('');
@@ -188,7 +196,7 @@
     <div class="wz sr">
       <div class="wz-top">
         <div class="wz-round"><b>Stage Rummy</b><span class="label"> · round ${v.round}</span></div>
-        ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Phases</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
       <p class="sr-goal" role="status">${goalLine}</p>
       <div class="sr-table">${table}</div>
@@ -205,6 +213,7 @@
   }
 
   function onClick(e) {
+    if (e.target.closest('[data-stop]') && !e.target.closest('button')) return;
     const el = e.target.closest('[data-sr]');
     const v = ui.latest; const ctx = ui.ctx;
     if (!el || !v || !ctx) return;
@@ -224,6 +233,8 @@
       case 'hit': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); const end = el.dataset.end === 'low' || el.dataset.end === 'high' ? el.dataset.end : undefined; ctx.act({ type: 'hit', card, owner: Number(el.dataset.owner), group: Number(el.dataset.group), ...(end ? { end } : {}) }); } break;
       case 'discard': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); ctx.act({ type: 'discard', card }); } break;
       case 'rules': ctx.showRules(); break;
+      case 'phases': ui.phases = true; ctx.rerender(); break;
+      case 'closePhases': ui.phases = false; ctx.rerender(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
     }
