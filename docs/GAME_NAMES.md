@@ -25,12 +25,12 @@ each name in the target markets (a trademark search or a short lawyer review is 
 | Property Rivals | Property Rivals | Low | Neutral name. Avoid "Monopoly", "Free Parking" etc. and the original board, token and card wording. |
 | Tic-Tac-Toe | Tic-Tac-Toe | Low | Generic. |
 | Four in a Row | Four in a Row | Low-medium | "Connect Four" is a Hasbro trademark; we use the generic descriptive name only. Keep it that way. |
-| Take 5 | Take 5 | **Medium-high** | Owner decision (2026-11-19): shown as "Take 5", internal id `penaltyrows` unchanged. "Take 5" is a known English title of AMIGO's "6 nimmt!", and the owner is awaiting AMIGO's response. Do **not** use "6 nimmt!" or "Category 5", the cow-head artwork or the rule-book text. Own penalty table, own wording and artwork. Not legal advice; not verified. |
+| Take 5 | Take 5 | **Medium-high** | Owner decision (2026-11-19): shown as "Take 5", internal id `penaltyrows` unchanged. "Take 5" is a known English title of AMIGO's "6 nimmt!", and the owner has said they are awaiting a response from AMIGO (that contact is the owner's own; it is not recorded in this repository). Do **not** use "6 nimmt!" or "Category 5", the cow-head artwork or the rule-book text. Own penalty table, own wording and artwork. Not legal advice; not verified. |
 | Stage 10 | Stage 10 | **Medium** | Owner decision (2026-11-19): shown as "Stage 10", internal id `stagerummy` unchanged. "Phase 10" is a registered trademark (U.S. Reg. No. 1849974, Mattel) and "Stage 10" is a close variant: a sound-alike can still be confusing. Do **not** use "Phase 10", its card set, logos or phase-card wording. Own cards, own scoring wording. Not verified. |
 
 ## Non-affiliation
 
-The in-app rules of Take 5, Stage 10 and Mind say that they are Tableverse's own games, not affiliated with, endorsed by or licensed by the publisher of any similar game. Keep that line, and do not use any publisher's logo, artwork, packaging or rule-book text. No publisher has been contacted and no legal setting was changed by the rename.
+The in-app rules of Take 5, Stage 10 and Mind say that they are Tableverse's own games, not affiliated with, endorsed by or licensed by the publisher of any similar game. Keep that line, and do not use any publisher's logo, artwork, packaging or rule-book text. The rename itself contacted no publisher and changed no legal setting or legal text.
 
 ## Never use
 

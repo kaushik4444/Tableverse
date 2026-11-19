@@ -43,6 +43,16 @@ function scene(phase, handIds, tweak) {
     await ctx.close();
   });
 
+  await test('the Stages sheet keeps Tab inside it', async () => {
+    const { page, ctx } = await open(scene('draw', [4, 5, 6]), { width: 1280, height: 860 });
+    if (!(await page.isVisible('[data-sr="phases"]'))) await page.click('.tb-more-btn'); // the toolbar folds into a menu on smaller screens
+    await page.click('[data-sr="phases"]');
+    await page.waitForSelector('[aria-labelledby="sr-phases-title"]');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.sr), 'closePhases', 'Tab stays on Close');
+    await ctx.close();
+  });
+
   await test('stage 1: select cards, add them to the two groups, lay down sends both groups', async () => {
     // 5 red/blue/green (ids 4, 28, 52) as the set; red 2,3,4 (ids 1,2,3) as the run
     const { page, ctx } = await open(scene('play', [4, 28, 52, 1, 2, 3, 80, 90]));
