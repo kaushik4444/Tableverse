@@ -82,6 +82,72 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     }
   });
 
+  // A move arrives after the page is open: the same message with the mark on the board and a new event.
+  const moveMsg = (m, cell, by, type = 'move') => {
+    const msg = JSON.parse(JSON.stringify(m[1]));
+    msg.view.board[cell] = by; msg.view.last = cell; msg.view.event = { seq: 50, type, by, cell };
+    msg.view.legal = msg.view.legal.filter((k) => k !== cell);
+    return msg;
+  };
+  const sizes = (page) => page.evaluate(() => [...document.querySelectorAll('.lg-cell')].map((c) => { const r = c.getBoundingClientRect(); return [Math.round(r.width * 10) / 10, Math.round(r.height * 10) / 10]; }));
+
+  await test('tic-tac-toe: squares keep exactly the same size as marks are placed, on every screen size', async () => {
+    for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 844 }, { width: 820, height: 1180 }, { width: 1280, height: 800 }]) {
+      const m = msgs('tictactoe', () => {});
+      const { page, ctx } = await open(m, viewport);
+      const empty = await sizes(page);
+      assert.equal(new Set(empty.map((s) => s.join('x'))).size, 1, `${viewport.width}: nine equal squares`);
+      for (const [cell, by] of [[4, 0], [0, 1], [8, 0], [2, 1], [6, 0], [3, 1]]) {
+        await page.evaluate((x) => window.__push(x), moveMsg(m, cell, by));
+        m[1].view.board[cell] = by; // the next message builds on the board so far
+        await page.waitForTimeout(60);
+        assert.deepEqual(await sizes(page), empty, `${viewport.width}: squares unchanged after a mark in ${cell}`);
+      }
+      assert.ok(await page.locator('.lg-glyph').count() >= 6, 'marks are drawn as shapes inside their squares');
+      await ctx.close();
+    }
+  });
+
+  await test('a new move animates once and plays its own sound; a redraw of the same position does not restart it', async () => {
+    for (const [id, sound, selector] of [['tictactoe', 'place', '.lg-cell.enter .lg-glyph path, .lg-cell.enter .lg-glyph circle'], ['fourinarow', 'drop', '.lg-cell.enter .lg-piece']]) {
+      const m = msgs(id, () => {});
+      const { page, ctx } = await open(m);
+      await page.evaluate(() => { window.__sounds = []; window.CardTable.sound.play = (n) => window.__sounds.push(n); });
+      const cell = id === 'fourinarow' ? 38 : 4;
+      await page.evaluate((x) => window.__push(x), moveMsg(m, cell, 0));
+      await page.waitForSelector(selector, { timeout: 2000 });
+      assert.ok((await page.evaluate((q) => getComputedStyle(document.querySelector(q)).animationName, selector)).match(/lg-(drop|draw)/), `${id}: the new mark is animated`);
+      assert.ok((await page.evaluate(() => window.__sounds)).includes(sound), `${id}: plays the ${sound} sound`);
+      const first = (await page.evaluate(() => window.__sounds)).length;
+      await page.evaluate((x) => window.__push(x), moveMsg(m, cell, 0)); // the same event again: nothing new
+      assert.equal((await page.evaluate(() => window.__sounds)).length, first, `${id}: the same event does not play again`);
+      await ctx.close();
+    }
+  });
+
+  await test('every game renderer plays sounds (the trick games through the shared hook in app.js)', async () => {
+    const fs = require('fs'); const path = require('path');
+    const dir = path.join(__dirname, '../../public/games');
+    for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+      const src = fs.readFileSync(path.join(dir, f), 'utf8');
+      assert.match(src, /sound|snd\./, `${f} uses sound`);
+    }
+    for (const name of ['card', 'deal', 'collect', 'turn', 'win', 'lose', 'place', 'drop']) {
+      assert.match(fs.readFileSync(path.join(__dirname, '../../public/sound.js'), 'utf8'), new RegExp(`\\b${name}:`), `the ${name} sound exists`);
+    }
+  });
+
+  await test('four in a row: the board keeps the shape of its grid (no empty space below the discs)', async () => {
+    for (const [cols, rows] of [[7, 6]]) {
+      const { page, ctx } = await open(msgs('fourinarow', () => {}), { width: 390, height: 700 });
+      const b = await page.locator('.lg-board').boundingBox();
+      assert.ok(Math.abs(b.height / b.width - rows / cols) < 0.08, `board is ${cols}x${rows}: ${Math.round(b.width)}x${Math.round(b.height)}`);
+      const cells = await page.locator('.lg-gravity .lg-cell').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+      assert.equal(new Set(cells).size, 1, 'every disc space has the same height');
+      await ctx.close();
+    }
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
