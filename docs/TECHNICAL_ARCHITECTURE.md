@@ -15,7 +15,7 @@ Where a provider price, plan limit or backup setting is not verified from the co
 **unverified**. Runbooks are linked, not repeated here.
 
 Related documents: `docs/LOCAL_DEVELOPMENT.md`, `docs/RELEASES.md`, `docs/OPERATIONS_RUNBOOK.md`, `docs/ADMIN.md`,
-`docs/ADMIN_CONSOLE_AUDIT.md`, `docs/ACCOUNT_DELETION_AND_RETENTION.md`, `docs/DATA_CLEANUP.md`, `docs/PRIVATE_TABLES.md`,
+`docs/ACCOUNT_DELETION_AND_RETENTION.md`, `docs/DATA_CLEANUP.md`, `docs/PRIVATE_TABLES.md`,
 `docs/SESSION_POLICY.md`, `docs/CHAT_MODERATION.md`, `docs/MATCH_RESULT_DURABILITY.md`, `docs/PERFORMANCE.md`,
 `docs/PRIVACY_NOTICE_DRAFT.md`, `docs/WAVE_1_LAUNCH_READINESS.md`.
 
