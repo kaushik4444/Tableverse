@@ -61,8 +61,9 @@
 /* The table: the shared felt with the seats around it. Stage Rummy needs a little more room than the default for its laid groups. */
 .sr .sr-table { margin-top: 6px; }
 .sr .sr-table .pt { --pt-min: 400px; }
-.sr .sr-table .pseat { max-width: 40vw; }
-.sr .sr-table .sr-laid { display: grid; gap: 3px; margin-top: 4px; width: min(220px, 40vw); }
+.sr .sr-table .pseat { max-width: 28vw; }
+.sr .sr-table { overflow-x: clip; }
+.sr .sr-table .sr-laid { display: grid; gap: 3px; margin-top: 4px; width: min(180px, 24vw); }
 .sr .sr-table .sr-laid .sr-group { padding: 3px 5px; }
 .sr .sr-table .sr-laid .sr-group.hit { min-height: 36px; }
 .sr .sr-table .sr-nolay { font-size: 11px; opacity: .7; text-align: center; }
