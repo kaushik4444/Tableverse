@@ -96,6 +96,17 @@
       tone(261.63, 0.02, 0.15, { type: 'triangle', vol: 0.08, slide: 1.5 });
       tone(329.63, 0.08, 0.18, { type: 'triangle', vol: 0.08, slide: 1.4 });
     },
+    // a mark set on a square: a soft wooden tap
+    place: () => {
+      tone(720, 0, 0.07, { type: 'sine', vol: 0.12, slide: 0.8 });
+      tone(120, 0.005, 0.09, { type: 'sine', vol: 0.22, slide: 0.5 });
+    },
+    // a disc dropped into a column: a short fall, a thud and a small bounce
+    drop: () => {
+      swish(0, 0.16, { vol: 0.14, f0: 2400, f1: 700, q: 0.9 });
+      tone(160, 0.17, 0.1, { type: 'sine', vol: 0.26, slide: 0.45 });
+      tone(210, 0.3, 0.05, { type: 'sine', vol: 0.1, slide: 0.6 });
+    },
     chat: () => { tone(523.25, 0, 0.06, { type: 'sine', vol: 0.1 }); tone(659.25, 0.05, 0.08, { type: 'sine', vol: 0.1 }); },
     tick: () => tone(587.33, 0, 0.05, { type: 'sine', vol: 0.08 }),
     turn: () => { tone(523.25, 0, 0.12, { type: 'triangle', vol: 0.15 }); tone(659.25, 0.1, 0.18, { type: 'triangle', vol: 0.18 }); tone(783.99, 0.2, 0.25, { type: 'triangle', vol: 0.22 }); },
