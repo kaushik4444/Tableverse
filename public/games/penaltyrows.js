@@ -27,14 +27,15 @@
   /** The table this renderer is showing (the room code), so playback for one table never plays on another. */
   const tableOf = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
 
-  function scheduleStep(seq, paceK) {
+  /** Advances one replay. The timeout is bound to the animation it was scheduled for, so a timeout left over from another
+   * table (or an earlier turn) does nothing. The last step is the completed table: it stays on screen until the next turn. */
+  function scheduleStep(anim, paceK) {
     setTimeout(() => {
-      const a = ui.anim;
-      if (!a || a.seq !== seq || a.table !== tableOf() || !ui.ctx) return;
-      a.i += 1;
-      if (a.i >= a.steps.length - 1) ui.anim = null; // the last step is the table itself
+      if (ui.anim !== anim || !ui.ctx || anim.table !== tableOf()) return;
+      if (anim.i >= anim.steps.length - 1) return;
+      anim.i += 1;
       ui.ctx.rerender();
-      if (ui.anim) scheduleStep(seq, paceK);
+      if (anim.i < anim.steps.length - 1) scheduleStep(anim, paceK);
     }, STEP_MS * (paceK || 1));
   }
 
@@ -118,7 +119,7 @@
     ui.seq = v.seq;
     const steps = replaySteps(v);
     ui.anim = steps ? { seq: v.seq, steps, i: 0, table: tableOf() } : null;
-    if (ui.anim) scheduleStep(v.seq, v.paceK);
+    if (ui.anim) scheduleStep(ui.anim, v.paceK);
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     else if (v.lastTurn.some((e) => e.by === v.me && e.took)) snd.play('lose');
