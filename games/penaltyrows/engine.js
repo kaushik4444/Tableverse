@@ -21,7 +21,8 @@ const HAND = 10;
 const START_ROWS = 4;
 const ROW_LIMIT = 5; // a row holds five cards: the sixth takes it
 const TARGETS = { short: 35, standard: 66, long: 100 };
-const TARGETS_SIMPLE = { short: 20, standard: 35, long: 50 }; // with one point per card the totals grow about half as fast
+const TARGETS_SIMPLE = { short: 20, standard: 35, long: 50 };
+const COUNTDOWN = 66; // Starting score: everyone starts with 66 points, and penalty points are taken away from them // with one point per card the totals grow about half as fast
 const ROW_SIZES = [4, 5, 6];
 const HAND_SIZES = [6, 8, 10];
 const PACE = { relaxed: 1.35, normal: 1, quick: 0.6 }; // how long the table lingers on each step, as a factor
@@ -62,7 +63,8 @@ function createGame(players, options, rng = Math.random) {
   const n = players.length;
   if (n < 2 || n > MAX_PLAYERS) throw new Error(`Penalty Rows is for 2 to ${MAX_PLAYERS} players`);
   const o = options || {};
-  const key = Object.hasOwn(TARGETS, o.target) ? o.target : 'standard';
+  const countdown = o.target === 'countdown';
+  const key = countdown || Object.hasOwn(TARGETS, o.target) ? o.target : 'standard';
   const scoring = o.scoring === 'simple' ? 'simple' : 'standard';
   const rowSize = ROW_SIZES.includes(Number(o.rowSize)) ? Number(o.rowSize) : ROW_LIMIT;
   const hand = HAND_SIZES.includes(Number(o.hand)) ? Number(o.hand) : HAND;
@@ -74,7 +76,9 @@ function createGame(players, options, rng = Math.random) {
     players: players.map((p) => ({ id: p.id, name: p.name })),
     rng,
     options: { target: key, scoring, rowSize, hand, lowCard, pace },
-    target: (scoring === 'simple' ? TARGETS_SIMPLE : TARGETS)[key],
+    countdown,
+    target: countdown ? COUNTDOWN : (scoring === 'simple' ? TARGETS_SIMPLE : TARGETS)[key],
+    losers: [], // countdown only: the players who reached 0 this game
     simple: scoring === 'simple', rowLimit: rowSize, handSize: hand, lowCard,
     history: [], // [{ round, penalties, totals }] one per finished round
     log: [], logN: 0, // public events for the floating feed
@@ -214,7 +218,19 @@ function endTurn(g) {
   g.lastRound = { round: g.round, penalties };
   g.history.push({ round: g.round, penalties: penalties.slice(), totals: g.totals.slice() });
   say(g, 'Table', `Round ${g.round} is over`, 'roundEnd');
-  if (Math.max(...g.totals) >= g.target) {
+  if (g.countdown) {
+    // the round has been played out; now whoever has reached 0 loses, and the most points left wins
+    g.losers = g.totals.map((t, i) => (t >= COUNTDOWN ? i : -1)).filter((i) => i >= 0);
+    if (g.losers.length) {
+      const left = g.totals.map((t, i) => (g.losers.includes(i) ? 0 : COUNTDOWN - t));
+      const best = Math.max(...left);
+      g.winners = best > 0 ? left.map((x, i) => (x === best ? i : -1)).filter((i) => i >= 0) : [];
+      g.phase = 'gameOver';
+      say(g, g.losers.map((i) => g.players[i].name).join(' & '), 'reached 0 and lose', 'win');
+      if (g.winners.length) say(g, g.winners.map((i) => g.players[i].name).join(' & '), g.winners.length > 1 ? 'share the win!' : 'wins!', 'win');
+      return;
+    }
+  } else if (Math.max(...g.totals) >= g.target) {
     const low = Math.min(...g.totals);
     g.winners = g.totals.map((t, i) => (t === low ? i : -1)).filter((i) => i >= 0);
     g.phase = 'gameOver';
@@ -284,6 +300,8 @@ function viewFor(g, playerId) {
     log: g.log.slice(-30),
     before: g.before, after: g.after,
     target: g.target,
+    countdown: g.countdown,
+    losers: g.losers.slice(),
     me,
     myTurn: me >= 0 && waiting.includes(playerId),
     players: g.players.map((p, i) => ({
@@ -292,6 +310,7 @@ function viewFor(g, playerId) {
       cards: g.hands[i].length,
       penalty: sum(g.piles[i]), // taken so far this round
       total: g.totals[i],
+      left: g.countdown ? Math.max(0, COUNTDOWN - g.totals[i]) : null, // countdown: points left
     })),
     rows: g.rows.map((r) => r.map((c) => ({ n: c.n, p: c.p }))),
     rowPenalty: g.rows.map(sum),
@@ -308,9 +327,8 @@ function viewFor(g, playerId) {
 }
 
 function results(g) {
-  const low = Math.min(...g.totals);
   // score is the negative total, so a higher score is better like in every other game (and ranks the places)
-  return g.players.map((_, i) => ({ score: -g.totals[i], winner: g.phase === 'gameOver' && g.totals[i] === low }));
+  return g.players.map((_, i) => ({ score: -g.totals[i], winner: g.phase === 'gameOver' && g.winners.includes(i) }));
 }
 
 module.exports = { DECK, HAND, START_ROWS, ROW_LIMIT, TARGETS, TARGETS_SIMPLE, ROW_SIZES, HAND_SIZES, PACE, STEP_MS, SWEEP_MS, MAX_PLAYERS, penaltyOf, createGame, applyAction, awaiting, botAction, forcedPlay, viewFor, results };
