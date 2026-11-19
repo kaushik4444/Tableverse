@@ -32,7 +32,7 @@ jobs:
     # CREATE DATABASE (the image's default superuser is), and the pg tests also use pg_terminate_backend.
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci-only-password # throw-away container, not a secret
@@ -77,6 +77,25 @@ jobs:
           done
           echo "PostgreSQL did not become ready" >&2
           exit 1
+
+      # The restore rehearsal dumps the PostgreSQL 17 service with pg_dump and restores it with pg_restore. ubuntu-latest can
+      # resolve to an image whose client is 16, which cannot dump a 17 server, so install the matching 17 client tools
+      # from the PostgreSQL apt repository and put them first on PATH. The check fails the job if the version is wrong.
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Check PostgreSQL client version
+        run: |
+          pg_dump --version
+          pg_restore --version
+          major=$(pg_dump --version | grep -o '[0-9][0-9]*' | head -1)
+          if [ "$major" -lt 17 ]; then echo "pg_dump $major is older than the PostgreSQL 17 service" >&2; exit 1; fi
 
       # `test:pg` passes --require, so a missing TEST_DATABASE_URL fails the run instead of skipping.
       - name: PostgreSQL integration tests

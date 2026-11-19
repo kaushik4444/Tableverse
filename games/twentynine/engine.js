@@ -11,6 +11,7 @@
 const SUITS = ['S', 'H', 'D', 'C']; // spades, hearts, diamonds, clubs
 const SUIT_NAMES = { S: 'spades', H: 'hearts', D: 'diamonds', C: 'clubs' };
 const RANKS = ['7', '8', 'Q', 'K', '10', 'A', '9', 'J']; // low -> high
+const MARRIAGE_MIN_BID = 19; // the marriage (K and Q of trump) is allowed only when the game's bid is at least this
 const POINTS = { J: 3, 9: 2, A: 1, 10: 1, K: 0, Q: 0, 8: 0, 7: 0 };
 const MIN_BID = 15;
 const MAX_BID = 28;
@@ -74,7 +75,12 @@ function createGame(playerList, options = {}, rng = Math.random) {
 function startHand(g) {
   if (g.handNo > 0) g.dealer = (g.dealer + 1) % 4;
   g.handNo++;
-  const deck = shuffle(buildDeck(), g.rng);
+  // A round is cancelled and dealt again when any player's first four cards hold no points at all (a card worth a point: J, 9, A or 10).
+  let deck = shuffle(buildDeck(), g.rng);
+  while ([0, 1, 2, 3].some((i) => !deck.slice(4 * i, 4 * i + 4).some((c) => c.pts > 0))) {
+    g.log.push({ by: 'Table', card: 'Round cancelled: a player had no point card in their first four. Dealing again.', kind: 'bid' });
+    deck = shuffle(buildDeck(), g.rng);
+  }
   for (const p of g.players) p.hand = sortHand(deck.splice(0, 4));
   g.stock = deck; // 16 cards, dealt after trump is chosen
   g.phase = 'bidding';
@@ -153,7 +159,12 @@ function advanceBidding(g, actedSeat) {
     }
     return;
   }
-  // The replacement challenger responds to the incumbent's standing bid first.
+  if (g.highBidder < 0) {
+    // No bid on the table yet: the other original bidder speaks next (a passes, then b; then c; then d).
+    g.turn = nextActiveBidder(g, actedSeat);
+    return;
+  }
+  // A standing bid: the replacement challenger answers it first.
   g.turn = incomingBidder >= 0 ? incomingBidder : nextActiveBidder(g, actedSeat);
 }
 
@@ -180,6 +191,7 @@ function canReveal(g, seat) {
 // Standard 29 marriage: the player holds both K and Q of revealed trump and their team has won a trick.
 function canDeclareMarriage(g, seat) {
   if (g.phase !== 'playing' || !g.trumpRevealed || seat !== g.turn || g.marriageDeclared) return false;
+  if (!(g.highBid >= MARRIAGE_MIN_BID)) return false; // the King–Queen marriage counts only in a game bid of 19 or more
   if (!g.tricksWon || g.tricksWon[team(seat)] < 1) return false;
   const hand = g.players[seat].hand;
   return hand.some((c) => c.suit === g.trumpSuit && c.rank === 'K') && hand.some((c) => c.suit === g.trumpSuit && c.rank === 'Q');
