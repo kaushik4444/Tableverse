@@ -8,6 +8,14 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-20-game-names',
+      date: '2026-11-20',
+      title: 'New game names',
+      items: [
+        { ico: '🏷️', title: 'Three games have new names', text: 'Penalty Rows is now Take 5, Stage Rummy is now Stage 10, and The Mind is now Mind. The games play exactly the same, and your matches and stats are all still there.' },
+      ],
+    },
+    {
       version: '2026-11-18-guest-play',
       date: '2026-11-18',
       title: 'Play as a guest',
@@ -87,7 +95,7 @@
       date: '',
       title: 'Shared feed and crowns',
       items: [
-        { ico: '💬', title: 'Floating messages', text: 'New public log lines (a bid, a raise, a capture, a mistake, a rent payment) float over the table for a few seconds in Wizard, 29, Poker, Ludo, The Mind and Property Rivals. Snakes and Ladders keeps its move banner; Go Fish has no log.' },
+        { ico: '💬', title: 'Floating messages', text: 'New public log lines (a bid, a raise, a capture, a mistake, a rent payment) float over the table for a few seconds in Wizard, 29, Poker, Ludo, Mind and Property Rivals. Snakes and Ladders keeps its move banner; Go Fish has no log.' },
         { ico: '👑', title: 'A crown for who is ahead', text: 'Every scoring game shows it: Wizard, Poker (three or more players), 29 (team score), Go Fish, Snakes and Ladders, Ludo and Property Rivals.' },
         { ico: '📱', title: 'Checks for phones', text: 'Phone-fit and layout checks now cover Property Rivals, Tic-Tac-Toe and Four in a Row.' },
       ],
