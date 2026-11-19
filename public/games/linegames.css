@@ -38,8 +38,8 @@
 .lg .lg-cell.win .lg-piece { animation: lg-pulse 1s ease-in-out infinite alternate; animation-delay: calc(.45s + var(--i, 0) * .12s); }
 @keyframes lg-pulse { to { transform: scale(1.07); } }
 /* a new disc falls from above the board, with a small bounce; a new X or O is drawn stroke by stroke */
-.lg .lg-gravity .lg-cell.enter .lg-piece { position: relative; z-index: 2; animation: lg-drop calc(.28s + var(--drop, 1) * .07s) cubic-bezier(.45, 0, .85, .55) both, lg-land .24s ease-out calc(.28s + var(--drop, 1) * .07s) both; }
-.lg .lg-gravity .lg-cell.enter.win .lg-piece { animation: lg-drop calc(.28s + var(--drop, 1) * .07s) cubic-bezier(.45, 0, .85, .55) both, lg-land .24s ease-out both, lg-pulse 1s ease-in-out infinite alternate;
+.lg .lg-gravity .lg-cell.enter .lg-piece { position: relative; z-index: 2; animation: lg-drop calc(.28s + var(--drop, 1) * .07s) cubic-bezier(.45, 0, .85, .55) both, lg-land .24s ease-out calc(.28s + var(--drop, 1) * .07s) forwards; /* forwards only: a landing must not hold the disc in place while it falls */ }
+.lg .lg-gravity .lg-cell.enter.win .lg-piece { animation: lg-drop calc(.28s + var(--drop, 1) * .07s) cubic-bezier(.45, 0, .85, .55) both, lg-land .24s ease-out forwards, lg-pulse 1s ease-in-out infinite alternate;
   animation-delay: 0s, calc(.28s + var(--drop, 1) * .07s), calc(.9s + var(--i, 0) * .12s); }
 @keyframes lg-drop { from { transform: translateY(calc(var(--drop, 1) * -108%)); } to { transform: translateY(0); } }
 @keyframes lg-land { 0% { transform: scaleY(1); } 40% { transform: scale(1.06, .92); } 100% { transform: scale(1); } }

@@ -5,7 +5,7 @@
   const { esc, pt } = window.CardTable;
   const ENTER_MS = 900;
   // enter: the cell that has just been played (it animates once, then the mark rests), see react()
-  const ui = { ctx: null, v: null, seq: null, enter: null };
+  const ui = { ctx: null, v: null, seq: null, enter: null, enterShown: false };
   const MARKS = {
     tictactoe: [{ cls: 'x', name: 'X' }, { cls: 'o', name: 'O' }],
     fourinarow: [{ cls: 'red', name: 'Red' }, { cls: 'yellow', name: 'Yellow' }],
@@ -35,7 +35,7 @@
   /** Extra classes for the cell that was just played, and for a winning cell (its position in the line sets the delay). */
   function cellClass(v, k, owner) {
     const lit = v.line.indexOf(k);
-    return ['lg-cell', owner === null ? 'free' : 'full', lit >= 0 ? 'win' : '', v.last === k ? 'last' : '', ui.enter && ui.enter.cell === k ? 'enter' : ''].filter(Boolean).join(' ');
+    return ['lg-cell', owner === null ? 'free' : 'full', lit >= 0 ? 'win' : '', v.last === k ? 'last' : '', ui.enter && !ui.enterShown && ui.enter.cell === k ? 'enter' : ''].filter(Boolean).join(' ');
   }
   const winStyle = (v, k) => { const i = v.line.indexOf(k); return i >= 0 ? `--i:${i}` : ''; };
 
@@ -92,13 +92,16 @@
     ui.seq = e.seq;
     // the new mark animates once; a later redraw of the same position shows it at rest
     ui.enter = Number.isInteger(e.cell) ? { cell: e.cell, seq: e.seq } : null;
+    ui.enterShown = false;
     const mine = ui.enter;
     setTimeout(() => { if (ui.enter === mine) ui.enter = null; }, ENTER_MS);
     if (!snd) return;
     snd.play(v.gravity ? 'drop' : 'place');
     // the result sound follows the move once the mark has landed
     const over = e.type === 'win' ? (v.winner === v.me ? 'win' : 'lose') : e.type === 'draw' ? 'round' : null;
-    if (over) setTimeout(() => snd.play(over), v.gravity ? 520 : 320);
+    // a disc falls (row + 1) squares, then lands; a draw's last stroke ends at about 380 ms
+    const landMs = v.gravity ? 280 + (Math.floor(e.cell / v.cols) + 1) * 70 + 240 : 380;
+    if (over) setTimeout(() => snd.play(over), landMs);
   }
 
   function render(root, v, ctx) {
@@ -111,6 +114,7 @@
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
+    if (ui.enter) ui.enterShown = true; // the entrance has been drawn: a redraw shows the mark at rest
   }
 
   function onClick(e) {
