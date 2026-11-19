@@ -523,7 +523,7 @@ async function purge() {
 // ---------------------------------------------------------------- game switches (owner)
 /** Every explicit switch: { game_id, access, enabled, updated_at }. A game without a row is on for everyone (lib/gameFlags.js). */
 async function listGameFlags() {
-  return (await db.query('SELECT game_id, access, enabled, updated_at FROM game_flags')).rows;
+  return (await db.query('SELECT game_id, access, enabled, updated_at, sort_order FROM game_flags')).rows;
 }
 
 /**
@@ -568,10 +568,34 @@ async function setGameFlag({ actorId, gameId, access }) {
   });
 }
 
+/**
+ * Sets the order of the games in the home menu. `order` is the full list of game ids, first to last; it must name every game
+ * exactly once (the route checks this). Only positions that change are written, and one audit entry records the whole order.
+ */
+async function setGameOrder({ actorId, order }) {
+  await db.withTransaction(async (c) => {
+    await lockStaff(c, actorId);
+    const cur = await c.query('SELECT game_id, sort_order FROM game_flags');
+    const have = new Map(cur.rows.map((r) => [r.game_id, r.sort_order]));
+    let changed = false;
+    for (let i = 0; i < order.length; i++) {
+      if (have.get(order[i]) === i) continue;
+      changed = true;
+      // a game with no row yet gets one that keeps it enabled and open to everybody, as a missing row does
+      await c.query(
+        `INSERT INTO game_flags (game_id, enabled, access, sort_order, updated_at, updated_by) VALUES ($1, TRUE, 'on', $2, NOW(), $3)
+         ON CONFLICT (game_id) DO UPDATE SET sort_order = EXCLUDED.sort_order`,
+        [order[i], i, actorId]
+      );
+    }
+    if (changed) await audit(c, { actorId, action: 'game.order', targetType: 'game', detail: { order } });
+  });
+}
+
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health, gameStats, listGameFlags, setGameFlag, listGuestFeatures, setGuestFeature, recordAudit,
+  addCounters, addActive, forgetActor, overview, health, gameStats, listGameFlags, setGameFlag, setGameOrder, listGuestFeatures, setGuestFeature, recordAudit,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)

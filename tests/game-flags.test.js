@@ -232,4 +232,36 @@ test('a read that started before a reset cannot apply after it', () => {
   assert.equal(flags.apply([], flags.begin()), true, 'a newer read applies');
 });
 
+test('the home order follows saved positions; unplaced games keep their registered order after them', () => {
+  flags.apply([]);
+  const base = games.list();
+  const last = base[base.length - 1].id;
+  const first = base[0].id;
+  flags.apply([{ game_id: last, access: 'on', enabled: true, sort_order: 0 }, { game_id: first, access: 'on', enabled: true, sort_order: 1 }]);
+  const listed = flags.withFlags(games.list()).map((g) => g.id);
+  assert.equal(listed[0], last, 'the placed game comes first');
+  assert.equal(listed[1], first, 'then the next placed game');
+  assert.deepEqual(listed.slice(2), base.map((g) => g.id).filter((id) => id !== last && id !== first), 'the rest keep registered order');
+  flags.apply([]);
+  assert.deepEqual(flags.withFlags(games.list()).map((g) => g.id), base.map((g) => g.id), 'no positions: registered order');
+});
+
+test('sortByPosition is pure and ignores positions for unknown games', () => {
+  const list = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  const out = flags.sortByPosition(list, new Map([['c', 0], ['a', 1]]));
+  assert.deepEqual(out.map((g) => g.id), ['c', 'a', 'b']);
+  assert.deepEqual(list.map((g) => g.id), ['a', 'b', 'c'], 'input not reordered');
+  assert.deepEqual([...flags.positionsOf(['x', 'y'])], [['x', 0], ['y', 1]]);
+});
+
+test('setOrder applies at once and reports a real change only', () => {
+  flags.apply([]);
+  const ids2 = games.list().map((g) => g.id);
+  const reversed = ids2.slice().reverse();
+  assert.equal(flags.setOrder(reversed), true);
+  assert.equal(flags.withFlags(games.list())[0].id, reversed[0]);
+  assert.equal(flags.setOrder(reversed), false, 'same order is not a change');
+  flags.apply([]);
+});
+
 console.log(`\n${passed} passed`);
