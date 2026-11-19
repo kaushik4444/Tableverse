@@ -27,15 +27,20 @@
   /** The table this renderer is showing (the room code), so playback for one table never plays on another. */
   const tableOf = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
 
-  /** Advances one replay. The timeout is bound to the animation it was scheduled for, so a timeout left over from another
-   * table (or an earlier turn) does nothing. The last step is the completed table: it stays on screen until the next turn. */
+  /** Advances one replay, one step per interval. Each timeout is bound to the animation it was scheduled for, so a timeout
+   * left from another table or turn does nothing. The last step is the completed table: it is held for one interval, then
+   * the replay ends and the rows as they stand (at a round's end, the new deal) are shown. */
   function scheduleStep(anim, paceK) {
     setTimeout(() => {
       if (ui.anim !== anim || !ui.ctx || anim.table !== tableOf()) return;
-      if (anim.i >= anim.steps.length - 1) return;
-      anim.i += 1;
+      if (anim.i < anim.steps.length - 1) {
+        anim.i += 1;
+        ui.ctx.rerender();
+        scheduleStep(anim, paceK);
+        return;
+      }
+      ui.anim = null;
       ui.ctx.rerender();
-      if (anim.i < anim.steps.length - 1) scheduleStep(anim, paceK);
     }, STEP_MS * (paceK || 1));
   }
 
