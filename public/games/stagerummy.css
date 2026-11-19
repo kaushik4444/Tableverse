@@ -15,6 +15,7 @@
 .sr .sr-card.cG { --cc: #1d7a43; }
 .sr .sr-card.cY { --cc: #c48d0c; }
 .sr .sr-card.cY::before { background: #e8b923; }
+.sr .sr-card.cY b, .sr .sr-card.cY u { color: #6e4a00; } /* the yellow band stays; the ranks on the cream face are darker to read at small sizes */
 .sr .sr-card.wild { color: #2b1d4a; background: linear-gradient(#fffdf6, #fffdf6) padding-box, linear-gradient(135deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #b76bff) border-box; border: 3px solid transparent; }
 .sr .sr-card.wild::before { background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #b76bff); }
 .sr .sr-card.skip { --cc: #2b2f3d; color: #2b2f3d; background: repeating-linear-gradient(-45deg, #d9d2bd 0 7px, #efe8d4 7px 14px); border-color: #2b2f3d; }
