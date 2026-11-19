@@ -315,11 +315,19 @@
       case 'ranks':
         ui.ranks = true;
         ctx.rerender();
+        document.querySelector('.pk .sheet button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
         break;
-      case 'closeRanks':
+      case 'closeRanks': {
         ui.ranks = false;
         ctx.rerender();
+        // Restore after the app's document click handler has closed the toolbar menu.
+        setTimeout(() => {
+          const trigger = document.querySelector('button[data-pk="ranks"]');
+          if (trigger?.closest('.tb-pop[hidden]')) document.querySelector('.tb-more-btn')?.click();
+          trigger?.focus({ preventScroll: true });
+        }, 0);
         break;
+      }
       case 'standings':
         ui.standings = true;
         ctx.rerender();

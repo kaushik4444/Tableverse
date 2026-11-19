@@ -137,7 +137,7 @@
   const groupLabel = (r) => (r.kind === 'colour' ? `${r.size} cards of one colour` : `${r.kind} of ${r.size}`);
   function phasesHTML(v) {
     const now = v.me >= 0 ? v.players[v.me].stage - 1 : -1;
-    const rows = v.goals.map((goal, i) => `<li class="${i === now ? 'ph-current' : ''}"><span class="ph-n">${i + 1}</span><span class="ph-body"><b>${esc(v.stageNames[i])}</b><small>${goal.map(groupLabel).join(' and ')}</small></span></li>`).join('');
+    const rows = v.goals.map((goal, i) => `<li class="${i === now ? 'ph-current' : ''}"${i === now ? ' aria-current="step"' : ''}><span class="ph-n">${i + 1}</span><span class="ph-body"><b>${esc(v.stageNames[i])}</b><small>${goal.map(groupLabel).join(' and ')}</small></span></li>`).join('');
     return `<div class="overlay" data-sr="closePhases"><div class="sheet" data-stop="1"><h2>Stages</h2><p class="hint" style="text-align:left">Lay down the groups of your current stage to move on. Your stage is highlighted.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-sr="closePhases">Close</button></div></div></div>`;
   }
   function overlayHTML(v, ctx) {
@@ -233,8 +233,22 @@
       case 'hit': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); const end = el.dataset.end === 'low' || el.dataset.end === 'high' ? el.dataset.end : undefined; ctx.act({ type: 'hit', card, owner: Number(el.dataset.owner), group: Number(el.dataset.group), ...(end ? { end } : {}) }); } break;
       case 'discard': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); ctx.act({ type: 'discard', card }); } break;
       case 'rules': ctx.showRules(); break;
-      case 'phases': ui.phases = true; ctx.rerender(); break;
-      case 'closePhases': ui.phases = false; ctx.rerender(); break;
+      case 'phases':
+        ui.phases = true;
+        ctx.rerender();
+        document.querySelector('.sr .sheet button[data-sr="closePhases"]')?.focus({ preventScroll: true });
+        break;
+      case 'closePhases': {
+        ui.phases = false;
+        ctx.rerender();
+        // Restore after the app's document click handler has closed the toolbar menu.
+        setTimeout(() => {
+          const trigger = document.querySelector('button[data-sr="phases"]');
+          if (trigger?.closest('.tb-pop[hidden]')) document.querySelector('.tb-more-btn')?.click();
+          trigger?.focus({ preventScroll: true });
+        }, 0);
+        break;
+      }
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
     }
