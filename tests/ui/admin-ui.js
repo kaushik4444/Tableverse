@@ -118,7 +118,7 @@ const api = (role) => ({
     assert.equal(await s.page.locator('#tablesList [role="alert"]').count(), 0);
     await s.close();
   });
-  await test('leaving Games during table loading does not fetch game switches', async () => {
+  await test('owner game switches load while table history is still loading, and a late table answer is not drawn after leaving Games', async () => {
     const s = await open('owner');
     let release; const held = new Promise((r) => { release = r; }); let requested = false;
     await s.page.route('**/api/admin/matches*', async (route) => {
@@ -129,8 +129,8 @@ const api = (role) => ({
     await tab(s.page, 'users');
     release();
     await sleep(150);
-    assert.ok(!s.calls.some((c) => c.path === '/api/admin/game-flags'));
-    assert.ok(!await s.page.locator('#tablesList').count());
+    assert.ok(s.calls.some((c) => c.path === '/api/admin/game-flags'), 'switches are not held back by the table history');
+    assert.ok(!await s.page.locator('#tablesList').count(), 'the late table answer is not drawn on another tab');
     await s.close();
   });
 

@@ -495,7 +495,7 @@
       <p class="ad-muted">Every table that has finished, newest first, across all time. Players are not named.</p>
       <div id="tablesList"></div>
       <p><button class="ad-btn" id="tablesMore" hidden>Load older tables</button></p>`);
-    await loadTables(gen, null);
+    loadTables(gen, null).catch(() => {}); // not awaited: owner game switches must not wait for the table history
     if (gen !== state.gen) return;
     if (state.me.isOwner) await gameSwitches();
   }
