@@ -10,7 +10,7 @@
     C: { sym: '♣', name: 'Clubs', cls: 'pc' },
   };
   const RANKS = '23456789TJQKA';
-  const ui = { raiseTo: 0, key: '', standings: false, ctx: null, latest: null, snap: null, hand: 0 };
+  const ui = { raiseTo: 0, key: '', standings: false, ranks: false, ctx: null, latest: null, snap: null, hand: 0 };
 
   const fmt = (n) => Number(n).toLocaleString('en-US');
   const rankLabel = (r) => (r === 'T' ? '10' : r);
@@ -167,7 +167,25 @@
     return `<ul class="pk-stand">${rows}</ul>${hist ? `<h3 style="margin:14px 0 6px">Recent hands</h3><div class="score-wrap"><table class="score pk-hist"><thead><tr><th>Hand</th><th>Pot</th><th>Winner</th></tr></thead><tbody>${hist}</tbody></table></div>` : ''}`;
   }
 
+  /** The hand rankings, best first, in the wording of the table players know. */
+  const HAND_RANKS = [
+    ['Royal flush', 'A, K, Q, J, 10, all of the same suit'],
+    ['Straight flush', '5 cards of the same suit in sequence'],
+    ['Four of a kind', '4 cards of equal value'],
+    ['Full house', 'Three of a kind with a pair'],
+    ['Flush', 'Any 5 cards of the same suit'],
+    ['Straight', '5 cards in a sequence'],
+    ['Three of a kind', '3 cards of the same value'],
+    ['Two pairs', '2 different pairs'],
+    ['One pair', '2 cards of the same value'],
+    ['High card', '5 cards that do not interact with each other'],
+  ];
+  function ranksHTML() {
+    const rows = HAND_RANKS.map(([name, text], i) => `<li><span class="ph-n">${i + 1}</span><span class="ph-body"><b>${esc(name)}</b><small>${esc(text)}</small></span></li>`).join('');
+    return `<div class="overlay" data-pk="closeRanks"><div class="sheet" data-stop="1" role="dialog" aria-modal="true" aria-labelledby="pk-ranks-title"><h2 id="pk-ranks-title">Hand rankings</h2><p class="hint" style="text-align:left">Best hand first. Ties are settled by the cards in the hand.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-pk="closeRanks">Close</button></div></div></div>`;
+  }
   function overlayHTML(v) {
+    if (ui.ranks) return ranksHTML();
     if (v.phase === 'gameOver') {
       const rows = v.standings
         .map((s) => `<li><span>${s.rank === 1 ? '🏆' : s.rank + '.'}</span><span>${esc(v.players[s.player].name)}</span><span class="pts">${fmt(s.chips)}</span></li>`)
@@ -220,12 +238,15 @@
     const b = v.blinds;
     const rise = b.next && b.handsLeft ? ` · up to ${b.next[0]}/${b.next[1]} in ${b.handsLeft} hand${b.handsLeft === 1 ? '' : 's'}` : '';
     const limit = v.limit ? ` · of ${v.limit}` : '';
+    const oldSheet = root.querySelector('[aria-labelledby="pk-ranks-title"]');
+    const sheetScroll = oldSheet ? oldSheet.scrollTop : 0;
+    const sheetHadFocus = !!oldSheet && oldSheet.contains(document.activeElement);
     root.innerHTML = `
     <div class="wz pk" style="--bw:${z.board}px;--hw:${z.hand}px">
       <div class="wz-top">
         <div class="wz-round"><b>Hand ${v.handNo}</b><span class="label">${limit}</span></div>
         <div class="pk-blinds"><span class="label">Blinds</span> <b>${b.sb} / ${b.bb}</b><small>${rise}</small></div>
-        ${CardTable.toolbarSeed('<button class="btn ghost small" data-pk="standings">Chips</button>', 'pk')}
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-pk="ranks">Hands</button> <button class="btn ghost small" data-pk="standings">Chips</button>', 'pk')}
       </div>
       ${tableHTML(v, ctx, z)}
       ${handHTML(v)}
@@ -235,6 +256,16 @@
     </div>`;
     root.onclick = onClick;
     root.oninput = onInput;
+    const ranksSheet = root.querySelector('[aria-labelledby="pk-ranks-title"]');
+    if (ranksSheet) {
+      ranksSheet.scrollTop = sheetScroll; // a re-render keeps the place in the list
+      if (sheetHadFocus) ranksSheet.querySelector('button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
+    }
+    if (ranksSheet) ranksSheet.onkeydown = (e) => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      ranksSheet.querySelector('button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
+    };
   }
 
   function onInput(e) {
@@ -294,6 +325,22 @@
       case 'next':
         ctx.act({ type: 'continue' });
         break;
+      case 'ranks':
+        ui.ranks = true;
+        ctx.rerender();
+        document.querySelector('.pk .sheet button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
+        break;
+      case 'closeRanks': {
+        ui.ranks = false;
+        ctx.rerender();
+        // Restore after the app's document click handler has closed the toolbar menu.
+        setTimeout(() => {
+          const trigger = document.querySelector('button[data-pk="ranks"]');
+          if (trigger?.closest('.tb-pop[hidden]')) document.querySelector('.tb-more-btn')?.click();
+          trigger?.focus({ preventScroll: true });
+        }, 0);
+        break;
+      }
       case 'standings':
         ui.standings = true;
         ctx.rerender();

@@ -254,6 +254,12 @@ table.score td small { display: block; color: var(--muted); font-size: 11px; }
 .podium { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 8px; }
 .podium li { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(0,0,0,.2); font-weight: 700; }
 .podium li:first-child { background: var(--gold); color: var(--gold-ink); font-size: 18px; }
+.ph-list { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 6px; }
+.ph-list li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(0,0,0,.2); }
+.ph-list li.ph-current { background: rgba(134,239,172,.22); box-shadow: inset 0 0 0 2px #86efac; }
+.ph-n { min-width: 26px; font-weight: 800; color: var(--gold); text-align: right; }
+.ph-body { display: grid; gap: 2px; }
+.ph-body small { opacity: .8; font-weight: 500; }
 .podium .pts { margin-left: auto; font-variant-numeric: tabular-nums; }
 
 /* ---------- v2: home + lobby polish */
