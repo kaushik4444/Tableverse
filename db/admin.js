@@ -575,6 +575,8 @@ async function setGameFlag({ actorId, gameId, access }) {
 async function setGameOrder({ actorId, order }) {
   await db.withTransaction(async (c) => {
     await lockStaff(c, actorId);
+    // one order writer at a time: two staff saving together must not each read the old positions and then interleave
+    await c.query("SELECT pg_advisory_xact_lock(hashtext('game_order'))");
     const cur = await c.query('SELECT game_id, sort_order FROM game_flags');
     const have = new Map(cur.rows.map((r) => [r.game_id, r.sort_order]));
     let changed = false;
