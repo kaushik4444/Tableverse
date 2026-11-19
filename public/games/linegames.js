@@ -39,7 +39,7 @@
   /** Extra classes for the cell that was just played, and for a winning cell (its position in the line sets the delay). */
   function cellClass(v, k, owner) {
     const lit = v.line.indexOf(k);
-    return ['lg-cell', owner === null ? 'free' : 'full', lit >= 0 ? 'win' : '', v.last === k ? 'last' : '', ui.enter && ui.enter.cell === k ? 'enter' : ''].filter(Boolean).join(' ');
+    return ['lg-cell', owner === null ? 'free' : 'full', lit >= 0 ? 'win' : '', v.last === k ? 'last' : '', ui.enter && !ui.enterShown && ui.enter.cell === k ? 'enter' : ''].filter(Boolean).join(' ');
   }
   const winStyle = (v, k) => { const i = v.line.indexOf(k); return i >= 0 ? `--i:${i}` : ''; };
   /** Style for the piece of the cell being entered: how far it falls, and how long it has already been running. */
@@ -121,6 +121,7 @@
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
+    if (ui.enter) ui.enterShown = true; // the entrance has been drawn: a redraw shows the mark at rest
   }
 
   function onClick(e) {
