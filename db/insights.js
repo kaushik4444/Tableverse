@@ -133,6 +133,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
   const newPlayers = daily.rows.reduce((a, r) => a + r.new_players, 0);
   return {
     days: n,
+    counterScope: n === WINDOWS[0] ? 'Today (UTC)' : `Last ${n} UTC calendar days`,
     zone,
     games: gameRows,
     heat: heat.rows.map((r) => ({ dow: r.dow, hour: r.hour, matches: r.matches, playerGames: r.player_games })),

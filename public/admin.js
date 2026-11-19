@@ -109,7 +109,7 @@
     return `<figure class="ad-chart"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${grid}<polyline points="${pts}" class="ad-line" fill="none"/>${dots}<text x="${pad}" y="${h - 6}" class="ad-axis">${first}</text><text x="${w - pad}" y="${h - 6}" class="ad-axis" text-anchor="end">${last}</text></svg><details><summary>${esc(label)}: data table</summary><table class="ad-t"><thead><tr><th>Day</th><th>${esc(label)}</th></tr></thead><tbody>${rows}</tbody></table></details></figure>`;
   };
   const RANGES = [1, 7, 30, 90]; // 1 = the last 24 hours
-  const rangeLabel = (d) => (Number(d) === 1 ? '24 hours' : `${d} days`);
+  const rangeLabel = (d, calendar = false) => (Number(d) === 1 ? (calendar ? 'Today (UTC)' : '24 hours') : `${d} days`);
 
   async function overview(days = 30) {
     const gen = state.gen;
@@ -119,8 +119,8 @@
     const t = (m) => o.totals[m] || 0;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
     const q = o.queues || {};
-    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${rangeLabel(d)}</button>`).join('');
-    main.innerHTML = `<h2>Overview <small class="ad-muted">last ${rangeLabel(o.days)}</small></h2>
+    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${rangeLabel(d, true)}</button>`).join('');
+    main.innerHTML = `<h2>Overview <small class="ad-muted">${Number(o.days) === 1 ? rangeLabel(o.days, true) : `last ${rangeLabel(o.days)}`}</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:12px">${rangeButtons}</div>
       <h3>Right now <small class="ad-muted">updates every 15 seconds</small></h3>
       <div class="ad-grid" id="liveNow" aria-live="off"><div class="ad-card"><b>…</b><small>loading</small></div></div>
@@ -204,6 +204,7 @@
       <h3>How long a visit lasts</h3>${bars(((o.visits && o.visits.length) || []), 'No visits counted yet.')}
       <p class="ad-muted">A visit is one connection, so a reconnect starts a new visit. Connections under 3 seconds are not counted, and a visit is counted when it ends, under the hour it opened in.</p>
       <h3>How each game goes</h3>${g.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Avg length</th><th>Median length</th><th>Avg seats</th><th>Left early</th><th>With a leaver</th><th>Drawn</th><th>Finished of started</th></tr></thead><tbody>${gameRows}</tbody></table>` : '<p class="ad-muted">No games yet.</p>'}
+      <p class="ad-muted">Finished of started uses ${esc(o.counterScope || (Number(o.days) === 1 ? 'Today (UTC)' : `Last ${o.days} UTC calendar days`))} counters.</p>
       <h3>New and returning players</h3>${stackBars(o.returning.newPerDay, o.returning.returningPerDay, o.labels, 'New', 'Returning')}
       <p class="ad-muted">Next-day, one-week and day-7 return use players whose first game was between ${o.days + 7} and 7 days ago (${c.size} players), so each has had a full week to come back. Day-30 return uses players whose first game was between ${o.days + 30} and 30 days ago (${c.size30} players).</p>
       <h3>Time spent playing</h3>${bars(buckets.map((name, i) => ({ name, total: pt.buckets[i] })), 'No play yet.')}
@@ -495,6 +496,7 @@
       <div id="tablesList"></div>
       <p><button class="ad-btn" id="tablesMore" hidden>Load older tables</button></p>`);
     await loadTables(gen, null);
+    if (gen !== state.gen) return;
     if (state.me.isOwner) await gameSwitches();
   }
 
@@ -504,12 +506,16 @@
     const more = main.querySelector('#tablesMore');
     if (!list || !more) return;
     more.disabled = true;
+    list.querySelector('.ad-msg.err')?.remove();
     let o;
     try {
       o = await api(`/api/admin/matches${before ? `?before=${encodeURIComponent(before)}` : ''}`);
     } catch (e) {
       if (gen !== state.gen) return;
       more.disabled = false;
+      more.hidden = false;
+      more.textContent = 'Retry loading tables';
+      more.onclick = () => loadTables(gen, before);
       list.insertAdjacentHTML('beforeend', '<p class="ad-msg err" role="alert">The list could not be loaded. Try again.</p>');
       return;
     }
@@ -522,6 +528,7 @@
     if (body) body.insertAdjacentHTML('beforeend', rows);
     else if (rows) list.innerHTML = `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Room</th><th>Started</th><th>Ended</th><th>Players</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     else list.innerHTML = '<p class="ad-muted">No tables have finished yet.</p>';
+    more.textContent = 'Load older tables';
     more.hidden = !(o && o.nextCursor);
     more.disabled = false;
     more.onclick = () => loadTables(state.gen, o.nextCursor);

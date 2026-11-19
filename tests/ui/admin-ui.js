@@ -96,6 +96,44 @@ const api = (role) => ({
   };
   const tab = (p, name) => p.click(`[data-tab="${name}"]`);
 
+  await test('table pages retry the same cursor and preserve existing rows', async () => {
+    const s = await open('admin');
+    let attempts = 0; const cursors = [];
+    await s.page.route('**/api/admin/matches*', async (route) => {
+      const before = new URL(route.request().url()).searchParams.get('before');
+      cursors.push(before); attempts++;
+      if (attempts === 1 || attempts === 3) return route.fulfill({ status: 500, json: { ok: false } });
+      return route.fulfill({ json: tablesFixture(before) });
+    });
+    await tab(s.page, 'games');
+    await s.page.waitForSelector('#tablesMore:text("Retry loading tables")');
+    await s.page.click('#tablesMore');
+    await s.page.waitForSelector('#tablesList tbody tr');
+    await s.page.click('#tablesMore');
+    await s.page.waitForSelector('#tablesMore:text("Retry loading tables")');
+    assert.equal(await s.page.locator('#tablesList tbody tr').count(), 1);
+    await s.page.click('#tablesMore');
+    await until(async () => await s.page.locator('#tablesList tbody tr').count() === 2, 'older rows');
+    assert.deepEqual(cursors, [null, null, tablesFixture(null).nextCursor, tablesFixture(null).nextCursor]);
+    assert.equal(await s.page.locator('#tablesList [role="alert"]').count(), 0);
+    await s.close();
+  });
+  await test('leaving Games during table loading does not fetch game switches', async () => {
+    const s = await open('owner');
+    let release; const held = new Promise((r) => { release = r; }); let requested = false;
+    await s.page.route('**/api/admin/matches*', async (route) => {
+      requested = true; await held; await route.fulfill({ json: tablesFixture(null) });
+    });
+    await tab(s.page, 'games');
+    await until(() => requested, 'held tables request');
+    await tab(s.page, 'users');
+    release();
+    await sleep(150);
+    assert.ok(!s.calls.some((c) => c.path === '/api/admin/game-flags'));
+    assert.ok(!await s.page.locator('#tablesList').count());
+    await s.close();
+  });
+
   await test('a non-admin sees no console and no admin data is requested', async () => {
     const s = await open('user');
     await s.page.waitForSelector('.ad-msg.err');
@@ -121,6 +159,7 @@ const api = (role) => ({
     assert.equal(await s.page.locator('.ad-chart svg').count(), 3, 'active players, registrations and errors');
     assert.equal(await s.page.locator('.ad-chart table').count(), 3, 'each chart has its data table');
     assert.equal(await s.page.locator('[data-days="30"][aria-pressed="true"]').count(), 1, '30 days is the default');
+    assert.equal(await s.page.textContent('[data-days="1"]'), 'Today (UTC)');
     await s.page.click('[data-days="7"]');
     await until(() => s.calls.some((c) => /overview\?days=7/.test(c.path)), 'the 7-day range is requested');
     await s.page.waitForSelector('[data-days="7"][aria-pressed="true"]');

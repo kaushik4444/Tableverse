@@ -168,6 +168,15 @@ const ADMIN_POSTS = [
       assert.equal(second.json.tables[0].roomCode, 'XYZ789');
       assert.equal(second.json.nextCursor, null, 'the last page has no cursor');
       assert.equal((await admin.b.get('/api/admin/matches?before=garbage')).status, 400, 'a made-up page is refused');
+      for (const cursor of [
+        '', 'nonsense|11111111-1111-4111-8111-111111111111',
+        '2026-02-30T12:00:00.123456Z|11111111-1111-4111-8111-111111111111',
+        '2026-11-17T10:30:00Z|------------------------------------',
+        '2026-11-17T10:30:00+23:00|11111111-1111-4111-8111-111111111111',
+        '2026-11-17T10:30:00Z|11111111-1111-4111-8111-111111111111|extra',
+      ]) assert.equal((await admin.b.get(`/api/admin/matches?before=${encodeURIComponent(cursor)}`)).status, 400);
+      assert.equal((await admin.b.get('/api/admin/matches?before=' + encodeURIComponent('2026-11-17T10:30:00.123456Z|11111111-1111-4111-8111-111111111111'))).status, 200);
+
       assert.equal((await user.b.get('/api/admin/matches')).status, 403, 'an ordinary account gets nothing');
       assert.ok(first.json.tables.every((t) => !('username' in t) && !('players' in t)), 'players are not named');
     });
