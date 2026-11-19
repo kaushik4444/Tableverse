@@ -182,7 +182,7 @@
   ];
   function ranksHTML() {
     const rows = HAND_RANKS.map(([name, text], i) => `<li><span class="ph-n">${i + 1}</span><span class="ph-body"><b>${esc(name)}</b><small>${esc(text)}</small></span></li>`).join('');
-    return `<div class="overlay" data-pk="closeRanks"><div class="sheet" data-stop="1"><h2>Hand rankings</h2><p class="hint" style="text-align:left">Best hand first. Ties are settled by the cards in the hand.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-pk="closeRanks">Close</button></div></div></div>`;
+    return `<div class="overlay" data-pk="closeRanks"><div class="sheet" data-stop="1" role="dialog" aria-modal="true" aria-labelledby="pk-ranks-title"><h2 id="pk-ranks-title">Hand rankings</h2><p class="hint" style="text-align:left">Best hand first. Ties are settled by the cards in the hand.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-pk="closeRanks">Close</button></div></div></div>`;
   }
   function overlayHTML(v) {
     if (ui.ranks) return ranksHTML();
@@ -238,6 +238,9 @@
     const b = v.blinds;
     const rise = b.next && b.handsLeft ? ` · up to ${b.next[0]}/${b.next[1]} in ${b.handsLeft} hand${b.handsLeft === 1 ? '' : 's'}` : '';
     const limit = v.limit ? ` · of ${v.limit}` : '';
+    const oldSheet = root.querySelector('[aria-labelledby="pk-ranks-title"]');
+    const sheetScroll = oldSheet ? oldSheet.scrollTop : 0;
+    const sheetHadFocus = !!oldSheet && oldSheet.contains(document.activeElement);
     root.innerHTML = `
     <div class="wz pk" style="--bw:${z.board}px;--hw:${z.hand}px">
       <div class="wz-top">
@@ -253,6 +256,16 @@
     </div>`;
     root.onclick = onClick;
     root.oninput = onInput;
+    const ranksSheet = root.querySelector('[aria-labelledby="pk-ranks-title"]');
+    if (ranksSheet) {
+      ranksSheet.scrollTop = sheetScroll; // a re-render keeps the place in the list
+      if (sheetHadFocus) ranksSheet.querySelector('button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
+    }
+    if (ranksSheet) ranksSheet.onkeydown = (e) => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      ranksSheet.querySelector('button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
+    };
   }
 
   function onInput(e) {
@@ -315,11 +328,19 @@
       case 'ranks':
         ui.ranks = true;
         ctx.rerender();
+        document.querySelector('.pk .sheet button[data-pk="closeRanks"]')?.focus({ preventScroll: true });
         break;
-      case 'closeRanks':
+      case 'closeRanks': {
         ui.ranks = false;
         ctx.rerender();
+        // Restore after the app's document click handler has closed the toolbar menu.
+        setTimeout(() => {
+          const trigger = document.querySelector('button[data-pk="ranks"]');
+          if (trigger?.closest('.tb-pop[hidden]')) document.querySelector('.tb-more-btn')?.click();
+          trigger?.focus({ preventScroll: true });
+        }, 0);
         break;
+      }
       case 'standings':
         ui.standings = true;
         ctx.rerender();
