@@ -3,9 +3,13 @@
 (() => {
   'use strict';
   const { esc, pt } = window.CardTable;
-  const ENTER_MS = 900;
-  // enter: the cell that has just been played (it animates once, then the mark rests), see react()
+  // One set of timings drives the animation (they reach the CSS as variables on .lg) and the sound schedule.
+  const T = { dropBase: 280, dropStep: 70, land: 240, draw: 380, win: 260 };
+  const ENTER_MS = 1000;
+  // enter: the cell that has just been played ({ cell, seq, at }). It animates once; a redraw while it runs continues the
+  // animation from where it is (see enterStyle) and a redraw after it has finished shows the mark at rest.
   const ui = { ctx: null, v: null, seq: null, enter: null };
+  const dropMs = (v, cell) => T.dropBase + (Math.floor(cell / v.cols) + 1) * T.dropStep;
   const MARKS = {
     tictactoe: [{ cls: 'x', name: 'X' }, { cls: 'o', name: 'O' }],
     fourinarow: [{ cls: 'red', name: 'Red' }, { cls: 'yellow', name: 'Yellow' }],
@@ -38,6 +42,11 @@
     return ['lg-cell', owner === null ? 'free' : 'full', lit >= 0 ? 'win' : '', v.last === k ? 'last' : '', ui.enter && ui.enter.cell === k ? 'enter' : ''].filter(Boolean).join(' ');
   }
   const winStyle = (v, k) => { const i = v.line.indexOf(k); return i >= 0 ? `--i:${i}` : ''; };
+  /** Style for the piece of the cell being entered: how far it falls, and how long it has already been running. */
+  function enterStyle(v, k) {
+    if (!ui.enter || ui.enter.cell !== k) return '';
+    return `--drop:${Math.floor(k / v.cols) + 1};--el:${Math.max(0, Date.now() - ui.enter.at)}ms`;
+  }
 
   function seatsHTML(v, ctx) {
     return `<div class="lg-seats">${v.players.map((p, i) => `<div class="lg-seat ${i === v.turn && v.phase === 'playing' ? 'turn' : ''} ${v.phase === 'gameOver' && v.winner === i ? 'won' : ''}">
@@ -50,7 +59,7 @@
     for (let k = 0; k < v.board.length; k++) {
       const r = Math.floor(k / v.cols), c = k % v.cols;
       const owner = v.board[k];
-      const piece = owner !== null ? pieceHTML(v, owner, winStyle(v, k)) : '';
+      const piece = owner !== null ? pieceHTML(v, owner, [winStyle(v, k), enterStyle(v, k)].filter(Boolean).join(';')) : '';
       const cls = cellClass(v, k, owner);
       const label = `Row ${r + 1}, column ${c + 1}, ${owner === null ? 'empty' : marks(v)[owner].name}`;
       if (v.gravity) out.push(`<div class="${cls}" data-col="${c}" role="presentation">${piece}</div>`);
@@ -66,8 +75,7 @@
         const cells = Array.from({ length: v.rows }, (_, r) => {
           const k = r * v.cols + c, owner = v.board[k];
           const cls = cellClass(v, k, owner);
-          // --drop: how many squares the disc falls, so a higher drop takes a little longer
-          const style = [winStyle(v, k), ui.enter && ui.enter.cell === k ? `--drop:${r + 1}` : ''].filter(Boolean).join(';');
+          const style = [winStyle(v, k), enterStyle(v, k)].filter(Boolean).join(';');
           return `<div class="${cls}">${owner !== null ? pieceHTML(v, owner, style) : ''}</div>`;
         }).join('');
         return `<button type="button" class="lg-col" data-col="${c}" aria-label="Drop in column ${c + 1}" ${open ? '' : 'disabled'}>${cells}</button>`;
@@ -90,20 +98,22 @@
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
-    // the new mark animates once; a later redraw of the same position shows it at rest
-    ui.enter = Number.isInteger(e.cell) ? { cell: e.cell, seq: e.seq } : null;
-    const mine = ui.enter;
-    setTimeout(() => { if (ui.enter === mine) ui.enter = null; }, ENTER_MS);
+    // the new mark animates once: a redraw of the same position does not start it again (the sound is by seq as well)
+    const entering = Number.isInteger(e.cell) ? { cell: e.cell, seq: e.seq, at: Date.now() } : null;
+    ui.enter = entering;
+    setTimeout(() => { if (ui.enter === entering) ui.enter = null; }, ENTER_MS);
     if (!snd) return;
-    snd.play(v.gravity ? 'drop' : 'place');
-    // the result sound follows the move once the mark has landed
+    // sounds follow the animation: a tap for a square; for a column the fall now and the landing when the disc arrives
+    const land = entering && v.gravity ? dropMs(v, e.cell) : T.draw;
+    if (v.gravity) { snd.play('fall'); setTimeout(() => snd.play('land'), land); } else snd.play('place');
+    // the result sound comes after the mark has landed
     const over = e.type === 'win' ? (v.winner === v.me ? 'win' : 'lose') : e.type === 'draw' ? 'round' : null;
-    if (over) setTimeout(() => snd.play(over), v.gravity ? 520 : 320);
+    if (over) setTimeout(() => snd.play(over), land + (v.gravity ? T.land : T.win));
   }
 
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.v = v; react(v);
-    root.innerHTML = `<div class="wz lg" data-game="${esc(v.game)}">
+    root.innerHTML = `<div class="wz lg" data-game="${esc(v.game)}" style="--drop-base:${T.dropBase}ms;--drop-step:${T.dropStep}ms;--land:${T.land}ms;--draw:${T.draw}ms">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.win} in a row</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-lg="rules">Rules</button>', 'lg')}</div>
       ${seatsHTML(v, ctx)}

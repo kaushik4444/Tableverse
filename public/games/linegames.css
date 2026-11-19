@@ -37,13 +37,17 @@
 .lg .lg-tictactoe .lg-cell.win { background: rgba(242, 193, 78, .22); }
 .lg .lg-cell.win .lg-piece { animation: lg-pulse 1s ease-in-out infinite alternate; animation-delay: calc(.45s + var(--i, 0) * .12s); }
 @keyframes lg-pulse { to { transform: scale(1.07); } }
-/* a new disc falls from above the board, with a small bounce; a new X or O is drawn stroke by stroke */
-.lg .lg-gravity .lg-cell.enter .lg-piece { position: relative; z-index: 2; animation: lg-drop calc(.28s + var(--drop, 1) * .07s) cubic-bezier(.45, 0, .85, .55) both, lg-land .24s ease-out calc(.28s + var(--drop, 1) * .07s) both; }
-.lg .lg-gravity .lg-cell.enter.win .lg-piece { animation: lg-drop calc(.28s + var(--drop, 1) * .07s) cubic-bezier(.45, 0, .85, .55) both, lg-land .24s ease-out both, lg-pulse 1s ease-in-out infinite alternate;
-  animation-delay: 0s, calc(.28s + var(--drop, 1) * .07s), calc(.9s + var(--i, 0) * .12s); }
+/* a new disc falls from above the board (a higher drop takes a little longer) and lands with a small squash; a new X or O is
+ * drawn stroke by stroke. --el is how long the animation has already run when the board is redrawn, so it continues, not restarts.
+ * The landing uses fill-mode forwards: with a start-frame fill it would hold the piece in its cell during the fall. */
+.lg .lg-gravity .lg-cell.enter .lg-piece { position: relative; z-index: 2; --fall: calc(var(--drop-base, 280ms) + var(--drop, 1) * var(--drop-step, 70ms));
+  animation: lg-drop var(--fall) cubic-bezier(.45, 0, .85, .55) both, lg-land var(--land, 240ms) ease-out forwards;
+  animation-delay: calc(0ms - var(--el, 0ms)), calc(var(--fall) - var(--el, 0ms)); }
+.lg .lg-gravity .lg-cell.enter.win .lg-piece { --fall: calc(var(--drop-base, 280ms) + var(--drop, 1) * var(--drop-step, 70ms)); animation: lg-drop var(--fall) cubic-bezier(.45, 0, .85, .55) both, lg-land var(--land, 240ms) ease-out forwards, lg-pulse 1s ease-in-out infinite alternate;
+  animation-delay: calc(0ms - var(--el, 0ms)), calc(var(--fall) - var(--el, 0ms)), calc(var(--fall) + var(--land, 240ms) + var(--i, 0) * .12s - var(--el, 0ms)); }
 @keyframes lg-drop { from { transform: translateY(calc(var(--drop, 1) * -108%)); } to { transform: translateY(0); } }
-@keyframes lg-land { 0% { transform: scaleY(1); } 40% { transform: scale(1.06, .92); } 100% { transform: scale(1); } }
-.lg .lg-tictactoe .lg-cell.enter .lg-glyph path, .lg .lg-tictactoe .lg-cell.enter .lg-glyph circle { stroke-dasharray: 100; animation: lg-draw .38s ease-out both; }
+@keyframes lg-land { 0% { transform: scale(1); } 40% { transform: scale(1.06, .92); } 100% { transform: scale(1); } }
+.lg .lg-tictactoe .lg-cell.enter .lg-glyph path, .lg .lg-tictactoe .lg-cell.enter .lg-glyph circle { stroke-dasharray: 100; animation: lg-draw var(--draw, 380ms) ease-out both; animation-delay: calc(0ms - var(--el, 0ms)); }
 @keyframes lg-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
 /* the result dialog waits for the last move to land and the winning line to light up */
 .lg .overlay { animation: lg-fade .4s ease both .95s; }
