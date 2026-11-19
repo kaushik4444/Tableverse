@@ -83,7 +83,7 @@
   .sr .sr-table .sr-laid { width: 27vw; }
   .sr .sr-table .sr-gcards .sr-card.mini { width: 19px; }
   .sr .sr-table .sr-glabel { font-size: 10px; }
-  .sr .sr-table .plate span { display: none; }
+  .sr .sr-table .plate span { font-size: 10px; line-height: 1.2; }
 }
 /* the shared centre ignores the pointer so the felt is never in the way; the piles are the one thing in it you can press */
 .sr .pt-center .sr-piles { pointer-events: auto; }

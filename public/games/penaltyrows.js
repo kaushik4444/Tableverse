@@ -4,7 +4,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, seq: null, anim: null };
+  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null };
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
 
   /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
@@ -19,18 +19,28 @@
       steps.push(rows.map((r) => r.slice()));
     }
     const last = steps[steps.length - 1];
-    const same = last.length === v.rows.length && last.every((r, k) => r.length === v.rows[k].length && r.every((c, s) => c.n === v.rows[k][s].n));
+    if (!v.after) return null;
+    const same = last.length === v.after.length && last.every((r, k) => r.length === v.after[k].length && r.every((c, s) => c.n === v.after[k][s].n)); // compare with the completed table: at a round's end the rows are already the next deal
     return same && steps.length > 1 ? steps : null;
   }
 
-  function scheduleStep(seq, paceK) {
+  /** The table this renderer is showing (the room code), so playback for one table never plays on another. */
+  const tableOf = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
+
+  /** Advances one replay, one step per interval. Each timeout is bound to the animation it was scheduled for, so a timeout
+   * left from another table or turn does nothing. The last step is the completed table: it is held for one interval, then
+   * the replay ends and the rows as they stand (at a round's end, the new deal) are shown. */
+  function scheduleStep(anim, paceK) {
     setTimeout(() => {
-      const a = ui.anim;
-      if (!a || a.seq !== seq || !ui.ctx) return;
-      a.i += 1;
-      if (a.i >= a.steps.length - 1) ui.anim = null; // the last step is the table itself
+      if (ui.anim !== anim || !ui.ctx || anim.table !== tableOf()) return;
+      if (anim.i < anim.steps.length - 1) {
+        anim.i += 1;
+        ui.ctx.rerender();
+        scheduleStep(anim, paceK);
+        return;
+      }
+      ui.anim = null;
       ui.ctx.rerender();
-      if (ui.anim) scheduleStep(seq, paceK);
     }, STEP_MS * (paceK || 1));
   }
 
@@ -109,11 +119,12 @@
   function react(v) {
     const snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = v.seq; return; } // first render (load or reconnect): do not replay
+    if (v.phase === 'takeRow') ui.anim = null; // a row choice must show the rows as they stand, not a replay
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
     const steps = replaySteps(v);
-    ui.anim = steps ? { seq: v.seq, steps, i: 0 } : null;
-    if (ui.anim) scheduleStep(v.seq, v.paceK);
+    ui.anim = steps ? { seq: v.seq, steps, i: 0, table: tableOf() } : null;
+    if (ui.anim) scheduleStep(ui.anim, v.paceK);
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     else if (v.lastTurn.some((e) => e.by === v.me && e.took)) snd.play('lose');
@@ -123,6 +134,7 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
+    if (ui.table !== tableOf()) { ui.table = tableOf(); ui.anim = null; ui.seq = null; } // a different table: start afresh, with no replay
     react(v);
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);

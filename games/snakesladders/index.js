@@ -22,7 +22,7 @@ module.exports = {
   rules: [
     'Two to six players start off the board. Take turns to roll one die and move that many squares along the numbered path, which winds up the board from 1 to 100.',
     'If you land on the foot of a ladder, climb to its top. If you land on a snake’s head, slide down to its tail. Ladders and snakes only work when you land exactly on their start.',
-    'With “Roll again on a six” on, a six that moves you gives you another roll. A six that would overshoot 100 ends your turn, and a third six in a row ends your turn without a move.',
+    'With “Roll again on a six” on, a six that moves you gives you another roll. With “Exact roll to finish” on, a six that would overshoot 100 ends your turn; with it off, a six that reaches 100 wins. A third six in a row ends your turn without a move.',
     'With “Exact roll to finish” on, you must land on 100 exactly. If your roll is too big you stay where you are.',
     'The first player to reach square 100 wins. The others are placed by how far they got.',
   ],
