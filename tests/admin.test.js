@@ -21,6 +21,117 @@ const ADMIN_POSTS = [
 ];
 
 (async () => {
+  // Exercise the production store at its query boundary; the HTTP fixture below uses an in-memory store.
+  const { validHistoryCursor } = require('../lib/historyCursor');
+  const db = require('../db/pool');
+  const sqlAdmin = require('../db/admin');
+  const historyId = 'abcdef01-2345-6789-abcd-0123456789ab';
+  await test('history cursors accept calendar boundaries, leap centuries, offsets and PostgreSQL microseconds', () => {
+    for (const stamp of [
+      '2000-02-29T00:00:00Z', '2024-02-29T23:59:59.123456Z',
+      '2026-04-30T12:30:00.1+05:30', '2026-12-31T23:59:59.123-08:00',
+    ]) assert.equal(validHistoryCursor(`${stamp}|${historyId.toUpperCase()}`), true, stamp);
+  });
+  await test('history cursors reject invalid calendar fields, precision, offsets, IDs and separators', () => {
+    for (const stamp of [
+      '1900-02-29T00:00:00Z', '2100-02-29T00:00:00Z', '2025-02-29T00:00:00Z',
+      '0000-01-01T00:00:00Z', '2026-00-01T00:00:00Z', '2026-13-01T00:00:00Z',
+      '2026-01-00T00:00:00Z', '2026-04-31T00:00:00Z', '2026-01-32T00:00:00Z',
+      '2026-01-01T24:00:00Z', '2026-01-01T00:60:00Z', '2026-01-01T00:00:60Z',
+      '2026-01-01T00:00:00.1234567Z', '2026-01-01T00:00:00.Z',
+      '2026-01-01T00:00:00+16:00', '2026-01-01T00:00:00+05:60',
+      '2026-01-01T00:00:00', '2026-01-01 00:00:00Z',
+    ]) assert.equal(validHistoryCursor(`${stamp}|${historyId}`), false, stamp);
+    const valid = `2026-01-01T00:00:00Z|${historyId}`;
+    for (const value of [null, undefined, 42, {}, [], '', valid + '|extra', ' ' + valid, valid + ' ',
+      valid.replace(historyId, 'not-a-uuid'), valid.replace(historyId, historyId.slice(1))]) {
+      assert.equal(validHistoryCursor(value), false, String(value));
+    }
+  });
+  async function withQuery(query, fn) {
+    const original = db.query;
+    db.query = query;
+    try { await fn(); } finally { db.query = original; }
+  }
+  await test('SQL history maps only public fields and takes its microsecond cursor from the last visible row', async () => {
+    const row = { id: historyId, room_code: 'ABC123', game_id: 'wizard', seats: 4,
+      table_humans: 3, table_bots: 1, started_at: new Date('2026-01-01T00:00:00Z'),
+      finished_at: new Date('2026-01-01T00:10:00.123Z'), cursor_at: '2026-01-01T00:10:00.123456Z',
+      completed: false, player_id: 'private-player', username: 'private-name', email: 'private@example.test' };
+    const before = `2026-01-02T00:00:00.654321+05:30|${historyId}`;
+    await withQuery(async (sql, args) => {
+      assert.deepEqual(args, [2, before.split('|')[0], historyId]);
+      return { rows: [row, { ...row, id: '00000000-0000-0000-0000-000000000001' }] };
+    }, async () => {
+      assert.deepEqual(await sqlAdmin.matchHistory({ before, limit: 1 }), {
+        tables: [{ id: historyId, roomCode: 'ABC123', gameId: 'wizard', seats: 4, humans: 3, bots: 1,
+          startedAt: row.started_at, finishedAt: row.finished_at, completed: false }],
+        nextCursor: `${row.cursor_at}|${historyId}`,
+      });
+    });
+  });
+  await test('SQL history returns no next cursor for empty or exactly full final pages', async () => {
+    for (const rows of [[], [{ id: historyId, completed: true }]]) {
+      await withQuery(async () => ({ rows }), async () => {
+        const result = await sqlAdmin.matchHistory({ limit: 1 });
+        assert.equal(result.tables.length, rows.length);
+        assert.equal(result.nextCursor, null);
+        if (rows.length) assert.equal(result.tables[0].completed, true);
+      });
+    }
+  });
+  await test('SQL history bounds page sizes and requests one extra row to detect another page', async () => {
+    for (const [limit, expected] of [[undefined, 50], [null, 50], ['bad', 50], [0, 50], [-2, 1], ['2.9', 2], [100, 100], [101, 100]]) {
+      await withQuery(async (sql, args) => {
+        assert.deepEqual(args, [expected + 1, null, null], String(limit));
+        return { rows: [] };
+      }, () => sqlAdmin.matchHistory({ limit }));
+    }
+  });
+  await test('SQL history rejects a malformed cursor before querying and propagates database failures', async () => {
+    await withQuery(async () => { assert.fail('invalid cursor must not reach the database'); }, async () => {
+      await assert.rejects(sqlAdmin.matchHistory({ before: `2026-02-30T00:00:00Z|${historyId}` }), /Bad cursor/);
+    });
+    const error = new Error('history database unavailable');
+    await withQuery(async () => { throw error; }, async () => {
+      await assert.rejects(sqlAdmin.matchHistory(), (e) => e === error);
+    });
+  });
+  await test('insights sends each supported range to every query and labels UTC calendar counters separately', async () => {
+    for (const days of [1, 7, 30, 90, '1', 2, undefined]) {
+      const expected = [1, 7, 30, 90].includes(Number(days)) ? Number(days) : 30;
+      let calls = 0;
+      await withQuery(async (sql, args) => {
+        calls++;
+        assert.equal(args[0], expected);
+        if (args.length > 1) assert.equal(args[1], 'Asia/Kolkata');
+        return { rows: [] };
+      }, async () => {
+        const result = await require('../db/insights').insights({ days, tz: 'Asia/Kolkata' });
+        assert.ok(calls > 0);
+        assert.equal(result.days, expected);
+        assert.equal(result.zone, 'Asia/Kolkata');
+        const scope = expected === 1 ? 'Today (UTC)' : `Last ${expected} UTC calendar days`;
+        assert.equal(result.counterScope, scope);
+        assert.equal(result.returning.newPlayersScope, scope);
+      });
+    }
+  });
+  await test('country engagement supports the one-day window while retaining the minimum sample rule', async () => {
+    for (const [days, expected] of [[1, 1], ['1', 1], [7, 7], [30, 30], [90, 90], [2, 30], [0, 30]]) {
+      await withQuery(async (sql, args) => {
+        assert.deepEqual(args, [expected]);
+        return { rows: [
+          { country: 'DE', players: 10, games: 20, minutes: 100, left_early: 2, active_days: 10 },
+          { country: 'FR', players: 1, games: 1, minutes: 5, left_early: 0, active_days: 1 },
+        ] };
+      }, async () => {
+        assert.deepEqual(await require('../db/countryStats').countryEngagement({ days }), {
+          minPlayers: 10, rows: [{ country: 'DE', players: 10, gamesPerPlayer: 2, minutesPerPlayer: 10, leftEarlyPct: 10, daysPerPlayer: 1 }],
+        });
+      });
+    }
+  });
   const mail = [];
   const s = await start({ mail });
   try {
@@ -179,6 +290,36 @@ const ADMIN_POSTS = [
 
       assert.equal((await user.b.get('/api/admin/matches')).status, 403, 'an ordinary account gets nothing');
       assert.ok(first.json.tables.every((t) => !('username' in t) && !('players' in t)), 'players are not named');
+    });
+    await test('history forwards a valid offset cursor unchanged and supplies null defaults for the first page', async () => {
+      const original = s.store.matchHistory;
+      const calls = [];
+      s.store.matchHistory = async (opts) => { calls.push(opts); return { tables: [], nextCursor: null }; };
+      try {
+        assert.equal((await owner.b.get('/api/admin/matches')).status, 200);
+        assert.deepEqual(calls.pop(), { before: null, limit: null });
+        const before = `2026-11-17T10:30:00.123456+05:30|${historyId}`;
+        const r = await admin.b.get(`/api/admin/matches?limit=2&before=${encodeURIComponent(before)}`);
+        assert.equal(r.status, 200);
+        assert.deepEqual(r.json, { ok: true, tables: [], nextCursor: null });
+        assert.deepEqual(calls.pop(), { before, limit: '2' });
+        assert.equal((await admin.b.get('/api/admin/matches?before=')).status, 400);
+        assert.equal((await user.b.get('/api/admin/matches?before=')).status, 403);
+        assert.equal(calls.length, 0, 'neither invalid nor unauthorized requests reach the store');
+      } finally { s.store.matchHistory = original; }
+    });
+    await test('history reports an unavailable store to staff while preserving authorization checks', async () => {
+      const original = s.store.matchHistory;
+      s.store.matchHistory = undefined;
+      try {
+        for (const staff of [admin, owner]) {
+          const r = await staff.b.get('/api/admin/matches');
+          assert.equal(r.status, 503);
+          assert.deepEqual(r.json, { ok: false, error: 'Table history is not available.' });
+        }
+        assert.equal((await guest.get('/api/admin/matches')).status, 401);
+        assert.equal((await user.b.get('/api/admin/matches')).status, 403);
+      } finally { s.store.matchHistory = original; }
     });
     await test('report queue: staff only, page passed on, and the answer carries no e-mail, address or token', async () => {
       assert.equal((await user.b.get('/api/admin/reports')).status, 403, 'an ordinary account gets nothing');
