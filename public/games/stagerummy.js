@@ -81,7 +81,7 @@
   function seatHTML(v, ctx, i) {
     const p = v.players[i];
     const stage = Math.min(p.stage, v.stageCount);
-    const sub = `Stage ${stage} · ${p.cards} cards · ${p.score} pts`;
+    const sub = `Stage ${stage}/${v.stageCount} · ${p.cards} cards`; // points are shown on the scoreboard, so the seat line stays on one line
     const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>` : (v.phase === 'gameOver' ? '' : '<div class="sr-laid sr-nolay">Not down yet</div>');
     return window.CardTable.pt.seatHTML({
       pid: p.id,
@@ -198,6 +198,10 @@
         <div class="wz-round"><b>Stage Rummy</b><span class="label"> · round ${v.round}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Phases</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
+      <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
+        const st = Math.min(p.stage, v.stageCount);
+        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${p.laid ? 'sr-laid' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
+      }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
       <div class="sr-table">${table}</div>
       ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
