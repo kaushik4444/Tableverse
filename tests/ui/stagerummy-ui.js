@@ -50,6 +50,8 @@ function scene(phase, handIds, tweak) {
     await page.waitForSelector('[aria-labelledby="sr-phases-title"]');
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.dataset.sr), 'closePhases', 'Tab stays on Close');
+    await page.keyboard.press('Enter'); // Close already has focus; the mouse target at this size is outside the sheet, so keys are the reliable path
+    await page.waitForFunction(() => { const a = document.activeElement; return a && (a.dataset.sr === 'phases' || a.classList.contains('tb-more-btn')); }, null, { timeout: 3000 }); // focus goes back to the Phases button, or to the menu that holds it
     await ctx.close();
   });
 
