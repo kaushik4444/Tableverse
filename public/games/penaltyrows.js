@@ -197,6 +197,7 @@
     ui.latest = v;
     if (ui.table !== tableOf()) { ui.table = tableOf(); ui.anim = null; ui.seq = null; } // a different table: start afresh, with no replay
     react(v);
+    const focusedTab = root.contains(document.activeElement) && document.activeElement.matches('[data-pr="tab"]') ? document.activeElement.dataset.tab : null;
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);
     const tab = ui.tab === 'scores' ? 'scores' : 'table';
@@ -219,6 +220,7 @@
       ${overlayHTML(v)}
     </div>`;
     root.onclick = onClick;
+    if (focusedTab) { const el = root.querySelector(`[data-pr="tab"][data-tab="${focusedTab}"]`); if (el) el.focus({ preventScroll: true }); }
     if (focused) { const el = root.querySelector(`.pr-hand [data-n="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
   }
 

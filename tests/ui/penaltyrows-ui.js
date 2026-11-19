@@ -32,6 +32,35 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('tab focus survives switching and game updates without taking focus from elsewhere', async () => {
+    const msgs = tableMessages('penaltyrows', four);
+    const { page, ctx } = await open(msgs);
+    const scores = page.locator('[data-pr="tab"][data-tab="scores"]');
+    const table = page.locator('[data-pr="tab"][data-tab="table"]');
+    const focusedTab = () => page.evaluate(() => document.activeElement.dataset.tab);
+    await scores.focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await focusedTab(), 'scores', 'keyboard activation keeps focus on the replacement');
+    assert.equal(await scores.getAttribute('aria-selected'), 'true');
+    await table.focus();
+    await page.evaluate((m) => window.__push(m), msgs[1]);
+    assert.equal(await focusedTab(), 'table', 'updates preserve the focused tab even when it is not selected');
+    await page.keyboard.press('Enter');
+    assert.equal(await focusedTab(), 'table');
+    assert.equal(await table.getAttribute('aria-selected'), 'true');
+    await page.evaluate(() => {
+      const other = document.createElement('button');
+      other.id = 'outside-game';
+      document.body.append(other);
+      other.focus();
+      document.querySelector('[data-tab="scores"]').click();
+    });
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'outside-game', 'switching without tab focus does not steal focus');
+    await page.evaluate((m) => window.__push(m), msgs[1]);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'outside-game', 'updates without tab focus do not steal focus');
+    await ctx.close();
+  });
+
   await test('a picked card is marked, and other players\' hands are nowhere in the page', async () => {
     const msgs = tableMessages('penaltyrows', four);
     const v = msgs[1].view; v.myPick = v.hand[2].n; v.players[0].picked = true;
