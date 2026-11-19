@@ -4,7 +4,35 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, seq: null };
+  const ui = { ctx: null, latest: null, seq: null, anim: null };
+  const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
+
+  /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
+   * Returns null when there is nothing to step through, or when the rebuild does not match the table (then the table is shown as it is). */
+  function replaySteps(v) {
+    if (!v.before || !v.before.length || !v.lastTurn.length) return null;
+    const rows = v.before.map((r) => r.map((c) => ({ n: c.n, p: c.p })));
+    const steps = [rows.map((r) => r.slice())];
+    for (const e of v.lastTurn) {
+      if (e.kind === 'place') rows[e.row].push({ n: e.n, p: e.p });
+      else rows[e.row] = [{ n: e.n, p: e.p }]; // a row taken: the card starts it again
+      steps.push(rows.map((r) => r.slice()));
+    }
+    const last = steps[steps.length - 1];
+    const same = last.length === v.rows.length && last.every((r, k) => r.length === v.rows[k].length && r.every((c, s) => c.n === v.rows[k][s].n));
+    return same && steps.length > 1 ? steps : null;
+  }
+
+  function scheduleStep(seq, paceK) {
+    setTimeout(() => {
+      const a = ui.anim;
+      if (!a || a.seq !== seq || !ui.ctx) return;
+      a.i += 1;
+      if (a.i >= a.steps.length - 1) ui.anim = null; // the last step is the table itself
+      ui.ctx.rerender();
+      if (ui.anim) scheduleStep(seq, paceK);
+    }, STEP_MS * (paceK || 1));
+  }
 
   const penWord = (p) => `${p} penalty point${p === 1 ? '' : 's'}`;
   const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
@@ -24,11 +52,13 @@
 
   function rowsHTML(v) {
     const taking = v.phase === 'takeRow' && v.pending && v.pending.by === v.me;
-    return `<div class="pr-rows">${v.rows.map((row, k) => {
-      const slots = Array.from({ length: 5 }, (_, s) => (row[s] ? cardHTML(row[s]) : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
-      const full = row.length >= 5;
-      const label = `Row ${k + 1}: ${row.length} card${row.length === 1 ? '' : 's'}, ${penWord(v.rowPenalty[k])}`;
-      const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span><small>${v.rowPenalty[k]} pts${full ? ' · full' : ''}</small></span><div class="pr-cards">${slots}</div>`;
+    const rows = ui.anim && ui.anim.seq === v.seq ? ui.anim.steps[ui.anim.i] : v.rows;
+    return `<div class="pr-rows">${rows.map((row, k) => {
+      const slots = Array.from({ length: v.rowLimit }, (_, s) => (row[s] ? cardHTML(row[s]) : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
+      const full = row.length >= v.rowLimit;
+      const points = row.reduce((s, c) => s + c.p, 0); // from the row as shown, so a step mid-turn counts only the cards on it
+      const label = `Row ${k + 1}: ${row.length} card${row.length === 1 ? '' : 's'}, ${penWord(points)}`;
+      const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span><small>${points} pts${full ? ' · full' : ''}</small></span><div class="pr-cards">${slots}</div>`;
       return taking
         ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
         : `<div class="pr-row ${full ? 'full' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
@@ -81,6 +111,9 @@
     if (ui.seq === null) { ui.seq = v.seq; return; } // first render (load or reconnect): do not replay
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
+    const steps = replaySteps(v);
+    ui.anim = steps ? { seq: v.seq, steps, i: 0 } : null;
+    if (ui.anim) scheduleStep(v.seq, v.paceK);
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     else if (v.lastTurn.some((e) => e.by === v.me && e.took)) snd.play('lose');
