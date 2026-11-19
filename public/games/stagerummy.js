@@ -77,6 +77,9 @@
       : `<div class="sr-group" role="group" aria-label="${esc(label)}">${inner}</div>`;
   }
 
+  /** Whether a player has completed their stage. At game over the stage has already moved on, so the last round's record decides. */
+  function stageDone(v, i, p) { return v.phase === 'gameOver' ? !!(v.lastRound && v.lastRound.laid[i]) : !!p.laid; }
+
   /** One player's seat: name, stage, cards in hand, points, and the groups they have laid down. */
   function seatHTML(v, ctx, i) {
     const p = v.players[i];
@@ -201,7 +204,7 @@
       </div>
       <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
         const st = Math.min(p.stage, v.stageCount);
-        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${p.laid ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
+        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
       }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
       <div class="sr-table">${table}</div>
