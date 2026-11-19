@@ -23,7 +23,9 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     const { page, ctx } = await open(tableMessages('penaltyrows', four));
     assert.equal(await page.locator('.pr-row').count(), 4);
     assert.equal(await page.locator('.pr-hand .pr-card').count(), 10);
-    assert.equal(await page.locator('.pr-score li').count(), 4);
+    assert.equal(await page.locator('.pt-seat').count(), 4, 'one seat per player around the felt');
+    assert.equal(await page.locator('.pt .pt-center .pr-row').count(), 4, 'the four rows sit in the middle of the table');
+    assert.match(await page.textContent('.pt-seat .pr-under, .pt-seat'), /Choosing|Picked/);
     const n = Number(await page.locator('.pr-hand .pr-card').first().getAttribute('data-n'));
     await page.locator('.pr-hand .pr-card').first().click();
     assert.deepEqual((await sent(page)).at(-1).action, { type: 'pick', card: n });

@@ -50,7 +50,7 @@ module.exports = {
     {
       key: 'hand',
       type: 'select',
-      label: 'Cards each',
+      label: 'Cards in hand',
       default: '10',
       choices: [
         { value: '6', label: '6 cards', desc: 'Short rounds: six turns each.' },
@@ -82,12 +82,13 @@ module.exports = {
     TIME_LIMIT_OPTION,
   ],
   rules: [
-    'Two to eight players share the numbers 1 to 104. Each number carries penalty points: 1, plus 1 if it is a multiple of 5, 1 more if it is a multiple of 10, and 4 more for 11, 22, 33 and so on. Penalty points are bad.',
-    'Each round you get 10 cards, and four cards are turned up to start four rows. Every turn all players secretly pick one card from their hand. When everyone has picked, the cards are shown and played from the lowest number to the highest.',
-    'A card goes onto the row whose last card is the highest number that is still lower than it. A row holds five cards: if your card would be the sixth, you take those five cards as penalty points and your card starts the row again.',
-    'If your card is lower than the last card of every row, it fits nowhere. You take any one row of your choice as penalty points, and your card starts that row.',
-    'After the 10 turns the penalty points you took are added to your total. A new round is dealt until someone reaches the target. The player with the lowest total wins; equal totals share the win.',
-    'The table options change the rules: the number of cards each, the cards per row, the scoring (simple scoring is one point per card), the game length and what happens to a card below every row.',
+    'Goal: finish with the fewest penalty points. Every card has penalty points: 1, plus 1 for a multiple of 5, plus 1 more for a multiple of 10, and 4 more for a multiple of 11 (so 55 is worth 6 and 11 is worth 5). Penalty points are paid out when you take a row.',
+    'Setup: four cards are turned face up to start four rows. Each player is dealt a hand (10 cards by default). Every turn, all players secretly pick one card from their hand. When everyone has picked, the cards are shown and played one at a time from the lowest number to the highest.',
+    'Placing a card: a card goes onto the row whose last card is the highest number still lower than it. A row is full at five cards by default (four or six under Cards per row). If a full row is the one your card would go onto, you take that whole row as penalty points, and your card starts a new row.',
+    'Below every row: if your card is lower than the last card of every row, it fits nowhere. You then take one row of your choice (with the Cheapest row option the game chooses the row with the fewest penalty points for you). Your card starts that row.',
+    'Scoring a round: when everyone has played their hand, the penalty points each player took are added to their total. A new round is dealt until someone reaches the game-length target: 66 by default, or as set under Game length.',
+    'Winning: the lowest total wins. If totals are equal, the players share the win.',
+    'The table options change these numbers: cards in hand, cards per row, scoring (simple scoring gives every card 1 point), game length, what happens to a card below every row, and pace (how long each card stays on the table).',
   ],
 
   create(players, options, rng) {
