@@ -61,7 +61,7 @@
       case 'chooseTrump':
         return v.myTurn ? 'You won the bid. Choose your trump suit (kept secret).' : `${name(v.highBidder)} is choosing trump…`;
       case 'challenge':
-        return v.myTurn ? (v.multiplier === 1 ? 'Double the bid, or accept it.' : 'Redouble, or accept.') : `${name(v.turn)} is deciding on the double…`;
+        return v.myTurn ? (v.multiplier === 1 ? 'Challenge the bid to double its stakes, or skip.' : 'Re-challenge to redouble the stakes, or skip.') : `${name(v.turn)} is deciding on the challenge…`;
       case 'playing':
         if (v.myTurn) {
           if (v.canReveal) return 'You can’t follow suit. Show the trump, or discard.';
@@ -153,9 +153,9 @@
   function controlsHTML(v) {
     if (v.phase === 'challenge' && v.myTurn) {
       const doubling = v.multiplier === 1;
-      return `<div class="bidbox"><div class="label"><span class="t29-mini-trump">${miniTrumpHTML(v)}</span> ${doubling ? 'Double the bid? Doubled hands count twice.' : 'Redouble? Redoubled hands count four times.'}</div>
-        <div class="row" style="gap:6px"><button class="btn ghost small" data-t9="accept">Accept</button>
-        <button class="btn small" data-t9="${doubling ? 'double' : 'redouble'}">${doubling ? 'Double (×2)' : 'Redouble (×4)'}</button></div></div>`;
+      return `<div class="bidbox"><div class="label"><span class="t29-mini-trump">${miniTrumpHTML(v)}</span> ${doubling ? 'Challenge: double the stakes? A doubled hand counts twice.' : 'Re-challenge: redouble the stakes? A redoubled hand counts four times.'}</div>
+        <div class="row" style="gap:6px"><button class="btn ghost small" data-t9="accept">Skip (play at current stakes)</button>
+        <button class="btn small" data-t9="${doubling ? 'double' : 'redouble'}">${doubling ? 'Challenge: double (×2)' : 'Re-challenge: redouble (×4)'}</button></div></div>`;
     }
     if (v.phase === 'chooseTrump' && v.myTurn) {
       const mine = [...new Set(v.hand.map((c) => c.suit))];

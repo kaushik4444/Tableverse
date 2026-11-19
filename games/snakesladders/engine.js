@@ -6,7 +6,7 @@
  * foot lifts you up to its top; a snake head drops you down to its tail. First to reach square 100 wins.
  *
  * Options: `exactFinish` (default on) needs the exact number to land on 100, otherwise you stay put. `sixAgain`
- * (default on) gives another roll after a six; a third six in a row ends your turn with no move, as in Ludo.
+ * (default on) gives another roll after a six that moves you (a six that does not fit ends the turn); a third six in a row ends your turn with no move, as in Ludo.
  * The board is this game's own layout, fixed for every game so players can learn it.
  */
 const pacing = require('../pacing');
@@ -92,8 +92,8 @@ function applyAction(g, playerId, action) {
     g.winner = who;
     say(g, who, 'reached 100 and won', 'win');
     emit(g, { type: 'won', by: who, dice, from, landed, to, via });
-  } else if (dice === 6 && g.options.sixAgain) {
-    // the same player rolls again
+  } else if (dice === 6 && g.options.sixAgain && !stuck) {
+    // the same player rolls again, but only when the six was used to move (a six that does not fit gives no extra roll)
   } else {
     endTurn(g);
   }
