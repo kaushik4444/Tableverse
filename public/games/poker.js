@@ -335,9 +335,10 @@
         ctx.rerender();
         // Restore after the app's document click handler has closed the toolbar menu.
         setTimeout(() => {
+          // when the toolbar is folded, Hands sits in its hidden menu: focus the menu button rather than opening it
           const trigger = document.querySelector('button[data-pk="ranks"]');
-          if (trigger?.closest('.tb-pop[hidden]')) document.querySelector('.tb-more-btn')?.click();
-          trigger?.focus({ preventScroll: true });
+          const target = trigger && !trigger.closest('.tb-pop[hidden]') ? trigger : document.querySelector('.tb-more-btn');
+          target?.focus({ preventScroll: true });
         }, 0);
         break;
       }
