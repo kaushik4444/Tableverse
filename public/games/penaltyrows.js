@@ -8,7 +8,8 @@
   const { esc } = window.CardTable;
   const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table' };
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
-  const BULL = '<svg class="pr-bull" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1c3.5 1.2 5.6 5.4 11 5.4S19.5 2.2 23 1c-.7 4.6-3 12.2-11 12.2S1.7 5.6 1 1z"/></svg>';
+  // a bull's head: the horns sweep out from a broad head
+  const BULL = '<svg class="pr-bull" viewBox="0 0 40 30" aria-hidden="true"><path d="M3 3c5 4 8 8 10 13h14c2-5 5-9 10-13-1 6-2 9-4 12 2 2 3 5 3 8 0 6-6 11-16 11S7 31 7 25c0-3 1-6 3-8C8 14 7 9 3 3z"/></svg>';
 
   /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
    * Returns null when there is nothing to step through, or when the rebuild does not match the table (then the table is shown as it is). */
@@ -52,8 +53,10 @@
   /** The event of the replay step on screen (the card that has just landed or taken a row), or null. */
   const currentEvent = (v) => (ui.anim && ui.anim.seq === v.seq && ui.anim.i > 0 ? v.lastTurn[ui.anim.i - 1] : null);
 
+  /** A card: the number big in the middle and small in the top corner, and one dot per penalty point along the bottom. */
   function cardHTML(c, { cls = '', attrs = '', tag = 'div' } = {}) {
-    return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}>${BULL}<b>${c.n}</b><i>${c.p}</i></${tag}>`;
+    const dots = '<span class="pr-pips" aria-hidden="true">' + '<span class="pr-pip"></span>'.repeat(Math.min(c.p, 7)) + '</span>';
+    return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}>${BULL}<em class="pr-tl" aria-hidden="true">${c.n}</em><b>${c.n}</b>${dots}</${tag}>`;
   }
   const backHTML = (cls = '') => `<div class="pr-card back tiny ${cls}" aria-hidden="true"></div>`;
   /** A card on the strip, with the player's name under it. */

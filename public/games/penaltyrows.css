@@ -55,7 +55,9 @@
 }
 .prt .pr-card .pr-bull { position: absolute; top: 6px; left: 50%; width: 46%; transform: translateX(-50%); fill: rgba(255, 255, 255, .4); }
 .prt .pr-card b { margin-top: 18%; font-size: clamp(14px, 2.6vw, 22px); font-weight: 900; text-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
-.prt .pr-card i { position: absolute; right: 5px; bottom: 3px; font-style: normal; font-size: 10px; font-weight: 900; opacity: .95; }
+.prt .pr-card em.pr-tl { position: absolute; left: 4px; top: 3px; font-style: normal; font-size: 10px; font-weight: 900; opacity: .92; }
+.prt .pr-pips { position: absolute; left: 0; right: 0; bottom: 4px; display: flex; justify-content: center; gap: 2px; }
+.prt .pr-pip { width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .18); }
 .prt .pr-card.pen2 { background: linear-gradient(160deg, #3b9bf0, #1d5fb8); }
 .prt .pr-card.pen3 { background: linear-gradient(160deg, #5bd06f, #2c8f43); }
 .prt .pr-card.pen5 { background: linear-gradient(160deg, #ff6b5b, #c42a2a); }
@@ -64,7 +66,7 @@
 .prt .pr-card.tiny { width: 36px; }
 .prt .pr-card.tiny b { font-size: 13px; margin-top: 22%; }
 .prt .pr-card.tiny .pr-bull { width: 60%; top: 4px; }
-.prt .pr-card.tiny i { font-size: 8px; }
+.prt .pr-card.tiny em.pr-tl, .prt .pr-card.tiny .pr-pips { display: none; }
 .prt .pr-card.new { animation: prDrop .7s cubic-bezier(.2, .8, .2, 1) both; }
 
 /* your hand */
