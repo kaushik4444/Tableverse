@@ -854,6 +854,7 @@
   }
 
   const views = { guests: () => guestsTab(), overview: () => overview(), insights: () => insights(), games: () => gamesTab(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
+  const SLOW_MS = 12000; // how long a view may load before the panel offers a retry
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
@@ -862,8 +863,15 @@
     tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     state.gen++;
     const gen = state.gen;
-    main.innerHTML = '<p class="ad-muted">Loading…</p>';
-    views[tab]().catch((e) => { if (gen === state.gen) fail(e); });
+    main.innerHTML = '<p class="ad-muted" data-loading>Loading…</p>';
+    // A request that hangs (a weak mobile connection, a slow server) must not leave a blank panel: after a while the
+    // panel offers to try again. The timer does nothing once the view has drawn or the admin has moved on.
+    const slow = setTimeout(() => {
+      if (gen !== state.gen || !main.querySelector('[data-loading]')) return;
+      main.innerHTML = '<p class="ad-msg err" role="status">This is taking longer than usual. <button type="button" class="ad-btn" data-retry>Try again</button></p>';
+      main.querySelector('[data-retry]').onclick = () => show(tab);
+    }, SLOW_MS);
+    views[tab]().catch((e) => { if (gen === state.gen) fail(e); }).finally(() => clearTimeout(slow));
   }
   tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) show(b.dataset.tab); });
 
