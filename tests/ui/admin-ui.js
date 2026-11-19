@@ -30,7 +30,12 @@ const funnelFixture = (days) => ({ ok: true, days, totals: { signups: 6, played:
 const gamesFixture = (days) => ({ ok: true, days, games: [
   { gameId: 'ludo', finished: 12, finished7d: 5, signedInPlayers: 9, playerGames: 40, avgMinutes: 21.4, penalisedLeaves: 2, leftWithoutPenalty: 1, leftEarly: 3 },
   { gameId: 'tictactoe', finished: 5, finished7d: 0, signedInPlayers: 4, playerGames: 10, avgMinutes: 2.1, penalisedLeaves: 0, leftWithoutPenalty: 0, leftEarly: 0 }] });
+// tables hosted: the first page, then the older one the cursor points to
+const tablesFixture = (before) => (before
+  ? { ok: true, tables: [{ id: '22222222-2222-4222-8222-222222222222', roomCode: 'XYZ789', gameId: 'poker', seats: 2, humans: 2, bots: 0, startedAt: '2026-11-16T10:00:00.000Z', finishedAt: '2026-11-16T11:00:00.000Z', completed: false }], nextCursor: null }
+  : { ok: true, tables: [{ id: '11111111-1111-4111-8111-111111111111', roomCode: 'ABC123', gameId: 'wizard', seats: 4, humans: 3, bots: 1, startedAt: '2026-11-17T10:00:00.000Z', finishedAt: '2026-11-17T10:30:00.000Z', completed: true }], nextCursor: '2026-11-17T10:30:00.000Z|11111111-1111-4111-8111-111111111111' });
 const api = (role) => ({
+  'GET /api/admin/matches': ({ url }) => tablesFixture(url.searchParams.get('before')),
   'GET /api/admin/games?days=30': () => gamesFixture(30),
   'GET /api/admin/games?days=7': () => gamesFixture(7),
   'GET /api/admin/live': () => liveFixture(),
@@ -503,6 +508,21 @@ const api = (role) => ({
     await a.close();
   });
 
+  await test('games: tables hosted lists each finished table, and Load older tables asks for the next page', async () => {
+    const s = await open('admin');
+    await s.page.waitForSelector('.ad-grid');
+    await tab(s.page, 'games');
+    await s.page.waitForSelector('#tablesList .ad-t');
+    const text = await s.page.textContent('#tablesList');
+    assert.match(text, /ABC123/); assert.match(text, /wizard/); assert.match(text, /3 people \+ 1 bot/);
+    assert.equal(/\bann\b/i.test(text), false, 'no player is named');
+    assert.equal(await s.page.isVisible('#tablesMore'), true, 'an older page is offered');
+    await s.page.click('#tablesMore');
+    await s.page.waitForSelector('#tablesList td:text-is("XYZ789")');
+    assert.equal(await s.page.isVisible('#tablesMore'), false, 'no older page is left');
+    assert.ok(s.calls.some((c) => c.path.startsWith('/api/admin/matches?before=')), 'the cursor is sent for the next page');
+    await s.close();
+  });
   await test('games: the Games tab shows each game with its counts, a range choice, and no player name', async () => {
     const s = await open('admin');
     await s.page.waitForSelector('.ad-grid');

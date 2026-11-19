@@ -9,7 +9,7 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; }
 }
 
-const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/live', '/api/admin/funnel', '/api/admin/funnel.csv', '/api/admin/seat-balance', '/api/admin/insights', '/api/admin/players', '/api/admin/players/profile?username=ann', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
+const ADMIN_GETS = ['/api/admin/me', '/api/admin/overview', '/api/admin/live', '/api/admin/funnel', '/api/admin/funnel.csv', '/api/admin/seat-balance', '/api/admin/insights', '/api/admin/matches', '/api/admin/players', '/api/admin/players/profile?username=ann', '/api/admin/health', '/api/admin/users', '/api/admin/feedback', '/api/admin/announcements', '/api/admin/audit', '/api/admin/logs'];
 const ADMIN_POSTS = [
   ['/api/admin/roles', { playerId: 'p_00000000-0000-4000-8000-000000000001', role: 'admin' }],
   ['/api/admin/users/sign-out', { playerId: 'p_00000000-0000-4000-8000-000000000001' }],
@@ -151,6 +151,25 @@ const ADMIN_POSTS = [
       const bare = await admin.b.get('/api/admin/insights');
       assert.equal(bare.json.days, 30);
       assert.equal(s.store.insightsCalls.at(-1).tz, 'UTC', 'UTC unless a zone is asked for');
+    });
+    await test('insights: the last 24 hours is a range the console can ask for', async () => {
+      const r = await admin.b.get('/api/admin/insights?days=1');
+      assert.equal(r.status, 200);
+      assert.equal(r.json.days, 1);
+      assert.deepEqual(s.store.insightsCalls.at(-1), { days: '1', tz: 'UTC' });
+    });
+    await test('table history: staff page through tables newest first, a bad page is refused, and no player is named', async () => {
+      const first = await admin.b.get('/api/admin/matches?limit=1');
+      assert.equal(first.status, 200);
+      assert.equal(first.json.tables.length, 1);
+      assert.equal(first.json.tables[0].roomCode, 'ABC123');
+      assert.ok(first.json.nextCursor, 'an older page follows');
+      const second = await admin.b.get(`/api/admin/matches?limit=1&before=${encodeURIComponent(first.json.nextCursor)}`);
+      assert.equal(second.json.tables[0].roomCode, 'XYZ789');
+      assert.equal(second.json.nextCursor, null, 'the last page has no cursor');
+      assert.equal((await admin.b.get('/api/admin/matches?before=garbage')).status, 400, 'a made-up page is refused');
+      assert.equal((await user.b.get('/api/admin/matches')).status, 403, 'an ordinary account gets nothing');
+      assert.ok(first.json.tables.every((t) => !('username' in t) && !('players' in t)), 'players are not named');
     });
     await test('report queue: staff only, page passed on, and the answer carries no e-mail, address or token', async () => {
       assert.equal((await user.b.get('/api/admin/reports')).status, 403, 'an ordinary account gets nothing');

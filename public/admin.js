@@ -108,7 +108,8 @@
     const rows = nums.map((v, i) => `<tr><td>${esc(labels[i] || '')}</td><td>${v === null ? 'not kept' : v}</td></tr>`).reverse().join('');
     return `<figure class="ad-chart"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${grid}<polyline points="${pts}" class="ad-line" fill="none"/>${dots}<text x="${pad}" y="${h - 6}" class="ad-axis">${first}</text><text x="${w - pad}" y="${h - 6}" class="ad-axis" text-anchor="end">${last}</text></svg><details><summary>${esc(label)}: data table</summary><table class="ad-t"><thead><tr><th>Day</th><th>${esc(label)}</th></tr></thead><tbody>${rows}</tbody></table></details></figure>`;
   };
-  const RANGES = [7, 30, 90];
+  const RANGES = [1, 7, 30, 90]; // 1 = the last 24 hours
+  const rangeLabel = (d) => (Number(d) === 1 ? '24 hours' : `${d} days`);
 
   async function overview(days = 30) {
     const gen = state.gen;
@@ -118,8 +119,8 @@
     const t = (m) => o.totals[m] || 0;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
     const q = o.queues || {};
-    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
-    main.innerHTML = `<h2>Overview <small class="ad-muted">last ${o.days} days</small></h2>
+    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${rangeLabel(d)}</button>`).join('');
+    main.innerHTML = `<h2>Overview <small class="ad-muted">last ${rangeLabel(o.days)}</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:12px">${rangeButtons}</div>
       <h3>Right now <small class="ad-muted">updates every 15 seconds</small></h3>
       <div class="ad-grid" id="liveNow" aria-live="off"><div class="ad-card"><b>…</b><small>loading</small></div></div>
@@ -187,13 +188,13 @@
     const g = o.games || [];
     const sum = (k) => g.reduce((a, r) => a + r[k], 0);
     const matches = sum('matches'); const humans = sum('humans'); const left = sum('leftEarly');
-    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
+    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${rangeLabel(d)}</button>`).join('');
     const zoneButtons = ZONES.map(([z, n]) => `<button class="ad-btn ${z === o.zone ? 'primary' : ''}" data-zone="${z}" aria-pressed="${z === o.zone}">${n}</button>`).join('');
     const gameRows = g.map((r) => `<tr><td data-l="Game">${esc(r.gameId)}</td><td data-l="Finished">${r.matches}</td><td data-l="Avg length">${mins(r.avgMinutes)}</td><td data-l="Median length">${mins(r.medianMinutes)}</td><td data-l="Avg seats">${r.avgSeats}</td><td data-l="Left early">${pctText(r.leftEarly, r.humans)}</td><td data-l="With a leaver">${pctText(r.withLeaver, r.matches)}</td><td data-l="Drawn">${pctText(r.draws, r.matches)}</td><td data-l="Finished of started">${pctText(r.finished, r.started)}</td></tr>`).join('');
     const pt = o.playtime; const buckets = ['under 10 min', '10–30 min', '30–60 min', '1–3 h', '3 h +'];
     const top = (o.top || []).map((r) => `<tr><td data-l="Player">${esc(r.displayName || r.username)} <span class="ad-muted">@${esc(r.username)}</span></td><td data-l="Games">${r.games}</td><td data-l="Wins">${r.wins}</td><td data-l="Played">${mins(r.minutes)}</td><td data-l="Usual hour">${r.peakHour == null ? '—' : hh(r.peakHour)}</td></tr>`).join('');
     const c = o.returning.cohort;
-    main.innerHTML = `<h2>Insights <small class="ad-muted">last ${o.days} days, ${esc(o.zone)}</small></h2>
+    main.innerHTML = `<h2>Insights <small class="ad-muted">last ${rangeLabel(o.days)}, ${esc(o.zone)}</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:8px">${rangeButtons}</div>
       <div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:12px">${zoneButtons}</div>
       <div class="ad-grid">${tile(matches, 'games finished')}${tile(g.filter((r) => r.matches).length, 'different games played')}${tile(pt.players, 'signed-in players')}${tile(mins(pt.avgMinutes), 'avg play time per player')}${tile(pctText(left, humans), 'players who left early')}${tile(pctText(c.d1, c.size), 'came back next day')}${tile(pctText(c.d7, c.size), 'came back within a week')}${tile(pctText(c.d7Exact, c.size), 'back on day 7 exactly')}${tile(pctText(c.d30Exact, c.size30), 'back on day 30 exactly')}</div>
@@ -484,12 +485,46 @@
     const o = await api(`/api/admin/games?days=${days}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Finished">${g.finished}</td><td data-l="Last 7 days">${g.finished7d}</td><td data-l="Signed-in players">${g.signedInPlayers}</td><td data-l="Player-games">${g.playerGames}</td><td data-l="Avg minutes each">${g.avgMinutes}</td><td data-l="Penalised leaves">${g.penalisedLeaves}</td><td data-l="Penalised leave rate">${pctText(g.penalisedLeaves, g.playerGames)}</td><td data-l="Left, no penalty">${g.leftWithoutPenalty}</td></tr>`).join('');
-    main.innerHTML = `<h2>Games <small class="ad-muted">last ${o.days} days</small></h2>
-      <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${[7, 30, 90].map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${d} days</button>`).join('')}</div>
+    main.innerHTML = `<h2>Games <small class="ad-muted">last ${rangeLabel(o.days)}</small></h2>
+      <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${RANGES.map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${rangeLabel(d)}</button>`).join('')}</div>
       ${o.games.length ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Last 7 days</th><th>Signed-in players</th><th>Player-games</th><th>Avg minutes each</th><th>Penalised leaves</th><th>Penalised leave rate</th><th>Left, no penalty</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="ad-muted">No finished games in this range.</p>'}
       <p class="ad-muted">Counts and averages only; no player is named. A penalised leave is leaving while others were still playing. Guests count as player-games but not as signed-in players.</p>`;
     main.querySelectorAll('[data-gd]').forEach((b) => { b.onclick = () => { state.gen += 1; const mine = state.gen; gamesTab(Number(b.dataset.gd)).catch((e) => { if (mine === state.gen) fail(e); }); }; });
+    main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Tables hosted</h3>
+      <p class="ad-muted">Every table that has finished, newest first, across all time. Players are not named.</p>
+      <div id="tablesList"></div>
+      <p><button class="ad-btn" id="tablesMore" hidden>Load older tables</button></p>`);
+    await loadTables(gen, null);
     if (state.me.isOwner) await gameSwitches();
+  }
+
+  // one page of tables hosted; the next page is asked for with the cursor the server gave (the list keeps growing down the page)
+  async function loadTables(gen, before) {
+    const list = main.querySelector('#tablesList');
+    const more = main.querySelector('#tablesMore');
+    if (!list || !more) return;
+    more.disabled = true;
+    let o;
+    try {
+      o = await api(`/api/admin/matches${before ? `?before=${encodeURIComponent(before)}` : ''}`);
+    } catch (e) {
+      if (gen !== state.gen) return;
+      more.disabled = false;
+      list.insertAdjacentHTML('beforeend', '<p class="ad-msg err" role="alert">The list could not be loaded. Try again.</p>');
+      return;
+    }
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    const rows = (o.tables || []).map((t) => {
+      const people = t.humans === null || t.humans === undefined ? `${t.seats} seats` : `${t.humans} ${t.humans === 1 ? 'person' : 'people'}${t.bots ? ` + ${t.bots} bot${t.bots === 1 ? '' : 's'}` : ''}`;
+      return `<tr><td data-l="Game">${esc(t.gameId)}</td><td data-l="Room">${esc(t.roomCode)}</td><td data-l="Started">${esc(when(t.startedAt))}</td><td data-l="Ended">${esc(when(t.finishedAt))}</td><td data-l="Players">${esc(people)}</td><td data-l="Completed">${t.completed ? 'yes' : 'closed early'}</td></tr>`;
+    }).join('');
+    const body = list.querySelector('tbody');
+    if (body) body.insertAdjacentHTML('beforeend', rows);
+    else if (rows) list.innerHTML = `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Room</th><th>Started</th><th>Ended</th><th>Players</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    else list.innerHTML = '<p class="ad-muted">No tables have finished yet.</p>';
+    more.hidden = !(o && o.nextCursor);
+    more.disabled = false;
+    more.onclick = () => loadTables(state.gen, o.nextCursor);
   }
 
   // ---------------------------------------------------------------- game switches (owner only; the server checks the role too)

@@ -9,7 +9,7 @@
  */
 const db = require('./pool');
 
-const WINDOWS = [7, 30, 90];
+const WINDOWS = [1, 7, 30, 90]; // 1 = the last 24 hours
 const clampDays = (d) => { const n = Math.floor(Number(d)); return WINDOWS.includes(n) ? n : 30; };
 // The only zones the console can ask for. The database does the conversion, so daylight saving and India's half hour are exact.
 const ZONES = ['UTC', 'Europe/Berlin', 'Asia/Kolkata'];

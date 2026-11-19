@@ -362,6 +362,40 @@ async function gameStats({ days = 30 } = {}) {
   };
 }
 
+/**
+ * Tables hosted, newest first, a page at a time. Each row: the game, the room code, when it started and ended, the seats,
+ * how many were people and how many bots, and whether it was completed. No player is named.
+ * The cursor is the last row's "finished_at|id" from the previous page, so paging stays correct as new tables finish.
+ */
+const HISTORY_MAX = 100;
+async function matchHistory({ before = null, limit = 50 } = {}) {
+  const n = Math.min(HISTORY_MAX, Math.max(1, Math.floor(Number(limit)) || 50));
+  let cursorAt = null;
+  let cursorId = null;
+  if (before) {
+    const [at, id] = String(before).split('|');
+    const when = new Date(at);
+    if (Number.isNaN(when.getTime()) || !/^[0-9a-f-]{36}$/i.test(id || '')) throw new Error('Bad cursor');
+    cursorAt = when.toISOString();
+    cursorId = id;
+  }
+  const r = await db.query(`
+    SELECT id, room_code, game_id, seats, started_at, finished_at, completed, table_humans, table_bots
+      FROM matches
+     WHERE ($2::timestamptz IS NULL OR (finished_at, id) < ($2::timestamptz, $3::uuid))
+     ORDER BY finished_at DESC, id DESC
+     LIMIT $1`, [n + 1, cursorAt, cursorId]);
+  const rows = r.rows.slice(0, n);
+  const last = rows[rows.length - 1];
+  return {
+    tables: rows.map((m) => ({
+      id: m.id, roomCode: m.room_code, gameId: m.game_id, seats: m.seats,
+      humans: m.table_humans, bots: m.table_bots, startedAt: m.started_at, finishedAt: m.finished_at, completed: m.completed,
+    })),
+    nextCursor: r.rows.length > n && last ? `${new Date(last.finished_at).toISOString()}|${last.id}` : null,
+  };
+}
+
 async function health() {
   const t0 = Date.now();
   await db.query('SELECT 1');
@@ -571,7 +605,7 @@ async function setGameFlag({ actorId, gameId, access }) {
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health, gameStats, listGameFlags, setGameFlag, listGuestFeatures, setGuestFeature, recordAudit,
+  addCounters, addActive, forgetActor, overview, health, gameStats, matchHistory, listGameFlags, setGameFlag, listGuestFeatures, setGuestFeature, recordAudit,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)
