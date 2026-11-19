@@ -1,5 +1,5 @@
 'use strict';
-// Stage Rummy in a real browser: drawing, assigning cards to the stage's groups, laying down, discarding, hitting, game over, narrow phone.
+// Stage 10 in a real browser: drawing, assigning cards to the stage's groups, laying down, discarding, hitting, game over, narrow phone.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk } = require('./harness');
 const { chromium } = loadPlaywright();

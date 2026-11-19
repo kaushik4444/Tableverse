@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Stage Rummy: the rules only (no sockets, no timers).
+ * Stage 10: the rules only (no sockets, no timers).
  *
  * 2-6 players. A 108-card deck: the numbers 1-12 in four colours (two of each), 8 wild cards and 4 skip cards. Ten stages
  * (a goal to lay down: sets, runs or one colour). Each round everyone gets 10 cards and tries to lay down the goal of their own
@@ -82,7 +82,7 @@ const indexOf = (g, id) => g.players.findIndex((p) => p.id === id);
 
 function createGame(players, options, rng = Math.random) {
   const n = players.length;
-  if (n < 2 || n > MAX_PLAYERS) throw new Error(`Stage Rummy is for 2 to ${MAX_PLAYERS} players`);
+  if (n < 2 || n > MAX_PLAYERS) throw new Error(`Stage 10 is for 2 to ${MAX_PLAYERS} players`);
   const length = options && Object.hasOwn(LENGTHS, options.length) ? options.length : 'full';
   const wildCards = !(options && options.wildCards === false); // on unless the host turns them off
   const g = {

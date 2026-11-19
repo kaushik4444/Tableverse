@@ -1,13 +1,14 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Game names: Penalty Rows is now Take 5, Stage Rummy is now Stage 10 and The Mind is now Mind (Wizard keeps its name). Display names only: game ids, rules, saved matches and stats are unchanged. The three games say in their rules that they are not affiliated with any publisher. See `docs/GAME_NAMES.md`.
 - Guest switches in the admin console (Guests tab): private tables, rejoin after leaving on purpose, profiles and stats, blocking and reports are locked for guests by default. Stored in the database (migration 032), applied at once, audited. Chat stays open to guests; friend requests stay account-only.
 - Locked guest controls show a lock and open the account reminder instead of sending a request. The server still refuses each one.
 - Owner-only redeploy of the Render service from the admin console's Logs tab, after typing REDEPLOY. Five-minute cooldown; audited (`render.redeploy`).
 - Privacy notice rewritten from the owner's decisions (not published): legal basis per purpose, provider locations and transfers, retention checked against the code, staff and production access, the manual data-request process, and a corrected usage-statistics statement. Open items stay as markers in the text. Owner decisions, code check and open items: `docs/PRIVACY_NOTICE_OWNER_DECISIONS.md`. Consistency tests: `tests/privacy-notice.test.js`.
 - Game switches: the owner can turn any game off and on from the admin console (Games tab), without a redeploy. A switched-off game stays listed but locked; new tables, starts and rematches are refused. Changes are audited.
 - Public contact address: the Impressum, privacy notice and terms show `PUBLIC_CONTACT_EMAIL` when it is set (Render), otherwise `IMPRESSUM_EMAIL`. No address is written into the code or the legal texts. Sign-in, Google and outgoing mail are unchanged.
-- Fixes from the release review: Penalty Rows uses its own style scope and keeps its phase when a deleted player's name is scrubbed; one awaited seat keeps its turn deadline; the account and reports wording in the privacy and retention docs now matches the code.
+- Fixes from the release review: Take 5 uses its own style scope and keeps its phase when a deleted player's name is scrubbed; one awaited seat keeps its turn deadline; the account and reports wording in the privacy and retention docs now matches the code.
 - Profile: the minutes to the next level and a one-time level-up notice (the notice is remembered on this device, for each account).
 - Home footer: a link to @playtableverse on Instagram, opened in a new tab.
 - What's new: a new top entry for the level notice and the Instagram link (`public/whats-new-data.js`).

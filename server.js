@@ -1082,7 +1082,7 @@ function start(opts = {}) {
       let who = humanCanAnswer ? undefined : (bots[0] || ms.find((m) => !m.bot && !isConnected(m)));
       let botMs = null;
       if (!humanCanAnswer && bots.length && typeof g.botDelayMs === 'function') {
-        // a real-time game (The Mind) times its bots itself: the bot that wants to play soonest goes next
+        // a real-time game (Mind) times its bots itself: the bot that wants to play soonest goes next
         const t = bots.map((m) => ({ m, d: g.botDelayMs(m.id) })).sort((x, y) => x.d - y.d)[0];
         who = t.m;
         botMs = Math.max(0, t.d * botScale);
