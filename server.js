@@ -151,9 +151,6 @@ function start(opts = {}) {
   const allowedOrigins = String(opts.allowedOrigins ?? env.ALLOWED_ORIGINS ?? '').split(',')
     .map((s) => s.trim().replace(/\/+$/, '').toLowerCase()).filter(Boolean);
   const maxSocketsPerIp = opts.maxSocketsPerIp ?? 40; // open WebSockets per client address
-  const maxNewAccountsPerIp = opts.maxNewAccountsPerIp ?? 30; // new anonymous accounts per client address per hour
-  const maxNewAccountsPerMin = opts.maxNewAccountsPerMin ?? 120; // site-wide backstop: stops a spoofed-address flood from filling the database
-  const maxPlayers = opts.maxPlayers ?? 5000; // players held in memory
   const database = opts.database || { prepare: () => prepareDatabase() };
   // Finished games are saved in the background with retries; see db/matchQueue.js. `rooms` is declared below, which is fine:
   // the callback only runs later.
@@ -1992,18 +1989,6 @@ function start(opts = {}) {
 
   const clientIp = (req) => clientAddress(req, trustProxy);
   const socketsByIp = new Map(); // ip -> open sockets
-  const accountsByIp = new Map(); // ip -> creation times within the last hour
-  let accountTimes = []; // creation times within the last minute (site-wide)
-  const allowNewAccount = (ip) => {
-    const now = Date.now();
-    accountTimes = accountTimes.filter((t) => now - t < 60000);
-    const mine = (accountsByIp.get(ip) || []).filter((t) => now - t < 3600000);
-    if (accountTimes.length >= maxNewAccountsPerMin || mine.length >= maxNewAccountsPerIp || players.size >= maxPlayers) return false;
-    mine.push(now);
-    accountsByIp.set(ip, mine);
-    accountTimes.push(now);
-    return true;
-  };
 
   const helloQueue = createBoundedSerialQueue(maxPendingHellos);
   const onHello = (ws, msg) => helloQueue.enqueue(
@@ -2370,7 +2355,6 @@ function start(opts = {}) {
         }
       }
     }
-    for (const [ip, times] of accountsByIp) if (!times.some((t) => now - t < 3600000)) accountsByIp.delete(ip);
     for (const p of players.values()) {
       if (!p.connected && !rooms.has(p.room) && now - p.lastSeen > 60 * 60 * 1000) {
         players.delete(p.id);

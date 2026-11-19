@@ -172,5 +172,4 @@ module.exports = {
   isTransientConnectionError,
   withTransaction,
   close,
-  getPool: () => pool,
 };
