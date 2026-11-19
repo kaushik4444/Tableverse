@@ -17,6 +17,7 @@ async function test(name, fn) {
   try {
     process.env.DATABASE_URL = t.url;
     const dbAdmin = require('../db/admin');
+    await require('../db/migrate').migrate(); // a fresh database has no tables yet: apply the schema first
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
     const staff = (await q(`INSERT INTO players (username, display_name, role) VALUES ('ordadmin', 'Admin', 'admin') RETURNING id`))[0].id;
