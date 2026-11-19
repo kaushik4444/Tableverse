@@ -709,6 +709,7 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .home-split { display: grid; gap: 4px; }
 .public-tables-panel { margin: 12px 0 8px; min-width: 0; } /* the markup puts it first, so keyboard order matches the screen */
 .public-tables-panel .public-table { flex-wrap: wrap; }
+.public-tables-panel .public-table .public-table-info { flex: 1 1 200px; } /* a long name wraps the action onto its own line instead of overlapping it */
 .public-tables-panel .public-table .btn { flex-shrink: 0; white-space: nowrap; margin-left: auto; }
 .public-tables-panel .public-tables { grid-auto-flow: column; grid-template-rows: repeat(2, auto); grid-auto-columns: minmax(280px, 88%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; margin-top: 8px; }
 .public-tables-panel .public-table { scroll-snap-align: start; }
