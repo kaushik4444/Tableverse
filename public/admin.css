@@ -92,3 +92,49 @@ section.ad-card + section.ad-card { margin-top: 16px; }
 .ad-chart details{margin-top:6px}
 .ad-sortbtn { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; white-space: nowrap; }
 .ad-sortbtn:hover, .ad-sortbtn:focus-visible { text-decoration: underline; }
+
+/* Game marks in the admin console: the same tile as the home page (public/game-marks.js) */
+.ad-game { display: inline-flex; vertical-align: middle; }
+.ad-game .gmark { width: 1.6em; height: 1.6em; }
+
+/* ---- one look with the game (public/style.css): the same background, panels, gold buttons and fields ---------------
+   These rules come last so they replace the console's own versions above. Markup is unchanged. */
+:root {
+  --panel: rgba(255, 255, 255, .04);
+  --panel-line: rgba(255, 255, 255, .09);
+  --ink: var(--text);
+  --gold: var(--accent);
+  --gold-ink: var(--accent-ink);
+  --danger: var(--bad);
+}
+body {
+  background:
+    radial-gradient(1000px 600px at 15% -10%, rgba(16, 185, 129, .22), transparent 60%),
+    radial-gradient(900px 600px at 95% 15%, rgba(59, 130, 246, .18), transparent 60%),
+    linear-gradient(180deg, #0d231b, var(--felt-2) 85%) fixed;
+}
+.ad-card, .ad-preview, .ad-t.stack tr {
+  background: linear-gradient(160deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .03));
+  border: 1px solid var(--panel-line);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+}
+.ad-tabs button { border: 1px solid var(--panel-line); background: rgba(255, 255, 255, .05); }
+.ad-tabs button[aria-selected="true"] { box-shadow: 0 6px 18px rgba(255, 177, 61, .28); }
+button.ad-btn, .ad-btn {
+  border: 1px solid var(--panel-line); background: rgba(255, 255, 255, .05); color: var(--text);
+  transition: transform .08s, filter .15s, background .15s;
+}
+.ad-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .1); }
+.ad-btn:active:not(:disabled) { transform: scale(.97); }
+.ad-btn.primary {
+  background: linear-gradient(135deg, #ffd978, #ffb13d); color: var(--gold-ink); border: 0;
+  box-shadow: 0 6px 18px rgba(255, 177, 61, .28);
+}
+.ad-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.ad-form input, .ad-form select, .ad-form textarea, .ad-search input, .ad-search select {
+  background: rgba(8, 9, 30, .5); border: 1px solid var(--panel-line); border-radius: 12px; min-height: 44px;
+}
+.ad-pill { background: rgba(255, 255, 255, .04); }
+/* the name block of a player row reads from the left, not spread across the row */
+@media (max-width: 640px) { .ad-t.stack td[data-l="Player"] { display: block; } .ad-t.stack td[data-l="Player"]::before { content: none; } }
