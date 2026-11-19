@@ -1,5 +1,5 @@
 'use strict';
-/** Penalty Rows plugin: adapts the pure engine to the server's game interface. */
+/** Take 5 plugin: adapts the pure engine to the server's game interface. */
 const engine = require('./engine');
 const { scrubDeep } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
@@ -7,7 +7,7 @@ const pacing = require('../pacing');
 
 module.exports = {
   id: 'penaltyrows',
-  name: 'Penalty Rows',
+  name: 'Take 5',
   icon: '🔢',
   accent: '#c2652a',
   tagline: 'Everyone plays a card at once. Squeeze it into a row, and avoid being the one who has to take it.',
@@ -90,6 +90,7 @@ module.exports = {
     'Scoring a round: when everyone has played their hand, the penalty points each player took are added to their total. A new round is dealt until someone reaches the game-length target: 66 by default, or as set under Game length.',
     'Winning: the lowest total wins. If totals are equal, the players share the win. With Starting score 66 everyone starts with 66 points and penalty points are taken away: when someone reaches 0 the round is played out, then the game ends. Whoever reached 0 loses; the player with the most points left wins.',
     'The table options change these numbers: cards in hand, cards per row, scoring (simple scoring gives every card 1 point), game length, what happens to a card below every row, and pace (how long each card stays on the table).',
+    'Take 5 is Tableverse\'s own game, made with our own cards, wording and artwork. It is not affiliated with, endorsed by or licensed by the publisher of any similar game.',
   ],
 
   create(players, options, rng) {

@@ -1,4 +1,4 @@
-/* Stage Rummy table renderer. The table is the shared felt: each player sits around it with the groups they have laid
+/* Stage 10 table renderer. The table is the shared felt: each player sits around it with the groups they have laid
  * in front of them, the two piles are in the middle, and a short message floats over the table when something happens.
  * You: the goal of your stage, your hand, and the groups you build before laying down.
  * Select cards, then: put them into the goal's groups and lay down, tap a laid group to add a selected card, or discard one.
@@ -187,7 +187,7 @@
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
-        <div class="wz-round"><b>Stage Rummy</b><span class="label"> · round ${v.round}</span></div>
+        <div class="wz-round"><b>Stage 10</b><span class="label"> · round ${v.round}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
       <p class="sr-goal" role="status">${goalLine}</p>

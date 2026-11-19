@@ -1,4 +1,4 @@
-/* Stage Rummy: goal line, scoreboard with laid groups, piles, hand. Builds on table.css (panels, status bar, overlay). */
+/* Stage 10: goal line, scoreboard with laid groups, piles, hand. Builds on table.css (panels, status bar, overlay). */
 .sr .sr-card { display: grid; place-items: center; position: relative; width: 100%; aspect-ratio: 3 / 4; padding: 0; border-radius: 8px; border: 2px solid rgba(0, 0, 0, .25); background: #fff; color: #fff; font: inherit; line-height: 1; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
 .sr .sr-card b { font-size: clamp(15px, 4.8vw, 24px); font-weight: 800; }
 .sr .sr-card i { position: absolute; left: 3px; top: 2px; font-style: normal; font-size: 11px; }
@@ -58,7 +58,7 @@
   .sr .sr-hand .sr-card { min-height: 44px; aspect-ratio: 1 / 1; }
 }
 
-/* The table: the shared felt with the seats around it. Stage Rummy needs a little more room than the default for its laid groups. */
+/* The table: the shared felt with the seats around it. Stage 10 needs a little more room than the default for its laid groups. */
 .sr .sr-table { margin-top: 6px; }
 .sr .sr-table .pt { --pt-min: 400px; }
 .sr .sr-table .pseat { max-width: 28vw; }
