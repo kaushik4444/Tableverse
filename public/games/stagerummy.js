@@ -200,8 +200,8 @@
     </div>`;
     root.onclick = onClick;
     if (focused) { const el = root.querySelector(`.sr-hand [data-id="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
-    // the float is removed from the page once it has faded, so a later redraw does not bring it back
-    if (ui.floatText && Date.now() - ui.floatAt < FLOAT_MS) setTimeout(() => { if (ui.latest === v && root.isConnected) ctx.rerender(); }, FLOAT_MS - (Date.now() - ui.floatAt) + 50);
+    // once the float has faded, remove only that element: a full redraw would drop keyboard focus on the controls
+    if (ui.floatText && Date.now() - ui.floatAt < FLOAT_MS) setTimeout(() => { if (ui.latest === v && root.isConnected) { const f = root.querySelector('.sr-float'); if (f) f.remove(); } }, FLOAT_MS - (Date.now() - ui.floatAt) + 50);
   }
 
   function onClick(e) {

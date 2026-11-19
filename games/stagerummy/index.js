@@ -39,7 +39,7 @@ module.exports = {
   ],
   rules: [
     'Goal: be the first to finish the last stage. Each round you try to lay down the goal of your current stage, a set of groups on the table in front of you. Players who lay down move up to the next stage.',
-    'Groups: a set is the same number in different colours (three 7s). A run is consecutive numbers in one colour (4, 5, 6). A colour group is any cards of one colour. A wild card can stand in for any number or colour, but every group needs at least one real number card.',
+    'Groups: a set is cards with the same number, in any colours (three 7s). A run is consecutive numbers, in any colours (4, 5, 6). A colour group is any cards of one colour. A wild card can stand in for any number or colour, but every group needs at least one real number card.',
     'Your turn has three steps: draw one card from the stock or take the top of the discard pile (a skip card cannot be taken). Lay down your stage if your cards allow it. End the turn by discarding one card. Once you have laid down, you can add cards to any group on the table on later turns.',
     'Skip cards: when a skip card is discarded, the next player loses their turn.',
     'Going out: a round ends when a player has no cards left. Everyone else counts the cards still in their hand: 1 to 9 are 5 points, 10 to 12 are 10, skip cards are 15 and wild cards are 25.',
