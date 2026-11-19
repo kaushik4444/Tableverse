@@ -32,7 +32,7 @@ jobs:
     # CREATE DATABASE (the image's default superuser is), and the pg tests also use pg_terminate_backend.
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci-only-password # throw-away container, not a secret
@@ -77,6 +77,11 @@ jobs:
           done
           echo "PostgreSQL did not become ready" >&2
           exit 1
+
+      # The runner's pg_dump can be newer than the service: it writes `SET transaction_timeout` (PostgreSQL 17+), which a
+      # PostgreSQL 16 server rejects in the restore rehearsal. The service is 17, so the client versions are logged here.
+      - name: Show PostgreSQL client versions
+        run: pg_dump --version && pg_restore --version
 
       # `test:pg` passes --require, so a missing TEST_DATABASE_URL fails the run instead of skipping.
       - name: PostgreSQL integration tests
