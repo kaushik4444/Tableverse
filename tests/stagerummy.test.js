@@ -282,5 +282,27 @@ test('scrubbing a deleted player\'s name never changes the internal phase, even 
   assert.equal(game.view('p0').phase, 'draw', 'the phase is still draw after the scrub');
 });
 
+test('wild cards off: the stock has 100 cards, none of them wild', () => {
+  const g = e.createGame(people(2), { wildCards: false }, rngFor(7));
+  const total = g.stock.length + g.hands.flat().length + g.discard.length;
+  assert.equal(total, 100, 'the deck is 108 cards minus the 8 wild cards');
+  assert.equal([...g.stock, ...g.hands.flat(), ...g.discard].some((c) => c.k === 'w'), false, 'no wild card is dealt');
+  assert.equal(e.viewFor(g, 'p0').wildCards, false, 'the view reports the option');
+});
+
+test('wild cards on (the default): the deck has all 108 cards', () => {
+  const g = e.createGame(people(2), {}, rngFor(7));
+  assert.equal(g.stock.length + g.hands.flat().length + g.discard.length, 108);
+  assert.equal(e.viewFor(g, 'p0').wildCards, true);
+});
+
+test('the view names each stage the table has reached', () => {
+  const g = e.createGame(people(3), { length: 'short' }, rngFor(8));
+  const v = e.viewFor(g, 'p0');
+  assert.deepEqual(v.stageNames, e.STAGE_NAMES.slice(0, g.stageCount), 'names match the stages in this game');
+  assert.equal(v.stageNames.length, 5, 'a quick game has five stages');
+  assert.equal(v.stageNames[0], 'Trio and run');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

@@ -4,7 +4,45 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, seq: null };
+  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null };
+  const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
+
+  /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
+   * Returns null when there is nothing to step through, or when the rebuild does not match the table (then the table is shown as it is). */
+  function replaySteps(v) {
+    if (!v.before || !v.before.length || !v.lastTurn.length) return null;
+    const rows = v.before.map((r) => r.map((c) => ({ n: c.n, p: c.p })));
+    const steps = [rows.map((r) => r.slice())];
+    for (const e of v.lastTurn) {
+      if (e.kind === 'place') rows[e.row].push({ n: e.n, p: e.p });
+      else rows[e.row] = [{ n: e.n, p: e.p }]; // a row taken: the card starts it again
+      steps.push(rows.map((r) => r.slice()));
+    }
+    const last = steps[steps.length - 1];
+    if (!v.after) return null;
+    const same = last.length === v.after.length && last.every((r, k) => r.length === v.after[k].length && r.every((c, s) => c.n === v.after[k][s].n)); // compare with the completed table: at a round's end the rows are already the next deal
+    return same && steps.length > 1 ? steps : null;
+  }
+
+  /** The table this renderer is showing (the room code), so playback for one table never plays on another. */
+  const tableOf = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
+
+  /** Advances one replay, one step per interval. Each timeout is bound to the animation it was scheduled for, so a timeout
+   * left from another table or turn does nothing. The last step is the completed table: it is held for one interval, then
+   * the replay ends and the rows as they stand (at a round's end, the new deal) are shown. */
+  function scheduleStep(anim, paceK) {
+    setTimeout(() => {
+      if (ui.anim !== anim || !ui.ctx || anim.table !== tableOf()) return;
+      if (anim.i < anim.steps.length - 1) {
+        anim.i += 1;
+        ui.ctx.rerender();
+        scheduleStep(anim, paceK);
+        return;
+      }
+      ui.anim = null;
+      ui.ctx.rerender();
+    }, STEP_MS * (paceK || 1));
+  }
 
   const penWord = (p) => `${p} penalty point${p === 1 ? '' : 's'}`;
   const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
@@ -24,11 +62,13 @@
 
   function rowsHTML(v) {
     const taking = v.phase === 'takeRow' && v.pending && v.pending.by === v.me;
-    return `<div class="pr-rows">${v.rows.map((row, k) => {
-      const slots = Array.from({ length: 5 }, (_, s) => (row[s] ? cardHTML(row[s]) : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
-      const full = row.length >= 5;
-      const label = `Row ${k + 1}: ${row.length} card${row.length === 1 ? '' : 's'}, ${penWord(v.rowPenalty[k])}`;
-      const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span><small>${v.rowPenalty[k]} pts${full ? ' · full' : ''}</small></span><div class="pr-cards">${slots}</div>`;
+    const rows = ui.anim && ui.anim.seq === v.seq ? ui.anim.steps[ui.anim.i] : v.rows;
+    return `<div class="pr-rows">${rows.map((row, k) => {
+      const slots = Array.from({ length: v.rowLimit }, (_, s) => (row[s] ? cardHTML(row[s]) : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
+      const full = row.length >= v.rowLimit;
+      const points = row.reduce((s, c) => s + c.p, 0); // from the row as shown, so a step mid-turn counts only the cards on it
+      const label = `Row ${k + 1}: ${row.length} card${row.length === 1 ? '' : 's'}, ${penWord(points)}`;
+      const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span><small>${points} pts${full ? ' · full' : ''}</small></span><div class="pr-cards">${slots}</div>`;
       return taking
         ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
         : `<div class="pr-row ${full ? 'full' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
@@ -79,8 +119,12 @@
   function react(v) {
     const snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = v.seq; return; } // first render (load or reconnect): do not replay
+    if (v.phase === 'takeRow') ui.anim = null; // a row choice must show the rows as they stand, not a replay
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
+    const steps = replaySteps(v);
+    ui.anim = steps ? { seq: v.seq, steps, i: 0, table: tableOf() } : null;
+    if (ui.anim) scheduleStep(ui.anim, v.paceK);
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     else if (v.lastTurn.some((e) => e.by === v.me && e.took)) snd.play('lose');
@@ -90,6 +134,7 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
+    if (ui.table !== tableOf()) { ui.table = tableOf(); ui.anim = null; ui.seq = null; } // a different table: start afresh, with no replay
     react(v);
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);

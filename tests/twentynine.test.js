@@ -65,17 +65,17 @@ test('bidding: ascending bids 15-28, pass, dealer forced to bid when all pass, 2
   assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 14 }).ok, false); // below minimum
   assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 29 }).ok, false); // above maximum
   assert.equal(E.applyAction(g, id(first), { type: 'bid', amount: 15.5 }).ok, false);
+  // a passes first: the other original bidder (b) speaks next, not the newcomer (c)
   assert.equal(E.applyAction(g, id(first), { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, (first + 1) % 4, 'after a passes with no bid, b speaks next');
+  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', amount: 15 }).ok, true);
+  assert.equal(g.turn, (first + 2) % 4, 'c enters and answers the standing bid');
   assert.equal(E.applyAction(g, id(first + 2), { type: 'bid', pass: true }).ok, true);
-  assert.equal(g.turn, (first + 3) % 4, 'the dealer is the next challenger');
-  assert.equal(E.viewFor(g, id(first + 3)).canPass, false); // dealer must bid
-  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', pass: true }).ok, false);
-  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', amount: 15 }).ok, true);
-  assert.equal(g.phase, 'bidding', 'the other active bidder still gets a chance to raise');
-  assert.equal(g.turn, (first + 1) % 4);
-  assert.equal(E.applyAction(g, id(first + 1), { type: 'bid', pass: true }).ok, true);
+  assert.equal(g.turn, (first + 3) % 4, 'then d (the dealer) enters and answers the bid');
+  assert.equal(E.viewFor(g, id(first + 3)).canPass, true, 'the dealer may pass once there is a bid');
+  assert.equal(E.applyAction(g, id(first + 3), { type: 'bid', pass: true }).ok, true);
   assert.equal(g.phase, 'chooseTrump');
-  assert.equal(g.turn, g.dealer);
+  assert.equal(g.turn, g.highBidder);
 
   const h = E.createGame(people(), {}, mulberry32(2));
   const f = (h.dealer + 1) % 4;
@@ -192,6 +192,7 @@ test('last trick is forced after the first card, unless the player may still ask
 
 test('trump King–Queen marriage adds four points once after trump reveal and a team trick win', () => {
   const g = toPlaying(31);
+  g.highBid = 19; // the marriage counts only in a game bid of 19 or more
   g.trumpSuit = 'S'; g.trumpRevealed = true; g.tricksWon = [1, 0]; g.tricksPlayed = 1; g.marriageDeclared = false; g.turn = 0;
   g.players[0].hand = [card('S', 'K'), card('S', 'Q'), card('H', '7')];
   assert.equal(E.viewFor(g, 'p0').canDeclareMarriage, true);
@@ -261,6 +262,7 @@ test('Marriage changes the bid: bidding team marriage lowers by 4 (min 15); othe
 test('marriage with the bid option adds no hand points and is still declared once per hand', () => {
   const g = toPlaying(31);
   g.options.marriageBid = true;
+  g.highBid = 19;
   g.trumpSuit = 'S'; g.trumpRevealed = true; g.tricksWon = [1, 0]; g.tricksPlayed = 1; g.marriageDeclared = false; g.turn = 0;
   g.players[0].hand = [card('S', 'K'), card('S', 'Q'), card('H', '7')];
   assert.equal(E.applyAction(g, 'p0', { type: 'marriage' }).ok, true);
@@ -372,6 +374,24 @@ test('200 full games: every hand distributes exactly 29 points and scores add up
     const t = g.options.target;
     assert.ok(g.teamScore.some((s) => s >= t || s <= -t));
     assert.ok(g.winnerTeam === 0 || g.winnerTeam === 1);
+  }
+});
+
+test('the King–Queen marriage needs a game bid of 19 or more', () => {
+  const g = toPlaying(31);
+  g.highBid = 18;
+  g.trumpSuit = 'S'; g.trumpRevealed = true; g.tricksWon = [1, 0]; g.tricksPlayed = 1; g.marriageDeclared = false; g.turn = 0;
+  g.players[0].hand = [card('S', 'K'), card('S', 'Q'), card('H', '7')];
+  assert.equal(E.viewFor(g, 'p0').canDeclareMarriage, false, 'refused at 18');
+  assert.equal(E.applyAction(g, 'p0', { type: 'marriage' }).ok, false);
+  g.highBid = 19;
+  assert.equal(E.viewFor(g, 'p0').canDeclareMarriage, true, 'allowed at 19');
+});
+
+test('every dealt player has at least one point card among their first four (a round is dealt again otherwise)', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const g = E.createGame(people(), {}, mulberry32(seed));
+    for (const p of g.players) assert.ok(p.hand.some((c) => c.pts > 0), `seed ${seed}: ${p.id} has no point card`);
   }
 });
 
