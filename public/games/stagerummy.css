@@ -86,3 +86,7 @@
 }
 /* the shared centre ignores the pointer so the felt is never in the way; the piles are the one thing in it you can press */
 .sr .pt-center .sr-piles { pointer-events: auto; }
+/* short phones (360x640): a smaller felt so the whole play area, hand included, fits the screen */
+@media (max-width: 520px) and (max-height: 700px) {
+  .sr .sr-table .pt { --pt-min: 250px; }
+}
