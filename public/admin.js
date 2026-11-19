@@ -200,7 +200,7 @@
       <div class="ad-grid">${tile(matches, 'games finished')}${tile(g.filter((r) => r.matches).length, 'different games played')}${tile(pt.players, 'signed-in players')}${tile(mins(pt.avgMinutes), 'avg play time per player')}${tile(pctText(left, humans), 'players who left early')}${tile(pctText(c.d1, c.size), 'came back next day')}${tile(pctText(c.d7, c.size), 'came back within a week')}${tile(pctText(c.d7Exact, c.size), 'back on day 7 exactly')}${tile(pctText(c.d30Exact, c.size30), 'back on day 30 exactly')}</div>
       <h3>When people play</h3>${heatmap(o.heat || [], o.zone)}
       <h3>When people open the site</h3>${hourColumns({ [o.zone]: (o.visits && o.visits.byHour) || Array(24).fill(0) }, o.zone, 'connections')}
-      <p class="ad-muted">Connections per hour of the day, from counters only (no account or device). Uses today's offset for ${esc(o.zone)}. Counting started when this feature shipped, so earlier days are empty.</p>
+      <p class="ad-muted">Connections per hour of the day, from counters only (no account or device). Uses today's offset for ${esc(o.zone)}. Counting started when this feature shipped, so earlier days are empty.${Number(o.days) === 1 ? ' For the last 24 hours these charts cover today (UTC) only.' : ''}</p>
       <h3>How long a visit lasts</h3>${bars(((o.visits && o.visits.length) || []), 'No visits counted yet.')}
       <p class="ad-muted">A visit is one connection, so a reconnect starts a new visit. Connections under 3 seconds are not counted, and a visit is counted when it ends, under the hour it opened in.</p>
       <h3>How each game goes</h3>${g.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Avg length</th><th>Median length</th><th>Avg seats</th><th>Left early</th><th>With a leaver</th><th>Drawn</th><th>Finished of started</th></tr></thead><tbody>${gameRows}</tbody></table>` : '<p class="ad-muted">No games yet.</p>'}
@@ -526,7 +526,7 @@
     }).join('');
     const body = list.querySelector('tbody');
     if (body) body.insertAdjacentHTML('beforeend', rows);
-    else if (rows) list.innerHTML = `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Room</th><th>Started</th><th>Ended</th><th>Players</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    else if (rows) list.innerHTML = `<div class="ad-scroll"><table class="ad-t stack" data-paged><thead><tr><th>Game</th><th>Room</th><th>Started</th><th>Ended</th><th>Players</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     else list.innerHTML = '<p class="ad-muted">No tables have finished yet.</p>';
     more.textContent = 'Load older tables';
     more.hidden = !(o && o.nextCursor);
