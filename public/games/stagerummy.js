@@ -82,7 +82,7 @@
     const p = v.players[i];
     const stage = Math.min(p.stage, v.stageCount);
     const sub = `Stage ${stage}/${v.stageCount}`; // short, so it fits a phone seat; the card count is under the seat
-    const count = `<div class="sr-nolay">${p.cards} cards</div>`;
+    const count = `<div class="sr-nolay">${p.cards} cards · ${p.score} pts</div>`; // points stay on the seat: fewer is better
     const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay">Not down · ${p.cards} cards</div>`);
     return window.CardTable.pt.seatHTML({
       pid: p.id,
@@ -201,7 +201,7 @@
       </div>
       <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
         const st = Math.min(p.stage, v.stageCount);
-        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${p.laid ? 'sr-laid' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
+        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${p.laid ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
       }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
       <div class="sr-table">${table}</div>
@@ -254,9 +254,10 @@
         ctx.rerender();
         // Restore after the app's document click handler has closed the toolbar menu.
         setTimeout(() => {
+          // when the toolbar is folded, Phases sits in its hidden menu: focus the menu button rather than opening it
           const trigger = document.querySelector('button[data-sr="phases"]');
-          if (trigger?.closest('.tb-pop[hidden]')) document.querySelector('.tb-more-btn')?.click();
-          trigger?.focus({ preventScroll: true });
+          const target = trigger && !trigger.closest('.tb-pop[hidden]') ? trigger : document.querySelector('.tb-more-btn');
+          target?.focus({ preventScroll: true });
         }, 0);
         break;
       }

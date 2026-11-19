@@ -7,8 +7,9 @@
 .sr .sr-card { --cc: #6b5a3a; background: linear-gradient(170deg, #fffdf6 0%, #f3ead3 100%); color: var(--cc); border-color: var(--cc); overflow: hidden; }
 .sr .sr-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 17%; background: var(--cc); }
 .sr .sr-card b { position: relative; margin-top: 12%; font-family: var(--display, inherit); }
-.sr .sr-card i { color: var(--cc); z-index: 1; }
-.sr .sr-card i, .sr .sr-card u { color: var(--cc); }
+.sr .sr-card i { color: #fffdf6; text-shadow: 0 0 2px rgba(0, 0, 0, .45); z-index: 1; } /* the corner symbol sits on the coloured band, so it is light */
+.sr .sr-card u { color: var(--cc); }
+.sr .sr-card.cY i, .sr .sr-card.wild i { color: #2b1d4a; text-shadow: none; } /* light bands: a dark symbol */
 .sr .sr-card.cR { --cc: #b8322b; }
 .sr .sr-card.cB { --cc: #2857b0; }
 .sr .sr-card.cG { --cc: #1d7a43; }
@@ -26,7 +27,7 @@
 .sr .sr-stages { margin-bottom: 6px; }
 .sr .sr-stages span { padding: 2px 6px; border-radius: 8px; }
 .sr .sr-stages span.sr-now { outline: 2px solid var(--gold, #f2c14e); }
-.sr .sr-stages span.sr-laid b::after { content: " ✓"; color: #86efac; }
+.sr .sr-stages span.sr-stage-done b::after { content: " ✓"; color: #86efac; }
 .sr .sr-card.mini { width: 28px; aspect-ratio: 3 / 4; }
 .sr .sr-card.mini b { font-size: 13px; }
 .sr .sr-card.mini i, .sr .sr-card.mini u { display: none; }
