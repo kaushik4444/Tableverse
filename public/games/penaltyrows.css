@@ -1,7 +1,10 @@
-/* Penalty Rows: the shared felt table with the four rows in its centre, and your hand below. Builds on table.css. */
+/* Penalty Rows: four lanes of full cards on the shared felt (seats around them, as at every table), and your hand below.
+ * Builds on table.css. The lanes are our own presentation; the name, artwork and penalty table are Tableverse's own. */
+.prt { --prc: clamp(30px, 8vw, 40px); } /* width of one card on the table: phone size by default */
+
 .prt .pr-card { display: grid; place-items: center; position: relative; aspect-ratio: 3 / 4; min-width: 0; padding: 0; border-radius: 8px; border: 2px solid rgba(0, 0, 0, .25); background: #fff; color: #1d2433; font: inherit; line-height: 1; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
-.prt .pr-card b { font-size: clamp(14px, 4.6vw, 22px); font-weight: 800; }
-.prt .pr-card i { position: absolute; right: 3px; bottom: 2px; font-style: normal; font-size: 10px; font-weight: 800; opacity: 1; }
+.prt .pr-card b { font-size: clamp(13px, 2.4vw, 24px); font-weight: 800; }
+.prt .pr-card i { position: absolute; right: 3px; bottom: 2px; font-style: normal; font-size: clamp(9px, 1.2vw, 11px); font-weight: 800; }
 .prt .pr-card.pen1 { background: #f4f7fb; }
 .prt .pr-card.pen2 { background: #ffe9a8; }
 .prt .pr-card.pen3 { background: #ffc97a; }
@@ -9,21 +12,30 @@
 .prt .pr-card.pen6, .prt .pr-card.pen7 { background: #f26b6b; color: #111; }
 .prt .pr-card.tiny { display: inline-grid; width: 30px; vertical-align: middle; }
 .prt .pr-card.tiny b { font-size: 13px; }
+.prt .pr-card.fresh { animation: prLand .7s ease-out; }
+@keyframes prLand { 0% { transform: translateY(-14px) scale(1.12); box-shadow: 0 0 0 4px var(--gold, #f2c14e); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .prt .pr-card.fresh { animation: none; } }
 
-/* the table's centre holds the rows: two columns of compact tiles, so the felt stays open for the seats around it */
-.prt .pt-center { max-width: 52%; width: 52%; }
-.prt .pr-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.prt .pr-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: center; gap: 2px 6px; padding: 6px 8px; border-radius: 12px; background: rgba(12, 24, 20, .55); border: 2px solid var(--panel-line); color: #fff; font: inherit; text-align: left; min-width: 0; pointer-events: auto; }
-.prt .pr-row.full { border-color: rgba(242, 107, 107, .85); }
-.prt .pr-rowhead { display: grid; gap: 1px; grid-column: 1; }
-.prt .pr-rowhead small { font-size: 11px; opacity: .85; }
-.prt .pr-tile { grid-column: 2; grid-row: 1 / 3; }
-.prt .pr-count { grid-column: 1; font-size: 11px; opacity: .8; }
-.prt .pr-slot { display: inline-block; width: 30px; aspect-ratio: 3 / 4; border-radius: 6px; border: 2px dashed rgba(255, 255, 255, .45); }
+/* the felt is taller here so the four lanes fit with the seats around them */
+.prt .pt { --pt-min: 360px; }
+@media (min-width: 900px) { .prt { --prc: 64px; } .prt .pt { --pt-min: 600px; } }
+
+/* the centre holds the lanes; it is not capped to a small share of the felt like the shared centre */
+.prt .pt-center { max-width: none; width: auto; margin-top: 10px; }
+.prt .pr-rows { display: grid; gap: clamp(4px, .8vw, 8px); pointer-events: auto; }
+.prt .pr-row { display: grid; grid-template-columns: clamp(46px, 7vw, 92px) auto; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 12px; background: rgba(12, 24, 20, .5); border: 2px solid var(--panel-line); color: #fff; font: inherit; text-align: left; min-width: 0; }
+.prt .pr-row.full { border-color: rgba(242, 107, 107, .9); }
+.prt .pr-rowhead { display: grid; gap: 1px; min-width: 0; }
+.prt .pr-rowhead .label { white-space: nowrap; font-size: 11px; }
+.prt .pr-rowhead small { font-size: 11px; opacity: .85; white-space: nowrap; }
+.prt .pr-cards { display: grid; gap: clamp(3px, .6vw, 6px); }
+.prt .pr-cards .pr-card { width: var(--prc); }
+.prt .pr-slot { width: var(--prc); aspect-ratio: 3 / 4; border-radius: 8px; border: 2px dashed rgba(255, 255, 255, .35); }
 .prt button.pr-row.take { cursor: pointer; border-color: var(--gold, #f2c14e); min-height: 44px; animation: prPulse 1.6s ease-in-out infinite; }
 .prt button.pr-row.take:hover { background: rgba(242, 193, 78, .25); }
 .prt button.pr-row.take:focus-visible, .prt .pr-hand .pr-card:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; }
 @keyframes prPulse { 50% { box-shadow: 0 0 0 4px rgba(242, 193, 78, .35); } }
+@media (prefers-reduced-motion: reduce) { .prt button.pr-row.take { animation: none; } }
 .prt .pr-pending { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: #fff; display: flex; align-items: center; justify-content: center; gap: 4px; }
 
 /* seat lines under each name */
@@ -34,7 +46,7 @@
 /* a floating message over the rows, fading after a moment */
 .prt .pr-float { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 6px; white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis; padding: 6px 12px; border-radius: 999px; background: rgba(0, 0, 0, .78); color: #fff; font-size: 13px; font-weight: 700; pointer-events: none; animation: prFloat 2.6s ease-out both; }
 @keyframes prFloat { 0% { opacity: 0; transform: translate(-50%, 6px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -8px); } }
-@media (prefers-reduced-motion: reduce) { .prt .pr-float, .prt button.pr-row.take { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .prt .pr-float { animation: none; } }
 
 .prt .pr-last { overflow-wrap: anywhere; margin: 8px 0 0; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-size: 13px; color: var(--ink); line-height: 1.35; }
 .prt .pr-hand { display: grid; grid-template-columns: repeat(5, minmax(44px, 64px)); justify-content: center; gap: 6px; margin-top: 10px; }
@@ -45,20 +57,20 @@
 .prt .pr-final { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
 .prt .pr-final li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .06); }
 .prt .pr-final li.win { background: rgba(242, 193, 78, .2); }
-@media (max-width: 520px) and (max-height: 700px) {
-  .prt .pt-center { max-width: 56%; width: 56%; }
-  .prt .pr-rows { gap: 3px; }
-  .prt .pr-row { padding: 3px 5px; }
-  .prt .pr-tile .pr-card.tiny { width: 24px; }
+
+/* phones: the lanes shrink so the whole play area, hand included, still fits the screen */
+@media (max-width: 520px) {
   .prt .pr-hand { gap: 4px; margin-top: 6px; }
   .prt .pr-hand .pr-card { aspect-ratio: 1 / 1; }
   .prt .pr-last { display: none; }
-}
-/* keep the rows clear of the seat lines above and below the felt */
-.prt .pt-center { margin-top: 10px; }
-.prt .pr-rowhead .label { white-space: nowrap; }
-@media (max-width: 520px) {
-  .prt .pr-count { display: none; }
-  .prt .pr-row { grid-template-columns: minmax(0, 1fr) auto; }
   .prt .pr-under:not(.ok):not(.warn) { display: none; }
+  .prt .pr-row { grid-template-columns: 34px auto; gap: 4px; }
+  .prt .pr-rowhead .label { display: none; }
+  .prt .pr-rowhead small { font-size: 10px; }
+  .prt .pr-cards { gap: 3px; }
+}
+@media (max-width: 520px) and (max-height: 700px) {
+  .prt { --prc: 26px; }
+  .prt .pt { --pt-min: 340px; }
+  .prt .pr-row { padding: 2px 4px; }
 }

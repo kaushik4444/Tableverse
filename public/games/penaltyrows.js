@@ -6,7 +6,7 @@
   'use strict';
   const { esc } = window.CardTable;
   const FLOAT_MS = 2600;
-  const ui = { ctx: null, latest: null, seq: null, floatText: '', floatAt: 0 };
+  const ui = { ctx: null, latest: null, seq: null, floatText: '', floatAt: 0, fresh: new Set() };
 
   const penWord = (p) => `${p} penalty point${p === 1 ? '' : 's'}`;
   const pts = (n) => `${n} pt${n === 1 ? '' : 's'}`;
@@ -25,18 +25,22 @@
     return waiting ? `You picked ${v.myPick}. Waiting for ${waiting} more… (tap another card to change it)` : 'Everyone has picked. Playing the cards…';
   }
 
-  /** The four rows in the centre: each shows its last card, how many cards it holds and its penalty points. */
+  /** The four rows, as lanes of full cards: each lane holds up to the row limit, and the card that would go past it takes the lane. */
   function rowsHTML(v) {
     const taking = v.phase === 'takeRow' && v.pending && v.pending.by === v.me;
-    return `<div class="pr-rows">${v.rows.map((row, k) => {
-      const last = row[row.length - 1];
-      const full = row.length >= v.rowLimit;
-      const label = `Row ${k + 1}: ${row.length} of ${v.rowLimit} cards, ${penWord(v.rowPenalty[k])}`;
-      const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span><small>${pts(v.rowPenalty[k])}</small></span>`
-        + `<span class="pr-tile">${last ? cardHTML(last, { cls: 'tiny' }) : '<span class="pr-slot" aria-hidden="true"></span>'}</span>`
-        + `<small class="pr-count">${row.length}/${v.rowLimit}${full ? ' full' : ''}</small>`;
+    const limit = v.rowLimit;
+    return `<div class="pr-rows" role="group" aria-label="The four rows">${v.rows.map((row, k) => {
+      const slots = Array.from({ length: limit }, (_, s) => {
+        const c = row[s];
+        if (!c) return '<span class="pr-slot" aria-hidden="true"></span>';
+        return cardHTML(c, { cls: ui.fresh.has(`${k}:${c.n}`) ? 'fresh' : '' });
+      }).join('');
+      const full = row.length >= limit;
+      const label = `Row ${k + 1}: ${row.length} of ${limit} cards, ${penWord(v.rowPenalty[k])}`;
+      const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span><small>${pts(v.rowPenalty[k])}${full ? ' · full' : ''}</small></span>`
+        + `<span class="pr-cards" style="grid-template-columns:repeat(${limit},var(--prc))">${slots}</span>`;
       return taking
-        ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
+        ? `<button type="button" class="pr-row take ${full ? 'full' : ''}" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
         : `<div class="pr-row ${full ? 'full' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
     }).join('')}</div>`;
   }
@@ -122,6 +126,7 @@
     if (ui.seq === null) { ui.seq = v.seq; return; } // first render (load or reconnect): do not replay
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
+    ui.fresh = new Set(v.lastTurn.filter((e) => e.kind === 'place').map((e) => `${e.row}:${e.n}`)); // cards that landed this turn glow briefly
     ui.floatText = floaterText(v);
     ui.floatAt = Date.now();
     if (!snd) return;
