@@ -81,8 +81,9 @@
   function seatHTML(v, ctx, i) {
     const p = v.players[i];
     const stage = Math.min(p.stage, v.stageCount);
-    const sub = `Stage ${stage}/${v.stageCount} · ${p.cards} cards`; // points are shown on the scoreboard, so the seat line stays on one line
-    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>` : (v.phase === 'gameOver' ? '' : '<div class="sr-laid sr-nolay">Not down yet</div>');
+    const sub = `Stage ${stage}/${v.stageCount}`; // short, so it fits a phone seat; the card count is under the seat
+    const count = `<div class="sr-nolay">${p.cards} cards</div>`;
+    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay">Not down · ${p.cards} cards</div>`);
     return window.CardTable.pt.seatHTML({
       pid: p.id,
       name: p.name + (i === v.me ? ' (you)' : ''),
