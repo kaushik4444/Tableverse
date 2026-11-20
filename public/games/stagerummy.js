@@ -80,9 +80,12 @@
     if (!key || !window.GameFeed) return;
     const last = v.log.length ? v.log[v.log.length - 1].seq : 0;
     const st = ui.feeds.get(key);
-    if (!st) { ui.feeds.set(key, { lastSeq: last, epoch: 0 }); return; }
-    if (last < st.lastSeq) st.epoch += 1;
-    const prev = last < st.lastSeq ? 0 : st.lastSeq;
+    if (!st) { ui.feeds.set(key, { lastSeq: last, epoch: 0, matchId: v.matchId }); return; }
+    // a new match (by its id, or a sequence that went back) starts a new epoch: nothing of the old match is kept as the position
+    const newMatch = v.matchId !== st.matchId || last < st.lastSeq;
+    if (newMatch) st.epoch += 1;
+    st.matchId = v.matchId;
+    const prev = newMatch ? 0 : st.lastSeq;
     window.GameFeed.add(key, v.log.filter((e) => e.seq > prev).map((e) => logItem(v, e, `${st.epoch}-${e.seq}`)).filter(Boolean));
     if (v.event && v.event.seq > prev) { const sp = spotFor(v, v.event); if (sp) window.GameFeed.spotlight(sp); }
     st.lastSeq = last;

@@ -329,5 +329,13 @@ test('the log names public cards, hides stock draws and records a skip with who 
   assert.ok(pacing.remaining(g) > 0, 'a bot waits after a skip so the feed can be read');
 });
 
+test('each match has its own id, so a rematch is never mistaken for the old one', () => {
+  const a = setup(3, [[R(3)], [G(2)], [B(7)]]);
+  const b = setup(3, [[R(3)], [G(2)], [B(7)]]);
+  assert.ok(a.matchId && b.matchId, 'a match has an id');
+  assert.notEqual(a.matchId, b.matchId, 'two matches have different ids');
+  assert.equal(e.viewFor(a, 'p0').matchId, a.matchId, 'the view carries it');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
