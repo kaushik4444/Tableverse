@@ -203,7 +203,12 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     const { page, ctx } = await open(msgsFor(fresh()));
     const s = await box(page, '.cb-striker');
     const sx = s.x + s.width / 2, sy = s.y + s.height / 2;
-    await page.mouse.click(sx - 40, sy + 90);
+    const svg = await box(page, '.cb-svg');
+    const tapY = Math.min(sy + 30, svg.y + svg.height - 6); // inside the board, behind the striker
+    assert.ok(tapY > svg.y && tapY < svg.y + svg.height, 'the tap point is on the board');
+    const angleBefore = await page.textContent('[data-out="angle"]');
+    await page.mouse.click(sx - 40, tapY);
+    assert.notEqual(await page.textContent('[data-out="angle"]'), angleBefore, 'the tap sets the aim');
     assert.equal((await sent(page)).length, 0, 'a tap does not fire');
     await page.mouse.move(sx, sy);
     await page.mouse.down();

@@ -52,7 +52,7 @@ module.exports = {
     const g = engine.createGame(players, options, rng);
     return {
       view: (playerId) => engine.viewFor(g, playerId),
-      scrub: (names, to) => { const phase = g.phase; scrubDeep([g, players], names, to); g.phase = phase; }, // phase is an internal enum, never a name
+      scrub: (names, to) => { const phase = g.phase, matchId = g.matchId; scrubDeep([g, players], names, to); g.phase = phase; g.matchId = matchId; }, // phase is an internal enum and matchId a random id, never a name
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },

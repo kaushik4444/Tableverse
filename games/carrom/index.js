@@ -3,6 +3,7 @@
 const engine = require('./engine');
 const { scrubText, scrubDeep } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
+const pacing = require('../pacing');
 
 module.exports = {
   id: 'carrom',
@@ -37,6 +38,9 @@ module.exports = {
       awaiting: () => (g.phase === 'playing' ? [players[g.turn].id] : []),
       botAction: () => engine.botAction(g, g.turn, rng),
       botDelayMs: () => 900 + rng() * 500,
+      // a bot's next shot waits until the last shot has been played out (see the engine)
+      holdMs: () => pacing.remaining(g),
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // the engine's winner is a colour ('w' or 'b'), so each seat compares its own colour

@@ -21,6 +21,7 @@
  *  - The striker is taken off the board after each shot and placed again from the baseline each turn.
  */
 const P = require('./physics');
+const pacing = require('../pacing');
 
 const COINS_EACH = 9;
 const MAX_SHOTS = 300; // a safety limit against a game that never finishes; it is a draw
@@ -192,6 +193,8 @@ function applyAction(g, playerId, action) {
   g.nextId = p.next.nextId;
   g.shots += 1;
   g.shot = { ...p.shot, seq: ++g.seq };
+  // the bot waits until this shot has been played out, plus a short pause to read it (people are never held)
+  pacing.holdLatest(g, p.shot.keyframes[p.shot.keyframes.length - 1].t * 1000 + 400);
   const name = g.players[seat].name;
   g.log.push(p.shot.foul ? `${name}: foul, the striker was pocketed`
     : p.shot.scored ? `${name} pocketed ${p.shot.scored} ${p.shot.colour === 'w' ? 'white' : 'black'}`
@@ -248,8 +251,8 @@ function botAction(g, seat, rng) {
     if (score > bestScore) { bestScore = score; best = a; }
   }
   if (best) return best;
-  // a fine grid across the baseline, both ends included: a narrow gap between coins is found, and only clear spots go to the rules
-  const [lo, hi] = STRIKER_X, steps = 150;
+  // a fine grid across the baseline, both ends included: a narrow gap between coins (about 0.0005 wide) is found, and only clear spots go to the rules
+  const [lo, hi] = STRIKER_X, steps = 4000;
   const clear = (x) => {
     const [sx, sy] = rotPoint([x, BASE_Y], g.sides[seat]);
     return !g.coins.some((c) => Math.hypot(c.x - sx, c.y - sy) < c.r + P.RADIUS.striker);

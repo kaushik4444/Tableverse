@@ -134,7 +134,9 @@
     // keep keyboard focus on the square the player was using: the re-render replaces every button
     const focused = document.activeElement;
     const inRoot = !!focused && root.contains(focused);
-    const focusSel = inRoot && focused.dataset.sq !== undefined ? `[data-sq="${focused.dataset.sq}"]` : inRoot && focused.dataset.ch ? `[data-ch="${focused.dataset.ch}"]` : null;
+    const focusSel = inRoot && focused.dataset.sq !== undefined ? `[data-sq="${focused.dataset.sq}"]`
+      : inRoot && focused.dataset.ch ? `[data-ch="${focused.dataset.ch}"]`
+      : inRoot && focused.dataset.chPromo ? `[data-ch-promo="${focused.dataset.chPromo}"]` : null;
     root.innerHTML = `<div class="wz ch" data-game="chess">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.log.length} moves</span></div>
         ${CardTable.toolbarSeed(`<button class="btn ghost small" data-ch="rules">Rules</button>${playing ? `<button class="btn ghost small" data-ch="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'ch')}</div>

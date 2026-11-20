@@ -282,6 +282,14 @@ test('scrubbing a deleted player\'s name never changes the internal phase, even 
   assert.equal(game.view('p0').phase, 'draw', 'the phase is still draw after the scrub');
 });
 
+test('scrubbing a player whose name is a piece of the match id keeps the match id', () => {
+  const game = def.create(people(2), {}, rngFor(4));
+  const before = game.view('p0').matchId;
+  const piece = before.split('-')[0]; // a player named like the first group of the uuid
+  game.scrub([piece], 'Removed player');
+  assert.equal(game.view('p0').matchId, before, 'the match id is unchanged, so the table does not treat it as a rematch');
+});
+
 test('wild cards off: the stock has 100 cards, none of them wild', () => {
   const g = e.createGame(people(2), { wildCards: false }, rngFor(7));
   const total = g.stock.length + g.hands.flat().length + g.discard.length;
@@ -327,6 +335,14 @@ test('the log names public cards, hides stock draws and records a skip with who 
   assert.equal(v.log.length, g.log.length, 'the view carries the log');
   assert.equal(v.log.at(-1).type, 'skip');
   assert.ok(pacing.remaining(g) > 0, 'a bot waits after a skip so the feed can be read');
+});
+
+test('each match has its own id, so a rematch is never mistaken for the old one', () => {
+  const a = setup(3, [[R(3)], [G(2)], [B(7)]]);
+  const b = setup(3, [[R(3)], [G(2)], [B(7)]]);
+  assert.ok(a.matchId && b.matchId, 'a match has an id');
+  assert.notEqual(a.matchId, b.matchId, 'two matches have different ids');
+  assert.equal(e.viewFor(a, 'p0').matchId, a.matchId, 'the view carries it');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
