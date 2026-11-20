@@ -41,7 +41,7 @@
     const by = e.by !== undefined ? nameOf(v, e.by) : '';
     switch (e.type) {
       case 'tile': return `${by} dug ${e.cut ? 'a dead end' : 'a tunnel'}${e.revealed && e.revealed.length ? `, opening ${e.revealed.map((i) => (v.goals[i].gold ? '<b>the gold chamber</b>' : 'a chamber of plain rock')).join(' and ')}` : ''}.`;
-      case 'break': return `${by} broke ${nameOf(v, e.target)}${e.target === v.me ? 'r' : '’s'} ${TOOLS[e.tool].name}.`.replace('Youer', 'your').replace('Yourr', 'your');
+      case 'break': return `${by} broke ${e.target === v.me ? 'your' : `${nameOf(v, e.target)}’s`} ${TOOLS[e.tool].name}.`;
       case 'repair': return `${by} repaired ${e.target === v.me ? 'your' : `${nameOf(v, e.target)}’s`} ${TOOLS[e.tool].name}.`;
       case 'scout': return `${by} scouted chamber ${e.goal + 1}.`;
       case 'collapse': return `${by} collapsed a tunnel piece.`;
@@ -58,6 +58,7 @@
     if (!v.myTurn) return `${esc(v.players[v.turn].name)} is playing…`;
     const c = selected(v);
     if (!c) {
+      if (ui.sel) return 'That card cannot be played now: throw it away, or pick another';
       if (v.players[v.me].broken.length) return 'A tool of yours is broken: repair it to dig, or play another card';
       return 'Your turn: pick a card to play, or throw one away';
     }
@@ -175,7 +176,7 @@
     react(v);
     const key = `${v.round}:${v.turn}:${v.event ? v.event.seq : 0}`;
     if (key !== ui.turnKey) { ui.turnKey = key; ui.sel = null; ui.flip = false; }
-    if (!v.myTurn || (ui.sel && !v.hand.some((c) => c.id === ui.sel && c.ok))) ui.sel = null;
+    if (!v.myTurn || (ui.sel && !v.hand.some((c) => c.id === ui.sel))) ui.sel = null; // a card that cannot be played stays chosen so it can be thrown away
     const text = eventText(v);
     const role = v.role ? `<span class="hm-youare ${v.role}" title="Only you can see this">You are a ${roleName(v.role)}</span>` : '';
     const handEl = root.querySelector('.hm-hand');

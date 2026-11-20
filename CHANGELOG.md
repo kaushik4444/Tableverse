@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- New game: Hidden Miners (3–8 players), Tableverse's own hidden-role tunnel game: build tunnels toward the gold, break and repair tools, scout and collapse, with secret Digger and Saboteur roles, round scoring and bots. Removed from the coming-soon list.
 - Chess (2 players, in review on `feat/chess-carrom`): rules in `games/chess/rules.js` with perft-verified move generation (standard start, Kiwipete and position 3 counts), a table game in `games/chess/engine.js`, a renderer in `public/games/chess.js`, and tests in `tests/chess-rules.test.js`, `tests/chess-engine.test.js` and `tests/ui/chess-ui.js`. Chess is not in the What's New list yet; add it when it ships.
 - Carrom (2–4 players, in review on `feat/carrom`): physics in `games/carrom/physics.js`, team rules in `games/carrom/engine.js`, an SVG board in `public/games/carrom.js` with drag-to-aim and a striker slider, and tests in `tests/carrom-physics.test.js`, `tests/carrom-engine.test.js` and `tests/ui/carrom-ui.js`. Design note: `docs/CARROM_DESIGN.md`. Not in What's New yet.
 - New game: Color Clash (2–8 players), Tableverse's own colour-and-number shedding game with Stop, Flip, Take 2 and Wild cards, round scoring and a choice of match length, bots, sounds and a phone layout. Off-limits titles stay out; see `docs/GAME_NAMES.md`. Removed from the coming-soon list.
