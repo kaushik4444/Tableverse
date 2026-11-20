@@ -433,20 +433,3 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 .emote-bar { flex-wrap: wrap; justify-content: center; max-width: min(92vw, 360px); }
 .emote-tag { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); white-space: nowrap; font: 600 12px/1.2 var(--sans); padding: 3px 8px; border-radius: 999px; background: rgba(10, 13, 43, .85); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); }
 
-/* Shared motion for every game: when a turn, a pick, a score or a selection changes, the colour, border, lift and opacity
-   glide instead of snapping. Boxes keep their size (the grids above use minmax tracks), so a changing label does not push
-   the rest of the table around. Reduced motion turns the glide off. */
-.wz .wz-status, .wz .wz-seat, .wz .wz-players > *, .wz .btn,
-.lg .lg-seat, .lg .lg-cell, .lg .lg-col,
-.prt .pr-chips li, .prt .pr-row, .prt .pr-strip, .pr-score li,
-.sl-players li, .pk-stand li, .ludo-player, .ludo-dice-panel,
-.sr .sr-hand > *, .cb-controls > *, .ch-log li, .tm-actions > * {
-  transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease, color .25s ease, opacity .25s ease, transform .25s ease;
-}
-@media (prefers-reduced-motion: reduce) {
-  .wz .wz-status, .wz .wz-seat, .wz .wz-players > *, .wz .btn,
-  .lg .lg-seat, .lg .lg-cell, .lg .lg-col,
-  .prt .pr-chips li, .prt .pr-row, .prt .pr-strip, .pr-score li,
-  .sl-players li, .pk-stand li, .ludo-player, .ludo-dice-panel,
-  .sr .sr-hand > *, .cb-controls > *, .ch-log li, .tm-actions > * { transition: none; }
-}
