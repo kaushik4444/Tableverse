@@ -102,4 +102,6 @@
   .sr .sr-seats .sr-laid { margin-top: 2px; }
   .sr .sr-seats .sr-laid .sr-group { padding: 2px 4px; }
   .sr .sr-stages { display: none; } /* every seat shows its own stage, so the strip is redundant here */
+  /* expanded laid groups scroll inside the seat region, so the hand always stays on the screen */
+  .sr .sr-seats { max-height: 200px; overflow-y: auto; }
 }

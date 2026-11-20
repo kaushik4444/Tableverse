@@ -239,7 +239,7 @@
     const text = eventText(v);
     // Stage 10 is not a table game: the piles sit in the middle and every seat follows in a list, you first, so it fits a phone
     const order = v.players.map((_, i) => i).sort((a, b) => (a === v.me ? -1 : b === v.me ? 1 : a - b));
-    const seats = `<div class="sr-seats">${order.map((i) => seatHTML(v, ctx, i)).join('')}</div>`;
+    const seats = `<div class="sr-seats" tabindex="0" role="region" aria-label="Every player's seat">${order.map((i) => seatHTML(v, ctx, i)).join('')}</div>`;
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
