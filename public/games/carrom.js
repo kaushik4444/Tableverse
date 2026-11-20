@@ -10,6 +10,7 @@
   const BASE_Y = 0.12;     // a side's baseline in the bottom frame
   const MAX_DRAG = 0.45;   // a drag of this length on the board is a full-power flick
   const ANGLE_MAX = 75;
+  const TAP_PX = 8;       // a pointer that moves less than this from where it went down is a tap, not a flick
   const ui = { ctx: null, v: null, root: null, seq: null, anim: null, known: new Map(), dragging: false, dragMoved: false, resignArmed: false,
     aim: { x: 50, angle: 0, power: 60 } };
 
@@ -165,7 +166,8 @@
     if (v.phase === 'gameOver' && snd) {
       const mine = colourOfMe(v);
       const sound = v.draw ? 'round' : v.winner === mine ? 'win' : mine === null ? 'round' : 'lose';
-      setTimeout(() => snd.play(sound), 900);
+      // the result sound belongs to this table: it is not played once the player has left it
+      setTimeout(() => { if (ui.animTable === tableKey && ui.root && ui.root.isConnected) snd.play(sound); }, 900);
     }
     play(ui.anim);
   }
@@ -203,10 +205,14 @@
     requestAnimationFrame((next) => { if (ui.anim === a) drawFrame(next, a); });
   }
 
+  /** Identifies the board a drag was started on: the table, the phase, the shot count and whose turn it is. */
+  const boardKeyOf = (v, ctx) => `${ctx && ctx.room ? ctx.room.code : ''}|${v.phase}|${v.shots}|${v.turn}`;
+
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.root = root; ui.v = v;
-    // a drag cannot survive the redraw: the pointer target it captured is replaced
-    ui.dragging = false; ui.dragMoved = false;
+    // a drag survives a redraw that leaves its board as it was: the redraw waits for the pointer to let go. Any other change cancels it.
+    if (ui.dragging && ui.dragKey === boardKeyOf(v, ctx)) { ui.deferred = { root, v, ctx }; return; }
+    ui.dragging = false; ui.dragMoved = false; ui.dragKey = null; ui.deferred = null;
     remember(v);
     react(v, ctx);
     const playing = v.phase === 'playing' && v.me >= 0;
@@ -283,10 +289,13 @@
   function onPointerDown(e) {
     const v = ui.v;
     if (!v || !v.myTurn || ui.anim || !e.target.closest('.cb-svg')) return;
+    if (e.button !== 0) return; // a middle or right button does not flick
     if (ui.dragging) return; // a second finger does not take over the drag
     ui.dragging = true;
     ui.pointerId = e.pointerId;
     ui.dragMoved = false;
+    ui.dragKey = boardKeyOf(v, ui.ctx);
+    ui.downAt = [e.clientX, e.clientY];
     const svg = e.target.closest('.cb-svg');
     if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
     const p = pointerDisplay(e);
@@ -295,7 +304,8 @@
 
   function onPointerMove(e) {
     if (!ui.dragging || e.pointerId !== ui.pointerId) return;
-    ui.dragMoved = true;
+    // a drag counts once the pointer is TAP_PX away from where it went down: a tap, or a pixel of jitter, only aims
+    if (!ui.dragMoved && Math.hypot(e.clientX - ui.downAt[0], e.clientY - ui.downAt[1]) > TAP_PX) ui.dragMoved = true;
     const p = pointerDisplay(e);
     if (p) aimFrom(p);
   }
@@ -305,16 +315,25 @@
     if (!ui.dragging || e.pointerId !== ui.pointerId) return;
     const moved = ui.dragMoved;
     ui.dragging = false;
-    if (!moved) return;
-    const p = pointerDisplay(e);
-    if (p) aimFrom(p);
-    fire();
+    if (moved) {
+      const p = pointerDisplay(e);
+      if (p) aimFrom(p);
+      fire();
+    }
+    flushDeferred();
+  }
+
+  /** Applies the redraw that waited for a drag. */
+  function flushDeferred() {
+    const d = ui.deferred;
+    if (d) { ui.deferred = null; render(d.root, d.v, d.ctx); }
   }
 
   /** A cancelled pointer, or one that lost its capture, ends its drag without a flick. Other pointers are ignored. */
   function onPointerCancel(e) {
     if (!ui.dragging || (e && e.pointerId !== ui.pointerId)) return;
     ui.dragging = false; ui.dragMoved = false;
+    flushDeferred();
   }
 
   /** Sends the current aim as a flick, if it is my turn, nothing is playing and the power is set. */

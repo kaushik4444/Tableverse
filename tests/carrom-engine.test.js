@@ -307,4 +307,13 @@ test('account deletion scrubs names only: a player named like a colour keeps the
   assert.equal(players[0].name, 'Someone');
 });
 
+test('a shot holds the next bot turn until it has been played out', () => {
+  const pacing = require('../games/pacing');
+  const g = two();
+  const a = E.botAction(g, g.turn, mulberry32(7));
+  assert.equal(a.type, 'flick');
+  assert.equal(act(g, 'p' + g.turn, a).ok, true);
+  assert.ok(pacing.remaining(g) > 0, 'a bot waits after a shot, so people can follow it');
+});
+
 console.log(`\n${passed} carrom engine tests passed`);
