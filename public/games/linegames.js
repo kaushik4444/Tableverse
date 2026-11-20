@@ -90,7 +90,8 @@
     // the result animates once, when it first appears; a redraw of the same result (a total or a rematch vote) shows it at rest
     const key = v.event ? v.event.seq : null;
     const settled = ui.resultSeen === key;
-    ui.resultSeen = key;
+    // only a result that is actually on screen counts as seen: the end stages hide it (endhold) and it must animate when it appears
+    if (!document.querySelector('.endhold')) ui.resultSeen = key;
     const title = v.draw ? 'A draw' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     return `<div class="overlay${settled ? ' settled' : ''}"><div class="sheet"><h2>${title}</h2>
       <p class="hint" style="text-align:left">${v.draw ? 'The board is full with no line.' : `${nameOf(v, v.winner) === 'You' ? 'You' : esc(v.players[v.winner].name)} made ${v.win} in a row.`}</p>
