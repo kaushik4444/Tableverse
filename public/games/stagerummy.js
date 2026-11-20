@@ -261,7 +261,14 @@
     if (seatsNow) seatsNow.scrollTop = seatScroll;
     // a wild card puts its end buttons on the runs: bring the first such run into view, so the choice is not hidden below the fold
     const endRun = seatsNow && seatsNow.querySelector(".sr-ends button");
-    if (endRun) endRun.closest(".sr-group").scrollIntoView({ block: "nearest" });
+    // scroll only the seat list, never the page: scrollIntoView would also move the outer containers and can hide the hand
+    const endGroup = endRun && endRun.closest(".sr-group");
+    if (endGroup && seatsNow) {
+      const g = endGroup.getBoundingClientRect();
+      const c = seatsNow.getBoundingClientRect();
+      if (g.top < c.top) seatsNow.scrollTop += g.top - c.top;
+      else if (g.bottom > c.bottom) seatsNow.scrollTop += g.bottom - c.bottom;
+    }
     root.onclick = onClick;
     const stagesSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
     if (stagesSheet) stagesSheet.onkeydown = (e) => {
