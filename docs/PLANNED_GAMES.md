@@ -5,7 +5,7 @@ Ideas only. Nothing here is committed to a release. Each needs a design note and
 
 | Game | Players | Name / trademark notes | Design questions |
 |---|---|---|---|
-| Carrom (in review on `feat/carrom`, 2 players; design in `docs/CARROM_DESIGN.md`) | 2 | Traditional game, generic name. Avoid commercial brand names for sets. | Four players in two teams and drag-to-aim are not built. |
+| Carrom (in review on `feat/carrom`, 2–4 players; design in `docs/CARROM_DESIGN.md`) | 2–4 | Traditional game, generic name. Avoid commercial brand names for sets. | Break rules, a per-shot timer and drag-to-aim on very small screens are not built. |
 | Chess | 2 | Generic. Avoid "FIDE", site/brand names. Own piece art. | Clocks, draw rules, resign/rejoin, optional rating. Existing engines can be used only if the licence fits (check). |
 | Ball Pong | 2–4 | "Beer Pong" is used as a brand-style name and is alcohol-themed: use a neutral name such as "Ball Pong" and a non-alcohol theme (cups, balls). | Throw physics, arc, authoritative server vs. seeded simulation, lag fairness. |
 | Pool | 2 | Generic. Do not use league or brand logos (e.g. "8-Ball Pool" as an app brand). | Physics fidelity, shot aiming on mobile, rules variant (8-ball first). |
