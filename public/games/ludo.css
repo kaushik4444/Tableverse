@@ -45,7 +45,6 @@
 /* a legal token is still easy to tap at half size: an invisible 18px margin makes the target about 44px */
 .ludo-token.legal::after { content: ''; position: absolute; inset: -18px; border-radius: 50%; }
 /* move buttons under the hexagon board: full-size touch targets for each legal token */
-.ludo-picks { display: flex; flex-wrap: wrap; gap: 8px; }
 /* white badge, dark seat-coloured text: the dark shades all pass 4.5:1 on white, unlike white text on yellow or green */
 .ludo-home-count { position: absolute; z-index: 4; width: 5.6%; aspect-ratio: 1; transform: translate(-50%, -50%); display: grid; place-items: center; border-radius: 50%; background: #fff; color: var(--d); border: 2px solid var(--c); font-size: clamp(9px, 2.2vw, 13px); font-weight: 700; pointer-events: none; }
 .ludo-pick { min-height: 44px; min-width: 44px; }

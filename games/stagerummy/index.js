@@ -1,5 +1,5 @@
 'use strict';
-/** Stage Rummy plugin: adapts the pure engine to the server's game interface. */
+/** Stage 10 plugin: adapts the pure engine to the server's game interface. */
 const engine = require('./engine');
 const { scrubDeep } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
@@ -10,7 +10,7 @@ const stageLine = (goal, i) => `${i + 1} ${engine.STAGE_NAMES[i]}: ${goal.map(gr
 
 module.exports = {
   id: 'stagerummy',
-  name: 'Stage Rummy',
+  name: 'Stage 10',
   icon: '🪜',
   accent: '#2f8f83',
   tagline: 'Lay down the goal of your stage, stage by stage. First to finish the last stage wins.',
@@ -45,6 +45,7 @@ module.exports = {
     'Going out: a round ends when a player has no cards left. Everyone else counts the cards still in their hand: 1 to 9 are 5 points, 10 to 12 are 10, skip cards are 15 and wild cards are 25.',
     'The stages: ' + engine.STAGES.slice(0, 10).map(stageLine).join('. ') + '.',
     'Winning: the game ends when a round finishes and someone has completed the last stage. The player who completed the most stages wins; if players completed the same number, the one with the fewest points wins.',
+    'Stage 10 is Tableverse\'s own game, made with our own cards, wording and artwork. It is not affiliated with, endorsed by or licensed by the publisher of any similar game.',
   ],
 
   create(players, options, rng) {

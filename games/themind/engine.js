@@ -1,6 +1,6 @@
 'use strict';
 /**
- * The Mind: pure rules engine (no timers, no sockets). Real-time cooperative game: there are no turns.
+ * Mind: pure rules engine (no timers, no sockets). Real-time cooperative game: there are no turns.
  * Every player holds some numbers from 1-100; together the team must play them all onto one pile in ascending
  * order without talking. A play always puts down the acting player's LOWEST card.
  */
@@ -46,7 +46,7 @@ function bonusFor(level, opts, maxLevel) {
 
 function createGame(players, options, rng) {
   const n = players.length;
-  if (n < 2 || n > 4) throw new Error('The Mind needs 2-4 players');
+  if (n < 2 || n > 4) throw new Error('Mind needs 2-4 players');
   const opts = normalizeOptions(options);
   const g = {
     game: 'themind',

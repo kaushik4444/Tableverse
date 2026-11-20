@@ -8,6 +8,27 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-20-twelve-games',
+      date: '2026-11-20',
+      title: 'Twelve games for everyone',
+      items: [
+        { ico: '🎲', title: 'Twelve games, open by default', text: 'Go Fish, Ludo, Take 5, Poker, Property Rivals, Snakes and Ladders, Stage 10, Mind, 29, Wizard, Tic-Tac-Toe and Four in a Row are open to every player unless the owner has limited one. A game that is closed to you is greyed out on the home page as unavailable.' },
+        { ico: '🖼️', title: 'Every game has its own logo', text: 'Each game has a mark of its own. It looks the same on the home page, in open tables, in your history and in the stats.' },
+        { ico: '🏠', title: 'Open tables above the games', text: 'Open tables are listed at the top of the home page, so you can join one straight away. On a phone they sit in two rows that scroll sideways. On a wide screen they sit beside the games.' },
+        { ico: '🃏', title: 'Take 5 has new card art', text: 'Each card shows its number in the corners, and its penalty points as stars, so you can read the risk at a glance. Up to eight players.' },
+        { ico: '🪜', title: 'Stage 10 shows every stage', text: 'Each player’s current stage is shown at the table, like the bids in Wizard. The cards are easier to tell apart, and a Phases sheet explains every stage.' },
+        { ico: '♠️', title: 'Poker hand rankings', text: 'Open the hand rankings sheet at the table to see which hands beat which.' },
+      ],
+    },
+    {
+      version: '2026-11-20-game-names',
+      date: '2026-11-20',
+      title: 'New game names',
+      items: [
+        { ico: '🏷️', title: 'Three games have new names', text: 'Penalty Rows is now Take 5, Stage Rummy is now Stage 10, and The Mind is now Mind. The games play exactly the same, and your matches and stats are all still there.' },
+      ],
+    },
+    {
       version: '2026-11-18-guest-play',
       date: '2026-11-18',
       title: 'Play as a guest',
@@ -87,7 +108,7 @@
       date: '',
       title: 'Shared feed and crowns',
       items: [
-        { ico: '💬', title: 'Floating messages', text: 'New public log lines (a bid, a raise, a capture, a mistake, a rent payment) float over the table for a few seconds in Wizard, 29, Poker, Ludo, The Mind and Property Rivals. Snakes and Ladders keeps its move banner; Go Fish has no log.' },
+        { ico: '💬', title: 'Floating messages', text: 'New public log lines (a bid, a raise, a capture, a mistake, a rent payment) float over the table for a few seconds in Wizard, 29, Poker, Ludo, Mind and Property Rivals. Snakes and Ladders keeps its move banner; Go Fish has no log.' },
         { ico: '👑', title: 'A crown for who is ahead', text: 'Every scoring game shows it: Wizard, Poker (three or more players), 29 (team score), Go Fish, Snakes and Ladders, Ludo and Property Rivals.' },
         { ico: '📱', title: 'Checks for phones', text: 'Phone-fit and layout checks now cover Property Rivals, Tic-Tac-Toe and Four in a Row.' },
       ],

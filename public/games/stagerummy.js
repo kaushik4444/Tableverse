@@ -1,4 +1,4 @@
-/* Stage Rummy table renderer. The table is the shared felt: each player sits around it with the groups they have laid
+/* Stage 10 table renderer. The table is the shared felt: each player sits around it with the groups they have laid
  * in front of them, the two piles are in the middle, and a short message floats over the table when something happens.
  * You: the goal of your stage, your hand, and the groups you build before laying down.
  * Select cards, then: put them into the goal's groups and lay down, tap a laid group to add a selected card, or discard one.
@@ -6,7 +6,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0 };
+  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0, phases: false };
   const FLOAT_MS = 2600;
 
   const COL = { R: { name: 'Red', sym: '●' }, B: { name: 'Blue', sym: '■' }, G: { name: 'Green', sym: '▲' }, Y: { name: 'Yellow', sym: '◆' } };
@@ -77,12 +77,21 @@
       : `<div class="sr-group" role="group" aria-label="${esc(label)}">${inner}</div>`;
   }
 
+  /** Whether a player has completed their stage. At game over the stage has already moved on, so the last round's record decides. */
+  function stageDone(v, i, p) { return v.phase === 'gameOver' ? !!(v.lastRound && v.lastRound.laid[i]) : !!p.laid; }
+
   /** One player's seat: name, stage, cards in hand, points, and the groups they have laid down. */
+  // the stage a player is shown on: at game over, the one the last round ended on (the same one the completed mark describes)
+  function shownStage(v, i) {
+    const st = v.phase === 'gameOver' && v.lastRound ? v.lastRound.stages[i] : v.players[i].stage;
+    return Math.min(st, v.stageCount);
+  }
   function seatHTML(v, ctx, i) {
     const p = v.players[i];
-    const stage = Math.min(p.stage, v.stageCount);
-    const sub = `Stage ${stage} · ${p.cards} cards · ${p.score} pts`;
-    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>` : (v.phase === 'gameOver' ? '' : '<div class="sr-laid sr-nolay">Not down yet</div>');
+    const stage = shownStage(v, i);
+    const sub = `Stage ${stage}/${v.stageCount}`; // short, so it fits a phone seat; the card count is under the seat
+    const count = `<div class="sr-nolay">${p.cards} cards · ${p.score} pts</div>`; // points stay on the seat: fewer is better
+    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay">Not down · ${p.cards} cards</div>`);
     return window.CardTable.pt.seatHTML({
       pid: p.id,
       name: p.name + (i === v.me ? ' (you)' : ''),
@@ -133,7 +142,15 @@
     return `<div class="sr-hand" role="group" aria-label="Your hand">${cards.map((c) => cardHTML(c, { tag: 'button', cls: ui.sel.has(c.id) ? 'sel' : '', attrs: `type="button" data-sr="sel" data-id="${c.id}" aria-pressed="${ui.sel.has(c.id)}" ${v.phase === 'gameOver' || !can ? 'disabled' : ''}` })).join('')}</div>${discard ? `<div class="sr-actions">${discard}</div>` : ''}`;
   }
 
+  /** One group in words, the same wording as the rules: "set of 3", "run of 5", "6 cards of one colour". */
+  const groupLabel = (r) => (r.kind === 'colour' ? `${r.size} cards of one colour` : `${r.kind} of ${r.size}`);
+  function phasesHTML(v) {
+    const now = v.me >= 0 ? v.players[v.me].stage - 1 : -1;
+    const rows = v.goals.map((goal, i) => `<li class="${i === now ? 'ph-current' : ''}"${i === now ? ' aria-current="step"' : ''}><span class="ph-n">${i + 1}</span><span class="ph-body"><b>${esc(v.stageNames[i])}</b><small>${goal.map(groupLabel).join(' and ')}</small></span></li>`).join('');
+    return `<div class="overlay" data-sr="closePhases"><div class="sheet" data-stop="1" role="dialog" aria-modal="true" aria-labelledby="sr-phases-title"><h2 id="sr-phases-title">Stages</h2><p class="hint" style="text-align:left">Lay down the groups of your current stage to move on. Your stage is highlighted.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-sr="closePhases">Close</button></div></div></div>`;
+  }
   function overlayHTML(v, ctx) {
+    if (ui.phases) return phasesHTML(v);
     if (v.phase !== 'gameOver') return '';
     const rows = v.players.map((p, i) => ({ p, i })).sort((a, b) => (b.p.stage - a.p.stage) || (a.p.score - b.p.score))
       .map(({ p, i }) => `<li class="${v.winners.includes(i) ? 'win' : ''}"><span>${v.winners.includes(i) ? '🏆 ' : ''}<b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b></span><span>stage ${Math.min(p.stage - 1, v.stageCount)} · ${p.score} pts</span></li>`).join('');
@@ -170,6 +187,8 @@
     ui.ctx = ctx; ui.latest = v;
     react(v); sync(v);
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null; // keep keyboard focus on the same card across redraws
+    const oldSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
+    const sheetHadFocus = !!oldSheet && oldSheet.contains(document.activeElement);
     const me = v.me >= 0 ? v.players[v.me] : null;
     const goalIdx = me ? Math.min(me.stage, v.stageCount) - 1 : -1;
     const goalLine = me
@@ -187,9 +206,13 @@
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
-        <div class="wz-round"><b>Stage Rummy</b><span class="label"> · round ${v.round}</span></div>
-        ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
+        <div class="wz-round"><b>Stage 10</b><span class="label"> · round ${v.round}</span></div>
+        ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Stages</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
+      <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
+        const st = shownStage(v, i);
+        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
+      }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
       <div class="sr-table">${table}</div>
       ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
@@ -199,12 +222,21 @@
       ${overlayHTML(v, ctx)}
     </div>`;
     root.onclick = onClick;
+    const stagesSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
+    if (stagesSheet) stagesSheet.onkeydown = (e) => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault(); // the Stages sheet has one control, Close, so Tab stays on it
+      stagesSheet.querySelector('button[data-sr="closePhases"]')?.focus({ preventScroll: true });
+    };
     if (focused) { const el = root.querySelector(`.sr-hand [data-id="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+    // Restore sheet focus only if it owned focus and is visible; endFlow handles its reveal.
+    if (sheetHadFocus && !root.closest('.endhold')) root.querySelector('[aria-labelledby="sr-phases-title"] button[data-sr="closePhases"]')?.focus({ preventScroll: true });
     // once the float has faded, remove only that element: a full redraw would drop keyboard focus on the controls
     if (ui.floatText && Date.now() - ui.floatAt < FLOAT_MS) setTimeout(() => { if (ui.latest === v && root.isConnected) { const f = root.querySelector('.sr-float'); if (f) f.remove(); } }, FLOAT_MS - (Date.now() - ui.floatAt) + 50);
   }
 
   function onClick(e) {
+    if (e.target.closest('[data-stop]') && !e.target.closest('button')) return;
     const el = e.target.closest('[data-sr]');
     const v = ui.latest; const ctx = ui.ctx;
     if (!el || !v || !ctx) return;
@@ -224,6 +256,23 @@
       case 'hit': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); const end = el.dataset.end === 'low' || el.dataset.end === 'high' ? el.dataset.end : undefined; ctx.act({ type: 'hit', card, owner: Number(el.dataset.owner), group: Number(el.dataset.group), ...(end ? { end } : {}) }); } break;
       case 'discard': if (play && ui.sel.size === 1) { const card = [...ui.sel][0]; ui.sel = new Set(); ctx.act({ type: 'discard', card }); } break;
       case 'rules': ctx.showRules(); break;
+      case 'phases':
+        ui.phases = true;
+        ctx.rerender();
+        document.querySelector('.sr .sheet button[data-sr="closePhases"]')?.focus({ preventScroll: true });
+        break;
+      case 'closePhases': {
+        ui.phases = false;
+        ctx.rerender();
+        // Restore after the app's document click handler has closed the toolbar menu.
+        setTimeout(() => {
+          // when the toolbar is folded, Phases sits in its hidden menu: focus the menu button rather than opening it
+          const trigger = document.querySelector('button[data-sr="phases"]');
+          const target = trigger && !trigger.closest('.tb-pop[hidden]') ? trigger : document.querySelector('.tb-more-btn');
+          target?.focus({ preventScroll: true });
+        }, 0);
+        break;
+      }
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
     }

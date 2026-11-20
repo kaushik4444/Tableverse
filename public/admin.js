@@ -108,7 +108,8 @@
     const rows = nums.map((v, i) => `<tr><td>${esc(labels[i] || '')}</td><td>${v === null ? 'not kept' : v}</td></tr>`).reverse().join('');
     return `<figure class="ad-chart"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${grid}<polyline points="${pts}" class="ad-line" fill="none"/>${dots}<text x="${pad}" y="${h - 6}" class="ad-axis">${first}</text><text x="${w - pad}" y="${h - 6}" class="ad-axis" text-anchor="end">${last}</text></svg><details><summary>${esc(label)}: data table</summary><table class="ad-t"><thead><tr><th>Day</th><th>${esc(label)}</th></tr></thead><tbody>${rows}</tbody></table></details></figure>`;
   };
-  const RANGES = [7, 30, 90];
+  const RANGES = [1, 7, 30, 90]; // 1 = the last 24 hours
+  const rangeLabel = (d, calendar = false) => (Number(d) === 1 ? (calendar ? 'Today (UTC)' : '24 hours') : `${d} days`);
 
   async function overview(days = 30) {
     const gen = state.gen;
@@ -118,8 +119,8 @@
     const t = (m) => o.totals[m] || 0;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
     const q = o.queues || {};
-    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
-    main.innerHTML = `<h2>Overview <small class="ad-muted">last ${o.days} days</small></h2>
+    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${rangeLabel(d, true)}</button>`).join('');
+    main.innerHTML = `<h2>Overview <small class="ad-muted">${Number(o.days) === 1 ? rangeLabel(o.days, true) : `last ${rangeLabel(o.days)}`}</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:12px">${rangeButtons}</div>
       <h3>Right now <small class="ad-muted">updates every 15 seconds</small></h3>
       <div class="ad-grid" id="liveNow" aria-live="off"><div class="ad-card"><b>…</b><small>loading</small></div></div>
@@ -187,23 +188,24 @@
     const g = o.games || [];
     const sum = (k) => g.reduce((a, r) => a + r[k], 0);
     const matches = sum('matches'); const humans = sum('humans'); const left = sum('leftEarly');
-    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${d} days</button>`).join('');
+    const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${rangeLabel(d)}</button>`).join('');
     const zoneButtons = ZONES.map(([z, n]) => `<button class="ad-btn ${z === o.zone ? 'primary' : ''}" data-zone="${z}" aria-pressed="${z === o.zone}">${n}</button>`).join('');
     const gameRows = g.map((r) => `<tr><td data-l="Game">${esc(r.gameId)}</td><td data-l="Finished">${r.matches}</td><td data-l="Avg length">${mins(r.avgMinutes)}</td><td data-l="Median length">${mins(r.medianMinutes)}</td><td data-l="Avg seats">${r.avgSeats}</td><td data-l="Left early">${pctText(r.leftEarly, r.humans)}</td><td data-l="With a leaver">${pctText(r.withLeaver, r.matches)}</td><td data-l="Drawn">${pctText(r.draws, r.matches)}</td><td data-l="Finished of started">${pctText(r.finished, r.started)}</td></tr>`).join('');
     const pt = o.playtime; const buckets = ['under 10 min', '10–30 min', '30–60 min', '1–3 h', '3 h +'];
     const top = (o.top || []).map((r) => `<tr><td data-l="Player">${esc(r.displayName || r.username)} <span class="ad-muted">@${esc(r.username)}</span></td><td data-l="Games">${r.games}</td><td data-l="Wins">${r.wins}</td><td data-l="Played">${mins(r.minutes)}</td><td data-l="Usual hour">${r.peakHour == null ? '—' : hh(r.peakHour)}</td></tr>`).join('');
     const c = o.returning.cohort;
-    main.innerHTML = `<h2>Insights <small class="ad-muted">last ${o.days} days, ${esc(o.zone)}</small></h2>
+    main.innerHTML = `<h2>Insights <small class="ad-muted">last ${rangeLabel(o.days)}, ${esc(o.zone)}</small></h2>
       <div class="ad-row" role="group" aria-label="Date range" style="margin-bottom:8px">${rangeButtons}</div>
       <div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:12px">${zoneButtons}</div>
       <div class="ad-grid">${tile(matches, 'games finished')}${tile(g.filter((r) => r.matches).length, 'different games played')}${tile(pt.players, 'signed-in players')}${tile(mins(pt.avgMinutes), 'avg play time per player')}${tile(pctText(left, humans), 'players who left early')}${tile(pctText(c.d1, c.size), 'came back next day')}${tile(pctText(c.d7, c.size), 'came back within a week')}${tile(pctText(c.d7Exact, c.size), 'back on day 7 exactly')}${tile(pctText(c.d30Exact, c.size30), 'back on day 30 exactly')}</div>
       <h3>When people play</h3>${heatmap(o.heat || [], o.zone)}
       <h3>When people open the site</h3>${hourColumns({ [o.zone]: (o.visits && o.visits.byHour) || Array(24).fill(0) }, o.zone, 'connections')}
-      <p class="ad-muted">Connections per hour of the day, from counters only (no account or device). Uses today's offset for ${esc(o.zone)}. Counting started when this feature shipped, so earlier days are empty.</p>
+      <p class="ad-muted">Connections per hour of the day, from counters only (no account or device). Uses today's offset for ${esc(o.zone)}. Counting started when this feature shipped, so earlier days are empty.${Number(o.days) === 1 ? ' For the last 24 hours these charts cover today (UTC) only.' : ''}</p>
       <h3>How long a visit lasts</h3>${bars(((o.visits && o.visits.length) || []), 'No visits counted yet.')}
       <p class="ad-muted">A visit is one connection, so a reconnect starts a new visit. Connections under 3 seconds are not counted, and a visit is counted when it ends, under the hour it opened in.</p>
       <h3>How each game goes</h3>${g.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Avg length</th><th>Median length</th><th>Avg seats</th><th>Left early</th><th>With a leaver</th><th>Drawn</th><th>Finished of started</th></tr></thead><tbody>${gameRows}</tbody></table>` : '<p class="ad-muted">No games yet.</p>'}
-      <h3>New and returning players</h3>${stackBars(o.returning.newPerDay, o.returning.returningPerDay, o.labels, 'New', 'Returning')}
+      <p class="ad-muted">Finished of started uses ${esc(o.counterScope || (Number(o.days) === 1 ? 'Today (UTC)' : `Last ${o.days} UTC calendar days`))} counters.</p>
+      <h3>New and returning players</h3>${Number(o.days) === 1 ? '<p class="ad-muted">The new and returning chart is per UTC day, so it covers today only. The tiles above count the last 24 hours, except the return tiles, which use earlier cohorts.</p>' : ''}${stackBars(o.returning.newPerDay, o.returning.returningPerDay, o.labels, 'New', 'Returning')}
       <p class="ad-muted">Next-day, one-week and day-7 return use players whose first game was between ${o.days + 7} and 7 days ago (${c.size} players), so each has had a full week to come back. Day-30 return uses players whose first game was between ${o.days + 30} and 30 days ago (${c.size30} players).</p>
       <h3>Time spent playing</h3>${bars(buckets.map((name, i) => ({ name, total: pt.buckets[i] })), 'No play yet.')}
       <p class="ad-muted">Median ${mins(pt.medianMinutes)}, total ${mins(pt.totalMinutes)}. Players per time bucket; games a player left early are not counted as time.</p>
@@ -231,7 +233,7 @@
     const t = f.totals;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
     el.innerHTML = `<div class="ad-grid">${tile(t.signups, 'signed up')}${tile(pctText(t.played, t.signups), 'played a first game')}${tile(pctText(t.returned, t.signups), 'came back on a later day')}</div>
-      <p class="ad-muted">Accounts that signed up in the last ${f.days} days, by UTC day. "Came back" means a game on a later day than their first, so the newest signups have had less time to return.
+      <p class="ad-muted">${Number(f.days) === 1 ? 'Accounts that signed up today (UTC)' : `Accounts that signed up in the last ${f.days} days`}, by UTC day. "Came back" means a game on a later day than their first, so the newest signups have had less time to return.
       <a class="ad-btn" href="/api/admin/funnel.csv?days=${f.days}" download>Download CSV</a></p>`;
   }
 
@@ -478,18 +480,59 @@
   const gameFlagPending = new Map();
   let gameFlagError = null; // { visit, text }: a save error that belongs to one visit of the Games tab, shown on each redraw of it
   const gameFlagQueue = new Map();
+  let orderBusy = false; // one home-order move is saved at a time
   async function gamesTab(days = 30) {
     state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
     const gen = state.gen;
     const o = await api(`/api/admin/games?days=${days}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Finished">${g.finished}</td><td data-l="Last 7 days">${g.finished7d}</td><td data-l="Signed-in players">${g.signedInPlayers}</td><td data-l="Player-games">${g.playerGames}</td><td data-l="Avg minutes each">${g.avgMinutes}</td><td data-l="Penalised leaves">${g.penalisedLeaves}</td><td data-l="Penalised leave rate">${pctText(g.penalisedLeaves, g.playerGames)}</td><td data-l="Left, no penalty">${g.leftWithoutPenalty}</td></tr>`).join('');
-    main.innerHTML = `<h2>Games <small class="ad-muted">last ${o.days} days</small></h2>
-      <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${[7, 30, 90].map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${d} days</button>`).join('')}</div>
+    main.innerHTML = `<h2>Games <small class="ad-muted">last ${rangeLabel(o.days)}</small></h2>
+      <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${RANGES.map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${rangeLabel(d)}</button>`).join('')}</div>
       ${o.games.length ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Last 7 days</th><th>Signed-in players</th><th>Player-games</th><th>Avg minutes each</th><th>Penalised leaves</th><th>Penalised leave rate</th><th>Left, no penalty</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="ad-muted">No finished games in this range.</p>'}
       <p class="ad-muted">Counts and averages only; no player is named. A penalised leave is leaving while others were still playing. Guests count as player-games but not as signed-in players.</p>`;
-    main.querySelectorAll('[data-gd]').forEach((b) => { b.onclick = () => { state.gen += 1; const mine = state.gen; gamesTab(Number(b.dataset.gd)).catch((e) => { if (mine === state.gen) fail(e); }); }; });
+    main.querySelectorAll('[data-gd]').forEach((b) => { b.onclick = () => { state.gen += 1; renderView('games', () => gamesTab(Number(b.dataset.gd))); }; });
+    main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Tables hosted</h3>
+      <p class="ad-muted">Every table that has finished, newest first, across all time. Players are not named.</p>
+      <div id="tablesList"></div>
+      <p><button class="ad-btn" id="tablesMore" hidden>Load older tables</button></p>`);
+    loadTables(gen, null).catch(() => {}); // not awaited: owner game switches must not wait for the table history
+    if (gen !== state.gen) return;
     if (state.me.isOwner) await gameSwitches();
+  }
+
+  // one page of tables hosted; the next page is asked for with the cursor the server gave (the list keeps growing down the page)
+  async function loadTables(gen, before) {
+    const list = main.querySelector('#tablesList');
+    const more = main.querySelector('#tablesMore');
+    if (!list || !more) return;
+    more.disabled = true;
+    list.querySelector('.ad-msg.err')?.remove();
+    let o;
+    try {
+      o = await api(`/api/admin/matches${before ? `?before=${encodeURIComponent(before)}` : ''}`);
+    } catch (e) {
+      if (gen !== state.gen) return;
+      more.disabled = false;
+      more.hidden = false;
+      more.textContent = 'Retry loading tables';
+      more.onclick = () => loadTables(gen, before);
+      list.insertAdjacentHTML('beforeend', '<p class="ad-msg err" role="alert">The list could not be loaded. Try again.</p>');
+      return;
+    }
+    if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    const rows = (o.tables || []).map((t) => {
+      const people = t.humans === null || t.humans === undefined ? `${t.seats} seats` : `${t.humans} ${t.humans === 1 ? 'person' : 'people'}${t.bots ? ` + ${t.bots} bot${t.bots === 1 ? '' : 's'}` : ''}`;
+      return `<tr><td data-l="Game">${esc(t.gameId)}</td><td data-l="Room">${esc(t.roomCode)}</td><td data-l="Started">${esc(when(t.startedAt))}</td><td data-l="Ended">${esc(when(t.finishedAt))}</td><td data-l="Players">${esc(people)}</td><td data-l="Completed">${t.completed ? 'yes' : 'closed early'}</td></tr>`;
+    }).join('');
+    const body = list.querySelector('tbody');
+    if (body) body.insertAdjacentHTML('beforeend', rows);
+    else if (rows) list.innerHTML = `<div class="ad-scroll"><table class="ad-t stack" data-paged><thead><tr><th>Game</th><th>Room</th><th>Started</th><th>Ended</th><th>Players</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    else list.innerHTML = '<p class="ad-muted">No tables have finished yet.</p>';
+    more.textContent = 'Load older tables';
+    more.hidden = !(o && o.nextCursor);
+    more.disabled = false;
+    more.onclick = () => loadTables(state.gen, o.nextCursor);
   }
 
   // ---------------------------------------------------------------- game switches (owner only; the server checks the role too)
@@ -501,14 +544,35 @@
     const label = (m) => labels[m] || m;
     const opts = (cur) => o.modes.map((m) => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(label(m))}</option>`).join('');
     const pill = (g) => (g.access === 'on' ? '<span class="ad-pill">on</span>' : `<span class="ad-pill warn">${esc(label(g.access))}</span>`);
-    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.icon || '')} ${esc(g.name)}</td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${gameFlagPending.has(g.id) ? ' disabled aria-disabled="true"' : ''}>${opts(gameFlagPending.has(g.id) ? gameFlagPending.get(g.id) : g.access)}</select></td></tr>`).join('');
+    const last = o.games.length - 1;
+    const rows = o.games.map((g, i) => `<tr><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || orderBusy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || orderBusy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${gameFlagPending.has(g.id) ? ' disabled aria-disabled="true"' : ''}>${opts(gameFlagPending.has(g.id) ? gameFlagPending.get(g.id) : g.access)}</select></td></tr>`).join('');
     main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Game switches</h3>
-      <p class="ad-muted">Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players play and refuses guests. "Disabled for all" keeps the game for the owner only. A game that is switched off stays listed, and new tables, starts and rematches are refused for the roles it excludes. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
+      <p class="ad-muted">Home order: move a game up or down to change where it appears in the home menu. Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players play and refuses guests. "Disabled for all" keeps the game for the owner only. A game that is switched off stays listed, and new tables, starts and rematches are refused for the roles it excludes. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
       <p id="gMsg" class="ad-msg" role="status"></p>
-      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
     // a redraw shows only its newest request's result: an older redraw that fails must not replace the current view
-    const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab(state.gamesDays || 30).catch((e) => { if (mine === state.gen) fail(e); }); };
+    const redrawGames = () => { state.gen += 1; return renderView('games', () => gamesTab(state.gamesDays || 30)); };
     if (gameFlagError && gameFlagError.visit === generation) say('gMsg', gameFlagError.text, 'err');
+  main.querySelectorAll('[data-gmove]').forEach((btn) => { btn.onclick = () => {
+      const ids = o.games.map((g) => g.id);
+      const at = ids.indexOf(btn.dataset.gid); const to = btn.dataset.gmove === 'up' ? at - 1 : at + 1;
+      if (at < 0 || to < 0 || to >= ids.length || orderBusy) return;
+      [ids[at], ids[to]] = [ids[to], ids[at]];
+      const visit = generation; orderBusy = true; gameFlagError = null;
+      // lock the move buttons now: orderBusy clears before the redraw replaces them, so a stale button must not fire
+      main.querySelectorAll('[data-gmove]').forEach((b) => { b.disabled = true; });
+      api('/api/admin/game-order', { order: ids }, false, true).then(() => {
+        orderBusy = false;
+        if (state.tab === 'games') redrawGames();
+      }, (e) => {
+        orderBusy = false;
+        if (state.tab !== 'games') return;
+        if (visit !== generation || e.name === 'AbortError') { redrawGames(); return; }
+        gameFlagError = { visit, text: e.message };
+        redrawGames();
+      });
+      redrawGames(); // the buttons lock while the move is saved
+    }; });
   main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
       const id = sel.dataset.gaccess; const value = sel.value; const visit = generation; gameFlagError = null;
       gameFlagPending.set(id, value); sel.disabled = true; // the newest choice stays shown and locked until it is saved
@@ -854,6 +918,20 @@
   }
 
   const views = { guests: () => guestsTab(), overview: () => overview(), insights: () => insights(), games: () => gamesTab(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
+  const SLOW_MS = 12000; // how long a view may load before the panel offers a retry
+  let loadingTimer;
+  function renderView(tab, render) {
+    clearTimeout(loadingTimer);
+    const gen = state.gen;
+    // Each replacement owns its timer: settling an older request cannot cancel the current watchdog.
+    const slow = setTimeout(() => {
+      if (gen !== state.gen || !main.querySelector('[data-loading]')) return;
+      main.innerHTML = '<p class="ad-msg err" role="status">This is taking longer than usual. <button type="button" class="ad-btn" data-retry>Try again</button></p>';
+      main.querySelector('[data-retry]').onclick = () => show(tab);
+    }, SLOW_MS);
+    loadingTimer = slow;
+    return render().catch((e) => { if (gen === state.gen) fail(e); }).finally(() => clearTimeout(slow));
+  }
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
@@ -861,9 +939,9 @@
     view = typeof AbortController === 'function' ? new AbortController() : null;
     tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     state.gen++;
-    const gen = state.gen;
-    main.innerHTML = '<p class="ad-muted">Loading…</p>';
-    views[tab]().catch((e) => { if (gen === state.gen) fail(e); });
+    main.innerHTML = '<p class="ad-muted" data-loading>Loading…</p>';
+    // Offer a retry for a hanging view, until it draws or the admin moves on.
+    renderView(tab, views[tab]);
   }
   tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) show(b.dataset.tab); });
 

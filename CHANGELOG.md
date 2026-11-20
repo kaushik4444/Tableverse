@@ -1,13 +1,23 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Release: all twelve games are open to everyone (Go Fish, Ludo, Take 5, Poker, Property Rivals, Snakes and Ladders, Stage 10, Mind, 29, Wizard, Tic-Tac-Toe, Four in a Row). The owner confirms each game is set to "Enabled" for everyone in the admin console's Games tab before the release; no game is locked by a code default.
+- Game logos: each game has its own SVG mark (`public/game-marks.js`), used on the home page, open tables, the rejoin banner, history, stats, game pages and the admin Games tab. The emoji stays as a fallback for an unknown game id.
+- Home page: open tables sit above the games. Phones show two rows that scroll sideways; desktop (1000 px and wider) puts them in a sticky column beside the games. Join and Spectate wrap below the text on narrow cards (PR #256).
+- Take 5 card art: corner numbers and penalty points shown as stars (PR #255). Stage 10 card faces, every player's stage at a glance, and a phases sheet (PR #253). Poker hand-rankings sheet (PR #251).
+- Admin: the Games tab lists the home order with move up and down buttons (staff; `POST /api/admin/game-order`, migration `034_game_order.sql`, audit `game.order`) (PR #259).
+- Admin: the 24-hour range on Overview, Insights and Games, and a "Tables hosted" list in the Games tab with paging (PR #250, staff only, no player named).
+- Admin: a tab that is still loading after 12 seconds offers "Try again" instead of a blank panel (PR #261).
+- Admin console look matches the game (panels, gold buttons, fields, tabs), and player names read from the left on phones (PR #260).
+- Cleanup: unused code, two superseded documents and unused CSS rules removed; four unit tests and two browser tests that no script ran are now wired in (PR #262).
+- Game names: Penalty Rows is now Take 5, Stage Rummy is now Stage 10 and The Mind is now Mind (Wizard keeps its name). Display names only: game ids, saved matches and stats are unchanged, and the rules that were already there are the same. Take 5 also adds a "Starting score 66" option: everyone starts with 66 points and penalty points are taken away. When someone reaches 0 the round is played out first, then the game ends. The three games say in their rules that they are not affiliated with any publisher. See `docs/GAME_NAMES.md`.
 - Guest switches in the admin console (Guests tab): private tables, rejoin after leaving on purpose, profiles and stats, blocking and reports are locked for guests by default. Stored in the database (migration 032), applied at once, audited. Chat stays open to guests; friend requests stay account-only.
 - Locked guest controls show a lock and open the account reminder instead of sending a request. The server still refuses each one.
 - Owner-only redeploy of the Render service from the admin console's Logs tab, after typing REDEPLOY. Five-minute cooldown; audited (`render.redeploy`).
 - Privacy notice rewritten from the owner's decisions (not published): legal basis per purpose, provider locations and transfers, retention checked against the code, staff and production access, the manual data-request process, and a corrected usage-statistics statement. Open items stay as markers in the text. Owner decisions, code check and open items: `docs/PRIVACY_NOTICE_OWNER_DECISIONS.md`. Consistency tests: `tests/privacy-notice.test.js`.
 - Game switches: the owner can turn any game off and on from the admin console (Games tab), without a redeploy. A switched-off game stays listed but locked; new tables, starts and rematches are refused. Changes are audited.
 - Public contact address: the Impressum, privacy notice and terms show `PUBLIC_CONTACT_EMAIL` when it is set (Render), otherwise `IMPRESSUM_EMAIL`. No address is written into the code or the legal texts. Sign-in, Google and outgoing mail are unchanged.
-- Fixes from the release review: Penalty Rows uses its own style scope and keeps its phase when a deleted player's name is scrubbed; one awaited seat keeps its turn deadline; the account and reports wording in the privacy and retention docs now matches the code.
+- Fixes from the release review: Take 5 uses its own style scope and keeps its phase when a deleted player's name is scrubbed; one awaited seat keeps its turn deadline; the account and reports wording in the privacy and retention docs now matches the code.
 - Profile: the minutes to the next level and a one-time level-up notice (the notice is remembered on this device, for each account).
 - Home footer: a link to @playtableverse on Instagram, opened in a new tab.
 - What's new: a new top entry for the level notice and the Instagram link (`public/whats-new-data.js`).

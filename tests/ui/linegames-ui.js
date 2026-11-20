@@ -71,6 +71,23 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await d.ctx.close();
   });
 
+  await test('hidden result renders do not consume its first animation; visible redraws settle', async () => {
+    const m = msgs('tictactoe', (v) => {
+      v.phase = 'gameOver'; v.draw = true; v.myTurn = false; v.legal = [];
+      v.event = { seq: 50, type: 'draw' };
+    });
+    Object.assign(m[1].room, { status: 'finished', outcome: { sinceMs: 0, winners: [] } });
+    const { page, ctx } = await open(m);
+    assert.equal(await page.isVisible('.lg .overlay'), false);
+    assert.equal(await page.locator('.lg .overlay.settled').count(), 0);
+    await page.waitForSelector('.end-actions', { timeout: 10000 });
+    assert.equal(await page.locator('.lg .overlay.settled').count(), 0, 'first visible result animates');
+    m[1].room.votes = ['p1'];
+    await page.evaluate((x) => window.__push(x), m[1]);
+    assert.equal(await page.locator('.lg .overlay.settled').count(), 1, 'later redraw stays settled');
+    await ctx.close();
+  });
+
   await test('spectators cannot move; every game fits a phone without sideways scroll', async () => {
     for (const id of ['tictactoe', 'fourinarow']) {
       const { page, ctx } = await open(msgs(id, (v) => { v.me = -1; v.myTurn = false; v.legal = []; }), { width: 360, height: 740 });
@@ -78,6 +95,98 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${id}: no horizontal scroll`);
       const b = await page.locator('.lg-board').boundingBox();
       assert.ok(b.x >= 0 && b.x + b.width <= 361, `${id}: board inside the screen`);
+      await ctx.close();
+    }
+  });
+
+  // A move arrives after the page is open: the same message with the mark on the board and a new event.
+  const moveMsg = (m, cell, by, type = 'move') => {
+    const msg = JSON.parse(JSON.stringify(m[1]));
+    msg.view.board[cell] = by; msg.view.last = cell; msg.view.event = { seq: 50, type, by, cell };
+    msg.view.legal = msg.view.legal.filter((k) => k !== cell);
+    return msg;
+  };
+  const sizes = (page) => page.evaluate(() => [...document.querySelectorAll('.lg-cell')].map((c) => { const r = c.getBoundingClientRect(); return [Math.round(r.width * 10) / 10, Math.round(r.height * 10) / 10]; }));
+
+  await test('tic-tac-toe: squares keep exactly the same size as marks are placed, on every screen size', async () => {
+    for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 844 }, { width: 820, height: 1180 }, { width: 1280, height: 800 }]) {
+      const m = msgs('tictactoe', () => {});
+      const { page, ctx } = await open(m, viewport);
+      const empty = await sizes(page);
+      assert.equal(new Set(empty.map((s) => s.join('x'))).size, 1, `${viewport.width}: nine equal squares`);
+      for (const [cell, by] of [[4, 0], [0, 1], [8, 0], [2, 1], [6, 0], [3, 1]]) {
+        await page.evaluate((x) => window.__push(x), moveMsg(m, cell, by));
+        m[1].view.board[cell] = by; // the next message builds on the board so far
+        await page.waitForTimeout(60);
+        assert.deepEqual(await sizes(page), empty, `${viewport.width}: squares unchanged after a mark in ${cell}`);
+      }
+      assert.ok(await page.locator('.lg-glyph').count() >= 6, 'marks are drawn as shapes inside their squares');
+      await ctx.close();
+    }
+  });
+
+  await test('a new move animates once and plays its own sound; a redraw of the same position does not restart it', async () => {
+    for (const [id, sound, selector] of [['tictactoe', 'place', '.lg-cell.enter .lg-glyph path, .lg-cell.enter .lg-glyph circle'], ['fourinarow', 'fall', '.lg-cell.enter .lg-piece']]) {
+      const m = msgs(id, () => {});
+      const { page, ctx } = await open(m);
+      await page.evaluate(() => { window.__sounds = []; window.CardTable.sound.play = (n) => window.__sounds.push(n); });
+      const cell = id === 'fourinarow' ? 38 : 4;
+      await page.evaluate((x) => window.__push(x), moveMsg(m, cell, 0));
+      await page.waitForSelector(selector, { timeout: 2000 });
+      assert.ok((await page.evaluate((q) => getComputedStyle(document.querySelector(q)).animationName, selector)).match(/lg-(drop|draw)/), `${id}: the new mark is animated`);
+      assert.ok((await page.evaluate(() => window.__sounds)).includes(sound), `${id}: plays the ${sound} sound`);
+      const first = (await page.evaluate(() => window.__sounds)).length;
+      await page.evaluate((x) => window.__push(x), moveMsg(m, cell, 0)); // the same event again: nothing new
+      assert.equal((await page.evaluate(() => window.__sounds)).length, first, `${id}: the same event does not play again`);
+      await ctx.close();
+    }
+  });
+
+  await test('a disc really falls from above its square (and lands); a redraw in the middle continues the animation instead of restarting it', async () => {
+    const m = msgs('fourinarow', () => {});
+    const { page, ctx } = await open(m);
+    await page.evaluate(() => { window.__sounds = []; window.CardTable.sound.play = (n) => window.__sounds.push(n); });
+    await page.evaluate((x) => window.__push(x), moveMsg(m, 38, 0)); // the bottom row: the longest fall
+    await page.waitForSelector('.lg-cell.enter .lg-piece');
+    const offset = await page.evaluate(() => { const p = document.querySelector('.lg-cell.enter .lg-piece').getBoundingClientRect(); const c = document.querySelector('.lg-cell.enter').getBoundingClientRect(); return c.top - p.top; });
+    assert.ok(offset > 100, `the disc starts well above its square (${Math.round(offset)}px)`);
+    await page.evaluate(() => { document.querySelector('.lg-cell.enter .lg-piece').dataset.original = '1'; });
+    await page.waitForTimeout(350);
+    // a redraw with a different rendered state (another player's earlier disc), same move: app.js skips a message identical to the last
+    const redraw = moveMsg(m, 38, 0); redraw.view.board[0] = 1;
+    await page.evaluate((x) => window.__push(x), redraw);
+    const after = await page.evaluate(() => {
+      const piece = document.querySelector('.lg-cell.enter .lg-piece');
+      const a = piece && piece.getAnimations().find((x) => x.animationName === 'lg-drop');
+      return { replaced: !!piece && piece.dataset.original !== '1', progress: a ? a.currentTime - a.effect.getTiming().delay : null };
+    });
+    assert.ok(after.replaced, 'the redraw replaced the disc element');
+    assert.ok(after.progress > 250, `the fall continues from about ${Math.round(after.progress)} ms, it does not restart at 0`);
+    await page.waitForTimeout(900);
+    const names = await page.evaluate(() => window.__sounds);
+    assert.deepEqual(names.slice(0, 2), ['fall', 'land'], 'the fall sound now, the landing sound when it arrives');
+    await ctx.close();
+  });
+
+  await test('every game renderer plays sounds (the trick games through the shared hook in app.js)', async () => {
+    const fs = require('fs'); const path = require('path');
+    const dir = path.join(__dirname, '../../public/games');
+    for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+      const src = fs.readFileSync(path.join(dir, f), 'utf8');
+      assert.match(src, /sound|snd\./, `${f} uses sound`);
+    }
+    for (const name of ['card', 'deal', 'collect', 'turn', 'win', 'lose', 'place', 'fall', 'land']) {
+      assert.match(fs.readFileSync(path.join(__dirname, '../../public/sound.js'), 'utf8'), new RegExp(`\\b${name}:`), `the ${name} sound exists`);
+    }
+  });
+
+  await test('four in a row: the board keeps the shape of its grid (no empty space below the discs)', async () => {
+    for (const [cols, rows] of [[7, 6]]) {
+      const { page, ctx } = await open(msgs('fourinarow', () => {}), { width: 390, height: 700 });
+      const b = await page.locator('.lg-board').boundingBox();
+      assert.ok(Math.abs(b.height / b.width - rows / cols) < 0.08, `board is ${cols}x${rows}: ${Math.round(b.width)}x${Math.round(b.height)}`);
+      const cells = await page.locator('.lg-gravity .lg-cell').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+      assert.equal(new Set(cells).size, 1, 'every disc space has the same height');
       await ctx.close();
     }
   });

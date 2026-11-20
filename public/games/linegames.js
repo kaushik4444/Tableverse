@@ -3,10 +3,21 @@
 (() => {
   'use strict';
   const { esc, pt } = window.CardTable;
-  const ui = { ctx: null, v: null, seq: null };
+  // One set of timings drives the animation (they reach the CSS as variables on .lg) and the sound schedule.
+  const T = { dropBase: 280, dropStep: 70, land: 240, draw: 380, win: 260 };
+  const ENTER_MARGIN_MS = 60;
+  // enter: the cell that has just been played ({ cell, seq, at }). It animates once; a redraw while it runs continues the
+  // animation from where it is (see enterStyle) and a redraw after it has finished shows the mark at rest.
+  const ui = { ctx: null, v: null, seq: null, enter: null };
+  const dropMs = (v, cell) => T.dropBase + (Math.floor(cell / v.cols) + 1) * T.dropStep;
   const MARKS = {
-    tictactoe: [{ cls: 'x', sym: 'X', name: 'X' }, { cls: 'o', sym: 'O', name: 'O' }],
-    fourinarow: [{ cls: 'red', sym: '', name: 'Red' }, { cls: 'yellow', sym: '', name: 'Yellow' }],
+    tictactoe: [{ cls: 'x', name: 'X' }, { cls: 'o', name: 'O' }],
+    fourinarow: [{ cls: 'red', name: 'Red' }, { cls: 'yellow', name: 'Yellow' }],
+  };
+  // X and O are drawn as strokes that fill their square exactly, so a mark never changes the size of a square.
+  const GLYPH = {
+    x: '<svg class="lg-glyph" viewBox="0 0 100 100" focusable="false"><path d="M24 24 76 76M76 24 24 76" pathLength="100"/></svg>',
+    o: '<svg class="lg-glyph" viewBox="0 0 100 100" focusable="false"><circle cx="50" cy="50" r="28" pathLength="100"/></svg>',
   };
   const marks = (v) => MARKS[v.game];
   const nameOf = (v, i) => (i === v.me ? 'You' : esc(v.players[i].name));
@@ -21,9 +32,20 @@
     return v.gravity ? 'Your move: pick a column' : 'Your move';
   }
 
-  function pieceHTML(v, i) {
+  function pieceHTML(v, i, style) {
     const m = marks(v)[i];
-    return `<span class="lg-piece ${m.cls}" aria-hidden="true">${esc(m.sym)}</span>`;
+    return `<span class="lg-piece ${m.cls}"${style ? ` style="${style}"` : ''} aria-hidden="true">${GLYPH[m.cls] || ''}</span>`;
+  }
+  /** Extra classes for the cell that was just played, and for a winning cell (its position in the line sets the delay). */
+  function cellClass(v, k, owner) {
+    const lit = v.line.indexOf(k);
+    return ['lg-cell', owner === null ? 'free' : 'full', lit >= 0 ? 'win' : '', v.last === k ? 'last' : '', ui.enter && ui.enter.cell === k ? 'enter' : ''].filter(Boolean).join(' ');
+  }
+  const winStyle = (v, k) => { const i = v.line.indexOf(k); return i >= 0 ? `--i:${i}` : ''; };
+  /** Style for the piece of the cell being entered: how far it falls, and how long it has already been running. */
+  function enterStyle(v, k) {
+    if (!ui.enter || ui.enter.cell !== k) return '';
+    return `--drop:${Math.floor(k / v.cols) + 1};--el:${Math.max(0, Date.now() - ui.enter.at)}ms`;
   }
 
   function seatsHTML(v, ctx) {
@@ -32,13 +54,13 @@
   }
 
   function cellsHTML(v) {
-    const lit = new Set(v.line), legal = new Set(v.legal);
+    const legal = new Set(v.legal);
     const out = [];
     for (let k = 0; k < v.board.length; k++) {
       const r = Math.floor(k / v.cols), c = k % v.cols;
       const owner = v.board[k];
-      const piece = owner !== null ? pieceHTML(v, owner) : '';
-      const cls = ['lg-cell', owner === null ? 'free' : 'full', lit.has(k) ? 'win' : '', v.last === k ? 'last' : ''].filter(Boolean).join(' ');
+      const piece = owner !== null ? pieceHTML(v, owner, [winStyle(v, k), enterStyle(v, k)].filter(Boolean).join(';')) : '';
+      const cls = cellClass(v, k, owner);
       const label = `Row ${r + 1}, column ${c + 1}, ${owner === null ? 'empty' : marks(v)[owner].name}`;
       if (v.gravity) out.push(`<div class="${cls}" data-col="${c}" role="presentation">${piece}</div>`);
       else out.push(`<button type="button" class="${cls}" data-cell="${k}" aria-label="${label}" ${owner === null && legal.has(k) ? '' : 'disabled'}>${piece}</button>`);
@@ -52,8 +74,9 @@
         const open = v.legal.some((k) => k % v.cols === c);
         const cells = Array.from({ length: v.rows }, (_, r) => {
           const k = r * v.cols + c, owner = v.board[k];
-          const cls = ['lg-cell', owner === null ? 'free' : 'full', v.line.includes(k) ? 'win' : '', v.last === k ? 'last' : ''].filter(Boolean).join(' ');
-          return `<div class="${cls}">${owner !== null ? pieceHTML(v, owner) : ''}</div>`;
+          const cls = cellClass(v, k, owner);
+          const style = [winStyle(v, k), enterStyle(v, k)].filter(Boolean).join(';');
+          return `<div class="${cls}">${owner !== null ? pieceHTML(v, owner, style) : ''}</div>`;
         }).join('');
         return `<button type="button" class="lg-col" data-col="${c}" aria-label="Drop in column ${c + 1}" ${open ? '' : 'disabled'}>${cells}</button>`;
       }).join('');
@@ -63,9 +86,14 @@
   }
 
   function overlayHTML(v) {
-    if (v.phase !== 'gameOver') return '';
+    if (v.phase !== 'gameOver') { ui.resultSeen = null; return ''; } // a new game shows its own result once
+    // the result animates once, when it first appears; a redraw of the same result (a total or a rematch vote) shows it at rest
+    const key = v.event ? v.event.seq : null;
+    const settled = ui.resultSeen === key;
+    // Only a result that is on screen counts as seen: the end stages hide it until it can animate.
+    if (ui.ctx.resultVisible !== false) ui.resultSeen = key;
     const title = v.draw ? 'A draw' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
-    return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
+    return `<div class="overlay${settled ? ' settled' : ''}"><div class="sheet"><h2>${title}</h2>
       <p class="hint" style="text-align:left">${v.draw ? 'The board is full with no line.' : `${nameOf(v, v.winner) === 'You' ? 'You' : esc(v.players[v.winner].name)} made ${v.win} in a row.`}</p>
       <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-lg="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-lg="leave">Leave table</button></div></div></div>`;
   }
@@ -75,14 +103,24 @@
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
+    // the new mark animates once: a redraw of the same position does not start it again (the sound is by seq as well)
+    const entering = Number.isInteger(e.cell) ? { cell: e.cell, seq: e.seq, at: Date.now() } : null;
+    ui.enter = entering;
+    // the entrance lasts as long as this move's animation (a disc: the fall and the landing, so a deep column takes longer)
+    const land = entering && v.gravity ? dropMs(v, e.cell) : T.draw;
+    const entranceMs = v.gravity ? land + T.land : T.draw;
+    setTimeout(() => { if (ui.enter === entering) ui.enter = null; }, entranceMs + ENTER_MARGIN_MS);
     if (!snd) return;
-    if (e.type === 'win') snd.play(v.winner === v.me ? 'win' : 'lose');
-    else snd.play('card');
+    // sounds follow the animation: a tap for a square; for a column the fall now and the landing when the disc arrives
+    if (v.gravity) { snd.play('fall'); setTimeout(() => snd.play('land'), land); } else snd.play('place');
+    // the result sound comes after the mark has landed
+    const over = e.type === 'win' ? (v.winner === v.me ? 'win' : 'lose') : e.type === 'draw' ? 'round' : null;
+    if (over) setTimeout(() => snd.play(over), land + (v.gravity ? T.land : T.win));
   }
 
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.v = v; react(v);
-    root.innerHTML = `<div class="wz lg" data-game="${esc(v.game)}">
+    root.innerHTML = `<div class="wz lg" data-game="${esc(v.game)}" style="--drop-base:${T.dropBase}ms;--drop-step:${T.dropStep}ms;--land:${T.land}ms;--draw:${T.draw}ms">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.win} in a row</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-lg="rules">Rules</button>', 'lg')}</div>
       ${seatsHTML(v, ctx)}

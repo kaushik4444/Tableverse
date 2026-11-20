@@ -1,5 +1,5 @@
 'use strict';
-// Stage Rummy in a real browser: drawing, assigning cards to the stage's groups, laying down, discarding, hitting, game over, narrow phone.
+// Stage 10 in a real browser: drawing, assigning cards to the stage's groups, laying down, discarding, hitting, game over, narrow phone.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk } = require('./harness');
 const { chromium } = loadPlaywright();
@@ -40,6 +40,18 @@ function scene(phase, handIds, tweak) {
   await test('a skip on the discard pile cannot be taken', async () => {
     const { page, ctx } = await open(scene('draw', [4, 5, 6], (v) => { v.discardTop = card(104); }));
     assert.equal(await page.isDisabled('[data-sr="draw"][data-from="discard"]'), true);
+    await ctx.close();
+  });
+
+  await test('the Stages sheet keeps Tab inside it', async () => {
+    const { page, ctx } = await open(scene('draw', [4, 5, 6]), { width: 1280, height: 860 });
+    if (!(await page.isVisible('[data-sr="phases"]'))) await page.click('.tb-more-btn'); // the toolbar folds into a menu on smaller screens
+    await page.click('[data-sr="phases"]');
+    await page.waitForSelector('[aria-labelledby="sr-phases-title"]');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.sr), 'closePhases', 'Tab stays on Close');
+    await page.keyboard.press('Enter'); // Close already has focus; the mouse target at this size is outside the sheet, so keys are the reliable path
+    await page.waitForFunction(() => { const a = document.activeElement; return a && (a.dataset.sr === 'phases' || a.classList.contains('tb-more-btn')); }, null, { timeout: 3000 }); // focus goes back to the Phases button, or to the menu that holds it
     await ctx.close();
   });
 
