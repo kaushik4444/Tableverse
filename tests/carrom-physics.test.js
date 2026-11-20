@@ -16,6 +16,10 @@ test('flick: straight ahead, full power, and forward for the far player', () => 
   assert.equal(P.flickVelocity(0, 1, -1).vy, -P.MAX_SPEED);
 });
 
+test('flick: the far player\u2019s right is the board\u2019s left', () => {
+  assert.ok(P.flickVelocity(Math.PI / 6, 1, -1).vx < 0);
+});
+
 test('flick: power is clamped to 0..1 and angle sets the sideways part', () => {
   assert.equal(P.flickVelocity(0, 5).vy, P.MAX_SPEED);
   assert.equal(P.flickVelocity(0, -1).vy, 0);

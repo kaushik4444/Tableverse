@@ -21,10 +21,13 @@ const SETTLE_SPEED = 0.01;  // every disc slower than this has stopped
 const SAMPLE_EVERY = 8;     // keyframe every 8 steps (30 per second)
 const ANGLE_LIMIT = 75 * Math.PI / 180;
 
-/** The velocity of a flick: angle from straight ahead (positive to the right), power 0..1. `forward` is +1 for the bottom player. */
+/**
+ * The velocity of a flick: angle from straight ahead (positive to the player's right), power 0..1. `forward` is +1 for the
+ * player at the bottom of the board and -1 for the player at the top, whose right is the board's left.
+ */
 function flickVelocity(angle, power, forward = 1) {
   const speed = Math.max(0, Math.min(1, power)) * MAX_SPEED;
-  return { vx: speed * Math.sin(angle), vy: forward * speed * Math.cos(angle) };
+  return { vx: forward * speed * Math.sin(angle), vy: forward * speed * Math.cos(angle) };
 }
 
 const round = (n) => Math.round(n * 1000) / 1000;
