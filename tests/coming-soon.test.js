@@ -28,9 +28,9 @@ for (const protectedBrand of ['Monopoly', 'Saboteur', '6 nimmt!', 'UNO', 'CATAN'
 assert.match(html, /Development order/);
 assert.equal((html.match(/>In development</g) || []).length, 1, 'exactly one game is in development');
 assert.match(html, /Hidden Miners[\s\S]*?>In development</);
-assert.equal((html.match(/>Planned</g) || []).length, 6, 'the others are planned');
+assert.equal((html.match(/>Planned</g) || []).length, 5, 'the others are planned');
 assert.match(html, /Also on the list/);
-assert.match(html, /7 planned/);
+assert.match(html, /6 planned/);
 assert.match(html, /original artwork and presentation/);
 // What's new: the release history is public/whats-new-data.js; the home page shows the newest release's first three items.
 const releaseSource = fs.readFileSync(require.resolve('../public/whats-new-data.js'), 'utf8');
@@ -88,4 +88,4 @@ for (const shipped of ['Private tables and invitations', 'Host tools', 'Player c
 }
 assert.match(appSource, /<h3 class="stat-h"[^\n]*r\.version/, 'each Version history heading shows its version, since older releases have no date');
 assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
-console.log('Coming Soon and latest-release-note tests passed (7 games, requested order, alternate working titles, 3 current highlights).');
+console.log('Coming Soon and latest-release-note tests passed (6 games, requested order, alternate working titles, 3 current highlights).');
