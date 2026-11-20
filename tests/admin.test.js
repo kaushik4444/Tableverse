@@ -142,6 +142,99 @@ const ADMIN_POSTS = [
     const other = await s.login({ role: 'user' });
     const admin2 = await s.login({ role: 'admin' });
 
+    console.log('home game order');
+    const gameFlags = require('../lib/gameFlags');
+    const gameIds = require('../games').list().map((g) => g.id);
+    // Supply just the new persistence boundary; authentication and CSRF use the real dispatcher.
+    async function orderTest(name, fn) {
+      await test(name, async () => {
+        const oldList = s.store.listGameFlags; const oldSave = s.store.setGameOrder;
+        const writes = [];
+        gameFlags.reset(); gameFlags.apply([]);
+        s.store.listGameFlags = async () => [];
+        s.store.setGameOrder = async (input) => { writes.push(input); };
+        try { await fn(writes); } finally {
+          s.store.listGameFlags = oldList; s.store.setGameOrder = oldSave; gameFlags.reset();
+        }
+      });
+    }
+    await orderTest('only staff may read or save game order, and CSRF is required', async (writes) => {
+      assert.equal((await guest.get('/api/admin/game-flags')).status, 401);
+      assert.equal((await user.b.get('/api/admin/game-flags')).status, 403);
+      assert.equal((await guest.post('/api/admin/game-order', { order: gameIds })).status, 401);
+      assert.equal((await user.b.post('/api/admin/game-order', { order: gameIds, role: 'owner' })).status, 403);
+      assert.equal((await owner.b.post('/api/admin/game-order', { order: gameIds }, { csrf: false })).status, 403);
+      assert.deepEqual(writes, []);
+    });
+    await orderTest('invalid orders are refused before saving or changing the cache', async (writes) => {
+      const invalid = [undefined, null, 'wizard', {}, [], gameIds.slice(1), [...gameIds, gameIds[0]],
+        [gameIds[0], ...gameIds.slice(0, -1)], ['ghost', ...gameIds.slice(1)],
+        [null, ...gameIds.slice(1)], [1, ...gameIds.slice(1)], [{ id: gameIds[0] }, ...gameIds.slice(1)]];
+      for (const order of invalid) {
+        const r = await admin.b.post('/api/admin/game-order', { order });
+        assert.equal(r.status, 400, JSON.stringify(order));
+        assert.match(r.json.error, /every game exactly once/);
+      }
+      assert.deepEqual(writes, []);
+      assert.deepEqual(gameFlags.withFlags(require('../games').list()).map((g) => g.id), gameIds);
+    });
+    await orderTest('owner and admin save the full order using the session actor', async (writes) => {
+      const order = gameIds.slice().reverse();
+      s.store.listGameFlags = async () => order.map((game_id, sort_order) => ({ game_id, sort_order, access: 'on' }));
+      for (const staff of [owner, admin]) {
+        const r = await staff.b.post('/api/admin/game-order', { order, actorId: user.id });
+        assert.equal(r.status, 200);
+        assert.deepEqual(r.json, { ok: true, order });
+        assert.deepEqual(writes.at(-1), { actorId: staff.id, order });
+        assert.deepEqual(gameFlags.withFlags(require('../games').list()).map((g) => g.id), order);
+      }
+      assert.equal(writes.length, 2);
+    });
+    await orderTest('missing persistence capabilities return 503 without saving', async (writes) => {
+      for (const key of ['listGameFlags', 'setGameOrder']) {
+        const saved = s.store[key]; s.store[key] = undefined;
+        try { assert.equal((await admin.b.post('/api/admin/game-order', { order: gameIds })).status, 503); }
+        finally { s.store[key] = saved; }
+      }
+      assert.deepEqual(writes, []);
+    });
+    await orderTest('a failed save leaves the cached order intact and never re-reads', async () => {
+      let reads = 0;
+      s.store.setGameOrder = async () => { throw new Error('save failed'); };
+      s.store.listGameFlags = async () => { reads++; return []; };
+      assert.equal((await admin.b.post('/api/admin/game-order', { order: gameIds.slice().reverse() })).status, 500);
+      assert.equal(reads, 0);
+      assert.deepEqual(gameFlags.withFlags(require('../games').list()).map((g) => g.id), gameIds);
+    });
+    await orderTest('a failed re-read still returns success and retains the saved order and access', async (writes) => {
+      gameFlags.apply([{ game_id: gameIds[0], access: 'owner' }]);
+      s.store.listGameFlags = async () => { throw new Error('read failed'); };
+      const order = gameIds.slice().reverse();
+      const error = console.error; const logs = []; console.error = (message) => logs.push(message);
+      let r;
+      try { r = await admin.b.post('/api/admin/game-order', { order }); } finally { console.error = error; }
+      assert.equal(r.status, 200);
+      assert.deepEqual(r.json, { ok: true, order });
+      assert.equal(writes.length, 1);
+      assert.deepEqual(gameFlags.withFlags(require('../games').list()).map((g) => g.id), order);
+      assert.equal(gameFlags.modeOf(gameIds[0]), 'owner');
+      assert.ok(logs.some((message) => message.includes('order re-read failed')));
+    });
+    await orderTest('the admin list uses stored positions and access rather than the process cache', async () => {
+      gameFlags.setOrder(gameIds.slice().reverse());
+      s.store.listGameFlags = async () => [
+        { game_id: gameIds[1], sort_order: 0, access: 'admins', enabled: true, updated_at: '2026-11-08T10:00:00Z' },
+        { game_id: gameIds[0], sort_order: '1', enabled: false, updated_at: '2026-11-08T10:00:00Z' },
+        { game_id: 'ghost', sort_order: -1, access: 'on' },
+      ];
+      const r = await admin.b.get('/api/admin/game-flags');
+      assert.equal(r.status, 200);
+      assert.deepEqual(r.json.games.map((g) => g.id), [gameIds[1], gameIds[0], ...gameIds.slice(2)]);
+      assert.equal(r.json.games[0].access, 'admins');
+      assert.equal(r.json.games[1].access, 'owner');
+      assert.equal(r.json.games[2].access, 'on');
+    });
+
     console.log('anonymous and signed-in non-admin callers');
     await test('every admin GET answers 401 without a session', async () => {
       for (const p of ADMIN_GETS) assert.equal((await guest.get(p)).status, 401, p);
