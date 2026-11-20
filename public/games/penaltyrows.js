@@ -6,9 +6,11 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table', match: 0, lastSeen: null };
-  /** Feed IDs carry the match, so a rematch at the same table cannot reuse an ID the feed still holds. */
-  const fid = (s) => `m${ui.match}:${s}`;
+  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table', tables: new Map(), cur: null };
+  /** Restart tracking for one table: its sequence is compared only with its own last value, and its match count rises when it restarts. */
+  const tableState = (key) => { let st = ui.tables.get(key); if (!st) { st = { lastSeen: null, match: 0 }; ui.tables.set(key, st); } return st; };
+  /** Feed IDs carry the table's match, so a rematch at the same table cannot reuse an ID the feed still holds. */
+  const fid = (s) => `m${ui.cur ? ui.cur.match : 0}:${s}`;
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
 
   /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
@@ -258,8 +260,9 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
-    if (ui.lastSeen !== null && v.seq < ui.lastSeen) ui.match += 1; // the sequence restarted: a new match at this table
-    ui.lastSeen = v.seq;
+    ui.cur = tableState(tableOf());
+    if (ui.cur.lastSeen !== null && v.seq < ui.cur.lastSeen) ui.cur.match += 1; // this table's sequence restarted: a new match there
+    ui.cur.lastSeen = v.seq;
     if (ui.table !== tableOf()) { ui.table = tableOf(); ui.anim = null; ui.seq = null; } // a different table: start afresh, with no replay
     react(v);
     feedPicksAndRounds(v);
