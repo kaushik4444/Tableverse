@@ -173,13 +173,14 @@ function applyAction(g, playerId, action) {
   if (!action || typeof action !== 'object') return { ok: false, error: 'Invalid action' };
   if (g.phase !== 'playing') return { ok: false, error: 'The game is over' };
   const seat = seatOf(g, playerId);
-  if (seat < 0 || seat !== g.turn) return { ok: false, error: 'Not your turn' };
+  if (seat < 0) return { ok: false, error: 'Not a player at this table' };
   if (action.type === 'resign') {
-    const winner = colourOf((seat + 1) % g.players.length);
-    finish(g, { winner, seat: null, reason: 'resignation' });
+    // Any seated player may resign at any time; the other colour wins (a three-player table has two seats of one colour).
+    finish(g, { winner: colourOf(seat) === 'w' ? 'b' : 'w', seat: null, reason: 'resignation' });
     g.log.push(`${g.players[seat].name} resigned`);
     return { ok: true };
   }
+  if (seat !== g.turn) return { ok: false, error: 'Not your turn' };
   const p = plan(g, seat, action);
   if (p.error) return { ok: false, error: p.error };
 
