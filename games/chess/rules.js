@@ -210,7 +210,7 @@ function legalMoves(s) {
 function keyOf(s) {
   let ep = '-';
   if (s.ep !== null) {
-    const canTake = pseudoMoves(s).some((m) => m.ep);
+    const canTake = legalMoves(s).some((m) => m.ep);
     if (canTake) ep = sqName(s.ep);
   }
   return `${s.board.map((p) => p || '.').join('')} ${s.turn} ${s.castle || '-'} ${ep}`;

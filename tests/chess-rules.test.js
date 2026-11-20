@@ -136,4 +136,17 @@ test('notation: pawn push, knight move, capture, check, castling and mate suffix
   assert.equal(R.san(castle, find(castle, 'e1', 'g1')), 'O-O');
 });
 
+test('repetition key: an en-passant square is kept only when a legal en-passant capture exists', () => {
+  // e5xd6 would expose the White king to the e8 rook, so it is illegal and d6 must not change the key
+  const pinned = R.fromFEN('k3r1n1/8/8/3pP3/8/8/8/4K1N1 w - d6 0 1');
+  const noEp = R.fromFEN('k3r1n1/8/8/3pP3/8/8/8/4K1N1 w - - 0 1');
+  assert.equal(R.legalMoves(pinned).filter((m) => m.ep).length, 0);
+  assert.equal(R.keyOf(pinned), R.keyOf(noEp));
+  // with the king off the rook's file the capture is legal, so the square is part of the key
+  const free = R.fromFEN('k7/8/8/3pP3/8/8/8/K7 w - d6 0 1');
+  const freeNoEp = R.fromFEN('k7/8/8/3pP3/8/8/8/K7 w - - 0 1');
+  assert.equal(R.legalMoves(free).filter((m) => m.ep).length, 1);
+  assert.notEqual(R.keyOf(free), R.keyOf(freeNoEp));
+});
+
 console.log(`\n${passed} chess rules tests passed`);
