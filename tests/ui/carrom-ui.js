@@ -52,13 +52,12 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     const { page, ctx } = await open(msgsFor(fresh()));
     const s = await box(page, '.cb-striker');
     const sx = s.x + s.width / 2, sy = s.y + s.height / 2;
-    // the flick goes from the pointer towards the striker: pull down and to the left, so the shot goes up and to the right
-    await page.mouse.move(sx, sy);
+    // press well away from the striker (so it is not grabbed), then pull back: the flick goes from the pointer towards the striker
+    await page.mouse.move(sx - 20, sy + 40);
     await page.mouse.down();
-    await page.mouse.move(sx - 40, sy + 90, { steps: 6 });
+    await page.mouse.move(sx - 60, sy + 95, { steps: 6 });
     await page.mouse.up();
-    const angle = Number((await page.textContent('[data-out="angle"]')).replace('°', ''));
-    const power = Number((await page.textContent('[data-out="power"]')).replace('%', ''));
+    const [, angle, power] = (await page.textContent('.cb-tip')).match(/Aim (-?\d+)° · power (\d+)%/).map(Number);
     assert.ok(angle > 0, `the flick goes to the player’s right (angle ${angle})`);
     assert.ok(power > 0, `the drag sets a power (${power}%)`);
     assert.equal(await page.isDisabled('[data-cb="flick"]'), false);
@@ -80,20 +79,40 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.mouse.down();
     await page.mouse.move(sx, sy - 80, { steps: 4 });
     await page.mouse.up();
-    assert.equal(await page.textContent('[data-out="power"]'), '0%');
+    assert.match(await page.textContent('.cb-tip'), /Drag your striker along the baseline/, 'no aim is set');
     assert.equal(await page.isDisabled('[data-cb="flick"]'), true);
+    assert.equal((await sent(page)).length, 0, 'nothing was sent');
     await ctx.close();
   });
 
-  await test('the striker slider moves the striker along the baseline', async () => {
+  await test('dragging the striker along the baseline places it without a shot, and a new spot clears the aim', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
-    const before = await page.getAttribute('.cb-striker', 'cx');
-    await page.evaluate(() => { const el = document.querySelector('[data-aim="x"]'); el.value = '70'; el.dispatchEvent(new Event('input', { bubbles: true })); });
-    const after = await page.getAttribute('.cb-striker', 'cx');
-    assert.notEqual(before, after);
-    assert.equal(await page.textContent('[data-out="x"]'), '70%');
+    const before = Number(await page.getAttribute('.cb-striker', 'cx'));
+    const s = await box(page, '.cb-striker');
+    const sx = s.x + s.width / 2, sy = s.y + s.height / 2;
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    await page.mouse.move(sx + 60, sy, { steps: 6 });
+    await page.mouse.up();
+    const after = Number(await page.getAttribute('.cb-striker', 'cx'));
+    assert.ok(after > before, `the striker moved right (${before} → ${after})`);
+    assert.equal((await sent(page)).length, 0, 'placing the striker is not a shot');
+    assert.equal(await page.isDisabled('[data-cb="flick"]'), true, 'the aim was cleared by the move');
+    await ctx.close();
+  });
+
+  await test('keyboard: the striker moves with the arrows, Up sets the power, and Flick sends that spot and power', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    await page.focus('[data-id="striker"]');
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight'); // moving the striker first (it clears any aim)
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    assert.match(await page.textContent('.cb-tip'), /power 10%/);
     await page.click('[data-cb="flick"]');
-    assert.equal((await sent(page)).at(-1).action.x, 0.7);
+    const a = (await sent(page)).at(-1).action;
+    assert.equal(a.type, 'flick');
+    assert.equal(a.x, 0.53, 'the striker moved three steps from the centre spot');
+    assert.equal(a.power, 0.1);
     await ctx.close();
   });
 
@@ -188,9 +207,9 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     const { page, ctx } = await open(msgsFor(fresh()));
     const s = await box(page, '.cb-striker');
     const sx = s.x + s.width / 2, sy = s.y + s.height / 2;
-    await page.mouse.move(sx, sy);
+    await page.mouse.move(sx - 20, sy + 40);
     await page.mouse.down();
-    await page.mouse.move(sx - 40, sy + 90, { steps: 6 });
+    await page.mouse.move(sx - 60, sy + 95, { steps: 6 });
     await page.mouse.up();
     const sentActs = await sent(page);
     assert.equal(sentActs.length, 1, 'releasing the drag sends the flick');
@@ -206,13 +225,13 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     const svg = await box(page, '.cb-svg');
     const tapY = Math.min(sy + 30, svg.y + svg.height - 6); // inside the board, behind the striker
     assert.ok(tapY > svg.y && tapY < svg.y + svg.height, 'the tap point is on the board');
-    const angleBefore = await page.textContent('[data-out="angle"]');
+    const tipBefore = await page.textContent('.cb-tip');
     await page.mouse.click(sx - 40, tapY);
-    assert.notEqual(await page.textContent('[data-out="angle"]'), angleBefore, 'the tap sets the aim');
+    assert.notEqual(await page.textContent('.cb-tip'), tipBefore, 'the tap sets the aim');
     assert.equal((await sent(page)).length, 0, 'a tap does not fire');
-    await page.mouse.move(sx, sy);
+    await page.mouse.move(sx - 20, sy + 40);
     await page.mouse.down();
-    await page.mouse.move(sx - 40, sy + 90, { steps: 6 });
+    await page.mouse.move(sx - 60, sy + 95, { steps: 6 });
     await page.evaluate(() => document.querySelector('.cb-svg').dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 })));
     await page.mouse.up();
     assert.equal((await sent(page)).length, 0, 'a cancelled drag does not fire');
@@ -230,21 +249,15 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
-  await test('the Flick button sends the aim set with the sliders, without a drag', async () => {
+  await test('the striker has no slider controls, and Flick sends a flick only once power is set', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
-    await page.evaluate(() => {
-      for (const [k, v] of [['x', 50], ['angle', 10], ['power', 60]]) {
-        const el = document.querySelector('[data-aim="' + k + '"]');
-        el.value = String(v);
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    });
-    assert.equal((await sent(page)).length, 0, 'nothing is sent until Flick is pressed');
+    assert.equal(await page.locator('[data-aim]').count(), 0, 'no range sliders');
+    assert.equal(await page.isDisabled('[data-cb="flick"]'), true);
+    await page.focus('[data-id="striker"]');
+    await page.keyboard.press('ArrowUp');
     await page.click('[data-cb="flick"]');
-    const acts = await sent(page);
-    assert.equal(acts.length, 1, 'the button sends one flick');
-    assert.equal(acts[0].action.type, 'flick');
-    assert.equal(typeof acts[0].action.seq, 'number', 'the flick names the board it was aimed at');
+    assert.equal((await sent(page)).length, 1, 'one flick with power set');
+    assert.equal(typeof (await sent(page)).at(-1).action.seq, 'number', 'the flick names the board it was aimed at');
     await ctx.close();
   });
 
