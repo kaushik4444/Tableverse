@@ -57,7 +57,9 @@
       if (anim.i < anim.steps.length - 1) {
         anim.i += 1;
         announce(anim, anim.i);
+        const from = captureStrip();
         ui.ctx.rerender();
+        glide(from);
         scheduleStep(anim, paceK);
         return;
       }
@@ -104,6 +106,31 @@
     const sp = spotFor(v, e, mark.phase);
     if (sp) window.GameFeed.spotlight(sp);
   }
+  /** Where each card on the strip sits now, by its number, so the same card can glide from there into its row. */
+  function captureStrip() {
+    const at = new Map();
+    if (reducedMotion()) return at;
+    for (const el of document.querySelectorAll('.prt .pr-strip [data-cn]')) {
+      const r = el.getBoundingClientRect();
+      at.set(el.dataset.cn, { x: r.left, y: r.top });
+    }
+    return at;
+  }
+  /** Each card that was on the strip glides from its old place to its new one in the rows (Web Animations, short, once). */
+  function glide(from) {
+    if (!from || !from.size || reducedMotion() || !document.querySelector('.prt')) return;
+    for (const el of document.querySelectorAll('.prt .pr-rows [data-cn]')) {
+      const old = from.get(el.dataset.cn);
+      if (!old) continue;
+      const r = el.getBoundingClientRect();
+      const dx = old.x - r.left; const dy = old.y - r.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      el.classList.remove('new'); // the glide is the landing; the drop animation would fight it
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    }
+  }
+  const reducedMotion = () => Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
   /** The replay step on screen, or null: which event it shows and which part of it. */
   const currentMark = (v) => (ui.anim && ui.anim.seq === v.seq ? ui.anim.marks[ui.anim.i] : null);
 
@@ -113,7 +140,7 @@
 
   function cardHTML(c, { cls = '', attrs = '', tag = 'div' } = {}) {
     const dots = `<span class="pr-pips" aria-hidden="true">${starsOf(c.p)}</span>`;
-    return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}><em class="pr-tl" aria-hidden="true">${c.n}</em><b>${c.n}</b>${dots}</${tag}>`;
+    return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" data-cn="${c.n}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}><em class="pr-tl" aria-hidden="true">${c.n}</em><b>${c.n}</b>${dots}</${tag}>`;
   }
   const backHTML = (cls = '') => `<div class="pr-card back tiny ${cls}" aria-hidden="true"></div>`;
   /** A card on the strip, with the player's name under it. */

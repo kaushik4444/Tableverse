@@ -202,6 +202,28 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a played card glides from the strip into its row as it lands', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [[c(12)], [c(3)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(12), c(18)], [c(3), c(7)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'place', by: 1, n: 18, p: pen(18), row: 0, took: 0 }, { kind: 'place', by: 2, n: 7, p: pen(7), row: 1, took: 0 }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const k = first.view.paceK || 1;
+    const { page, ctx } = await open([first]);
+    await page.evaluate((m) => window.__push(m), second);
+    await page.waitForTimeout(900 * k + 120); // the first placement has just been drawn
+    const gliding = await page.evaluate(() => { const el = document.querySelector('.pr-rows [data-cn="18"]'); return el ? el.getAnimations().length : -1; });
+    assert.ok(gliding > 0, 'the card that landed is still moving into its row');
+    await ctx.close();
+  });
+
   await test('the feed sits under the rows and never covers row 4', async () => {
     const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
     const c = (n) => ({ n, p: pen(n) });
