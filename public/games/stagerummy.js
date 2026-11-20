@@ -239,20 +239,16 @@
     const text = eventText(v);
     // Stage 10 is not a table game: the piles sit in the middle and every seat follows in a list, you first, so it fits a phone
     const order = v.players.map((_, i) => i).sort((a, b) => (a === v.me ? -1 : b === v.me ? 1 : a - b));
-    const seats = `<div class="sr-seats" tabindex="0" role="region" aria-label="Every player's seat">${order.map((i) => seatHTML(v, ctx, i)).join('')}</div>`;
+    const seats = `<div class="sr-seats ${v.players.length > 4 ? 'many' : ''}" tabindex="0" role="region" aria-label="Every player's seat">${order.map((i) => seatHTML(v, ctx, i)).join('')}</div>`;
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
         <div class="wz-round"><b>Stage 10</b><span class="label"> · round ${v.round}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Stages</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
-      <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
-        const st = shownStage(v, i);
-        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
-      }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
       <div class="sr-table">${centreHTML(v)}${seats}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
-      ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
+      <p class="sr-event" role="status">${text || '&nbsp;'}</p>
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${traysHTML(v)}
       ${handHTML(v)}
