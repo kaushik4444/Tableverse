@@ -173,5 +173,5 @@
     ctx.act({ type: 'move', from: options[0][0], to: i, promo: null });
   }
 
-  for (const id of ['chess']) window.CardTable.register(id, { render });
+  window.CardTable.register('chess', { render });
 })();
