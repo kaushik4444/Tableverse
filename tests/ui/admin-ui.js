@@ -616,6 +616,62 @@ const api = (role) => ({
     await a.close();
   });
 
+  await test('home order swaps adjacent games, locks moves during save, and preserves access', async () => {
+    const s = await open('owner');
+    const entries = [
+      { id: 'wizard', name: 'Wizard', access: 'on' },
+      { id: 'ludo', name: 'Ludo', access: 'owner' },
+      { id: 'poker', name: 'Poker', access: 'admins' },
+    ];
+    let current = entries.slice(); let finish;
+    const saved = new Promise((resolve) => { finish = resolve; });
+    const requests = [];
+    await s.page.route('**/api/admin/game-flags', (route) => route.fulfill({ json: { ok: true, modes: ['on', 'owner', 'admins'], games: current } }));
+    await s.page.route('**/api/admin/game-order', async (route) => {
+      requests.push(route.request().postDataJSON());
+      await saved;
+      current = requests.at(-1).order.map((id) => entries.find((g) => g.id === id));
+      await route.fulfill({ json: { ok: true, order: requests.at(-1).order } });
+    });
+    try {
+      await tab(s.page, 'games');
+      await s.page.waitForSelector('[data-gmove]');
+      assert.equal(await s.page.isDisabled('[data-gid="wizard"][data-gmove="up"]'), true);
+      assert.equal(await s.page.isDisabled('[data-gid="poker"][data-gmove="down"]'), true);
+      await s.page.click('[data-gid="ludo"][data-gmove="up"]');
+      await until(() => requests.length === 1, 'order POST');
+      await until(() => s.page.locator('[data-gmove]:disabled').count().then((n) => n === 6), 'all moves locked');
+      assert.deepEqual(requests, [{ order: ['ludo', 'wizard', 'poker'] }]);
+      finish();
+      await until(() => s.page.locator('[data-gmove="up"]').evaluateAll((buttons) => buttons.map((b) => b.dataset.gid).join(',')).then((ids) => ids === 'ludo,wizard,poker'), 'saved order');
+      assert.equal(await s.page.inputValue('[data-gaccess="ludo"]'), 'owner');
+      assert.equal(await s.page.isDisabled('[data-gid="wizard"][data-gmove="up"]'), false);
+      await s.page.click('[data-gid="ludo"][data-gmove="down"]');
+      await until(() => requests.length === 2, 'downward move');
+      assert.deepEqual(requests[1], { order: ['wizard', 'ludo', 'poker'] });
+    } finally { finish(); await s.close(); }
+  });
+
+  await test('a rejected home order shows the error and unlocks controls for retry', async () => {
+    const s = await open('owner');
+    const entries = [{ id: 'wizard', name: 'Wizard', access: 'on' }, { id: 'ludo', name: 'Ludo', access: 'owner' }];
+    let attempts = 0;
+    await s.page.route('**/api/admin/game-flags', (route) => route.fulfill({ json: { ok: true, modes: ['on', 'owner'], games: entries } }));
+    await s.page.route('**/api/admin/game-order', (route) => {
+      attempts++;
+      return route.fulfill({ status: 503, json: { ok: false, error: 'Order could not be saved' } });
+    });
+    try {
+      await tab(s.page, 'games');
+      await s.page.click('[data-gid="ludo"][data-gmove="up"]');
+      await until(() => s.page.textContent('#gMsg').then((text) => text.includes('Order could not be saved')), 'save error');
+      assert.equal(await s.page.isDisabled('[data-gid="ludo"][data-gmove="up"]'), false);
+      assert.deepEqual(await s.page.locator('[data-gmove="up"]').evaluateAll((buttons) => buttons.map((b) => b.dataset.gid)), ['wizard', 'ludo']);
+      await s.page.click('[data-gid="ludo"][data-gmove="up"]');
+      await until(() => attempts === 2, 'retry');
+    } finally { await s.close(); }
+  });
+
   await browser.close();
   console.log(`\n${passed} admin UI tests passed${failed ? `, ${failed} FAILED` : ''}`);
   if (failed) process.exit(1);
