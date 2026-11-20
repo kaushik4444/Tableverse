@@ -1,4 +1,5 @@
 'use strict';
+const pacing = require('../pacing');
 /**
  * Stage 10: the rules only (no sockets, no timers).
  *
@@ -94,7 +95,7 @@ function createGame(players, options, rng = Math.random) {
     stock: [], discard: [], hands: [],
     stage: players.map(() => 1), scores: players.map(() => 0),
     laid: players.map(() => null), skipped: players.map(() => false),
-    event: null, lastRound: null, winners: [], seq: 0,
+    event: null, log: [], lastRound: null, winners: [], seq: 0,
   };
   startRound(g);
   return g;
@@ -136,7 +137,21 @@ function applyAction(g, playerId, action) {
   }
 }
 
-function event(g, e) { g.seq += 1; g.event = { ...e, seq: g.seq }; }
+const COLOUR_NAME = { R: 'Red', B: 'Blue', G: 'Green', Y: 'Yellow' };
+/** A card in words for the public feed: "Blue 7", "Skip card" or "Wild card". Only for a card that is already public. */
+function cardLabel(c) { return c.k === 'w' ? 'Wild card' : c.k === 's' ? 'Skip card' : `${COLOUR_NAME[c.c]} ${c.v}`; }
+/** How long a bot waits after these events, so people can read the feed and the spotlight. Humans are never held. */
+const HOLD_MS = { lay: 1200, skip: 1600, roundEnd: 1800 };
+
+/** Records an event: the latest one (for the spotlight) and the recent ones (for the feed, so none is lost). */
+function event(g, e) {
+  g.seq += 1;
+  const ev = { ...e, seq: g.seq };
+  g.event = ev;
+  g.log.push(ev);
+  if (g.log.length > 40) g.log.shift();
+  if (HOLD_MS[e.type]) pacing.hold(g, HOLD_MS[e.type]);
+}
 
 function draw(g, i, action) {
   if (g.phase !== 'draw') return { ok: false, error: 'You have already drawn' };
@@ -157,7 +172,7 @@ function draw(g, i, action) {
   } else return { ok: false, error: 'Draw from the stock or the discard pile' };
   g.hands[i].push(card); sortHand(g.hands[i]);
   g.phase = 'play';
-  event(g, { type: 'draw', by: i, from: action.from, card: action.from === 'discard' ? card.id : null });
+  event(g, { type: 'draw', by: i, from: action.from, card: action.from === 'discard' ? card.id : null, label: action.from === 'discard' ? cardLabel(card) : null });
   return { ok: true };
 }
 
@@ -217,7 +232,7 @@ function hit(g, i, action) {
     else { grp.lo -= 1; grp.cards.unshift(c.k === 'w' ? { ...c, as: grp.lo } : { ...c }); }
   }
   g.hands[i] = g.hands[i].filter((x) => x.id !== c.id);
-  event(g, { type: 'hit', by: i, owner, group: action.group, card: c.id });
+  event(g, { type: 'hit', by: i, owner, group: action.group, card: c.id, label: cardLabel(c) });
   if (!g.hands[i].length) endRound(g, i);
   return { ok: true };
 }
@@ -228,7 +243,7 @@ function discard(g, i, action) {
   if (!c) return { ok: false, error: 'That card is not in your hand' };
   g.hands[i] = g.hands[i].filter((x) => x.id !== c.id);
   g.discard.push(c);
-  event(g, { type: 'discard', by: i, card: c.id });
+  event(g, { type: 'discard', by: i, card: c.id, label: cardLabel(c) });
   if (!g.hands[i].length) { endRound(g, i); return { ok: true }; }
   advance(g, i, c.k === 's');
   return { ok: true };
@@ -422,6 +437,7 @@ function viewFor(g, playerId) {
     discardTop: g.discard.length ? pub(g.discard[g.discard.length - 1]) : null,
     discardCount: g.discard.length, stockCount: g.stock.length,
     event: g.event ? { ...g.event } : null,
+    log: g.log.slice(-20).map((e) => ({ ...e })),
     lastRound: g.lastRound ? { ...g.lastRound, points: g.lastRound.points.slice(), laid: g.lastRound.laid.slice(), stages: g.lastRound.stages.slice() } : null,
     winners: g.winners.slice(),
   };
