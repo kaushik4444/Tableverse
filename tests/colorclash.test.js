@@ -283,4 +283,15 @@ test('scrubbing a deleted player keeps the rule options (a player named like an 
   assert.equal(game.isOver(), true, 'the one-round game still ends after the scrub');
 });
 
+test('scrubbing a player named like a card kind leaves the cards alone', () => {
+  const named = [{ id: 'p0', name: 'wild' }, { id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }];
+  const game = plugin.create(named, {}, () => 0.5);
+  const wildCards = () => ['p0', 'p1', 'p2'].reduce((n, id) => n + (JSON.stringify(game.view(id)).match(/"k":"wild"/g) || []).length, 0);
+  const before = wildCards();
+  assert.ok(before > 0, 'the deal includes a Wild card, so the check means something');
+  game.scrub(['wild'], 'Former player');
+  assert.equal(wildCards(), before, 'the Wild cards keep their kind');
+  assert.equal(JSON.stringify(game.view('p1')).includes('"k":"Former player"'), false, 'no card kind was rewritten');
+});
+
 console.log(`${passed} color clash tests passed`);
