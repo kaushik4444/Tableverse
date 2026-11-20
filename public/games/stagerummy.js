@@ -237,14 +237,9 @@
       ? `Your goal, stage ${goalIdx + 1} · ${esc(stageName(v, goalIdx + 1))}: ${esc(goalText(v.goals[goalIdx]))}${me.laid ? ' ✓ laid down' : ''}`
       : `${v.stageCount} stages · watching`;
     const text = eventText(v);
-    const n = v.players.length;
-    const table = window.CardTable.pt.tableHTML({
-      n,
-      me: v.me,
-      seat: (i) => seatHTML(v, ctx, i),
-      card: () => null,
-      center: centreHTML(v),
-    });
+    // Stage 10 is not a table game: the piles sit in the middle and every seat follows in a list, you first, so it fits a phone
+    const order = v.players.map((_, i) => i).sort((a, b) => (a === v.me ? -1 : b === v.me ? 1 : a - b));
+    const seats = `<div class="sr-seats">${order.map((i) => seatHTML(v, ctx, i)).join('')}</div>`;
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
@@ -256,7 +251,7 @@
         return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
       }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
-      <div class="sr-table">${table}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
+      <div class="sr-table">${centreHTML(v)}${seats}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
       ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${traysHTML(v)}
