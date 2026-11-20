@@ -17,6 +17,7 @@ const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = re
 const { matchXpOf } = require('./lib/progress');
 const { leaveStateOf, rejoinGraceMs, rejoinDecision, voluntaryLeave, reclaimSeat } = require('./lib/leavePolicy');
 const { startPlay, stopPlay, stopAllPlay } = require('./lib/playTime');
+const idlePolicy = require('./lib/idlePolicy'); // three bot turns in a row for one person: removed with a penalty
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -1039,6 +1040,27 @@ function start(opts = {}) {
     schedule(room);
   }
 
+  /** A bot has played this person's turn (they are away, or ran out of the table's time). After three in a row they are removed. */
+  function noteBotTurnFor(room, m) {
+    if (!m || m.bot || !room.members.includes(m)) return;
+    if (!idlePolicy.noteBotTurn(room, m.id)) return;
+    const out = idlePolicy.kickIdle(room, m, Date.now());
+    const q = players.get(m.id);
+    if (q) {
+      q.room = null;
+      clearTimeout(q.dropTimer);
+      q.dropAnnounced = false;
+      if (q.connected) {
+        send(q.ws, { t: 'left' });
+        send(q.ws, { t: 'notice', text: 'A bot played your last three turns while you were away, so you were removed from that table.' });
+        send(q.ws, tablesMsg(q));
+      }
+      schedulePresence(q.id);
+    }
+    if (voiceRelay.dropVoice(room, m.id)) broadcastVoice(room);
+    sys(room, `🚫 ${m.name} was removed for being away: a bot played their last three turns.${out.penalised ? ' That counts as a loss.' : ''}`);
+  }
+
   /** Decide whether the server must act soon (bot turn, absent human, forced play, timeout, between rounds) and set one timer for it. */
   function schedule(room) {
     clearTimeout(room.timer);
@@ -1086,7 +1108,7 @@ function start(opts = {}) {
       }
       if (who) {
         delay = Math.max(who.bot ? (botMs !== null ? botMs : rand(botDelay[0], botDelay[1])) : absentMs, pause);
-        run = () => g.act(who.id, g.botAction(who.id));
+        run = () => { const r = g.act(who.id, g.botAction(who.id)); if (r && r.ok) noteBotTurnFor(room, who); return r; };
         valid = () => awaitingOf(g).includes(who.id) && (who.bot || !isConnected(who));
       } else if (room.deadline) {
         // connected humans are thinking, but the table has a time limit
@@ -1106,6 +1128,7 @@ function start(opts = {}) {
               sys(room, `⏱ ${m.name} ran out of time. A bot played for them.`);
               const q = players.get(id);
               if (q && q.connected) send(q.ws, { t: 'notice', text: 'Time is up! A bot played for you.' });
+              noteBotTurnFor(room, m);
             }
           }
           return res;
@@ -1888,6 +1911,7 @@ function start(opts = {}) {
       // Only seated people who are connected now earn time. A person who drops in the lobby starts when they come back (see hello).
       for (const m of room.seated) if (!m.bot && isConnected(m)) startPlay(room, m.id, room.startedAt);
       room.leftEarly = new Set();
+      room.idleTurns = new Map();
       room.forfeits = new Set();
       room.finalForfeits = new Set();
       room.leaveCounts = new Map();
@@ -1910,6 +1934,7 @@ function start(opts = {}) {
         sendError(p, res.error || 'Not allowed');
         return broadcast(room); // resync the sender's view
       }
+      idlePolicy.clearIdle(room, p.id); // they acted for themselves: their streak of bot turns starts again
       afterChange(room);
     },
 
