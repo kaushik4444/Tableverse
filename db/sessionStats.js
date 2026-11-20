@@ -10,7 +10,7 @@
 const db = require('./pool');
 const { lengthBucket } = require('../lib/analytics');
 
-const WINDOWS = [7, 30, 90];
+const WINDOWS = [1, 7, 30, 90]; // 1 = the last 24 hours
 const clampDays = (d) => { const n = Math.floor(Number(d)); return WINDOWS.includes(n) ? n : 30; };
 const ZONES = ['UTC', 'Europe/Berlin', 'Asia/Kolkata'];
 const clampZone = (z) => (ZONES.includes(z) ? z : 'UTC');
