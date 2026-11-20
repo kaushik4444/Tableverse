@@ -259,6 +259,9 @@
     </div>`;
     const seatsNow = root.querySelector(".sr-seats");
     if (seatsNow) seatsNow.scrollTop = seatScroll;
+    // a wild card puts its end buttons on the runs: bring the first such run into view, so the choice is not hidden below the fold
+    const endRun = seatsNow && seatsNow.querySelector(".sr-ends button");
+    if (endRun) endRun.closest(".sr-group").scrollIntoView({ block: "nearest" });
     root.onclick = onClick;
     const stagesSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
     if (stagesSheet) stagesSheet.onkeydown = (e) => {
