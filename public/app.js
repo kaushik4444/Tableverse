@@ -3140,11 +3140,14 @@
         else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
       }
       // A game can end while a sheet of its own (Hands, Stages) has focus: that control is replaced, so focus would fall to the page.
-      // Restore the same result action after a redraw, or focus the first action on arrival.
-      // a rules sheet open on the page (showRules) keeps focus: the result behind it must not take it
-      if ((!document.activeElement || document.activeElement === document.body) && !document.querySelector('body > .overlay')) (focusedResultAction
-        ? Array.from($app.querySelectorAll('.end-actions button, .end-bar button')).find((b) => b.dataset.act === focusedResultAction)
-        : $app.querySelector('.end-actions button, .end-bar button'))?.focus({ preventScroll: true });
+      // Focus a visible Stages sheet, restore the prior result action, or focus the first action on arrival.
+      // A rules sheet open on the page keeps focus: the result behind it must not take it.
+      if ((!document.activeElement || document.activeElement === document.body) && !document.querySelector('body > .overlay')) {
+        const back = focusedResultAction
+          ? Array.from($app.querySelectorAll('.end-actions button, .end-bar button')).find((b) => b.dataset.act === focusedResultAction)
+          : $app.querySelector('.end-actions button, .end-bar button');
+        ($app.querySelector('[aria-labelledby="sr-phases-title"] button[data-sr="closePhases"]') || back)?.focus({ preventScroll: true });
+      }
       // The game-over reminder: the one stronger prompt for a guest, placed by the end actions (never during play)
       const gameNudge = guestNudge('gameover');
       if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }

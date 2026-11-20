@@ -75,6 +75,66 @@ function finished(hostId, sinceMs, votes = []) {
     await ctx.close();
   });
 
+  for (const game of ['poker', 'stagerummy']) {
+    await test(`${game}: sheet focus follows the shared end flow`, async () => {
+      const msgs = tableMessages(game, four);
+      const { page, ctx } = await scriptedPage(browser, { messages: msgs, viewport: { width: 1280, height: 860 } });
+      await page.goto(url + '/');
+      const action = game === 'poker' ? 'pk' : 'sr';
+      const opener = `[data-${action}="${game === 'poker' ? 'ranks' : 'phases'}"]`;
+      await page.waitForSelector(`.${action}`);
+      if (!(await page.isVisible(opener))) await page.click('.tb-more-btn');
+      await page.click(opener);
+      const close = `button[data-${action}="${game === 'poker' ? 'closeRanks' : 'closePhases'}"]`;
+      await page.focus(close);
+      await page.evaluate(() => {
+        window.__hiddenSheetFocus = 0;
+        const focus = HTMLElement.prototype.focus;
+        HTMLElement.prototype.focus = function (...args) {
+          if (this.matches('button[data-sr="closePhases"]') && this.closest('.endhold')) window.__hiddenSheetFocus++;
+          return focus.apply(this, args);
+        };
+      });
+      const final = structuredClone(msgs[1]);
+      final.view.phase = 'gameOver'; final.view.myTurn = false;
+      final.view.winners = [0];
+      if (game === 'poker') final.view.standings = final.view.players.map((p, i) => ({ player: i, rank: i + 1, chips: p.chips }));
+      Object.assign(final.room, { status: 'finished', outcome: { winners: [{ id: 'me', name: 'Aarav' }], sinceMs: 6200 } });
+      await page.evaluate((m) => window.__push(m), final);
+      await page.waitForSelector('.end-actions');
+      const target = game === 'poker' ? '[data-act="endAgain"]' : close;
+      await page.waitForFunction((sel) => document.activeElement === document.querySelector(sel), target);
+      assert.ok(await page.isVisible(target));
+      assert.equal(await page.evaluate(() => window.__hiddenSheetFocus), 0, 'never focus Stages while endhold hides it');
+      if (game === 'poker') assert.equal(await page.$(close), null, 'rankings close on game over');
+      else {
+        await page.keyboard.press('Tab');
+        assert.equal(await page.evaluate((sel) => document.activeElement === document.querySelector(sel), close), true);
+      }
+      await ctx.close();
+    });
+  }
+
+  await test('Stages redraw preserves focus inside the sheet and outside in chat', async () => {
+    const msgs = tableMessages('stagerummy', four);
+    const { page, ctx } = await scriptedPage(browser, { messages: msgs, viewport: { width: 1280, height: 860 } });
+    await page.goto(url + '/');
+    await page.waitForSelector('.sr');
+    if (!(await page.isVisible('[data-sr="phases"]'))) await page.click('.tb-more-btn');
+    await page.click('[data-sr="phases"]');
+    const close = 'button[data-sr="closePhases"]';
+    await page.focus(close);
+    const next = structuredClone(msgs[1]); next.view.round++;
+    await page.evaluate((m) => window.__push(m), next);
+    assert.equal(await page.evaluate((sel) => document.activeElement === document.querySelector(sel), close), true);
+    await page.evaluate(() => document.querySelector('[data-act="chat"]').click());
+    await page.focus('#chat-input');
+    next.view.round++;
+    await page.evaluate((m) => window.__push(m), next);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'chat-input');
+    await ctx.close();
+  });
+
   await test('joining or creating blocks every other tap behind a spinner until the table arrives', async () => {
     const msgs = tableMessages('gofish', four);
     const welcomeOnly = [msgs[0]];
