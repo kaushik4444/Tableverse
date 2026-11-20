@@ -108,8 +108,8 @@
   const currentMark = (v) => (ui.anim && ui.anim.seq === v.seq ? ui.anim.marks[ui.anim.i] : null);
 
   /** A card: the number big in the middle and small in the top corner, and one dot per penalty point along the bottom. */
-  /** Penalty points as stars: one star a point, so the count reads at a glance. Past 12 the number is given after the stars. */
-  const starsOf = (n) => (n <= 0 ? '' : '★'.repeat(Math.min(n, 12)) + (n > 12 ? `+${n - 12}` : ''));
+  /** Penalty points as bombs: one bomb a point, so the count reads at a glance and the cost looks negative. Past 12 the count follows. */
+  const starsOf = (n) => (n <= 0 ? '' : '💣'.repeat(Math.min(n, 12)) + (n > 12 ? `×${n}` : ''));
 
   function cardHTML(c, { cls = '', attrs = '', tag = 'div' } = {}) {
     const dots = `<span class="pr-pips" aria-hidden="true">${starsOf(c.p)}</span>`;
@@ -167,7 +167,7 @@
       : collected ? `${nameOf(v, e.by)} took ${e.took}` : '';
     const callout = calloutText ? `<span class="pr-callout">${calloutText}</span>` : '';
     const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span></span><span class="pr-cards" style="--cols:${cols}">${slots}</span>`
-      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${points <= 5 ? (starsOf(points) || '0') : `★×${points}`}</span></span>${callout}`;
+      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${points <= 5 ? (starsOf(points) || '0') : `💣×${points}`}</span></span>${callout}`;
     return taking
       ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
       : `<div class="pr-row ${full ? 'full' : ''}${collected ? ' collected' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
@@ -190,7 +190,7 @@
       const out = v.losers && v.losers.includes(i) ? ' out' : '';
       return `<li data-pid="${esc(p.id)}" class="${i === v.me ? 'me' : ''}${out}"><span class="pr-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span>`
         + `<span class="pr-tot" title="${v.countdown ? 'Points left' : 'Total penalty points'}">${main}</span>`
-        + `<span class="pr-rnd" title="Taken this round">+${p.penalty}</span><span class="pr-state" aria-label="${state === '⚠' ? 'must take a row' : p.picked ? 'has picked' : 'still choosing'}">${state}</span></li>`;
+        + `<span class="pr-rnd" title="Taken this round">−${p.penalty}</span><span class="pr-state" aria-label="${state === '⚠' ? 'must take a row' : p.picked ? 'has picked' : 'still choosing'}">${state}</span></li>`;
     }).join('')}</ul>`;
   }
 
@@ -208,7 +208,7 @@
   /** The last rounds, newest first, so the scores tab shows how the game got here. */
   function historyHTML(v) {
     if (!v.history.length) return '';
-    const rows = v.history.slice(-5).reverse().map((h) => `<li><span>Round ${h.round}</span><span>${v.players.map((p, i) => `${esc(p.name)} +${h.penalties[i]}`).join(' · ')}</span></li>`).join('');
+    const rows = v.history.slice(-5).reverse().map((h) => `<li><span>Round ${h.round}</span><span>${v.players.map((p, i) => `${esc(p.name)} \u2212${h.penalties[i]}`).join(' · ')}</span></li>`).join('');
     return `<section class="pr-hist"><h3 class="label">Rounds</h3><ol>${rows}</ol></section>`;
   }
 
