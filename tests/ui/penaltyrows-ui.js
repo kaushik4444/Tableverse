@@ -191,6 +191,8 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await at(1350 * k);
     assert.equal(await row1(), 6, 'the sixth card lands in the row');
     assert.match(await page.textContent('.pr-callout'), /6th card placed/, 'and says so on the row');
+    assert.equal(await page.$$eval('.pr-callout', (els) => els.length), 1, 'only the row that got the sixth card says so');
+    assert.equal(await page.locator('.pr-row').nth(0).locator('.pr-callout').count(), 1, 'and it is on row 1');
     assert.match(await page.textContent('.gf-feed'), /played the 6th card on row 1/, 'the feed says the sixth card was placed');
     await at(2500 * k);
     assert.match(await page.textContent('.pr-callout'), /Bo took/, 'the row is collected: the taker is named');
@@ -219,8 +221,13 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     const { page, ctx } = await open([first]);
     await page.evaluate((m) => window.__push(m), second);
     await page.waitForTimeout(900 * k + 120); // the first placement has just been drawn
-    const gliding = await page.evaluate(() => { const el = document.querySelector('.pr-rows [data-cn="18"]'); return el ? el.getAnimations().length : -1; });
-    assert.ok(gliding > 0, 'the card that landed is still moving into its row');
+    // the glide is a Web Animation that moves the card from where it was on the strip; the old drop is a CSS animation
+    const glide = await page.evaluate(() => {
+      const el = document.querySelector('.pr-rows [data-cn="18"]');
+      if (!el) return null;
+      return el.getAnimations().map((a) => ({ css: Boolean(a.animationName), first: a.effect && a.effect.getKeyframes()[0].transform }));
+    });
+    assert.ok(glide && glide.some((a) => !a.css && /translate\(/.test(a.first)), 'the card that landed glides into its row: ' + JSON.stringify(glide));
     await ctx.close();
   });
 

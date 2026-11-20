@@ -146,6 +146,7 @@ function reveal(g) {
   g.hands = g.hands.map((h, i) => h.filter((c) => c.n !== g.picks[i]));
   g.resolved = 0; g.lastTurn = [];
   g.before = g.rows.map((r) => r.map((c) => ({ n: c.n, p: c.p })));
+  linger(g, STEP_MS); // the opening snapshot, which the table shows before the first card lands
   play(g);
 }
 

@@ -124,10 +124,10 @@
     for (const el of document.querySelectorAll('.prt .pr-rows [data-cn]')) {
       const old = from.get(el.dataset.cn);
       if (!old) continue;
+      el.classList.remove('new'); // the glide is the landing: the drop animation would move the card before it is measured
       const r = el.getBoundingClientRect();
       const dx = old.x - r.left; const dy = old.y - r.top;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      el.classList.remove('new'); // the glide is the landing; the drop animation would fight it
       el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.2, .8, .2, 1)' });
     }
   }
@@ -215,7 +215,7 @@
       ? cardHTML(row[s], { cls: s === newAt ? 'new' : '' })
       : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
     const collected = here && mark.phase === 'collect';
-    const calloutText = mark && mark.phase === 'add' ? `${v.rowLimit + 1}th card placed`
+    const calloutText = here && mark.phase === 'add' ? `${v.rowLimit + 1}th card placed`
       : collected ? `${nameOf(v, e.by)} took ${e.took}` : '';
     const callout = calloutText ? `<span class="pr-callout">${calloutText}</span>` : '';
     const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span></span><span class="pr-cards" style="--cols:${cols}">${slots}</span>`
