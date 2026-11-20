@@ -51,6 +51,30 @@ function finished(hostId, sinceMs, votes = []) {
     await ctx.close();
   });
 
+  await test('result redraws preserve each focused action and leave a rules sheet focused', async () => {
+    const messages = finished('p2', 20000);
+    const { page, ctx } = await open(messages);
+    await page.waitForSelector('.end-actions');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.act), 'endVote');
+    for (const action of ['endLeave', 'endVote']) {
+      await page.focus(`[data-act="${action}"]`);
+      messages[1].room.votes = action === 'endLeave' ? ['p1'] : [];
+      await page.evaluate((m) => window.__push(m), messages[1]);
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.act), action);
+    }
+    // Open rules programmatically because the result overlay covers the toolbar.
+    await page.evaluate(() => document.querySelector('[data-gf="rules"]').click());
+    await page.focus('body > .overlay [data-close]');
+    const focused = await page.evaluate(() => {
+      document.activeElement.dataset.focusMarker = 'rules';
+      return document.activeElement.outerHTML;
+    });
+    messages[1].room.votes = ['p1'];
+    await page.evaluate((m) => window.__push(m), messages[1]);
+    assert.equal(await page.evaluate(() => document.activeElement.outerHTML), focused);
+    await ctx.close();
+  });
+
   await test('joining or creating blocks every other tap behind a spinner until the table arrives', async () => {
     const msgs = tableMessages('gofish', four);
     const welcomeOnly = [msgs[0]];
