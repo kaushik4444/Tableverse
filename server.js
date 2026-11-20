@@ -773,7 +773,7 @@ function start(opts = {}) {
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
       members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m), standIn: isStandIn(room, m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
-      outcome: room.status === 'finished' && room.outcome ? { id: room.outcome.at, winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
+      outcome: room.status === 'finished' && room.outcome ? { id: room.outcome.at, winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, playMs: room.outcome.playMs || 0, xp: room.outcome.xp || null } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
@@ -998,7 +998,10 @@ function start(opts = {}) {
     const winners = Array.isArray(results) && results.length === seated.length
       ? seated.filter((m, i) => results[i] && results[i].winner).map((m) => ({ id: m.id, name: m.name }))
       : [];
-    return { winners, at: Date.now() };
+    // how long the last move is still being played out (a shot, a walk): the pop-up waits for it (see app.js endFlow)
+    let playMs = 0;
+    try { playMs = typeof g.holdMs === 'function' ? Math.max(0, Number(g.holdMs()) || 0) : 0; } catch { playMs = 0; }
+    return { winners, at: Date.now(), playMs };
   }
 
   function afterChange(room) {
