@@ -104,6 +104,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     assert.match(await page.textContent('.cb-tip'), /power 10%/);
+    assert.equal(await page.getAttribute('[data-id="striker"]', 'aria-valuenow'), '53', 'the slider value follows the striker');
     await page.keyboard.press('Enter');
     const a = (await sent(page)).at(-1).action;
     assert.equal(a.type, 'flick');

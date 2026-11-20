@@ -130,8 +130,8 @@
   /** What the player can do now, with the live aim and power (there are no sliders). */
   function tipText() {
     const { angle, power } = ui.aim;
-    if (power <= 0) return 'Drag your striker along the baseline to place it. Then press on the board and drag back to set the aim and power.';
-    return `Aim ${angle}° · power ${power}%. Let go to flick. Drag the striker to move it.`;
+    if (power <= 0) return 'Drag your striker along the baseline to place it (or use ← and → when it is focused). Then press on the board and drag back to set the aim and power.';
+    return `Aim ${angle}° · power ${power}%. Let go to flick, or press Enter on the striker. Keyboard: ← → move, Shift+← → turn, ↑ ↓ power.`;
   }
 
   function logHTML(v) {
@@ -273,7 +273,7 @@
       line.setAttribute('x2', to[0]); line.setAttribute('y2', to[1]);
     }
     const striker = svg && svg.querySelector('[data-id="striker"]');
-    if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); }
+    if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); striker.setAttribute('aria-valuenow', String(ui.aim.x)); }
     const tip = root.querySelector('.cb-tip');
     if (tip) tip.textContent = tipText();
   }
