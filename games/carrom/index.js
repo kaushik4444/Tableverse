@@ -1,7 +1,7 @@
 'use strict';
 /** Carrom: two players, one colour each. Physics and rules live in physics.js and engine.js. */
 const engine = require('./engine');
-const { scrubDeep } = require('../scrub');
+const { scrubText, scrubDeep } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
 
 module.exports = {
@@ -26,8 +26,11 @@ module.exports = {
     const g = engine.createGame(players);
     return {
       view: (playerId) => engine.viewFor(g, playerId),
-      // only the names and the log text hold player names: the phase, colours and rules fields must keep their values
-      scrub: (names, to) => scrubDeep([g.players, players, g.log], names, to),
+      // only the name fields and the log text hold player names: colours, ids, phase and rules must keep their values
+      scrub: (names, to) => {
+        for (const p of [...g.players, ...players]) if (typeof p.name === 'string') p.name = scrubText(p.name, names, to);
+        scrubDeep([g.log], names, to);
+      },
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },

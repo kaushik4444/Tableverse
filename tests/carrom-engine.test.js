@@ -297,4 +297,14 @@ test('scrubbing a deleted player keeps the phase (a player named like a field), 
   assert.equal(v.players[1].name, 'Bo');
 });
 
+test('account deletion scrubs names only: a player named like a colour keeps the colours', () => {
+  const players = [{ id: 'a', name: 'w' }, { id: 'b', name: 'Bo' }];
+  const instance = games.get('carrom').create(players, {}, () => 0.5);
+  const colours = () => JSON.stringify(instance.view('a')).match(/"colour":"[wb]"/g);
+  const before = colours();
+  instance.scrub(['w', 'Bo'], 'Someone');
+  assert.deepEqual(colours(), before, 'the seat colours are unchanged');
+  assert.equal(players[0].name, 'Someone');
+});
+
 console.log(`\n${passed} carrom engine tests passed`);
