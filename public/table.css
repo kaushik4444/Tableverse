@@ -1,6 +1,9 @@
 /* Wizard table. Card size comes from --cw (set by wizard.js). */
 .wz { --cw: 78px; min-height: 100dvh; max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px); }
 .wz-top { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+/* the Ready bar keeps its height whatever it says, so the table below never moves */
+.ready-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; box-sizing: border-box; margin: 8px 0; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--panel-line, rgba(255, 255, 255, .2)); background: var(--panel, rgba(255, 255, 255, .06)); font-size: 14px; }
+.ready-bar > span { min-width: 0; }
 .wz-round { flex: none; white-space: nowrap; }
 .wz-top > .row { flex: 0 1 auto; min-width: 0; }
 .wz-top .row { flex-wrap: wrap; justify-content: flex-end; }

@@ -123,6 +123,10 @@ function awaiting(g) {
 }
 
 function applyAction(g, playerId, action) {
+  if (g.phase === 'roundEnd') { // between rounds: nothing is played until everybody is ready, then the next round starts
+    if (action && action.type === 'continue') { startRound(g); return { ok: true }; }
+    return { ok: false, error: 'The next round starts when everybody is ready' };
+  }
   if (g.phase === 'gameOver') return { ok: false, error: 'The game is over' };
   const i = indexOf(g, playerId);
   if (i < 0) return { ok: false, error: 'You are not at this table' };
@@ -237,7 +241,7 @@ function endTurn(g) {
     say(g, g.winners.map((i) => g.players[i].name).join(' & '), g.winners.length > 1 ? 'share the win!' : 'wins!', 'win');
     return;
   }
-  startRound(g);
+  g.phase = 'roundEnd'; // the next round starts once everybody has pressed Ready (the continue action)
 }
 
 /** The cost of playing `n` now, for a bot: what it would take. Lower is better. */

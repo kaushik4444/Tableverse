@@ -137,6 +137,20 @@ function scene(n, edit) {
     }
   });
 
+  await test('the Ready bar waits for everybody: Ready sends the ready message, and the bar says who is still awaited', async () => {
+    const withGate = (ready, waiting) => scene(4, (v, m) => { m[1].room.gate = { ready, waiting }; });
+    const { page, ctx } = await open(withGate([], ['me', 'p1', 'p2', 'p3']));
+    assert.equal(await page.locator('.ready-bar').count(), 1, 'the bar shows while the table waits');
+    assert.match(await page.textContent('.ready-bar'), /Everybody presses Ready/);
+    await page.click('.ready-bar [data-act="readyUp"]');
+    const sentReady = await page.evaluate(() => window.__sent.filter((m) => m.t === 'ready').length);
+    assert.equal(sentReady, 1, 'the Ready button sends one ready message');
+    await page.evaluate((m) => window.__push(m), withGate(['me'], ['p1', 'p2', 'p3'])[1]);
+    await page.waitForFunction(() => /You are ready/.test(document.querySelector('.ready-bar')?.textContent || ''), null, { timeout: 4000 });
+    assert.equal(await page.locator('.ready-bar [data-act="readyUp"]').count(), 0, 'no second Ready for the same round');
+    await ctx.close();
+  });
+
   await test('cards can be told apart without colour: every coloured card shows its shape, and every card has a name', async () => {
     const { page, ctx } = await open(scene(4));
     const info = await page.evaluate(() => [...document.querySelectorAll('.hand .card')].map((c) => ({ label: c.getAttribute('aria-label'), text: c.textContent })));

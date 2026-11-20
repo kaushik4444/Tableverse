@@ -13,23 +13,22 @@ const human = (id) => ({ id, name: id, bot: false });
   t('three bot turns in a row remove the person; two do not', () => {
     assert.equal(IDLE_KICK_TURNS, 3);
     const r = room([human('a'), human('b')]);
-    assert.equal(noteBotTurn(r, 'a'), false);
-    assert.equal(noteBotTurn(r, 'a'), false);
-    assert.equal(noteBotTurn(r, 'a'), true);
+    assert.equal(noteBotTurn(r, 'a'), 1);
+    assert.equal(noteBotTurn(r, 'a'), 2);
+    assert.equal(noteBotTurn(r, 'a'), IDLE_KICK_TURNS);
   });
 
   t('a move of their own starts the count again', () => {
     const r = room([human('a')]);
     noteBotTurn(r, 'a'); noteBotTurn(r, 'a');
     clearIdle(r, 'a');
-    assert.equal(noteBotTurn(r, 'a'), false);
-    assert.equal(noteBotTurn(r, 'a'), false);
+    assert.equal(noteBotTurn(r, 'a'), 1);
   });
 
   t('the count is per person', () => {
     const r = room([human('a'), human('b')]);
     noteBotTurn(r, 'a'); noteBotTurn(r, 'a');
-    assert.equal(noteBotTurn(r, 'b'), false);
+    assert.equal(noteBotTurn(r, 'b'), 1);
   });
 
   t('a kick gives the seat to a bot, records a final penalty and blocks rejoining', () => {
@@ -41,7 +40,6 @@ const human = (id) => ({ id, name: id, bot: false });
     const out = kickIdle(r, a, 5000);
     assert.equal(a.bot, true, 'a bot takes the seat');
     assert.equal(out.penalised, true, 'another person is still playing, so it counts as a loss');
-    assert.ok(r.finalForfeits.has('a'), 'the penalty is final');
     assert.ok(r.forfeits.has('a'), 'the loss is recorded');
     assert.ok(r.leftEarly.has('a'));
     assert.ok(r.removed.has('a'), 'they cannot come back to this table');

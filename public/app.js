@@ -3022,6 +3022,18 @@
     standInWatch.observe($app, { childList: true, subtree: true });
   }
 
+  /** The Ready bar: shown while the table waits for everybody to press Ready (the first round, and each round between). Generic for every game. */
+  function readyBarHTML() {
+    const gate = S.room && S.room.gate;
+    if (!gate || S.room.status !== 'playing') return '';
+    const nameOf = (id) => { const m = S.room.members.find((x) => x.id === id); return m ? esc(m.name) : 'Someone'; };
+    const seated = S.room.members.some((m) => m.id === S.id && !m.bot);
+    const total = gate.ready.length + gate.waiting.length;
+    if (seated && !gate.ready.includes(S.id)) return `<div class="ready-bar" role="status"><span><b>Everybody presses Ready to continue.</b> ${gate.ready.length} of ${total} ready</span><button class="btn" data-act="readyUp">Ready</button></div>`;
+    const waiting = gate.waiting.map(nameOf);
+    return `<div class="ready-bar" role="status"><span>${seated ? 'You are ready. ' : ''}${waiting.length ? `Waiting for ${waiting.join(', ')}` : 'Everybody is ready'}</span></div>`;
+  }
+
   function renderGame() {
     const plugin = plugins[S.room.gameId];
     if (!plugin || !S.view) {
@@ -3038,12 +3050,15 @@
       isHost: S.room.hostId === S.id,
       activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
       act: (action) => send({ t: 'act', action }),
+      ready: () => send({ t: 'ready' }), // this seat is ready for the next round (or the first)
       leave: () => requestLeave(),
       rematch: () => send({ t: 'rematch' }),
       showRules: () => showRules(S.room.gameId),
       rerender: render,
       toast,
     });
+    const readyBar = readyBarHTML();
+    if (readyBar) { const top = $app.querySelector('.wz-top'); if (top) top.insertAdjacentHTML('afterend', readyBar); else $app.insertAdjacentHTML('afterbegin', readyBar); }
     markStandIns($app);
     watchStandIns();
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
@@ -3335,6 +3350,7 @@
     },
     removeBot: (el) => send({ t: 'removeBot', id: el.dataset.id }),
     makeHost: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Make host', `<p class="hint">Make ${esc(el.dataset.name || 'this player')} the host of this table? You will stay at the table, but only the host can start the game and change settings.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="makeHostConfirm">Make host</button></div>`); },
+    readyUp: () => send({ t: 'ready' }),
     kickPlayer: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Remove player', `<p class="hint">Remove ${esc(el.dataset.name || 'this player')} from this table? They will not be able to come back.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="kickPlayerConfirm">Remove</button></div>`); },
     seats: (el) => send({ t: 'setSeats', seats: Number(el.dataset.n) }),
     start: () => send({ t: 'start' }),

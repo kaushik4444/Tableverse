@@ -172,6 +172,8 @@ test('the first player out ends the round and scores the points left in the othe
   assert.equal(g.scores[0], 4 + 20 + 50 + 7);
   assert.equal(g.roundResult.winner, 0);
   assert.equal(g.roundResult.total, 81);
+  assert.equal(g.phase, 'roundEnd', 'the table waits for everybody to be ready');
+  assert.equal(E.applyAction(g, null, { type: 'continue' }).ok, true);
   assert.equal(g.round, 2, 'the next round has been dealt');
   assert.ok(g.hands.every((h) => h.length === 7));
   assert.equal(g.turn, 1, 'the first turn moves round the table');
@@ -244,6 +246,7 @@ test('full games played by bots finish, keep all 104 cards, and every move is ac
       const g = E.createGame(people(n), { target: seed % 3 === 0 ? 'round' : '100' }, seeded(seed * 31 + n));
       let moves = 0;
       while (g.phase !== 'gameOver') {
+        if (g.phase === 'roundEnd') { assert.equal(E.applyAction(g, null, { type: 'continue' }).ok, true); continue; }
         const id = E.awaiting(g)[0];
         const a = E.botAction(g, id);
         const r = E.applyAction(g, id, a);

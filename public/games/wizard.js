@@ -196,7 +196,7 @@
         .join('');
       return `<div class="overlay"><div class="sheet"><h2>Round ${v.round} of ${v.totalRounds}</h2>
         <div class="score-wrap"><table class="score"><thead><tr><th>Player</th><th>Bid</th><th>Won</th><th>Pts</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <div class="row" style="margin-top:14px"><button class="btn" data-wz="next">Next round</button><span class="hint">Starts automatically in a few seconds</span></div></div></div>`;
+        <div class="row" style="margin-top:14px"><button class="btn" data-wz="next">Ready</button><span class="hint">Everybody presses Ready to start the next round</span></div></div></div>`;
     }
     const order = v.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
     const win = v.winners.includes(v.players[v.me] && v.players[v.me].id);
@@ -340,7 +340,7 @@
         ctx.rerender();
         break;
       case 'next':
-        ctx.act({ type: 'continue' });
+        ctx.ready();
         break;
       case 'again':
         ctx.rematch();
