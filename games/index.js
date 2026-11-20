@@ -12,6 +12,7 @@ const registry = {
   penaltyrows: require('./penaltyrows'),
   stagerummy: require('./stagerummy'),
   chess: require('./chess'),
+  colorclash: require('./colorclash'),
   // Tic-Tac-Toe and Four in a Row (four or five) share one engine
   ...Object.fromEntries(require('./linegames').map((game) => [game.id, game])),
 };

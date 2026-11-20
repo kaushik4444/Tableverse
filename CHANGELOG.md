@@ -2,6 +2,7 @@
 
 ## Unreleased (on `development`, not yet on `main`)
 - Chess (2 players, in review on `feat/chess-carrom`): rules in `games/chess/rules.js` with perft-verified move generation (standard start, Kiwipete and position 3 counts), a table game in `games/chess/engine.js`, a renderer in `public/games/chess.js`, and tests in `tests/chess-rules.test.js`, `tests/chess-engine.test.js` and `tests/ui/chess-ui.js`. Chess is not in the What's New list yet; add it when it ships.
+- New game: Color Clash (2–8 players), Tableverse's own colour-and-number shedding game with Stop, Flip, Take 2 and Wild cards, round scoring and a choice of match length, bots, sounds and a phone layout. Off-limits titles stay out; see `docs/GAME_NAMES.md`. Removed from the coming-soon list.
 - Release: all twelve games are open to everyone (Go Fish, Ludo, Take 5, Poker, Property Rivals, Snakes and Ladders, Stage 10, Mind, 29, Wizard, Tic-Tac-Toe, Four in a Row). The owner confirms each game is set to "Enabled" for everyone in the admin console's Games tab before the release; no game is locked by a code default.
 - Game logos: each game has its own SVG mark (`public/game-marks.js`), used on the home page, open tables, the rejoin banner, history, stats, game pages and the admin Games tab. The emoji stays as a fallback for an unknown game id.
 - Home page: open tables sit above the games. Phones show two rows that scroll sideways; desktop (1000 px and wider) puts them in a sticky column beside the games. Join and Spectate wrap below the text on narrow cards (PR #256).
