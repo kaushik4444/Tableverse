@@ -39,6 +39,17 @@ function finished(hostId, sinceMs, votes = []) {
     await ctx.close();
   });
 
+  await test('the winner pop-up waits until the final move has been played out', async () => {
+    const messages = finished('me', 0);
+    messages[1].room.outcome.playMs = 4000;
+    const { page, ctx } = await open(messages);
+    await page.waitForTimeout(4500); // past the 3.5 s board, still inside the 4 s playback
+    assert.equal(await page.$('.end-pop'), null, 'no pop-up while the last shot is still playing');
+    await page.waitForSelector('.end-pop', { timeout: 9000 });
+    assert.match(await page.textContent('.end-pop'), /Bo won/);
+    await ctx.close();
+  });
+
   await test('not the host: vote to play again with the vote count, and leave', async () => {
     const { page, ctx } = await open(finished('p2', 20000, ['p1']));
     await page.waitForSelector('.end-actions');
