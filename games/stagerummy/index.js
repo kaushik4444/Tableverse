@@ -1,7 +1,7 @@
 'use strict';
 /** Stage 10 plugin: adapts the pure engine to the server's game interface. */
 const engine = require('./engine');
-const { scrubDeep } = require('../scrub');
+const { scrubText } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
 
 /** "set of 3", "run of 5" or "6 cards of one colour": how one group of a stage is described. */
@@ -52,7 +52,8 @@ module.exports = {
     const g = engine.createGame(players, options, rng);
     return {
       view: (playerId) => engine.viewFor(g, playerId),
-      scrub: (names, to) => { const phase = g.phase, matchId = g.matchId; scrubDeep([g, players], names, to); g.phase = phase; g.matchId = matchId; }, // phase is an internal enum and matchId a random id, never a name
+      // only each seat's name changes: groups (kind), phase and matchId are game state and keep their values; log events hold seat numbers, not names
+      scrub: (names, to) => { for (const p of [...g.players, ...players]) if (typeof p.name === 'string') p.name = scrubText(p.name, names, to); },
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },
