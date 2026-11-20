@@ -7,7 +7,7 @@
   const GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' };
   const PROMO_NAMES = { Q: 'Queen', R: 'Rook', B: 'Bishop', N: 'Knight' };
   const PIECE_NAMES = { K: 'King', Q: 'Queen', R: 'Rook', B: 'Bishop', N: 'Knight', P: 'Pawn' };
-  const ui = { ctx: null, v: null, seq: null, sel: null, promo: null, resignArmed: false, lastKey: null };
+  const ui = { ctx: null, v: null, seq: null, sel: null, promo: null, resignArmed: false, lastKey: null, focusAfter: null };
   const isWhite = (p) => p === p.toUpperCase();
   const myColour = (v) => (v.me < 0 ? 'w' : v.colours[v.me]);
   const nameOf = (v, seat) => (seat === v.me ? 'You' : esc(v.players[seat].name));
@@ -74,7 +74,8 @@
         if (v.last && (v.last.from === i || v.last.to === i)) cls.push('last');
         if (check === i) cls.push('check');
         if (ui.sel === i) cls.push('sel');
-        const canTap = v.myTurn && (mine || targets.has(i));
+        // while the promotion picker is open every square takes a tap, so a tap elsewhere can cancel it (onSquare checks the move)
+        const canTap = v.myTurn && (mine || targets.has(i) || !!ui.promo);
         if (targets.has(i)) cls.push(p ? 'capture' : 'dot');
         const label = `${squareName(i)}${p ? `, ${PIECE_NAMES[p.toUpperCase()]} (${isWhite(p) ? 'white' : 'black'})` : ''}`;
         cells.push(`<button type="button" class="${cls.join(' ')}" data-sq="${i}" aria-label="${esc(label)}" ${canTap ? '' : 'disabled'}>${pieceHTML(p)}</button>`);
@@ -132,7 +133,8 @@
     const playing = v.phase === 'playing' && v.me >= 0;
     // keep keyboard focus on the square the player was using: the re-render replaces every button
     const focused = document.activeElement;
-    const focusSq = focused && root.contains(focused) && focused.dataset.sq !== undefined ? focused.dataset.sq : null;
+    const inRoot = !!focused && root.contains(focused);
+    const focusSel = inRoot && focused.dataset.sq !== undefined ? `[data-sq="${focused.dataset.sq}"]` : inRoot && focused.dataset.ch ? `[data-ch="${focused.dataset.ch}"]` : null;
     root.innerHTML = `<div class="wz ch" data-game="chess">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.log.length} moves</span></div>
         ${CardTable.toolbarSeed(`<button class="btn ghost small" data-ch="rules">Rules</button>${playing ? `<button class="btn ghost small" data-ch="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'ch')}</div>
@@ -143,8 +145,11 @@
       <details class="ch-moves" open><summary>Moves</summary>${logHTML(v)}</details>
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
-    if (focusSq !== null) {
-      const again = root.querySelector(`[data-sq="${focusSq}"]`);
+    // focus goes back to the control the player used (a square or Resign), or to the pawn when the picker closes
+    const restore = ui.focusAfter !== null ? `[data-sq="${ui.focusAfter}"]` : focusSel;
+    ui.focusAfter = null;
+    if (restore) {
+      const again = root.querySelector(restore);
       if (again && !again.disabled) again.focus();
     }
   }
@@ -153,7 +158,7 @@
     const el = e.target.closest('[data-sq],[data-ch],[data-ch-promo]'); const v = ui.v, ctx = ui.ctx;
     if (!el || !v || !ctx) return;
     if (el.dataset.chPromo) {
-      if (ui.promo) { ctx.act({ type: 'move', from: ui.promo.from, to: ui.promo.to, promo: el.dataset.chPromo }); ui.promo = null; }
+      if (ui.promo) { ui.focusAfter = ui.promo.from; ctx.act({ type: 'move', from: ui.promo.from, to: ui.promo.to, promo: el.dataset.chPromo }); ui.promo = null; }
       return;
     }
     if (el.dataset.sq !== undefined) return onSquare(v, ctx, Number(el.dataset.sq));
@@ -161,7 +166,7 @@
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
-      case 'cancel-promo': ui.promo = null; ctx.rerender(); break;
+      case 'cancel-promo': ui.focusAfter = ui.promo ? ui.promo.from : null; ui.promo = null; ctx.rerender(); break;
       case 'resign':
         if (!ui.resignArmed) { ui.resignArmed = true; ctx.rerender(); break; }
         ui.resignArmed = false; ctx.act({ type: 'resign' }); break;

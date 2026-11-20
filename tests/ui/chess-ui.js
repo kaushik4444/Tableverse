@@ -59,6 +59,18 @@ const msgsFor = (g, viewer = 'me') => { const m = tableMessages('chess', [{ id: 
     await ctx.close();
   });
 
+  await test('promotion: a tap on an empty square cancels the open picker and sends no move', async () => {
+    const g = game({ colour: 'host', fen: 'k7/4P3/8/8/8/8/8/K7 w - - 0 1' });
+    const { page, ctx } = await open(msgsFor(g));
+    await page.click('[data-sq="' + sq('e7') + '"]');
+    await page.click('[data-sq="' + sq('e8') + '"]');
+    assert.equal(await page.locator('.ch-promo').count(), 1);
+    await page.click('[data-sq="' + sq('e4') + '"]');
+    assert.equal(await page.locator('.ch-promo').count(), 0, 'the picker closes');
+    assert.equal((await sent(page)).filter((m) => m.action && m.action.type === 'move').length, 0, 'no move is sent');
+    await ctx.close();
+  });
+
   await test('promotion: choosing a pawn’s last-rank square opens the picker and sends the chosen piece', async () => {
     const g = game({ colour: 'host', fen: 'k7/4P3/8/8/8/8/8/K7 w - - 0 1' });
     const { page, ctx } = await open(msgsFor(g));
