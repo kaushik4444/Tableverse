@@ -326,7 +326,8 @@
   /** Applies the redraw that waited for a drag. */
   function flushDeferred() {
     const d = ui.deferred;
-    if (d) { ui.deferred = null; render(d.root, d.v, d.ctx); }
+    // the host renderer sets up the toolbar, voice, settings and timer after every redraw
+    if (d) { ui.deferred = null; d.ctx.rerender(); }
   }
 
   /** A cancelled pointer, or one that lost its capture, ends its drag without a flick. Other pointers are ignored. */
