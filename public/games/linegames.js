@@ -90,6 +90,7 @@
     // the result animates once, when it first appears; a redraw of the same result (a total or a rematch vote) shows it at rest
     const key = v.event ? v.event.seq : null;
     const settled = ui.resultSeen === key;
+    // Only a result that is on screen counts as seen: the end stages hide it until it can animate.
     if (ui.ctx.resultVisible !== false) ui.resultSeen = key;
     const title = v.draw ? 'A draw' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     return `<div class="overlay${settled ? ' settled' : ''}"><div class="sheet"><h2>${title}</h2>
