@@ -136,3 +136,12 @@
   .prt .pr-hand .pr-card { width: 42px; min-height: 0; }
   .prt .pr-last { display: none; }
 }
+
+/* Scores under each name, always in view (public/games/penaltyrows.js chipsHTML). */
+.prt .pr-chips { list-style: none; margin: 8px auto 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 620px; }
+.prt .pr-chips li { display: flex; flex-direction: column; align-items: center; min-width: 88px; padding: 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .12); }
+.prt .pr-chips li.me { border-color: #f59e0b; }
+.prt .pr-chips li.out { opacity: .55; text-decoration: line-through; }
+.prt .pr-chip-name { font-size: .85em; font-weight: 600; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prt .pr-chip-n { font-size: 1.25em; font-variant-numeric: tabular-nums; }
+.prt .pr-chip-n small { font-size: .6em; opacity: .7; font-weight: 500; }
