@@ -6,7 +6,9 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table' };
+  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table', match: 0, lastSeen: null };
+  /** Feed IDs carry the match, so a rematch at the same table cannot reuse an ID the feed still holds. */
+  const fid = (s) => `m${ui.match}:${s}`;
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
 
   /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
@@ -71,7 +73,7 @@
     const e = anim.events[idx];
     const v = ui.latest;
     if (!e || !v || !window.GameFeed || anim.table !== tableOf()) return; // no feed: the replay still moves on
-    window.GameFeed.add(anim.table, [feedItem(v, e, `t${anim.seq}-${idx}`)]);
+    window.GameFeed.add(anim.table, [feedItem(v, e, fid(`t${anim.seq}-${idx}`))]);
     const sp = spotFor(v, e);
     if (sp) window.GameFeed.spotlight(sp);
   }
@@ -228,7 +230,7 @@
     const steps = replaySteps(v);
     ui.anim = steps ? { seq: v.seq, steps, i: 0, table: tableOf(), events: v.lastTurn } : null;
     if (ui.anim) scheduleStep(ui.anim, v.paceK);
-    else if (window.GameFeed) window.GameFeed.add(tableOf(), v.lastTurn.map((e, idx) => feedItem(v, e, `t${v.seq}-${idx}`))); // no replay: the feed still gets the turn
+    else if (window.GameFeed) window.GameFeed.add(tableOf(), v.lastTurn.map((e, idx) => feedItem(v, e, fid(`t${v.seq}-${idx}`)))); // no replay: the feed still gets the turn
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     else if (v.lastTurn.some((e) => e.by === v.me && e.took)) snd.play('lose');
@@ -241,21 +243,23 @@
     if (!key || !window.GameFeed || ui.seq === null) { ui.round = v.round; return; }
     if (ui.anim && ui.anim.table === key) { ui.heldFeed = v; return; } // the replayed moves come first
     ui.heldFeed = null;
-    if (ui.round !== v.round) { window.GameFeed.add(key, [{ id: `round-${v.round}`, tone: 'round', html: `Round ${v.round} begins` }]); ui.round = v.round; }
+    if (ui.round !== v.round) { window.GameFeed.add(key, [{ id: fid(`round-${v.round}`), tone: 'round', html: `Round ${v.round} begins` }]); ui.round = v.round; }
     if (v.phase === 'choose') {
       v.players.forEach((p, i) => {
-        if (p.picked && i !== v.me) window.GameFeed.add(key, [{ id: `pick-${v.round}-${v.turn}-${i}`, tone: 'info', html: `<b>${esc(p.name)}</b> has locked in a card` }]);
+        if (p.picked && i !== v.me) window.GameFeed.add(key, [{ id: fid(`pick-${v.round}-${v.turn}-${i}`), tone: 'info', html: `<b>${esc(p.name)}</b> has locked in a card` }]);
       });
     }
     if (v.phase === 'gameOver' && v.winners.length) {
       const names = v.winners.map((i) => esc(v.players[i].name)).join(' & ');
-      window.GameFeed.add(key, [{ id: `end-${v.round}`, tone: 'win', html: `Game over · <b>${names}</b> ${v.winners.length > 1 ? 'share the win' : 'wins'}` }]);
+      window.GameFeed.add(key, [{ id: fid(`end-${v.round}`), tone: 'win', html: `Game over · <b>${names}</b> ${v.winners.length > 1 ? 'share the win' : 'wins'}` }]);
     }
   }
 
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
+    if (ui.lastSeen !== null && v.seq < ui.lastSeen) ui.match += 1; // the sequence restarted: a new match at this table
+    ui.lastSeen = v.seq;
     if (ui.table !== tableOf()) { ui.table = tableOf(); ui.anim = null; ui.seq = null; } // a different table: start afresh, with no replay
     react(v);
     feedPicksAndRounds(v);

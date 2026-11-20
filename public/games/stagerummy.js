@@ -6,7 +6,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0, phases: false, lastSeq: null, epoch: 0 };
+  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0, phases: false, feeds: new Map() };
   const FLOAT_MS = 2600;
 
   const COL = { R: { name: 'Red', sym: '●' }, B: { name: 'Blue', sym: '■' }, G: { name: 'Green', sym: '▲' }, Y: { name: 'Yellow', sym: '◆' } };
@@ -72,20 +72,20 @@
     return null;
   }
   const feedKey = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
-  /** Feeds the log into the shared feed and fires the spotlight for a new moment. The first render only records the
-   * position, so joining a table mid-game does not replay its history. A new game restarts the sequence (a new epoch). */
+  /** Feeds the log into the shared feed and fires the spotlight for a new moment. Each table keeps its own position, so
+   * coming back to a table compares its log with where it was left. The first visit records the position and shows no
+   * history. A new game restarts the sequence, which starts a new epoch so its IDs cannot collide with the old ones. */
   function feedSync(v) {
     const key = feedKey();
     if (!key || !window.GameFeed) return;
     const last = v.log.length ? v.log[v.log.length - 1].seq : 0;
-    // the cursor belongs to one table: on a switch, start from its current position (no replay of its history)
-    if (ui.feedRoom !== key) { ui.feedRoom = key; ui.lastSeq = null; }
-    if (ui.lastSeq === null) { ui.lastSeq = last; return; }
-    if (last < ui.lastSeq) ui.epoch += 1;
-    const prev = last < ui.lastSeq ? 0 : ui.lastSeq;
-    window.GameFeed.add(key, v.log.filter((e) => e.seq > prev).map((e) => logItem(v, e, `${ui.epoch}-${e.seq}`)).filter(Boolean));
+    const st = ui.feeds.get(key);
+    if (!st) { ui.feeds.set(key, { lastSeq: last, epoch: 0 }); return; }
+    if (last < st.lastSeq) st.epoch += 1;
+    const prev = last < st.lastSeq ? 0 : st.lastSeq;
+    window.GameFeed.add(key, v.log.filter((e) => e.seq > prev).map((e) => logItem(v, e, `${st.epoch}-${e.seq}`)).filter(Boolean));
     if (v.event && v.event.seq > prev) { const sp = spotFor(v, v.event); if (sp) window.GameFeed.spotlight(sp); }
-    ui.lastSeq = last;
+    st.lastSeq = last;
   }
 
   function guidance(v) {
