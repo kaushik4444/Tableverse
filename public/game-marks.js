@@ -23,6 +23,7 @@
     wizard: ['#4f46e5', `<polygon points="24,8 27.5,20.5 40,24 27.5,27.5 24,40 20.5,27.5 8,24 20.5,20.5" fill="${INK}"/><circle cx="37" cy="11" r="2.4" fill="${INK}"/><circle cx="11" cy="37" r="1.8" fill="${INK}"/>`],
     tictactoe: ['#0f766e', `<g stroke="${INK}" stroke-width="2.6" stroke-linecap="round"><line x1="19" y1="11" x2="19" y2="37"/><line x1="29" y1="11" x2="29" y2="37"/><line x1="11" y1="19" x2="37" y2="19"/><line x1="11" y1="29" x2="37" y2="29"/></g><g stroke="#fbbf24" stroke-width="3.2" stroke-linecap="round"><line x1="20.8" y1="20.8" x2="27.2" y2="27.2"/><line x1="27.2" y1="20.8" x2="20.8" y2="27.2"/></g>`],
     fourinarow: ['#e17055', `<rect x="9" y="12" width="30" height="24" rx="4" fill="${INK}"/><g fill="#e17055">${[18, 24, 30].map((cy) => [15, 21, 27, 33].map((cx) => `<circle cx="${cx}" cy="${cy}" r="2.4"/>`).join('')).join('')}</g>`],
+    carrom: ['#a16207', `<circle cx="24" cy="24" r="14" fill="none" stroke="${INK}" stroke-width="3"/><circle cx="24" cy="24" r="5" fill="${INK}"/><circle cx="38" cy="14" r="3" fill="${INK}"/>`],
   };
 
   /** The mark for a game id as an inline SVG string, or the escaped fallback (the emoji icon) when the id has no mark. */

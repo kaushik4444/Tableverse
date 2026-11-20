@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Carrom (2–4 players, in review on `feat/carrom`): physics in `games/carrom/physics.js`, team rules in `games/carrom/engine.js`, an SVG board in `public/games/carrom.js` with drag-to-aim and a striker slider, and tests in `tests/carrom-physics.test.js`, `tests/carrom-engine.test.js` and `tests/ui/carrom-ui.js`. Design note: `docs/CARROM_DESIGN.md`. Not in What's New yet.
 - New game: Color Clash (2–8 players), Tableverse's own colour-and-number shedding game with Stop, Flip, Take 2 and Wild cards, round scoring and a choice of match length, bots, sounds and a phone layout. Off-limits titles stay out; see `docs/GAME_NAMES.md`. Removed from the coming-soon list.
 - Release: all twelve games are open to everyone (Go Fish, Ludo, Take 5, Poker, Property Rivals, Snakes and Ladders, Stage 10, Mind, 29, Wizard, Tic-Tac-Toe, Four in a Row). The owner confirms each game is set to "Enabled" for everyone in the admin console's Games tab before the release; no game is locked by a code default.
 - Game logos: each game has its own SVG mark (`public/game-marks.js`), used on the home page, open tables, the rejoin banner, history, stats, game pages and the admin Games tab. The emoji stays as a fallback for an unknown game id.
