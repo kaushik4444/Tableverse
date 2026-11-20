@@ -10,6 +10,8 @@ const db = require('./pool');
 const policy = require('../lib/adminPolicy');
 const announcements = require('../lib/announcements');
 
+const { validHistoryCursor } = require('../lib/historyCursor');
+
 const PAGE = 25;
 const RETENTION = { activeDays: 35, dailyDays: 400, auditDays: 365, feedbackDays: 180, announcementDays: 90 };
 let ownerKnown = false; // once an owner exists nothing else needs checking (an owner is only ever removed by deleting the account)
@@ -311,16 +313,16 @@ async function forgetActor(playerId) {
 async function overview({ days = 30 } = {}) {
   const n = Math.min(90, Math.max(1, Math.floor(Number(days)) || 30));
   const [series, dims, active, accounts, activeDaily, queues] = await Promise.all([
-    db.query('SELECT day::text AS day, metric, SUM(total)::int AS total FROM analytics_daily WHERE day > CURRENT_DATE - $1::int GROUP BY day, metric ORDER BY day', [n]),
-    db.query("SELECT metric, dim, SUM(total)::int AS total FROM analytics_daily WHERE day > CURRENT_DATE - $1::int AND metric IN ('game_started', 'game_finished', 'error') GROUP BY metric, dim ORDER BY total DESC LIMIT 60", [n]),
-    db.query(`SELECT COUNT(DISTINCT actor) FILTER (WHERE day = CURRENT_DATE)::int AS dau,
-                     COUNT(DISTINCT actor) FILTER (WHERE day > CURRENT_DATE - 7)::int AS wau,
-                     COUNT(DISTINCT actor) FILTER (WHERE day > CURRENT_DATE - 30)::int AS mau FROM analytics_active`),
+    db.query("SELECT day::text AS day, metric, SUM(total)::int AS total FROM analytics_daily WHERE day > (NOW() AT TIME ZONE 'UTC')::date - $1::int GROUP BY day, metric ORDER BY day", [n]),
+    db.query("SELECT metric, dim, SUM(total)::int AS total FROM analytics_daily WHERE day > (NOW() AT TIME ZONE 'UTC')::date - $1::int AND metric IN ('game_started', 'game_finished', 'error') GROUP BY metric, dim ORDER BY total DESC LIMIT 60", [n]),
+    db.query(`SELECT COUNT(DISTINCT actor) FILTER (WHERE day = (NOW() AT TIME ZONE 'UTC')::date)::int AS dau,
+                     COUNT(DISTINCT actor) FILTER (WHERE day > (NOW() AT TIME ZONE 'UTC')::date - 7)::int AS wau,
+                     COUNT(DISTINCT actor) FILTER (WHERE day > (NOW() AT TIME ZONE 'UTC')::date - 30)::int AS mau FROM analytics_active`),
     db.query(`SELECT COUNT(*) FILTER (WHERE NOT is_anonymous)::int AS registered,
                      COUNT(*) FILTER (WHERE NOT is_anonymous AND created_at > NOW() - INTERVAL '1 day')::int AS registered_24h,
                      COUNT(*) FILTER (WHERE role <> 'user')::int AS staff FROM players`),
     // one row per player per day in analytics_active (a keyed hash, never an account id), so a count is distinct players that day
-    db.query('SELECT day::text AS day, COUNT(*)::int AS active FROM analytics_active WHERE day > CURRENT_DATE - $1::int GROUP BY day ORDER BY day', [n]),
+    db.query("SELECT day::text AS day, COUNT(*)::int AS active FROM analytics_active WHERE day > (NOW() AT TIME ZONE 'UTC')::date - $1::int GROUP BY day ORDER BY day", [n]),
     // work waiting for a person: reports (no status column yet, so recent and total) and feedback not yet read
     db.query(`SELECT (SELECT COUNT(*) FROM chat_reports WHERE created_at > NOW() - INTERVAL '7 days')::int AS reports7d,
                      (SELECT COUNT(*) FROM chat_reports)::int AS reports_total,
@@ -359,6 +361,38 @@ async function gameStats({ days = 30 } = {}) {
       penalisedLeaves: r.penalised_leaves, leftWithoutPenalty: r.left_without_penalty,
       avgMinutes: Math.round((r.avg_seconds / 60) * 10) / 10, finished7d: r.finished_7d,
     })),
+  };
+}
+
+/**
+ * Tables hosted, newest first, a page at a time. Each row: the game, the room code, when it started and ended, the seats,
+ * how many were people and how many bots, and whether it was completed. No player is named.
+ * The cursor is the last row's "finished_at|id" from the previous page, so paging stays correct as new tables finish.
+ */
+const HISTORY_MAX = 100;
+async function matchHistory({ before = null, limit = 50 } = {}) {
+  const n = Math.min(HISTORY_MAX, Math.max(1, Math.floor(Number(limit)) || 50));
+  let cursorAt = null;
+  let cursorId = null;
+  if (before) {
+    if (!validHistoryCursor(before)) throw new Error('Bad cursor');
+    [cursorAt, cursorId] = before.split('|');
+  }
+  const r = await db.query(`
+    SELECT id, room_code, game_id, seats, started_at, finished_at, completed, table_humans, table_bots,
+           to_char(finished_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_at
+      FROM matches
+     WHERE ($2::timestamptz IS NULL OR (finished_at, id) < ($2::timestamptz, $3::uuid))
+     ORDER BY finished_at DESC, id DESC
+     LIMIT $1`, [n + 1, cursorAt, cursorId]);
+  const rows = r.rows.slice(0, n);
+  const last = rows[rows.length - 1];
+  return {
+    tables: rows.map((m) => ({
+      id: m.id, roomCode: m.room_code, gameId: m.game_id, seats: m.seats,
+      humans: m.table_humans, bots: m.table_bots, startedAt: m.started_at, finishedAt: m.finished_at, completed: m.completed,
+    })),
+    nextCursor: r.rows.length > n && last ? `${last.cursor_at}|${last.id}` : null,
   };
 }
 
@@ -597,7 +631,7 @@ async function setGameOrder({ actorId, order }) {
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health, gameStats, listGameFlags, setGameFlag, setGameOrder, listGuestFeatures, setGuestFeature, recordAudit,
+  addCounters, addActive, forgetActor, overview, health, gameStats, matchHistory, listGameFlags, setGameFlag, setGameOrder, listGuestFeatures, setGuestFeature, recordAudit,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)

@@ -9,7 +9,7 @@
  */
 const db = require('./pool');
 
-const WINDOWS = [7, 30, 90];
+const WINDOWS = [1, 7, 30, 90]; // 1 = the last 24 hours
 const clampDays = (d) => { const n = Math.floor(Number(d)); return WINDOWS.includes(n) ? n : 30; };
 // The only zones the console can ask for. The database does the conversion, so daylight saving and India's half hour are exact.
 const ZONES = ['UTC', 'Europe/Berlin', 'Asia/Kolkata'];
@@ -133,12 +133,13 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
   const newPlayers = daily.rows.reduce((a, r) => a + r.new_players, 0);
   return {
     days: n,
+    counterScope: n === WINDOWS[0] ? 'Today (UTC)' : `Last ${n} UTC calendar days`,
     zone,
     games: gameRows,
     heat: heat.rows.map((r) => ({ dow: r.dow, hour: r.hour, matches: r.matches, playerGames: r.player_games })),
     playtime: { players: num(pt.players), totalMinutes: round1(pt.total_minutes), avgMinutes: round1(pt.avg_minutes), medianMinutes: round1(pt.median_minutes),
       buckets: [num(pt.b_lt10), num(pt.b_10_30), num(pt.b_30_60), num(pt.b_60_180), num(pt.b_180)] },
-    returning: { activePlayers: num(pt.players), newPlayers, returningPlayers: num(pt.multi_day), daily: daily.rows.map((r) => ({ day: r.day, newPlayers: r.new_players, returningPlayers: r.returning_players })),
+    returning: { activePlayers: num(pt.players), newPlayers, newPlayersScope: n === WINDOWS[0] ? 'Today (UTC)' : `Last ${n} UTC calendar days`, returningPlayers: num(pt.multi_day), daily: daily.rows.map((r) => ({ day: r.day, newPlayers: r.new_players, returningPlayers: r.returning_players })),
       cohort: { size: num(c.size), d1: num(c.d1), d7: num(c.d7), d7Exact: num(c.d7_exact), size30: num(c.size30), d30Exact: num(c.d30_exact) } },
     countries: countries.rows.map((r) => ({ country: r.country, players: r.players })),
     top: top.rows.map((r) => ({ username: r.username, displayName: r.display_name, games: r.games, wins: r.wins, minutes: round1(r.minutes), peakHour: r.peak_hour })),

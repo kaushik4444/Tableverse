@@ -42,6 +42,23 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       return { ...u, email: e, id: me.id };
     };
 
+    await test('history preserves microseconds and the id tie-breaker across pages', async () => {
+      const ids = ['ffffffff-ffff-4fff-8fff-fffffffffff1', 'ffffffff-ffff-4fff-8fff-fffffffffff2', 'ffffffff-ffff-4fff-8fff-fffffffffff3'];
+      try {
+        for (let i = 0; i < ids.length; i++) await q(`INSERT INTO matches (id, room_code, game_id, seats, started_at, finished_at, completed)
+          VALUES ($1, 'MICROS', 'ludo', 2, '2099-01-01T00:00:00Z', $2, TRUE)`,
+          [ids[i], i === 0 ? '2099-01-01T00:01:00.123455Z' : '2099-01-01T00:01:00.123456Z']);
+        const seen = []; let before = null;
+        for (let i = 0; i < 3; i++) {
+          const page = await dbAdmin.matchHistory({ limit: 1, before });
+          seen.push(page.tables[0].id);
+          if (i < 2) assert.match(page.nextCursor, /\.123456Z\|/);
+          before = page.nextCursor;
+        }
+        assert.deepEqual(seen, [...ids].reverse());
+      } finally { await q('DELETE FROM matches WHERE id = ANY($1::uuid[])', [ids]); }
+    });
+
     console.log('insights');
     await test('insights: the SQL runs on a real database and counts humans, leavers, draws, new and returning players', async () => {
       const ins = require('../db/insights');
