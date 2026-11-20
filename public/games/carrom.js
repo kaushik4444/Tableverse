@@ -1,4 +1,4 @@
-/* Carrom (games/carrom): the board as SVG, aiming by dragging on the board (with sliders for fine control), playing back each
+/* Carrom (games/carrom): the board as SVG, aiming by dragging on the board, playing back each
  * shot from its keyframes, and the end of the game. Styles in carrom.css.
  *
  * Frames: the server keeps the board in the bottom side's frame. A viewer sees their own side at the bottom, so every point is
@@ -110,7 +110,7 @@
     const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]);
     const striker = aiming ? `<circle class="cb-striker ${colourOfMe(v) === 'w' ? 'w' : 'b'}" data-id="striker" cx="${sx}" cy="${sy}" r="0.026" tabindex="0" role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}"/>` : '';
     const pockets = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => `<circle class="cb-pocket" cx="${x}" cy="${y}" r="0.05"/>`).join('');
-    return `<svg class="cb-svg" viewBox="-0.07 -0.07 1.14 1.14" role="img" aria-label="Carrom board">
+    return `<svg class="cb-svg" viewBox="-0.05 -0.05 1.10 1.10" role="img" aria-label="Carrom board">
       <rect class="cb-board" x="0" y="0" width="1" height="1" rx="0.02"/>
       <rect class="cb-inner" x="0.06" y="0.06" width="0.88" height="0.88"/>
       ${lines}
@@ -124,17 +124,14 @@
 
   function controlsHTML(v) {
     if (!v.myTurn || ui.anim) return '';
-    return `<div class="cb-controls">
-      <button type="button" class="btn cb-flick" data-cb="flick" ${ui.aim.power > 0 ? '' : 'disabled'}>Flick</button>
-    </div>
-    <p class="hint cb-tip">${tipText()}</p>`;
+    return `<p class="hint cb-tip">${tipText()}</p>`;
   }
 
   /** What the player can do now, with the live aim and power (there are no sliders). */
   function tipText() {
     const { angle, power } = ui.aim;
     if (power <= 0) return 'Drag your striker along the baseline to place it. Then press on the board and drag back to set the aim and power.';
-    return `Aim ${angle}° · power ${power}%. Let go to flick, or press Flick. Drag the striker to move it.`;
+    return `Aim ${angle}° · power ${power}%. Let go to flick. Drag the striker to move it.`;
   }
 
   function logHTML(v) {
@@ -264,7 +261,7 @@
     syncAim();
   }
 
-  /** Updates the sliders, readouts, arrow and Flick button without rebuilding the board. */
+  /** Updates the arrow and tip text without rebuilding the board. */
   function syncAim() {
     const root = ui.root;
     if (!root) return;
@@ -277,8 +274,6 @@
     }
     const striker = svg && svg.querySelector('[data-id="striker"]');
     if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); }
-    const fire = root.querySelector('[data-cb="flick"]');
-    if (fire) fire.disabled = ui.aim.power <= 0;
     const tip = root.querySelector('.cb-tip');
     if (tip) tip.textContent = tipText();
   }
@@ -361,6 +356,7 @@
   function onKey(e) {
     const v = ui.v;
     if (!v || !v.myTurn || ui.anim || !e.target.closest || !e.target.closest('[data-id="striker"]')) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); return; }
     const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: 1, ArrowDown: -1 }[e.key];
     if (!step) return;
     e.preventDefault();
@@ -375,7 +371,6 @@
     const v = ui.v, ctx = ui.ctx;
     if (!el || !v || !ctx) return;
     switch (el.dataset.cb) {
-      case 'flick': fire(); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ui.resignArmed = false; ctx.leave(); break;
