@@ -97,9 +97,9 @@
     const e = v.event;
     const fresh = e && e.type === 'play' && ui.shown !== e.seq; // the new top card lands once, a later redraw shows it at rest
     const stock = `<button type="button" class="cc-stock ${v.canDraw ? 'ready' : ''}" data-cc="draw" ${v.canDraw ? '' : 'disabled'} aria-label="Draw a card (${v.stock} left in the stock)">${v.stock ? backHTML() : '<div class="card slot"></div>'}<b>${v.stock}</b><small>stock</small></button>`;
-    const center = `<div class="cc-mid">${stock}<div class="cc-discard">${cardHTML(v.top, fresh ? 'cc-land' : '')}<span class="cc-dir" title="Direction of play" aria-label="${v.dir > 0 ? 'Clockwise' : 'Anticlockwise'}">${v.dir > 0 ? '↻' : '↺'}</span></div></div><div class="cc-colour">Colour in play ${colourChip(v.colour)}</div>`;
+    const center = `<div class="cc-mid">${stock}<div class="cc-discard">${cardHTML(v.top, fresh ? 'cc-land' : '')}<span class="cc-dir" title="Direction of play" aria-label="${v.dir > 0 ? 'Clockwise' : 'Anticlockwise'}">${v.dir > 0 ? '↻' : '↺'}</span></div></div>`;
     const feed = window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : '';
-    return `<div class="cc-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}${feed}</div>`
+    return `<div class="cc-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}${feed}</div><div class="cc-colour">Colour in play ${colourChip(v.colour)}</div>`
       + (text ? `<p class="cc-event cc-event-bar" role="status">${text}</p>` : '');
   }
 
