@@ -3143,9 +3143,9 @@
       // Focus a visible Stages sheet, restore the prior result action, or focus the first action on arrival.
       // A rules sheet open on the page keeps focus: the result behind it must not take it.
       if ((!document.activeElement || document.activeElement === document.body) && !document.querySelector('body > .overlay')) {
-        const back = focusedResultAction
-          ? Array.from($app.querySelectorAll('.end-actions button, .end-bar button')).find((b) => b.dataset.act === focusedResultAction)
-          : $app.querySelector('.end-actions button, .end-bar button');
+        // the action that had focus if it is still there (a redraw can replace it), otherwise the first action
+        const back = (focusedResultAction && Array.from($app.querySelectorAll('.end-actions button, .end-bar button')).find((b) => b.dataset.act === focusedResultAction))
+          || $app.querySelector('.end-actions button, .end-bar button');
         ($app.querySelector('[aria-labelledby="sr-phases-title"] button[data-sr="closePhases"]') || back)?.focus({ preventScroll: true });
       }
       // The game-over reminder: the one stronger prompt for a guest, placed by the end actions (never during play)
