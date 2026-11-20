@@ -146,7 +146,9 @@
     if (!chip || !lane) return;
     const to = chip.getBoundingClientRect();
     const tx = to.left + to.width / 2; const ty = to.top + to.height / 2;
-    [...lane.querySelectorAll('[data-cn]')].forEach((el, i) => {
+    // a sweep takes the cards already on the row; the card just played (e.n) is not collected: it starts the row again
+    const cards = [...lane.querySelectorAll('[data-cn]')].filter((el) => !(e.kind === 'sweep' && el.dataset.cn === String(e.n)));
+    cards.forEach((el, i) => {
       const r = el.getBoundingClientRect();
       const dx = tx - (r.left + r.width / 2); const dy = ty - (r.top + r.height / 2);
       el.animate([
