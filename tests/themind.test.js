@@ -224,4 +224,4 @@ test('400 games with imperfect timing always finish; bots only ever act legally'
   assert.ok(wins > 20 && losses > 20, `wins ${wins}, losses ${losses}`);
 });
 
-console.log(`\n${passed} The Mind tests passed`);
+console.log(`\n${passed} Mind tests passed`);
