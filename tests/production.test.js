@@ -249,7 +249,7 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
   });
 
   await test('authenticated sessions can connect and invalid/missing tokens are rejected', async () => {
-    const srv = await start({ ...base, maxNewAccountsPerIp: 2 });
+    const srv = await start(base);
     const one = await auth(srv, 'Auth One');
     const two = await auth(srv, 'Auth Two');
 
@@ -270,7 +270,7 @@ const rejects = (p, re) => assert.rejects(p, (e) => re.test(e.message));
   });
 
   await test('sessions from many addresses can connect when authenticated', async () => {
-    const srv = await start({ ...base, trustProxy: true, maxNewAccountsPerMin: 3, maxNewAccountsPerIp: 1000 });
+    const srv = await start({ ...base, trustProxy: true });
     let welcomed = 0;
     for (let i = 0; i < 5; i++) {
       const s = await auth(srv, `Flood ${i}`);
