@@ -109,7 +109,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
   });
 
   await test('a new move animates once and plays its own sound; a redraw of the same position does not restart it', async () => {
-    for (const [id, sound, selector] of [['tictactoe', 'place', '.lg-cell.enter .lg-glyph path, .lg-cell.enter .lg-glyph circle'], ['fourinarow', 'drop', '.lg-cell.enter .lg-piece']]) {
+    for (const [id, sound, selector] of [['tictactoe', 'place', '.lg-cell.enter .lg-glyph path, .lg-cell.enter .lg-glyph circle'], ['fourinarow', 'fall', '.lg-cell.enter .lg-piece']]) {
       const m = msgs(id, () => {});
       const { page, ctx } = await open(m);
       await page.evaluate(() => { window.__sounds = []; window.CardTable.sound.play = (n) => window.__sounds.push(n); });
@@ -125,6 +125,32 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     }
   });
 
+  await test('a disc really falls from above its square (and lands); a redraw in the middle continues the animation instead of restarting it', async () => {
+    const m = msgs('fourinarow', () => {});
+    const { page, ctx } = await open(m);
+    await page.evaluate(() => { window.__sounds = []; window.CardTable.sound.play = (n) => window.__sounds.push(n); });
+    await page.evaluate((x) => window.__push(x), moveMsg(m, 38, 0)); // the bottom row: the longest fall
+    await page.waitForSelector('.lg-cell.enter .lg-piece');
+    const offset = await page.evaluate(() => { const p = document.querySelector('.lg-cell.enter .lg-piece').getBoundingClientRect(); const c = document.querySelector('.lg-cell.enter').getBoundingClientRect(); return c.top - p.top; });
+    assert.ok(offset > 100, `the disc starts well above its square (${Math.round(offset)}px)`);
+    await page.evaluate(() => { document.querySelector('.lg-cell.enter .lg-piece').dataset.original = '1'; });
+    await page.waitForTimeout(350);
+    // a redraw with a different rendered state (another player's earlier disc), same move: app.js skips a message identical to the last
+    const redraw = moveMsg(m, 38, 0); redraw.view.board[0] = 1;
+    await page.evaluate((x) => window.__push(x), redraw);
+    const after = await page.evaluate(() => {
+      const piece = document.querySelector('.lg-cell.enter .lg-piece');
+      const a = piece && piece.getAnimations().find((x) => x.animationName === 'lg-drop');
+      return { replaced: !!piece && piece.dataset.original !== '1', progress: a ? a.currentTime - a.effect.getTiming().delay : null };
+    });
+    assert.ok(after.replaced, 'the redraw replaced the disc element');
+    assert.ok(after.progress > 250, `the fall continues from about ${Math.round(after.progress)} ms, it does not restart at 0`);
+    await page.waitForTimeout(900);
+    const names = await page.evaluate(() => window.__sounds);
+    assert.deepEqual(names.slice(0, 2), ['fall', 'land'], 'the fall sound now, the landing sound when it arrives');
+    await ctx.close();
+  });
+
   await test('every game renderer plays sounds (the trick games through the shared hook in app.js)', async () => {
     const fs = require('fs'); const path = require('path');
     const dir = path.join(__dirname, '../../public/games');
@@ -132,7 +158,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
       const src = fs.readFileSync(path.join(dir, f), 'utf8');
       assert.match(src, /sound|snd\./, `${f} uses sound`);
     }
-    for (const name of ['card', 'deal', 'collect', 'turn', 'win', 'lose', 'place', 'drop']) {
+    for (const name of ['card', 'deal', 'collect', 'turn', 'win', 'lose', 'place', 'fall', 'land']) {
       assert.match(fs.readFileSync(path.join(__dirname, '../../public/sound.js'), 'utf8'), new RegExp(`\\b${name}:`), `the ${name} sound exists`);
     }
   });

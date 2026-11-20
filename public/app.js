@@ -181,6 +181,8 @@
   });
 
   const gameMeta = (id) => S.games.find((g) => g.id === id);
+  // the game's SVG mark (public/game-marks.js); the emoji icon when there is no mark
+  const gameMark = (g) => (window.GameMarks ? window.GameMarks.html(g.id, g.icon || '🎴') : esc(g.icon || '🎴'));
   /** The account reminder for a guest on this page (lib/guest.js decides whether it may show now); '' for everybody else. */
   const guestNudge = (ctx) => (S.isGuest && window.TvGuest ? window.TvGuest.nudgeHTML(ctx, { guest: true, hours: S.guestHours }) : '');
   const addNudge = (ctx) => { const host = $app.querySelector('main, .page'); const n = guestNudge(ctx); if (host && n) host.insertAdjacentHTML('afterbegin', n); };
@@ -210,7 +212,7 @@
     const el = document.createElement('div');
     el.className = 'overlay';
     el.innerHTML = `<div class="sheet" role="dialog" aria-label="How to play ${esc(g.name)}">
-      <h2>${esc(g.icon)} How to play ${esc(g.name)}</h2>
+      <h2>${gameMark(g)} How to play ${esc(g.name)}</h2>
       ${(g.rules || []).map((p) => `<p class="rule">${esc(p)}</p>`).join('')}
       ${variants ? `<h3 style="margin:16px 0 6px">Options</h3><dl class="variants">${variants}</dl>` : ''}
       <div class="row" style="margin-top:14px"><button class="btn" data-close="1">Got it</button></div></div>`;
@@ -985,7 +987,7 @@
   function rejoinBannerHTML() {
     if (!S.rejoin.length) return '';
     return S.rejoin.map((r) => {
-      const g = gameMeta(r.gameId) || { name: r.gameId, icon: '🎴' };
+      const g = gameMeta(r.gameId) || { id: r.gameId, name: r.gameId, icon: '🎴' };
       const canReclaim = r.canReclaim !== false;
       const message = canReclaim
         ? `${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.`
@@ -993,7 +995,7 @@
       const action = canReclaim
         ? `<button class="btn" data-act="rejoin" data-code="${esc(r.code)}">Rejoin</button>`
         : r.noSeatedHumans ? '' : `<button class="btn" data-act="watch" data-code="${esc(r.code)}">Watch</button>`;
-      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${esc(g.icon || '🎴')}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${message}</span></div>${action}</div>`;
+      return `<div class="rejoin-banner panel" role="status"><span class="rj-ico">${gameMark(g)}</span><div class="rj-text"><b>Your ${esc(g.name)} game is still running</b><span>${message}</span></div>${action}</div>`;
     }).join('');
   }
 
@@ -1205,9 +1207,9 @@
     const count = S.publicTables.length;
     if (!count) return ''; // nothing open: no empty block on the home page
     const rows = S.publicTables.map((t) => {
-      const g = gameMeta(t.gameId) || { name: t.gameId, icon: '🎴' };
+      const g = gameMeta(t.gameId) || { id: t.gameId, name: t.gameId, icon: '🎴' };
       const action = publicTableAction(t);
-      return `<div class="public-table"><span class="public-game-icon">${esc(g.icon || '🎴')}</span><div class="public-table-info"><b>${esc(g.name)}</b><span>${esc(t.host)}'s table · ${t.members}/${t.seats} players${t.spectators ? ` · 👁 ${t.spectators}` : ''}</span></div><button class="btn ${action.cls} small" data-act="joinPublic" data-code="${esc(t.code)}" ${action.disabled ? 'disabled' : ''}>${action.label}</button></div>`;
+      return `<div class="public-table"><span class="public-game-icon">${gameMark(g)}</span><div class="public-table-info"><b>${esc(g.name)}</b><span>${esc(t.host)}'s table · ${t.members}/${t.seats} players${t.spectators ? ` · 👁 ${t.spectators}` : ''}</span></div><button class="btn ${action.cls} small" data-act="joinPublic" data-code="${esc(t.code)}" ${action.disabled ? 'disabled' : ''}>${action.label}</button></div>`;
     }).join('');
     return `<section class="home-section public-tables-panel"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 class="section">Open tables <span class="session-count">${count}</span></h2></div><button class="btn ghost small" data-act="toggleSessions" aria-expanded="${S.sessionListOpen}">${S.sessionListOpen ? 'Hide' : 'Show'}</button></div>${S.sessionListOpen ? count ? `<div class="public-tables">${rows}</div>` : emptyState('🪑', 'No open tables', 'Create a table and make it public, and it appears here for everyone.') : ''}</section>`;
   }
@@ -2100,7 +2102,7 @@
     if (!h || !h.total) return emptyState('🕘', 'No games yet', 'Finished games show up here with the game, the date and how it went.');
     const rows = h.items.map((g) => {
       const meta = statsGame(g.gameId);
-      return `<li class="hist-row"><span class="hist-ico" aria-hidden="true">${esc(meta.icon || '🎴')}</span><span class="hist-main"><b>${esc(meta.name)}</b><small>${esc(fmtDate(g.finishedAt))} · ${g.humans} player${g.humans === 1 ? '' : 's'}${g.seats > g.humans ? ` + ${g.seats - g.humans} bot${g.seats - g.humans === 1 ? '' : 's'}` : ''}</small></span><span class="result ${g.result}">${RESULT_LABEL[g.result]}</span></li>`;
+      return `<li class="hist-row"><span class="hist-ico" aria-hidden="true">${gameMark(meta)}</span><span class="hist-main"><b>${esc(meta.name)}</b><small>${esc(fmtDate(g.finishedAt))} · ${g.humans} player${g.humans === 1 ? '' : 's'}${g.seats > g.humans ? ` + ${g.seats - g.humans} bot${g.seats - g.humans === 1 ? '' : 's'}` : ''}</small></span><span class="result ${g.result}">${RESULT_LABEL[g.result]}</span></li>`;
     }).join('');
     const pager = h.pages > 1 ? `<nav class="pager" aria-label="History pages"><button type="button" class="btn ghost small" data-act="historyPage" data-page="${h.page - 1}" ${h.page <= 1 ? 'disabled' : ''}>← Newer</button><span>Page ${h.page} of ${h.pages}</span><button type="button" class="btn ghost small" data-act="historyPage" data-page="${h.page + 1}" ${h.page >= h.pages ? 'disabled' : ''}>Older →</button></nav>` : '';
     return `<ul class="hist-list">${rows}</ul>${pager}<p class="hint" style="text-align:left">Leaving while others were still playing counts as a loss. Leaving against bots only, or in a game that was abandoned, is listed but not counted.</p>`;
@@ -2665,7 +2667,7 @@
       const note = open ? '' : guestLocked && window.TvGuest ? window.TvGuest.lockedLabel(g.name) : '<p class="game-off" role="status">Unavailable right now.</p>';
       return `
       <article class="game-card${open ? '' : ' is-locked'}" style="--accent:${esc(g.accent || '#7b4bd0')}">
-        <div class="game-art" aria-hidden="true">${esc(g.icon || '🎴')}</div>
+        <div class="game-art" aria-hidden="true">${gameMark(g)}</div>
         <div class="game-body">
           <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
           <p>${esc(g.tagline)}</p>${note}
@@ -2784,7 +2786,7 @@
 
   function renderLobby() {
     const r = S.room;
-    const g = gameMeta(r.gameId) || { name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
+    const g = gameMeta(r.gameId) || { id: r.gameId, name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
     const isHost = r.hostId === S.id;
     const n = r.members.length;
     const open = r.seats - n;
@@ -2826,7 +2828,7 @@
     <main class="page">
       <div class="row" style="justify-content:space-between">
         <button class="btn ghost small" data-act="leave">← Leave</button>
-        <h2>${esc(g.icon)} ${esc(g.name)}</h2>
+        <h2>${gameMark(g)} ${esc(g.name)}</h2>
         <span class="row" style="gap:6px">${S.guest || !pendingSocial() ? '' : bellHTML()}${voiceButtonsHTML()}${CardTable.chat.button()}<button class="btn ghost small" data-act="rules" data-game="${esc(r.gameId)}">Rules</button></span>
       </div>
       ${spectating ? `<section class="panel"><h3>👁 You are watching</h3><p class="hint" style="text-align:left;margin:6px 0 10px">The next game starts when the host presses Start. ${open > 0 ? 'There is an open seat if you want to play.' : 'Ask the host to free a seat if you want to play.'}</p>${open > 0 ? '<button class="btn" data-act="sit">Take a seat</button>' : ''}</section>` : ''}
@@ -2862,7 +2864,7 @@
   }
 
   // ------------------------------------------------------------ player stats
-  const statsGame = (id) => gameMeta(id) || { name: id, icon: '🎴' };
+  const statsGame = (id) => gameMeta(id) || { id, name: id, icon: '🎴' }; // the id too, so a game's mark still shows without its menu entry
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
@@ -2896,7 +2898,7 @@
     const gameXp = (g) => Number(g.points !== undefined ? g.points : g.xp) || 0;
     const games = Object.entries(pr.games || {}).sort((x, y) => gameXp(y[1]) - gameXp(x[1])).map(([id, g]) => {
       const meta = statsGame(id);
-      const label = `<span>${esc(meta.icon || '🎴')} ${esc(meta.name)}</span><b>${fmtXp(gameXp(g))} XP</b>`;
+      const label = `<span>${gameMark(meta)} ${esc(meta.name)}</span><b>${fmtXp(gameXp(g))} XP</b>`;
       // Another player's profile shows the same numbers but has no detail view for them, so its rows are plain text.
       return interactive
         ? `<li class="pg-row"><button type="button" class="pg-btn" data-act="openGameStats" data-game="${esc(id)}" aria-label="${esc(meta.name)}: ${fmtXp(gameXp(g))} Game XP, details">${label}</button></li>`
@@ -2917,7 +2919,7 @@
   function gameDetailHTML(P) {
     const id = P.game;
     const meta = statsGame(id);
-    const head = `<div class="pg-head"><button type="button" class="btn ghost small" data-act="closeGameStats">← All games</button><b>${esc(meta.icon || '🎴')} ${esc(meta.name)}</b></div>`;
+    const head = `<div class="pg-head"><button type="button" class="btn ghost small" data-act="closeGameStats">← All games</button><b>${gameMark(meta)} ${esc(meta.name)}</b></div>`;
     const st = P.data.stats;
     const g = (st.perGame || []).find((x) => x.gameId === id);
     if (!g) return `${head}${emptyState('🃏', 'Not played yet', 'Play this game and your Game XP and record show up here.')}`;
@@ -2955,9 +2957,9 @@
     const games = s.perGame.map((g) => {
       const meta = statsGame(g.gameId);
       const tag = interactive ? 'button' : 'div';
-      return `<${tag} class="stat-game${interactive ? ' stat-game-btn' : ''}"${interactive ? ` type="button" data-act="openGameStats" data-game="${esc(g.gameId)}" aria-label="${esc(meta.name)}: details"` : ''}><span class="stat-game-name">${esc(meta.icon || '🎴')} ${esc(meta.name)}${KIND_NOTE[g.kind] ? ` <small class="stat-kind" title="${esc(KIND_NOTE[g.kind])}">${g.kind === 'coop' ? 'co-op' : 'teams'}</small>` : ''}</span><span class="stat-game-rec">${g.wins}W · ${g.losses}L</span><span class="stat-bar" aria-hidden="true"><i style="width:${g.winRate || 0}%"></i></span><span class="stat-game-pct">${g.winRate}%</span>${g.best !== null && g.bestLabel ? `<span class="stat-game-best">${esc(g.bestLabel)}: <b>${esc(g.bestText)}</b></span>` : ''}</${tag}>`;
+      return `<${tag} class="stat-game${interactive ? ' stat-game-btn' : ''}"${interactive ? ` type="button" data-act="openGameStats" data-game="${esc(g.gameId)}" aria-label="${esc(meta.name)}: details"` : ''}><span class="stat-game-name">${gameMark(meta)} ${esc(meta.name)}${KIND_NOTE[g.kind] ? ` <small class="stat-kind" title="${esc(KIND_NOTE[g.kind])}">${g.kind === 'coop' ? 'co-op' : 'teams'}</small>` : ''}</span><span class="stat-game-rec">${g.wins}W · ${g.losses}L</span><span class="stat-bar" aria-hidden="true"><i style="width:${g.winRate || 0}%"></i></span><span class="stat-game-pct">${g.winRate}%</span>${g.best !== null && g.bestLabel ? `<span class="stat-game-best">${esc(g.bestLabel)}: <b>${esc(g.bestText)}</b></span>` : ''}</${tag}>`;
     }).join('');
-    const recent = s.recent.map((r) => `<span class="stat-chip ${r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${esc(statsGame(r.gameId).icon || '🎴')}<b>${r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
+    const recent = s.recent.map((r) => `<span class="stat-chip ${r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${gameMark({ id: r.gameId, icon: statsGame(r.gameId).icon })}<b>${r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
     return `
       ${progressHTML(s.progress, interactive)}
       <div class="stat-grid">
@@ -2965,7 +2967,7 @@
         ${tile('Wins', s.wins, 'good')}
         ${tile('Losses', s.losses)}
         ${tile('Win rate', s.winRate + '%')}
-        ${tile('Favourite game', fav ? `${esc(fav.icon || '🎴')} ${esc(fav.name)}` : '–', 'wide')}
+        ${tile('Favourite game', fav ? `${gameMark(fav)} ${esc(fav.name)}` : '–', 'wide')}
         ${tile('Win streak', s.streak.current)}
         ${tile('Best streak', s.streak.best)}
       </div>
