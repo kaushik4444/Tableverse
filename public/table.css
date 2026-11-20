@@ -62,7 +62,6 @@ button.card { cursor: pointer; }
 
 
 /* ---- foresight + hidden card */
-.chip.hasfs { padding-right: 44px; }
 .chip .fs { --cw: 30px; position: absolute; right: 6px; top: 6px; }
 .card.back { background: repeating-linear-gradient(45deg, #3a2a7a 0 6px, #4b3a96 6px 12px); }
 .card.back .pip { font-size: calc(var(--cw) * .5); opacity: .8; }
@@ -77,8 +76,6 @@ button.card { cursor: pointer; }
 .bidinfo { align-self: center; text-align: center; font-size: 12px; color: var(--gold); max-width: 110px; }
 .wz-players.four { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 480px) { .wz-players.four { grid-template-columns: repeat(2, 1fr); } }
-.chip.tus { border-left: 4px solid rgba(123, 224, 160, .8); }
-.chip.tthem { border-left: 4px solid rgba(255, 122, 107, .8); }
 .cpts { position: absolute; left: 50%; bottom: 5%; transform: translateX(-50%); min-width: calc(var(--cw) * .26); text-align: center; font-family: var(--sans); font-size: calc(var(--cw) * .17); line-height: 1.5; border-radius: 999px; background: rgba(0, 0, 0, .35); color: #fff; padding: 0 4px; }
 .card.suit-Y .cpts { background: rgba(0, 0, 0, .55); }
 
@@ -122,8 +119,6 @@ button.card { cursor: pointer; }
 }
 .av .face { font-size: calc(var(--av) * .56); line-height: 1; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .4)); font-weight: 700; }
 .pseat.me .av { border-color: var(--gold); }
-.pseat.team0 .av { box-shadow: 0 0 0 3px rgba(123, 224, 160, .75), 0 4px 10px rgba(0, 0, 0, .5); }
-.pseat.team1 .av { box-shadow: 0 0 0 3px rgba(255, 122, 107, .75), 0 4px 10px rgba(0, 0, 0, .5); }
 .pseat.turn .av { box-shadow: 0 0 0 4px var(--gold), 0 0 20px 8px rgba(242, 193, 78, .55); animation: ring 1.3s ease-in-out infinite; }
 @keyframes ring { 50% { box-shadow: 0 0 0 4px var(--gold), 0 0 30px 14px rgba(242, 193, 78, .3); } }
 .dealer { display: none; }
@@ -160,7 +155,6 @@ button.card { cursor: pointer; }
   .plate b { font-size: 12px; }
   .plate span { font-size: 10px; }
   .pt-info { display: none; }
-  .wc-name { display: none; }
 }
 /* Short phones (about 640px high or less): spend less height on the table so the hand and the bid or bet controls stay on screen */
 @media (max-width: 520px) and (max-height: 700px) { .wz { --av: 38px; } .pt { --pt-min: 250px; } }
