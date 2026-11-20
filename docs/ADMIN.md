@@ -171,7 +171,7 @@ The game server counts, per day, how many connections opened in each UTC hour (`
 
 ## Tables hosted and the 24-hour range (staff)
 
-- Overview, Insights, country figures and the Games tab take `days=1` as well as 7, 30 and 90. The two kinds of figure differ: the Games tab uses the **rolling last 24 hours**, while the Overview and Insights counters are kept per UTC calendar day, so `days=1` there means **Today (UTC)** (the screen says so). At 01:00 UTC, Today (UTC) leaves out the previous evening, and the rolling range does not.
+- Overview, Insights, country figures and the Games tab take `days=1` as well as 7, 30 and 90. Most match-derived figures (the Games tab, and the Insights players, play time, leaving, per-game, country, heatmap and top-player figures) use the **rolling last 24 hours**. Only the Overview and Insights counters ("Finished of started", the visit charts and the new and returning chart) are kept per UTC calendar day, so `days=1` there means **Today (UTC)**, and the screen says so. At 01:00 UTC, Today (UTC) leaves out the previous evening, and the rolling range does not.
 - **Tables hosted** (Games tab): `GET /api/admin/matches` lists every finished table, newest first, paged with a cursor (`Load older tables`). Each row shows the game, room code, start and end time, people and bots, and whether it completed. No player is named. A bad cursor is refused, and an ordinary account gets 403. The query is a keyset on `(finished_at, id)`.
 
 ## Home order (staff)

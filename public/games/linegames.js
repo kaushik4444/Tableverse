@@ -86,7 +86,7 @@
   }
 
   function overlayHTML(v) {
-    if (v.phase !== 'gameOver') return '';
+    if (v.phase !== 'gameOver') { ui.resultSeen = null; return ''; } // a new game shows its own result once
     // the result animates once, when it first appears; a redraw of the same result (a total or a rematch vote) shows it at rest
     const key = v.event ? v.event.seq : null;
     const settled = ui.resultSeen === key;
