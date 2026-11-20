@@ -22,6 +22,7 @@ Audited against `main` at `c10f6a6` (includes PRs #26–#35, all shipped game mo
 | `themind` | Mind | `games/themind` | `themind.test.js` | ✅ | `feed-ui.js` |
 | `ludo` | Ludo | `games/ludo` | `ludo.test.js` | ✅ | `ludo-ui.js` |
 | `gofish` | Go Fish | `games/gofish` | `gofish.test.js` | ✅ | `gofish-ui.js` |
+| `colorclash` | Color Clash | `games/colorclash` | `colorclash.test.js` | ✅ | `colorclash-ui.js` |
 | `snakesladders` | Snakes & Ladders | `games/snakesladders` | `snakesladders.test.js` | ✅ | `snakesladders-ui.js` |
 | `propertyrivals` | Property Rivals | `games/propertyrivals` | `propertyrivals.test.js` | ✅ | `propertyrivals-ui.js` |
 | `tictactoe` | Tic-Tac-Toe | `games/linegames` | `linegames.test.js` | ✅ | `linegames-ui.js` |

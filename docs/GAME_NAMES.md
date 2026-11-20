@@ -32,6 +32,10 @@ each name in the target markets (a trademark search or a short lawyer review is 
 
 The in-app rules of Take 5, Stage 10 and Mind say that they are Tableverse's own games, not affiliated with, endorsed by or licensed by the publisher of any similar game. Keep that line, and do not use any publisher's logo, artwork, packaging or rule-book text. The rename itself contacted no publisher and changed no legal setting or legal text.
 
+## Color Clash
+
+Color Clash is Tableverse's own colour-and-number shedding game. Its cards, colour names (Ruby, Sun, Leaf, Sea), action names (Stop, Flip, Take 2, Wild, Wild Take 4), artwork and rules text are written for Tableverse; the 104-card deck and scoring are our own design. The in-app rules end with the non-affiliation line. Name-risk check: "Uno" is a protected title and stays on the never-use list; "Color Clash" was chosen because it names the idea without borrowing that title. Re-check before any marketing use.
+
 ## Never use
 
 Phase 10, 6 nimmt!, Category 5, The Mind (as a title), Connect Four, Chutes and Ladders, Monopoly, Uno, Parcheesi, Scrabble, Catan, Cluedo,
