@@ -46,7 +46,7 @@ async function test(name, fn) {
 
     await test('a change is audited with the actor and the new order', async () => {
       await dbAdmin.setGameOrder({ actorId: staff, order: ids });
-      const row = (await q(`SELECT actor_id, detail FROM admin_audit_log WHERE action = 'game.order' ORDER BY id DESC LIMIT 1`))[0];
+      const row = (await q(`SELECT actor_id, detail FROM admin_audit_log WHERE action = 'game.order' ORDER BY at DESC LIMIT 1`))[0]; // id is a random UUID, so order by the time instead
       assert.equal(row.actor_id, staff);
       assert.deepEqual(row.detail.order, ids);
     });
