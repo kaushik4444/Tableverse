@@ -69,3 +69,5 @@
 /* the recent-moves list under the status line */
 .cc-log { margin-top: 8px; }
 .cc-log ol { margin: 6px 0 0; padding-left: 20px; font-size: 13px; }
+
+.cc-controls .btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }

@@ -80,7 +80,7 @@
     const text = eventText(v);
     const e = v.event;
     const fresh = e && e.type === 'play' && ui.shown !== e.seq; // the new top card lands once, a later redraw shows it at rest
-    const stock = `<button type="button" class="cc-stock ${v.canDraw ? 'ready' : ''}" data-cc="draw" ${v.canDraw ? '' : 'disabled'} aria-label="Draw a card (${v.stock} left in the stock)">${v.stock ? backHTML() : '<div class="card slot"></div>'}<b>${v.stock}</b><small>stock</small></button>`;
+    const stock = `<button type="button" class="cc-stock ${v.canDraw ? 'ready' : ''}" data-cc="draw" aria-disabled="${v.canDraw ? 'false' : 'true'}" aria-label="Draw a card (${v.stock} left in the stock)">${v.stock ? backHTML() : '<div class="card slot"></div>'}<b>${v.stock}</b><small>stock</small></button>`;
     const center = `<div class="cc-mid">${stock}<div class="cc-discard">${cardHTML(v.top, fresh ? 'cc-land' : '')}<span class="cc-dir" title="Direction of play" aria-label="${v.dir > 0 ? 'Clockwise' : 'Anticlockwise'}">${v.dir > 0 ? '↻' : '↺'}</span></div></div><div class="cc-colour">Colour in play ${colourChip(v.colour)}</div>`;
     return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })
       + `<p class="cc-event cc-event-bar" role="status">${text || '&nbsp;'}</p>`;
@@ -113,7 +113,7 @@
       return `<div class="cc-controls panel"><span class="label">Choose a colour</span><div class="cc-picks">${picks}</div><button class="btn ghost small" data-cc="cancel">Cancel</button></div>`;
     }
     if (v.drawn) return '<div class="cc-controls panel"><span class="label">Play the card you drew, or</span><button class="btn" data-cc="keep">Keep it and pass</button></div>';
-    return `<div class="cc-controls"><button class="btn big" data-cc="draw" ${v.canDraw ? '' : 'disabled'}>Draw a card</button></div>`;
+    return `<div class="cc-controls"><button class="btn big" data-cc="draw" aria-disabled="${v.canDraw ? 'false' : 'true'}">Draw a card</button></div>`;
   }
 
   function overlayHTML(v) {
