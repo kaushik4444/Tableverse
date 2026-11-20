@@ -63,3 +63,6 @@
 
 /* the shared table centre ignores taps; the stock pile is a button, so it must take them */
 .cc-game .pt-center .cc-stock { pointer-events: auto; }
+
+/* the shared feed floats over the table without taking room */
+.cc-game .cc-tablewrap { position: relative; }

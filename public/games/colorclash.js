@@ -14,7 +14,7 @@
   };
   const ORDER = ['R', 'Y', 'G', 'B'];
   const ACTION = { stop: { name: 'Stop', face: '⊘' }, flip: { name: 'Flip', face: '⇄' }, take2: { name: 'Take 2', face: '+2' }, wild: { name: 'Wild', face: '★' }, take4: { name: 'Wild Take 4', face: '+4' } };
-  const ui = { ctx: null, latest: null, seq: null, shown: null, pending: null, seenRound: null, turnKey: '' };
+  const ui = { ctx: null, latest: null, seq: null, shown: null, pending: null, seenRound: null, turnKey: '', feeds: new Map() };
 
   const label = (c) => (c.k === 'n' ? `${COLOURS[c.c].name} ${c.v}` : c.c === 'W' ? ACTION[c.k].name : `${COLOURS[c.c].name} ${ACTION[c.k].name}`);
   const corner = (c) => (c.k === 'n' ? String(c.v) : ACTION[c.k].face);
@@ -50,6 +50,29 @@
     }
   }
 
+  const feedKey = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
+  /** Each new event goes into the shared feed (the last lines float over the table) and an action card played by someone else is
+   * held in the middle of the screen for a moment, so nobody misses a Stop, a Take 2 or a colour change. The first look at a
+   * table only records where it is, and a new match (the sequence going back) starts a new epoch so IDs never collide. */
+  function feedSync(v) {
+    const key = feedKey();
+    const e = v.event;
+    if (!key || !window.GameFeed) return;
+    const st = ui.feeds.get(key);
+    if (!st) { ui.feeds.set(key, { seq: e ? e.seq : 0, epoch: 0 }); return; }
+    if (e && e.seq < st.seq) { st.epoch += 1; st.seq = 0; }
+    if (!e || e.seq <= st.seq) return;
+    st.seq = e.seq;
+    const text = eventText(v);
+    if (!text) return;
+    const tone = e.type === 'over' || e.type === 'roundEnd' ? 'round' : e.penalised ? 'take' : e.skipped !== undefined || (e.card && e.card.k === 'flip') ? 'skip' : 'play';
+    window.GameFeed.add(key, [{ id: `cc-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
+    const notable = e.type === 'play' && e.card && (e.card.k !== 'n');
+    if (notable && (e.by !== v.me || (e.penalised && e.penalised.target === v.me))) {
+      window.GameFeed.spotlight({ card: cardHTML(e.card, '', 'style="--cw:56px"', 'span'), caption: text, tone, ms: 1300 });
+    }
+  }
+
   function guidance(v) {
     if (v.phase === 'gameOver') return v.winners.includes(v.me) ? 'You won!' : 'Game over';
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} is playing`;
@@ -75,7 +98,8 @@
     const fresh = e && e.type === 'play' && ui.shown !== e.seq; // the new top card lands once, a later redraw shows it at rest
     const stock = `<button type="button" class="cc-stock ${v.canDraw ? 'ready' : ''}" data-cc="draw" ${v.canDraw ? '' : 'disabled'} aria-label="Draw a card (${v.stock} left in the stock)">${v.stock ? backHTML() : '<div class="card slot"></div>'}<b>${v.stock}</b><small>stock</small></button>`;
     const center = `<div class="cc-mid">${stock}<div class="cc-discard">${cardHTML(v.top, fresh ? 'cc-land' : '')}<span class="cc-dir" title="Direction of play" aria-label="${v.dir > 0 ? 'Clockwise' : 'Anticlockwise'}">${v.dir > 0 ? '↻' : '↺'}</span></div></div><div class="cc-colour">Colour in play ${colourChip(v.colour)}</div>`;
-    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })
+    const feed = window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : '';
+    return `<div class="cc-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}${feed}</div>`
       + (text ? `<p class="cc-event cc-event-bar" role="status">${text}</p>` : '');
   }
 
@@ -152,6 +176,7 @@
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
     if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.shown = null; ui.seenRound = null; ui.pending = null; ui.turnKey = ''; }
     react(v);
+    feedSync(v);
     const key = `${v.turn}:${v.event ? v.event.seq : 0}`;
     if (key !== ui.turnKey) { ui.turnKey = key; ui.pending = null; }
     if (!v.myTurn || (ui.pending && !v.hand.some((c) => c.id === ui.pending && c.ok))) ui.pending = null;

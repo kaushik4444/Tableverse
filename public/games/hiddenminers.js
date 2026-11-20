@@ -4,7 +4,7 @@
   'use strict';
   const { esc } = window.CardTable;
   const TOOLS = { lamp: { name: 'Lamp', icon: '🔦' }, pick: { name: 'Pick', icon: '⛏️' }, cart: { name: 'Cart', icon: '🛒' } };
-  const ui = { ctx: null, latest: null, seq: null, seenRound: null, sel: null, flip: false, turnKey: '' };
+  const ui = { ctx: null, latest: null, seq: null, seenRound: null, sel: null, flip: false, turnKey: '', feeds: new Map() };
   const flipMask = (m) => ((m << 2) | (m >> 2)) & 15;
   const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
   const roleName = (r) => (r === 'saboteur' ? 'Saboteur' : 'Digger');
@@ -50,6 +50,31 @@
       case 'over': return 'The match is over.';
       default: return '';
     }
+  }
+
+  const feedKey = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
+  /** New events go into the shared feed (the last lines float over the board); a chamber being opened, a collapse and a break
+   * or repair aimed at you are also held in the middle of the screen for a moment. The first look at a table only records
+   * where it is, and a sequence that goes back (a new match) starts a new epoch so IDs never collide. */
+  function feedSync(v) {
+    const key = feedKey();
+    const e = v.event;
+    if (!key || !window.GameFeed) return;
+    const st = ui.feeds.get(key);
+    if (!st) { ui.feeds.set(key, { seq: e ? e.seq : 0, epoch: 0 }); return; }
+    if (e && e.seq < st.seq) { st.epoch += 1; st.seq = 0; }
+    if (!e || e.seq <= st.seq) return;
+    st.seq = e.seq;
+    const text = eventText(v);
+    if (!text) return;
+    const opened = e.type === 'tile' && e.revealed && e.revealed.length ? e.revealed.map((i) => v.goals[i]) : [];
+    const gold = opened.some((q) => q && q.gold);
+    const tone = e.type === 'over' || e.type === 'roundEnd' || gold ? 'win' : e.type === 'break' || e.type === 'collapse' ? 'take' : e.type === 'repair' ? 'lay' : 'play';
+    window.GameFeed.add(key, [{ id: `hm-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
+    const big = (face) => `<span style="font-size:44px;line-height:1" aria-hidden="true">${face}</span>`;
+    if (opened.length) window.GameFeed.spotlight({ card: big(gold ? '🪙' : '🪨'), caption: gold ? 'The gold chamber is open!' : 'That chamber holds only rock', tone: gold ? 'win' : 'skip', ms: 1400 });
+    else if (e.type === 'collapse') window.GameFeed.spotlight({ card: big('💥'), caption: text, tone: 'take', ms: 1200 });
+    else if ((e.type === 'break' || e.type === 'repair') && e.target === v.me && e.by !== v.me) window.GameFeed.spotlight({ card: big(TOOLS[e.tool].icon), caption: text, tone: e.type === 'break' ? 'take' : 'lay', ms: 1200 });
   }
 
   function guidance(v) {
@@ -174,6 +199,7 @@
     ui.ctx = ctx;
     ui.latest = v;
     react(v);
+    feedSync(v);
     const key = `${v.round}:${v.turn}:${v.event ? v.event.seq : 0}`;
     if (key !== ui.turnKey) { ui.turnKey = key; ui.sel = null; ui.flip = false; }
     if (!v.myTurn || (ui.sel && !v.hand.some((c) => c.id === ui.sel))) ui.sel = null; // a card that cannot be played stays chosen so it can be thrown away
@@ -189,7 +215,7 @@
       </div>
       ${role ? `<div class="hm-role-row">${role}</div>` : ''}
       ${playersHTML(v)}
-      ${boardHTML(v)}
+      <div class="hm-boardwrap">${boardHTML(v)}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
       ${text ? `<p class="hm-event" role="status">${text}</p>` : ''}
       <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${controlsHTML(v)}

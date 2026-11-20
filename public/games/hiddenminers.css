@@ -60,3 +60,7 @@
 .hm-role.saboteur { background: rgba(180, 35, 24, .55); }
 .hm-role.digger { background: rgba(53, 184, 106, .45); }
 @media (prefers-reduced-motion: reduce) { .hm-p.target, .hm-tool.fixable, .hm-cell.spot, .hm-cell.cave { animation: none; } .hm-card { transition: none; } }
+
+/* the shared feed floats over the bottom of the board without taking room */
+.hm-boardwrap { position: relative; }
+.hm-boardwrap .gf-feed.gf-float { bottom: 8px; }

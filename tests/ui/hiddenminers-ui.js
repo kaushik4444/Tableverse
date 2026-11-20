@@ -133,6 +133,20 @@ function scene(n, edit) {
     await ctx.close();
   });
 
+  await test('new events float over the board; opening the gold chamber is held in the middle; the first look shows no history', async () => {
+    const { page, ctx } = await open(scene(4));
+    assert.equal(await page.locator('.gf-item').count(), 0);
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => {
+      v.myTurn = false; v.turn = 2;
+      v.goals[1] = { x: 8, y: 2, revealed: true, gold: true };
+      v.event = { seq: 15, type: 'tile', by: 1, x: 7, y: 2, mask: 10, cut: false, revealed: [1] };
+    })[1]);
+    await page.waitForSelector('.gf-spot');
+    assert.match(await page.textContent('.gf-spot'), /gold chamber is open/);
+    assert.match(await page.textContent('.hm-boardwrap .gf-item'), /Bo dug a tunnel/);
+    await ctx.close();
+  });
+
   await test('round summary reveals every role once and is dismissed; the final sheet shows winners and Play again', async () => {
     const result = { round: 1, side: 'diggers', finder: 0, roles: ['digger', 'saboteur', 'digger', 'digger'], gains: [4, 0, 3, 3], gold: 1 };
     const { page, ctx } = await open(scene(4));
