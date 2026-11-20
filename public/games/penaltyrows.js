@@ -43,6 +43,9 @@
         return;
       }
       ui.anim = null;
+      // the round and pick lines that were held behind the replay now follow its moves
+      const held = ui.heldFeed; ui.heldFeed = null;
+      if (held) feedPicksAndRounds(held);
       ui.ctx.rerender();
     }, STEP_MS * (paceK || 1));
   }
@@ -67,7 +70,7 @@
   function announce(anim, idx) {
     const e = anim.events[idx];
     const v = ui.latest;
-    if (!e || !v || anim.table !== tableOf()) return;
+    if (!e || !v || !window.GameFeed || anim.table !== tableOf()) return; // no feed: the replay still moves on
     window.GameFeed.add(anim.table, [feedItem(v, e, `t${anim.seq}-${idx}`)]);
     const sp = spotFor(v, e);
     if (sp) window.GameFeed.spotlight(sp);
@@ -236,6 +239,8 @@
   function feedPicksAndRounds(v) {
     const key = tableOf();
     if (!key || !window.GameFeed || ui.seq === null) { ui.round = v.round; return; }
+    if (ui.anim && ui.anim.table === key) { ui.heldFeed = v; return; } // the replayed moves come first
+    ui.heldFeed = null;
     if (ui.round !== v.round) { window.GameFeed.add(key, [{ id: `round-${v.round}`, tone: 'round', html: `Round ${v.round} begins` }]); ui.round = v.round; }
     if (v.phase === 'choose') {
       v.players.forEach((p, i) => {

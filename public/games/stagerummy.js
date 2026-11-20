@@ -78,6 +78,8 @@
     const key = feedKey();
     if (!key || !window.GameFeed) return;
     const last = v.log.length ? v.log[v.log.length - 1].seq : 0;
+    // the cursor belongs to one table: on a switch, start from its current position (no replay of its history)
+    if (ui.feedRoom !== key) { ui.feedRoom = key; ui.lastSeq = null; }
     if (ui.lastSeq === null) { ui.lastSeq = last; return; }
     if (last < ui.lastSeq) ui.epoch += 1;
     const prev = last < ui.lastSeq ? 0 : ui.lastSeq;
