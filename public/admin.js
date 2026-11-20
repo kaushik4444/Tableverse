@@ -559,6 +559,8 @@
       if (at < 0 || to < 0 || to >= ids.length || orderBusy) return;
       [ids[at], ids[to]] = [ids[to], ids[at]];
       const visit = generation; orderBusy = true; gameFlagError = null;
+      // lock the move buttons now: orderBusy clears before the redraw replaces them, so a stale button must not fire
+      main.querySelectorAll('[data-gmove]').forEach((b) => { b.disabled = true; });
       api('/api/admin/game-order', { order: ids }, false, true).then(() => {
         orderBusy = false;
         if (state.tab === 'games') redrawGames();
