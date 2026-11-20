@@ -39,7 +39,7 @@ Color Clash is Tableverse's own colour-and-number shedding game. Its cards, colo
 ## Never use
 
 Phase 10, 6 nimmt!, Category 5, The Mind (as a title), Connect Four, Chutes and Ladders, Monopoly, Uno, Parcheesi, Scrabble, Catan, Cluedo,
-Beer Pong (as a *brand*-style product name), and any publisher's art or rule-book text.
+Tetris, Bullhead Run (the removed working title for what is now Take 5), Beer Pong (as a *brand*-style product name), and any publisher's art or rule-book text.
 
 ## Other things to keep clean
 
