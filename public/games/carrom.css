@@ -1,0 +1,40 @@
+/* Carrom (public/games/carrom.js). The board is an SVG in the server's unit square, so it scales with the table. */
+.cb-seats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.cb-seat { display: flex; align-items: center; gap: 8px; flex: 1 1 140px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line, #e5e7eb); }
+.cb-seat.turn { border-color: #a16207; box-shadow: 0 0 0 2px rgba(161, 98, 7, .2); }
+.cb-seat.won { background: rgba(161, 98, 7, .12); }
+.cb-colour { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #5b3f22; flex: 0 0 auto; }
+.cb-colour.w { background: #f7f1e3; }
+.cb-colour.b { background: #2b2521; }
+.cb-who { display: flex; flex-direction: column; min-width: 0; }
+.cb-who small { opacity: .7; }
+
+.cb-board-wrap { display: flex; justify-content: center; }
+.cb-svg { width: min(100%, 420px); height: auto; aspect-ratio: 1; display: block; touch-action: none; user-select: none; }
+.cb-board { fill: #b97c3a; stroke: #5b3f22; stroke-width: 0.012; }
+.cb-inner { fill: #d9a463; stroke: none; }
+.cb-line { stroke: #7a4a1f; stroke-width: 0.006; stroke-linecap: round; }
+.cb-centre { fill: none; stroke: #7a4a1f; stroke-width: 0.006; }
+.cb-pocket { fill: #151210; stroke: #5b3f22; stroke-width: 0.006; }
+.cb-coin { stroke-width: 0.005; }
+.cb-coin.w { fill: #f7f1e3; stroke: #a8966f; }
+.cb-coin.b { fill: #2b2521; stroke: #0f0c0a; }
+.cb-queen { fill: #c2410c; stroke: #7c2d12; stroke-width: 0.005; }
+.cb-striker { fill: #f59e0b; stroke: #7c4a03; stroke-width: 0.006; }
+.cb-striker.w { fill: #fde68a; }
+.cb-striker.b { fill: #f59e0b; }
+.cb-aim { stroke: #ffffff; stroke-width: 0.008; stroke-dasharray: 0.03 0.02; stroke-linecap: round; opacity: .9; }
+
+.cb-controls { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end; max-width: 520px; margin: 12px auto 0; }
+.cb-controls label { display: flex; flex-direction: column; gap: 4px; font-size: .9em; }
+.cb-controls input[type=range] { width: 100%; accent-color: #a16207; }
+.cb-controls output { font-weight: 600; }
+.cb-flick { min-height: 44px; padding: 0 18px; }
+.cb-moves { margin-top: 12px; max-width: 520px; margin-left: auto; margin-right: auto; }
+.cb-log { margin: 6px 0 0; padding-left: 20px; }
+
+@media (max-width: 600px) {
+  .cb-controls { grid-template-columns: 1fr 1fr; }
+  .cb-controls label:nth-child(3) { grid-column: 1 / 3; }
+  .cb-flick { grid-column: 1 / 3; width: 100%; }
+}

@@ -187,6 +187,7 @@ function viewFor(g, playerId) {
     board: g.coins.map((c) => ({ id: c.id, kind: c.kind, colour: c.colour, x: c.x, y: c.y, r: c.r })),
     score: g.score.slice(),
     queenHeld: g.queenHeld,
+    shots: g.shots,
     shot: g.shot,
     log: g.log.slice(-8),
     winner: g.phase === 'gameOver' ? g.winner : null,
