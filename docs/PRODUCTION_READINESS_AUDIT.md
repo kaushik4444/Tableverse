@@ -33,6 +33,8 @@ Audited against `main` at `c10f6a6` (includes PRs #26–#35, all shipped game mo
 
 ---
 
+*Added after this snapshot (2026-11-20):* Color Clash (`games/colorclash`) was not part of the `c10f6a6` audit, so it is not in the table above. Its coverage is recorded in `PROGRESS.md`.
+
 ## Findings
 
 ### F1 — One throwing bot/auto-move crashed the whole server ✅ Fixed
