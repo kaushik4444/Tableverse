@@ -3136,6 +3136,9 @@
         if (inSheet) inSheet.insertAdjacentHTML('beforeend', `<div class="end-bar end-bar-in">${html}</div>`);
         else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
       }
+      // A game can end while a sheet of its own (Hands, Stages) has focus: that control is replaced, so focus would fall to the page.
+      // Move it to the first result action instead, but only when nothing else holds it.
+      if (!document.activeElement || document.activeElement === document.body) $app.querySelector('.end-actions button, .end-bar button')?.focus({ preventScroll: true });
       // The game-over reminder: the one stronger prompt for a guest, placed by the end actions (never during play)
       const gameNudge = guestNudge('gameover');
       if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }
