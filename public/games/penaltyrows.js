@@ -8,7 +8,7 @@
   const { esc } = window.CardTable;
   const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table', tables: new Map(), cur: null };
   /** Restart tracking for one table: its sequence is compared only with its own last value, and its match count rises when it restarts. */
-  const tableState = (key) => { let st = ui.tables.get(key); if (!st) { st = { lastSeen: null, match: 0 }; ui.tables.set(key, st); } return st; };
+  const tableState = (key) => { let st = ui.tables.get(key); if (!st) { st = { lastSeen: null, match: 0, round: null }; ui.tables.set(key, st); } return st; };
   /** Feed IDs carry the table's match, so a rematch at the same table cannot reuse an ID the feed still holds. */
   const fid = (s) => `m${ui.cur ? ui.cur.match : 0}:${s}`;
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
@@ -242,10 +242,11 @@
   /** Public events that are not a card on the table: who has locked in a card, and a new round. */
   function feedPicksAndRounds(v) {
     const key = tableOf();
-    if (!key || !window.GameFeed || ui.seq === null) { ui.round = v.round; return; }
+    if (!key || !window.GameFeed || ui.seq === null) { ui.cur.round = v.round; return; }
     if (ui.anim && ui.anim.table === key) { ui.heldFeed = v; return; } // the replayed moves come first
     ui.heldFeed = null;
-    if (ui.round !== v.round) { window.GameFeed.add(key, [{ id: fid(`round-${v.round}`), tone: 'round', html: `Round ${v.round} begins` }]); ui.round = v.round; }
+    // announced per table and per match: each table says its round once, and a one-round rematch says it again
+    if (ui.cur.round !== v.round) { window.GameFeed.add(key, [{ id: fid(`round-${v.round}`), tone: 'round', html: `Round ${v.round} begins` }]); ui.cur.round = v.round; }
     if (v.phase === 'choose') {
       v.players.forEach((p, i) => {
         if (p.picked && i !== v.me) window.GameFeed.add(key, [{ id: fid(`pick-${v.round}-${v.turn}-${i}`), tone: 'info', html: `<b>${esc(p.name)}</b> has locked in a card` }]);
@@ -261,7 +262,7 @@
     ui.ctx = ctx;
     ui.latest = v;
     ui.cur = tableState(tableOf());
-    if (ui.cur.lastSeen !== null && v.seq < ui.cur.lastSeen) ui.cur.match += 1; // this table's sequence restarted: a new match there
+    if (ui.cur.lastSeen !== null && v.seq < ui.cur.lastSeen) { ui.cur.match += 1; ui.cur.round = null; } // this table's sequence restarted: a new match there, with no round announced yet
     ui.cur.lastSeen = v.seq;
     if (ui.table !== tableOf()) { ui.table = tableOf(); ui.anim = null; ui.seq = null; } // a different table: start afresh, with no replay
     react(v);

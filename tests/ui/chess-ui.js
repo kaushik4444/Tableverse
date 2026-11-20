@@ -71,6 +71,21 @@ const msgsFor = (g, viewer = 'me') => { const m = tableMessages('chess', [{ id: 
     await ctx.close();
   });
 
+  await test('promotion: a redraw with the picker still open keeps focus on the piece the player is choosing', async () => {
+    const g = game({ colour: 'host', fen: 'k7/4P3/8/8/8/8/8/K7 w - - 0 1' });
+    const msgs = msgsFor(g);
+    const { page, ctx } = await open(msgs);
+    await page.click('[data-sq="' + sq('e7') + '"]');
+    await page.click('[data-sq="' + sq('e8') + '"]');
+    await page.focus('[data-ch-promo="N"]');
+    // an unchanged position with a new state (e.g. a spectator joins): the board is redrawn
+    const same = JSON.parse(JSON.stringify(msgs[1])); same.view.spectators = 1;
+    await page.evaluate((m) => window.__push(m), same);
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.chPromo), 'N', 'Knight keeps focus');
+    assert.equal(await page.locator('.ch-promo').count(), 1, 'the picker is still open');
+    await ctx.close();
+  });
+
   await test('promotion: choosing a pawn’s last-rank square opens the picker and sends the chosen piece', async () => {
     const g = game({ colour: 'host', fen: 'k7/4P3/8/8/8/8/8/K7 w - - 0 1' });
     const { page, ctx } = await open(msgsFor(g));

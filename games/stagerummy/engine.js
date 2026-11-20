@@ -1,5 +1,6 @@
 'use strict';
 const pacing = require('../pacing');
+const { randomUUID } = require('crypto');
 /**
  * Stage 10: the rules only (no sockets, no timers).
  *
@@ -96,6 +97,7 @@ function createGame(players, options, rng = Math.random) {
     stage: players.map(() => 1), scores: players.map(() => 0),
     laid: players.map(() => null), skipped: players.map(() => false),
     event: null, log: [], lastRound: null, winners: [], seq: 0,
+    matchId: randomUUID(), // identifies this match: a rematch at the same table is a new one, even if its sequence catches up
   };
   startRound(g);
   return g;
@@ -438,6 +440,7 @@ function viewFor(g, playerId) {
     discardCount: g.discard.length, stockCount: g.stock.length,
     event: g.event ? { ...g.event } : null,
     log: g.log.slice(-20).map((e) => ({ ...e })),
+    matchId: g.matchId,
     lastRound: g.lastRound ? { ...g.lastRound, points: g.lastRound.points.slice(), laid: g.lastRound.laid.slice(), stages: g.lastRound.stages.slice() } : null,
     winners: g.winners.slice(),
   };
