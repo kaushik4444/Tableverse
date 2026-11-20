@@ -81,4 +81,47 @@ test('game marks render registered IDs and escape fallbacks for unknown and inhe
   }
 });
 
+test('game mark IDs are stable snapshots and every mark has a decorative scalable SVG', () => {
+  const context = { window: {} };
+  vm.runInNewContext(read('game-marks.js'), context);
+  const marks = context.window.GameMarks;
+  const ids = Array.from(marks.ids());
+  assert.equal(new Set(ids).size, ids.length);
+  const snapshot = marks.ids();
+  snapshot.pop(); snapshot.push('fake-game');
+  assert.deepEqual(Array.from(marks.ids()), ids, 'callers cannot mutate the registry');
+  for (const id of ids) {
+    const html = marks.html(id, '<img src=x onerror=alert(1)>');
+    assert.match(html, /viewBox="0 0 48 48"/);
+    assert.match(html, /aria-hidden="true"/);
+    assert.match(html, /focusable="false"/);
+    assert.match(html, /<rect width="48" height="48"/);
+    assert.match(html, /<\/svg>$/);
+    assert.doesNotMatch(html, /<img|onerror/, 'registered marks ignore caller-provided fallback');
+  }
+});
+
+test('unknown game marks use the default for empty fallbacks and preserve escaped text', () => {
+  const context = { window: {} };
+  vm.runInNewContext(read('game-marks.js'), context);
+  const { html } = context.window.GameMarks;
+  for (const fallback of [undefined, null, '', false, 0]) assert.equal(html('new-game', fallback), '🎴');
+  assert.equal(html('new-game', '🐟'), '🐟');
+  assert.equal(html('new-game', '&lt;script&gt;'), '&amp;lt;script&amp;gt;');
+  assert.equal(html(null, 'unknown'), 'unknown');
+  assert.equal(html(undefined, 'unknown'), 'unknown');
+  assert.equal(html('LUDO', 'case-sensitive'), 'case-sensitive');
+});
+
+test('both entry pages load game marks before their consumer scripts', () => {
+  for (const [page, consumer] of [['index.html', 'app.js'], ['admin.html', 'admin.js']]) {
+    const scripts = [...read(page).matchAll(/<script\b[^>]*src="([^"]+)"[^>]*>/g)];
+    const mark = scripts.findIndex((m) => m[1] === '/game-marks.js');
+    const client = scripts.findIndex((m) => m[1] === '/' + consumer);
+    assert.ok(mark >= 0 && client > mark, page + ' loads marks first');
+    assert.match(scripts[mark][0], /\bdefer\b/);
+    assert.match(scripts[client][0], /\bdefer\b/);
+  }
+});
+
 console.log(`\n${passed} passed`);
