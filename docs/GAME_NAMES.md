@@ -45,6 +45,6 @@ Beer Pong (as a *brand*-style product name), and any publisher's art or rule-boo
 
 ## Suggested follow-up (owner decision)
 
-1. Decide whether to rename **Wizard** and **The Mind** before any commercial launch (code change is small: `name`, `tagline`, docs, tests).
+1. Decide whether to rename **Wizard** before any commercial launch (code change is small: `name`, `tagline`, docs, tests). **The Mind** is already shown as **Mind** (owner decision, 2026-11-19).
 2. Run a proper trademark search in the target markets for every name in the table.
 3. Re-check this table whenever a game is added (see `docs/PLANNED_GAMES.md`).
