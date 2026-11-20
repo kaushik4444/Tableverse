@@ -81,6 +81,7 @@ test('a card lower than every row makes its player take a row of their choice', 
   assert.equal(g.phase, 'takeRow');
   assert.deepEqual(e.awaiting(g), ['p0']);
   assert.equal(e.viewFor(g, 'p1').pending.n, 5, 'everyone can see which card is waiting');
+  assert.equal(e.viewFor(g, 'p1').pending.p, g.pending.card.p, 'the waiting card keeps its penalty value');
   assert.equal(e.applyAction(g, 'p1', { type: 'takeRow', row: 0 }).ok, false, 'only the player whose card it is');
   assert.equal(e.applyAction(g, 'p0', { type: 'takeRow', row: 4 }).ok, false, 'a real row');
   assert.equal(e.applyAction(g, 'p0', { type: 'takeRow', row: 'x' }).ok, false);

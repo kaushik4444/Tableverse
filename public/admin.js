@@ -233,7 +233,7 @@
     const t = f.totals;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
     el.innerHTML = `<div class="ad-grid">${tile(t.signups, 'signed up')}${tile(pctText(t.played, t.signups), 'played a first game')}${tile(pctText(t.returned, t.signups), 'came back on a later day')}</div>
-      <p class="ad-muted">Accounts that signed up in the last ${f.days} days, by UTC day. "Came back" means a game on a later day than their first, so the newest signups have had less time to return.
+      <p class="ad-muted">${Number(f.days) === 1 ? 'Accounts that signed up today (UTC)' : `Accounts that signed up in the last ${f.days} days`}, by UTC day. "Came back" means a game on a later day than their first, so the newest signups have had less time to return.
       <a class="ad-btn" href="/api/admin/funnel.csv?days=${f.days}" download>Download CSV</a></p>`;
   }
 

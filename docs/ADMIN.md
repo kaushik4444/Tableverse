@@ -162,7 +162,7 @@ The game server counts, per day, how many connections opened in each UTC hour (`
 
 ## Games and player profiles (Games tab)
 
-- **Games tab** (staff): `GET /api/admin/games?days=` (7, 30 or 90) gives, for each game, the finished games (and the last 7 days), signed-in players, player-games, penalised leaves (left while others were still playing) and their rate, leaves without a penalty, and average minutes per player-game. These are counts and averages from `matches` and `match_participants`. No player is named, and guests are counted as player-games only.
+- **Games tab** (staff): `GET /api/admin/games?days=` (1, 7, 30 or 90) gives, for each game, the finished games (and the last 7 days), signed-in players, player-games, penalised leaves (left while others were still playing) and their rate, leaves without a penalty, and average minutes per player-game. These are counts and averages from `matches` and `match_participants`. No player is named, and guests are counted as player-games only.
 - **Player profile** (staff): `GET /api/admin/players/profile?username=` also returns `progress`: overall level, Player Progress XP (time only), penalised leaves, and Game XP per game. It is computed from the stored results on each read, with the same rules as the player's own profile. Opening a profile is still recorded in the audit log.
 
 ## First-login welcome
@@ -171,12 +171,12 @@ The game server counts, per day, how many connections opened in each UTC hour (`
 
 ## Tables hosted and the 24-hour range (staff)
 
-- Overview, Insights, country figures and the Games tab take `days=1` as well as 7, 30 and 90. The two kinds of figure differ: the Games tab and the tables list use the **rolling last 24 hours**, while the Overview and Insights counters are kept per UTC calendar day, so `days=1` there means **Today (UTC)** (the screen says so). At 01:00 UTC, Today (UTC) leaves out the previous evening, and the rolling range does not.
+- Overview, Insights, country figures and the Games tab take `days=1` as well as 7, 30 and 90. Most match-derived figures use the **rolling last 24 hours**: the Games tab, and in Insights the games finished, signed-in players, play time, leaving, per-game, country, heatmap and top-player figures. Only the Overview and Insights counters ("Finished of started", the visit charts and the new and returning chart) are kept per UTC calendar day, so `days=1` there means **Today (UTC)**, and the screen says so. At 01:00 UTC, Today (UTC) leaves out the previous evening, and the rolling range does not.
 - **Tables hosted** (Games tab): `GET /api/admin/matches` lists every finished table, newest first, paged with a cursor (`Load older tables`). Each row shows the game, room code, start and end time, people and bots, and whether it completed. No player is named. A bad cursor is refused, and an ordinary account gets 403. The query is a keyset on `(finished_at, id)`.
 
 ## Home order (staff)
 
-- The Games tab shows each game's place on the home page with ▲ and ▼ buttons. Owner and admins can move a game; the server checks the role on every change.
+- The Games tab shows each game's place on the home page with ▲ and ▼ buttons. Only the owner sees the move buttons in the Games tab. `POST /api/admin/game-order` accepts owner and admins (`requireStaff`) and checks the role on every change, so an admin can call it directly.
 - `POST /api/admin/game-order` takes the full list of game ids, first to last. It is refused unless every game appears exactly once.
 - Stored as `game_flags.sort_order` (migration `034_game_order.sql`, additive and nullable). A game nobody has placed keeps its registered place after the placed games. Only real changes are written and audited (`game.order`, with the actor and the full order).
 
