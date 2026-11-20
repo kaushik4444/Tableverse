@@ -60,6 +60,8 @@
         const from = captureStrip();
         ui.ctx.rerender();
         glide(from);
+        const mark = anim.marks[anim.i];
+        if (mark && mark.phase === 'collect') stashRow(anim, mark, paceK);
         scheduleStep(anim, paceK);
         return;
       }
@@ -130,6 +132,29 @@
     }
   }
   const reducedMotion = () => Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  /** A collected row: its cards slide, one after another, into the taker's score chip, the pile they are kept in.
+   * Slow enough to follow, and it ends inside the collect step, so the next card is not drawn over it. */
+  function stashRow(anim, mark, paceK) {
+    const e = anim.events[mark.j];
+    const v = ui.latest;
+    const k = paceK || 1;
+    if (!v || !e || reducedMotion()) return;
+    const pid = v.players[e.by] && v.players[e.by].id;
+    const chip = pid ? document.querySelector(`.prt .pr-chips li[data-pid="${CSS.escape(pid)}"]`) : null;
+    const lane = document.querySelector(`.prt .pr-rows > .pr-row:nth-child(${e.row + 1})`);
+    if (!chip || !lane) return;
+    const to = chip.getBoundingClientRect();
+    const tx = to.left + to.width / 2; const ty = to.top + to.height / 2;
+    [...lane.querySelectorAll('[data-cn]')].forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      const dx = tx - (r.left + r.width / 2); const dy = ty - (r.top + r.height / 2);
+      el.animate([
+        { transform: 'none', opacity: 1 },
+        { transform: `translate(${dx}px, ${dy}px) scale(.25)`, opacity: 0.25 },
+      ], { duration: 750 * k, delay: i * 120 * k, fill: 'forwards', easing: 'cubic-bezier(.4, 0, .2, 1)' });
+    });
+  }
 
   /** The replay step on screen, or null: which event it shows and which part of it. */
   const currentMark = (v) => (ui.anim && ui.anim.seq === v.seq ? ui.anim.marks[ui.anim.i] : null);

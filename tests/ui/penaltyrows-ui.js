@@ -224,6 +224,32 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a collected row slides, card by card, into the taker\'s pile', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const full = [3, 5, 8, 9, 10];
+    const took = full.reduce((s, n) => s + pen(n), 0);
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [full.map(c), [c(12)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(11)], [c(12)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'sweep', by: 1, n: 11, p: pen(11), row: 0, took }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const k = first.view.paceK || 1;
+    const { page, ctx } = await open([first]);
+    await page.evaluate((m) => window.__push(m), second);
+    const t0 = Date.now();
+    await page.waitForTimeout(Math.max(0, t0 + 1800 * k + 200 - Date.now())); // the collect step has just been drawn
+    const moving = await page.evaluate(() => [...document.querySelectorAll('.pr-rows > .pr-row:first-child [data-cn]')].map((el) => el.getAnimations().length));
+    assert.ok(moving.filter((n) => n > 0).length >= 2, 'several cards of the row are on their way: ' + moving.join(','));
+    assert.ok(await page.evaluate(() => !!document.querySelector('.prt .pr-chips li[data-pid]')), 'the taker has a chip to receive them');
+    await ctx.close();
+  });
+
   await test('the feed sits under the rows and never covers row 4', async () => {
     const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
     const c = (n) => ({ n, p: pen(n) });
