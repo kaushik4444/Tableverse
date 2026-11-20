@@ -704,6 +704,9 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .guest-sheet form input { width: 100%; box-sizing: border-box; }
 @media (max-width: 480px) { .guest-nudge { padding: 10px 12px; } .guest-nudge-actions .btn { flex: 1 1 auto; } }
 
+/* Game marks (public/game-marks.js): an SVG tile sized by the text around it. The art tile's own gradient gives way to the mark. */
+.gmark { display: inline-block; width: 1em; height: 1em; vertical-align: -0.16em; flex: none; overflow: visible; filter: drop-shadow(0 3px 8px rgba(0, 0, 0, .28)); }
+.game-art:has(> .gmark) { background: none; text-shadow: none; }
 /* Home: open tables sit above the games on a phone, as two rows that scroll sideways; on a desktop they sit in a
  * column beside the games and scroll down. The same markup serves both: the layout is only CSS. */
 .home-split { display: grid; gap: 4px; }
