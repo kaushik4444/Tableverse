@@ -32,7 +32,12 @@
     const reason = v.reason;
     if (v.draw) return reason === 'stalemate' ? 'A draw by stalemate' : `A draw: ${reason}`;
     const winnerName = v.winner === v.me ? 'You' : v.players[v.winner].name;
-    if (reason === 'resignation') return v.winner === v.me ? 'You won: the other player resigned' : `${winnerName} won: you resigned`;
+    if (reason === 'resignation') {
+      if (v.winner === v.me) return 'You won: the other player resigned';
+      // a spectator is not the one who resigned: name the losing seat
+      if (v.me < 0) return `${winnerName} won: ${v.players[1 - v.winner].name} resigned`;
+      return `${winnerName} won: you resigned`;
+    }
     return v.winner === v.me ? `You won by checkmate` : `${winnerName} won by checkmate`;
   }
 
@@ -120,11 +125,14 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     // a move (or a new position) clears the selection and any open promotion choice
-    const key = `${v.log.length}|${v.turn}`;
+    const key = `${v.phase}|${v.log.length}|${v.turn}`;
     if (key !== ui.lastKey) { ui.lastKey = key; ui.sel = null; ui.promo = null; ui.resignArmed = false; }
     ui.v = v;
     react(v);
     const playing = v.phase === 'playing' && v.me >= 0;
+    // keep keyboard focus on the square the player was using: the re-render replaces every button
+    const focused = document.activeElement;
+    const focusSq = focused && root.contains(focused) && focused.dataset.sq !== undefined ? focused.dataset.sq : null;
     root.innerHTML = `<div class="wz ch" data-game="chess">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.log.length} moves</span></div>
         ${CardTable.toolbarSeed(`<button class="btn ghost small" data-ch="rules">Rules</button>${playing ? `<button class="btn ghost small" data-ch="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'ch')}</div>
@@ -135,6 +143,10 @@
       <details class="ch-moves" open><summary>Moves</summary>${logHTML(v)}</details>
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
+    if (focusSq !== null) {
+      const again = root.querySelector(`[data-sq="${focusSq}"]`);
+      if (again && !again.disabled) again.focus();
+    }
   }
 
   function onClick(e) {
@@ -157,6 +169,8 @@
   }
 
   function onSquare(v, ctx, i) {
+    // a tap on the board leaves any open promotion choice (the picker must not submit an older move)
+    ui.promo = null;
     if (!v.myTurn) return;
     const p = v.board[i];
     const mine = p && (isWhite(p) ? 'w' : 'b') === myColour(v);
@@ -168,6 +182,9 @@
     if (options[0][2]) { // a pawn reaching the last rank: the player chooses the piece
       ui.promo = { from: ui.sel, to: i };
       ctx.rerender();
+      // move focus into the picker so keyboard players can choose a piece
+      const first = document.querySelector('[data-ch-promo]');
+      if (first) first.focus();
       return;
     }
     ui.sel = null;

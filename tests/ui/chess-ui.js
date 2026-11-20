@@ -120,6 +120,39 @@ const msgsFor = (g, viewer = 'me') => { const m = tableMessages('chess', [{ id: 
     await ctx.close();
   });
 
+  await test('a spectator is told which seat resigned, not that they resigned', async () => {
+    const g = E.createGame(players, { colour: 'host' }, () => 0.1);
+    assert.equal(E.applyAction(g, 'me', { type: 'resign' }).ok, true);
+    const m = tableMessages('chess', players);
+    m[1].view = E.viewFor(g, 'spectator');
+    const { page, ctx } = await open(m);
+    const text = await page.textContent('.overlay');
+    assert.match(text, /Bo won: Aarav resigned/, 'the losing seat is named');
+    assert.doesNotMatch(text, /you resigned/);
+    await ctx.close();
+  });
+
+  await test('keyboard: the focused square stays focused after a selection re-renders the board', async () => {
+    const { page, ctx } = await open(msgsFor(game({ colour: 'host' })));
+    await page.focus('[data-sq="' + sq('e2') + '"]');
+    await page.keyboard.press('Enter');
+    const focused = await page.evaluate(() => document.activeElement && document.activeElement.dataset.sq);
+    assert.equal(focused, String(sq('e2')), 'focus did not fall back to the page');
+    await ctx.close();
+  });
+
+  await test('a tap elsewhere on the board cancels an open promotion choice', async () => {
+    const g = game({ colour: 'host', fen: 'k7/4P3/8/8/8/8/8/4K3 w - - 0 1' });
+    const { page, ctx } = await open(msgsFor(g));
+    await page.click('[data-sq="' + sq('e7') + '"]');
+    await page.click('[data-sq="' + sq('e8') + '"]');
+    assert.equal(await page.locator('[data-ch-promo]').count(), 4, 'the picker is open');
+    await page.click('[data-sq="' + sq('e1') + '"]'); // tap my own king instead: an enabled square
+    assert.equal(await page.locator('[data-ch-promo]').count(), 0, 'the picker closed');
+    assert.equal((await sent(page)).length, 0, 'nothing was sent');
+    await ctx.close();
+  });
+
   await closeOpenContexts();
   await browser.close();
   server.close();
