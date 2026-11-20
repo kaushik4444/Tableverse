@@ -58,10 +58,11 @@
     return 'Your turn: set the striker, then drag on the board to flick';
   }
 
+  /** The end of the table as plain text: callers escape it once when they put it into the page. */
   function endText(v) {
     if (v.draw) return 'A draw: the table was not finished in time';
     if (v.reason === 'resignation') return v.winner === colourOfMe(v) ? 'Your team won: the other team resigned' : 'Your team resigned';
-    const who = v.winnerNames ? esc(v.winnerNames) : 'A team';
+    const who = v.winnerNames || 'A team';
     return v.winner === colourOfMe(v) ? `You pocketed all nine coins with the queen (${who})` : `${who} pocketed all nine coins with the queen`;
   }
   const colourOfMe = (v) => (v.me < 0 ? null : v.colours[v.me]);
@@ -141,12 +142,15 @@
     if (v.phase !== 'gameOver' || ui.anim) return '';
     const title = v.draw ? 'A draw' : v.winner === colourOfMe(v) ? 'You won! 🎉' : `${v.winnerNames ? esc(v.winnerNames) : 'A team'} won`;
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
-      <p class="hint" style="text-align:left">${endText(v)}.</p>
+      <p class="hint" style="text-align:left">${esc(endText(v))}.</p>
       <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-cb="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-cb="leave">Leave table</button></div>
     </div></div>`;
   }
 
-  function react(v) {
+  function react(v, ctx) {
+    // playback belongs to one table: another table (or a fresh join) starts from its own state, never from this table's frames
+    const tableKey = ctx && ctx.room ? ctx.room.code : '';
+    if (ui.animTable !== tableKey) { ui.animTable = tableKey; ui.anim = null; ui.seq = null; }
     const e = v.shot, snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
     if (!e) { ui.anim = null; ui.seq = 0; return; } // a fresh match (Play again) has no shot yet: drop the old playback
@@ -197,8 +201,10 @@
 
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.root = root; ui.v = v;
+    // a drag cannot survive the redraw: the pointer target it captured is replaced
+    ui.dragging = false; ui.dragMoved = false;
     remember(v);
-    react(v);
+    react(v, ctx);
     const playing = v.phase === 'playing' && v.me >= 0;
     // a resignation confirmation belongs to one match at one table: a new shot, a finished game or another table clears it
     if (ui.resignArmed && ui.armKey !== armKeyOf(v, ctx)) ui.resignArmed = false;
@@ -331,7 +337,7 @@
       case 'flick': fire(); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
-      case 'leave': ctx.leave(); break;
+      case 'leave': ui.resignArmed = false; ctx.leave(); break;
       case 'resign':
         if (!ui.resignArmed) { ui.resignArmed = true; ui.armKey = armKeyOf(v, ctx); ctx.rerender(); break; }
         ui.resignArmed = false; ctx.act({ type: 'resign' }); break;

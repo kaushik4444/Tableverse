@@ -248,10 +248,15 @@ function botAction(g, seat, rng) {
     if (score > bestScore) { bestScore = score; best = a; }
   }
   if (best) return best;
-  // step by index so the far end of the baseline (STRIKER_X[1]) is always tried
-  const steps = Math.ceil((STRIKER_X[1] - STRIKER_X[0]) / 0.02);
+  // a fine grid across the baseline, both ends included: a narrow gap between coins is found, and only clear spots go to the rules
+  const [lo, hi] = STRIKER_X, steps = 150;
+  const clear = (x) => {
+    const [sx, sy] = rotPoint([x, BASE_Y], g.sides[seat]);
+    return !g.coins.some((c) => Math.hypot(c.x - sx, c.y - sy) < c.r + P.RADIUS.striker);
+  };
   for (let i = 0; i <= steps; i++) {
-    const x = Math.min(STRIKER_X[1], STRIKER_X[0] + i * 0.02);
+    const x = lo + ((hi - lo) * i) / steps;
+    if (!clear(x)) continue;
     const a = { type: 'flick', x, angle: 0, power: 0.6, seq: g.seq };
     if (!plan(g, seat, a).error) return a;
   }

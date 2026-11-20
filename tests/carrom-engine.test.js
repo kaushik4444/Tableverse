@@ -271,4 +271,30 @@ test('registry: carrom is registered and its plugin never throws on bad input', 
   assert.equal(inst.act('p0', undefined).ok, false);
 });
 
+test('results: each seat is judged by its own colour, and a resignation gives the other colour the win', () => {
+  const plugin = require('../games/carrom');
+  const players = names(2);
+  const first = plugin.create(players, {}, () => 0.5);
+  first.act('p0', { type: 'resign' });
+  const r = first.results();
+  assert.equal(r[1].winner, true); assert.equal(r[1].score, 1);
+  assert.equal(r[0].winner, false); assert.equal(r[0].score, 0);
+  const second = plugin.create(players, {}, () => 0.5);
+  second.act('p1', { type: 'resign' });
+  const r2 = second.results();
+  assert.equal(r2[0].winner, true); assert.equal(r2[0].score, 1);
+  assert.equal(r2[1].winner, false); assert.equal(r2[1].score, 0);
+});
+
+test('scrubbing a deleted player keeps the phase (a player named like a field), and only the name changes', () => {
+  const plugin = require('../games/carrom');
+  const players = [{ id: 'p0', name: 'playing' }, { id: 'p1', name: 'Bo' }];
+  const inst = plugin.create(players, {}, () => 0.5);
+  inst.scrub(['playing'], 'Deleted player');
+  const v = inst.view('p1');
+  assert.equal(v.phase, 'playing');
+  assert.equal(v.players[0].name, 'Deleted player');
+  assert.equal(v.players[1].name, 'Bo');
+});
+
 console.log(`\n${passed} carrom engine tests passed`);

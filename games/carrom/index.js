@@ -26,7 +26,8 @@ module.exports = {
     const g = engine.createGame(players);
     return {
       view: (playerId) => engine.viewFor(g, playerId),
-      scrub: (names, to) => scrubDeep([g, players], names, to),
+      // only the names and the log text hold player names: the phase, colours and rules fields must keep their values
+      scrub: (names, to) => scrubDeep([g.players, players, g.log], names, to),
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },
@@ -35,9 +36,10 @@ module.exports = {
       botDelayMs: () => 900 + rng() * 500,
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
-      results: () => g.players.map((_, i) => ({
-        score: g.draw ? 0.5 : g.winner === i ? 1 : 0,
-        winner: g.winner === i,
+      // the engine's winner is a colour ('w' or 'b'), so each seat compares its own colour
+      results: () => g.players.map((p) => ({
+        score: g.draw ? 0.5 : g.winner === p.colour ? 1 : 0,
+        winner: !g.draw && g.winner === p.colour,
         draw: g.draw,
       })),
     };
