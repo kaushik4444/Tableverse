@@ -1,5 +1,5 @@
 'use strict';
-// Penalty Rows in a real browser: picking a card, changing the pick, taking a row, spectators, game over and a narrow phone.
+// Take 5 in a real browser: picking a card, changing the pick, taking a row, spectators, game over and a narrow phone.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk } = require('./harness');
 const { chromium } = loadPlaywright();

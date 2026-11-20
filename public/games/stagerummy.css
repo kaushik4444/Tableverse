@@ -1,14 +1,34 @@
-/* Stage Rummy: goal line, scoreboard with laid groups, piles, hand. Builds on table.css (panels, status bar, overlay). */
+/* Stage 10: goal line, scoreboard with laid groups, piles, hand. Builds on table.css (panels, status bar, overlay). */
 .sr .sr-card { display: grid; place-items: center; position: relative; width: 100%; aspect-ratio: 3 / 4; padding: 0; border-radius: 8px; border: 2px solid rgba(0, 0, 0, .25); background: #fff; color: #fff; font: inherit; line-height: 1; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
 .sr .sr-card b { font-size: clamp(15px, 4.8vw, 24px); font-weight: 800; }
 .sr .sr-card i { position: absolute; left: 3px; top: 2px; font-style: normal; font-size: 11px; }
 .sr .sr-card u { position: absolute; right: 3px; bottom: 2px; font-size: 10px; text-decoration: none; opacity: .9; }
-.sr .sr-card.cR { background: #b93633; }
-.sr .sr-card.cB { background: #2f6fd0; }
-.sr .sr-card.cG { background: #21763f; }
-.sr .sr-card.cY { background: #e8b923; color: #3b2c00; }
-.sr .sr-card.wild { background: linear-gradient(135deg, #7b4bd6, #d6498c); }
-.sr .sr-card.skip { background: #3a3f4f; }
+/* the card face is cream paper; its colour sits in a band across the top and in the number and symbols */
+.sr .sr-card { --cc: #6b5a3a; background: linear-gradient(170deg, #fffdf6 0%, #f3ead3 100%); color: var(--cc); border-color: var(--cc); overflow: hidden; }
+.sr .sr-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 17%; background: var(--cc); }
+.sr .sr-card b { position: relative; margin-top: 12%; font-family: var(--display, inherit); }
+.sr .sr-card i { color: #fffdf6; text-shadow: 0 0 2px rgba(0, 0, 0, .45); z-index: 1; } /* the corner symbol sits on the coloured band, so it is light */
+.sr .sr-card u { color: var(--cc); }
+.sr .sr-card.cY i, .sr .sr-card.wild i { color: #2b1d4a; text-shadow: none; } /* light bands: a dark symbol */
+.sr .sr-card.cR { --cc: #b8322b; }
+.sr .sr-card.cB { --cc: #2857b0; }
+.sr .sr-card.cG { --cc: #1d7a43; }
+.sr .sr-card.cY { --cc: #c48d0c; }
+.sr .sr-card.cY::before { background: #e8b923; }
+.sr .sr-card.cY b, .sr .sr-card.cY u { color: #6e4a00; } /* the yellow band stays; the ranks on the cream face are darker to read at small sizes */
+.sr .sr-card.wild { color: #2b1d4a; background: linear-gradient(#fffdf6, #fffdf6) padding-box, linear-gradient(135deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #b76bff) border-box; border: 3px solid transparent; }
+.sr .sr-card.wild::before { background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #b76bff); }
+.sr .sr-card.skip { --cc: #2b2f3d; color: #2b2f3d; background: repeating-linear-gradient(-45deg, #d9d2bd 0 7px, #efe8d4 7px 14px); border-color: #2b2f3d; }
+.sr .sr-card.skip::before { background: #2b2f3d; }
+.sr .sr-card.skip b { color: #b8322b; }
+.sr .sr-card.mini b { margin-top: 0; }
+.sr .sr-card.mini::before { height: 22%; }
+
+/* every player's stage, as Wizard shows bids: a strip under the top bar, and the stage on each seat */
+.sr .sr-stages { margin-bottom: 6px; }
+.sr .sr-stages span { padding: 2px 6px; border-radius: 8px; }
+.sr .sr-stages span.sr-now { outline: 2px solid var(--gold, #f2c14e); }
+.sr .sr-stages span.sr-stage-done b::after { content: " ✓"; color: #86efac; }
 .sr .sr-card.mini { width: 28px; aspect-ratio: 3 / 4; }
 .sr .sr-card.mini b { font-size: 13px; }
 .sr .sr-card.mini i, .sr .sr-card.mini u { display: none; }
@@ -49,7 +69,7 @@
   .sr .sr-hand .sr-card { min-height: 44px; aspect-ratio: 1 / 1; }
 }
 
-/* The table: the shared felt with the seats around it. Stage Rummy needs a little more room than the default for its laid groups. */
+/* The table: the shared felt with the seats around it. Stage 10 needs a little more room than the default for its laid groups. */
 .sr .sr-table { margin-top: 6px; }
 .sr .sr-table .pt { --pt-min: 400px; }
 .sr .sr-table .pseat { max-width: 28vw; }

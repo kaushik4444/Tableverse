@@ -1,4 +1,4 @@
-/* Penalty Rows: a wooden table with four lanes of cards, the cards played this turn on a strip above, a penalty badge
+/* Take 5: a wooden table with four lanes of cards, the cards played this turn on a strip above, a penalty badge
  * per row, and your hand below. Builds on table.css (panels, status bar, overlay). Card sizes are capped in px so the
  * whole table fits a desktop window without zooming (see the 900px and short-screen rules at the end). */
 .prt { max-width: 980px; margin: 0 auto; }

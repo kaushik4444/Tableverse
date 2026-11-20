@@ -32,7 +32,7 @@ Nothing here is "production verified" unless it says so; production verification
 
 | Area | Status | Notes and evidence |
 |---|---|---|
-| Games: Wizard, 29, Poker, The Mind, Ludo (2-6), Snakes and Ladders (2-6), Property Rivals, Go Fish, Penalty Rows (2-8), Stage Rummy (2-6), Tic-Tac-Toe / Four in a Row | DONE | Engine tests in `npm test`; browser checks in `npm run test:ui`. Live smoke test by the owner: PENDING OWNER ACTION (S-6) |
+| Games: Wizard, 29, Poker, Mind, Ludo (2-6), Snakes and Ladders (2-6), Property Rivals, Go Fish, Take 5 (2-8), Stage 10 (2-6), Tic-Tac-Toe / Four in a Row | DONE | Engine tests in `npm test`; browser checks in `npm run test:ui`. Live smoke test by the owner: PENDING OWNER ACTION (S-6) |
 | 29 double/redouble by the whole answering side, 29 and Wizard options on by default | DONE IN DEVELOPMENT | #167, #170 (`tests/twentynine.test.js`, `tests/seat-order.test.js`) |
 | Accounts, sessions, 18+ confirmation, password policy, keep-me-signed-in | DONE | Code and CI (PostgreSQL suites run in CI only). Live sign-up/login smoke tests: PENDING OWNER ACTION (S-2 to S-7) |
 | Friends, invitations, public-by-default tables, private tables, host tools | DONE | In `main` since #165. Live two-account check: PENDING OWNER ACTION (S-6) |
@@ -191,7 +191,7 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 
 ## Stage 12 — consistent, uncluttered games on phones (branch `feature/stage-12-mobile-fit`, from stage 11; not merged)
 - 12.1 Shared toolbar: every game now shows chat, reactions, a "more" menu (sound, log, scores/chips/stats) and leave in ONE row (`unifyToolbar()` in `public/app.js`, styles at the end of `public/game-ux.css`). Previously each game had up to six buttons on two rows.
-- 12.2 Fit: on short phones (<= 700px tall) the table gives up height (`--pt-min`), Wizard keeps room for the trump corner, Ludo's turn bar and player list are one row each. At 360x640 the main play area (toolbar, table, hand, main buttons) now ends above the fold for Wizard, 29, Poker, The Mind and Ludo.
+- 12.2 Fit: on short phones (<= 700px tall) the table gives up height (`--pt-min`), Wizard keeps room for the trump corner, Ludo's turn bar and player list are one row each. At 360x640 the main play area (toolbar, table, hand, main buttons) now ends above the fold for Wizard, 29, Poker, Mind and Ludo.
 - Tests: `node tests/ui/mobile-fit.js` 5 passed (new, in `npm run test:ui`: main area fits 360x640, toolbar order, menu opens/closes with Escape); `wizard-layout.js` all viewports ok (Wizard 4/6, 29 re-run after the final CSS); `ludo-ui.js` 3 passed; `host-tools-ui.js` 9 passed; `social-ui.js` 12 passed. Not run: PG suites and `production.test.js` (no `ws` in this sandbox).
 - 12.3 Lobby declutter: table-code card drops the repeated help sentences (kept as tooltips), the invite form is hidden when there is nobody to invite, your profile editor and the game options fold into one-line summaries (`optionsSummary`, `details.fold`). Phone lobby went from ~2000px to ~1200px tall. `mobile-fit.js` now also checks the lobby (compact, folds closed).
 - 12.4 Home declutter: the 12-game roadmap is a closed fold (still complete in the DOM, tests unchanged), game cards are compact on phones (2-line taglines), the empty "Open tables" block no longer renders. Phone home page ~3150px -> ~1700px. `mobile-fit.js` also checks the home page.
@@ -203,7 +203,7 @@ Each item is one commit. Resume by reading `git log` on the branch.
 - 14.1 Table directory: coalesced (120 ms), sent only to people outside a table, skipped when unchanged per person, rejoin offers built in one pass (`rejoinIndex`). Was: every move at every table sent the whole directory to every player, O(players x rooms).
 - 14.2 State broadcast serialises the shared room info once (`sendBoundedRaw` in `lib/wsLimits.js`).
 - 14.3 Client `render()` keeps typed text, dropdown choice, focus and cursor (`KEEP_FIELDS`); identical `state` and `tables` messages no longer rebuild the screen. `tests/ui/redraw-ui.js` (fails without the fix).
-- 14.4 Game renderers (wizard, 29, poker, The Mind) redraw once a resize settles (120 ms) instead of on every resize event.
+- 14.4 Game renderers (wizard, 29, poker, Mind) redraw once a resize settles (120 ms) instead of on every resize event.
 - 14.5 `lib/staticFiles.js`: files cached in memory (revalidated by mtime), gzip for text, ETag and 304; `tests/static.test.js` (6).
 - Bug: accepting a table invitation failed with "no table code" because `transitionInvitation` returned only id and status. It now returns `game_id` and `room_code`, and the client falls back to what it knew. `tests/ui/invitations-ui.js`, plus a PostgreSQL assertion in `tests/friends.pg.test.js`.
 - Accessibility: friend names and online chips are buttons (keyboard opens the profile).
@@ -256,7 +256,7 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 - 17.7 (done) Property Rivals: tokens walk square by square (back 3 walks back, lockup jumps), action buttons wait for arrival, and new log lines float over the board as messages (log entries are numbered; rolls and landings are now logged).
 
 ## Stage 18 — shared feed and consistency for the new games (branch `feature/stage-18-shared-feed`, on top of PR #31)
-- 18.1 (done) `public/feed.js`: shared floating log feed, hooked in `renderGame()` (`CardTable.feed.sync`), configs for Wizard, 29, Poker, Ludo, The Mind; Property Rivals registers its own (landing line waits for the walking token). New lines are found by entry number when a game numbers its log, else by the overlap of the log tails (no engine changes). `tests/ui/feed-ui.js`.
+- 18.1 (done) `public/feed.js`: shared floating log feed, hooked in `renderGame()` (`CardTable.feed.sync`), configs for Wizard, 29, Poker, Ludo, Mind; Property Rivals registers its own (landing line waits for the walking token). New lines are found by entry number when a game numbers its log, else by the overlap of the log tails (no engine changes). `tests/ui/feed-ui.js`.
 - 18.2 (done) Crown for the leader in Wizard, Poker (3+ players) and 29 (team), `tests/ui/lead-ui.js`. 29 already had Wizard's trick "Leading" and "Winner" tags (checked with a real engine mid-trick).
 - 18.3 (done) `mobile-fit.js` and `game-audit.js` cover Property Rivals, Tic-Tac-Toe and Four in a Row (the check found a broken CSS block in my own feed refactor; fixed).
 - Considered and left out: floating feed for Snakes and Ladders (it already prints every move in a banner) and Go Fish (no public log by design).
@@ -293,7 +293,7 @@ Resume from the first stage not marked done. Each stage is one commit, pushed at
 ## PR #87 — Property Rivals city cards, net-worth crown, game settings (branch `feat/property-rivals-card-settings`)
 - Property Rivals: holdings are buttons that open a city card (`pr-cardsheet`). Figures come from the engine (`games/propertyrivals/actions.js` `viewFor` info array), so the client does not repeat the rules. Card is a dialog: focus moves to Close, Tab stays inside, Escape closes, focus returns to the holding; scroll position is kept across live redraws.
 - Player list: cash and net worth on separate lines; the crown uses net worth. Short phones use a grid so net worth is never squeezed out; holding targets are 24 px on desktop and 44 px on touch screens.
-- Every game: the settings chip sits in the title row (`app.js` `addSettingsChip`). Opens a read-only dialog; focus moves to its close button and returns to the chip on close; Space on the chip does not reach game shortcuts (The Mind plays a card on Space). Snakes and Ladders finishes its move animation through `ctx.rerender()` so the chip is rebuilt.
+- Every game: the settings chip sits in the title row (`app.js` `addSettingsChip`). Opens a read-only dialog; focus moves to its close button and returns to the chip on close; Space on the chip does not reach game shortcuts (Mind plays a card on Space). Snakes and Ladders finishes its move animation through `ctx.rerender()` so the chip is rebuilt.
 - Narrow phones (≤400 px): toolbar gaps and an icon-only chip keep the title row on one line at 360 px (`game-ux.css`).
 - Tests: `tests/propertyrivals.test.js` (card figures from the rules), `tests/ui/propertyrivals-ui.js` (card, cash/net worth, keyboard), `tests/ui/game-settings-ui.js` (chip, focus, Space, all six games). Full `npm run test:ui` passes locally.
 - Status: merged into `main` as merge commit `2d04d77` (PR #87, closed 2026-11-10 02:13 UTC, head `a3a169d`). The docs and What's new follow-up is PR #95 (`docs/property-rivals-whats-new`); nothing else on this branch is pending.
