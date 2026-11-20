@@ -27,10 +27,11 @@
     return `Your move (${myColour(v) === 'w' ? 'White' : 'Black'})`;
   }
 
+  /** The end of the game as plain text: callers escape it when they put it into the page. */
   function endText(v) {
     const reason = v.reason;
     if (v.draw) return reason === 'stalemate' ? 'A draw by stalemate' : `A draw: ${reason}`;
-    const winnerName = v.winner === v.me ? 'You' : esc(v.players[v.winner].name);
+    const winnerName = v.winner === v.me ? 'You' : v.players[v.winner].name;
     if (reason === 'resignation') return v.winner === v.me ? 'You won: the other player resigned' : `${winnerName} won: you resigned`;
     return v.winner === v.me ? `You won by checkmate` : `${winnerName} won by checkmate`;
   }

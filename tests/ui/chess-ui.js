@@ -98,6 +98,19 @@ const msgsFor = (g, viewer = 'me') => { const m = tableMessages('chess', [{ id: 
     await w.ctx.close();
   });
 
+  await test('resignation: a name with an ampersand is shown once, not as &amp; in the game-over text', async () => {
+    const named = [{ id: 'me', name: 'Aarav' }, { id: 'p1', name: 'A&B' }];
+    const g = E.createGame(named, { colour: 'host' }, () => 0.1);
+    assert.equal(E.applyAction(g, 'me', { type: 'resign' }).ok, true);
+    const m = tableMessages('chess', named);
+    m[1].view = E.viewFor(g, 'me');
+    const { page, ctx } = await open(m);
+    const text = await page.textContent('.overlay');
+    assert.match(text, /A&B won: you resigned/, 'the explanation reads A&B');
+    assert.doesNotMatch(text, /&amp;/, 'no doubly escaped ampersand is shown');
+    await ctx.close();
+  });
+
   await test('phone width (375px): the board fits the screen and the page does not scroll sideways', async () => {
     const { page, ctx } = await open(msgsFor(game({ colour: 'host' })), { width: 375, height: 667 });
     const box = await page.locator('.ch-board').boundingBox();
