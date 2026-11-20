@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const PUB = path.join(__dirname, '..', 'public');
 let passed = 0;
@@ -66,6 +67,18 @@ test('the loading pulse has a target and respects reduced motion', () => {
   const css = read('style.css');
   assert.match(css, /\.brand \.seat-halo\s*\{[^}]*animation:\s*seat-pulse/);
   assert.match(css, /prefers-reduced-motion:\s*reduce\)\s*\{\s*\.brand \.seat-halo\s*\{\s*animation:\s*none/);
+});
+
+test('game marks render registered IDs and escape fallbacks for unknown and inherited IDs', () => {
+  const context = { window: {} };
+  vm.runInNewContext(read('game-marks.js'), context);
+  const marks = context.window.GameMarks;
+  assert.ok(marks.ids().length > 0);
+  for (const id of marks.ids()) assert.match(marks.html(id), /^<svg class="gmark"/);
+  for (const id of ['unknown', ...Object.getOwnPropertyNames(Object.prototype)]) {
+    assert.equal(marks.html(id, `<&>"'`), '&lt;&amp;&gt;&quot;&#39;', id);
+    assert.equal(marks.html(id), '🎴', id);
+  }
 });
 
 console.log(`\n${passed} passed`);

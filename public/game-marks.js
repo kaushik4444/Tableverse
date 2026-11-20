@@ -26,7 +26,7 @@
 
   /** The mark for a game id as an inline SVG string, or the escaped fallback (the emoji icon) when the id has no mark. */
   function html(id, fallback) {
-    const m = MARKS[id];
+    const m = Object.prototype.hasOwnProperty.call(MARKS, id) ? MARKS[id] : null;
     if (!m) return esc(fallback || '🎴');
     return `<svg class="gmark" viewBox="0 0 48 48" role="img" aria-hidden="true" focusable="false"><rect width="48" height="48" rx="12" fill="${m[0]}"/>${m[1]}</svg>`;
   }
