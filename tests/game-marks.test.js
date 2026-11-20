@@ -163,6 +163,18 @@ test('open tables and rejoin banners show marks and keep unknown-game fallbacks 
   state.games = [];
 });
 
+test('open tables and rejoin banners keep a known mark when the game is missing from the menu', () => {
+  const state = renderContext.S;
+  state.games = [];
+  state.sessionListOpen = true;
+  state.publicTables = [{ gameId: 'ludo', code: 'ABCDEF', host: 'Host', members: 1, seats: 4 }];
+  state.rejoin = [{ gameId: 'ludo', code: 'ABCDEF' }];
+  for (const result of [render.publicTablesHTML(), render.rejoinBannerHTML()]) {
+    assert.ok(result.includes(html('ludo')), 'known id keeps its mark without menu metadata');
+    assert.doesNotMatch(result, /undefined/);
+  }
+});
+
 // Exercise the admin renderer with synthetic API data and a minimal output sink.
 async function adminMarks() {
   const admin = publicFile('admin.js');

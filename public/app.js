@@ -987,7 +987,7 @@
   function rejoinBannerHTML() {
     if (!S.rejoin.length) return '';
     return S.rejoin.map((r) => {
-      const g = gameMeta(r.gameId) || { name: r.gameId, icon: '🎴' };
+      const g = gameMeta(r.gameId) || { id: r.gameId, name: r.gameId, icon: '🎴' };
       const canReclaim = r.canReclaim !== false;
       const message = canReclaim
         ? `${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.`
@@ -1207,7 +1207,7 @@
     const count = S.publicTables.length;
     if (!count) return ''; // nothing open: no empty block on the home page
     const rows = S.publicTables.map((t) => {
-      const g = gameMeta(t.gameId) || { name: t.gameId, icon: '🎴' };
+      const g = gameMeta(t.gameId) || { id: t.gameId, name: t.gameId, icon: '🎴' };
       const action = publicTableAction(t);
       return `<div class="public-table"><span class="public-game-icon">${gameMark(g)}</span><div class="public-table-info"><b>${esc(g.name)}</b><span>${esc(t.host)}'s table · ${t.members}/${t.seats} players${t.spectators ? ` · 👁 ${t.spectators}` : ''}</span></div><button class="btn ${action.cls} small" data-act="joinPublic" data-code="${esc(t.code)}" ${action.disabled ? 'disabled' : ''}>${action.label}</button></div>`;
     }).join('');
@@ -2786,7 +2786,7 @@
 
   function renderLobby() {
     const r = S.room;
-    const g = gameMeta(r.gameId) || { name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
+    const g = gameMeta(r.gameId) || { id: r.gameId, name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
     const isHost = r.hostId === S.id;
     const n = r.members.length;
     const open = r.seats - n;
