@@ -490,7 +490,7 @@
       <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${RANGES.map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${rangeLabel(d)}</button>`).join('')}</div>
       ${o.games.length ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Last 7 days</th><th>Signed-in players</th><th>Player-games</th><th>Avg minutes each</th><th>Penalised leaves</th><th>Penalised leave rate</th><th>Left, no penalty</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="ad-muted">No finished games in this range.</p>'}
       <p class="ad-muted">Counts and averages only; no player is named. A penalised leave is leaving while others were still playing. Guests count as player-games but not as signed-in players.</p>`;
-    main.querySelectorAll('[data-gd]').forEach((b) => { b.onclick = () => { state.gen += 1; const mine = state.gen; gamesTab(Number(b.dataset.gd)).catch((e) => { if (mine === state.gen) fail(e); }); }; });
+    main.querySelectorAll('[data-gd]').forEach((b) => { b.onclick = () => { state.gen += 1; renderView('games', () => gamesTab(Number(b.dataset.gd))); }; });
     main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Tables hosted</h3>
       <p class="ad-muted">Every table that has finished, newest first, across all time. Players are not named.</p>
       <div id="tablesList"></div>
@@ -549,7 +549,7 @@
       <p id="gMsg" class="ad-msg" role="status"></p>
       <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
     // a redraw shows only its newest request's result: an older redraw that fails must not replace the current view
-    const redrawGames = () => { state.gen += 1; const mine = state.gen; return gamesTab(state.gamesDays || 30).catch((e) => { if (mine === state.gen) fail(e); }); };
+    const redrawGames = () => { state.gen += 1; return renderView('games', () => gamesTab(state.gamesDays || 30)); };
     if (gameFlagError && gameFlagError.visit === generation) say('gMsg', gameFlagError.text, 'err');
   main.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
       const id = sel.dataset.gaccess; const value = sel.value; const visit = generation; gameFlagError = null;
@@ -897,6 +897,19 @@
 
   const views = { guests: () => guestsTab(), overview: () => overview(), insights: () => insights(), games: () => gamesTab(), players: () => players(), users: () => users(), feedback: () => feedback(), reports: () => reports(), announcements, health, logs: async (f) => { const g = state.gen; await logs(f); if (state.me.isOwner && g === state.gen) await renderHistory(); }, audit: () => audit(), email: () => emailTab() };
   const SLOW_MS = 12000; // how long a view may load before the panel offers a retry
+  let loadingTimer;
+  function renderView(tab, render) {
+    clearTimeout(loadingTimer);
+    const gen = state.gen;
+    // Each replacement owns its timer: settling an older request cannot cancel the current watchdog.
+    const slow = setTimeout(() => {
+      if (gen !== state.gen || !main.querySelector('[data-loading]')) return;
+      main.innerHTML = '<p class="ad-msg err" role="status">This is taking longer than usual. <button type="button" class="ad-btn" data-retry>Try again</button></p>';
+      main.querySelector('[data-retry]').onclick = () => show(tab);
+    }, SLOW_MS);
+    loadingTimer = slow;
+    return render().catch((e) => { if (gen === state.gen) fail(e); }).finally(() => clearTimeout(slow));
+  }
   function show(tab) {
     state.tab = tab;
     generation++; // answers still on their way for the previous tab are dropped when they arrive
@@ -904,16 +917,9 @@
     view = typeof AbortController === 'function' ? new AbortController() : null;
     tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     state.gen++;
-    const gen = state.gen;
     main.innerHTML = '<p class="ad-muted" data-loading>Loading…</p>';
-    // A request that hangs (a weak mobile connection, a slow server) must not leave a blank panel: after a while the
-    // panel offers to try again. The timer does nothing once the view has drawn or the admin has moved on.
-    const slow = setTimeout(() => {
-      if (gen !== state.gen || !main.querySelector('[data-loading]')) return;
-      main.innerHTML = '<p class="ad-msg err" role="status">This is taking longer than usual. <button type="button" class="ad-btn" data-retry>Try again</button></p>';
-      main.querySelector('[data-retry]').onclick = () => show(tab);
-    }, SLOW_MS);
-    views[tab]().catch((e) => { if (gen === state.gen) fail(e); }).finally(() => clearTimeout(slow));
+    // Offer a retry for a hanging view, until it draws or the admin moves on.
+    renderView(tab, views[tab]);
   }
   tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) show(b.dataset.tab); });
 
