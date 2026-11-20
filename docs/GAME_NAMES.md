@@ -42,7 +42,7 @@ Hidden Miners is Tableverse's own hidden-role tunnel game. The rules, card set (
 
 ## Never use
 
-Phase 10, 6 nimmt!, Category 5, The Mind (as a title), Connect Four, Chutes and Ladders, Monopoly, Uno, Parcheesi, Scrabble, Catan, Cluedo,
+Phase 10, Saboteur (as a game title), 6 nimmt!, Category 5, The Mind (as a title), Connect Four, Chutes and Ladders, Monopoly, Uno, Parcheesi, Scrabble, Catan, Cluedo,
 Beer Pong (as a *brand*-style product name), and any publisher's art or rule-book text.
 
 ## Other things to keep clean
