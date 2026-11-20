@@ -167,7 +167,7 @@
     const step = (now) => {
       if (ui.anim !== a) return; // superseded by a newer shot or a fresh match, which has already redrawn
       if (!ui.root || !ui.v) { ui.anim = null; return; }
-      if (ui.v.shot?.seq !== a.seq) { ui.anim = null; render(ui.root, ui.v, ui.ctx); return; }
+      if (ui.v.shot?.seq !== a.seq) { ui.anim = null; ui.ctx.rerender(); return; }
       drawFrame(now, a);
     };
     requestAnimationFrame(step);
@@ -190,7 +190,8 @@
       }
       svg.querySelectorAll('[data-id]').forEach((el) => { if (!seen.has(el.dataset.id)) el.style.display = 'none'; });
     }
-    if (t >= a.end + 0.25 || t > 25) { ui.anim = null; render(ui.root, ui.v, ui.ctx); return; }
+    // the app redraws the table (with its turn timer and toolbar) from the current state
+    if (t >= a.end + 0.25 || t > 25) { ui.anim = null; ui.ctx.rerender(); return; }
     requestAnimationFrame((next) => { if (ui.anim === a) drawFrame(next, a); });
   }
 
@@ -199,10 +200,12 @@
     remember(v);
     react(v);
     const playing = v.phase === 'playing' && v.me >= 0;
+    // a resignation confirmation belongs to one match at one table: a new shot, a finished game or another table clears it
+    if (ui.resignArmed && ui.armKey !== armKeyOf(v, ctx)) ui.resignArmed = false;
     const frame = ui.anim ? ui.anim.frames[0] : null;
     root.innerHTML = `<div class="wz carrom-game" data-game="carrom">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.shots} shots</span></div>
-        ${CardTable.toolbarSeed(`<button class="btn ghost small" data-cb="rules">Rules</button>${playing ? `<button class="btn ghost small" data-cb="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'carrom')}</div>
+        ${CardTable.toolbarSeed(`<button class="btn ghost small" data-cb="rules">Rules</button>${playing ? `<button class="btn ghost small" data-cb="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'cb')}</div>
       ${seatsHTML(v)}
       <div class="cb-board-wrap">${boardHTML(v, frame)}</div>
       ${controlsHTML(v)}
@@ -215,7 +218,10 @@
     root.onpointermove = onPointerMove;
     root.onpointerup = onPointerUp;
     root.onpointercancel = onPointerCancel;
+    root.onlostpointercapture = onPointerCancel;
   }
+
+  function armKeyOf(v, ctx) { return `${ctx.room ? ctx.room.code : ''}|${v.phase}|${v.shots}`; }
 
   // ---- aiming ----
 
@@ -267,7 +273,9 @@
   function onPointerDown(e) {
     const v = ui.v;
     if (!v || !v.myTurn || ui.anim || !e.target.closest('.cb-svg')) return;
+    if (ui.dragging) return; // a second finger does not take over the drag
     ui.dragging = true;
+    ui.pointerId = e.pointerId;
     ui.dragMoved = false;
     const svg = e.target.closest('.cb-svg');
     if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
@@ -276,7 +284,7 @@
   }
 
   function onPointerMove(e) {
-    if (!ui.dragging) return;
+    if (!ui.dragging || e.pointerId !== ui.pointerId) return;
     ui.dragMoved = true;
     const p = pointerDisplay(e);
     if (p) aimFrom(p);
@@ -284,7 +292,7 @@
 
   /** Releasing a drag flicks with the aim it ends on. A tap only sets the aim, and a cancelled pointer never flicks. */
   function onPointerUp(e) {
-    if (!ui.dragging) return;
+    if (!ui.dragging || e.pointerId !== ui.pointerId) return;
     const moved = ui.dragMoved;
     ui.dragging = false;
     if (!moved) return;
@@ -293,13 +301,18 @@
     fire();
   }
 
-  function onPointerCancel() { ui.dragging = false; ui.dragMoved = false; }
+  /** A cancelled pointer, or one that lost its capture, ends its drag without a flick. Other pointers are ignored. */
+  function onPointerCancel(e) {
+    if (!ui.dragging || (e && e.pointerId !== ui.pointerId)) return;
+    ui.dragging = false; ui.dragMoved = false;
+  }
 
   /** Sends the current aim as a flick, if it is my turn, nothing is playing and the power is set. */
   function fire() {
     const v = ui.v, ctx = ui.ctx;
     if (!v || !ctx || !v.myTurn || ui.anim || ui.aim.power <= 0) return;
-    ctx.act({ type: 'flick', x: ui.aim.x / 100, angle: (ui.aim.angle * Math.PI) / 180, power: ui.aim.power / 100 });
+    // the flick names the board it was aimed at, so a duplicate sent after a shot is rejected by the server
+    ctx.act({ type: 'flick', x: ui.aim.x / 100, angle: (ui.aim.angle * Math.PI) / 180, power: ui.aim.power / 100, seq: v.seq });
   }
 
   function onInput(e) {
@@ -320,7 +333,7 @@
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
       case 'resign':
-        if (!ui.resignArmed) { ui.resignArmed = true; ctx.rerender(); break; }
+        if (!ui.resignArmed) { ui.resignArmed = true; ui.armKey = armKeyOf(v, ctx); ctx.rerender(); break; }
         ui.resignArmed = false; ctx.act({ type: 'resign' }); break;
     }
   }

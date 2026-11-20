@@ -181,6 +181,8 @@ function applyAction(g, playerId, action) {
     return { ok: true };
   }
   if (seat !== g.turn) return { ok: false, error: 'Not your turn' };
+  // a flick names the board it was aimed at: a duplicate sent before the new board arrived must not play on it
+  if (action.seq !== g.seq) return { ok: false, error: 'The table changed before your shot: aim again' };
   const p = plan(g, seat, action);
   if (p.error) return { ok: false, error: p.error };
 
@@ -217,6 +219,7 @@ function viewFor(g, playerId) {
     score: { ...g.score },
     queenHeld: g.queenHeld,
     shots: g.shots,
+    seq: g.seq,
     shot: g.shot,
     log: g.log.slice(-8),
     winner: g.phase === 'gameOver' ? g.winner : null,
@@ -234,7 +237,7 @@ function viewFor(g, playerId) {
 function botAction(g, seat, rng) {
   const cands = [];
   for (let i = 0; i < 16; i++) {
-    cands.push({ type: 'flick', x: STRIKER_X[0] + (STRIKER_X[1] - STRIKER_X[0]) * rng(), angle: (rng() * 2 - 1) * 0.9, power: 0.45 + 0.55 * rng() });
+    cands.push({ type: 'flick', x: STRIKER_X[0] + (STRIKER_X[1] - STRIKER_X[0]) * rng(), angle: (rng() * 2 - 1) * 0.9, power: 0.45 + 0.55 * rng(), seq: g.seq });
   }
   let best = null, bestScore = -Infinity;
   for (const a of cands) {
@@ -245,8 +248,11 @@ function botAction(g, seat, rng) {
     if (score > bestScore) { bestScore = score; best = a; }
   }
   if (best) return best;
-  for (let x = STRIKER_X[0]; x <= STRIKER_X[1]; x += 0.02) {
-    const a = { type: 'flick', x, angle: 0, power: 0.6 };
+  // step by index so the far end of the baseline (STRIKER_X[1]) is always tried
+  const steps = Math.ceil((STRIKER_X[1] - STRIKER_X[0]) / 0.02);
+  for (let i = 0; i <= steps; i++) {
+    const x = Math.min(STRIKER_X[1], STRIKER_X[0] + i * 0.02);
+    const a = { type: 'flick', x, angle: 0, power: 0.6, seq: g.seq };
     if (!plan(g, seat, a).error) return a;
   }
   return { type: 'resign' };

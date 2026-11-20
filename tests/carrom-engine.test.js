@@ -16,6 +16,8 @@ const two = () => E.createGame(names(2));
 const coin = (id, colour, x, y) => ({ id, kind: 'coin', colour, x, y, r: P.RADIUS.coin });
 const queen = (x, y) => ({ id: 'q', kind: 'queen', colour: null, x, y, r: P.RADIUS.queen });
 const flick = (x, power = 0.05, angle = 0) => ({ type: 'flick', x, angle, power });
+// a flick names the board it was aimed at (the view's seq), as the browser sends it
+const act = (g, who, a) => E.applyAction(g, who, a && a.type === 'flick' ? { ...a, seq: g.seq } : a);
 const onBoard = (g, colour) => g.coins.filter((c) => c.colour === colour).length;
 const pl = (g, seat, a) => E.plan(g, seat, a);
 
@@ -54,17 +56,17 @@ test('turns go round all four seats in order, and a miss passes the turn', () =>
   const seen = [];
   for (let i = 0; i < 4; i++) {
     seen.push(g.turn);
-    assert.deepEqual(E.applyAction(g, 'p' + g.turn, flick(0.5, 0.05)), { ok: true });
+    assert.deepEqual(act(g, 'p' + g.turn, flick(0.5, 0.05)), { ok: true });
   }
   assert.deepEqual(seen, [0, 1, 2, 3]);
   assert.equal(g.turn, 0);
-  assert.deepEqual(E.applyAction(g, 'p1', flick(0.5)), { ok: false, error: 'Not your turn' });
+  assert.deepEqual(act(g, 'p1', flick(0.5)), { ok: false, error: 'Not your turn' });
 });
 
 test('a shot from another side is rotated into its frame: the striker travels across the board, not up it', () => {
   const g = four();
   g.turn = 1; // the right-hand side
-  E.applyAction(g, 'p1', flick(0.5, 1, 0));
+  act(g, 'p1', flick(0.5, 1, 0));
   const frames = g.shot.keyframes;
   const first = frames[0].d.find((d) => d[0] === 'striker');
   const later = frames[Math.min(frames.length - 1, 12)].d.find((d) => d[0] === 'striker');
@@ -72,16 +74,39 @@ test('a shot from another side is rotated into its frame: the striker travels ac
   assert.ok(later[1] < first[1] - 0.05, 'moves towards the left, away from its own side');
 });
 
+test('a flick aimed at an earlier board is rejected, even when the same player is to shoot again', () => {
+  const g = four();
+  const stale = { ...flick(0.5), seq: g.seq };
+  assert.equal(E.applyAction(g, 'p0', { ...stale }).ok, true);
+  g.turn = 0; // as if the same player keeps the turn (their own colour was pocketed)
+  const shots = g.shots;
+  const r = E.applyAction(g, 'p0', stale);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /aim again/);
+  assert.equal(g.shots, shots, 'the duplicate did not play a second shot');
+});
+
+test('a striker placed on a piece is rejected by the overlap check, and nothing changes', () => {
+  const g = four();
+  const coin = g.coins[0];
+  coin.x = 0.5; coin.y = E.BASE_Y;
+  const before = JSON.stringify([g.coins, g.turn, g.shots, g.seq]);
+  const r = act(g, 'p0', flick(0.5));
+  assert.equal(r.ok, false);
+  assert.equal(r.error, 'The striker overlaps a piece');
+  assert.equal(JSON.stringify([g.coins, g.turn, g.shots, g.seq]), before);
+});
+
 test('validation: bad x, angle, power, overlapping striker and invalid action are rejected without change', () => {
   const g = four();
   const before = JSON.stringify(g.coins);
-  assert.equal(E.applyAction(g, 'p0', flick(0.1)).ok, false);
-  assert.equal(E.applyAction(g, 'p0', flick(0.5, 0.5, 1.4)).ok, false);
-  assert.equal(E.applyAction(g, 'p0', flick(0.5, 0)).ok, false);
-  assert.equal(E.applyAction(g, 'p0', flick(0.5, 1.5)).ok, false);
-  assert.equal(E.applyAction(g, 'p0', { type: 'flick', x: NaN, angle: 0, power: 0.5 }).ok, false);
-  assert.equal(E.applyAction(g, 'p0', null).ok, false);
-  assert.equal(E.applyAction(g, 'p0', { type: 'dance' }).ok, false);
+  assert.equal(act(g, 'p0', flick(0.1)).ok, false);
+  assert.equal(act(g, 'p0', flick(0.5, 0.5, 1.4)).ok, false);
+  assert.equal(act(g, 'p0', flick(0.5, 0)).ok, false);
+  assert.equal(act(g, 'p0', flick(0.5, 1.5)).ok, false);
+  assert.equal(act(g, 'p0', { type: 'flick', x: NaN, angle: 0, power: 0.5 }).ok, false);
+  assert.equal(act(g, 'p0', null).ok, false);
+  assert.equal(act(g, 'p0', { type: 'dance' }).ok, false);
   assert.equal(JSON.stringify(g.coins), before);
   assert.equal(g.turn, 0);
 });
@@ -89,7 +114,7 @@ test('validation: bad x, angle, power, overlapping striker and invalid action ar
 test('pocketing your own coin gives an extra shot, and the coin counts for your team', () => {
   const g = four();
   g.coins = [coin('w1', 'w', 0.035, 0.035), coin('b1', 'b', 0.6, 0.6), coin('b2', 'b', 0.9, 0.9)];
-  assert.equal(E.applyAction(g, 'p0', flick(0.2, 0.05)).ok, true);
+  assert.equal(act(g, 'p0', flick(0.2, 0.05)).ok, true);
   assert.equal(g.score.w, 1);
   assert.equal(g.turn, 0, 'the same seat shoots again');
   assert.equal(onBoard(g, 'b'), 2);
@@ -99,7 +124,7 @@ test('a partner (seat 2, White) pockets for the White team, and the turn goes on
   const g = four();
   g.turn = 2;
   g.coins = [coin('w1', 'w', 0.035, 0.035)]; // inside a pocket: pocketed on the first step of any shot
-  E.applyAction(g, 'p2', flick(0.5, 0.05));
+  act(g, 'p2', flick(0.5, 0.05));
   assert.equal(g.score.w, 1, 'the partner scores for White');
   assert.equal(g.score.b, 0);
   assert.equal(g.turn, 2, 'a pocket gives the same seat another shot');
@@ -108,7 +133,7 @@ test('a partner (seat 2, White) pockets for the White team, and the turn goes on
 test('pocketing the other colour sends it back and passes the turn', () => {
   const g = four();
   g.coins = [coin('b1', 'b', 0.035, 0.035)];
-  E.applyAction(g, 'p0', flick(0.2, 0.05));
+  act(g, 'p0', flick(0.2, 0.05));
   assert.equal(g.score.w, 0);
   assert.equal(g.turn, 1);
   assert.equal(onBoard(g, 'b'), 1);
@@ -119,7 +144,7 @@ test('a foul when the striker is pocketed: the coins of that shot go back, and o
   g.coins = [coin('w1', 'w', 0.6, 0.6)];
   g.score = { w: 2, b: 0 };
   const a = findShot(g, 0, 0.3, (s) => s.foul);
-  E.applyAction(g, 'p0', a);
+  act(g, 'p0', a);
   assert.equal(g.score.w, 1, 'one held coin went back');
   assert.equal(onBoard(g, 'w'), 2);
   assert.equal(g.turn, 1);
@@ -129,7 +154,7 @@ test('a foul when the striker is pocketed: the coins of that shot go back, and o
 test('an uncovered queen goes back to the centre', () => {
   const g = four();
   g.coins = [queen(0.035, 0.035)];
-  E.applyAction(g, 'p0', flick(0.2, 0.05));
+  act(g, 'p0', flick(0.2, 0.05));
   assert.equal(g.queenHeld, null);
   assert.ok(g.coins.some((c) => c.kind === 'queen'));
 });
@@ -138,7 +163,7 @@ test('the queen is covered by the team pocketing one of its coins in the same sh
   const g = four();
   // the queen and a white coin each sit inside a different corner pocket, so one shot takes both
   g.coins = [queen(0.035, 0.035), coin('w1', 'w', 0.965, 0.035)];
-  E.applyAction(g, 'p0', flick(0.5, 0.05));
+  act(g, 'p0', flick(0.5, 0.05));
   assert.equal(g.queenHeld, 'w');
 });
 
@@ -146,7 +171,7 @@ test('winning: a team with all nine coins and the queen wins, and the team is na
   const g = four();
   g.coins = [queen(0.035, 0.035)];
   g.score = { w: 9, b: 0 };
-  E.applyAction(g, 'p0', flick(0.2, 0.05));
+  act(g, 'p0', flick(0.2, 0.05));
   assert.equal(g.phase, 'gameOver');
   assert.equal(g.winner, 'w');
   assert.equal(g.reason, 'all nine coins');
@@ -158,14 +183,14 @@ test('a team with nine coins is not stuck: the queen still covers when it goes i
   const g = four();
   g.coins = [queen(0.035, 0.035)];
   g.score = { w: 9, b: 0 };
-  E.applyAction(g, 'p0', flick(0.2, 0.05));
+  act(g, 'p0', flick(0.2, 0.05));
   assert.equal(g.winner, 'w');
 });
 
 test('a returned disc never shares an id with a disc already on the board (the opening uses c1 to c18)', () => {
   const g = four();
   g.coins = [...E.opening(), coin('b99', 'b', 0.035, 0.035)]; // a black coin in a pocket goes back to the centre
-  assert.equal(E.applyAction(g, 'p0', flick(0.2, 0.05)).ok, true);
+  assert.equal(act(g, 'p0', flick(0.2, 0.05)).ok, true);
   const ids = g.coins.map((c) => c.id);
   assert.equal(new Set(ids).size, ids.length, 'every disc on the board has its own id');
   assert.equal(onBoard(g, 'b'), 10, 'the returned black coin is back on the board');
@@ -173,16 +198,16 @@ test('a returned disc never shares an id with a disc already on the board (the o
 
 test('resignation: the other team wins', () => {
   const g = four();
-  assert.equal(E.applyAction(g, 'p0', { type: 'resign' }).ok, true);
+  assert.equal(act(g, 'p0', { type: 'resign' }).ok, true);
   assert.equal(g.winner, 'b');
   assert.equal(g.reason, 'resignation');
-  assert.equal(E.applyAction(g, 'p1', flick(0.5)).error, 'The game is over');
+  assert.equal(act(g, 'p1', flick(0.5)).error, 'The game is over');
 });
 
 test('resignation is allowed for any seated player, not only the one to move', () => {
   const g = four();
   assert.equal(g.turn, 0);
-  assert.equal(E.applyAction(g, 'p2', { type: 'resign' }).ok, true, 'seat 2 may resign while seat 0 is to play');
+  assert.equal(act(g, 'p2', { type: 'resign' }).ok, true, 'seat 2 may resign while seat 0 is to play');
   assert.equal(g.phase, 'gameOver');
   assert.equal(g.winner, 'b', 'seat 2 is White, so Black wins');
 });
@@ -190,19 +215,19 @@ test('resignation is allowed for any seated player, not only the one to move', (
 test('resignation in a three-player game: the winner is the opposite colour, not the next seat (which can share the colour)', () => {
   const g = E.createGame(names(3));
   g.turn = 2;
-  assert.equal(E.applyAction(g, 'p2', { type: 'resign' }).ok, true);
+  assert.equal(act(g, 'p2', { type: 'resign' }).ok, true);
   assert.equal(g.winner, 'b', 'seat 2 (White) resigned: Black wins, even though seat 0 is also White');
 });
 
 test('a stranger cannot resign, and an unknown player is rejected before anything else', () => {
   const g = four();
-  assert.equal(E.applyAction(g, 'nobody', { type: 'resign' }).ok, false);
+  assert.equal(act(g, 'nobody', { type: 'resign' }).ok, false);
   assert.equal(g.phase, 'playing');
 });
 
 test('view: only the seat to move has myTurn; the board, team scores and the last shot are shown', () => {
   const g = four();
-  E.applyAction(g, 'p0', flick(0.5, 0.05));
+  act(g, 'p0', flick(0.5, 0.05));
   const v = E.viewFor(g, 'p1');
   assert.equal(v.myTurn, true);
   assert.equal(E.viewFor(g, 'p0').myTurn, false);
@@ -220,7 +245,7 @@ test('the bot always returns a flick the rules accept, from any seat', () => {
     const seat = g.turn;
     const a = E.botAction(g, seat, rng);
     assert.equal(a.type, 'flick');
-    assert.equal(E.applyAction(g, 'p' + seat, a).ok, true, JSON.stringify(a));
+    assert.equal(act(g, 'p' + seat, a).ok, true, JSON.stringify(a));
   }
 });
 
@@ -229,7 +254,7 @@ test('a four-player bot game keeps the pieces consistent: each colour has nine b
   const g = four();
   for (let turn = 0; turn < 60 && g.phase === 'playing'; turn++) {
     const seat = g.turn;
-    assert.equal(E.applyAction(g, 'p' + seat, E.botAction(g, seat, rng)).ok, true);
+    assert.equal(act(g, 'p' + seat, E.botAction(g, seat, rng)).ok, true);
     assert.equal(onBoard(g, 'w') + g.score.w, 9, 'white coins: board plus held');
     assert.equal(onBoard(g, 'b') + g.score.b, 9, 'black coins: board plus held');
     const queens = g.coins.filter((c) => c.kind === 'queen').length;

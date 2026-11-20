@@ -118,7 +118,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
   await test('shot playback: controls are hidden while a shot plays, then the board is redrawn for the next seat', async () => {
     const g = fresh();
     const first = msgsFor(g, 'p0');
-    assert.equal(E.applyAction(g, 'p0', { type: 'flick', x: 0.5, angle: 0, power: 0.05 }).ok, true);
+    assert.equal(E.applyAction(g, 'p0', { seq: g.seq, type: 'flick', x: 0.5, angle: 0, power: 0.05 }).ok, true);
     const { page, ctx } = await scriptedPage(browser, { messages: [first[0], first[1], { t: 'state', room: first[1].room, view: E.viewFor(g, 'p0') }], viewport: { width: 390, height: 844 } });
     await page.goto(url + '/');
     await page.waitForSelector('.cb-svg', { timeout: 8000 });
@@ -146,7 +146,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     g.coins = [{ id: 'w1', kind: 'coin', colour: 'w', x: 0.035, y: 0.035, r: 0.022 }]; // inside a pocket
     g.score = { w: 8, b: 0 }; g.queenHeld = 'w';
     const before = msgsFor(g, 'p0');
-    E.applyAction(g, 'p0', { type: 'flick', x: 0.2, angle: 0, power: 0.05 });
+    E.applyAction(g, 'p0', { seq: g.seq, type: 'flick', x: 0.2, angle: 0, power: 0.05 });
     return { g, first: before[0], table: before[1], end: { t: 'state', room: before[1].room, view: E.viewFor(g, 'p0') } };
   }
 
@@ -219,6 +219,31 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     assert.ok(overflow <= 0, 'no horizontal scroll');
     const btn = await box(page, '[data-cb="flick"]');
     assert.ok(btn.height >= 40, 'the Flick button is a comfortable tap target');
+    await ctx.close();
+  });
+
+  await test('the Flick button sends the aim set with the sliders, without a drag', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    await page.evaluate(() => {
+      for (const [k, v] of [['x', 50], ['angle', 10], ['power', 60]]) {
+        const el = document.querySelector('[data-aim="' + k + '"]');
+        el.value = String(v);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+    assert.equal((await sent(page)).length, 0, 'nothing is sent until Flick is pressed');
+    await page.click('[data-cb="flick"]');
+    const acts = await sent(page);
+    assert.equal(acts.length, 1, 'the button sends one flick');
+    assert.equal(acts[0].action.type, 'flick');
+    assert.equal(typeof acts[0].action.seq, 'number', 'the flick names the board it was aimed at');
+    await ctx.close();
+  });
+
+  await test('the table toolbar Leave button is wired to the plugin (data-cb, not a dead data-carrom key)', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    assert.equal(await page.locator('[data-cb="leave"]').count(), 1);
+    assert.equal(await page.locator('[data-carrom]').count(), 0);
     await ctx.close();
   });
 
