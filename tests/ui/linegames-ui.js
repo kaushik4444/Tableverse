@@ -71,6 +71,23 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await d.ctx.close();
   });
 
+  await test('hidden result renders do not consume its first animation; visible redraws settle', async () => {
+    const m = msgs('tictactoe', (v) => {
+      v.phase = 'gameOver'; v.draw = true; v.myTurn = false; v.legal = [];
+      v.event = { seq: 50, type: 'draw' };
+    });
+    Object.assign(m[1].room, { status: 'finished', outcome: { sinceMs: 0, winners: [] } });
+    const { page, ctx } = await open(m);
+    assert.equal(await page.isVisible('.lg .overlay'), false);
+    assert.equal(await page.locator('.lg .overlay.settled').count(), 0);
+    await page.waitForSelector('.end-actions', { timeout: 10000 });
+    assert.equal(await page.locator('.lg .overlay.settled').count(), 0, 'first visible result animates');
+    m[1].room.votes = ['p1'];
+    await page.evaluate((x) => window.__push(x), m[1]);
+    assert.equal(await page.locator('.lg .overlay.settled').count(), 1, 'later redraw stays settled');
+    await ctx.close();
+  });
+
   await test('spectators cannot move; every game fits a phone without sideways scroll', async () => {
     for (const id of ['tictactoe', 'fourinarow']) {
       const { page, ctx } = await open(msgs(id, (v) => { v.me = -1; v.myTurn = false; v.legal = []; }), { width: 360, height: 740 });

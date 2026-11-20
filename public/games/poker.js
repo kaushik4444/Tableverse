@@ -185,6 +185,8 @@
     return `<div class="overlay" data-pk="closeRanks"><div class="sheet" data-stop="1" role="dialog" aria-modal="true" aria-labelledby="pk-ranks-title"><h2 id="pk-ranks-title">Hand rankings</h2><p class="hint" style="text-align:left">Best hand first. Ties are settled by the cards in the hand.</p><ol class="ph-list">${rows}</ol><div class="row"><button class="btn" data-pk="closeRanks">Close</button></div></div></div>`;
   }
   function overlayHTML(v) {
+    // the result and its actions come first: Hands must not replace them, or keyboard users cannot reach them
+    if (v.phase === 'gameOver') ui.ranks = false;
     if (ui.ranks) return ranksHTML();
     if (v.phase === 'gameOver') {
       const rows = v.standings
