@@ -125,7 +125,7 @@ button.ad-btn, .ad-btn {
   border: 1px solid var(--panel-line); background: rgba(255, 255, 255, .05); color: var(--text);
   transition: transform .08s, filter .15s, background .15s;
 }
-.ad-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .1); }
+.ad-btn:hover:not(:disabled):not(.primary) { background: rgba(255, 255, 255, .1); }
 .ad-btn:active:not(:disabled) { transform: scale(.97); }
 .ad-btn.primary {
   background: linear-gradient(135deg, #ffd978, #ffb13d); color: var(--gold-ink); border: 0;

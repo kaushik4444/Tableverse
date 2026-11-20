@@ -987,7 +987,7 @@
   function rejoinBannerHTML() {
     if (!S.rejoin.length) return '';
     return S.rejoin.map((r) => {
-      const g = gameMeta(r.gameId) || { name: r.gameId, icon: '🎴' };
+      const g = gameMeta(r.gameId) || { id: r.gameId, name: r.gameId, icon: '🎴' };
       const canReclaim = r.canReclaim !== false;
       const message = canReclaim
         ? `${r.paused ? 'Everyone stepped out, so it is paused' : 'A bot is playing your seat'} at table <code>${esc(r.code)}</code>. Jump back in to carry on.`
@@ -1207,7 +1207,7 @@
     const count = S.publicTables.length;
     if (!count) return ''; // nothing open: no empty block on the home page
     const rows = S.publicTables.map((t) => {
-      const g = gameMeta(t.gameId) || { name: t.gameId, icon: '🎴' };
+      const g = gameMeta(t.gameId) || { id: t.gameId, name: t.gameId, icon: '🎴' };
       const action = publicTableAction(t);
       return `<div class="public-table"><span class="public-game-icon">${gameMark(g)}</span><div class="public-table-info"><b>${esc(g.name)}</b><span>${esc(t.host)}'s table · ${t.members}/${t.seats} players${t.spectators ? ` · 👁 ${t.spectators}` : ''}</span></div><button class="btn ${action.cls} small" data-act="joinPublic" data-code="${esc(t.code)}" ${action.disabled ? 'disabled' : ''}>${action.label}</button></div>`;
     }).join('');
@@ -1584,32 +1584,6 @@
   const initial = (name) => esc([...name][0] || '?').toUpperCase();
   /** A round avatar for anything with a name and an optional emoji; `cls` adds a size/placement class ('big', 'tb-av'). */
   const avatar = (m, cls = '') => `<span class="avatar${cls ? ' ' + cls : ''}" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span>`;
-
-  function profileHTML() {
-    const userBadge = S.username ? `<div class="profile-user">@${esc(S.username)}</div>` : '';
-    const picks = S.avatars
-      .map((a) => `<button type="button" class="av-pick ${a === S.avatar ? 'on' : ''}" data-act="avatar" data-a="${esc(a)}" aria-label="Avatar ${esc(a)}" aria-pressed="${a === S.avatar}">${esc(a)}</button>`)
-      .join('');
-    const myName = S.named ? S.name : '';
-    const initialChar = myName ? esc([...myName][0] || '?').toUpperCase() : '★';
-    const previewBg = myName ? avatarColor(myName) : 'hsl(260 55% 42%)';
-    return `<div class="profile">
-      <div class="profile-header">
-        <div class="profile-preview">
-          <span class="avatar big" style="background:${previewBg}">${S.avatar ? esc(S.avatar) : initialChar}</span>
-          <div class="profile-meta">
-            <span class="profile-welcome">${myName ? `Playing as <b>${esc(myName)}</b>` : 'Choose your player persona'}</span>
-            ${userBadge}
-            <span class="profile-hint">Seen by friends at the table</span>
-          </div>
-        </div>
-      </div>
-      <label class="label" for="name">Your name</label>
-      <input id="name" type="text" maxlength="20" autocomplete="nickname" placeholder="Type your nickname" value="${esc(myName)}">
-      <div class="row" style="justify-content:space-between;margin-top:12px"><span class="label">Avatar</span><button type="button" class="btn ghost small" data-act="toggleAvatars" aria-expanded="${S.avatarOpen}">${S.avatarOpen ? 'Done' : 'Change'}</button></div>
-      ${S.avatarOpen ? `<div class="av-picks">${picks}</div>` : ''}
-    </div>`;
-  }
 
   let prevView = null;
   const bidSig = (v) => JSON.stringify(v.bids || (v.players || []).map((p) => (p.bid !== undefined && p.bid !== null ? p.bid : p.hasBid ? 1 : null)));
@@ -2706,6 +2680,8 @@
       </article>`;
     }).join('');
     const name = S.guest ? '' : (S.named ? S.name : '');
+    const oldTables = $app.querySelector('.public-tables'); // the open-tables list keeps its place when the home page redraws
+    const tablesAt = oldTables ? { x: oldTables.scrollLeft, y: oldTables.scrollTop } : null;
     $app.innerHTML = `
     ${topbarHTML()}
     <main class="page wide home">
@@ -2726,15 +2702,19 @@
       ${bannersHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
       ${friendsStripHTML()}
-      <section class="home-section" id="games">
-        <h2 class="section">Games</h2>
-        ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
-      </section>
+      <div class="home-split">
+        ${publicTablesHTML()}
+        <section class="home-section" id="games">
+          <h2 class="section">Games</h2>
+          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
+        </section>
+      </div>
       ${comingSoonHTML()}
       ${recentTablesHTML()}
-      ${publicTablesHTML()}
       <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.privacyPublished ? '<a href="/privacy">Privacy notice</a>' : '', S.termsPublished ? '<a href="/terms">Terms</a>' : '', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
     </main>`;
+    const tablesNow = $app.querySelector('.public-tables');
+    if (tablesNow && tablesAt) { tablesNow.scrollLeft = tablesAt.x; tablesNow.scrollTop = tablesAt.y; }
   }
 
   function optionHTML(o, r, isHost) {
@@ -2806,7 +2786,7 @@
 
   function renderLobby() {
     const r = S.room;
-    const g = gameMeta(r.gameId) || { name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
+    const g = gameMeta(r.gameId) || { id: r.gameId, name: r.gameId, options: [], seats: { min: r.min, max: r.max }, icon: '🎴' };
     const isHost = r.hostId === S.id;
     const n = r.members.length;
     const open = r.seats - n;
@@ -2884,7 +2864,7 @@
   }
 
   // ------------------------------------------------------------ player stats
-  const statsGame = (id) => gameMeta(id) || { name: id, icon: '🎴' };
+  const statsGame = (id) => gameMeta(id) || { id, name: id, icon: '🎴' }; // the id too, so a game's mark still shows without its menu entry
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
@@ -2979,7 +2959,7 @@
       const tag = interactive ? 'button' : 'div';
       return `<${tag} class="stat-game${interactive ? ' stat-game-btn' : ''}"${interactive ? ` type="button" data-act="openGameStats" data-game="${esc(g.gameId)}" aria-label="${esc(meta.name)}: details"` : ''}><span class="stat-game-name">${gameMark(meta)} ${esc(meta.name)}${KIND_NOTE[g.kind] ? ` <small class="stat-kind" title="${esc(KIND_NOTE[g.kind])}">${g.kind === 'coop' ? 'co-op' : 'teams'}</small>` : ''}</span><span class="stat-game-rec">${g.wins}W · ${g.losses}L</span><span class="stat-bar" aria-hidden="true"><i style="width:${g.winRate || 0}%"></i></span><span class="stat-game-pct">${g.winRate}%</span>${g.best !== null && g.bestLabel ? `<span class="stat-game-best">${esc(g.bestLabel)}: <b>${esc(g.bestText)}</b></span>` : ''}</${tag}>`;
     }).join('');
-    const recent = s.recent.map((r) => `<span class="stat-chip ${r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${esc(statsGame(r.gameId).icon || '🎴')}<b>${r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
+    const recent = s.recent.map((r) => `<span class="stat-chip ${r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${gameMark({ id: r.gameId, icon: statsGame(r.gameId).icon })}<b>${r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
     return `
       ${progressHTML(s.progress, interactive)}
       <div class="stat-grid">

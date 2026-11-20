@@ -707,3 +707,20 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 /* Game marks (public/game-marks.js): an SVG tile sized by the text around it. The art tile's own gradient gives way to the mark. */
 .gmark { display: inline-block; width: 1em; height: 1em; vertical-align: -0.16em; flex: none; overflow: visible; filter: drop-shadow(0 3px 8px rgba(0, 0, 0, .28)); }
 .game-art:has(> .gmark) { background: none; text-shadow: none; }
+/* Home: open tables sit above the games on a phone, as two rows that scroll sideways; on a desktop they sit in a
+ * column beside the games and scroll down. The same markup serves both: the layout is only CSS. */
+.home-split { display: grid; gap: 4px; }
+.public-tables-panel { margin: 12px 0 8px; min-width: 0; } /* the markup puts it first, so keyboard order matches the screen */
+.public-tables-panel .public-table { flex-wrap: wrap; }
+.public-tables-panel .public-table .public-table-info { flex: 1 1 200px; } /* a long name wraps the action onto its own line instead of overlapping it */
+.public-tables-panel .public-table .btn { flex-shrink: 0; white-space: nowrap; margin-left: auto; }
+.public-tables-panel .public-tables { grid-auto-flow: column; grid-template-rows: repeat(2, auto); grid-auto-columns: min(280px, 82%); /* a little of the next card always shows, even on a 320px phone */ overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; margin-top: 8px; }
+.public-tables-panel .public-table { scroll-snap-align: start; }
+@media (min-width: 1000px) {
+  .home-split { grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; }
+  /* the side column is reserved only when there are open tables */
+  .home-split:has(> .public-tables-panel) { grid-template-columns: minmax(0, 1fr) 320px; }
+  .home-split:has(> .public-tables-panel) > #games { grid-column: 1; grid-row: 1; }
+  .home-split > .public-tables-panel { grid-column: 2; grid-row: 1; margin: 0; position: sticky; top: 12px; }
+  .public-tables-panel .public-tables { grid-auto-flow: row; grid-template-rows: none; grid-auto-columns: auto; overflow-x: hidden; overflow-y: auto; max-height: 72vh; scroll-snap-type: none; }
+}

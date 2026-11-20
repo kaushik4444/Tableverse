@@ -101,11 +101,11 @@
       tone(720, 0, 0.07, { type: 'sine', vol: 0.12, slide: 0.8 });
       tone(120, 0.005, 0.09, { type: 'sine', vol: 0.22, slide: 0.5 });
     },
-    // a disc dropped into a column: a short fall, a thud and a small bounce
-    drop: () => {
-      swish(0, 0.16, { vol: 0.14, f0: 2400, f1: 700, q: 0.9 });
-      tone(160, 0.17, 0.1, { type: 'sine', vol: 0.26, slide: 0.45 });
-      tone(210, 0.3, 0.05, { type: 'sine', vol: 0.1, slide: 0.6 });
+    // a disc dropped into a column: the fall (a short swish, at the start) and the landing (a thud and a small bounce)
+    fall: () => swish(0, 0.2, { vol: 0.14, f0: 2400, f1: 700, q: 0.9 }),
+    land: () => {
+      tone(160, 0, 0.1, { type: 'sine', vol: 0.26, slide: 0.45 });
+      tone(210, 0.12, 0.05, { type: 'sine', vol: 0.1, slide: 0.6 });
     },
     chat: () => { tone(523.25, 0, 0.06, { type: 'sine', vol: 0.1 }); tone(659.25, 0.05, 0.08, { type: 'sine', vol: 0.1 }); },
     tick: () => tone(587.33, 0, 0.05, { type: 'sine', vol: 0.08 }),
