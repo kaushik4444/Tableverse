@@ -6,7 +6,11 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table' };
+  const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table', tables: new Map(), cur: null };
+  /** Restart tracking for one table: its sequence is compared only with its own last value, and its match count rises when it restarts. */
+  const tableState = (key) => { let st = ui.tables.get(key); if (!st) { st = { lastSeen: null, match: 0 }; ui.tables.set(key, st); } return st; };
+  /** Feed IDs carry the table's match, so a rematch at the same table cannot reuse an ID the feed still holds. */
+  const fid = (s) => `m${ui.cur ? ui.cur.match : 0}:${s}`;
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
 
   /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
@@ -37,17 +41,44 @@
       if (ui.anim !== anim || !ui.ctx || anim.table !== tableOf()) return;
       if (anim.i < anim.steps.length - 1) {
         anim.i += 1;
+        announce(anim, anim.i - 1);
         ui.ctx.rerender();
         scheduleStep(anim, paceK);
         return;
       }
       ui.anim = null;
+      // the round and pick lines that were held behind the replay now follow its moves
+      const held = ui.heldFeed; ui.heldFeed = null;
+      if (held) feedPicksAndRounds(held);
       ui.ctx.rerender();
     }, STEP_MS * (paceK || 1));
   }
 
   const penWord = (p) => `${p} penalty point${p === 1 ? '' : 's'}`;
   const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
+  const rowName = (e) => `row ${e.row + 1}`;
+
+  /** The feed line for one event of the last turn: who played which card, and who took which row. */
+  function feedItem(v, e, id) {
+    const who = nameOf(v, e.by);
+    if (e.kind === 'place') return { id, tone: 'play', html: `<b>${who}</b> played ${e.n} on ${rowName(e)}` };
+    if (e.kind === 'sweep') return { id, tone: 'take', html: `<b>${who}</b> played the ${v.rowLimit + 1}th card and took ${rowName(e)} · ${penWord(e.took)}` };
+    return { id, tone: 'take', html: `<b>${who}</b> played ${e.n}, which fits no row, and took ${rowName(e)} · ${penWord(e.took)}` };
+  }
+  /** The spotlight for an event: a row taken shows its card, large, for a moment. Playing a card needs no spotlight. */
+  function spotFor(v, e) {
+    if (e.kind === 'place') return null;
+    return { card: cardHTML({ n: e.n, p: e.p }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} took ${rowName(e)} · ${penWord(e.took)}`, tone: 'take', ms: 1300 };
+  }
+  /** Shows one replayed event in the feed (and the spotlight, for a row taken). */
+  function announce(anim, idx) {
+    const e = anim.events[idx];
+    const v = ui.latest;
+    if (!e || !v || !window.GameFeed || anim.table !== tableOf()) return; // no feed: the replay still moves on
+    window.GameFeed.add(anim.table, [feedItem(v, e, fid(`t${anim.seq}-${idx}`))]);
+    const sp = spotFor(v, e);
+    if (sp) window.GameFeed.spotlight(sp);
+  }
   /** The event of the replay step on screen (the card that has just landed or taken a row), or null. */
   const currentEvent = (v) => (ui.anim && ui.anim.seq === v.seq && ui.anim.i > 0 ? v.lastTurn[ui.anim.i - 1] : null);
 
@@ -132,6 +163,17 @@
     }).join('')}</ul>`;
   }
 
+  /** Each player's score under their name, always in view: points left out of the target (countdown) or penalty points out of
+   * the target (race), so there is a reference without going to the Scores tab. */
+  function chipsHTML(v) {
+    const what = v.countdown ? 'points left' : 'penalty points';
+    return `<ul class="pr-chips" aria-label="Scores, ${what} out of ${v.target}">${v.players.map((p, i) => {
+      const num = v.countdown ? p.left : p.total;
+      const out = v.losers && v.losers.includes(i) ? ' out' : '';
+      return `<li class="${i === v.me ? 'me' : ''}${out}" data-pid="${esc(p.id)}"><span class="pr-chip-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><b class="pr-chip-n" title="${what}">${num}<small>/${v.target}</small></b></li>`;
+    }).join('')}</ul>`;
+  }
+
   /** The last rounds, newest first, so the scores tab shows how the game got here. */
   function historyHTML(v) {
     if (!v.history.length) return '';
@@ -188,19 +230,42 @@
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
     const steps = replaySteps(v);
-    ui.anim = steps ? { seq: v.seq, steps, i: 0, table: tableOf() } : null;
+    ui.anim = steps ? { seq: v.seq, steps, i: 0, table: tableOf(), events: v.lastTurn } : null;
     if (ui.anim) scheduleStep(ui.anim, v.paceK);
+    else if (window.GameFeed) window.GameFeed.add(tableOf(), v.lastTurn.map((e, idx) => feedItem(v, e, fid(`t${v.seq}-${idx}`)))); // no replay: the feed still gets the turn
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     else if (v.lastTurn.some((e) => e.by === v.me && e.took)) snd.play('lose');
     else snd.play('card');
   }
 
+  /** Public events that are not a card on the table: who has locked in a card, and a new round. */
+  function feedPicksAndRounds(v) {
+    const key = tableOf();
+    if (!key || !window.GameFeed || ui.seq === null) { ui.round = v.round; return; }
+    if (ui.anim && ui.anim.table === key) { ui.heldFeed = v; return; } // the replayed moves come first
+    ui.heldFeed = null;
+    if (ui.round !== v.round) { window.GameFeed.add(key, [{ id: fid(`round-${v.round}`), tone: 'round', html: `Round ${v.round} begins` }]); ui.round = v.round; }
+    if (v.phase === 'choose') {
+      v.players.forEach((p, i) => {
+        if (p.picked && i !== v.me) window.GameFeed.add(key, [{ id: fid(`pick-${v.round}-${v.turn}-${i}`), tone: 'info', html: `<b>${esc(p.name)}</b> has locked in a card` }]);
+      });
+    }
+    if (v.phase === 'gameOver' && v.winners.length) {
+      const names = v.winners.map((i) => esc(v.players[i].name)).join(' & ');
+      window.GameFeed.add(key, [{ id: fid(`end-${v.round}`), tone: 'win', html: `Game over · <b>${names}</b> ${v.winners.length > 1 ? 'share the win' : 'wins'}` }]);
+    }
+  }
+
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
+    ui.cur = tableState(tableOf());
+    if (ui.cur.lastSeen !== null && v.seq < ui.cur.lastSeen) ui.cur.match += 1; // this table's sequence restarted: a new match there
+    ui.cur.lastSeen = v.seq;
     if (ui.table !== tableOf()) { ui.table = tableOf(); ui.anim = null; ui.seq = null; } // a different table: start afresh, with no replay
     react(v);
+    feedPicksAndRounds(v);
     const focusedTab = root.contains(document.activeElement) && document.activeElement.matches('[data-pr="tab"]') ? document.activeElement.dataset.tab : null;
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);
@@ -210,7 +275,7 @@
         <button type="button" role="tab" class="btn ghost small" data-pr="tab" data-tab="scores" aria-selected="${tab === 'scores'}">Scores</button></nav>`;
     const body = tab === 'scores'
       ? `${scoreHTML(v)}${historyHTML(v)}${lastTurnHTML(v)}`
-      : `<section class="pr-table" aria-label="Table">${stripHTML(v)}${rowsHTML(v)}</section>${lastTurnHTML(v)}`;
+      : `<section class="pr-table" aria-label="Table">${chipsHTML(v)}${stripHTML(v)}${rowsHTML(v)}${window.GameFeed ? window.GameFeed.html(tableOf(), 'gf-float') : ''}</section>${lastTurnHTML(v)}`;
     root.innerHTML = `
     <div class="wz prt">
       <div class="wz-top">
