@@ -1,45 +1,64 @@
 'use strict';
 /**
- * Carrom for two players (one colour each). The physics is in physics.js; this file holds the rules and the table state.
+ * Carrom for two to four players. The physics is in physics.js; this file holds the rules and the table state.
  *
- * Seats: the first seat plays White from the bottom baseline, the second plays Black from the top. Each player flicks the
- * striker from their own baseline (x is measured from their own left, so the board turns for the far player).
- * Action: { type: 'flick', x, angle, power } or { type: 'resign' }.
+ * Sides and teams: each seat sits on one side of the board. Two players sit opposite each other; three or four take the
+ * sides in turn order. Seats 0 and 2 play White and seats 1 and 3 play Black, so partners sit opposite each other and
+ * share a colour. Turns go round in seat order.
  *
- * Rules (first version, deliberately simple):
- *  - Pocket all nine of your own coins to win. The queen is covered when you pocket it in the same shot as one of your
- *    coins, or once you have all nine; a covered queen is held by you. An uncovered queen goes back to the centre.
+ * The simulation always runs in the bottom side's frame (the first seat's baseline at the bottom). A seat's shot is given
+ * in its own frame and rotated into that frame. Action: { type: 'flick', x, angle, power } or { type: 'resign' }, where
+ * x is the striker's position along the seat's own baseline (0.2 to 0.8), angle is in radians from straight ahead
+ * (positive to the player's right, at most 75 degrees) and power is 0 to 1.
+ *
+ * Rules (simplified):
+ *  - Your team pockets its own colour. Pocket all nine coins of your colour, with the queen held, to win for your team.
+ *  - The queen is covered when your team pockets it in the same shot as one of its coins, or once it has all nine. A
+ *    covered queen is held by the team; an uncovered one goes back to the centre.
  *  - Pocketing one of your own coins gives you another shot. Any other shot passes the turn.
- *  - Coins of the other colour that you pocket go back to the centre.
- *  - Foul: the striker is pocketed. Every coin pocketed on that shot goes back, and one coin you already hold goes back too.
- *  - The striker is taken off the board after each shot, so it is placed again from the baseline each turn.
+ *  - Coins of the other colour that are pocketed go back to the centre.
+ *  - Foul: the striker is pocketed. Every coin pocketed on that shot goes back, and one coin the team holds goes back too.
+ *  - The striker is taken off the board after each shot and placed again from the baseline each turn.
  */
 const P = require('./physics');
 
 const COINS_EACH = 9;
 const MAX_SHOTS = 300; // a safety limit against a game that never finishes; it is a draw
-const BASE_Y = [0.12, 0.88];
+const BASE_Y = 0.12;   // the baseline of each side, in the bottom side's frame
 const STRIKER_X = [0.2, 0.8];
 const COIN_SPACING = 2 * P.RADIUS.coin;
-const COLOURS = ['w', 'b'];
 
-const forward = (seat) => (seat === 0 ? 1 : -1);
-const colourOf = (seat) => COLOURS[seat];
-const boardX = (seat, x) => (seat === 0 ? x : 1 - x);
+/** Rotate a point about the centre by k quarter turns, counter-clockwise (k = 1 moves the bottom side to the right). */
+function rotPoint([x, y], k) {
+  let p = [x, y];
+  for (let i = 0; i < ((k % 4) + 4) % 4; i++) p = [1 - p[1], p[0]];
+  return p;
+}
+/** The same rotation applied to a direction (no centre). */
+function rotVector([x, y], k) {
+  let v = [x, y];
+  for (let i = 0; i < ((k % 4) + 4) % 4; i++) v = [-v[1], v[0]];
+  return v;
+}
+
+/** The sides used by a table of n players, in seat order. */
+function sidesFor(n) {
+  if (n === 2) return [0, 2];
+  if (n === 3) return [0, 1, 2];
+  return [0, 1, 2, 3];
+}
+const colourOf = (seat) => (seat % 2 === 0 ? 'w' : 'b');
+const forwardOf = () => 1;
 
 /** The opening layout: a queen in the centre and nine coins of each colour in two hexagonal rings, alternating. */
 function opening() {
   const coins = [];
   let n = 0;
-  const pts = [];
   for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {
     if (Math.abs(a + b) > 2) continue;
-    pts.push([a, b]);
-  }
-  for (const [a, b] of pts) {
     const x = 0.5 + COIN_SPACING * (a + b / 2), y = 0.5 + COIN_SPACING * (b * Math.sqrt(3) / 2);
     if (a === 0 && b === 0) { coins.push({ id: 'q', kind: 'queen', colour: null, x, y, r: P.RADIUS.queen }); continue; }
-    const colour = COLOURS[n++ % 2];
+    const colour = n++ % 2 === 0 ? 'w' : 'b';
     coins.push({ id: 'c' + n, kind: 'coin', colour, x, y, r: P.RADIUS.coin });
   }
   return coins;
@@ -47,18 +66,20 @@ function opening() {
 
 function createGame(players) {
   return {
-    players: players.map((p) => ({ id: p.id, name: p.name })),
-    coins: opening(),          // coins and the queen on the board
-    score: [0, 0],             // own coins held by each seat
-    queenHeld: null,           // seat holding the queen
+    players: players.map((p, seat) => ({ id: p.id, name: p.name, seat, side: sidesFor(players.length)[seat], colour: colourOf(seat) })),
+    sides: sidesFor(players.length),
+    coins: opening(),           // coins and the queen on the board, in the bottom side's frame
+    score: { w: 0, b: 0 },      // own-colour coins held by each team
+    queenHeld: null,            // the colour of the team holding the queen
     turn: 0,
     phase: 'playing',
-    winner: null,
+    winner: null,               // the colour that won
+    finisher: null,             // the seat that pocketed the last coin
     draw: false,
     reason: null,
     shots: 0,
     nextId: 1,
-    shot: null,                // the last shot: { seq, seat, keyframes, pocketed, foul, scored }
+    shot: null,                 // the last shot: { seq, seat, colour, foul, scored, keyframes, pocketed }
     seq: 0,
     log: [],
   };
@@ -66,7 +87,7 @@ function createGame(players) {
 
 const seatOf = (g, playerId) => g.players.findIndex((p) => p.id === playerId);
 
-/** A free spot near the centre for a disc going back on the board: the first one not touching another disc. */
+/** A free spot near the centre for a disc going back on the board: the first one that touches no other disc. */
 function freeSpot(coins, r) {
   for (let ring = 0; ring <= 12; ring++) {
     const steps = ring === 0 ? 1 : ring * 6;
@@ -78,12 +99,10 @@ function freeSpot(coins, r) {
       if (coins.every((c) => Math.hypot(c.x - x, c.y - y) >= c.r + r + 0.002)) return { x, y };
     }
   }
-  return { x: 0.5, y: 0.5 }; // the board is full: a very unlikely case, the disc is placed at the centre
+  return { x: 0.5, y: 0.5 };
 }
 
-/**
- * Plans a flick without changing the game. Returns { error } or { next, shot, winner, extra }. The caller commits `next`.
- */
+/** Plans a flick without changing the game. Returns { error } or { next, shot, winner, extra, nextTurn }. */
 function plan(g, seat, a) {
   if (!a || typeof a !== 'object' || a.type !== 'flick') return { error: 'Invalid action' };
   const { x, angle, power } = a;
@@ -93,28 +112,30 @@ function plan(g, seat, a) {
   if (power <= 0 || power > 1) return { error: 'Choose a power between 0 and 1' };
 
   const colour = colourOf(seat);
-  const sx = boardX(seat, x), sy = BASE_Y[seat];
+  const k = g.sides[seat];
+  const [sx, sy] = rotPoint([x, BASE_Y], k);
   const r = P.RADIUS.striker;
   if (g.coins.some((c) => Math.hypot(c.x - sx, c.y - sy) < c.r + r)) return { error: 'The striker overlaps a piece' };
-  const v = P.flickVelocity(angle, power, forward(seat));
-  const striker = { id: 'striker', kind: 'striker', colour, x: sx, y: sy, vx: v.vx, vy: v.vy, r };
+  const local = P.flickVelocity(angle, power, forwardOf());
+  const [vx, vy] = rotVector([local.vx, local.vy], k);
+  const striker = { id: 'striker', kind: 'striker', colour, x: sx, y: sy, vx, vy, r };
   const res = P.simulate([...g.coins.map((c) => ({ ...c, vx: 0, vy: 0 })), striker]);
 
   const foul = res.pocketed.some((p) => p.kind === 'striker');
   const own = res.pocketed.filter((p) => p.kind === 'coin' && p.colour === colour);
   const queenIn = res.pocketed.some((p) => p.kind === 'queen');
-  const score = [...g.score];
+  const score = { ...g.score };
   let queenHeld = g.queenHeld;
   const back = []; // discs going back on the board: { kind, colour }
   if (foul) {
     for (const p of res.pocketed) if (p.kind !== 'striker') back.push({ kind: p.kind, colour: p.colour });
-    if (score[seat] > 0) { score[seat] -= 1; back.push({ kind: 'coin', colour }); }
+    if (score[colour] > 0) { score[colour] -= 1; back.push({ kind: 'coin', colour }); }
   } else {
-    score[seat] += own.length;
+    score[colour] += own.length;
     for (const p of res.pocketed) if (p.kind === 'coin' && p.colour !== colour) back.push({ kind: 'coin', colour: p.colour });
     if (queenIn) {
-      const covered = own.length > 0 || g.score[seat] >= COINS_EACH;
-      if (covered) queenHeld = seat;
+      const covered = own.length > 0 || g.score[colour] >= COINS_EACH;
+      if (covered) queenHeld = colour;
       else back.push({ kind: 'queen', colour: null });
     }
   }
@@ -123,25 +144,30 @@ function plan(g, seat, a) {
   const coins = res.discs.filter((d) => d.kind !== 'striker').map(({ id, kind, colour: c, x: px, y: py, r: pr }) => ({ id, kind, colour: c, x: px, y: py, r: pr }));
   let nextId = g.nextId;
   for (const b of back) {
-    const spot = freeSpot(coins, P.RADIUS[b.kind === 'queen' ? 'queen' : 'coin']);
-    coins.push({ id: (b.kind === 'queen' ? 'q' : 'c') + (nextId++), kind: b.kind, colour: b.colour, x: spot.x, y: spot.y, r: P.RADIUS[b.kind === 'queen' ? 'queen' : 'coin'] });
+    const rr = P.RADIUS[b.kind === 'queen' ? 'queen' : 'coin'];
+    const spot = freeSpot(coins, rr);
+    coins.push({ id: (b.kind === 'queen' ? 'q' : 'c') + (nextId++), kind: b.kind, colour: b.colour, x: spot.x, y: spot.y, r: rr });
   }
 
-  const winner = !foul && score[seat] >= COINS_EACH && queenHeld === seat ? seat : null;
+  const winner = !foul && score[colour] >= COINS_EACH && queenHeld === colour ? colour : null;
   const extra = !foul && own.length > 0 && winner === null;
   const shot = {
-    seat, foul, scored: foul ? 0 : own.length, keyframes: res.keyframes,
+    seat, colour, foul, scored: foul ? 0 : own.length, keyframes: res.keyframes,
     pocketed: res.pocketed.map((p) => ({ kind: p.kind, colour: p.colour })),
   };
-  return { next: { coins, score, queenHeld, nextId }, shot, winner, extra };
+  const nextTurn = extra ? seat : (seat + 1) % g.players.length;
+  return { next: { coins, score, queenHeld, nextId }, shot, winner, extra, nextTurn };
 }
 
-function finish(g, winner, reason) {
+function finish(g, { winner, seat, draw, reason }) {
   g.phase = 'gameOver';
   g.winner = winner;
-  g.draw = winner === null;
+  g.finisher = seat === undefined ? null : seat;
+  g.draw = !!draw;
   g.reason = reason;
 }
+
+const teamName = (g, colour) => g.players.filter((p) => p.colour === colour).map((p) => p.name).join(' & ');
 
 function applyAction(g, playerId, action) {
   if (!action || typeof action !== 'object') return { ok: false, error: 'Invalid action' };
@@ -149,7 +175,8 @@ function applyAction(g, playerId, action) {
   const seat = seatOf(g, playerId);
   if (seat < 0 || seat !== g.turn) return { ok: false, error: 'Not your turn' };
   if (action.type === 'resign') {
-    finish(g, 1 - seat, 'resignation');
+    const winner = colourOf((seat + 1) % g.players.length);
+    finish(g, { winner, seat: null, reason: 'resignation' });
     g.log.push(`${g.players[seat].name} resigned`);
     return { ok: true };
   }
@@ -163,14 +190,14 @@ function applyAction(g, playerId, action) {
   g.shots += 1;
   g.shot = { ...p.shot, seq: ++g.seq };
   const name = g.players[seat].name;
-  g.log.push(p.shot.foul ? `${name}: foul, the striker was pocketed` : p.shot.scored ? `${name} pocketed ${p.shot.scored}` : `${name} missed`);
-  if (p.winner !== null) return finishAndReturn(g, p.winner, 'all nine coins');
-  if (g.shots >= MAX_SHOTS) return finishAndReturn(g, null, 'move limit');
-  if (!p.extra) g.turn = 1 - seat;
+  g.log.push(p.shot.foul ? `${name}: foul, the striker was pocketed`
+    : p.shot.scored ? `${name} pocketed ${p.shot.scored} ${p.shot.colour === 'w' ? 'white' : 'black'}`
+    : `${name} missed`);
+  if (p.winner !== null) { finish(g, { winner: p.winner, seat, reason: 'all nine coins' }); return { ok: true }; }
+  if (g.shots >= MAX_SHOTS) { finish(g, { winner: null, draw: true, reason: 'move limit' }); return { ok: true }; }
+  g.turn = p.nextTurn;
   return { ok: true };
 }
-
-function finishAndReturn(g, winner, reason) { finish(g, winner, reason); return { ok: true }; }
 
 function viewFor(g, playerId) {
   const me = seatOf(g, playerId);
@@ -179,25 +206,28 @@ function viewFor(g, playerId) {
     game: 'carrom',
     name: 'Carrom',
     phase: g.phase,
-    players: g.players,
+    players: g.players.map((p) => ({ id: p.id, name: p.name, seat: p.seat, side: p.side, colour: p.colour })),
     me,
+    mySide: me >= 0 ? g.sides[me] : 0,
     myTurn,
     turn: g.turn,
-    colours: COLOURS,
+    colours: g.players.map((p) => p.colour),
     board: g.coins.map((c) => ({ id: c.id, kind: c.kind, colour: c.colour, x: c.x, y: c.y, r: c.r })),
-    score: g.score.slice(),
+    score: { ...g.score },
     queenHeld: g.queenHeld,
     shots: g.shots,
     shot: g.shot,
     log: g.log.slice(-8),
     winner: g.phase === 'gameOver' ? g.winner : null,
+    winnerNames: g.phase === 'gameOver' && g.winner ? teamName(g, g.winner) : null,
+    finisher: g.phase === 'gameOver' ? g.finisher : null,
     draw: g.phase === 'gameOver' && g.draw,
     reason: g.reason,
   };
 }
 
 /**
- * A simple bot: tries a set of random flicks on a copy of the table and plays the one that pockets the most of its own coins,
+ * A simple bot: tries random flicks on a copy of the table and plays the one that pockets the most of its team's coins,
  * avoiding fouls and not pocketing the other colour. Deterministic for a given rng.
  */
 function botAction(g, seat, rng) {
@@ -214,7 +244,6 @@ function botAction(g, seat, rng) {
     if (score > bestScore) { bestScore = score; best = a; }
   }
   if (best) return best;
-  // Nothing valid among the random shots: try the centre of the baseline with a gentle flick.
   for (let x = STRIKER_X[0]; x <= STRIKER_X[1]; x += 0.02) {
     const a = { type: 'flick', x, angle: 0, power: 0.6 };
     if (!plan(g, seat, a).error) return a;
@@ -222,4 +251,4 @@ function botAction(g, seat, rng) {
   return { type: 'resign' };
 }
 
-module.exports = { COINS_EACH, createGame, plan, applyAction, viewFor, botAction, seatOf, opening, freeSpot, COLOURS, BASE_Y, STRIKER_X };
+module.exports = { COINS_EACH, BASE_Y, STRIKER_X, createGame, plan, applyAction, viewFor, botAction, seatOf, opening, freeSpot, rotPoint, rotVector, sidesFor, colourOf };
