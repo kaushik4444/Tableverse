@@ -133,10 +133,18 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await page.waitForSelector('.lg-cell.enter .lg-piece');
     const offset = await page.evaluate(() => { const p = document.querySelector('.lg-cell.enter .lg-piece').getBoundingClientRect(); const c = document.querySelector('.lg-cell.enter').getBoundingClientRect(); return c.top - p.top; });
     assert.ok(offset > 100, `the disc starts well above its square (${Math.round(offset)}px)`);
+    await page.evaluate(() => { document.querySelector('.lg-cell.enter .lg-piece').dataset.original = '1'; });
     await page.waitForTimeout(350);
-    await page.evaluate((x) => window.__push(x), moveMsg(m, 38, 0)); // a redraw of the same position, mid-fall
-    const time = await page.evaluate(() => { const a = document.querySelector('.lg-cell.enter .lg-piece').getAnimations().find((x) => x.animationName === 'lg-drop'); return a ? a.currentTime : null; });
-    assert.ok(time !== null && time > 250, `the fall continues from ${Math.round(time)} ms, it does not restart`);
+    // a redraw with a different rendered state (another player's earlier disc), same move: app.js skips a message identical to the last
+    const redraw = moveMsg(m, 38, 0); redraw.view.board[0] = 1;
+    await page.evaluate((x) => window.__push(x), redraw);
+    const after = await page.evaluate(() => {
+      const piece = document.querySelector('.lg-cell.enter .lg-piece');
+      const a = piece && piece.getAnimations().find((x) => x.animationName === 'lg-drop');
+      return { replaced: !!piece && piece.dataset.original !== '1', progress: a ? a.currentTime - a.effect.getTiming().delay : null };
+    });
+    assert.ok(after.replaced, 'the redraw replaced the disc element');
+    assert.ok(after.progress > 250, `the fall continues from about ${Math.round(after.progress)} ms, it does not restart at 0`);
     await page.waitForTimeout(900);
     const names = await page.evaluate(() => window.__sounds);
     assert.deepEqual(names.slice(0, 2), ['fall', 'land'], 'the fall sound now, the landing sound when it arrives');

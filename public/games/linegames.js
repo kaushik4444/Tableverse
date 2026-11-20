@@ -5,7 +5,7 @@
   const { esc, pt } = window.CardTable;
   // One set of timings drives the animation (they reach the CSS as variables on .lg) and the sound schedule.
   const T = { dropBase: 280, dropStep: 70, land: 240, draw: 380, win: 260 };
-  const ENTER_MS = 1000;
+  const ENTER_MARGIN_MS = 60;
   // enter: the cell that has just been played ({ cell, seq, at }). It animates once; a redraw while it runs continues the
   // animation from where it is (see enterStyle) and a redraw after it has finished shows the mark at rest.
   const ui = { ctx: null, v: null, seq: null, enter: null };
@@ -101,10 +101,12 @@
     // the new mark animates once: a redraw of the same position does not start it again (the sound is by seq as well)
     const entering = Number.isInteger(e.cell) ? { cell: e.cell, seq: e.seq, at: Date.now() } : null;
     ui.enter = entering;
-    setTimeout(() => { if (ui.enter === entering) ui.enter = null; }, ENTER_MS);
+    // the entrance lasts as long as this move's animation (a disc: the fall and the landing, so a deep column takes longer)
+    const land = entering && v.gravity ? dropMs(v, e.cell) : T.draw;
+    const entranceMs = v.gravity ? land + T.land : T.draw;
+    setTimeout(() => { if (ui.enter === entering) ui.enter = null; }, entranceMs + ENTER_MARGIN_MS);
     if (!snd) return;
     // sounds follow the animation: a tap for a square; for a column the fall now and the landing when the disc arrives
-    const land = entering && v.gravity ? dropMs(v, e.cell) : T.draw;
     if (v.gravity) { snd.play('fall'); setTimeout(() => snd.play('land'), land); } else snd.play('place');
     // the result sound comes after the mark has landed
     const over = e.type === 'win' ? (v.winner === v.me ? 'win' : 'lose') : e.type === 'draw' ? 'round' : null;
