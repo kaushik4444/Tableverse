@@ -3028,7 +3028,11 @@
       $app.innerHTML = '<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>';
       return;
     }
+    const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
+    const r = S.room;
+    if (r.status === 'finished' && (!S.endFlow || S.endFlow.code !== r.code)) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0), timer: null };
     plugin.render($app, S.view, {
+      resultVisible: r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS,
       room: S.room,
       game: gameMeta(S.room.gameId),
       isHost: S.room.hostId === S.id,
@@ -3047,7 +3051,7 @@
     unifyToolbar();
     addSettingsChip();
     refreshVoiceUI();
-    endFlow();
+    endFlow(focusedResultAction);
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const bar = $app.querySelector('.wz-status');
     if (bar) bar.insertAdjacentHTML('beforeend', '<span class="ct-timer" hidden></span>');
@@ -3087,10 +3091,9 @@
     return `<section class="end-xp" aria-label="${game} XP for this game">${note}${table}</section>`;
   }
 
-  function endFlow() {
+  function endFlow(focusedResultAction) {
     const r = S.room;
     if (!r || r.status !== 'finished') { $app.classList.remove('endhold'); return; }
-    if (!S.endFlow || S.endFlow.code !== r.code) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0), timer: null };
     const f = S.endFlow;
     clearTimeout(f.timer);
     if (!f.levelDone) {
@@ -3135,6 +3138,15 @@
         const inSheet = $app.querySelector('.overlay .sheet') || $app.querySelector('.ludo-end');
         if (inSheet) inSheet.insertAdjacentHTML('beforeend', `<div class="end-bar end-bar-in">${html}</div>`);
         else $app.insertAdjacentHTML('beforeend', `<div class="end-bar">${html}</div>`);
+      }
+      // A game can end while a sheet of its own (Hands, Stages) has focus: that control is replaced, so focus would fall to the page.
+      // Focus a visible Stages sheet, restore the prior result action, or focus the first action on arrival.
+      // A rules sheet open on the page keeps focus: the result behind it must not take it.
+      if ((!document.activeElement || document.activeElement === document.body) && !document.querySelector('body > .overlay')) {
+        // the action that had focus if it is still there (a redraw can replace it), otherwise the first action
+        const back = (focusedResultAction && Array.from($app.querySelectorAll('.end-actions button, .end-bar button')).find((b) => b.dataset.act === focusedResultAction))
+          || $app.querySelector('.end-actions button, .end-bar button');
+        ($app.querySelector('[aria-labelledby="sr-phases-title"] button[data-sr="closePhases"]') || back)?.focus({ preventScroll: true });
       }
       // The game-over reminder: the one stronger prompt for a guest, placed by the end actions (never during play)
       const gameNudge = guestNudge('gameover');
