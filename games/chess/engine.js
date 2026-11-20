@@ -77,11 +77,13 @@ function applyAction(g, playerId, action) {
   if (!action || typeof action !== 'object') return { ok: false, error: 'Invalid action' };
   if (g.phase !== 'playing') return { ok: false, error: 'The game is over' };
   const seat = seatOf(g, playerId);
-  if (seat < 0 || seat !== turnSeat(g)) return { ok: false, error: 'Not your turn' };
+  if (seat < 0) return { ok: false, error: 'Not a player in this game' };
+  // either seated player may resign at any time; only moves wait for their turn
   if (action.type === 'resign') {
     finish(g, { over: true, reason: 'resignation', winner: colourOfSeat(g, 1 - seat) }, 'resign');
     return { ok: true };
   }
+  if (seat !== turnSeat(g)) return { ok: false, error: 'Not your turn' };
   if (action.type !== 'move' || !isIndex(action.from) || !isIndex(action.to)) return { ok: false, error: 'Invalid move' };
   if (action.promo !== undefined && action.promo !== null && !rules.PROMOTIONS.includes(action.promo)) return { ok: false, error: 'Invalid promotion' };
   const legal = rules.legalMoves(g.pos);

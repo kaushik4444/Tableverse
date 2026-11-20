@@ -109,11 +109,36 @@ test('resignation ends the game in favour of the other player', () => {
   assert.equal(g.event.type, 'resign');
 });
 
+test('either seated player may resign, even when it is not their turn; the other player wins', () => {
+  const g = E.createGame(two, { colour: 'host' }, mulberry32(1));
+  assert.equal(E.turnSeat(g), 0, 'White (first seat) is to move');
+  assert.deepEqual(E.applyAction(g, 'b', { type: 'resign' }), { ok: true });
+  assert.equal(g.phase, 'gameOver');
+  assert.equal(g.winner, 0, 'Black resigned, so White (first seat) wins');
+  assert.equal(g.reason, 'resignation');
+});
+
+test('the seat to move may resign; a stranger may not, and the game is unchanged', () => {
+  const g = E.createGame(two, { colour: 'host' }, mulberry32(1));
+  assert.deepEqual(E.applyAction(g, 'zz', { type: 'resign' }), { ok: false, error: 'Not a player in this game' });
+  assert.equal(g.phase, 'playing');
+  assert.deepEqual(E.applyAction(g, 'a', { type: 'resign' }), { ok: true });
+  assert.equal(g.winner, 1);
+});
+
+test('out-of-turn moves are still rejected while the other player may resign', () => {
+  const g = E.createGame(two, { colour: 'host' }, mulberry32(1));
+  const before = JSON.stringify(g.pos);
+  assert.deepEqual(E.applyAction(g, 'b', mv('e7', 'e5')), { ok: false, error: 'Not your turn' });
+  assert.equal(JSON.stringify(g.pos), before);
+  assert.equal(g.phase, 'playing');
+});
+
 test('the plugin reports awaiting, isOver and results from the game state', () => {
   const inst = plugin.create(two, { colour: 'host' }, mulberry32(3));
   assert.deepEqual(inst.awaiting(), ['a']);
   assert.equal(inst.isOver(), false);
-  assert.deepEqual(inst.act('b', { type: 'resign' }), { ok: false, error: 'Not your turn' });
+  assert.equal(inst.act('zz', { type: 'resign' }).ok, false, 'a stranger cannot resign');
   assert.equal(inst.act('a', { type: 'resign' }).ok, true);
   assert.deepEqual(inst.awaiting(), []);
   assert.equal(inst.isOver(), true);
