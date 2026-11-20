@@ -114,6 +114,7 @@
     const rows = (list) => list.map(({ p, i }) => `<li class="${v.winners.includes(i) ? 'win' : ''}"><span>${v.winners.includes(i) ? '🏆 ' : ''}<b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b></span><span>${r && r.gains[i] ? `+${r.gains[i]} · ` : ''}${p.score} pts</span></li>`).join('');
     const sorted = v.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
     if (v.phase === 'gameOver') {
+      ui.seenRound = null; // the next match starts with no dismissed round, so its first summary shows
       const title = v.me >= 0 ? (v.winners.includes(v.me) ? (v.winners.length > 1 ? 'You share the win! 🎉' : 'You won! 🎉') : 'Game over') : 'Game over';
       const who = v.winners.map((i) => esc(v.players[i].name)).join(' and ');
       return `<div class="overlay"><div class="sheet"><h2>${title}</h2>

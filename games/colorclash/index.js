@@ -42,7 +42,8 @@ module.exports = {
     return {
       view: (playerId) => engine.viewFor(g, playerId),
       // an account was deleted: its name is rewritten everywhere in the state, including the log
-      scrub: (names, to) => scrubDeep([g, players], names, to),
+      // rule fields (the target, the phase) are never names: a player called 'round' must not rewrite the option
+      scrub: (names, to) => { const options = { ...g.options }; const phase = g.phase; scrubDeep([g, players], names, to); g.options = options; g.phase = phase; },
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },

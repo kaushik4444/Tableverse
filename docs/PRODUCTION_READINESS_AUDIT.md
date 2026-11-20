@@ -22,7 +22,6 @@ Audited against `main` at `c10f6a6` (includes PRs #26–#35, all shipped game mo
 | `themind` | Mind | `games/themind` | `themind.test.js` | ✅ | `feed-ui.js` |
 | `ludo` | Ludo | `games/ludo` | `ludo.test.js` | ✅ | `ludo-ui.js` |
 | `gofish` | Go Fish | `games/gofish` | `gofish.test.js` | ✅ | `gofish-ui.js` |
-| `colorclash` | Color Clash | `games/colorclash` | `colorclash.test.js` | ✅ | `colorclash-ui.js` |
 | `snakesladders` | Snakes & Ladders | `games/snakesladders` | `snakesladders.test.js` | ✅ | `snakesladders-ui.js` |
 | `propertyrivals` | Property Rivals | `games/propertyrivals` | `propertyrivals.test.js` | ✅ | `propertyrivals-ui.js` |
 | `tictactoe` | Tic-Tac-Toe | `games/linegames` | `linegames.test.js` | ✅ | `linegames-ui.js` |
@@ -33,6 +32,8 @@ Audited against `main` at `c10f6a6` (includes PRs #26–#35, all shipped game mo
 - Property Rivals trade outcomes under random play
 
 ---
+
+*Added after this snapshot (2026-11-20):* Color Clash (`games/colorclash`) was not part of the `c10f6a6` audit, so it is not in the table above. Its coverage is recorded in `PROGRESS.md`.
 
 ## Findings
 

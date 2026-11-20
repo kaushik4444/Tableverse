@@ -274,4 +274,13 @@ test('the plugin matches the server interface: seats, options, rules, results, s
   assert.equal(game.results().filter((r) => r.winner).length >= 1, true);
 });
 
+test('scrubbing a deleted player keeps the rule options (a player named like an option)', () => {
+  const named = [{ id: 'p0', name: 'round' }, { id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }];
+  const game = plugin.create(named, { target: 'round' }, seeded(5));
+  game.scrub(['round'], 'Former player');
+  let steps = 0;
+  while (!game.isOver() && steps++ < 2000) { const id = game.awaiting()[0]; assert.equal(game.act(id, game.botAction(id)).ok, true); }
+  assert.equal(game.isOver(), true, 'the one-round game still ends after the scrub');
+});
+
 console.log(`${passed} color clash tests passed`);
