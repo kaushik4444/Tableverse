@@ -61,7 +61,11 @@
   /** The end of the table as plain text: callers escape it once when they put it into the page. */
   function endText(v) {
     if (v.draw) return 'A draw: the table was not finished in time';
-    if (v.reason === 'resignation') return v.winner === colourOfMe(v) ? 'Your team won: the other team resigned' : 'Your team resigned';
+    if (v.reason === 'resignation') {
+      const me = colourOfMe(v);
+      if (me === null) return `${colourLabel(v.winner)} won: ${colourLabel(v.winner === 'w' ? 'b' : 'w')} resigned`; // a spectator names the sides
+      return v.winner === me ? 'Your team won: the other team resigned' : 'Your team resigned';
+    }
     const who = v.winnerNames || 'A team';
     return v.winner === colourOfMe(v) ? `You pocketed all nine coins with the queen (${who})` : `${who} pocketed all nine coins with the queen`;
   }

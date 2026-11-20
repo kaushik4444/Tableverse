@@ -43,6 +43,14 @@ test('cushion: a disc that reaches an edge bounces back with less speed', () => 
   assert.ok(c.y <= 1 - c.r + 1e-9, 'stays inside the board');
 });
 
+test('pocket: a disc that reaches a pocket is taken, not bounced back out by the cushion', () => {
+  // A coin just inside the corner at (0,0), moving down past the edge: the cushion must not turn it back into the board.
+  const discs = [{ x: 0.044, y: 0.026, vx: 0.24, vy: -1.2, r: P.RADIUS.coin, id: 1 }];
+  const pocketed = P.step(discs);
+  assert.equal(pocketed.length, 1, 'pocketed in this step');
+  assert.equal(discs.length, 0, 'it leaves the board');
+});
+
 test('pocket: a disc aimed at a corner is pocketed and leaves the board', () => {
   // Aim straight at the bottom-left pocket (0,0) from above it.
   const r = P.simulate([disc('c', 0.2, 0.2, -1.2, -1.2)]);

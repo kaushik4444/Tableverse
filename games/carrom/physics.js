@@ -45,17 +45,20 @@ function step(discs) {
       d.vx *= ns / s;
       d.vy *= ns / s;
     }
-    if (d.x < d.r) { d.x = d.r; d.vx = -d.vx * CUSHION; }
-    if (d.x > 1 - d.r) { d.x = 1 - d.r; d.vx = -d.vx * CUSHION; }
-    if (d.y < d.r) { d.y = d.r; d.vy = -d.vy * CUSHION; }
-    if (d.y > 1 - d.r) { d.y = 1 - d.r; d.vy = -d.vy * CUSHION; }
   }
+  // Pockets are checked before the cushions: a disc that has reached a pocket is taken, not clamped and bounced back out.
   for (let i = discs.length - 1; i >= 0; i--) {
     const d = discs[i];
     if (CORNERS.some(([cx, cy]) => Math.hypot(d.x - cx, d.y - cy) < POCKET_R)) {
       pocketed.unshift(d);
       discs.splice(i, 1);
     }
+  }
+  for (const d of discs) {
+    if (d.x < d.r) { d.x = d.r; d.vx = -d.vx * CUSHION; }
+    if (d.x > 1 - d.r) { d.x = 1 - d.r; d.vx = -d.vx * CUSHION; }
+    if (d.y < d.r) { d.y = d.r; d.vy = -d.vy * CUSHION; }
+    if (d.y > 1 - d.r) { d.y = 1 - d.r; d.vy = -d.vy * CUSHION; }
   }
   for (let i = 0; i < discs.length; i++) {
     for (let j = i + 1; j < discs.length; j++) {
