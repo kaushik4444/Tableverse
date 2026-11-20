@@ -57,6 +57,7 @@ Tableverse is open to players, with all twelve games available in this release.
 
 ## What's new — unreleased (on `development`, not yet on `main`)
 
+- **Carrom** (2), in review on `feat/carrom`: pocket your nine coins with the queen before your rival. Set the striker's position, angle and power with the sliders and flick. Shots play back on the board. Pocketing the striker is a foul.
 - **Guest play controls.** Guests can read and send table chat and play open games. Private tables, rejoining after leaving on purpose, player profiles and stats, blocking and reports are locked for guests until the owner or an admin opens them in the admin console (**Guests** tab). A locked control shows a lock and opens the account reminder. Friend requests stay account-only. Connecting after a dropped connection always works.
 - **Owner redeploy.** The owner can ask Render to redeploy the app from the admin console's Logs tab, after typing `REDEPLOY`. It needs `RENDER_API_KEY` with deploy rights and `RENDER_SERVICE_ID`, and has a five-minute cooldown.
 - **Guest play (off by default).** With `GUEST_PLAY_ENABLED=true` a visitor can play without registering. A guest is a temporary account that lasts `GUEST_SESSION_TTL_HOURS` (default 72) and can later become a full account in place, keeping its games. The owner chooses per game who may play (enabled, disabled for non-admins, disabled for guests only, or disabled for all). See [docs/GUEST_PLAY.md](docs/GUEST_PLAY.md).
