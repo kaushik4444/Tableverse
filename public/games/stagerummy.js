@@ -240,6 +240,9 @@
     // Stage 10 is not a table game: the piles sit in the middle and every seat follows in a list, you first, so it fits a phone
     const order = v.players.map((_, i) => i).sort((a, b) => (a === v.me ? -1 : b === v.me ? 1 : a - b));
     const seats = `<div class="sr-seats ${v.players.length > 4 ? 'many' : ''}" tabindex="0" role="region" aria-label="Every player's seat">${order.map((i) => seatHTML(v, ctx, i)).join('')}</div>`;
+    // a short phone scrolls the seat list: keep its position when the table is redrawn
+    const seatList = root.querySelector(".sr-seats");
+    const seatScroll = seatList ? seatList.scrollTop : 0;
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
@@ -254,6 +257,8 @@
       ${handHTML(v)}
       ${overlayHTML(v, ctx)}
     </div>`;
+    const seatsNow = root.querySelector(".sr-seats");
+    if (seatsNow) seatsNow.scrollTop = seatScroll;
     root.onclick = onClick;
     const stagesSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
     if (stagesSheet) stagesSheet.onkeydown = (e) => {
