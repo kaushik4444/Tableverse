@@ -136,6 +136,34 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('every player shows a score under their name, and the feed says who played what as the turn plays out', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [[c(12)], [c(3)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(12), c(18)], [c(3), c(7)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'place', by: 1, n: 18, p: pen(18), row: 0, took: 0 }, { kind: 'place', by: 2, n: 7, p: pen(7), row: 1, took: 0 }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const stepMs = 900 * (first.view.paceK || 1);
+    const { page, ctx } = await open([first]);
+    const chips = await page.$$eval('.pr-chips li', (els) => els.map((el) => el.textContent.replace(/\s+/g, ' ').trim()));
+    assert.equal(chips.length, 4, 'one score per player');
+    assert.ok(chips.every((t) => /\d+\/\d+/.test(t)), 'each reads as points/target, like 10/66: ' + chips.join(' | '));
+    await page.evaluate((m) => window.__push(m), second);
+    await page.waitForTimeout(stepMs + 150);
+    assert.match(await page.textContent('.gf-feed'), /played 18 on/, 'the first card of the turn is in the feed');
+    await page.waitForTimeout(stepMs);
+    const feed = await page.textContent('.gf-feed');
+    assert.match(feed, /played 7 on/, 'then the second');
+    assert.match(feed, /played 18 on/, 'earlier moves stay in the feed');
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
