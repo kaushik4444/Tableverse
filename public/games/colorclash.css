@@ -63,3 +63,9 @@
 
 /* the shared table centre ignores taps; the stock pile is a button, so it must take them */
 .cc-game .pt-center .cc-stock { pointer-events: auto; }
+
+/* the message line keeps its height, so a move that adds or clears text never shifts the table */
+.cc-event-bar { box-sizing: border-box; min-height: 2.4em; }
+/* the recent-moves list under the status line */
+.cc-log { margin-top: 8px; }
+.cc-log ol { margin: 6px 0 0; padding-left: 20px; font-size: 13px; }
