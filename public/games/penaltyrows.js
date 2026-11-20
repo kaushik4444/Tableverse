@@ -268,7 +268,7 @@
         <button type="button" role="tab" class="btn ghost small" data-pr="tab" data-tab="scores" aria-selected="${tab === 'scores'}">Scores</button></nav>`;
     const body = tab === 'scores'
       ? `${scoreHTML(v)}${historyHTML(v)}${lastTurnHTML(v)}`
-      : `${chipsHTML(v)}<section class="pr-table" aria-label="Table">${stripHTML(v)}${rowsHTML(v)}</section>${window.GameFeed ? window.GameFeed.html(tableOf()) : ''}${lastTurnHTML(v)}`;
+      : `<section class="pr-table" aria-label="Table">${chipsHTML(v)}${stripHTML(v)}${rowsHTML(v)}${window.GameFeed ? window.GameFeed.html(tableOf(), 'gf-float') : ''}</section>${lastTurnHTML(v)}`;
     root.innerHTML = `
     <div class="wz prt">
       <div class="wz-top">

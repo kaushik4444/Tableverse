@@ -253,8 +253,7 @@
         return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
       }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
-      <div class="sr-table">${table}</div>
-      ${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey()) : ''}
+      <div class="sr-table">${table}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
       ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${traysHTML(v)}

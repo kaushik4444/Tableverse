@@ -70,7 +70,7 @@
 }
 
 /* The table: the shared felt with the seats around it. Stage 10 needs a little more room than the default for its laid groups. */
-.sr .sr-table { margin-top: 6px; }
+.sr .sr-table { margin-top: 6px; position: relative; }
 .sr .sr-table .pt { --pt-min: 400px; }
 .sr .sr-table .pseat { max-width: 28vw; }
 .sr .sr-table { overflow-x: clip; }
