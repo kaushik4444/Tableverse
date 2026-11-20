@@ -114,8 +114,8 @@ const SIZES = [
         }
         const dicePanel = document.querySelector('.ludo-dice-panel');
         if (!dicePanel) out.problems.push('Ludo roll controls are missing');
-        else if (vw <= 760 && board && dicePanel.getBoundingClientRect().bottom > board.getBoundingClientRect().top + 1) {
-          out.problems.push('Ludo dice and roll control must appear above the board on mobile');
+        else if (vw <= 760 && board && board.getBoundingClientRect().bottom > dicePanel.getBoundingClientRect().top + 1) {
+          out.problems.push('Ludo board must appear above the dice and roll control on mobile');
         }
         if (!document.querySelector('#game-status-announcer[role="status"][aria-live="polite"]')) out.problems.push('Ludo turn status is not announced by the persistent live region');
         const legal = board ? [...board.querySelectorAll('.ludo-token.legal')] : [];
