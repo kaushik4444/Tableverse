@@ -122,10 +122,14 @@ function startRound(g) {
 }
 const sortHand = (h) => h.sort((a, b) => (a.k === b.k ? (a.c === b.c ? a.v - b.v : COLOURS.indexOf(a.c) - COLOURS.indexOf(b.c)) : a.k < b.k ? -1 : 1));
 
-function awaiting(g) { return g.phase === 'gameOver' ? [] : [g.players[g.turn].id]; }
+function awaiting(g) { return g.phase === 'gameOver' || g.phase === 'roundEnd' ? [] : [g.players[g.turn].id]; }
 
 function applyAction(g, playerId, action) {
   if (g.phase === 'gameOver') return { ok: false, error: 'The game is over' };
+  if (g.phase === 'roundEnd') { // between rounds: nothing is played until everybody is ready, then the next round starts
+    if (action && action.type === 'continue') { startRound(g); return { ok: true }; }
+    return { ok: false, error: 'The next round starts when everybody is ready' };
+  }
   const i = indexOf(g, playerId);
   if (i < 0) return { ok: false, error: 'You are not at this table' };
   if (i !== g.turn) return { ok: false, error: 'It is not your turn' };
@@ -274,7 +278,7 @@ function endRound(g, outBy) {
     g.phase = 'gameOver';
     return;
   }
-  startRound(g);
+  g.phase = 'roundEnd'; // the next round starts once everybody has pressed Ready (the continue action)
 }
 
 /* ---------- Bot ---------- */

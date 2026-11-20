@@ -153,6 +153,8 @@ test('going out ends the round: leftover points are added, laid players move up,
   assert.deepEqual(g.scores, [0, 5 + 25, 5 + 15 + 10]);
   assert.equal(g.lastRound.outBy, 0);
   assert.deepEqual(g.stage, [2, 2, 1]);
+  assert.equal(g.phase, 'roundEnd', 'the table waits for everybody to be ready');
+  assert.equal(e.applyAction(g, null, { type: 'continue' }).ok, true, 'once everybody is ready the next round is dealt');
   assert.equal(g.round, 2, 'a new round was dealt');
   assert.ok(g.hands.every((h) => h.length === 10));
 });
@@ -214,6 +216,7 @@ test('bots finish whole games, at every size and length', () => {
     let steps = 0;
     while (g.phase !== 'gameOver') {
       assert.ok(++steps < 20000, `stuck at ${n} players, ${length}`);
+      if (g.phase === 'roundEnd') { assert.equal(e.applyAction(g, null, { type: 'continue' }).ok, true); continue; }
       const id = e.awaiting(g)[0];
       assert.equal(e.applyAction(g, id, e.botAction(g, id)).ok, true);
     }

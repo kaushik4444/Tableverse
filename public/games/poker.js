@@ -154,7 +154,7 @@
     const hands = r.showdown && r.hands.length > r.winners.length ? `<p class="hint">${r.hands.map((h) => `${esc(v.players[h.player].name)}: ${esc(h.hand)}`).join(' · ')}</p>` : '';
     const side = r.pots.length > 1 ? `<p class="hint">${r.pots.length} pots: ${r.pots.map((p) => fmt(p.amount)).join(' + ')}</p>` : '';
     return `<div class="pk-result"><h3>Hand ${r.handNo}</h3><ul>${winners}</ul>${side}${hands}
-      <div class="row" style="justify-content:space-between"><span class="hint">Next hand starts automatically</span><button class="btn small" data-pk="next">Next hand</button></div></div>`;
+      <div class="row" style="justify-content:space-between"><span class="hint">Everybody presses Ready to start the next hand</span><button class="btn small" data-pk="next">Ready</button></div></div>`;
   }
 
   function standingsHTML(v) {
@@ -325,7 +325,7 @@
         break;
       }
       case 'next':
-        ctx.act({ type: 'continue' });
+        ctx.ready();
         break;
       case 'ranks':
         ui.ranks = true;
