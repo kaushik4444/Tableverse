@@ -3339,12 +3339,12 @@
     makeHost: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Make host', `<p class="hint">Make ${esc(el.dataset.name || 'this player')} the host of this table? You will stay at the table, but only the host can start the game and change settings.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="makeHostConfirm">Make host</button></div>`); },
     kickPlayer: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Remove player', `<p class="hint">Remove ${esc(el.dataset.name || 'this player')} from this table? They will not be able to come back.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="kickPlayerConfirm">Remove</button></div>`); },
     seats: (el) => send({ t: 'setSeats', seats: Number(el.dataset.n) }),
-    shuffleSeats: () => { S.seatPick = null; send({ t: 'shuffleSeats' }); },
+    shuffleSeats: () => { S.seatPick = null; render(); send({ t: 'shuffleSeats' }); },
     // the host swaps two players' seats: tap one, then the other (tapping the same one again cancels)
     pickSeat: (el) => {
       const id = el.dataset.vid;
       const first = S.seatPick;
-      if (!first) { S.seatPick = id; render(); return; }
+      if (!first) { S.seatPick = id; render(); const btn = $app.querySelector('[data-act="pickSeat"][data-vid="' + CSS.escape(id) + '"]'); if (btn) btn.focus({ preventScroll: true }); return; }
       S.seatPick = null;
       const ids = S.room.members.map((m) => m.id);
       const a = ids.indexOf(first); const b = ids.indexOf(id);
