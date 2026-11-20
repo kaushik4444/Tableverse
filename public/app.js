@@ -2803,6 +2803,7 @@
         ${label}
         ${m.id === r.hostId ? '<span class="tag host">host</span>' : ''}
         <span class="dot ${m.connected ? '' : 'off'}" title="${m.connected ? 'online' : 'offline'}"></span>
+        ${isHost && r.members.length > 1 ? `<button class="btn ghost small seat-swap${S.seatPick === m.id ? ' picked' : ''}" data-act="pickSeat" data-vid="${esc(m.id)}" aria-pressed="${S.seatPick === m.id}" aria-label="Swap the seat of ${esc(m.name)}">⇄</button>` : ''}
         ${isHost && m.bot ? `<button class="btn ghost small" data-act="removeBot" data-id="${esc(m.id)}" aria-label="Remove ${esc(m.name)}">✕</button>` : ''}
         ${isHost && !m.bot && m.id !== S.id ? `<span class="seat-actions"><button class="btn ghost small" data-act="makeHost" data-id="${esc(m.id)}" data-name="${esc(m.name)}" aria-label="Make ${esc(m.name)} the host" title="Make host">👑</button><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(m.id)}" data-name="${esc(m.name)}" aria-label="Remove ${esc(m.name)} from the table" title="Remove from table">✕</button></span>` : ''}
       </li>`);
@@ -2851,6 +2852,7 @@
         </div>
         <p class="hint seat-status" id="seat-why" style="text-align:left;margin:8px 0 0">${esc([seatStatus, lessWhy, moreWhy].filter(Boolean).join(' '))}</p>
         <ul class="seats">${seats.join('')}</ul>
+        ${isHost && n >= 2 ? `<div class="row seat-tools" style="justify-content:space-between"><button class="btn ghost small" data-act="shuffleSeats">🔀 Shuffle seats</button><span class="hint">${S.seatPick ? 'Now tap the seat to swap with (tap ⇄ again to cancel).' : 'Tap ⇄ on two players to swap their seats.'}</span></div>` : ''}
         ${isHost && open > 0 ? `<div class="row" style="margin-top:12px"><button class="btn ghost small" data-act="addBot">+ Add a bot</button><button class="btn ghost small" data-act="fillBots">Fill ${open} open seat${open === 1 ? '' : 's'} with bots</button></div>` : ''}
       </section>
       ${opts ? `<details id="fold-options" class="panel fold"><summary><span class="fold-title">Game options</span><span class="fold-hint">${esc(optionsSummary(g, r))}</span></summary><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</details>` : ''}
@@ -3337,6 +3339,19 @@
     makeHost: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Make host', `<p class="hint">Make ${esc(el.dataset.name || 'this player')} the host of this table? You will stay at the table, but only the host can start the game and change settings.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="makeHostConfirm">Make host</button></div>`); },
     kickPlayer: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Remove player', `<p class="hint">Remove ${esc(el.dataset.name || 'this player')} from this table? They will not be able to come back.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="kickPlayerConfirm">Remove</button></div>`); },
     seats: (el) => send({ t: 'setSeats', seats: Number(el.dataset.n) }),
+    shuffleSeats: () => { S.seatPick = null; send({ t: 'shuffleSeats' }); },
+    // the host swaps two players' seats: tap one, then the other (tapping the same one again cancels)
+    pickSeat: (el) => {
+      const id = el.dataset.vid;
+      const first = S.seatPick;
+      if (!first) { S.seatPick = id; render(); return; }
+      S.seatPick = null;
+      const ids = S.room.members.map((m) => m.id);
+      const a = ids.indexOf(first); const b = ids.indexOf(id);
+      if (first === id || a < 0 || b < 0) { render(); return; }
+      [ids[a], ids[b]] = [ids[b], ids[a]];
+      send({ t: 'arrangeSeats', order: ids });
+    },
     start: () => send({ t: 'start' }),
     dismissBanner: (el) => dismissBanner(el.dataset.id),
     openAdmin: () => { S.menuOpen = false; location.href = '/admin.html'; },

@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { seatPlayers } = require('../lib/seatOrder');
+const { seatPlayers, arrangeMembers, shuffleMembers } = require('../lib/seatOrder');
 
 let passed = 0;
 function test(name, fn) {
@@ -36,6 +36,26 @@ test('the members array is not changed by shuffling', () => {
   const m = members();
   seatPlayers(m, { shuffle: true, offered: true, randomInt: () => 0 });
   assert.deepEqual(ids(m), ['a', 'b', 'c', 'd']);
+});
+
+test('the host can arrange the members: every id exactly once, or nothing', () => {
+  assert.deepEqual(ids(arrangeMembers(members(), ['c', 'a', 'd', 'b'])), ['c', 'a', 'd', 'b']);
+  assert.equal(arrangeMembers(members(), ['a', 'b', 'c']), null, 'a missing player');
+  assert.equal(arrangeMembers(members(), ['a', 'a', 'c', 'd']), null, 'a repeated player');
+  assert.equal(arrangeMembers(members(), ['a', 'b', 'c', 'x']), null, 'a stranger');
+  assert.equal(arrangeMembers(members(), 'abcd'), null, 'not a list');
+  assert.equal(ids(members()).join(), 'a,b,c,d', 'the input is not changed');
+});
+
+test('a shuffle is a permutation of the members, and the input is unchanged', () => {
+  const out = shuffleMembers(members(), lastRandom);
+  assert.deepEqual(ids(out).slice().sort(), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(ids(members()), ['a', 'b', 'c', 'd']);
+});
+
+test('an arranged order: a manual arrangement is kept and the start does not shuffle it again', () => {
+  const arranged = arrangeMembers(members(), ['b', 'a', 'd', 'c']);
+  assert.deepEqual(ids(seatPlayers(arranged, { shuffle: false, offered: true })), ['b', 'a', 'd', 'c']);
 });
 
 console.log(`\n${passed} seat order tests passed`);
