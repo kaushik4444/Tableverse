@@ -31,6 +31,8 @@ function msgsFor(g, viewer = 'me', extra = []) {
 
   await test('board: 18 coins and the queen on the opening layout, plus the striker on my turn', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
+    const onScreen = await page.evaluate(() => { const s = document.querySelector('.cb-svg').getBoundingClientRect(); const b = document.querySelector('.cb-board').getBoundingClientRect(); return b.y >= s.y - 1 && b.bottom <= s.bottom + 1 && b.height > 200; });
+    assert.equal(onScreen, true, 'the near player sees the whole board inside the table area');
     assert.equal(await page.locator('.cb-coin').count(), 18);
     assert.equal(await page.locator('.cb-queen').count(), 1);
     assert.equal(await page.locator('.cb-striker').count(), 1);
@@ -67,6 +69,8 @@ function msgsFor(g, viewer = 'me', extra = []) {
     const { page, ctx } = await open(msgsFor(g, 'p1'));
     const transform = await page.getAttribute('.cb-svg > g', 'transform');
     assert.equal(transform, 'translate(1 0) scale(-1 1)');
+    const bottom = await page.evaluate(() => { const s = document.querySelector('.cb-svg').getBoundingClientRect(); const st = document.querySelector('.cb-striker').getBoundingClientRect(); return st.y > s.y + s.height / 2; });
+    assert.equal(bottom, true, 'the striker is in the lower half of the screen');
     assert.match(await page.textContent('.wz-status'), /Your turn/);
     await ctx.close();
   });
@@ -104,6 +108,12 @@ function msgsFor(g, viewer = 'me', extra = []) {
     const { page, ctx } = await open(msgsFor(fresh()), { width: 375, height: 667 });
     const box = await page.locator('.cb-svg').boundingBox();
     assert.ok(box.x >= 0 && box.x + box.width <= 375, `board ${box.width}px wide fits the screen`);
+    const inside = await page.evaluate(() => {
+      const svg = document.querySelector('.cb-svg').getBoundingClientRect();
+      const b = document.querySelector('.cb-board').getBoundingClientRect();
+      return b.x >= svg.x - 1 && b.y >= svg.y - 1 && b.right <= svg.right + 1 && b.bottom <= svg.bottom + 1 && b.height > 200;
+    });
+    assert.ok(inside, 'the board is drawn inside the table area, not off-screen');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert.ok(overflow <= 0, 'no horizontal scroll');
     const btn = await page.locator('[data-cb="flick"]').boundingBox();

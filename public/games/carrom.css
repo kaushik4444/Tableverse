@@ -9,8 +9,8 @@
 .cb-who { display: flex; flex-direction: column; min-width: 0; }
 .cb-who small { opacity: .7; }
 
-.cb-board-wrap { display: flex; justify-content: center; }
-.cb-svg { width: min(100%, 420px); height: auto; aspect-ratio: 1; display: block; touch-action: none; user-select: none; }
+.cb-board-wrap { display: flex; justify-content: center; flex: none; }
+.cb-svg { flex: none; width: min(100%, 420px); height: auto; aspect-ratio: 1; display: block; overflow: visible; touch-action: none; user-select: none; }
 .cb-board { fill: #b97c3a; stroke: #5b3f22; stroke-width: 0.012; }
 .cb-inner { fill: #d9a463; stroke: none; }
 .cb-line { stroke: #7a4a1f; stroke-width: 0.006; stroke-linecap: round; }

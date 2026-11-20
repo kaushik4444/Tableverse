@@ -56,7 +56,8 @@
   /** The board in server coordinates. Discs come from the view, or from the animation's current frame. */
   function boardHTML(v, frame) {
     const me = v.me < 0 ? 0 : v.me;
-    const turned = me === 1 ? 'translate(1 0) scale(-1 1)' : 'translate(0 -1) scale(1 -1)';
+    // SVG applies a transform list right to left: these map server (x, y) to the screen, with the near baseline at the bottom.
+    const turned = me === 1 ? 'translate(1 0) scale(-1 1)' : 'scale(1 -1) translate(0 -1)';
     const discs = frame
       ? frame.d.map(([id, x, y]) => { const k = ui.known.get(id) || { kind: 'coin', colour: 'w', r: 0.022 }; return { id, kind: k.kind, colour: k.colour, x, y, r: k.r }; })
       : v.board.slice();
@@ -66,7 +67,7 @@
     }
     const aimLine = (!frame && v.myTurn && !ui.anim) ? aimHTML(me) : '';
     const pockets = POCKETS.map(([x, y]) => `<circle class="cb-pocket" cx="${x}" cy="${y}" r="${POCKET_R}"/>`).join('');
-    return `<svg class="cb-svg" viewBox="-0.03 -0.03 1.06 1.06" role="img" aria-label="Carrom board">
+    return `<svg class="cb-svg" viewBox="-0.07 -0.07 1.14 1.14" role="img" aria-label="Carrom board">
       <g transform="${turned}">
         <rect class="cb-board" x="0" y="0" width="1" height="1" rx="0.02"/>
         <rect class="cb-inner" x="0.06" y="0.06" width="0.88" height="0.88"/>
