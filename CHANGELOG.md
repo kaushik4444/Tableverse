@@ -4,7 +4,7 @@
 - Release: all twelve games are open to everyone (Go Fish, Ludo, Take 5, Poker, Property Rivals, Snakes and Ladders, Stage 10, Mind, 29, Wizard, Tic-Tac-Toe, Four in a Row). The owner confirms each game is set to "Enabled" for everyone in the admin console's Games tab before the release; no game is locked by a code default.
 - Game logos: each game has its own SVG mark (`public/game-marks.js`), used on the home page, open tables, the rejoin banner, history, stats, game pages and the admin Games tab. The emoji stays as a fallback for an unknown game id.
 - Home page: open tables sit above the games. Phones show two rows that scroll sideways; desktop (1000 px and wider) puts them in a sticky column beside the games. Join and Spectate wrap below the text on narrow cards (PR #256).
-- Take 5 card art: corner numbers, penalty dots and a bull's head on the highest-penalty cards (PR #255). Stage 10 card faces, every player's stage at a glance, and a phases sheet (PR #253). Poker hand-rankings sheet (PR #251).
+- Take 5 card art: corner numbers and penalty points shown as stars (PR #255). Stage 10 card faces, every player's stage at a glance, and a phases sheet (PR #253). Poker hand-rankings sheet (PR #251).
 - Admin: the Games tab lists the home order with move up and down buttons (staff; `POST /api/admin/game-order`, migration `034_game_order.sql`, audit `game.order`) (PR #259).
 - Admin: the 24-hour range on Overview, Insights and Games, and a "Tables hosted" list in the Games tab with paging (PR #250, staff only, no player named).
 - Admin: a tab that is still loading after 12 seconds offers "Try again" instead of a blank panel (PR #261).

@@ -52,6 +52,7 @@
 /* the result dialog waits for the last move to land and the winning line to light up */
 .lg .overlay { animation: lg-fade .4s ease both .95s; }
 .lg .overlay .sheet { animation: lg-rise .4s ease both .95s; }
+.lg .overlay.settled, .lg .overlay.settled .sheet { animation: none; }
 @keyframes lg-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes lg-rise { from { transform: translateY(10px) scale(.98); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .lg *, .lg .overlay, .lg .overlay .sheet { animation: none !important; transition: none !important; } }

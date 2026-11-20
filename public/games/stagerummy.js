@@ -203,7 +203,8 @@
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Stages</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
       <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
-        const st = Math.min(p.stage, v.stageCount);
+        // at game over the label shows the stage each player finished on, the same stage the completion mark describes
+        const st = Math.min(v.phase === 'gameOver' && v.lastRound ? v.lastRound.stages[i] : p.stage, v.stageCount);
         return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
       }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
@@ -222,6 +223,8 @@
       stagesSheet.querySelector('button[data-sr="closePhases"]')?.focus({ preventScroll: true });
     };
     if (focused) { const el = root.querySelector(`.sr-hand [data-id="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+    // a redraw while the Stages sheet is open replaces its Close button: put focus back on it so the Tab trap keeps working
+    if (ui.phases) root.querySelector('[aria-labelledby="sr-phases-title"] button[data-sr="closePhases"]')?.focus({ preventScroll: true });
     // once the float has faded, remove only that element: a full redraw would drop keyboard focus on the controls
     if (ui.floatText && Date.now() - ui.floatAt < FLOAT_MS) setTimeout(() => { if (ui.latest === v && root.isConnected) { const f = root.querySelector('.sr-float'); if (f) f.remove(); } }, FLOAT_MS - (Date.now() - ui.floatAt) + 50);
   }

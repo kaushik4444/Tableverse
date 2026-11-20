@@ -87,8 +87,12 @@
 
   function overlayHTML(v) {
     if (v.phase !== 'gameOver') return '';
+    // the result animates once, when it first appears; a redraw of the same result (a total or a rematch vote) shows it at rest
+    const key = v.event ? v.event.seq : null;
+    const settled = ui.resultSeen === key;
+    ui.resultSeen = key;
     const title = v.draw ? 'A draw' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
-    return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
+    return `<div class="overlay${settled ? ' settled' : ''}"><div class="sheet"><h2>${title}</h2>
       <p class="hint" style="text-align:left">${v.draw ? 'The board is full with no line.' : `${nameOf(v, v.winner) === 'You' ? 'You' : esc(v.players[v.winner].name)} made ${v.win} in a row.`}</p>
       <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-lg="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-lg="leave">Leave table</button></div></div></div>`;
   }
