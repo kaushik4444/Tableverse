@@ -38,13 +38,14 @@ const sandbox = { window: {} };
 vm.runInNewContext(releaseSource, sandbox);
 const releases = sandbox.window.TV_RELEASES;
 assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history keeps every version (newest first)');
-// The newest release is the game names release (one item); the guest play release follows it with three highlights.
-assert.equal(releases[0].version, '2026-11-20-game-names');
-assert.match(releases[0].items.map((i) => i.title).join('\n'), /Three games have new names/);
-const newest = releases[1];
+// Releases are newest first. The latest is the twelve-games release; the game names note and the guest play release follow it.
+const byVersion = (v) => releases.find((r) => r.version === v);
+assert.equal(releases[0].version, '2026-11-20-twelve-games', 'the newest release comes first');
+assert.ok(releases[0].items.length >= 1, 'the newest release has at least one item');
+assert.match(byVersion('2026-11-20-game-names').items.map((i) => i.title).join('\n'), /Three games have new names/);
+const newest = byVersion('2026-11-18-guest-play');
 const highlights = newest.items.slice(0, 3).map((i) => i.title).join('\n');
-assert.equal(newest.items.slice(0, 3).length, 3, 'the home page shows three highlights');
-assert.equal(newest.version, '2026-11-18-guest-play');
+assert.equal(newest.items.slice(0, 3).length, 3, 'the guest play release keeps three highlights');
 assert.match(highlights, /Play without an account/);
 assert.match(highlights, /Some games need an account/);
 assert.match(highlights, /Quiet reminders/);

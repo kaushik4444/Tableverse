@@ -8,6 +8,19 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-20-twelve-games',
+      date: '2026-11-20',
+      title: 'Twelve games for everyone',
+      items: [
+        { ico: '🎲', title: 'All twelve games are open to everyone', text: 'Go Fish, Ludo, Take 5, Poker, Property Rivals, Snakes and Ladders, Stage 10, Mind, 29, Wizard, Tic-Tac-Toe and Four in a Row are all open to every player.' },
+        { ico: '🖼️', title: 'Every game has its own logo', text: 'Each game has a mark of its own. It looks the same on the home page, in open tables, in your history and in the stats.' },
+        { ico: '🏠', title: 'Open tables above the games', text: 'Open tables are listed at the top of the home page, so you can join one straight away. On a phone they sit in two rows that scroll sideways. On a wide screen they sit beside the games.' },
+        { ico: '🃏', title: 'Take 5 has new card art', text: 'Each card shows its number in the corners and its penalty points as dots. The highest-penalty cards show a bull’s head, so you can read the risk at a glance. Up to eight players.' },
+        { ico: '🪜', title: 'Stage 10 shows every stage', text: 'Each player’s current stage is shown at the table, like the bids in Wizard. The cards are easier to tell apart, and a Phases sheet explains every stage.' },
+        { ico: '♠️', title: 'Poker hand rankings', text: 'Open the hand rankings sheet at the table to see which hands beat which.' },
+      ],
+    },
+    {
       version: '2026-11-20-game-names',
       date: '2026-11-20',
       title: 'New game names',

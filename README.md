@@ -8,6 +8,8 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 
 ## Current games
 
+All twelve games are open to every player in this release.
+
 - **Wizard** (3–6): plus/minus one, hidden/secret prediction, foresight, short game.
 - **29** (4): team-based trick play with secret trump and 3/6/9 match length options.
 - **Poker (No-Limit Texas Hold’em)** (2–8): blinds, all-ins, side pots, showdown resolution.
@@ -17,16 +19,17 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 - **Take 5** (2–8): everyone secretly picks a card each turn; cards are played lowest first onto four rows of five. The sixth card in a row, or a card that fits nowhere, makes you take penalty points. Lowest total wins when someone reaches the target (35, 66 or 100).
 - **Stage 10** (2–6): a rummy game in stages. Lay down each stage's goal (sets, runs or one colour; wild cards help), add cards to laid groups, and be first to go out. Skip cards make the next player lose a turn. Short (5 stages) or full (10 stages).
 - **Property Rivals** (2–6): an original world-tour board game: buy cities, ports and utilities, collect rent, build houses and hotels, trade, auction and bankrupt your rivals. Tap a city in your holdings for its card: mortgage value, rent now and the full rent table, and house and hotel costs. Options: game length, starting cash, auctions, Rest Stop jackpot.
-- **Tic-Tac-Toe** and **Four in a Row** (2): two quick line games on one engine. Line up three on a 3×3 grid, or drop discs into a 7×6 grid and connect four. Four in a Row has a *Line length* option: choose five for a bigger 9×8 grid. Choose who starts; a bot fills the second seat.
+- **Tic-Tac-Toe** (2): a 3×3 line game. Line up three to win; a full board with no line is a draw.
+- **Four in a Row** (2): drop discs into a 7×6 grid and connect four. Choose *Line length* five for a bigger 9×8 grid (Five in a Row). Choose who starts; a bot fills the second seat.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
 
 Bots can fill open seats so tables can start quickly.
 
 ## Friend-testing status (current)
 
-Tableverse is currently open for friend testing.
+Tableverse is open to players, with all twelve games available in this release.
 
-- Account login is required for play actions.
+- Playing needs an account, or a guest visit when guest play is switched on (`GUEST_PLAY_ENABLED=true`; see `docs/GUEST_PLAY.md`).
 - **Email verification is currently optional** in this environment.
 - This is controlled by `REQUIRE_EMAIL_VERIFICATION`.
   - `REQUIRE_EMAIL_VERIFICATION=false` → immediate play allowed after signup/login.
@@ -43,6 +46,8 @@ Tableverse is currently open for friend testing.
 - **Public and private tables.** New tables are public and listed in the open tables; a host can make a table private, and private tables open with friend invitations, and **host tools** to hand over the table or remove people.
 - Real-time chat, spectators, reconnect/rejoin, activity log.
 - **Game settings at a glance**: every game shows its current settings at the top right. Tap them for the full list with each choice explained. Settings are set by the host in the lobby and can't change during a game.
+- **Home page**: open tables sit above the games (two rows that scroll sideways on a phone; a column beside the games on a wide screen). Each game has its own logo, and the games are listed in the order set in the admin console.
+- **Game guides in the table**: Poker has a hand-rankings sheet, and Stage 10 has a Phases sheet explaining each stage. Stage 10 shows every player's stage at the table.
 - **Levels and progress**: the profile shows an overall level from active play time (1 XP per full minute seated and connected), the minutes to the next level, and a one-time notice when you reach a new level.
 - **Instagram**: the home page footer links to @playtableverse, in a new tab.
 - **Keep me signed in on this device**: optional at sign-in. The browser stays signed in for 30 days after its last visit. It ends on sign-out, sign-out everywhere, a password reset, or a suspension.
