@@ -137,7 +137,8 @@
   }
 
   function overlayHTML(v) {
-    if (v.phase !== 'gameOver') return '';
+    // shown once the last shot has finished playing (playback redraws the board when it ends)
+    if (v.phase !== 'gameOver' || ui.anim) return '';
     const title = v.draw ? 'A draw' : v.winner === colourOfMe(v) ? 'You won! 🎉' : `${v.winnerNames ? esc(v.winnerNames) : 'A team'} won`;
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
       <p class="hint" style="text-align:left">${endText(v)}.</p>
@@ -148,7 +149,8 @@
   function react(v) {
     const e = v.shot, snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
-    if (!e || e.seq === ui.seq) return;
+    if (!e) { ui.anim = null; ui.seq = 0; return; } // a fresh match (Play again) has no shot yet: drop the old playback
+    if (e.seq === ui.seq) return;
     ui.seq = e.seq;
     ui.anim = { seq: e.seq, frames: e.keyframes, t0: null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0 };
     if (snd) snd.play('place');
@@ -157,13 +159,21 @@
       const sound = v.draw ? 'round' : v.winner === mine ? 'win' : mine === null ? 'round' : 'lose';
       setTimeout(() => snd.play(sound), 900);
     }
-    requestAnimationFrame(tick);
+    play(ui.anim);
   }
 
-  /** Plays the shot's keyframes on the board, then redraws from the final view. */
-  function tick(now) {
-    const a = ui.anim;
-    if (!a || !ui.root || !ui.v || ui.v.shot?.seq !== a.seq) { ui.anim = null; return; }
+  /** Plays one shot's keyframes on the board, then redraws from the final view. Stops if a newer state has replaced it. */
+  function play(a) {
+    const step = (now) => {
+      if (ui.anim !== a) return; // superseded by a newer shot or a fresh match, which has already redrawn
+      if (!ui.root || !ui.v) { ui.anim = null; return; }
+      if (ui.v.shot?.seq !== a.seq) { ui.anim = null; render(ui.root, ui.v, ui.ctx); return; }
+      drawFrame(now, a);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function drawFrame(now, a) {
     if (a.t0 === null) a.t0 = now;
     const t = (now - a.t0) / 1000;
     let frame = a.frames[0];
@@ -181,7 +191,7 @@
       svg.querySelectorAll('[data-id]').forEach((el) => { if (!seen.has(el.dataset.id)) el.style.display = 'none'; });
     }
     if (t >= a.end + 0.25 || t > 25) { ui.anim = null; render(ui.root, ui.v, ui.ctx); return; }
-    requestAnimationFrame(tick);
+    requestAnimationFrame((next) => { if (ui.anim === a) drawFrame(next, a); });
   }
 
   function render(root, v, ctx) {

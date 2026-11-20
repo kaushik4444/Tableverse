@@ -140,6 +140,47 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await l.ctx.close();
   });
 
+  /** A won game: the last coin of the winning team goes in, so the board goes to game over with the final shot. */
+  function winningShot() {
+    const g = fresh();
+    g.coins = [{ id: 'w1', kind: 'coin', colour: 'w', x: 0.035, y: 0.035, r: 0.022 }]; // inside a pocket
+    g.score = { w: 8, b: 0 }; g.queenHeld = 'w';
+    const before = msgsFor(g, 'p0');
+    E.applyAction(g, 'p0', { type: 'flick', x: 0.2, angle: 0, power: 0.05 });
+    return { g, first: before[0], table: before[1], end: { t: 'state', room: before[1].room, view: E.viewFor(g, 'p0') } };
+  }
+
+  await test('game over: the result sheet waits for the final shot to finish playing, then appears', async () => {
+    const { first, table, end } = winningShot();
+    const { page, ctx } = await scriptedPage(browser, { messages: [first, table, end], viewport: { width: 390, height: 844 } });
+    await page.goto(url + '/');
+    await page.waitForSelector('.cb-svg', { timeout: 8000 });
+    // the status already names the result, but the final shot is still moving: the sheet must not cover it yet
+    await page.waitForFunction(() => /all nine/.test(document.querySelector('.wz-status')?.textContent || ''), null, { timeout: 4000 });
+    assert.equal(await page.locator('.overlay').count(), 0, 'no overlay over the board while the last shot is in play');
+    await page.waitForSelector('.overlay', { timeout: 15000 });
+    assert.match(await page.textContent('.overlay'), /You won/);
+    await ctx.close();
+  });
+
+  await test('play again during the final shot: the new opening board and the Flick control show at once, with no old frame', async () => {
+    const { first, table, end } = winningShot();
+    const again = { t: 'state', room: table.room, view: E.viewFor(fresh(), 'p0') };
+    const { page, ctx } = await scriptedPage(browser, { messages: [first, table, end], viewport: { width: 390, height: 844 } });
+    await page.goto(url + '/');
+    await page.waitForFunction(() => /all nine/.test(document.querySelector('.wz-status')?.textContent || ''), null, { timeout: 8000 });
+    // the host presses Play again while the final shot is still moving
+    await page.evaluate((m) => window.__push(m), again);
+    await page.waitForFunction(() => /Your turn/.test(document.querySelector('.wz-status')?.textContent || ''), null, { timeout: 4000 });
+    assert.equal(await page.locator('.cb-coin').count(), 18, 'the opening coins, not the old frame');
+    assert.equal(await page.locator('.cb-flick').count(), 1, 'the Flick control is there straight away');
+    assert.equal(await page.locator('.overlay').count(), 0, 'no result sheet from the old match');
+    await page.waitForTimeout(1200); // the old playback would have ended by now: nothing may change the new board
+    assert.equal(await page.locator('.cb-flick').count(), 1);
+    assert.equal(await page.locator('.cb-coin').count(), 18);
+    await ctx.close();
+  });
+
   await test('phone width (375px): the board is on screen, the controls fit, and the page does not scroll sideways', async () => {
     const { page, ctx } = await open(msgsFor(fresh()), { width: 375, height: 667 });
     const s = await box(page, '.cb-svg');
