@@ -10,7 +10,7 @@
 const db = require('./pool');
 
 const MIN_PLAYERS = 10;
-const WINDOWS = [7, 30, 90];
+const WINDOWS = [1, 7, 30, 90]; // 1 = the last 24 hours
 const clampDays = (d) => { const n = Math.floor(Number(d)); return WINDOWS.includes(n) ? n : 30; };
 const num = (v) => Number(v) || 0;
 const round1 = (v) => Math.round(num(v) * 10) / 10;

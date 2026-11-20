@@ -100,8 +100,20 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     // the real SQL is in db/insights.js (tests/admin.pg.test.js); this records what the route asked for and returns a fixed answer
     async insights({ days = 30, tz = 'UTC' } = {}) {
       this.insightsCalls.push({ days, tz });
-      return { days: [7, 30, 90].includes(Number(days)) ? Number(days) : 30, zone: tz, games: [], heat: [], countries: [{ country: 'DE', players: 2 }, { country: null, players: 1 }], playtime: { players: 0, totalMinutes: 0, avgMinutes: 0, medianMinutes: 0, buckets: [0, 0, 0, 0, 0] },
+      return { days: [1, 7, 30, 90].includes(Number(days)) ? Number(days) : 30, zone: tz, games: [], heat: [], countries: [{ country: 'DE', players: 2 }, { country: null, players: 1 }], playtime: { players: 0, totalMinutes: 0, avgMinutes: 0, medianMinutes: 0, buckets: [0, 0, 0, 0, 0] },
         returning: { activePlayers: 0, newPlayers: 2, returningPlayers: 1, daily: [{ day: '2026-11-08', newPlayers: 2, returningPlayers: 1 }], cohort: { size: 0, d1: 0, d7: 0 } }, top: [] };
+    },
+    // the real SQL is in db/admin.js (matchHistory); this pages a fixed two-table history the way the route expects
+    async matchHistory({ before = null, limit = 50 } = {}) {
+      this.historyCalls.push({ before, limit });
+      const all = [
+        { id: '11111111-1111-4111-8111-111111111111', roomCode: 'ABC123', gameId: 'wizard', seats: 4, humans: 3, bots: 1, startedAt: '2026-11-17T10:00:00.000Z', finishedAt: '2026-11-17T10:30:00.000Z', completed: true },
+        { id: '22222222-2222-4222-8222-222222222222', roomCode: 'XYZ789', gameId: 'poker', seats: 2, humans: 2, bots: 0, startedAt: '2026-11-16T10:00:00.000Z', finishedAt: '2026-11-16T11:00:00.000Z', completed: false },
+      ];
+      const start = before ? all.findIndex((t) => `${t.finishedAt}|${t.id}` === before) + 1 : 0;
+      const tables = all.slice(start, start + limit);
+      const more = start + limit < all.length && tables.length ? `${tables.at(-1).finishedAt}|${tables.at(-1).id}` : null;
+      return { tables, nextCursor: more };
     },
     // the real SQL is in db/playerStats.js (tests/admin.pg.test.js); these record the request and return fixed answers
     async listPlayers(opts = {}) {
@@ -140,6 +152,7 @@ function createMemoryAdminStore({ now = () => new Date(), env = {} } = {}) {
     async sessionStats({ days, tz }) { this.sessionCalls.push({ days, tz }); return { zone: tz, byHour: Array.from({ length: 24 }, (_, h) => (h === 19 ? 30 : h === 20 ? 22 : 1)), length: [{ name: 'under 1 min', total: 5 }, { name: '1–5 min', total: 9 }, { name: '5–15 min', total: 7 }, { name: '15–60 min', total: 4 }, { name: 'over 1 h', total: 1 }] }; },
     sessionCalls: [],
     insightsCalls: [],
+    historyCalls: [],
     async health() { return { dbMs: 1, migrations: 13, feedback_new: feedback.filter((f) => f.status === 'new').length, analytics_rows: 0 }; },
     async createFeedback({ playerId, category, message }) { st.check(); const row = { id: crypto.randomUUID(), player_id: playerId, category, message, status: 'new', created_at: now() }; feedback.push(row); return { id: row.id }; },
     async listFeedback() { return { total: feedback.length, pageSize: 25, items: feedback.slice() }; },
