@@ -39,7 +39,7 @@ function home({ old = null, tables = true, guest = false, games = [] } = {}) {
   const context = {
     $app: app, S: { games, guest, named: false }, window: {},
     esc: (value) => String(value == null ? '' : value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
-    gameMark: (g) => esc(g.icon || '🎴'), // the real mark helper is covered by tests/game-marks.test.js
+    gameMark: (g) => String(g.icon || '🎴').replaceAll('<', '&lt;'), // the real mark helper is covered by tests/game-marks.test.js
     gameOpenFor: () => true, guestLockedFor: () => false, range: () => '2–4',
     guestNudge: () => '', topbarHTML: () => '', rejoinBannerHTML: () => '', bannersHTML: () => '', friendsStripHTML: () => '',
     publicTablesHTML: () => { calls++; return tables ? '<section class="public-tables-panel"><div class="public-tables"></div></section>' : ''; },
