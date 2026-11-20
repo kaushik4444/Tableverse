@@ -162,12 +162,42 @@ test('a team with nine coins is not stuck: the queen still covers when it goes i
   assert.equal(g.winner, 'w');
 });
 
+test('a returned disc never shares an id with a disc already on the board (the opening uses c1 to c18)', () => {
+  const g = four();
+  g.coins = [...E.opening(), coin('b99', 'b', 0.035, 0.035)]; // a black coin in a pocket goes back to the centre
+  assert.equal(E.applyAction(g, 'p0', flick(0.2, 0.05)).ok, true);
+  const ids = g.coins.map((c) => c.id);
+  assert.equal(new Set(ids).size, ids.length, 'every disc on the board has its own id');
+  assert.equal(onBoard(g, 'b'), 10, 'the returned black coin is back on the board');
+});
+
 test('resignation: the other team wins', () => {
   const g = four();
   assert.equal(E.applyAction(g, 'p0', { type: 'resign' }).ok, true);
   assert.equal(g.winner, 'b');
   assert.equal(g.reason, 'resignation');
   assert.equal(E.applyAction(g, 'p1', flick(0.5)).error, 'The game is over');
+});
+
+test('resignation is allowed for any seated player, not only the one to move', () => {
+  const g = four();
+  assert.equal(g.turn, 0);
+  assert.equal(E.applyAction(g, 'p2', { type: 'resign' }).ok, true, 'seat 2 may resign while seat 0 is to play');
+  assert.equal(g.phase, 'gameOver');
+  assert.equal(g.winner, 'b', 'seat 2 is White, so Black wins');
+});
+
+test('resignation in a three-player game: the winner is the opposite colour, not the next seat (which can share the colour)', () => {
+  const g = E.createGame(names(3));
+  g.turn = 2;
+  assert.equal(E.applyAction(g, 'p2', { type: 'resign' }).ok, true);
+  assert.equal(g.winner, 'b', 'seat 2 (White) resigned: Black wins, even though seat 0 is also White');
+});
+
+test('a stranger cannot resign, and an unknown player is rejected before anything else', () => {
+  const g = four();
+  assert.equal(E.applyAction(g, 'nobody', { type: 'resign' }).ok, false);
+  assert.equal(g.phase, 'playing');
 });
 
 test('view: only the seat to move has myTurn; the board, team scores and the last shot are shown', () => {

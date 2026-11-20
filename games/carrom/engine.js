@@ -78,7 +78,7 @@ function createGame(players) {
     draw: false,
     reason: null,
     shots: 0,
-    nextId: 1,
+    nextId: COINS_EACH * 2 + 1, // the opening uses q, c1 to c18: returned discs start after them, so ids stay unique
     shot: null,                 // the last shot: { seq, seat, colour, foul, scored, keyframes, pocketed }
     seq: 0,
     log: [],
