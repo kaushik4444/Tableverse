@@ -1,7 +1,7 @@
 'use strict';
 /** Chess: two players, full rules (castling, en passant, promotion, draws). See rules.js and engine.js. */
 const engine = require('./engine');
-const { scrubDeep } = require('../scrub');
+const { scrubText } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
 
 module.exports = {
@@ -23,8 +23,8 @@ module.exports = {
     const g = engine.createGame(players, options, rng);
     return {
       view: (playerId) => engine.viewFor(g, playerId),
-      // only the player records hold names: the phase, colours, board and move notation must keep their values
-      scrub: (names, to) => scrubDeep([g.players, players], names, to),
+      // only the name of each player record changes: ids (which seats and turns use), colours and the board keep their values
+      scrub: (names, to) => { for (const p of [...g.players, ...players]) if (typeof p.name === 'string') p.name = scrubText(p.name, names, to); },
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },

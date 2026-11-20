@@ -203,4 +203,11 @@ test('scrubbing a deleted player keeps the phase (a player named like a field) a
   assert.equal(v.board.length, 64);
 });
 
+test('account deletion scrubs only the name: a seat id that contains a name keeps its value', () => {
+  const players = [{ id: 'Ann-Bo', name: 'Ann' }, { id: 'Cy', name: 'Bo' }];
+  plugin.create(players, {}, () => 0.5).scrub(['Bo'], 'Someone');
+  assert.equal(players[0].id, 'Ann-Bo', 'the id is not a name field');
+  assert.equal(players[1].name, 'Someone');
+});
+
 console.log(`\n${passed} chess engine tests passed`);
