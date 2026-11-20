@@ -39,11 +39,11 @@ There are two kinds of result:
 | Go Fish | Placing | Number of books collected. |
 | Ludo | Placing | Finishing order. |
 | Snakes & Ladders | Placing | Finishing order. |
-| Penalty Rows | Placing | Lowest penalty total is first. |
-| Stage Rummy | Placing | Most stages completed, then fewest points. |
+| Take 5 | Placing | Lowest penalty total is first. |
+| Stage 10 | Placing | Most stages completed, then fewest points. |
 | Twenty-nine | Win or lose | Your team wins or loses (both players on a team get the same points). |
 | Line Games | Win or lose | Your side wins, draws or loses. |
-| The Mind | Win or lose | Everyone plays together: cleared together is a win for all, lost together is a loss for all. |
+| Mind | Win or lose | Everyone plays together: cleared together is a win for all, lost together is a loss for all. |
 
 Rules that apply to every game:
 - **Penalised leave** (leaving while others are still playing, see `lib/leavePolicy.js`): **-30**. It is always worse than

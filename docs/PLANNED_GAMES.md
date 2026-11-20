@@ -14,4 +14,4 @@ Ideas only. Nothing here is committed to a release. Each needs a design note and
 Physics-based games (Carrom, Ball Pong, Pool, Bowling) share needs: an authoritative, deterministic simulation, touch aiming,
 and tolerance for latency on the single-instance server. A shared physics decision should be taken once, not per game.
 
-In progress / built recently: Penalty Rows (PR #223). Next in the queue: Stage Rummy.
+In progress / built recently: Take 5 (PR #223). Next in the queue: Stage 10.

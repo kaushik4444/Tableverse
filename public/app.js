@@ -1583,32 +1583,6 @@
   /** A round avatar for anything with a name and an optional emoji; `cls` adds a size/placement class ('big', 'tb-av'). */
   const avatar = (m, cls = '') => `<span class="avatar${cls ? ' ' + cls : ''}" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span>`;
 
-  function profileHTML() {
-    const userBadge = S.username ? `<div class="profile-user">@${esc(S.username)}</div>` : '';
-    const picks = S.avatars
-      .map((a) => `<button type="button" class="av-pick ${a === S.avatar ? 'on' : ''}" data-act="avatar" data-a="${esc(a)}" aria-label="Avatar ${esc(a)}" aria-pressed="${a === S.avatar}">${esc(a)}</button>`)
-      .join('');
-    const myName = S.named ? S.name : '';
-    const initialChar = myName ? esc([...myName][0] || '?').toUpperCase() : '★';
-    const previewBg = myName ? avatarColor(myName) : 'hsl(260 55% 42%)';
-    return `<div class="profile">
-      <div class="profile-header">
-        <div class="profile-preview">
-          <span class="avatar big" style="background:${previewBg}">${S.avatar ? esc(S.avatar) : initialChar}</span>
-          <div class="profile-meta">
-            <span class="profile-welcome">${myName ? `Playing as <b>${esc(myName)}</b>` : 'Choose your player persona'}</span>
-            ${userBadge}
-            <span class="profile-hint">Seen by friends at the table</span>
-          </div>
-        </div>
-      </div>
-      <label class="label" for="name">Your name</label>
-      <input id="name" type="text" maxlength="20" autocomplete="nickname" placeholder="Type your nickname" value="${esc(myName)}">
-      <div class="row" style="justify-content:space-between;margin-top:12px"><span class="label">Avatar</span><button type="button" class="btn ghost small" data-act="toggleAvatars" aria-expanded="${S.avatarOpen}">${S.avatarOpen ? 'Done' : 'Change'}</button></div>
-      ${S.avatarOpen ? `<div class="av-picks">${picks}</div>` : ''}
-    </div>`;
-  }
-
   let prevView = null;
   const bidSig = (v) => JSON.stringify(v.bids || (v.players || []).map((p) => (p.bid !== undefined && p.bid !== null ? p.bid : p.hasBid ? 1 : null)));
   /** Play a sound for whatever changed between two game views. Only the trick-taking games (Wizard, 29) have the
@@ -2320,7 +2294,7 @@
       const rb = document.createElement('button');
       rb.type = 'button'; rb.className = 'btn ghost small'; rb.dataset.act = 'rules'; rb.dataset.game = S.room.gameId;
       rb.setAttribute('aria-label', 'How to play'); rb.textContent = '📖 How to play';
-      // Space on a focused button must not reach the document-level Space shortcuts (The Mind plays a card on Space)
+      // Space on a focused button must not reach the document-level Space shortcuts (Mind plays a card on Space)
       rb.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
       extras.push(rb);
     }
@@ -2704,6 +2678,8 @@
       </article>`;
     }).join('');
     const name = S.guest ? '' : (S.named ? S.name : '');
+    const oldTables = $app.querySelector('.public-tables'); // the open-tables list keeps its place when the home page redraws
+    const tablesAt = oldTables ? { x: oldTables.scrollLeft, y: oldTables.scrollTop } : null;
     $app.innerHTML = `
     ${topbarHTML()}
     <main class="page wide home">
@@ -2724,15 +2700,19 @@
       ${bannersHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
       ${friendsStripHTML()}
-      <section class="home-section" id="games">
-        <h2 class="section">Games</h2>
-        ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
-      </section>
+      <div class="home-split">
+        ${publicTablesHTML()}
+        <section class="home-section" id="games">
+          <h2 class="section">Games</h2>
+          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
+        </section>
+      </div>
       ${comingSoonHTML()}
       ${recentTablesHTML()}
-      ${publicTablesHTML()}
       <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.privacyPublished ? '<a href="/privacy">Privacy notice</a>' : '', S.termsPublished ? '<a href="/terms">Terms</a>' : '', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
     </main>`;
+    const tablesNow = $app.querySelector('.public-tables');
+    if (tablesNow && tablesAt) { tablesNow.scrollLeft = tablesAt.x; tablesNow.scrollTop = tablesAt.y; }
   }
 
   function optionHTML(o, r, isHost) {
@@ -2786,7 +2766,7 @@
     chip.title = `Game settings: ${summary}`;
     chip.setAttribute('aria-label', `Game settings: ${summary}. Open for details.`);
     chip.innerHTML = `<span aria-hidden="true">⚙</span> <span class="gs-sum">${esc(summary)}</span>`;
-    // Space on the focused chip opens the settings; it must not reach the document-level Space shortcuts (The Mind plays a card on Space)
+    // Space on the focused chip opens the settings; it must not reach the document-level Space shortcuts (Mind plays a card on Space)
     chip.addEventListener('keydown', (e) => { if (e.code === 'Space') e.stopPropagation(); });
     // Game settings live in the ⋯ menu (top right), not in the top bar. The menu item is a plain button with the summary.
     const pop = $app.querySelector('.tb-pop');

@@ -118,7 +118,7 @@ const rows = (pattern, game = 'wizard') => [...pattern].map((c, i) => ({ gameId:
     assert.deepEqual([g.best, g.bestText], [3, '×3']); // 3,000 of 1,000 beats 6,000 of 5,000 (1.2)
     assert.match(g.bestLabel, /starting chips/);
   });
-  await test('the mind: a co-operative game; best is the most levels cleared', () => {
+  await test('mind: a co-operative game; best is the most levels cleared', () => {
     const g = computeProfile([row('themind', 5, false), row('themind', 8, true), row('themind', 3, false)], { metrics }).perGame[0];
     assert.deepEqual([g.kind, g.best, g.bestLabel], ['coop', 8, 'Most levels cleared']);
   });

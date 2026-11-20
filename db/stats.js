@@ -10,7 +10,7 @@ const pct = (wins, played) => (played ? Math.round((wins / played) * 1000) / 10 
  *
  * metrics(gameId) returns that game's stats description { kind, bestLabel, bestOf(row) } (see games/<id>/index.js).
  * "Best" is only reported where a game defines a number that is comparable between games; raw scores are not
- * (poker stacks depend on the starting chips, a 29 team always ends on the target, The Mind is co-operative).
+ * (poker stacks depend on the starting chips, a 29 team always ends on the target, Mind is co-operative).
  */
 function computeProfile(rows, { memberSince = null, recentCount = 10, metrics = () => null, streak: streakIn = null, recent: recentIn = null, lastPlayed: lastIn = null } = {}) {
   // A row may stand for several identical results (`n`, default 1): the Postgres store sends SQL aggregates, not every game.

@@ -20,10 +20,12 @@ body:
         - Wizard
         - Twenty-Nine (29)
         - Poker
-        - The Mind
+        - Mind
         - Go Fish
         - Tic-Tac-Toe
         - Four in a Row
+        - Take 5
+        - Stage 10
     validations:
       required: true
   - type: dropdown

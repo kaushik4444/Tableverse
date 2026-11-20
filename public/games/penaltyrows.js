@@ -1,6 +1,6 @@
-/* Penalty Rows table renderer. The table is a wooden table with the rows laid out as lanes: the cards played this turn
+/* Take 5 table renderer. The table is a wooden table with the rows laid out as lanes: the cards played this turn
  * sit in a strip above (lowest first, one name under each card), then each one drops into its row in turn, slowly. A row
- * that is taken shows an inline callout on the lane. A row's badge is its penalty points, shown as a bull's head.
+ * that is taken shows an inline callout on the lane. A row's badge is its penalty points.
  * Tabs: Table (the play) and Scores. Everyone picks at once, so tapping a card sends the pick and you may change it until
  * all are in. Styles in penaltyrows.css. */
 (() => {
@@ -8,7 +8,6 @@
   const { esc } = window.CardTable;
   const ui = { ctx: null, latest: null, seq: null, anim: null, table: null, tab: 'table' };
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
-  const BULL = '<svg class="pr-bull" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1c3.5 1.2 5.6 5.4 11 5.4S19.5 2.2 23 1c-.7 4.6-3 12.2-11 12.2S1.7 5.6 1 1z"/></svg>';
 
   /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
    * Returns null when there is nothing to step through, or when the rebuild does not match the table (then the table is shown as it is). */
@@ -52,8 +51,13 @@
   /** The event of the replay step on screen (the card that has just landed or taken a row), or null. */
   const currentEvent = (v) => (ui.anim && ui.anim.seq === v.seq && ui.anim.i > 0 ? v.lastTurn[ui.anim.i - 1] : null);
 
+  /** A card: the number big in the middle and small in the top corner, and one dot per penalty point along the bottom. */
+  /** Penalty points as stars: one star a point, so the count reads at a glance. Past 12 the number is given after the stars. */
+  const starsOf = (n) => (n <= 0 ? '' : '★'.repeat(Math.min(n, 12)) + (n > 12 ? `+${n - 12}` : ''));
+
   function cardHTML(c, { cls = '', attrs = '', tag = 'div' } = {}) {
-    return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}>${BULL}<b>${c.n}</b><i>${c.p}</i></${tag}>`;
+    const dots = `<span class="pr-pips" aria-hidden="true">${starsOf(c.p)}</span>`;
+    return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}><em class="pr-tl" aria-hidden="true">${c.n}</em><b>${c.n}</b>${dots}</${tag}>`;
   }
   const backHTML = (cls = '') => `<div class="pr-card back tiny ${cls}" aria-hidden="true"></div>`;
   /** A card on the strip, with the player's name under it. */
@@ -101,7 +105,7 @@
       : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
     const callout = here && ev.kind !== 'place' ? `<span class="pr-callout">${nameOf(v, ev.by)} took ${ev.took}</span>` : '';
     const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span></span><span class="pr-cards" style="--cols:${v.rowLimit}">${slots}</span>`
-      + `<span class="pr-pile" title="Penalty points on this row"><span class="pr-pile-n">${points}</span>${BULL}</span>${callout}`;
+      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${points <= 5 ? (starsOf(points) || '0') : `★×${points}`}</span></span>${callout}`;
     return taking
       ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
       : `<div class="pr-row ${full ? 'full' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
@@ -201,7 +205,7 @@
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.n : null; // keep keyboard focus on the same card across redraws
     const mine = v.me >= 0 && (v.phase === 'choose' ? v.myPick === null : v.pending && v.pending.by === v.me);
     const tab = ui.tab === 'scores' ? 'scores' : 'table';
-    const tabs = `<nav class="pr-tabs" role="tablist" aria-label="Penalty Rows views">
+    const tabs = `<nav class="pr-tabs" role="tablist" aria-label="Take 5 views">
         <button type="button" role="tab" class="btn ghost small" data-pr="tab" data-tab="table" aria-selected="${tab === 'table'}">Table</button>
         <button type="button" role="tab" class="btn ghost small" data-pr="tab" data-tab="scores" aria-selected="${tab === 'scores'}">Scores</button></nav>`;
     const body = tab === 'scores'
@@ -210,7 +214,7 @@
     root.innerHTML = `
     <div class="wz prt">
       <div class="wz-top">
-        <div class="wz-round"><b>Penalty Rows</b><span class="label"> · round ${v.round} · turn ${v.turn}/${v.handSize}</span></div>
+        <div class="wz-round"><b>Take 5</b><span class="label"> · round ${v.round} · turn ${v.turn}/${v.handSize}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-pr="rules">Rules</button>', 'pr')}
       </div>
       ${tabs}

@@ -1,4 +1,4 @@
-/* Penalty Rows: a wooden table with four lanes of cards, the cards played this turn on a strip above, a penalty badge
+/* Take 5: a wooden table with four lanes of cards, the cards played this turn on a strip above, a penalty badge
  * per row, and your hand below. Builds on table.css (panels, status bar, overlay). Card sizes are capped in px so the
  * whole table fits a desktop window without zooming (see the 900px and short-screen rules at the end). */
 .prt { max-width: 980px; margin: 0 auto; }
@@ -39,23 +39,22 @@
   display: grid; justify-items: center; align-content: center; gap: 1px; min-height: 46px; padding: 3px 4px; border-radius: 12px;
   color: #fff; background: linear-gradient(180deg, #e8554a, #a72a20); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .25);
 }
-.prt .pr-pile-n { font-size: 16px; font-weight: 900; line-height: 1; }
-.prt .pr-pile .pr-bull { width: 26px; height: 14px; fill: rgba(255, 255, 255, .9); }
+.prt .pr-pile-n { font-size: 14px; font-weight: 900; line-height: 1; letter-spacing: 1px; white-space: nowrap; }
 .prt .pr-callout {
   position: absolute; left: 50%; top: -11px; transform: translateX(-50%); z-index: 2; white-space: nowrap;
   padding: 3px 10px; border-radius: 999px; background: #fbbf24; color: #2b1a0b; font-size: 12px; font-weight: 800;
   box-shadow: 0 3px 8px rgba(0, 0, 0, .3); animation: prPop .35s both;
 }
 
-/* the cards: colour by penalty points, a bull's head across the top, the number, the points in the corner */
+/* the cards: colour by penalty points, the number, the points in the corner */
 .prt .pr-card {
   position: relative; display: grid; place-items: center; width: 100%; min-width: 0; aspect-ratio: 3 / 4; padding: 0;
   border-radius: 10px; border: 2px solid rgba(255, 255, 255, .75); color: #fff; font: inherit; line-height: 1; overflow: hidden;
   background: linear-gradient(160deg, #7c5cff, #4b2fb8); box-shadow: 0 3px 6px rgba(0, 0, 0, .35), inset 0 0 0 2px rgba(255, 255, 255, .15);
 }
-.prt .pr-card .pr-bull { position: absolute; top: 6px; left: 50%; width: 46%; transform: translateX(-50%); fill: rgba(255, 255, 255, .4); }
 .prt .pr-card b { margin-top: 18%; font-size: clamp(14px, 2.6vw, 22px); font-weight: 900; text-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
-.prt .pr-card i { position: absolute; right: 5px; bottom: 3px; font-style: normal; font-size: 10px; font-weight: 900; opacity: .95; }
+.prt .pr-card em.pr-tl { position: absolute; left: 4px; top: 3px; font-style: normal; font-size: 10px; font-weight: 900; opacity: .92; }
+.prt .pr-pips { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font-size: 9px; line-height: 1; letter-spacing: -0.5px; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, .6); white-space: nowrap; overflow: hidden; }
 .prt .pr-card.pen2 { background: linear-gradient(160deg, #3b9bf0, #1d5fb8); }
 .prt .pr-card.pen3 { background: linear-gradient(160deg, #5bd06f, #2c8f43); }
 .prt .pr-card.pen5 { background: linear-gradient(160deg, #ff6b5b, #c42a2a); }
@@ -63,8 +62,7 @@
 .prt .pr-card.back { background: repeating-linear-gradient(45deg, #6b4220 0 6px, #8a5a2c 6px 12px); border-color: #3d2410; }
 .prt .pr-card.tiny { width: 36px; }
 .prt .pr-card.tiny b { font-size: 13px; margin-top: 22%; }
-.prt .pr-card.tiny .pr-bull { width: 60%; top: 4px; }
-.prt .pr-card.tiny i { font-size: 8px; }
+.prt .pr-card.tiny em.pr-tl, .prt .pr-card.tiny .pr-pips { display: none; }
 .prt .pr-card.new { animation: prDrop .7s cubic-bezier(.2, .8, .2, 1) both; }
 
 /* your hand */
@@ -133,7 +131,6 @@
   .prt .pr-row { padding: 3px 5px; }
   .prt .pr-cards { gap: 3px; }
   .prt .pr-pile { min-height: 34px; padding: 2px 3px; }
-  .prt .pr-pile .pr-bull { width: 20px; height: 11px; }
   .prt .pr-handlabel { display: none; }
   .prt .pr-hand { gap: 5px; margin-top: 3px; }
   .prt .pr-hand .pr-card { width: 42px; min-height: 0; }
