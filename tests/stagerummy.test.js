@@ -282,6 +282,14 @@ test('scrubbing a deleted player\'s name never changes the internal phase, even 
   assert.equal(game.view('p0').phase, 'draw', 'the phase is still draw after the scrub');
 });
 
+test('scrubbing a player whose name is a piece of the match id keeps the match id', () => {
+  const game = def.create(people(2), {}, rngFor(4));
+  const before = game.view('p0').matchId;
+  const piece = before.split('-')[0]; // a player named like the first group of the uuid
+  game.scrub([piece], 'Removed player');
+  assert.equal(game.view('p0').matchId, before, 'the match id is unchanged, so the table does not treat it as a rematch');
+});
+
 test('wild cards off: the stock has 100 cards, none of them wild', () => {
   const g = e.createGame(people(2), { wildCards: false }, rngFor(7));
   const total = g.stock.length + g.hands.flat().length + g.discard.length;

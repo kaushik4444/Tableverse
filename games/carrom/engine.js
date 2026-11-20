@@ -194,7 +194,7 @@ function applyAction(g, playerId, action) {
   g.shots += 1;
   g.shot = { ...p.shot, seq: ++g.seq };
   // the bot waits until this shot has been played out, plus a short pause to read it (people are never held)
-  pacing.hold(g, p.shot.keyframes[p.shot.keyframes.length - 1].t * 1000 + 400);
+  pacing.holdLatest(g, p.shot.keyframes[p.shot.keyframes.length - 1].t * 1000 + 400);
   const name = g.players[seat].name;
   g.log.push(p.shot.foul ? `${name}: foul, the striker was pocketed`
     : p.shot.scored ? `${name} pocketed ${p.shot.scored} ${p.shot.colour === 'w' ? 'white' : 'black'}`

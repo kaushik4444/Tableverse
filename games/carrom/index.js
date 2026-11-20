@@ -40,6 +40,7 @@ module.exports = {
       botDelayMs: () => 900 + rng() * 500,
       // a bot's next shot waits until the last shot has been played out (see the engine)
       holdMs: () => pacing.remaining(g),
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // the engine's winner is a colour ('w' or 'b'), so each seat compares its own colour
