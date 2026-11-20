@@ -81,9 +81,14 @@
   function stageDone(v, i, p) { return v.phase === 'gameOver' ? !!(v.lastRound && v.lastRound.laid[i]) : !!p.laid; }
 
   /** One player's seat: name, stage, cards in hand, points, and the groups they have laid down. */
+  // the stage a player is shown on: at game over, the one the last round ended on (the same one the completed mark describes)
+  function shownStage(v, i) {
+    const st = v.phase === 'gameOver' && v.lastRound ? v.lastRound.stages[i] : v.players[i].stage;
+    return Math.min(st, v.stageCount);
+  }
   function seatHTML(v, ctx, i) {
     const p = v.players[i];
-    const stage = Math.min(p.stage, v.stageCount);
+    const stage = shownStage(v, i);
     const sub = `Stage ${stage}/${v.stageCount}`; // short, so it fits a phone seat; the card count is under the seat
     const count = `<div class="sr-nolay">${p.cards} cards · ${p.score} pts</div>`; // points stay on the seat: fewer is better
     const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay">Not down · ${p.cards} cards</div>`);
@@ -182,6 +187,8 @@
     ui.ctx = ctx; ui.latest = v;
     react(v); sync(v);
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null; // keep keyboard focus on the same card across redraws
+    const oldSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
+    const sheetHadFocus = !!oldSheet && oldSheet.contains(document.activeElement);
     const me = v.me >= 0 ? v.players[v.me] : null;
     const goalIdx = me ? Math.min(me.stage, v.stageCount) - 1 : -1;
     const goalLine = me
@@ -203,7 +210,7 @@
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Stages</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
       <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
-        const st = Math.min(p.stage, v.stageCount);
+        const st = shownStage(v, i);
         return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
       }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
@@ -222,6 +229,8 @@
       stagesSheet.querySelector('button[data-sr="closePhases"]')?.focus({ preventScroll: true });
     };
     if (focused) { const el = root.querySelector(`.sr-hand [data-id="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+    // Restore sheet focus only if it owned focus and is visible; endFlow handles its reveal.
+    if (sheetHadFocus && !root.closest('.endhold')) root.querySelector('[aria-labelledby="sr-phases-title"] button[data-sr="closePhases"]')?.focus({ preventScroll: true });
     // once the float has faded, remove only that element: a full redraw would drop keyboard focus on the controls
     if (ui.floatText && Date.now() - ui.floatAt < FLOAT_MS) setTimeout(() => { if (ui.latest === v && root.isConnected) { const f = root.querySelector('.sr-float'); if (f) f.remove(); } }, FLOAT_MS - (Date.now() - ui.floatAt) + 50);
   }
