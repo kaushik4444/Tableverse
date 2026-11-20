@@ -181,6 +181,36 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
+  await test('a completed drag on the board flicks on release, without the Flick button', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    const s = await box(page, '.cb-striker');
+    const sx = s.x + s.width / 2, sy = s.y + s.height / 2;
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    await page.mouse.move(sx - 40, sy + 90, { steps: 6 });
+    await page.mouse.up();
+    const sentActs = await sent(page);
+    assert.equal(sentActs.length, 1, 'releasing the drag sends the flick');
+    assert.equal(sentActs[0].action.type, 'flick');
+    assert.ok(sentActs[0].action.angle > 0 && sentActs[0].action.power > 0);
+    await ctx.close();
+  });
+
+  await test('a tap on the board sets the aim but does not flick; a cancelled drag does not flick either', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    const s = await box(page, '.cb-striker');
+    const sx = s.x + s.width / 2, sy = s.y + s.height / 2;
+    await page.mouse.click(sx - 40, sy + 90);
+    assert.equal((await sent(page)).length, 0, 'a tap does not fire');
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    await page.mouse.move(sx - 40, sy + 90, { steps: 6 });
+    await page.evaluate(() => document.querySelector('.cb-svg').dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 })));
+    await page.mouse.up();
+    assert.equal((await sent(page)).length, 0, 'a cancelled drag does not fire');
+    await ctx.close();
+  });
+
   await test('phone width (375px): the board is on screen, the controls fit, and the page does not scroll sideways', async () => {
     const { page, ctx } = await open(msgsFor(fresh()), { width: 375, height: 667 });
     const s = await box(page, '.cb-svg');

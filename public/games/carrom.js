@@ -10,7 +10,7 @@
   const BASE_Y = 0.12;     // a side's baseline in the bottom frame
   const MAX_DRAG = 0.45;   // a drag of this length on the board is a full-power flick
   const ANGLE_MAX = 75;
-  const ui = { ctx: null, v: null, root: null, seq: null, anim: null, known: new Map(), dragging: false, resignArmed: false,
+  const ui = { ctx: null, v: null, root: null, seq: null, anim: null, known: new Map(), dragging: false, dragMoved: false, resignArmed: false,
     aim: { x: 50, angle: 0, power: 60 } };
 
   /** Rotates a point about the centre by k quarter turns, counter-clockwise (the same rotation the server uses). */
@@ -213,8 +213,8 @@
     root.oninput = onInput;
     root.onpointerdown = onPointerDown;
     root.onpointermove = onPointerMove;
-    root.onpointerup = endDrag;
-    root.onpointercancel = endDrag;
+    root.onpointerup = onPointerUp;
+    root.onpointercancel = onPointerCancel;
   }
 
   // ---- aiming ----
@@ -268,6 +268,7 @@
     const v = ui.v;
     if (!v || !v.myTurn || ui.anim || !e.target.closest('.cb-svg')) return;
     ui.dragging = true;
+    ui.dragMoved = false;
     const svg = e.target.closest('.cb-svg');
     if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
     const p = pointerDisplay(e);
@@ -276,11 +277,30 @@
 
   function onPointerMove(e) {
     if (!ui.dragging) return;
+    ui.dragMoved = true;
     const p = pointerDisplay(e);
     if (p) aimFrom(p);
   }
 
-  function endDrag() { ui.dragging = false; }
+  /** Releasing a drag flicks with the aim it ends on. A tap only sets the aim, and a cancelled pointer never flicks. */
+  function onPointerUp(e) {
+    if (!ui.dragging) return;
+    const moved = ui.dragMoved;
+    ui.dragging = false;
+    if (!moved) return;
+    const p = pointerDisplay(e);
+    if (p) aimFrom(p);
+    fire();
+  }
+
+  function onPointerCancel() { ui.dragging = false; ui.dragMoved = false; }
+
+  /** Sends the current aim as a flick, if it is my turn, nothing is playing and the power is set. */
+  function fire() {
+    const v = ui.v, ctx = ui.ctx;
+    if (!v || !ctx || !v.myTurn || ui.anim || ui.aim.power <= 0) return;
+    ctx.act({ type: 'flick', x: ui.aim.x / 100, angle: (ui.aim.angle * Math.PI) / 180, power: ui.aim.power / 100 });
+  }
 
   function onInput(e) {
     const el = e.target.closest('[data-aim]');
@@ -295,10 +315,7 @@
     const v = ui.v, ctx = ui.ctx;
     if (!el || !v || !ctx) return;
     switch (el.dataset.cb) {
-      case 'flick':
-        if (!v.myTurn || ui.anim || ui.aim.power <= 0) return;
-        ctx.act({ type: 'flick', x: ui.aim.x / 100, angle: (ui.aim.angle * Math.PI) / 180, power: ui.aim.power / 100 });
-        break;
+      case 'flick': fire(); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
