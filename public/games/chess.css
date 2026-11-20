@@ -1,0 +1,46 @@
+/* Chess (public/games/chess.js). The board is a square grid that fills the width of a phone, up to 440 px. */
+.ch .ch-seats { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin: 8px 0 12px; }
+.ch .ch-seat { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 14px; background: rgba(255, 255, 255, .05); border: 1px solid var(--panel-line, rgba(255, 255, 255, .09)); min-width: 0; }
+.ch .ch-seat.turn { border-color: #fbbf24; box-shadow: 0 0 0 2px rgba(251, 191, 36, .25); }
+.ch .ch-seat.won { border-color: #86efac; }
+.ch .ch-who { display: flex; flex-direction: column; min-width: 0; }
+.ch .ch-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.ch .ch-who small { opacity: .75; }
+.ch .ch-colour { width: 16px; height: 16px; border-radius: 50%; flex: none; border: 1px solid rgba(0, 0, 0, .4); }
+.ch .ch-colour.w { background: #fffaf0; }
+.ch .ch-colour.b { background: #1d1409; }
+.ch .ch-taken { font-size: 15px; line-height: 1; margin-left: 2px; }
+.ch .ch-taken.w { color: #fffaf0; text-shadow: 0 0 2px #000; }
+.ch .ch-taken.b { color: #1d1409; }
+
+.ch-board { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, minmax(0, 1fr)); width: min(100%, 440px); aspect-ratio: 1; margin: 0 auto; border-radius: 10px; overflow: hidden; border: 2px solid #5b3f22; box-shadow: 0 10px 28px rgba(0, 0, 0, .35); touch-action: manipulation; }
+.ch-sq { position: relative; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; margin: 0; border-radius: 0; background: none; min-width: 0; min-height: 0; cursor: default; }
+.ch-sq.light { background: #ead9b8; }
+.ch-sq.dark { background: #a97f53; }
+.ch-sq:not(:disabled) { cursor: pointer; }
+.ch-sq:disabled { cursor: default; }
+.ch-sq.last { background-image: linear-gradient(rgba(251, 191, 36, .42), rgba(251, 191, 36, .42)); }
+.ch-sq.check { background-image: radial-gradient(circle, rgba(239, 68, 68, .9) 0%, rgba(239, 68, 68, .35) 55%, rgba(239, 68, 68, 0) 75%); }
+.ch-sq.sel { box-shadow: inset 0 0 0 3px #fbbf24; }
+.ch-sq.dot::after { content: ''; position: absolute; width: 28%; height: 28%; border-radius: 50%; background: rgba(15, 23, 42, .32); }
+.ch-sq.capture::after { content: ''; position: absolute; inset: 6%; border-radius: 50%; border: 4px solid rgba(15, 23, 42, .4); }
+.ch-sq:not(:disabled):hover { filter: brightness(1.06); }
+
+.ch-piece { font-size: min(9.4vw, 40px); line-height: 1; font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'Apple Symbols', system-ui, sans-serif; user-select: none; pointer-events: none; }
+.ch-piece.w { color: #fffaf0; text-shadow: 0 0 1px #111, 0 0 3px #000, 0 1px 1px #000; }
+.ch-piece.b { color: #1d1409; text-shadow: 0 0 1px #d6c7a6; }
+@media (min-width: 440px) { .ch-piece { font-size: 38px; } }
+
+.ch-promo { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 10px auto; }
+.ch-promo .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.ch-promo-btn { display: flex; flex-direction: column; align-items: center; min-width: 74px; font-size: 26px; line-height: 1.1; }
+.ch-promo-btn span { font-size: 12px; font-family: inherit; }
+
+.ch-moves { margin: 12px auto 0; max-width: 440px; }
+.ch-moves summary { cursor: pointer; opacity: .85; padding: 4px 0; }
+.ch-log { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 2px; max-height: 180px; overflow: auto; font-variant-numeric: tabular-nums; }
+.ch-log li { display: grid; grid-template-columns: 38px 1fr 1fr; gap: 6px; padding: 3px 6px; border-radius: 6px; }
+.ch-log li:nth-child(odd) { background: rgba(255, 255, 255, .04); }
+.ch-n { opacity: .6; }
+.ch-b:empty::before { content: ''; }
+.ch-log-empty { margin: 4px 0; }

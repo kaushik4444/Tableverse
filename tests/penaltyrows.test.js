@@ -269,8 +269,8 @@ test('table option: with the cheapest row, a card below every row takes the chea
 });
 
 test('table options: unknown values fall back to the defaults', () => {
-  const g = e.createGame(people(2), { rowSize: '7', hand: '9', scoring: 'x', lowCard: 'y', pace: 'slow', target: 'huge' }, rngFor(2));
-  assert.deepEqual(g.options, { target: 'standard', scoring: 'standard', rowSize: 5, hand: 10, lowCard: 'choose', pace: 'relaxed' });
+  const g = e.createGame(people(2), { rowSize: '7', hand: '9', scoring: 'x', lowCard: 'y', pace: 'warp', target: 'huge' }, rngFor(2));
+  assert.deepEqual(g.options, { target: 'standard', scoring: 'standard', rowSize: 5, hand: 10, lowCard: 'choose', pace: 'slow' });
   assert.equal(g.handSize, 10);
   assert.equal(g.rowLimit, 5);
 });

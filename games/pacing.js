@@ -16,7 +16,9 @@ function hold(g, ms) {
   const base = Math.max(Date.now(), until.get(g) || 0);
   until.set(g, base + Math.max(0, ms) * (scales.get(g) || 1));
 }
+/** Reserve `ms` (scaled) from now, replacing any earlier reservation: for a hold that belongs only to the latest action. */
+function holdLatest(g, ms) { until.set(g, Date.now() + Math.max(0, ms) * (scales.get(g) || 1)); }
 /** Milliseconds still reserved. */
 function remaining(g) { return Math.max(0, (until.get(g) || 0) - Date.now()); }
 
-module.exports = { hold, remaining, setScale };
+module.exports = { hold, holdLatest, remaining, setScale };

@@ -132,6 +132,26 @@ function scene(phase, handIds, tweak) {
     await ctx.close();
   });
 
+  await test('a skip shows in the feed and the spotlight; history from before the table was seen is not replayed', async () => {
+    const msgs = scene('play', [4, 5, 6], (v) => { v.log = [{ type: 'discard', by: 1, label: 'Blue 5', seq: 1 }]; v.event = v.log[0]; });
+    const { page, ctx } = await open(msgs);
+    const base = msgs[1];
+    await page.evaluate((st) => {
+      const v = st.view;
+      v.log = v.log.concat([{ type: 'skip', by: 1, who: 2, seq: 2 }]);
+      v.event = v.log[v.log.length - 1];
+      window.__push({ t: 'state', room: st.room, view: v });
+    }, base);
+    await page.waitForSelector('.gf-feed', { timeout: 4000 });
+    const feed = await page.textContent('.gf-feed');
+    assert.match(feed, /lost a turn/, 'the skip is in the feed');
+    assert.doesNotMatch(feed, /Blue 5/, 'the earlier discard is not replayed when the table is first seen');
+    await page.waitForSelector('.gf-spot', { timeout: 2000 });
+    assert.match(await page.textContent('.gf-spot'), /played Skip/, 'the spotlight names the skip');
+    assert.match(await page.textContent('.sr-table'), /Not down · \d+ cards · \d+ pts/, 'a seat that is not down shows its points');
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

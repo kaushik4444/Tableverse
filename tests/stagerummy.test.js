@@ -282,6 +282,14 @@ test('scrubbing a deleted player\'s name never changes the internal phase, even 
   assert.equal(game.view('p0').phase, 'draw', 'the phase is still draw after the scrub');
 });
 
+test('scrubbing a player whose name is a piece of the match id keeps the match id', () => {
+  const game = def.create(people(2), {}, rngFor(4));
+  const before = game.view('p0').matchId;
+  const piece = before.split('-')[0]; // a player named like the first group of the uuid
+  game.scrub([piece], 'Removed player');
+  assert.equal(game.view('p0').matchId, before, 'the match id is unchanged, so the table does not treat it as a rematch');
+});
+
 test('wild cards off: the stock has 100 cards, none of them wild', () => {
   const g = e.createGame(people(2), { wildCards: false }, rngFor(7));
   const total = g.stock.length + g.hands.flat().length + g.discard.length;
@@ -302,6 +310,39 @@ test('the view names each stage the table has reached', () => {
   assert.deepEqual(v.stageNames, e.STAGE_NAMES.slice(0, g.stageCount), 'names match the stages in this game');
   assert.equal(v.stageNames.length, 5, 'a quick game has five stages');
   assert.equal(v.stageNames[0], 'Trio and run');
+});
+
+test('the log names public cards, hides stock draws and records a skip with who lost the turn', () => {
+  const pacing = require('../games/pacing');
+  const g = setup(3, [[R(3), B(5)], [G(2), Y(9), R(4)], [B(7), G(8)]]);
+  act(g, 0, { type: 'draw', from: 'stock' });
+  act(g, 0, { type: 'discard', card: B(5).id });
+  const draw = g.log[0];
+  assert.equal(draw.type, 'draw');
+  assert.equal(draw.label, null, 'a stock draw names no card');
+  assert.equal(g.log[1].type, 'discard');
+  assert.equal(g.log[1].label, 'Blue 5', 'a discard is named in words');
+  // player 1 discards a skip card: player 2 loses a turn
+  g.turn = 1; g.phase = 'play'; g.hands[1] = [S(0), Y(9)];
+  act(g, 1, { type: 'draw', from: 'stock' });
+  g.turn = 1; g.phase = 'play';
+  act(g, 1, { type: 'discard', card: S(0).id });
+  const skip = g.log.find((x) => x.type === 'skip');
+  assert.ok(skip, 'the skip is in the log');
+  assert.equal(skip.by, 1, 'the player who played it');
+  assert.equal(skip.who, 2, 'the player who lost the turn');
+  const v = e.viewFor(g, 'p0');
+  assert.equal(v.log.length, g.log.length, 'the view carries the log');
+  assert.equal(v.log.at(-1).type, 'skip');
+  assert.ok(pacing.remaining(g) > 0, 'a bot waits after a skip so the feed can be read');
+});
+
+test('each match has its own id, so a rematch is never mistaken for the old one', () => {
+  const a = setup(3, [[R(3)], [G(2)], [B(7)]]);
+  const b = setup(3, [[R(3)], [G(2)], [B(7)]]);
+  assert.ok(a.matchId && b.matchId, 'a match has an id');
+  assert.notEqual(a.matchId, b.matchId, 'two matches have different ids');
+  assert.equal(e.viewFor(a, 'p0').matchId, a.matchId, 'the view carries it');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

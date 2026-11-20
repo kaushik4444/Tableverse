@@ -73,8 +73,9 @@ module.exports = {
       key: 'pace',
       type: 'select',
       label: 'Pace',
-      default: 'relaxed',
+      default: 'slow',
       choices: [
+        { value: 'slow', label: 'Slow', desc: 'Each card and each row taken stays on the table long enough to follow who played what.' },
         { value: 'relaxed', label: 'Relaxed', desc: 'Each card stays on the table long enough to read it.' },
         { value: 'normal', label: 'Normal', desc: 'A quicker table: cards stay on the table for less time.' },
         { value: 'quick', label: 'Quick', desc: 'The shortest pauses between the cards.' },

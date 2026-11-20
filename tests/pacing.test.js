@@ -74,4 +74,13 @@ test('a scale shortens the reservation at the time it is made, so the bots wait 
   assert.ok(r > 1900 && r <= 2000, `two holds of 4000 at scale 0.25 give ~2000 ms: ${r}`);
 });
 
+test('holdLatest replaces the earlier reservation instead of queuing behind it', () => {
+  const g = {};
+  pacing.setScale(g, 1);
+  pacing.hold(g, 10000); // an earlier shot reserved 10 s
+  pacing.holdLatest(g, 1000); // the latest shot needs only 1 s
+  const r = pacing.remaining(g);
+  assert.ok(r > 900 && r <= 1000, `the latest hold alone applies, about 1000 ms: ${r}`);
+});
+
 console.log(`\n${passed} pacing tests passed`);
