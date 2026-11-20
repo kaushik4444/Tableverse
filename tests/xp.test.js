@@ -73,6 +73,12 @@ test('Twenty-nine and Mind: a win is +20, a draw 0, a loss -10 for everyone on t
   assert.equal(drawn.B, 0);
 });
 
+test('Carrom: a team win is +20 for both partners, a loss -10 for both on the other team', () => {
+  assert.equal(RULES.carrom, RULES.twentynine, 'carrom is a win-or-lose game, not placings');
+  const pts = gameSkillPoints('carrom', [w('A'), w('C'), l('B'), l('D')]);
+  assert.deepEqual([pts.A, pts.C, pts.B, pts.D], [WIN, WIN, LOSS, LOSS]);
+});
+
 test('Line Games (the real ids): a win and a loss, also when the opponent forfeits or is a bot', () => {
   for (const id of ['tictactoe', 'fourinarow']) {
     const pts = gameSkillPoints(id, [w('A'), l('B')]);
