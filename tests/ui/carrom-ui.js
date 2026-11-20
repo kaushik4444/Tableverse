@@ -62,8 +62,11 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     assert.ok(angle > 0, `the flick goes to the player’s right (angle ${angle})`);
     assert.ok(power > 0, `the drag sets a power (${power}%)`);
     assert.equal(await page.isDisabled('[data-cb="flick"]'), false);
+    const released = (await sent(page)).length; // the drag release already flicked once
     await page.click('[data-cb="flick"]');
-    const a = (await sent(page)).at(-1).action;
+    const sentNow = await sent(page);
+    assert.equal(sentNow.length, released + 1, 'the Flick button itself sends a flick');
+    const a = sentNow.at(-1).action;
     assert.equal(a.type, 'flick');
     assert.ok(a.angle > 0 && a.power > 0);
     await ctx.close();
