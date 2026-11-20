@@ -5,7 +5,8 @@
  * White (P N B R Q K), lowercase for Black, or null. Colours are 'w' and 'b'.
  *
  * Everything a game needs is here: legal moves (castling, en passant, promotion, no move that leaves the king in check),
- * the end of a game (checkmate, stalemate, the 50-move rule, threefold repetition, dead positions) and move notation.
+ * the end of a game (checkmate, stalemate, the 50-move rule, threefold repetition, insufficient material) and move notation.
+ * Dead positions that still have material (such as a locked pawn wall) are not detected: the game goes on until one of the other ends applies.
  * Move generation is checked against the standard perft counts in tests/chess-rules.test.js.
  */
 
