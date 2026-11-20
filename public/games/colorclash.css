@@ -1,0 +1,65 @@
+/* Color Clash: the four-colour cards, the stock and discard, the colour in play, the colour picker. Builds on table.css. */
+.card.cc { --c: linear-gradient(160deg, #e0533f, #b42318); border-color: rgba(255, 255, 255, .95); }
+.card.cc-R { --c: linear-gradient(160deg, #ee6a55, #b42318); }
+.card.cc-Y { --c: linear-gradient(160deg, #fcd84a, #e0a800); color: #3b2c00; }
+.card.cc-G { --c: linear-gradient(160deg, #35b86a, #13753a); }
+.card.cc-B { --c: linear-gradient(160deg, #4f93ff, #1d4ed8); }
+.card.cc-W { --c: conic-gradient(from 45deg, #ee6a55 0 25%, #fcd84a 0 50%, #35b86a 0 75%, #4f93ff 0 100%); color: #fff; }
+.card.cc .pip { font-size: calc(var(--cw) * .5); text-shadow: 0 2px 0 rgba(0, 0, 0, .22); }
+.card.cc-k-n .pip { font-size: calc(var(--cw) * .6); }
+.card.cc-W .pip, .card.cc-W .rk { text-shadow: 0 0 4px rgba(0, 0, 0, .85), 0 1px 2px rgba(0, 0, 0, .8); }
+.card.cc .rk { font-size: calc(var(--cw) * .23); }
+.card.cc-back { --c: linear-gradient(160deg, #2b2d42, #14161f); background: repeating-linear-gradient(45deg, #2b2d42 0 6px, #3b3e5c 6px 12px); }
+.card.cc-back .pip { font-size: calc(var(--cw) * .36); font-weight: 800; letter-spacing: .04em; opacity: .9; }
+.card.cc .pip::after { content: ''; position: absolute; inset: 14% 12%; border-radius: 50% / 38%; border: 2px solid rgba(255, 255, 255, .28); pointer-events: none; }
+.card.cc-back .pip::after, .card.cc-W .pip::after { display: none; }
+.cc-game .card.slot { background: transparent; border: 2px dashed rgba(255, 255, 255, .35); box-shadow: none; }
+.cc-game .card.tiny { --cw: 26px; display: inline-block; vertical-align: middle; }
+
+.cc-game .cc-mid { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.cc-game .cc-stock { display: grid; justify-items: center; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: default; }
+.cc-game .cc-stock .card { --cw: calc(var(--cw0, 62px) * .78); }
+.cc-game .cc-stock.ready { cursor: pointer; }
+.cc-game .cc-stock.ready .card { box-shadow: 0 0 0 3px var(--gold, #f2c14e), 0 4px 12px rgba(0, 0, 0, .5); }
+.cc-game .cc-stock b { font-size: 18px; line-height: 1; }
+.cc-game .cc-stock small { color: rgba(255, 255, 255, .78); font-size: 11px; }
+.cc-game .cc-discard { position: relative; display: grid; justify-items: center; }
+.cc-game .cc-discard .card { --cw: calc(var(--cw0, 62px) * .9); }
+.cc-game .cc-dir { position: absolute; right: -16px; top: -10px; font-size: 22px; line-height: 1; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.cc-game .cc-colour { margin-top: 6px; font-size: 13px; color: rgba(255, 255, 255, .85); display: flex; align-items: center; justify-content: center; gap: 6px; }
+.cc-game .cc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-weight: 750; font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+.cc-game .cc-chip-R { background: #c2392b; }
+.cc-game .cc-chip-Y { background: #e0a800; color: #3b2c00; text-shadow: none; }
+.cc-game .cc-chip-G { background: #1a8a46; }
+.cc-game .cc-chip-B { background: #2c62d6; }
+.cc-game .cc-land { animation: cc-land .32s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes cc-land { from { transform: translateY(-26px) rotate(-8deg) scale(1.12); opacity: .6; } to { transform: none; opacity: 1; } }
+
+.cc-game .cc-event { margin: 6px 0 0; max-width: 340px; line-height: 1.3; color: #fff; font-size: 15px; font-weight: 650; text-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+.cc-game .cc-backs { display: flex; gap: 2px; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); }
+.cc-game .cc-backs i { width: 9px; height: 13px; border-radius: 2px; background: repeating-linear-gradient(45deg, #2b2d42 0 3px, #3b3e5c 3px 6px); border: 1px solid rgba(255, 255, 255, .7); }
+.cc-game .bdg.cc-last { background: #e0533f; color: #fff; animation: cc-blink 1s ease-in-out infinite alternate; }
+@keyframes cc-blink { to { opacity: .6; } }
+.cc-game .hc.cc-drawn { box-shadow: 0 0 0 3px var(--gold, #f2c14e), 0 8px 16px rgba(0, 0, 0, .5); transform: translateY(-10px); }
+
+.cc-game .cc-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
+.cc-game .cc-picks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.cc-game .cc-pick { display: inline-flex; align-items: center; gap: 6px; min-width: 88px; min-height: 48px; padding: 6px 14px; justify-content: center; border-radius: 12px; border: 2px solid rgba(255, 255, 255, .8); color: #fff; font: inherit; font-weight: 750; cursor: pointer; text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+.cc-game .cc-pick-R { background: #c2392b; }
+.cc-game .cc-pick-Y { background: #e0a800; color: #3b2c00; text-shadow: none; }
+.cc-game .cc-pick-G { background: #1a8a46; }
+.cc-game .cc-pick-B { background: #2c62d6; }
+.cc-game .cc-pick:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; }
+.cc-game .cc-final { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.cc-game .cc-final li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .06); }
+.cc-game .cc-final li.win { background: rgba(242, 193, 78, .2); }
+
+@media (max-width: 520px) and (max-height: 700px) {
+  .cc-game .cc-event { font-size: 13px; }
+  .cc-game .cc-colour { font-size: 11px; margin-top: 2px; }
+  .cc-game .cc-mid { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .cc-game .cc-land, .cc-game .bdg.cc-last { animation: none; } }
+
+/* the shared table centre ignores taps; the stock pile is a button, so it must take them */
+.cc-game .pt-center .cc-stock { pointer-events: auto; }
