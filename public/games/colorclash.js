@@ -186,7 +186,7 @@
     ui.latest = state;
     // table-local state belongs to one table: another table starts from its own first render (no replay, no dismissed round)
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
-    if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.shown = null; ui.seenRound = null; ui.pending = null; ui.turnKey = ''; ui.holdUntil = 0; ui.log = []; ui.summaryKey = null; }
+    if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.shown = null; ui.seenRound = null; ui.pending = null; ui.turnKey = ''; ui.holdUntil = 0; ui.log = []; ui.summaryKey = null; clearTimeout(ui.holdTimer); clearTimeout(ui.summaryTimer); ui.holdTimer = null; ui.summaryTimer = null; }
     react(state);
     // after each move the table holds still for a moment: nothing can be played in that time
     const v = held() ? Object.assign({}, state, { myTurn: false, canDraw: false, held: true }) : state;
