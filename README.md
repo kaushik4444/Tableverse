@@ -58,6 +58,7 @@ Tableverse is open to players, with all twelve games available in this release.
 
 ## What's new — unreleased (on `development`, not yet on `main`)
 
+- **Chess** (2), in review on `feat/chess-carrom`: the full game with castling, en passant and promotion, draws by stalemate, fifty moves, threefold repetition or insufficient material, and resignation. Tap a piece to see its moves, then tap a square. The board turns for Black, and it fits a phone screen. A bot can fill the second seat.
 - **Carrom** (2–4 players, in teams of partners when there are four), in review on `feat/carrom`: pocket your team's nine coins with the queen before the other team. Drag on the board, back from the striker, to flick; place the striker with the slider. Shots play back on the board. Pocketing the striker is a foul.
 - **Guest play controls.** Guests can read and send table chat and play open games. Private tables, rejoining after leaving on purpose, player profiles and stats, blocking and reports are locked for guests until the owner or an admin opens them in the admin console (**Guests** tab). A locked control shows a lock and opens the account reminder. Friend requests stay account-only. Connecting after a dropped connection always works.
 - **Owner redeploy.** The owner can ask Render to redeploy the app from the admin console's Logs tab, after typing `REDEPLOY`. It needs `RENDER_API_KEY` with deploy rights and `RENDER_SERVICE_ID`, and has a five-minute cooldown.
