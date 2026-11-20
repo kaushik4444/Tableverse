@@ -125,6 +125,21 @@ test('reaching a chamber opens it; the gold ends the round for the Diggers with 
   assert.equal(g.goals[1].revealed, true);
   g.roles.forEach((r, i) => assert.equal(g.roundResult.gains[i], r === 'digger' ? 3 + (i === who ? 1 : 0) : 0));
   assert.ok(g.winners.length >= 1);
+  assert.equal(g.event.type, 'over');
+  assert.equal(g.event.goldIndex, 1, 'the closing event still says which chamber held the gold');
+  assert.deepEqual(e.viewFor(g, 'p0').event.revealed, [1]);
+});
+
+test('a Saboteur who opens the gold earns only the finder point; the Diggers still score', () => {
+  const g = fresh(4, { rounds: '1' });
+  g.goals.forEach((q, i) => { q.gold = i === 1; });
+  for (let x = 1; x <= 6; x++) g.board.set(`${x},2`, { id: `t${x}`, mask: 10, cut: false, x, y: 2 });
+  const who = g.turn;
+  g.roles = ['digger', 'digger', 'digger', 'digger'];
+  g.roles[who] = 'saboteur';
+  g.hands[who] = [tile('last', 10)];
+  assert.equal(e.applyAction(g, `p${who}`, { type: 'tile', card: 'last', x: 7, y: 2 }).ok, true);
+  g.roles.forEach((r, i) => assert.equal(g.roundResult.gains[i], i === who ? 1 : 3));
 });
 
 test('a rock chamber opens without ending the round', () => {

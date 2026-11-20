@@ -163,13 +163,14 @@ const repairTargets = (g, who, card) => {
 const breakTargets = (g, who, card) => g.players.map((_, i) => i).filter((i) => i !== who && !g.broken[i].includes(card.tool));
 const collapseCells = (g) => [...g.board.values()].filter((t) => t.id !== 'start').map((t) => [t.x, t.y]);
 
-function endRound(g, side, finder) {
+function endRound(g, side, finder, reveal) {
   const gains = g.players.map(() => 0);
   const sabCount = g.roles.filter((r) => r === 'saboteur').length;
   g.roles.forEach((r, i) => {
-    if (side === 'diggers' && r === 'digger') gains[i] = 3 + (i === finder ? 1 : 0);
+    if (side === 'diggers' && r === 'digger') gains[i] = 3;
     if (side === 'saboteurs' && r === 'saboteur') gains[i] = sabCount === 1 ? 4 : 3;
   });
+  if (side === 'diggers' && finder !== undefined) gains[finder] += 1; // whoever opens the gold earns 1 more, even a Saboteur who gave the Diggers the win
   gains.forEach((v, i) => { g.scores[i] += v; });
   g.roundResult = { round: g.round, side, finder: finder === undefined ? null : finder, roles: g.roles.slice(), gains, gold: g.goals.findIndex((q) => q.gold) };
   say(g, null, side === 'diggers' ? `The Diggers found the gold in round ${g.round}` : `The Saboteurs won round ${g.round}`, 'end');
@@ -177,10 +178,10 @@ function endRound(g, side, finder) {
     g.phase = 'gameOver';
     const best = Math.max(...g.scores);
     g.winners = g.scores.map((s, i) => (s === best ? i : -1)).filter((i) => i >= 0);
-    emit(g, { type: 'over', side, winners: g.winners.slice(), round: g.round });
+    emit(g, { type: 'over', side, winners: g.winners.slice(), round: g.round, ...(reveal || {}) });
     return;
   }
-  emit(g, { type: 'roundEnd', side, round: g.round });
+  emit(g, { type: 'roundEnd', side, round: g.round, ...(reveal || {}) });
   startRound(g);
 }
 
@@ -226,18 +227,20 @@ function applyAction(g, playerId, action) {
     if (!canPlace(g, mask, action.x, action.y)) return { ok: false, error: 'The piece does not fit there' };
     take(g, who, card.id);
     g.board.set(key(action.x, action.y), { id: card.id, mask, cut: card.cut, x: action.x, y: action.y });
-    emit(g, { type: 'tile', by: who, x: action.x, y: action.y, mask, cut: card.cut, revealed: [] });
+    emit(g, { type: 'tile', by: who, x: action.x, y: action.y, mask, cut: card.cut, revealed: [], goldIndex: -1 });
     say(g, who, `dug ${card.cut ? 'a dead end' : 'a tunnel'}`, 'tile');
     const seen = reach(g);
     let found = false;
     g.goals.forEach((q, i) => {
       if (!q.revealed && seen.has(key(q.x, q.y))) {
         q.revealed = true; g.event.revealed.push(i);
+        if (q.gold) g.event.goldIndex = i;
         say(g, null, q.gold ? 'The gold chamber is open!' : 'That chamber holds only rock', 'reveal');
         if (q.gold) found = true;
       }
     });
-    if (found) { endRound(g, 'diggers', who); return { ok: true }; }
+    // the round-ending event keeps what this move opened, so every client can still show the gold being found
+    if (found) { endRound(g, 'diggers', who, { by: who, revealed: g.event.revealed.slice(), goldIndex: g.event.goldIndex }); return { ok: true }; }
   } else if (type === 'break') {
     if (card.k !== 'break') return { ok: false, error: 'That is not a break card' };
     if (!int(action.target) || !breakTargets(g, who, card).includes(action.target)) return { ok: false, error: 'You cannot break that' };

@@ -67,8 +67,8 @@
     st.seq = e.seq;
     const text = eventText(v);
     if (!text) return;
-    const opened = e.type === 'tile' && e.revealed && e.revealed.length ? e.revealed.map((i) => v.goals[i]) : [];
-    const gold = opened.some((q) => q && q.gold);
+    const opened = e.revealed && e.revealed.length ? e.revealed : [];
+    const gold = e.goldIndex !== undefined && e.goldIndex >= 0;
     const tone = e.type === 'over' || e.type === 'roundEnd' || gold ? 'win' : e.type === 'break' || e.type === 'collapse' ? 'take' : e.type === 'repair' ? 'lay' : 'play';
     window.GameFeed.add(key, [{ id: `hm-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
     const big = (face) => `<span style="font-size:44px;line-height:1" aria-hidden="true">${face}</span>`;
@@ -127,13 +127,13 @@
       const q = goals.get(k);
       if (t) {
         const cave = caves.has(k);
-        html += `<${cave ? 'button type="button" data-hm="cave" data-x="' + x + '" data-y="' + y + '"' : 'div'} class="hm-cell ${t.start ? 'start' : ''} ${cave ? 'cave' : ''}" role="img" aria-label="${t.start ? 'Start of the tunnel' : esc(describeTile(t.mask, t.cut))}${cave ? '. Collapse this piece' : ''}">${tileSVG(t.mask, t.cut)}${t.start ? '<span class="hm-flag">⛏️</span>' : ''}</${cave ? 'button' : 'div'}>`;
+        html += `<${cave ? 'button type="button" data-hm="cave" data-x="' + x + '" data-y="' + y + '"' : 'div role="img"'} class="hm-cell ${t.start ? 'start' : ''} ${cave ? 'cave' : ''}" aria-label=""${t.start ? 'Start of the tunnel' : esc(describeTile(t.mask, t.cut))}${cave ? '. Collapse this piece' : ''}">${tileSVG(t.mask, t.cut)}${t.start ? '<span class="hm-flag">⛏️</span>' : ''}</${cave ? 'button' : 'div'}>`;
       } else if (q) {
         const seen = v.scouts.find((s) => s.goal === q.i);
         const face = q.revealed ? (q.gold ? '<span class="hm-gold">🪙</span>' : '<span class="hm-rock">🪨</span>') : '<span class="hm-q">?</span>';
         const hint = !q.revealed && seen ? `<span class="hm-seen" title="You scouted this chamber">${seen.gold ? '🪙' : '🪨'}</span>` : '';
         const word = q.revealed ? (q.gold ? 'gold' : 'plain rock') : seen ? `unopened, you scouted ${seen.gold ? 'gold' : 'plain rock'}` : 'unopened';
-        html += `<${scoutable ? 'button type="button" data-hm="goal" data-i="' + q.i + '"' : 'div'} class="hm-cell goal ${q.revealed ? (q.gold ? 'is-gold' : 'is-rock') : ''} ${scoutable ? 'cave' : ''}" role="img" aria-label="Chamber ${q.i + 1}: ${word}">${face}${hint}</${scoutable ? 'button' : 'div'}>`;
+        html += `<${scoutable ? 'button type="button" data-hm="goal" data-i="' + q.i + '"' : 'div role="img"'} class="hm-cell goal ${q.revealed ? (q.gold ? 'is-gold' : 'is-rock') : ''} ${scoutable ? 'cave' : ''}" aria-label=""Chamber ${q.i + 1}: ${word}">${face}${hint}</${scoutable ? 'button' : 'div'}>`;
       } else if (spots.has(k)) {
         const preview = tileSVG(ui.flip ? flipMask(c.mask) : c.mask, c.cut, 'ghost');
         html += `<button type="button" class="hm-cell spot" data-hm="spot" data-x="${x}" data-y="${y}" aria-label="Place the piece in column ${x + 1}, row ${y + 1}">${preview}</button>`;
@@ -144,7 +144,7 @@
 
   function handHTML(v) {
     if (v.me < 0) return '';
-    return `<div class="hm-hand" role="list">${v.hand.map((c) => `<button type="button" role="listitem" class="hm-card ${v.myTurn && c.ok ? 'playable' : ''} ${v.myTurn && !c.ok ? 'dim' : ''} ${ui.sel === c.id ? 'sel' : ''}" data-hm="card" data-id="${esc(c.id)}" aria-label="${esc(cardName(c))}${v.myTurn && !c.ok ? ' (cannot be played now)' : ''}" aria-pressed="${ui.sel === c.id}" ${v.myTurn ? '' : 'aria-disabled="true"'}>${cardFace(c)}<small>${cardLabel(c)}</small></button>`).join('')}</div>`;
+    return `<div class="hm-hand" role="group" aria-label="Your cards">${v.hand.map((c) => `<button type="button" class="hm-card ${v.myTurn && c.ok ? 'playable' : ''} ${v.myTurn && !c.ok ? 'dim' : ''} ${ui.sel === c.id ? 'sel' : ''}" data-hm="card" data-id="${esc(c.id)}" aria-label="${esc(cardName(c))}${v.myTurn && !c.ok ? ' (cannot be played now)' : ''}" aria-pressed="${ui.sel === c.id}" ${v.myTurn ? '' : 'aria-disabled="true"'}>${cardFace(c)}<small>${cardLabel(c)}</small></button>`).join('')}</div>`;
   }
 
   function controlsHTML(v) {
@@ -187,17 +187,32 @@
     ui.seq = e.seq;
     if (!snd) return;
     if (e.type === 'over') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
-    else if (e.type === 'roundEnd') snd.play('round');
-    else if (e.type === 'tile') { snd.play('place'); if (e.revealed && e.revealed.some((i) => v.goals[i].gold)) setTimeout(() => snd.play('fanfare'), 150); }
+    else if (e.type === 'roundEnd') snd.play(e.goldIndex >= 0 ? 'fanfare' : 'round');
+    else if (e.type === 'tile') { snd.play('place'); if (e.goldIndex >= 0) setTimeout(() => snd.play('fanfare'), 150); }
     else if (e.type === 'break' || e.type === 'collapse') snd.play('fall');
     else if (e.type === 'repair') snd.play('land');
     else if (e.type === 'scout') snd.play('tick');
     else if (e.type === 'discard') snd.play('fold');
   }
 
+  /** The control that has keyboard focus, as a selector, so a redraw does not drop a keyboard player back to the top of the page. */
+  function focusKey(root) {
+    const a = document.activeElement;
+    if (!a || !root.contains(a) || !a.dataset || !a.dataset.hm) return null;
+    return ['hm', 'id', 'x', 'y', 'seat', 'tool', 'i'].filter((k) => a.dataset[k] !== undefined).map((k) => `[data-${k}="${CSS.escape(a.dataset[k])}"]`).join('');
+  }
+  function restoreFocus(root, sel) {
+    if (!sel) return;
+    const el = root.querySelector(sel) || root.querySelector('.hm-card');
+    if (el && el.focus) el.focus({ preventScroll: true });
+  }
+
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
+    // table-local state belongs to one table: another table starts from its own first render (no replay, no dismissed round)
+    const tableKey = ctx && ctx.room ? ctx.room.code : '';
+    if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.seenRound = null; ui.sel = null; ui.flip = false; ui.turnKey = ''; }
     react(v);
     feedSync(v);
     const key = `${v.round}:${v.turn}:${v.event ? v.event.seq : 0}`;
@@ -207,6 +222,7 @@
     const role = v.role ? `<span class="hm-youare ${v.role}" title="Only you can see this">You are a ${roleName(v.role)}</span>` : '';
     const handEl = root.querySelector('.hm-hand');
     const scroll = handEl ? handEl.scrollLeft : 0;
+    const focus = focusKey(root);
     root.innerHTML = `
     <div class="wz hm-game">
       <div class="wz-top">
@@ -224,6 +240,7 @@
     </div>`;
     const h2 = root.querySelector('.hm-hand');
     if (h2) h2.scrollLeft = scroll;
+    restoreFocus(root, focus);
     root.onclick = onClick;
   }
 

@@ -64,3 +64,8 @@
 /* the shared feed floats over the bottom of the board without taking room */
 .hm-boardwrap { position: relative; }
 .hm-boardwrap .gf-feed.gf-float { bottom: 8px; }
+
+/* the highlighted targets pulse, so a keyboard focus ring must look different from their resting outline */
+.hm-game .hm-cell.spot:focus-visible, .hm-game .hm-cell.cave:focus-visible, .hm-game .hm-tool.fixable:focus-visible, .hm-game .hm-p.target:focus-visible, .hm-game .hm-card:focus-visible {
+  outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--gold, #f2c14e);
+}

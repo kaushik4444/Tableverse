@@ -139,11 +139,21 @@ function scene(n, edit) {
     await page.evaluate((m) => window.__push(m), scene(4, (v) => {
       v.myTurn = false; v.turn = 2;
       v.goals[1] = { x: 8, y: 2, revealed: true, gold: true };
-      v.event = { seq: 15, type: 'tile', by: 1, x: 7, y: 2, mask: 10, cut: false, revealed: [1] };
+      v.event = { seq: 15, type: 'tile', by: 1, x: 7, y: 2, mask: 10, cut: false, revealed: [1], goldIndex: 1 };
     })[1]);
     await page.waitForSelector('.gf-spot');
     assert.match(await page.textContent('.gf-spot'), /gold chamber is open/);
     assert.match(await page.textContent('.hm-boardwrap .gf-item'), /Bo dug a tunnel/);
+    await ctx.close();
+  });
+
+  await test('keyboard: focus stays on the chosen card after the board redraws; cards are buttons, not list items', async () => {
+    const { page, ctx } = await open(scene(4));
+    await page.focus('.hm-card[data-id="t1"]');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.id), 't1');
+    assert.equal(await page.locator('.hm-cell.spot').count(), 1);
+    assert.equal(await page.locator('[role="listitem"], button[role="img"]').count(), 0);
     await ctx.close();
   });
 
