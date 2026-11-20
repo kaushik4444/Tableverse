@@ -149,4 +149,15 @@ test('repetition key: an en-passant square is kept only when a legal en-passant 
   assert.notEqual(R.keyOf(free), R.keyOf(freeNoEp));
 });
 
+test('castling notation carries the check suffix', () => {
+  const checking = R.fromFEN('5k2/8/8/8/8/8/8/4K2R w K - 0 1');
+  const castle = R.legalMoves(checking).find((m) => m.castle === 'K');
+  assert.equal(R.inCheck(R.apply(checking, castle), 'b'), true);
+  assert.equal(R.san(checking, castle), 'O-O+', 'the rook on f1 gives check');
+  // a non-checking castle keeps the plain notation
+  const quiet = R.fromFEN('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
+  assert.equal(R.san(quiet, R.legalMoves(quiet).find((m) => m.castle === 'K')), 'O-O');
+  assert.equal(R.san(quiet, R.legalMoves(quiet).find((m) => m.castle === 'Q')), 'O-O-O');
+});
+
 console.log(`\n${passed} chess rules tests passed`);

@@ -246,9 +246,10 @@ function status(s, repeats = 1) {
 
 /** Standard algebraic notation for a legal move in state s, with disambiguation, captures, promotion and check. */
 function san(s, m, legal = legalMoves(s)) {
-  if (m.castle) return m.castle === 'K' ? 'O-O' : 'O-O-O';
   let out;
-  if (m.piece === 'P') {
+  if (m.castle) {
+    out = m.castle === 'K' ? 'O-O' : 'O-O-O';
+  } else if (m.piece === 'P') {
     out = m.captured ? FILES[fileOf(m.from)] + 'x' + sqName(m.to) : sqName(m.to);
     if (m.promo) out += '=' + m.promo;
   } else {
