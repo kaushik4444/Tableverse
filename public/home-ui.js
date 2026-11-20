@@ -70,7 +70,6 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   const COMING_SOON = [
     ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order', 'In development'],
     ['🐂', 'Bullhead Run', 'Play numbered cards and avoid collecting bullheads.', 'Your build order'],
-    ['🎨', 'Color Clash', 'Match colours and numbers, then play action cards wisely.', 'Your build order'],
     ['🚢', 'Sea Battle', 'Hide your fleet, call your shots and sink the opposing ships.', 'Your build order'],
     ['🌾', 'Resource Isles — 4 players', 'Gather resources, trade and build settlements and roads.', 'Your build order'],
     ['🌾', 'Resource Isles — 5–6 players', 'Bring the larger-group expansion to the island.', 'Your build order'],

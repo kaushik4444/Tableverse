@@ -6,7 +6,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0, phases: false };
+  const ui = { ctx: null, latest: null, sel: new Set(), groups: [], key: '', seq: null, floatText: '', floatAt: 0, phases: false, feeds: new Map() };
   const FLOAT_MS = 2600;
 
   const COL = { R: { name: 'Red', sym: '●' }, B: { name: 'Blue', sym: '■' }, G: { name: 'Green', sym: '▲' }, Y: { name: 'Yellow', sym: '◆' } };
@@ -47,6 +47,45 @@
     if (e.type === 'skip') return `${nameOf(v, e.who)} loses a turn`;
     if (e.type === 'roundEnd') return `${nameOf(v, e.by)} went out!`;
     return '';
+  }
+
+  /** One line for the feed, from the game log. Only public facts are named: a stock draw says nothing about the card. */
+  function logItem(v, e, id) {
+    const by = nameOf(v, e.by);
+    switch (e.type) {
+      case 'draw': return e.from === 'discard'
+        ? { id, tone: 'take', html: `<b>${by}</b> took the ${esc(e.label)} from the discard pile` }
+        : { id, tone: 'info', html: `<b>${by}</b> drew from the stock` };
+      case 'hit': return { id, tone: 'play', html: `<b>${by}</b> added ${esc(e.label)} to a group on the table` };
+      case 'discard': return { id, tone: 'play', html: `<b>${by}</b> discarded ${esc(e.label)}` };
+      case 'lay': return { id, tone: 'win', html: `<b>${by} laid down stage ${e.stage}: ${esc(stageName(v, e.stage))}!</b>` };
+      case 'skip': return { id, tone: 'skip', html: `<b>${by}</b> played a Skip card · <b>${nameOf(v, e.who)}</b> lost a turn` };
+      case 'roundEnd': return { id, tone: 'round', html: `<b>${by} went out. The round is over.</b>` };
+      default: return null;
+    }
+  }
+  /** The big moment for the spotlight: a skip (the Skip card shown large), a stage laid, a round over. Other moves need none. */
+  function spotFor(v, e) {
+    if (e.type === 'skip') return { card: cardHTML({ k: 's' }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} played Skip · ${nameOf(v, e.who)} loses a turn`, tone: 'skip', ms: 1300 };
+    if (e.type === 'lay') return { caption: `${nameOf(v, e.by)} laid down stage ${e.stage}: ${esc(stageName(v, e.stage))}!`, tone: 'win', ms: 1300 };
+    if (e.type === 'roundEnd') return { caption: `${nameOf(v, e.by)} went out. The round is over.`, tone: 'round', ms: 1300 };
+    return null;
+  }
+  const feedKey = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
+  /** Feeds the log into the shared feed and fires the spotlight for a new moment. Each table keeps its own position, so
+   * coming back to a table compares its log with where it was left. The first visit records the position and shows no
+   * history. A new game restarts the sequence, which starts a new epoch so its IDs cannot collide with the old ones. */
+  function feedSync(v) {
+    const key = feedKey();
+    if (!key || !window.GameFeed) return;
+    const last = v.log.length ? v.log[v.log.length - 1].seq : 0;
+    const st = ui.feeds.get(key);
+    if (!st) { ui.feeds.set(key, { lastSeq: last, epoch: 0 }); return; }
+    if (last < st.lastSeq) st.epoch += 1;
+    const prev = last < st.lastSeq ? 0 : st.lastSeq;
+    window.GameFeed.add(key, v.log.filter((e) => e.seq > prev).map((e) => logItem(v, e, `${st.epoch}-${e.seq}`)).filter(Boolean));
+    if (v.event && v.event.seq > prev) { const sp = spotFor(v, v.event); if (sp) window.GameFeed.spotlight(sp); }
+    st.lastSeq = last;
   }
 
   function guidance(v) {
@@ -91,7 +130,7 @@
     const stage = shownStage(v, i);
     const sub = `Stage ${stage}/${v.stageCount}`; // short, so it fits a phone seat; the card count is under the seat
     const count = `<div class="sr-nolay">${p.cards} cards · ${p.score} pts</div>`; // points stay on the seat: fewer is better
-    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay">Not down · ${p.cards} cards</div>`);
+    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay">Not down · ${p.cards} cards · ${p.score} pts</div>`);
     return window.CardTable.pt.seatHTML({
       pid: p.id,
       name: p.name + (i === v.me ? ' (you)' : ''),
@@ -185,7 +224,7 @@
 
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.latest = v;
-    react(v); sync(v);
+    react(v); feedSync(v); sync(v);
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null; // keep keyboard focus on the same card across redraws
     const oldSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
     const sheetHadFocus = !!oldSheet && oldSheet.contains(document.activeElement);
@@ -214,7 +253,7 @@
         return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
       }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
-      <div class="sr-table">${table}</div>
+      <div class="sr-table">${table}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
       ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${traysHTML(v)}
