@@ -25,7 +25,7 @@ const TARGETS_SIMPLE = { short: 20, standard: 35, long: 50 };
 const COUNTDOWN = 66; // Starting score: everyone starts with 66 points, and penalty points are taken away from them // with one point per card the totals grow about half as fast
 const ROW_SIZES = [4, 5, 6];
 const HAND_SIZES = [6, 8, 10];
-const PACE = { relaxed: 1.35, normal: 1, quick: 0.6 }; // how long the table lingers on each step, as a factor
+const PACE = { slow: 1.6, relaxed: 1.2, normal: 1, quick: 0.6 }; // how long the table lingers on each step, as a factor (slow is the default: people can follow every card) // how long the table lingers on each step, as a factor
 const STEP_MS = 900; // a card placed on a row stays on the table this long before the next one is played
 const SWEEP_MS = 500; // a row taken (or swept) lingers this much longer, so the cards can be read
 const MAX_PLAYERS = 8;
@@ -69,7 +69,7 @@ function createGame(players, options, rng = Math.random) {
   const rowSize = ROW_SIZES.includes(Number(o.rowSize)) ? Number(o.rowSize) : ROW_LIMIT;
   const hand = HAND_SIZES.includes(Number(o.hand)) ? Number(o.hand) : HAND;
   const lowCard = o.lowCard === 'cheapest' ? 'cheapest' : 'choose';
-  const pace = Object.hasOwn(PACE, o.pace) ? o.pace : 'relaxed';
+  const pace = Object.hasOwn(PACE, o.pace) ? o.pace : 'slow';
   const g = {
     game: 'penaltyrows',
     n,
