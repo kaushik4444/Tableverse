@@ -3032,7 +3032,7 @@
     }
     const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
     const r = S.room;
-    if (r.status === 'finished' && (!S.endFlow || S.endFlow.code !== r.code)) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0), timer: null };
+    if (r.status === 'finished' && (!S.endFlow || S.endFlow.code !== r.code)) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0) + Math.max(0, (r.outcome && r.outcome.playMs) || 0), timer: null };
     plugin.render($app, S.view, {
       resultVisible: r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS,
       room: S.room,
