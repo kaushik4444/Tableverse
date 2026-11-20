@@ -23,7 +23,8 @@ module.exports = {
     const g = engine.createGame(players, options, rng);
     return {
       view: (playerId) => engine.viewFor(g, playerId),
-      scrub: (names, to) => scrubDeep([g, players], names, to),
+      // only the player records hold names: the phase, colours, board and move notation must keep their values
+      scrub: (names, to) => scrubDeep([g.players, players], names, to),
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },

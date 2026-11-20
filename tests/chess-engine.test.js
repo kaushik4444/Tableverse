@@ -191,4 +191,16 @@ test('a full bot-vs-bot game always reaches a result', () => {
   assert.ok(g.reason, 'a reason is recorded');
 });
 
+test('scrubbing a deleted player keeps the phase (a player named like a field) and the board; only the name changes', () => {
+  const plugin = require('../games/chess');
+  const players = [{ id: 'p0', name: 'playing' }, { id: 'p1', name: 'Bo' }];
+  const inst = plugin.create(players, {}, () => 0.1);
+  inst.scrub(['playing'], 'Deleted player');
+  const v = inst.view('p1');
+  assert.equal(v.phase, 'playing');
+  assert.equal(v.players[0].name, 'Deleted player');
+  assert.equal(v.players[1].name, 'Bo');
+  assert.equal(v.board.length, 64);
+});
+
 console.log(`\n${passed} chess engine tests passed`);

@@ -125,7 +125,7 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     // a move (or a new position) clears the selection and any open promotion choice
-    const key = `${v.phase}|${v.log.length}|${v.turn}`;
+    const key = `${ctx.room ? ctx.room.code : ''}|${v.phase}|${v.log.length}|${v.turn}`;
     if (key !== ui.lastKey) { ui.lastKey = key; ui.sel = null; ui.promo = null; ui.resignArmed = false; }
     ui.v = v;
     react(v);
