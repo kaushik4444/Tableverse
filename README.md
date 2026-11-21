@@ -21,6 +21,7 @@ All twelve games are open to every player in this release.
 - **Property Rivals** (2–6): an original world-tour board game: buy cities, ports and utilities, collect rent, build houses and hotels, trade, auction and bankrupt your rivals. Tap a city in your holdings for its card: mortgage value, rent now and the full rent table, and house and hotel costs. Options: game length, starting cash, auctions, Rest Stop jackpot.
 - **Tic-Tac-Toe** (2): a 3×3 line game. Line up three to win; a full board with no line is a draw.
 - **Four in a Row** (2): drop discs into a 7×6 grid and connect four. Choose *Line length* five for a bigger 9×8 grid (Five in a Row). Choose who starts; a bot fills the second seat.
+- **Hidden Miners** (3–8): secretly a Digger or a Saboteur, build a tunnel toward the gold, break and repair tools, scout chambers and collapse pieces. Scored over 1, 3 or 5 rounds.
 - **Color Clash** (2–8): match the colour or number, use Stop, Flip, Take 2 and Wild cards, and be first to empty your hand. Round points add up to a target.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
 
