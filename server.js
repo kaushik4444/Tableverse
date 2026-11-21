@@ -1076,7 +1076,7 @@ function start(opts = {}) {
   }
 
   /** A move ended the turn (the turn, batch or multiplier changed, or the phase moved on): several moves of one turn count as one bot turn.
-   *  Stage Rummy's draw moves the same player from "draw" to "play", which is still their turn: only the discard ends it. */
+   *  The Stage 10 draw moves the same player from "draw" to "play", which is still their turn: only the discard ends it. */
   function turnPassed(a, b) {
     if (a.turn !== b.turn || a.batch !== b.batch || a.multiplier !== b.multiplier) return true;
     return a.phase !== b.phase && !(a.phase === 'draw' && b.phase === 'play');
