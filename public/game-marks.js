@@ -10,6 +10,7 @@
 
   // Each mark: [tile colour, glyph markup]. Glyphs use INK, or the tile colour for cut-outs.
   const MARKS = {
+    hiddenminers: ['#c98a2b', `<path d="M10 38 L24 12 L38 38 Z" fill="${INK}"/><rect x="20" y="26" width="8" height="12" rx="2" fill="#c98a2b"/><circle cx="35" cy="13" r="4.5" fill="#f5b700"/>`],
     colorclash: ['#e0533f', `<rect x="12" y="8" width="24" height="32" rx="5" fill="${INK}"/><rect x="16" y="13" width="7.5" height="10" rx="1.6" fill="#e0533f"/><rect x="24.5" y="13" width="7.5" height="10" rx="1.6" fill="#f5b700"/><rect x="16" y="25" width="7.5" height="10" rx="1.6" fill="#1a8a46"/><rect x="24.5" y="25" width="7.5" height="10" rx="1.6" fill="#2c62d6"/>`],
     gofish: ['#0891b2', `<ellipse cx="22" cy="24" rx="13" ry="8" fill="${INK}"/><path d="M33 24 L42 16 L42 32 Z" fill="${INK}"/><circle cx="16" cy="22" r="2.2" fill="#0891b2"/>`],
     ludo: ['#dc2626', `<rect x="12" y="12" width="24" height="24" rx="5" fill="${INK}"/><g fill="#dc2626"><circle cx="18" cy="18" r="2.6"/><circle cx="30" cy="18" r="2.6"/><circle cx="24" cy="24" r="2.6"/><circle cx="18" cy="30" r="2.6"/><circle cx="30" cy="30" r="2.6"/></g>`],
