@@ -160,6 +160,8 @@
 @media (max-width: 520px) {
   .prt .pr-table > .pr-chips { position: static; flex-wrap: wrap; margin: 0 0 4px; }
   .prt .pr-chips li { flex: 1 1 calc(25% - 4px); }
+  /* a long name wraps inside its chip rather than being cut to a few letters */
+  .prt .pr-chip-name { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
 }
 @media (max-width: 520px) and (min-height: 701px) {
   .prt .pr-hand .pr-card { width: 56px; }
