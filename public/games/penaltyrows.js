@@ -12,6 +12,7 @@
   /** Feed IDs carry the table's match, so a rematch at the same table cannot reuse an ID the feed still holds. */
   const fid = (s) => `m${ui.cur ? ui.cur.match : 0}:${s}`;
   const STEP_MS = 900; // the server holds each placement this long, scaled by the pace option (matches engine STEP_MS)
+  const SWEEP_MS = 500; // a row collected lingers this much longer (matches engine SWEEP_MS)
 
   /** The table rebuilt one event at a time from the start of the last turn: each step is a card landing, or a row being taken.
    * Returns null when there is nothing to step through, or when the rebuild does not match the table (then the table is shown as it is). */
@@ -19,15 +20,29 @@
     if (!v.before || !v.before.length || !v.lastTurn.length) return null;
     const rows = v.before.map((r) => r.map((c) => ({ n: c.n, p: c.p })));
     const steps = [rows.map((r) => r.slice())];
-    for (const e of v.lastTurn) {
-      if (e.kind === 'place') rows[e.row].push({ n: e.n, p: e.p });
-      else rows[e.row] = [{ n: e.n, p: e.p }]; // a row taken: the card starts it again
-      steps.push(rows.map((r) => r.slice()));
-    }
+    const marks = [null]; // what each step shows: the event (index into lastTurn) and which part of it
+    const durs = [STEP_MS]; // how long each step stays up (before the pace factor); the engine holds the same time per event
+    const firstStep = []; // the step on which each event first shows, so its card leaves the strip there
+    v.lastTurn.forEach((e, j) => {
+      const card = { n: e.n, p: e.p };
+      const push = (phase, ms) => {
+        if (firstStep[j] === undefined) firstStep[j] = steps.length;
+        steps.push(rows.map((r) => r.slice())); marks.push({ j, phase }); durs.push(ms);
+      };
+      if (e.kind === 'place') { rows[e.row].push(card); push('place', STEP_MS); return; }
+      if (e.kind === 'sweep') {
+        rows[e.row].push(card); push('add', STEP_MS); // the sixth card lands in the row
+        push('collect', STEP_MS + SWEEP_MS); // the row is collected, the cards still on it
+        rows[e.row] = [card]; push('restart', STEP_MS); // the played card starts the row again
+        return;
+      }
+      push('collect', STEP_MS + SWEEP_MS); // a card that fits no row: its player collects the row first
+      rows[e.row] = [card]; push('restart', STEP_MS);
+    });
     const last = steps[steps.length - 1];
     if (!v.after) return null;
     const same = last.length === v.after.length && last.every((r, k) => r.length === v.after[k].length && r.every((c, s) => c.n === v.after[k][s].n)); // compare with the completed table: at a round's end the rows are already the next deal
-    return same && steps.length > 1 ? steps : null;
+    return same && steps.length > 1 ? { steps, marks, durs, firstStep } : null;
   }
 
   /** The table this renderer is showing (the room code), so playback for one table never plays on another. */
@@ -41,8 +56,12 @@
       if (ui.anim !== anim || !ui.ctx || anim.table !== tableOf()) return;
       if (anim.i < anim.steps.length - 1) {
         anim.i += 1;
-        announce(anim, anim.i - 1);
+        announce(anim, anim.i);
+        const from = captureStrip();
         ui.ctx.rerender();
+        glide(from);
+        const mark = anim.marks[anim.i];
+        if (mark && mark.phase === 'collect') stashRow(anim, mark, paceK);
         scheduleStep(anim, paceK);
         return;
       }
@@ -51,7 +70,7 @@
       const held = ui.heldFeed; ui.heldFeed = null;
       if (held) feedPicksAndRounds(held);
       ui.ctx.rerender();
-    }, STEP_MS * (paceK || 1));
+    }, anim.durs[anim.i] * (paceK || 1));
   }
 
   const penWord = (p) => `${p} penalty point${p === 1 ? '' : 's'}`;
@@ -65,30 +84,90 @@
     if (e.kind === 'sweep') return { id, tone: 'take', html: `<b>${who}</b> played the ${v.rowLimit + 1}th card and took ${rowName(e)} · ${penWord(e.took)}` };
     return { id, tone: 'take', html: `<b>${who}</b> played ${e.n}, which fits no row, and took ${rowName(e)} · ${penWord(e.took)}` };
   }
-  /** The spotlight for an event: a row taken shows its card, large, for a moment. Playing a card needs no spotlight. */
-  function spotFor(v, e) {
-    if (e.kind === 'place') return null;
-    return { card: cardHTML({ n: e.n, p: e.p }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} took ${rowName(e)} · ${penWord(e.took)}`, tone: 'take', ms: 1300 };
+  /** The feed and spotlight line for one step of the replay. A card landing needs only the feed; a row being collected
+   * also gets the spotlight, so the taking is never missed. */
+  function stepItem(v, e, phase) {
+    const who = nameOf(v, e.by);
+    if (phase === 'place') return { tone: 'play', html: `<b>${who}</b> played ${e.n} on ${rowName(e)}` };
+    if (phase === 'add') return { tone: 'play', html: `<b>${who}</b> played the ${v.rowLimit + 1}th card on ${rowName(e)}` };
+    if (phase === 'collect') return { tone: 'take', html: `<b>${who}</b> collected ${rowName(e)} · ${penWord(e.took)}` };
+    return { tone: 'play', html: `${e.n} starts ${rowName(e)}` }; // restart
   }
-  /** Shows one replayed event in the feed (and the spotlight, for a row taken). */
-  function announce(anim, idx) {
-    const e = anim.events[idx];
+  /** The spotlight for a row being collected: its taker and the points. Other steps need none. */
+  function spotFor(v, e, phase) {
+    if (phase !== 'collect') return null;
+    return { card: cardHTML({ n: e.n, p: e.p }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} collected ${rowName(e)} · ${penWord(e.took)}`, tone: 'take', ms: 1300 };
+  }
+  /** Shows one replayed step in the feed (and the spotlight, for a row collected). */
+  function announce(anim, k) {
+    const mark = anim.marks[k];
     const v = ui.latest;
-    if (!e || !v || !window.GameFeed || anim.table !== tableOf()) return; // no feed: the replay still moves on
-    window.GameFeed.add(anim.table, [feedItem(v, e, fid(`t${anim.seq}-${idx}`))]);
-    const sp = spotFor(v, e);
+    if (!mark || !v || !window.GameFeed || anim.table !== tableOf()) return; // no feed: the replay still moves on
+    const e = anim.events[mark.j];
+    window.GameFeed.add(anim.table, [{ id: fid(`t${anim.seq}-${k}`), ...stepItem(v, e, mark.phase) }]);
+    const sp = spotFor(v, e, mark.phase);
     if (sp) window.GameFeed.spotlight(sp);
   }
-  /** The event of the replay step on screen (the card that has just landed or taken a row), or null. */
-  const currentEvent = (v) => (ui.anim && ui.anim.seq === v.seq && ui.anim.i > 0 ? v.lastTurn[ui.anim.i - 1] : null);
+  /** Where each card on the strip sits now, by its number, so the same card can glide from there into its row. */
+  function captureStrip() {
+    const at = new Map();
+    if (reducedMotion()) return at;
+    for (const el of document.querySelectorAll('.prt .pr-strip [data-cn]')) {
+      const r = el.getBoundingClientRect();
+      at.set(el.dataset.cn, { x: r.left, y: r.top });
+    }
+    return at;
+  }
+  /** Each card that was on the strip glides from its old place to its new one in the rows (Web Animations, short, once). */
+  function glide(from) {
+    if (!from || !from.size || reducedMotion() || !document.querySelector('.prt')) return;
+    for (const el of document.querySelectorAll('.prt .pr-rows [data-cn]')) {
+      const old = from.get(el.dataset.cn);
+      if (!old) continue;
+      el.classList.remove('new'); // the glide is the landing: the drop animation would move the card before it is measured
+      const r = el.getBoundingClientRect();
+      const dx = old.x - r.left; const dy = old.y - r.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    }
+  }
+  const reducedMotion = () => Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  /** A collected row: its cards slide, one after another, into the taker's score chip, the pile they are kept in.
+   * Slow enough to follow, and it ends inside the collect step, so the next card is not drawn over it. */
+  function stashRow(anim, mark, paceK) {
+    const e = anim.events[mark.j];
+    const v = ui.latest;
+    const k = paceK || 1;
+    if (!v || !e || reducedMotion()) return;
+    const pid = v.players[e.by] && v.players[e.by].id;
+    const chip = pid ? document.querySelector(`.prt .pr-chips li[data-pid="${CSS.escape(pid)}"]`) : null;
+    const lane = document.querySelector(`.prt .pr-rows > .pr-row:nth-child(${e.row + 1})`);
+    if (!chip || !lane) return;
+    const to = chip.getBoundingClientRect();
+    const tx = to.left + to.width / 2; const ty = to.top + to.height / 2;
+    // a sweep takes the cards already on the row; the card just played (e.n) is not collected: it starts the row again
+    const cards = [...lane.querySelectorAll('[data-cn]')].filter((el) => !(e.kind === 'sweep' && el.dataset.cn === String(e.n)));
+    cards.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      const dx = tx - (r.left + r.width / 2); const dy = ty - (r.top + r.height / 2);
+      el.animate([
+        { transform: 'none', opacity: 1 },
+        { transform: `translate(${dx}px, ${dy}px) scale(.25)`, opacity: 0.25 },
+      ], { duration: 750 * k, delay: i * 120 * k, fill: 'forwards', easing: 'cubic-bezier(.4, 0, .2, 1)' });
+    });
+  }
+
+  /** The replay step on screen, or null: which event it shows and which part of it. */
+  const currentMark = (v) => (ui.anim && ui.anim.seq === v.seq ? ui.anim.marks[ui.anim.i] : null);
 
   /** A card: the number big in the middle and small in the top corner, and one dot per penalty point along the bottom. */
-  /** Penalty points as stars: one star a point, so the count reads at a glance. Past 12 the number is given after the stars. */
-  const starsOf = (n) => (n <= 0 ? '' : '★'.repeat(Math.min(n, 12)) + (n > 12 ? `+${n - 12}` : ''));
+  /** Penalty points as bombs: one bomb a point, so the count reads at a glance and the cost looks negative. Past 12 the count follows. */
+  const starsOf = (n) => (n <= 0 ? '' : '💣'.repeat(Math.min(n, 12)) + (n > 12 ? `×${n}` : ''));
 
   function cardHTML(c, { cls = '', attrs = '', tag = 'div' } = {}) {
     const dots = `<span class="pr-pips" aria-hidden="true">${starsOf(c.p)}</span>`;
-    return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}><em class="pr-tl" aria-hidden="true">${c.n}</em><b>${c.n}</b>${dots}</${tag}>`;
+    return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" data-cn="${c.n}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}><em class="pr-tl" aria-hidden="true">${c.n}</em><b>${c.n}</b>${dots}</${tag}>`;
   }
   const backHTML = (cls = '') => `<div class="pr-card back tiny ${cls}" aria-hidden="true"></div>`;
   /** A card on the strip, with the player's name under it. */
@@ -108,7 +187,7 @@
   function stripHTML(v) {
     let items = '';
     if (ui.anim && ui.anim.seq === v.seq) {
-      items = v.lastTurn.slice(ui.anim.i).map((e) => playedHTML(v, e.by, e.n, e.p)).join('');
+      items = v.lastTurn.filter((_, j) => ui.anim.firstStep[j] > ui.anim.i).map((e) => playedHTML(v, e.by, e.n, e.p)).join('');
     } else if (v.phase === 'takeRow' && v.pending) {
       items = playedHTML(v, v.pending.by, v.pending.n, v.pending.p, 'waiting');
     } else if (v.phase === 'choose') {
@@ -126,27 +205,33 @@
   }
 
   /** One lane: its row label, the card slots, and the penalty badge. A row that was just taken shows a callout. */
-  function laneHTML(v, k, row, ev, taking) {
+  function laneHTML(v, k, row, mark, taking) {
     const full = row.length >= v.rowLimit;
     const points = row.reduce((s, c) => s + c.p, 0); // from the row as shown, so a step mid-turn counts only the cards on it
     const label = `Row ${k + 1}: ${row.length} card${row.length === 1 ? '' : 's'}, ${penWord(points)}`;
-    const here = ev && ev.row === k;
-    const slots = Array.from({ length: v.rowLimit }, (_, s) => (row[s]
-      ? cardHTML(row[s], { cls: here && s === (ev.kind === 'place' ? row.length - 1 : 0) ? 'new' : '' })
+    const e = mark ? v.lastTurn[mark.j] : null;
+    const here = e && e.row === k;
+    const newAt = here && (mark.phase === 'place' || mark.phase === 'add') ? row.length - 1 : here && mark.phase === 'restart' ? 0 : -1;
+    const cols = Math.max(v.rowLimit, row.length); // the sixth card needs a sixth slot for the moment it lands
+    const slots = Array.from({ length: cols }, (_, s) => (row[s]
+      ? cardHTML(row[s], { cls: s === newAt ? 'new' : '' })
       : '<div class="pr-slot" aria-hidden="true"></div>')).join('');
-    const callout = here && ev.kind !== 'place' ? `<span class="pr-callout">${nameOf(v, ev.by)} took ${ev.took}</span>` : '';
-    const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span></span><span class="pr-cards" style="--cols:${v.rowLimit}">${slots}</span>`
-      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${points <= 5 ? (starsOf(points) || '0') : `★×${points}`}</span></span>${callout}`;
+    const collected = here && mark.phase === 'collect';
+    const calloutText = here && mark.phase === 'add' ? `${v.rowLimit + 1}th card placed`
+      : collected ? `${nameOf(v, e.by)} took ${e.took}` : '';
+    const callout = calloutText ? `<span class="pr-callout">${calloutText}</span>` : '';
+    const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span></span><span class="pr-cards" style="--cols:${cols}">${slots}</span>`
+      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${points <= 5 ? (starsOf(points) || '0') : `💣×${points}`}</span></span>${callout}`;
     return taking
       ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
-      : `<div class="pr-row ${full ? 'full' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
+      : `<div class="pr-row ${full ? 'full' : ''}${collected ? ' collected' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;
   }
 
   function rowsHTML(v) {
     const taking = v.phase === 'takeRow' && v.pending && v.pending.by === v.me;
     const rows = ui.anim && ui.anim.seq === v.seq ? ui.anim.steps[ui.anim.i] : v.rows;
-    const ev = currentEvent(v);
-    return `<div class="pr-rows">${rows.map((row, k) => laneHTML(v, k, row, ev, taking)).join('')}</div>`;
+    const mark = currentMark(v);
+    return `<div class="pr-rows">${rows.map((row, k) => laneHTML(v, k, row, mark, taking)).join('')}</div>`;
   }
 
   /** Who has how much left (countdown) or how many penalty points in total (race). */
@@ -159,7 +244,7 @@
       const out = v.losers && v.losers.includes(i) ? ' out' : '';
       return `<li data-pid="${esc(p.id)}" class="${i === v.me ? 'me' : ''}${out}"><span class="pr-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span>`
         + `<span class="pr-tot" title="${v.countdown ? 'Points left' : 'Total penalty points'}">${main}</span>`
-        + `<span class="pr-rnd" title="Taken this round">+${p.penalty}</span><span class="pr-state" aria-label="${state === '⚠' ? 'must take a row' : p.picked ? 'has picked' : 'still choosing'}">${state}</span></li>`;
+        + `<span class="pr-rnd" title="Taken this round">−${p.penalty}</span><span class="pr-state" aria-label="${state === '⚠' ? 'must take a row' : p.picked ? 'has picked' : 'still choosing'}">${state}</span></li>`;
     }).join('')}</ul>`;
   }
 
@@ -177,7 +262,7 @@
   /** The last rounds, newest first, so the scores tab shows how the game got here. */
   function historyHTML(v) {
     if (!v.history.length) return '';
-    const rows = v.history.slice(-5).reverse().map((h) => `<li><span>Round ${h.round}</span><span>${v.players.map((p, i) => `${esc(p.name)} +${h.penalties[i]}`).join(' · ')}</span></li>`).join('');
+    const rows = v.history.slice(-5).reverse().map((h) => `<li><span>Round ${h.round}</span><span>${v.players.map((p, i) => `${esc(p.name)} \u2212${h.penalties[i]}`).join(' · ')}</span></li>`).join('');
     return `<section class="pr-hist"><h3 class="label">Rounds</h3><ol>${rows}</ol></section>`;
   }
 
@@ -230,7 +315,7 @@
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
     const steps = replaySteps(v);
-    ui.anim = steps ? { seq: v.seq, steps, i: 0, table: tableOf(), events: v.lastTurn } : null;
+    ui.anim = steps ? { seq: v.seq, ...steps, i: 0, table: tableOf(), events: v.lastTurn } : null;
     if (ui.anim) scheduleStep(ui.anim, v.paceK);
     else if (window.GameFeed) window.GameFeed.add(tableOf(), v.lastTurn.map((e, idx) => feedItem(v, e, fid(`t${v.seq}-${idx}`)))); // no replay: the feed still gets the turn
     if (!snd) return;
@@ -276,7 +361,7 @@
         <button type="button" role="tab" class="btn ghost small" data-pr="tab" data-tab="scores" aria-selected="${tab === 'scores'}">Scores</button></nav>`;
     const body = tab === 'scores'
       ? `${scoreHTML(v)}${historyHTML(v)}${lastTurnHTML(v)}`
-      : `<section class="pr-table" aria-label="Table">${chipsHTML(v)}${stripHTML(v)}${rowsHTML(v)}${window.GameFeed ? window.GameFeed.html(tableOf(), 'gf-float') : ''}</section>${lastTurnHTML(v)}`;
+      : `<section class="pr-table" aria-label="Table">${chipsHTML(v)}${stripHTML(v)}${rowsHTML(v)}</section>${window.GameFeed ? window.GameFeed.html(tableOf(), 'pr-feed') : ''}${lastTurnHTML(v)}`;
     root.innerHTML = `
     <div class="wz prt">
       <div class="wz-top">
