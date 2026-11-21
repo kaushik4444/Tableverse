@@ -3028,6 +3028,20 @@
   }
 
   /** The Ready bar: shown while the table waits for everybody to press Ready (the first round, and each round between). Generic for every game. */
+  /** The Ready gate as a game sees it: whether this seat is seated and ready, and who the table still waits for (null when no gate). */
+  function gateInfo() {
+    const gate = S.room && S.room.status === 'playing' && S.room.gate;
+    if (!gate) return null;
+    const nameOf = (id) => { const m = S.room.members.find((x) => x.id === id); return m ? m.name : 'Someone'; };
+    return {
+      seated: S.room.members.some((m) => m.id === S.id && !m.bot),
+      youReady: gate.ready.includes(S.id),
+      ready: gate.ready.length,
+      total: gate.ready.length + gate.waiting.length,
+      waiting: gate.waiting.map(nameOf),
+    };
+  }
+
   function readyBarHTML() {
     const gate = S.room && S.room.gate;
     if (!gate || S.room.status !== 'playing') return '';
@@ -3051,6 +3065,7 @@
     plugin.render($app, S.view, {
       resultVisible: r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS,
       room: S.room,
+      gate: gateInfo(),
       game: gameMeta(S.room.gameId),
       isHost: S.room.hostId === S.id,
       activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },

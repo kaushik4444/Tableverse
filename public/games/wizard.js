@@ -180,7 +180,16 @@
       <p class="hint">Each cell: running score, then bid/won</p>`;
   }
 
-  function overlayHTML(v) {
+  /** The Ready control of the round-end summary: it shows whether this seat is ready and who the table is still waiting for. */
+  function readyRow(ctx) {
+    const g = ctx && ctx.gate;
+    if (!g) return '<div class="row" style="margin-top:14px"><button class="btn" data-wz="next">Ready</button><span class="hint">Everybody presses Ready to start the next round</span></div>';
+    const waiting = g.waiting.length ? g.waiting.map((n) => esc(n)).join(', ') : '';
+    if (g.seated && g.youReady) return `<div class="row" style="margin-top:14px"><button class="btn" disabled>Ready</button><span class="hint">You are ready. ${waiting ? 'Waiting for ' + waiting : 'Everybody is ready'}</span></div>`;
+    return `<div class="row" style="margin-top:14px"><button class="btn" data-wz="next"${g.seated ? '' : ' disabled'}>Ready</button><span class="hint">${g.ready} of ${g.total} ready${waiting ? ' · waiting for ' + waiting : ''}</span></div>`;
+  }
+
+  function overlayHTML(v, ctx) {
     if (ui.scores) {
       return `<div class="overlay" data-wz="closeScores"><div class="sheet" data-stop="1"><h2>Scoreboard</h2>${scoreTable(v)}<p class="hint">${esc(optionsLine(v))}</p><div class="row" style="margin-top:12px"><button class="btn" data-wz="closeScores">Close</button><button class="btn ghost" data-wz="rules">How to play</button></div></div></div>`;
     }
@@ -196,7 +205,7 @@
         .join('');
       return `<div class="overlay"><div class="sheet"><h2>Round ${v.round} of ${v.totalRounds}</h2>
         <div class="score-wrap"><table class="score"><thead><tr><th>Player</th><th>Bid</th><th>Won</th><th>Pts</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <div class="row" style="margin-top:14px"><button class="btn" data-wz="next">Ready</button><span class="hint">Everybody presses Ready to start the next round</span></div></div></div>`;
+        ${readyRow(ctx)}</div></div>`;
     }
     const order = v.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
     const win = v.winners.includes(v.players[v.me] && v.players[v.me].id);
@@ -266,7 +275,7 @@
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${statusText(v)}</span>${canPlay ? '<button class="btn small" data-wz="play">Play</button>' : ''}</div>
       ${controlsHTML(v)}
       <div class="hand"><div class="hand-in">${handHTML(v, z)}</div></div>
-      ${overlayHTML(v)}
+      ${overlayHTML(v, ctx)}
     </div>`;
     const h2 = root.querySelector('.hand');
     if (h2) h2.scrollLeft = scroll;
