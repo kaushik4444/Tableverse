@@ -38,8 +38,8 @@
 
 .ch-moves { margin: 12px auto 0; max-width: 440px; }
 .ch-moves summary { cursor: pointer; opacity: .85; padding: 4px 0; }
-.ch-log { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 2px; max-height: 180px; overflow: auto; font-variant-numeric: tabular-nums; }
-.ch-log li { display: grid; grid-template-columns: 38px 1fr 1fr; gap: 6px; padding: 3px 6px; border-radius: 6px; }
+.ch-log { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; max-height: 180px; overflow: auto; font-variant-numeric: tabular-nums; }
+.ch-log li { display: grid; grid-template-columns: 38px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; padding: 3px 6px; border-radius: 6px; }
 .ch-log li:nth-child(odd) { background: rgba(255, 255, 255, .04); }
 .ch-n { opacity: .6; }
 .ch-b:empty::before { content: ''; }
