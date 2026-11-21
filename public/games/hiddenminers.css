@@ -17,7 +17,7 @@
 .hm-tool { font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 6px; background: rgba(255, 255, 255, .1); border: 0; color: inherit; }
 .hm-tool.broken { background: rgba(180, 35, 24, .55); filter: grayscale(.6); position: relative; text-decoration: line-through; }
 .hm-tool.broken::after { content: '✖'; position: absolute; right: -3px; top: -5px; font-size: 9px; color: #fff; }
-.hm-tool.fixable { cursor: pointer; filter: none; outline: 2px solid var(--gold, #f2c14e); animation: hm-pulse 1.1s ease-in-out infinite; }
+.hm-tool.fixable { min-width: 44px; min-height: 44px; cursor: pointer; filter: none; outline: 2px solid var(--gold, #f2c14e); animation: hm-pulse 1.1s ease-in-out infinite; }
 
 .hm-board-wrap { display: flex; justify-content: center; }
 .hm-board { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px; width: min(100%, 880px); padding: 4px; border-radius: 10px; background: #1b1511; }

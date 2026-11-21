@@ -30,7 +30,7 @@
     if (c.k === 'scout') return '<span class="hm-face hm-util"><b>🔭</b></span>';
     return '<span class="hm-face hm-bad"><b>💥</b></span>';
   }
-  const cardName = (c) => (c.k === 'tile' ? describeTile(c.mask, c.cut) : c.k === 'break' ? `Break ${TOOLS[c.tool].name}` : c.k === 'repair' ? `Repair ${c.tools.map((t) => TOOLS[t].name).join(' or ')}` : c.k === 'scout' ? 'Scout a chamber' : 'Collapse a tunnel piece');
+  const cardName = (c) => (c.k === 'tile' ? describeTile(ui.sel === c.id && ui.flip ? flipMask(c.mask) : c.mask, c.cut) : c.k === 'break' ? `Break ${TOOLS[c.tool].name}` : c.k === 'repair' ? `Repair ${c.tools.map((t) => TOOLS[t].name).join(' or ')}` : c.k === 'scout' ? 'Scout a chamber' : 'Collapse a tunnel piece');
   const cardLabel = (c) => (c.k === 'tile' ? (c.cut ? 'Dead end' : 'Tunnel') : c.k === 'break' ? 'Break' : c.k === 'repair' ? 'Repair' : c.k === 'scout' ? 'Scout' : 'Collapse');
 
   function selected(v) { return ui.sel ? v.hand.find((c) => c.id === ui.sel && c.ok) || null : null; }
@@ -127,7 +127,7 @@
       const q = goals.get(k);
       if (t) {
         const cave = caves.has(k);
-        html += `<${cave ? 'button type="button" data-hm="cave" data-x="' + x + '" data-y="' + y + '"' : 'div role="img"'} class="hm-cell ${t.start ? 'start' : ''} ${cave ? 'cave' : ''}" aria-label="${t.start ? 'Start of the tunnel' : esc(describeTile(t.mask, t.cut))}${cave ? '. Collapse this piece' : ''}">${tileSVG(t.mask, t.cut)}${t.start ? '<span class="hm-flag">⛏️</span>' : ''}</${cave ? 'button' : 'div'}>`;
+        html += `<${cave ? 'button type="button" data-hm="cave" data-x="' + x + '" data-y="' + y + '"' : 'div role="img"'} class="hm-cell ${t.start ? 'start' : ''} ${cave ? 'cave' : ''}" aria-label="Column ${x + 1}, row ${y + 1}: ${t.start ? 'Start of the tunnel' : esc(describeTile(t.mask, t.cut))}${cave ? '. Collapse this piece' : ''}">${tileSVG(t.mask, t.cut)}${t.start ? '<span class="hm-flag">⛏️</span>' : ''}</${cave ? 'button' : 'div'}>`;
       } else if (q) {
         const seen = v.scouts.find((s) => s.goal === q.i);
         const face = q.revealed ? (q.gold ? '<span class="hm-gold">🪙</span>' : '<span class="hm-rock">🪨</span>') : '<span class="hm-q">?</span>';
@@ -241,6 +241,12 @@
     const h2 = root.querySelector('.hm-hand');
     if (h2) h2.scrollLeft = scroll;
     restoreFocus(root, focus);
+    // a round or game summary takes the keyboard: its button gets focus, and the game behind it is inert until it is dismissed
+    const game = root.querySelector('.hm-game');
+    const sheet = game ? game.querySelector(':scope > .overlay') : null;
+    if (game) [...game.children].forEach((el) => { if (el !== sheet) el.inert = Boolean(sheet); });
+    if (sheet && !ui.summaryOpen) { const first = sheet.querySelector('button'); if (first) first.focus({ preventScroll: true }); }
+    ui.summaryOpen = Boolean(sheet);
     root.onclick = onClick;
   }
 
