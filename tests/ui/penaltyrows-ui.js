@@ -164,6 +164,130 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a sixth card: it lands as the sixth card, the row is collected with a line and a spotlight, then it starts the row again', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const full = [3, 5, 8, 9, 10];
+    const took = full.reduce((s, n) => s + pen(n), 0);
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [full.map(c), [c(12)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(11)], [c(12)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'sweep', by: 1, n: 11, p: pen(11), row: 0, took }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const k = first.view.paceK || 1;
+    const { page, ctx } = await open([first]);
+    const row1 = () => page.evaluate(() => [...document.querySelectorAll('.pr-row')][0].querySelectorAll('.pr-card').length);
+    await page.evaluate((m) => window.__push(m), second);
+    const t0 = Date.now();
+    // the steps: before 900k, sixth card 900k (to 1800k), row collected 1400k, restart 900k; sample each in its middle
+    const at = (ms) => page.waitForTimeout(Math.max(0, t0 + ms - Date.now()));
+    await at(300 * k);
+    assert.equal(await row1(), 5, 'the row is as it was before the card');
+    await at(1350 * k);
+    assert.equal(await row1(), 6, 'the sixth card lands in the row');
+    assert.match(await page.textContent('.pr-callout'), /6th card placed/, 'and says so on the row');
+    assert.equal(await page.$$eval('.pr-callout', (els) => els.length), 1, 'only the row that got the sixth card says so');
+    assert.equal(await page.locator('.pr-row').nth(0).locator('.pr-callout').count(), 1, 'and it is on row 1');
+    assert.match(await page.textContent('.gf-feed'), /played the 6th card on row 1/, 'the feed says the sixth card was placed');
+    await at(2500 * k);
+    assert.match(await page.textContent('.pr-callout'), /Bo took/, 'the row is collected: the taker is named');
+    assert.match(await page.textContent('.gf-feed'), /Bo collected row 1/, 'the feed says who collected it');
+    assert.match(await page.textContent('.gf-spot'), /Bo collected row 1/, 'the spotlight holds the collection');
+    await at(3650 * k);
+    assert.equal(await row1(), 1, 'then the played card starts the row again');
+    assert.match(await page.textContent('.gf-feed'), /11 starts row 1/, 'the feed says the new row starts with it');
+    await ctx.close();
+  });
+
+  await test('a played card glides from the strip into its row as it lands', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [[c(12)], [c(3)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(12), c(18)], [c(3), c(7)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'place', by: 1, n: 18, p: pen(18), row: 0, took: 0 }, { kind: 'place', by: 2, n: 7, p: pen(7), row: 1, took: 0 }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const k = first.view.paceK || 1;
+    const { page, ctx } = await open([first]);
+    await page.evaluate((m) => window.__push(m), second);
+    await page.waitForTimeout(900 * k + 120); // the first placement has just been drawn
+    // the glide is a Web Animation that moves the card from where it was on the strip; the old drop is a CSS animation
+    const glide = await page.evaluate(() => {
+      const el = document.querySelector('.pr-rows [data-cn="18"]');
+      if (!el) return null;
+      return el.getAnimations().map((a) => ({ css: Boolean(a.animationName), first: a.effect && a.effect.getKeyframes()[0].transform }));
+    });
+    assert.ok(glide && glide.some((a) => !a.css && /translate\(/.test(a.first)), 'the card that landed glides into its row: ' + JSON.stringify(glide));
+    await ctx.close();
+  });
+
+  await test('a collected row slides, card by card, into the taker\'s pile', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const full = [3, 5, 8, 9, 10];
+    const took = full.reduce((s, n) => s + pen(n), 0);
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [full.map(c), [c(12)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(11)], [c(12)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'sweep', by: 1, n: 11, p: pen(11), row: 0, took }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const k = first.view.paceK || 1;
+    const { page, ctx } = await open([first]);
+    await page.evaluate((m) => window.__push(m), second);
+    const t0 = Date.now();
+    await page.waitForTimeout(Math.max(0, t0 + 1800 * k + 200 - Date.now())); // the collect step has just been drawn
+    const moving = await page.evaluate(() => [...document.querySelectorAll('.pr-rows > .pr-row:first-child [data-cn]')].map((el) => el.getAnimations().length));
+    assert.ok(moving.filter((n) => n > 0).length >= 2, 'several cards of the row are on their way: ' + moving.join(','));
+    // the card that was played (11) is not collected: only the five cards that were on the row move into the pile
+    const identity = await page.evaluate(() => [...document.querySelectorAll('.pr-rows > .pr-row:first-child [data-cn]')].map((el) => [el.dataset.cn, el.getAnimations().length > 0]));
+    assert.ok(identity.filter(([n]) => n !== '11').every(([, moving2]) => moving2), 'the five collected cards move: ' + JSON.stringify(identity));
+    assert.ok(identity.filter(([n]) => n === '11').every(([, moving2]) => !moving2), 'the played card does not go into the pile: ' + JSON.stringify(identity));
+    assert.ok(await page.evaluate(() => !!document.querySelector('.prt .pr-chips li[data-pid]')), 'the taker has a chip to receive them');
+    await ctx.close();
+  });
+
+  await test('the feed sits under the rows and never covers row 4', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [[c(12)], [c(3)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(12), c(18)], [c(3), c(7)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'place', by: 1, n: 18, p: pen(18), row: 0, took: 0 }, { kind: 'place', by: 2, n: 7, p: pen(7), row: 1, took: 0 }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const { page, ctx } = await open([first]);
+    await page.evaluate((m) => window.__push(m), second);
+    await page.waitForSelector('.pr-feed .gf-item', { timeout: 4000 });
+    const boxes = await page.evaluate(() => {
+      const rows = document.querySelector('.pr-rows').getBoundingClientRect();
+      const feed = document.querySelector('.pr-feed').getBoundingClientRect();
+      const pos = getComputedStyle(document.querySelector('.pr-feed')).position;
+      return { rowsBottom: rows.bottom, feedTop: feed.top, pos };
+    });
+    assert.notEqual(boxes.pos, 'absolute', 'the feed is in the page flow, not floating over the table');
+    assert.ok(boxes.feedTop >= boxes.rowsBottom - 1, `the feed starts below the last row: ${JSON.stringify(boxes)}`);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
