@@ -1085,7 +1085,10 @@ function start(opts = {}) {
     const boundaryAuto = typeof g.autoAction === 'function' ? g.autoAction() : null;
     const boundary = !!boundaryAuto && boundaryAuto.type === 'continue';
     if (!boundary) room.gatePassed = false;
-    else if (!room.gatePassed && !room.gate) readyGate.startGate(room);
+    else if (!room.gatePassed && !room.gate) {
+      readyGate.startGate(room);
+      broadcast(room); // everybody now sees the Ready bar; nothing else would send that state until someone acts
+    }
     if (room.gate) {
       if (!readyGate.gateOpen(room, isConnected)) return;
       room.gate = null;
