@@ -72,6 +72,14 @@
 
 .cc-controls .btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 
+/* small phones: the recent-moves toggle is a slim line, so the controls and hand stay on the screen */
+@media (max-width: 420px), (max-height: 640px) {
+  .cc-game .cc-log { margin-top: 2px; }
+  .cc-game .cc-log .btn { min-height: 30px; padding: 2px 10px; }
+  .cc-game .cc-event-bar { height: 2.6em; line-height: 1.3; }
+  .cc-game .wz-status { margin-top: 2px; padding-top: 2px; padding-bottom: 2px; }
+}
+
 /* the shared feed floats over the table without taking room */
 .cc-game .cc-tablewrap { position: relative; }
 
