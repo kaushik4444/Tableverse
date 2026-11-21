@@ -9,6 +9,10 @@ async function test(name, fn) { try { await fn(); passed++; console.log('  ok  '
 const four = [{ name: 'Aarav' }, { name: 'Bo' }, { name: 'Charlotte' }, { name: 'Dmitri' }];
 const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === 'act'));
 const card = (id) => { const c = require('../../games/stagerummy/engine').makeCard(id); return { id: c.id, k: c.k, c: c.c, v: c.v }; };
+const expandedGroups = () => [
+  { kind: 'set', num: 5, cards: [4, 28, 52].map(card) },
+  { kind: 'run', lo: 6, hi: 12, cards: [5, 6, 7, 8, 9, 10, 11].map(card) },
+];
 
 /** Messages where it is my turn in the given phase, with a chosen hand. */
 function scene(phase, handIds, tweak) {
@@ -130,6 +134,89 @@ function scene(phase, handIds, tweak) {
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert.ok(over <= 0, 'horizontal overflow ' + over);
     await ctx.close();
+  });
+
+  await test('four seats stay fully exposed on a short phone even with laid groups', async () => {
+    const msgs = scene('draw', [12, 13, 14, 15], (v) => {
+      v.players.forEach((p, i) => {
+        p.cards = i === 0 ? 10 : 2;
+        p.score = 25 + i;
+        if (i > 0) p.laid = expandedGroups();
+      });
+    });
+    const { page, ctx } = await open(msgs, { width: 360, height: 640 });
+    try {
+      const seats = page.locator('.sr-seats');
+      assert.equal(await seats.locator('.pseat').count(), 4);
+      assert.equal(await seats.locator('.sr-group').count(), 6);
+      assert.deepEqual(await seats.locator('.sr-nolay').allInnerTexts(),
+        ['10 cards · 25 pts', '2 cards · 26 pts', '2 cards · 27 pts', '2 cards · 28 pts']);
+      const { clipped, scrollTop } = await seats.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+        const bounds = el.getBoundingClientRect();
+        return {
+          clipped: [...el.querySelectorAll('.pseat')].some((seat) => {
+            const box = seat.getBoundingClientRect();
+            return box.top < bounds.top || box.bottom > bounds.bottom;
+          }),
+          scrollTop: el.scrollTop,
+        };
+      });
+      assert.equal(clipped, false, 'every seat fits inside the seat region');
+      assert.equal(scrollTop, 0, 'laid cards do not introduce inner scrolling for four players');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  await test('five seats can scroll to the final player on a tall phone', async () => {
+    const msgs = tableMessages('stagerummy', [...four, { name: 'Eli' }]);
+    msgs[1].view.players.forEach((p) => { p.laid = expandedGroups(); });
+    const { page, ctx } = await open(msgs, { width: 360, height: 800 });
+    try {
+      const seats = page.locator('.sr-seats');
+      assert.equal(await seats.locator('.pseat').count(), 5);
+      const { overflowY, height, scrollTop, lastSeatFits } = await seats.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+        return {
+          overflowY: getComputedStyle(el).overflowY,
+          height: el.clientHeight,
+          scrollTop: el.scrollTop,
+          lastSeatFits: el.lastElementChild.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + 1,
+        };
+      });
+      assert.equal(overflowY, 'auto');
+      assert.ok(height <= 240 && scrollTop > 0, 'expanded seats scroll within the capped region');
+      assert.equal(lastSeatFits, true, 'the final seat can be brought into view');
+      assert.equal((await seats.locator('.av').first().boundingBox()).width, 24);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  await test('Stage 10 switches to compact counts and larger portrait cards on short phones', async () => {
+    const { page, ctx } = await open(scene('draw', [4, 5, 6], (v) => {
+      v.players[0].cards = 10;
+      v.players[0].score = 125;
+    }), { width: 520, height: 640 });
+    try {
+      const seat = page.locator('.sr-seats .pseat').first();
+      const count = seat.locator('.sr-nolay');
+      const avatar = seat.locator('.av');
+      assert.equal(await count.innerText(), '10 cards · 125 pts');
+      assert.equal(await count.evaluate((el) => getComputedStyle(el).whiteSpace), 'nowrap');
+      const phoneAvatar = await avatar.boundingBox();
+      assert.equal(phoneAvatar.width, 28);
+      await page.setViewportSize({ width: 360, height: 640 });
+      const handCard = await page.locator('.sr-hand .sr-card').first().boundingBox();
+      assert.ok(handCard.height >= 52, 'hand card is tall enough on a short phone');
+      assert.ok(Math.abs(handCard.width * 4 / 3 - handCard.height) < 1, 'hand card keeps its portrait shape');
+      await page.setViewportSize({ width: 521, height: 640 });
+      assert.equal((await count.innerText()).replace(/\s+/g, ' '), 'Not down · 10 cards · 125 pts');
+      assert.ok((await avatar.boundingBox()).width > phoneAvatar.width, 'wider seats retain larger avatars');
+    } finally {
+      await ctx.close();
+    }
   });
 
   await test('a skip shows in the feed and the spotlight; history from before the table was seen is not replayed', async () => {

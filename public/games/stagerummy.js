@@ -133,7 +133,7 @@
     const stage = shownStage(v, i);
     const sub = `Stage ${stage}/${v.stageCount}`; // short, so it fits a phone seat; the card count is under the seat
     const count = `<div class="sr-nolay">${p.cards} cards · ${p.score} pts</div>`; // points stay on the seat: fewer is better
-    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay">Not down · ${p.cards} cards · ${p.score} pts</div>`);
+    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay"><span class="sr-wide">Not down · </span>${p.cards} cards · ${p.score} pts</div>`);
     return window.CardTable.pt.seatHTML({
       pid: p.id,
       name: p.name + (i === v.me ? ' (you)' : ''),
