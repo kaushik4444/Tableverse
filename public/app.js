@@ -1403,6 +1403,8 @@
         S.stateKey = stateKey;
         S.room = m.room;
         S.view = m.view;
+        // a seat change is confirmed when the table shows a new order (or it times out, if the server kept the order)
+        if (S.seatChange && (Date.now() > S.seatChange.until || m.room.members.map((x) => x.id).join() !== S.seatChange.from)) S.seatChange = null;
         S.skew = (m.room.now || Date.now()) - Date.now();
         if (same) break; // identical to what is on screen (a presence or ping tick): keep the DOM, the focus and any animation
         setHash(m.room.code);
@@ -3342,17 +3344,24 @@
     makeHost: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Make host', `<p class="hint">Make ${esc(el.dataset.name || 'this player')} the host of this table? You will stay at the table, but only the host can start the game and change settings.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="makeHostConfirm">Make host</button></div>`); },
     kickPlayer: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Remove player', `<p class="hint">Remove ${esc(el.dataset.name || 'this player')} from this table? They will not be able to come back.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="kickPlayerConfirm">Remove</button></div>`); },
     seats: (el) => send({ t: 'setSeats', seats: Number(el.dataset.n) }),
-    shuffleSeats: () => { S.seatPick = null; render(); send({ t: 'shuffleSeats' }); },
+    shuffleSeats: () => {
+      if (S.seatChange) return; // one seat change at a time: a second one would start from an order the server has not confirmed
+      S.seatPick = null; render();
+      S.seatChange = { from: S.room.members.map((m) => m.id).join(), until: Date.now() + 3000 };
+      send({ t: 'shuffleSeats' });
+    },
     // the host swaps two players' seats: tap one, then the other (tapping the same one again cancels)
     pickSeat: (el) => {
       const id = el.dataset.vid;
       const first = S.seatPick;
+      if (S.seatChange) { S.seatPick = null; render(); return; } // wait for the last change to be confirmed
       if (!first) { S.seatPick = id; render(); const btn = $app.querySelector('[data-act="pickSeat"][data-vid="' + CSS.escape(id) + '"]'); if (btn) btn.focus({ preventScroll: true }); return; }
       S.seatPick = null;
       const ids = S.room.members.map((m) => m.id);
       const a = ids.indexOf(first); const b = ids.indexOf(id);
       if (first === id || a < 0 || b < 0) { render(); return; }
       [ids[a], ids[b]] = [ids[b], ids[a]];
+      S.seatChange = { from: S.room.members.map((m) => m.id).join(), until: Date.now() + 3000 };
       send({ t: 'arrangeSeats', order: ids });
     },
     start: () => send({ t: 'start' }),
