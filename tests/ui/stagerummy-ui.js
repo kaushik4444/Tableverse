@@ -140,9 +140,10 @@ function scene(phase, handIds, tweak) {
         return { h: Math.round(s.height), inside: groups.every((g) => g.left >= s.left - 1 && g.right <= s.right + 1 && g.bottom <= s.bottom + 1) };
       });
       const hand = [...document.querySelectorAll('.sr .sr-hand .sr-card')].map(box);
-      return { seats, handBottom: Math.max(...hand.map((h) => h.bottom)), vh: innerHeight, over: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      return { seats, n: hand.length, handBottom: Math.max(...hand.map((h) => h.bottom)), vh: innerHeight, over: document.documentElement.scrollWidth - document.documentElement.clientWidth };
     });
     assert.equal(r.seats.length, 4, 'four seats');
+    assert.ok(r.n > 0, 'the hand has cards to measure');
     assert.ok(r.seats.every((s) => s.inside), 'every laid group sits inside its seat: ' + JSON.stringify(r.seats));
     assert.ok(new Set(r.seats.map((s) => s.h)).size <= 2, 'seat boxes keep their heights: ' + JSON.stringify(r.seats.map((s) => s.h)));
     assert.ok(r.handBottom <= r.vh, `the hand is on screen (bottom ${Math.round(r.handBottom)}, screen ${r.vh})`);
@@ -158,6 +159,7 @@ function scene(phase, handIds, tweak) {
       const cards = [...document.querySelectorAll('.sr .sr-hand .sr-card')].map((el) => el.getBoundingClientRect());
       return { n: cards.length, bottom: Math.max(...cards.map((c) => c.bottom)), vh: innerHeight, page: document.documentElement.scrollHeight };
     });
+    assert.ok(r.n > 0, 'the hand has cards to measure');
     assert.ok(r.bottom <= r.vh, `last row of the hand ends at ${Math.round(r.bottom)}, screen is ${r.vh}`);
     assert.ok(r.page <= r.vh + 1, `the page scrolls (${r.page} > ${r.vh})`);
     await ctx.close();

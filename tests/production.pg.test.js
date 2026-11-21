@@ -71,7 +71,7 @@ function cookieSocket(port, cookie) {
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
     const matchesOf = (code) => q('SELECT * FROM matches WHERE room_code = $1 ORDER BY finished_at', [code]);
-    const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80] };
+    const fast = { port: 0, trustProxy: false, idleKickTurns: 1e9, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80] };
 
     let authSeq = 1;
     const authClient = async (srv, name) => {
