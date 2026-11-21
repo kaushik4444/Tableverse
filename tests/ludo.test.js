@@ -351,7 +351,7 @@ test('hexagon: no move buttons under the board; a legal token is marked on the b
   // six players: only the active yard's triangle carries the blink class (its outline is the seat colour)
   const blinking = [...html.innerHTML.matchAll(/<path class="ludo-turn-home" d="[^"]*" fill="[^"]*" stroke="[^"]*" stroke-width="([\d.]+)"/g)];
   assert.equal(blinking.length, 1, 'exactly one triangle blinks on the six-player board');
-  assert.equal(blinking[0][1], '0.4', 'the blinking triangle is an outer yard');
+  assert.equal(blinking[0][1], '3', 'the blinking triangle is the yard outline, not an inner piece');
   const five = E.createGame(people(4), {}, mulberry32(4));
   five.phase = 'moving'; five.turn = 0; five.dice = 6;
   const sq = { innerHTML: '', querySelectorAll: () => [], onclick: null, offsetWidth: 0 };
