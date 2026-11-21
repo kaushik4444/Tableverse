@@ -108,6 +108,16 @@ function scene(n, edit) {
     await ctx.close();
   });
 
+  await test('a new action card floats a line over the table and is held in the middle for a moment; the first look shows no history', async () => {
+    const { page, ctx } = await open(scene(4));
+    assert.equal(await page.locator('.gf-item').count(), 0, 'nothing is replayed on the first look');
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.myTurn = false; v.turn = 2; v.event = { seq: 12, type: 'play', by: 3, card: { id: 'Ystopa', c: 'Y', k: 'stop', v: null }, colour: 'Y', left: 5, skipped: 0 }; })[1]);
+    await page.waitForSelector('.gf-spot');
+    assert.match(await page.textContent('.gf-spot'), /Dmitri played Sun Stop/);
+    assert.match(await page.textContent('.cc-tablewrap .gf-item'), /Dmitri played Sun Stop/);
+    await ctx.close();
+  });
+
   await test('a round summary shows once and is dismissed with Next round; the final sheet shows the totals and Play again for the host', async () => {
     const result = { round: 1, winner: 2, total: 64, gains: [0, 0, 64, 0], hands: [[], [], [], []] };
     const first = tableMessages('colorclash', people(4));
