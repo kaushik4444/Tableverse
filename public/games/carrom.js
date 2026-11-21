@@ -124,7 +124,7 @@
 
   function controlsHTML(v) {
     if (!v.myTurn || ui.anim) return '';
-    return `<p class="hint cb-tip">${tipText()}</p>`;
+    return `<p class="hint cb-tip" aria-live="polite">${tipText()}</p>`;
   }
 
   /** What the player can do now, with the live aim and power (there are no sliders). */
