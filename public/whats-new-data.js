@@ -8,6 +8,16 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-21-color-clash-hidden-miners',
+      date: '2026-11-21',
+      title: 'Two new games',
+      items: [
+        { ico: '🎨', title: 'Color Clash', text: 'Match the colour or the number and be first to empty your hand. Stop, Flip, Take 2 and Wild cards shake things up. Two to eight players, with bots, and a score that adds up over the rounds.' },
+        { ico: '⛏️', title: 'Hidden Miners', text: 'Dig a tunnel toward the gold, but someone at the table is secretly a Saboteur. Break and repair tools, scout the chambers and collapse tunnels. Three to eight players.' },
+        { ico: '📱', title: 'More room on phones', text: 'The main buttons are a little smaller on a phone, so the table and your cards get more space.' },
+      ],
+    },
+    {
       version: '2026-11-20-twelve-games',
       date: '2026-11-20',
       title: 'Twelve games for everyone',
