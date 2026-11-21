@@ -83,3 +83,7 @@
 .hm-card { width: clamp(64px, 19vw, 96px); }
 .hm-card .hm-face b { font-size: clamp(26px, 8vw, 40px); }
 .hm-game .wz-status { padding-top: 6px; padding-bottom: 6px; }
+
+/* a tool you can tap to repair is a real touch target, even though resting icons are compact */
+.hm-players .hm-tool.fixable { display: inline-grid; place-items: center; min-width: 40px; min-height: 40px; font-size: 18px; }
+.hm-players li:has(.hm-tool.fixable) .hm-tools { gap: 6px; }
