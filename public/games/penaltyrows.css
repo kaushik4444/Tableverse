@@ -123,15 +123,18 @@
 }
 /* short phones (for example 360 by 640): everything tightens so the whole table and hand fit without scrolling */
 @media (max-height: 700px) {
-  .prt .pr-tabs { margin: 2px 0 4px; }
-  .prt .pr-strip { min-height: 56px; padding: 4px; margin-bottom: 4px; gap: 5px; }
+  .prt .pr-tabs { margin: 2px 0 2px; }
+  .prt .pr-strip { min-height: 42px; padding: 3px; margin-bottom: 3px; gap: 4px; }
   .prt .pr-played small { display: none; }
-  .prt .pr-table { padding: 6px; }
-  .prt .pr-rows { gap: 4px; }
-  .prt .pr-row { padding: 3px 5px; }
+  .prt .pr-table { padding: 4px; }
+  .prt .pr-rows { gap: 3px; }
+  .prt .pr-row { padding: 2px 5px; }
   .prt .pr-cards { gap: 3px; }
   .prt .pr-pile { min-height: 34px; padding: 2px 3px; }
   .prt .pr-handlabel { display: none; }
+  .prt .gf-feed.pr-feed { margin-top: 2px; }
+  .prt .gf-feed.pr-feed .gf-item { padding: 1px 6px; }
+  .prt .gf-feed.pr-feed .gf-item:nth-last-child(n+2) { display: none; } /* one line on a short phone */
   .prt .pr-hand { gap: 5px; margin-top: 3px; }
   .prt .pr-hand .pr-card { width: 42px; min-height: 0; }
   .prt .pr-last { display: none; }
@@ -145,3 +148,9 @@
 .prt .pr-chip-name { font-size: 1em; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prt .pr-chip-n { font-size: 1.25em; font-variant-numeric: tabular-nums; }
 .prt .pr-chip-n small { font-size: .6em; opacity: .7; font-weight: 500; }
+
+/* the feed sits under the rows (it used to float over them and hid row 4): the latest two lines only */
+.prt .gf-feed.pr-feed { margin: 6px 0 0; max-width: none; gap: 2px; }
+.prt .gf-feed.pr-feed .gf-item { padding: 2px 8px; font-size: 12px; line-height: 1.3; }
+.prt .gf-feed.pr-feed .gf-item:nth-last-child(n+3) { display: none; }
+.prt .pr-row.collected { outline: 2px solid #fbbf24; outline-offset: 2px; }

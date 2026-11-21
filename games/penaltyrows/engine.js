@@ -146,6 +146,7 @@ function reveal(g) {
   g.hands = g.hands.map((h, i) => h.filter((c) => c.n !== g.picks[i]));
   g.resolved = 0; g.lastTurn = [];
   g.before = g.rows.map((r) => r.map((c) => ({ n: c.n, p: c.p })));
+  linger(g, STEP_MS); // the opening snapshot, which the table shows before the first card lands
   play(g);
 }
 
@@ -174,7 +175,7 @@ function play(g) {
       g.rows[best] = [r.card];
       g.lastTurn.push({ by: r.by, n: r.card.n, p: r.card.p, row: best, kind: 'sweep', took: sum(taken) });
       say(g, g.players[r.by].name, `played the ${g.rowLimit + 1}th card: took row ${best + 1}, ${pts(sum(taken))}`, 'sweep');
-      linger(g, STEP_MS + SWEEP_MS);
+      linger(g, 3 * STEP_MS + SWEEP_MS); // the sixth card lands, the row is collected, then the card starts the row
     } else {
       g.rows[best].push(r.card);
       g.lastTurn.push({ by: r.by, n: r.card.n, p: r.card.p, row: best, kind: 'place', took: 0 });
@@ -192,7 +193,7 @@ function takeIt(g, i, row, card) {
   g.rows[row] = [card];
   g.lastTurn.push({ by: i, n: card.n, p: card.p, row, kind: 'take', took: sum(taken) });
   say(g, g.players[i].name, `${card.n} fits no row: took row ${row + 1}, ${pts(sum(taken))}`, 'take');
-  linger(g, STEP_MS + SWEEP_MS);
+  linger(g, 2 * STEP_MS + SWEEP_MS); // the row is collected, then the card starts it
 }
 
 function takeRow(g, i, action) {
