@@ -127,13 +127,13 @@
       const q = goals.get(k);
       if (t) {
         const cave = caves.has(k);
-        html += `<${cave ? 'button type="button" data-hm="cave" data-x="' + x + '" data-y="' + y + '"' : 'div role="img"'} class="hm-cell ${t.start ? 'start' : ''} ${cave ? 'cave' : ''}" aria-label=""${t.start ? 'Start of the tunnel' : esc(describeTile(t.mask, t.cut))}${cave ? '. Collapse this piece' : ''}">${tileSVG(t.mask, t.cut)}${t.start ? '<span class="hm-flag">⛏️</span>' : ''}</${cave ? 'button' : 'div'}>`;
+        html += `<${cave ? 'button type="button" data-hm="cave" data-x="' + x + '" data-y="' + y + '"' : 'div role="img"'} class="hm-cell ${t.start ? 'start' : ''} ${cave ? 'cave' : ''}" aria-label="${t.start ? 'Start of the tunnel' : esc(describeTile(t.mask, t.cut))}${cave ? '. Collapse this piece' : ''}">${tileSVG(t.mask, t.cut)}${t.start ? '<span class="hm-flag">⛏️</span>' : ''}</${cave ? 'button' : 'div'}>`;
       } else if (q) {
         const seen = v.scouts.find((s) => s.goal === q.i);
         const face = q.revealed ? (q.gold ? '<span class="hm-gold">🪙</span>' : '<span class="hm-rock">🪨</span>') : '<span class="hm-q">?</span>';
         const hint = !q.revealed && seen ? `<span class="hm-seen" title="You scouted this chamber">${seen.gold ? '🪙' : '🪨'}</span>` : '';
         const word = q.revealed ? (q.gold ? 'gold' : 'plain rock') : seen ? `unopened, you scouted ${seen.gold ? 'gold' : 'plain rock'}` : 'unopened';
-        html += `<${scoutable ? 'button type="button" data-hm="goal" data-i="' + q.i + '"' : 'div role="img"'} class="hm-cell goal ${q.revealed ? (q.gold ? 'is-gold' : 'is-rock') : ''} ${scoutable ? 'cave' : ''}" aria-label=""Chamber ${q.i + 1}: ${word}">${face}${hint}</${scoutable ? 'button' : 'div'}>`;
+        html += `<${scoutable ? 'button type="button" data-hm="goal" data-i="' + q.i + '"' : 'div role="img"'} class="hm-cell goal ${q.revealed ? (q.gold ? 'is-gold' : 'is-rock') : ''} ${scoutable ? 'cave' : ''}" aria-label="Chamber ${q.i + 1}: ${word}">${face}${hint}</${scoutable ? 'button' : 'div'}>`;
       } else if (spots.has(k)) {
         const preview = tileSVG(ui.flip ? flipMask(c.mask) : c.mask, c.cut, 'ghost');
         html += `<button type="button" class="hm-cell spot" data-hm="spot" data-x="${x}" data-y="${y}" aria-label="Place the piece in column ${x + 1}, row ${y + 1}">${preview}</button>`;
