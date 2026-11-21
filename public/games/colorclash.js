@@ -105,8 +105,9 @@
 
   function sizes(v) {
     const w = window.innerWidth;
-    let cw = w < 480 ? 56 : w < 900 ? 70 : 82;
-    if (innerHeight <= 700) cw = Math.min(cw, 46);
+    let cw = w < 480 ? 62 : w < 900 ? 72 : 84;
+    if (innerHeight <= 620) cw = Math.min(cw, 46);
+    else if (innerHeight <= 700) cw = Math.min(cw, 56);
     const n = v.hand.length;
     const avail = Math.min(w, 980) - 20;
     let overlap = -6;
@@ -130,7 +131,13 @@
       return `<div class="cc-controls panel"><span class="label">Choose a colour</span><div class="cc-picks">${picks}</div><button class="btn ghost small" data-cc="cancel">Cancel</button></div>`;
     }
     if (v.drawn) return '<div class="cc-controls panel"><span class="label">Play the card you drew, or</span><button class="btn" data-cc="keep">Keep it and pass</button></div>';
-    return `<div class="cc-controls"><button class="btn big" data-cc="draw" ${v.canDraw ? '' : 'disabled'}>Draw a card</button></div>`;
+    return '';
+  }
+
+  /** Drawing is small and sits in the status bar: the stock pile on the table is the big target. */
+  function drawInline(v) {
+    if (v.phase !== 'playing' || v.me < 0 || !v.myTurn || ui.pending || v.drawn) return '';
+    return `<span class="cc-controls"><button class="btn small" data-cc="draw" ${v.canDraw ? '' : 'disabled'}>Draw</button></span>`;
   }
 
   function overlayHTML(v) {
@@ -190,7 +197,7 @@
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-cc="rules">Rules</button>', 'cc')}
       </div>
       ${tableHTML(v, ctx)}
-      <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''}"><span>${guidance(v)}</span></div>
+      <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''}"><span>${guidance(v)}</span>${drawInline(v)}</div>
       ${controlsHTML(v)}
       ${handHTML(v, z)}
       ${overlayHTML(v)}
