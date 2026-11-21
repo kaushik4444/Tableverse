@@ -24,7 +24,21 @@ const quiet = () => ({ log() {}, warn() {}, error() {} });
 function socket(port, cookie) {
   const c = { msgs: [], closed: null, ws: new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: { cookie } }) };
   c.ws.on('open', () => c.ws.send(JSON.stringify({ t: 'hello' })));
-  c.ws.on('message', (raw) => { const m = JSON.parse(raw); c.msgs.push(m); if (m.t === 'state') { c.room = m.room; c.view = m.view; } if (m.t === 'welcome') c.id = m.id; });
+  c.ws.on('message', (raw) => {
+    const m = JSON.parse(raw); c.msgs.push(m);
+    if (m.t === 'welcome') c.id = m.id;
+    if (m.t === 'state') {
+      c.room = m.room; c.view = m.view;
+      if (c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' });
+      // answer our own turns: three turns left to the time limit in a row would remove this player (idle rule)
+      if (c.autoplay && m.view && m.view.myTurn) {
+        const v = m.view;
+        if (v.phase === 'chooseTrump') c.send({ t: 'act', action: { type: 'chooseTrump', suit: 'G' } });
+        else if (v.phase === 'bidding') c.send({ t: 'act', action: { type: 'bid', amount: v.forbiddenBid === 0 ? 1 : 0 } });
+        else if (v.phase === 'playing') c.send({ t: 'act', action: { type: 'play', cardId: v.legal[0] } });
+      }
+    }
+  });
   c.ws.on('close', (code) => { c.closed = code; });
   c.ws.on('error', () => {});
   c.send = (m) => c.ws.send(JSON.stringify(m));
@@ -54,6 +68,7 @@ function socket(port, cookie) {
     const open = async (srv, user) => { const s = socket(srv.port, user.browser.cookieHeader); await until(() => s.id, 'welcome'); return s; };
     /** One human (idle: the turn limit plays for them) and two bots, played to the end. */
     async function playToEnd(s, extra = {}) {
+      s.autoplay = true;
       s.send({ t: 'setSeats', seats: 3 });
       s.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20', ...extra } });
       s.send({ t: 'start' });
@@ -97,7 +112,7 @@ function socket(port, cookie) {
       s.send({ t: 'create', gameId: 'wizard' });
       await until(() => s.room && s.room.status === 'lobby', 'table');
       const code = s.room.code;
-      s.send({ t: 'setSeats', seats: 3 }); s.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20' } }); s.send({ t: 'start' });
+      s.autoplay = true;       s.send({ t: 'setSeats', seats: 3 }); s.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20' } }); s.send({ t: 'start' });
       await until(() => s.room.status === 'playing', 'playing');
       await sleep(150);
       assert.equal((await matchesIn(code)).length, 0, 'a running game has no match row');
