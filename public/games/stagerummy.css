@@ -93,13 +93,17 @@
 @media (prefers-reduced-motion: reduce) { .sr .sr-float { animation: none; opacity: 1; } }
 @media (max-width: 520px) {
   /* a hand of ten or more needs two rows: square, smaller cards keep both rows above the fold on a phone */
-  .sr .sr-hand { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin-top: 6px; }
-  .sr .sr-hand .sr-card { min-height: 44px; aspect-ratio: 1 / 1; }
+  .sr .sr-hand { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin-top: 4px; }
+  .sr .sr-hand .sr-card { min-height: 40px; aspect-ratio: 1 / 1; }
   /* with laid groups on the table, four players still leave the whole hand on the screen */
-  .sr .sr-goal { min-height: 40px; }
-  .sr .sr-table { gap: 8px; }
+  .sr .sr-goal { min-height: 32px; }
+  .sr .sr-table { gap: 6px; }
   .sr .sr-pile { width: 50px; }
-  .sr .sr-event { min-height: 32px; }
+  .sr .sr-event { min-height: 24px; margin-top: 4px; }
+  .sr .sr-goal { margin-top: 4px; }
+  .sr .sr-table { margin-top: 4px; }
+  .sr .sr-seats { gap: 4px; }
+  .sr .wz-status { min-height: 34px; }
   .sr .sr-table .sr-laid { width: 27vw; }
   .sr .sr-table .sr-gcards .sr-card.mini { width: 19px; }
   .sr .sr-table .sr-glabel { font-size: 10px; }
