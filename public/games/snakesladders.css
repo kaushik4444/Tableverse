@@ -26,18 +26,18 @@
 .sl-token.turn { z-index: 4; box-shadow: 0 0 0 3px #fff, 0 0 12px 4px #19a66b99; }
 .sl-start-label { position: absolute; left: 2%; bottom: -8.6%; font-size: 11px; font-weight: 700; color: #6b6656; }
 .sl-side { display: grid; gap: 12px; }
-.sl-panel { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; padding: 12px; border: 1px solid var(--panel-line); border-radius: 14px; background: var(--panel); }
+.sl-panel { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; align-items: center; padding: 12px; border: 1px solid var(--panel-line); border-radius: 14px; background: var(--panel); }
 .sl-panel .sl-roll { grid-column: 1 / -1; min-height: 48px; }
 .sl-panel-copy { display: grid; gap: 2px; }
 .sl-panel-copy small { color: var(--muted); font-size: 12px; }
-.sl-die { width: 54px; height: 54px; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); gap: 3px; padding: 8px; border-radius: 12px; background: #fffdf6; border: 2px solid #d8d2bd; box-shadow: 0 3px 0 #c9c3ad; }
+.sl-die { width: 54px; height: 54px; display: grid; grid-template: repeat(3, minmax(0, 1fr)) / repeat(3, minmax(0, 1fr)); gap: 3px; padding: 8px; border-radius: 12px; background: #fffdf6; border: 2px solid #d8d2bd; box-shadow: 0 3px 0 #c9c3ad; }
 .sl-die i { width: 100%; height: 100%; border-radius: 50%; background: #2a2a2a; }
 .sl-die.blank { place-items: center; display: flex; justify-content: center; align-items: center; }
 .sl-die b { color: #8a8470; font-size: 22px; }
 .sl-die.tumble { animation: sl-tumble .45s ease-out; }
 @keyframes sl-tumble { 0% { transform: rotate(-200deg) scale(.7); } 70% { transform: rotate(12deg) scale(1.08); } 100% { transform: none; } }
 .sl-players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.sl-players li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--panel-line); border-radius: 12px; background: var(--panel); min-width: 0; }
+.sl-players li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--panel-line); border-radius: 12px; background: var(--panel); min-width: 0; }
 .sl-players li.on { border-color: #19a66b; box-shadow: 0 0 0 2px #19a66b33; }
 .sl-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .sl-pname small { font-weight: 500; color: var(--muted); }
@@ -49,7 +49,7 @@
 .sl-final li.win { background: rgba(255, 201, 77, .18); }
 @media (max-width: 760px) {
   .sl-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .sl-players { grid-template-columns: 1fr 1fr; }
+  .sl-players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { .sl-token, .sl-token.hop { transition: none; animation: none; } .sl-die.tumble { animation: none; } }
 .sl.sl-jumping .sl-token { transition-duration: 1.3s; transition-timing-function: cubic-bezier(.4, 0, .2, 1); } /* a ladder or snake is one long slide */

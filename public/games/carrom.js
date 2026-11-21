@@ -183,19 +183,41 @@
     requestAnimationFrame(step);
   }
 
+  /**
+   * Where each disc is at time t of a shot. Keyframes come about 30 times a second, so the discs move between the two
+   * keyframes either side of t (a straight line), not in steps. A disc that is gone by the next keyframe (pocketed) fades
+   * out over the interval. Returns [[id, x, y, alpha]]: alpha is 0..1 and only falls for a disc that is leaving.
+   */
+  function poseAt(frames, t) {
+    if (!frames.length) return [];
+    let i = 0;
+    while (i + 1 < frames.length && frames[i + 1].t <= t) i += 1;
+    const f0 = frames[i]; const f1 = frames[i + 1];
+    if (!f1) return f0.d.map(([id, x, y]) => [id, x, y, 1]);
+    const span = f1.t - f0.t;
+    const k = span > 0 ? Math.min(1, Math.max(0, (t - f0.t) / span)) : 1;
+    const next = new Map(f1.d.map(([id, x, y]) => [id, [x, y]]));
+    const pose = f0.d.map(([id, x, y]) => {
+      const n = next.get(id);
+      return n ? [id, x + (n[0] - x) * k, y + (n[1] - y) * k, 1] : [id, x, y, 1 - k];
+    });
+    for (const [id, x, y] of f1.d) if (!f0.d.some(([other]) => other === id)) pose.push([id, x, y, k]); // a disc that comes into view
+    return pose;
+  }
+  if (typeof window !== 'undefined') window.CarromPlayback = { poseAt }; // for the browser tests
+
   function drawFrame(now, a) {
     if (a.t0 === null) a.t0 = now;
     const t = (now - a.t0) / 1000;
-    let frame = a.frames[0];
-    for (const f of a.frames) if (f.t <= t) frame = f;
+    const pose = poseAt(a.frames, t);
     const svg = ui.root.querySelector('.cb-svg');
     if (svg) {
-      const seen = new Set(frame.d.map(([id]) => id));
-      for (const [id, x, y] of frame.d) {
+      const seen = new Set(pose.map(([id]) => id));
+      for (const [id, x, y, alpha] of pose) {
         const el = svg.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (el) {
           const [X, Y] = toSvg(ui.v, [x, y]);
-          el.setAttribute('cx', X); el.setAttribute('cy', Y); el.style.display = '';
+          el.setAttribute('cx', X); el.setAttribute('cy', Y); el.style.display = ''; el.style.opacity = String(alpha);
         }
       }
       svg.querySelectorAll('[data-id]').forEach((el) => { if (!seen.has(el.dataset.id)) el.style.display = 'none'; });
