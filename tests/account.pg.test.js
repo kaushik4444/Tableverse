@@ -397,6 +397,12 @@ function socket(port, cookie) {
       assert.equal(del.status, 200, JSON.stringify(del.json));
       const mark = w.msgs.length;
       await until(() => s.closed === 4001, 'the deleted player\'s socket is closed');
+      // the friend is the only person left at the table: while the table waits for them (Ready, or their turn), keep answering
+      for (let i = 0; i < 300 && !w.msgs.slice(mark).some((m) => m.t === 'state'); i++) {
+        if (f.room && f.room.gate && !(f.room.gate.ready || []).includes(f.id)) f.send({ t: 'ready' });
+        if (f.view && f.view.myTurn) f.send({ t: 'act', action: { type: 'bid', amount: 0 } });
+        await sleep(100);
+      }
       await until(() => w.msgs.slice(mark).some((m) => m.t === 'state'), 'a state broadcast after the deletion');
 
       // 1. nothing sent to the watcher after the deletion carries the real name: state, log, players, notices, chat
