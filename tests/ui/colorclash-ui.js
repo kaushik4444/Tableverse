@@ -147,6 +147,54 @@ function scene(n, edit) {
     }
   });
 
+  await test('after each move the table holds still for a moment: nothing can be played, a tap says why, then play comes back', async () => {
+    const { page, ctx } = await open(scene(4));
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => {
+      v.top = { id: 'Y4x', c: 'Y', k: 'n', v: 4 }; v.colour = 'Y';
+      v.event = { seq: 30, type: 'play', by: 2, card: { id: 'Y4x', c: 'Y', k: 'n', v: 4 }, colour: 'Y', left: 3 };
+    })[1]);
+    await page.waitForFunction(() => /Charlotte played/.test(document.querySelector('.cc-event')?.textContent || ''), null, { timeout: 4000 });
+    assert.equal(await page.locator('.hand .card.playable').count(), 0, 'no card can be played during the hold');
+    assert.equal(await page.locator('.cc-controls').count(), 0, 'no draw or keep control during the hold');
+    await page.click('.hand .card[data-id="R9a"]', { force: true });
+    assert.equal((await sent(page)).length, 0, 'a tap during the hold sends nothing');
+    await page.waitForFunction(() => document.querySelectorAll('.hand .card.playable').length === 3, null, { timeout: 4000 });
+    await page.click('.hand .card[data-id="R9a"]');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'play', card: 'R9a' });
+    await ctx.close();
+  });
+
+  await test('the round summary waits about two seconds after the last move, then shows', async () => {
+    const { page, ctx } = await open(scene(4));
+    const result = { round: 1, winner: 2, total: 64, gains: [0, 0, 64, 0], hands: [[], [], [], []] };
+    const t0 = Date.now();
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.roundResult = result; v.round = 2; v.event = { seq: 40, type: 'roundEnd', by: 2, round: 1, total: 64 }; })[1]);
+    await page.waitForSelector('.overlay .sheet', { timeout: 6000 });
+    const waited = Date.now() - t0;
+    assert.ok(waited >= 1900, `the summary showed after ${waited}ms, not straight away`);
+    await ctx.close();
+  });
+
+  await test('recent moves lists the last moves in words, newest first, and opens on tap', async () => {
+    const { page, ctx } = await open(scene(4));
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => {
+      v.event = { seq: 50, type: 'play', by: 2, card: { id: 'Y4x', c: 'Y', k: 'n', v: 4 }, colour: 'Y', left: 3 };
+    })[1]);
+    await page.waitForFunction(() => /Charlotte played/.test(document.querySelector('.cc-event')?.textContent || ''), null, { timeout: 4000 });
+    await page.waitForTimeout(1200);
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => {
+      v.event = { seq: 51, type: 'draw', by: 3, count: 1, left: 3 };
+    })[1]);
+    await page.waitForFunction(() => /Dmitri drew/.test(document.querySelector('.cc-event')?.textContent || ''), null, { timeout: 4000 });
+    await page.waitForTimeout(1200);
+    await page.click('[data-cc="log"]');
+    const items = await page.locator('.cc-log li').allTextContents();
+    assert.equal(items.length, 2);
+    assert.match(items[0], /Dmitri drew a card/, 'newest first');
+    assert.match(items[1], /Charlotte played Sun 4/);
+    await ctx.close();
+  });
+
   await test('cards can be told apart without colour: every coloured card shows its shape, and every card has a name', async () => {
     const { page, ctx } = await open(scene(4));
     const info = await page.evaluate(() => [...document.querySelectorAll('.hand .card')].map((c) => ({ label: c.getAttribute('aria-label'), text: c.textContent })));
