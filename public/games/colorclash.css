@@ -68,7 +68,7 @@
 .cc-game .cc-tablewrap { position: relative; }
 
 /* small phones: a smaller stock and discard so the middle never reaches the seats around it */
-@media (max-width: 420px), (max-height: 640px) {
+@media (max-height: 640px) {
   .cc-game .cc-mid { gap: 8px; }
   .cc-game .cc-stock .card, .cc-game .cc-discard .card { --cw: calc(var(--cw0, 62px) * .66); }
   .cc-game .cc-stock b { font-size: 14px; }
@@ -76,3 +76,8 @@
   .cc-game .cc-dir { right: -12px; top: -8px; font-size: 18px; }
 }
 .cc-game .cc-colour { margin: 4px 0 0; }
+
+.cc-game .wz-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; padding-bottom: 6px; }
+.cc-game .wz-status .cc-controls { flex: 0 0 auto; }
+.cc-game .wz-status .btn.small { min-height: 34px; padding: 4px 14px; }
+@media (max-width: 420px) { .cc-game .cc-mid { gap: 10px; } .cc-game .cc-stock .card, .cc-game .cc-discard .card { --cw: calc(var(--cw0, 62px) * .7); } }
