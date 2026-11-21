@@ -68,7 +68,6 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   }
 
   const COMING_SOON = [
-    ['⛏️', 'Hidden Miners', 'Work together to find gold — unless you are the saboteur.', 'Your build order', 'In development'],
     ['🎱', 'Bingo', 'Mark off the numbers as they are called and shout when your card is full.', 'Your build order'],
     ['🥤', 'Cup Pong', 'Take turns tossing balls into the opposing cups.', 'Your build order'],
     ['🔢', 'Sudoku', 'Race to fill the grid so every row, column and box holds 1 to 9.', 'Your build order'],
