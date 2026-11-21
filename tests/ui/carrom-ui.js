@@ -241,6 +241,10 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert.ok(overflow <= 0, 'no horizontal scroll');
     assert.ok(s.width >= 300, `board ${s.width}px wide on a phone`);
+    // the corner pockets are whole and on screen, not cut by the edge
+    const pockets = await page.evaluate(() => [...document.querySelectorAll('.cb-pocket')].map((el) => { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right }; }));
+    assert.equal(pockets.length, 4, 'four pockets');
+    assert.ok(pockets.every((p) => p.l >= 2 && p.r <= 373), 'every pocket is inside the screen: ' + JSON.stringify(pockets));
     await ctx.close();
   });
 

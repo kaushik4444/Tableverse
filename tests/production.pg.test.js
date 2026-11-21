@@ -71,7 +71,7 @@ function cookieSocket(port, cookie) {
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
     const matchesOf = (code) => q('SELECT * FROM matches WHERE room_code = $1 ORDER BY finished_at', [code]);
-    const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80] };
+    const fast = { port: 0, trustProxy: false, idleKickTurns: 1e9, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80] };
 
     let authSeq = 1;
     const authClient = async (srv, name) => {
@@ -90,7 +90,11 @@ function cookieSocket(port, cookie) {
       c.send({ t: 'setSeats', seats: 3 });
       c.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20', shuffleSeats: false, ...extra } });
       c.send({ t: 'start' });
-      await until(() => c.room && c.room.status === 'finished', 'game over');
+      // the table waits at each round for every seated person to press Ready; this player presses it whenever the table asks
+      await until(() => {
+        if (c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' });
+        return c.room && c.room.status === 'finished';
+      }, 'game over');
       return c;
     }
 
@@ -520,7 +524,11 @@ function cookieSocket(port, cookie) {
         a.send({ t: 'start' });
         await until(() => b.view && b.room.status === 'playing', 'started');
         b.send({ t: 'leave' });
-        await until(() => a.room.status === 'finished', 'game over');
+        // the rounds wait for the one person left to press Ready, so this player presses it whenever the table asks
+        await until(() => {
+          if (a.room && a.room.gate && !(a.room.gate.ready || []).includes(a.id)) a.send({ t: 'ready' });
+          return a.room && a.room.status === 'finished';
+        }, 'game over');
         const [m] = await until(async () => { const r = await matchesOf(a.room.code); return r.length ? r : null; }, 'match row');
         const ps = await q('SELECT * FROM match_participants WHERE match_id = $1 ORDER BY seat', [m.id]);
         assert.deepEqual(ps.map((p) => [p.left_early, p.is_bot]), [[false, false], [true, false], [false, true]]);

@@ -84,6 +84,19 @@ function scene(n, edit) {
     await t.ctx.close();
   });
 
+  await test('the stock is a disabled button when drawing is not allowed: it says so, and a tap sends nothing', async () => {
+    const off = await open(scene(4, (v) => { v.canDraw = false; }));
+    assert.equal(await off.page.getAttribute('.cc-stock', 'aria-disabled'), 'true', 'the stock reports it is disabled');
+    await off.page.click('.cc-stock', { force: true });
+    assert.equal((await sent(off.page)).length, 0, 'a tap on the disabled stock sends nothing');
+    await off.ctx.close();
+    const on = await open(scene(4, (v) => { v.canDraw = true; }));
+    assert.equal(await on.page.getAttribute('.cc-stock', 'aria-disabled'), 'false', 'the stock is enabled on my turn');
+    await on.page.click('.cc-stock');
+    assert.deepEqual((await sent(on.page)).map((a) => a.action.type), ['draw']);
+    await on.ctx.close();
+  });
+
   await test('not your turn: no controls, nothing is flagged, tapping sends nothing; a spectator sees the table without a hand', async () => {
     const { page, ctx } = await open(scene(4, (v) => { v.myTurn = false; v.turn = 2; v.canDraw = false; v.hand = v.hand.map((c) => ({ ...c, ok: false })); }));
     assert.equal(await page.locator('.cc-controls').count(), 0);
@@ -192,6 +205,20 @@ function scene(n, edit) {
     assert.equal(items.length, 2);
     assert.match(items[0], /Dmitri drew a card/, 'newest first');
     assert.match(items[1], /Charlotte played Sun 4/);
+    await ctx.close();
+  });
+
+  await test('the Ready bar waits for everybody: Ready sends the ready message, and the bar says who is still awaited', async () => {
+    const withGate = (ready, waiting) => scene(4, (v, m) => { m[1].room.gate = { ready, waiting }; });
+    const { page, ctx } = await open(withGate([], ['me', 'p1', 'p2', 'p3']));
+    assert.equal(await page.locator('.ready-bar').count(), 1, 'the bar shows while the table waits');
+    assert.match(await page.textContent('.ready-bar'), /Everybody presses Ready/);
+    await page.click('.ready-bar [data-act="readyUp"]');
+    const sentReady = await page.evaluate(() => window.__sent.filter((m) => m.t === 'ready').length);
+    assert.equal(sentReady, 1, 'the Ready button sends one ready message');
+    await page.evaluate((m) => window.__push(m), withGate(['me'], ['p1', 'p2', 'p3'])[1]);
+    await page.waitForFunction(() => /You are ready/.test(document.querySelector('.ready-bar')?.textContent || ''), null, { timeout: 4000 });
+    assert.equal(await page.locator('.ready-bar [data-act="readyUp"]').count(), 0, 'no second Ready for the same round');
     await ctx.close();
   });
 

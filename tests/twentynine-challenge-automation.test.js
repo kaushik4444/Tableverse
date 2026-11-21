@@ -24,10 +24,11 @@ function socketFor(port, token, onState = () => {}) {
     if (m.t === 'welcome') c.id = m.id;
     if (m.t === 'left') { c.room = null; c.view = null; }
     if (m.t === 'state') { c.room = m.room; c.view = m.view; if (m.view && m.view.phase) c.phases.push(m.view.phase + (m.view.myTurn ? ':mine' : '')); onState(c); }
+    if (m.t === 'state' && c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' }); // the start and round gates need every person to press Ready
   });
   return c;
 }
-async function until(fn, label, ms = 4000) {
+async function until(fn, label, ms = 15000) { // the first round waits for Ready from everybody, and CI runners are slower
   const t0 = Date.now();
   for (;;) { const v = fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(5); }
 }

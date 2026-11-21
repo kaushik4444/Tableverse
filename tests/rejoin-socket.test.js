@@ -9,9 +9,9 @@ const { registerAndVerify } = require('./helpers/auth');
 const { start } = require('../server');
 
 const GRACE_MS = 400;
-const guard = setTimeout(() => { console.error('FAIL rejoin socket test timed out'); process.exit(1); }, 90000);
+const guard = setTimeout(() => { console.error('FAIL rejoin socket test timed out'); process.exit(1); }, 180000);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function until(fn, label, ms = 8000) {
+async function until(fn, label, ms = 8000) { // a second game can take a while with Ready at each round
   const t0 = Date.now();
   for (;;) { const v = fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(15); }
 }
@@ -24,6 +24,14 @@ function connect(port, token) {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') { c.id = m.id; c.rejoin = m.rejoin || []; }
     if (m.t === 'state') { c.room = m.room; c.view = m.view; }
+    if (m.t === 'state' && c.autoplay && m.view && m.view.myTurn) {
+      // a player who is at the table answers their own turns; three timeouts in a row would remove them (idle rule)
+      const v = m.view;
+      if (v.phase === 'chooseTrump') c.send({ t: 'act', action: { type: 'chooseTrump', suit: 'G' } });
+      else if (v.phase === 'bidding') c.send({ t: 'act', action: { type: 'bid', amount: v.forbiddenBid === 0 ? 1 : 0 } });
+      else if (v.phase === 'playing') c.send({ t: 'act', action: { type: 'play', cardId: v.legal[0] } });
+    }
+    if (m.t === 'state' && c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' }); // the start and round gates need every person to press Ready
     if (m.t === 'tables') c.rejoin = m.rejoin || [];
     if (m.t === 'chat') c.chats.push(m.m);
     if (m.t === 'chatlog') c.chats = c.chats.concat(m.messages);
@@ -105,13 +113,14 @@ function connect(port, token) {
     await until(() => a.room.members.some((m) => m.id === c.id), 'third player joined');
     a.send({ t: 'setSeats', seats: 3 });
     a.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20' } });
+    a.autoplay = true;
     a.send({ t: 'start' });
     await until(() => a.room.status === 'playing', 'second game started');
     const originalBots = a.room.members.filter((m) => m.bot).map((m) => m.id);
     c.send({ t: 'leave' });
     await until(() => a.room.members.some((m) => m.id === c.id && m.bot), 'early leaver bot takes the seat');
     assert.ok(!a.room.spectators.some((s) => s.id === c.id), 'the early leaver is not spectating');
-    await until(() => a.room.status === 'finished', 'second game finished');
+    await until(() => a.room.status === 'finished', 'second game finished', 60000);
     a.send({ t: 'rematch' });
     await until(() => a.room.status === 'lobby', 'rematch lobby');
     assert.ok(!a.room.members.some((m) => m.id === c.id), 'the early leaver seat is free');

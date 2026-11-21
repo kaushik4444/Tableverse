@@ -23,6 +23,7 @@ function client(port, token) {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') c.id = m.id;
     if (m.t === 'state') c.room = m.room;
+    if (m.t === 'state' && c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' }); // the start and round gates need every person to press Ready
     if (m.t === 'notice') c.notices.push(m.text);
     if (m.t === 'left') { c.room = null; c.left++; }
   });

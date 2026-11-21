@@ -128,6 +128,47 @@ function scene(phase, handIds, tweak) {
     await ctx.close();
   });
 
+  await test('mid-round, four players with laid groups: each seat keeps its box, the groups stay inside it, the hand is on screen', async () => {
+    const SR = require('../../games/stagerummy/engine');
+    const msgs = tableMessages('stagerummy', four);
+    const v = msgs[1].view;
+    v.players[1].laid = [{ kind: 'set', num: 5, cards: [card('R5a'), card('B5a'), card('G5a')].map((c) => c) }];
+    v.players[2].laid = [{ kind: 'run', lo: 2, hi: 4, cards: [card('R2a'), card('R3a'), card('R4a')] }];
+    v.players[3].laid = [{ kind: 'set', num: 9, cards: [card('R9a'), card('B9a'), card('G9a')] }, { kind: 'run', lo: 6, hi: 8, cards: [card('R6a'), card('R7a'), card('R8a')] }];
+    const { page, ctx } = await open(msgs, { width: 393, height: 852 });
+    const r = await page.evaluate(() => {
+      const box = (el) => el.getBoundingClientRect();
+      const seats = [...document.querySelectorAll('.sr .pseat')].map((seat) => {
+        const s = box(seat);
+        const groups = [...seat.querySelectorAll('.sr-group')].map(box);
+        return { h: Math.round(s.height), inside: groups.every((g) => g.left >= s.left - 1 && g.right <= s.right + 1 && g.bottom <= s.bottom + 1) };
+      });
+      const hand = [...document.querySelectorAll('.sr .sr-hand .sr-card')].map(box);
+      return { seats, n: hand.length, handBottom: Math.max(...hand.map((h) => h.bottom)), vh: innerHeight, over: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    });
+    assert.equal(r.seats.length, 4, 'four seats');
+    assert.ok(r.n > 0, 'the hand has cards to measure');
+    assert.ok(r.seats.every((s) => s.inside), 'every laid group sits inside its seat: ' + JSON.stringify(r.seats));
+    assert.ok(new Set(r.seats.map((s) => s.h)).size <= 2, 'seat boxes keep their heights: ' + JSON.stringify(r.seats.map((s) => s.h)));
+    assert.ok(r.handBottom <= r.vh, `the hand is on screen (bottom ${Math.round(r.handBottom)}, screen ${r.vh})`);
+    assert.ok(r.over <= 0, 'no sideways scroll');
+    await ctx.close();
+  });
+
+  await test('six players with ten cards in hand: the whole hand is on an iPhone 15 screen without scrolling', async () => {
+    const six = ['A', 'B', 'C', 'D', 'E', 'F'].map((name) => ({ name }));
+    const msgs = tableMessages('stagerummy', six);
+    const { page, ctx } = await open(msgs, { width: 393, height: 852 });
+    const r = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('.sr .sr-hand .sr-card')].map((el) => el.getBoundingClientRect());
+      return { n: cards.length, bottom: Math.max(...cards.map((c) => c.bottom)), vh: innerHeight, page: document.documentElement.scrollHeight };
+    });
+    assert.ok(r.n > 0, 'the hand has cards to measure');
+    assert.ok(r.bottom <= r.vh, `last row of the hand ends at ${Math.round(r.bottom)}, screen is ${r.vh}`);
+    assert.ok(r.page <= r.vh + 1, `the page scrolls (${r.page} > ${r.vh})`);
+    await ctx.close();
+  });
+
   await test('a 320 px phone: six players, nothing overflows sideways', async () => {
     const six = ['A', 'B', 'C', 'D', 'E', 'F'].map((name) => ({ name }));
     const { page, ctx } = await open(tableMessages('stagerummy', six), { width: 320, height: 640 });

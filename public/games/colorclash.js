@@ -166,7 +166,7 @@
       return `<div class="overlay"><div class="sheet"><h2>${nameOf(v, r.winner)} went out!</h2>
         <p class="hint" style="text-align:left">${r.total} points for round ${r.round}. First to ${v.target}.</p>
         <ul class="cc-final">${rows(sorted)}</ul>
-        <div class="row" style="margin-top:12px"><button class="btn" data-cc="next">Next round</button></div></div></div>`;
+        <div class="row" style="margin-top:12px"><button class="btn" data-cc="next">Ready</button><span class="hint">Everybody presses Ready to start the next round</span></div></div></div>`;
     }
     return '';
   }
@@ -271,7 +271,7 @@
       case 'cancel': ui.pending = null; ctx.rerender(); break;
       case 'draw': if (v.canDraw) ctx.act({ type: 'draw' }); break;
       case 'keep': if (v.myTurn && v.drawn) ctx.act({ type: 'pass' }); break;
-      case 'next': ui.seenRound = v.roundResult ? v.roundResult.round : null; ctx.rerender(); break;
+      case 'next': ui.seenRound = v.roundResult ? v.roundResult.round : null; ctx.ready(); ctx.rerender(); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;

@@ -110,7 +110,7 @@
     const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]);
     const striker = aiming ? `<circle class="cb-striker ${colourOfMe(v) === 'w' ? 'w' : 'b'}" data-id="striker" cx="${sx}" cy="${sy}" r="0.026" tabindex="0" role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}"/>` : '';
     const pockets = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => `<circle class="cb-pocket" cx="${x}" cy="${y}" r="0.05"/>`).join('');
-    return `<svg class="cb-svg" viewBox="-0.05 -0.05 1.10 1.10" role="img" aria-label="Carrom board">
+    return `<svg class="cb-svg" viewBox="-0.08 -0.08 1.16 1.16" role="img" aria-label="Carrom board">
       <rect class="cb-board" x="0" y="0" width="1" height="1" rx="0.02"/>
       <rect class="cb-inner" x="0.06" y="0.06" width="0.88" height="0.88"/>
       ${lines}

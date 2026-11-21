@@ -110,7 +110,7 @@ module.exports = {
       botDelayMs: () => 700 + g.rng() * 900,
       holdMs: () => pacing.remaining(g), // the time the table needs to show the cards played (games/pacing.js)
       setPacingScale: (scale) => pacing.setScale(g, scale),
-      autoAction: () => null,
+      autoAction: () => (g.phase === 'roundEnd' ? { type: 'continue' } : null),
       isOver: () => g.phase === 'gameOver',
       results: () => engine.results(g),
     };
