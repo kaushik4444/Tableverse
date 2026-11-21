@@ -63,3 +63,16 @@
 
 /* the shared table centre ignores taps; the stock pile is a button, so it must take them */
 .cc-game .pt-center .cc-stock { pointer-events: auto; }
+
+/* the shared feed floats over the table without taking room */
+.cc-game .cc-tablewrap { position: relative; }
+
+/* small phones: a smaller stock and discard so the middle never reaches the seats around it */
+@media (max-width: 420px), (max-height: 640px) {
+  .cc-game .cc-mid { gap: 8px; }
+  .cc-game .cc-stock .card, .cc-game .cc-discard .card { --cw: calc(var(--cw0, 62px) * .66); }
+  .cc-game .cc-stock b { font-size: 14px; }
+  .cc-game .cc-stock small { display: none; }
+  .cc-game .cc-dir { right: -12px; top: -8px; font-size: 18px; }
+}
+.cc-game .cc-colour { margin: 4px 0 0; }

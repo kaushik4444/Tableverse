@@ -11,6 +11,7 @@ const registry = {
   propertyrivals: require('./propertyrivals'),
   penaltyrows: require('./penaltyrows'),
   stagerummy: require('./stagerummy'),
+  hiddenminers: require('./hiddenminers'),
   chess: require('./chess'),
   carrom: require('./carrom'),
   colorclash: require('./colorclash'),
