@@ -14,7 +14,13 @@
   };
   const ORDER = ['R', 'Y', 'G', 'B'];
   const ACTION = { stop: { name: 'Stop', face: '⊘' }, flip: { name: 'Flip', face: '⇄' }, take2: { name: 'Take 2', face: '+2' }, wild: { name: 'Wild', face: '★' }, take4: { name: 'Wild Take 4', face: '+4' } };
-  const ui = { ctx: null, latest: null, seq: null, shown: null, pending: null, seenRound: null, turnKey: '', feeds: new Map() };
+  const ui = { ctx: null, latest: null, seq: null, shown: null, pending: null, seenRound: null, turnKey: '', table: null, holdUntil: 0, holdTimer: null, log: [], logOpen: false, summaryKey: null, summaryTimer: null, feeds: new Map() };
+  // Gaps between plays, as Wizard does between tricks: after each move the table holds still for a moment, and the round or game summary waits a moment after the last move.
+  const HOLD_MS = 1100;
+  const SUMMARY_MS = 2100;
+  const LOG_MAX = 12;
+  const held = () => ui.holdUntil > Date.now();
+  const summaryKeyOf = (v) => (v.phase === 'gameOver' ? 'over' : v.roundResult ? `round${v.roundResult.round}` : null);
 
   const label = (c) => (c.k === 'n' ? `${COLOURS[c.c].name} ${c.v}` : c.c === 'W' ? ACTION[c.k].name : `${COLOURS[c.c].name} ${ACTION[c.k].name}`);
   const corner = (c) => (c.k === 'n' ? String(c.v) : ACTION[c.k].face);
@@ -76,6 +82,7 @@
   function guidance(v) {
     if (v.phase === 'gameOver') return v.winners.includes(v.me) ? 'You won!' : 'Game over';
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} is playing`;
+    if (v.held) return v.turn === v.me ? 'Your turn is next…' : `${esc(v.players[v.turn].name)} is next…`;
     if (!v.myTurn) return `${esc(v.players[v.turn].name)} is playing…`;
     if (ui.pending) return 'Choose the colour for your Wild';
     if (v.drawn) return 'You drew a card that fits: play it or keep it';
@@ -96,11 +103,11 @@
     const text = eventText(v);
     const e = v.event;
     const fresh = e && e.type === 'play' && ui.shown !== e.seq; // the new top card lands once, a later redraw shows it at rest
-    const stock = `<button type="button" class="cc-stock ${v.canDraw ? 'ready' : ''}" data-cc="draw" ${v.canDraw ? '' : 'disabled'} aria-label="Draw a card (${v.stock} left in the stock)">${v.stock ? backHTML() : '<div class="card slot"></div>'}<b>${v.stock}</b><small>stock</small></button>`;
-    const center = `<div class="cc-mid">${stock}<div class="cc-discard">${cardHTML(v.top, fresh ? 'cc-land' : '')}<span class="cc-dir" title="Direction of play" aria-label="${v.dir > 0 ? 'Clockwise' : 'Anticlockwise'}">${v.dir > 0 ? '↻' : '↺'}</span></div></div>`;
+    const stock = `<button type="button" class="cc-stock ${v.canDraw ? 'ready' : ''}" data-cc="draw" aria-disabled="${v.canDraw ? 'false' : 'true'}" aria-label="Draw a card (${v.stock} left in the stock)">${v.stock ? backHTML() : '<div class="card slot"></div>'}<b>${v.stock}</b><small>stock</small></button>`;
+    const center = `<div class="cc-mid">${stock}<div class="cc-discard">${cardHTML(v.top, fresh ? 'cc-land' : '')}<span class="cc-dir" title="Direction of play" aria-label="${v.dir > 0 ? 'Clockwise' : 'Anticlockwise'}">${v.dir > 0 ? '↻' : '↺'}</span></div></div><div class="cc-colour">Colour in play ${colourChip(v.colour)}</div>`;
     const feed = window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : '';
-    return `<div class="cc-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}${feed}</div><div class="cc-colour">Colour in play ${colourChip(v.colour)}</div>`
-      + (text ? `<p class="cc-event cc-event-bar" role="status">${text}</p>` : '');
+    return `<div class="cc-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}${feed}</div>`
+      + `<p class="cc-event cc-event-bar" role="status">${text || '&nbsp;'}</p>`;
   }
 
   function sizes(v) {
@@ -137,10 +144,11 @@
   /** Drawing is small and sits in the status bar: the stock pile on the table is the big target. */
   function drawInline(v) {
     if (v.phase !== 'playing' || v.me < 0 || !v.myTurn || ui.pending || v.drawn) return '';
-    return `<span class="cc-controls"><button class="btn small" data-cc="draw" ${v.canDraw ? '' : 'disabled'}>Draw</button></span>`;
+    return `<span class="cc-controls"><button class="btn small" data-cc="draw" aria-disabled="${v.canDraw ? 'false' : 'true'}">Draw</button></span>`;
   }
 
   function overlayHTML(v) {
+    if (summaryKeyOf(v) !== ui.summaryKey) return ''; // the summary waits a moment after the last move
     const r = v.roundResult;
     const rows = (list) => list.map(({ p, i }) => `<li class="${v.winners.includes(i) ? 'win' : ''}"><span>${v.winners.includes(i) ? '🏆 ' : ''}<b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b></span><span>${r && r.gains[i] ? `+${r.gains[i]} · ` : ''}${p.score} pts</span></li>`).join('');
     const sorted = v.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
@@ -165,9 +173,13 @@
   function react(v) {
     const e = v.event;
     const snd = window.CardTable.sound;
-    if (ui.seq === null) { ui.seq = e ? e.seq : 0; ui.shown = ui.seq; ui.seenRound = v.roundResult ? v.roundResult.round : null; return; } // first render: do not replay an old event
+    if (ui.seq === null) { ui.seq = e ? e.seq : 0; ui.shown = ui.seq; ui.seenRound = v.roundResult ? v.roundResult.round : null; ui.summaryKey = summaryKeyOf(v); return; } // first render: do not replay an old event or hold the summary
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
+    ui.holdUntil = Date.now() + HOLD_MS;
+    clearTimeout(ui.holdTimer);
+    ui.holdTimer = setTimeout(() => { ui.holdTimer = null; if (ui.ctx && ui.latest) ui.ctx.rerender(); }, HOLD_MS + 20);
+    logPush(v, e);
     if (!snd) return;
     if (e.type === 'over') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     else if (e.type === 'roundEnd') snd.play('round');
@@ -176,13 +188,40 @@
     else if (e.type === 'pass') snd.play('fold');
   }
 
-  function render(root, v, ctx) {
+  /** The moves so far, in words, newest first. Plain text: the page escapes it when it draws the list. */
+  function logPush(v, e) {
+    const text = e.type === 'draw' && e.by === v.me && v.myDraw ? `You drew ${label(v.myDraw.card)}` : eventText(v).replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+    if (!text) return;
+    ui.log.unshift(text);
+    if (ui.log.length > LOG_MAX) ui.log.length = LOG_MAX;
+  }
+
+  function logHTML() {
+    const items = ui.log.map((t) => `<li>${esc(t)}</li>`).join('');
+    return `<div class="cc-log"><button type="button" class="btn ghost small" data-cc="log" aria-expanded="${ui.logOpen}">Recent moves (${ui.log.length})</button>${ui.logOpen ? (items ? `<ol>${items}</ol>` : '<p class="hint">No moves yet.</p>') : ''}</div>`;
+  }
+
+  /** Starts the summary timer for a round or game that has just ended; the summary shows when it fires. */
+  function armSummary(v) {
+    const key = summaryKeyOf(v);
+    if (!key) { ui.summaryKey = null; return; }
+    if (key === ui.summaryKey || ui.summaryTimer) return;
+    ui.summaryTimer = setTimeout(() => {
+      ui.summaryTimer = null;
+      if (ui.latest && summaryKeyOf(ui.latest) === key) { ui.summaryKey = key; if (ui.ctx) ui.ctx.rerender(); }
+    }, SUMMARY_MS);
+  }
+
+  function render(root, state, ctx) {
     ui.ctx = ctx;
-    ui.latest = v;
+    ui.latest = state;
     // table-local state belongs to one table: another table starts from its own first render (no replay, no dismissed round)
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
-    if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.shown = null; ui.seenRound = null; ui.pending = null; ui.turnKey = ''; }
-    react(v);
+    if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.shown = null; ui.seenRound = null; ui.pending = null; ui.turnKey = ''; ui.holdUntil = 0; ui.log = []; ui.summaryKey = null; clearTimeout(ui.holdTimer); clearTimeout(ui.summaryTimer); ui.holdTimer = null; ui.summaryTimer = null; }
+    react(state);
+    // after each move the table holds still for a moment: nothing can be played in that time
+    const v = held() ? Object.assign({}, state, { myTurn: false, canDraw: false, held: true }) : state;
+    armSummary(state);
     feedSync(v);
     const key = `${v.turn}:${v.event ? v.event.seq : 0}`;
     if (key !== ui.turnKey) { ui.turnKey = key; ui.pending = null; }
@@ -198,6 +237,7 @@
       </div>
       ${tableHTML(v, ctx)}
       <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''}"><span>${guidance(v)}</span>${drawInline(v)}</div>
+      ${logHTML()}
       ${controlsHTML(v)}
       ${handHTML(v, z)}
       ${overlayHTML(v)}
@@ -213,7 +253,9 @@
     const v = ui.latest;
     const ctx = ui.ctx;
     if (!v || !ctx || !el) return;
+    if (['play', 'colour', 'draw', 'keep'].includes(el.dataset.cc) && held()) { window.CardTable.toast('Wait a moment: the last move is still being shown'); return; }
     switch (el.dataset.cc) {
+      case 'log': ui.logOpen = !ui.logOpen; ctx.rerender(); break;
       case 'play': {
         const c = v.hand.find((x) => x.id === el.dataset.id);
         if (!v.myTurn || !c || !c.ok) return;
