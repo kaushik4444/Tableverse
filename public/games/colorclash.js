@@ -210,6 +210,7 @@
     ui.summaryTimer = setTimeout(() => {
       ui.summaryTimer = null;
       if (ui.latest && summaryKeyOf(ui.latest) === key) { ui.summaryKey = key; if (ui.ctx) ui.ctx.rerender(); }
+      else if (ui.latest) armSummary(ui.latest); // a later result ended while this timer ran: arm its summary
     }, SUMMARY_MS);
   }
 
@@ -256,7 +257,8 @@
     const v = ui.latest;
     const ctx = ui.ctx;
     if (!v || !ctx || !el) return;
-    if (['play', 'colour', 'draw', 'keep'].includes(el.dataset.cc) && held()) { window.CardTable.toast('Wait a moment: the last move is still being shown'); return; }
+    const summaryWaiting = ui.latest && summaryKeyOf(ui.latest) !== null && summaryKeyOf(ui.latest) !== ui.summaryKey;
+    if (['play', 'colour', 'draw', 'keep'].includes(el.dataset.cc) && (held() || summaryWaiting)) { window.CardTable.toast('Wait a moment: the last move is still being shown'); return; }
     switch (el.dataset.cc) {
       case 'log': ui.logOpen = !ui.logOpen; ctx.rerender(); break;
       case 'play': {
