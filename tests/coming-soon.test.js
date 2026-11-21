@@ -13,9 +13,9 @@ const ui = window.TVHomeUI({
   pendingSocial: () => 0,
 });
 const html = ui.comingSoonHTML();
-const buildOrder = ['Hidden Miners', 'Bingo', 'Cup Pong', 'Sudoku', 'Falling Blocks', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
+const buildOrder = ['Bingo', 'Cup Pong', 'Sudoku', 'Falling Blocks', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
 const additional = ['Secret Clues'];
-assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 9);
+assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 8);
 let previous = -1;
 for (const name of [...buildOrder, ...additional]) {
   const index = html.indexOf(name);
@@ -26,11 +26,11 @@ for (const protectedBrand of ['Monopoly', 'Saboteur', 'Tetris', 'Bullhead', '6 n
   assert.ok(!html.includes(protectedBrand), `protected commercial title should not be displayed: ${protectedBrand}`);
 }
 assert.match(html, /Development order/);
-assert.equal((html.match(/>In development</g) || []).length, 1, 'exactly one game is in development');
-assert.match(html, /Hidden Miners[\s\S]*?>In development</);
-assert.equal((html.match(/>Planned</g) || []).length, 8, 'the others are planned');
+assert.equal((html.match(/>In development</g) || []).length, 0, 'no game is in development right now');
+assert.ok(!html.includes('Hidden Miners'), 'Hidden Miners is playable, so it is no longer listed');
+assert.equal((html.match(/>Planned</g) || []).length, 8, 'all are are planned');
 assert.match(html, /Also on the list/);
-assert.match(html, /9 planned/);
+assert.match(html, /8 planned/);
 assert.match(html, /original artwork and presentation/);
 // What's new: the release history is public/whats-new-data.js; the home page shows the newest release's first three items.
 const releaseSource = fs.readFileSync(require.resolve('../public/whats-new-data.js'), 'utf8');
@@ -88,4 +88,4 @@ for (const shipped of ['Private tables and invitations', 'Host tools', 'Player c
 }
 assert.match(appSource, /<h3 class="stat-h"[^\n]*r\.version/, 'each Version history heading shows its version, since older releases have no date');
 assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
-console.log('Coming Soon and latest-release-note tests passed (9 games, requested order, alternate working titles, 3 current highlights).');
+console.log('Coming Soon and latest-release-note tests passed (8 games, requested order, alternate working titles, 3 current highlights).');
