@@ -84,6 +84,19 @@ function scene(n, edit) {
     await t.ctx.close();
   });
 
+  await test('the stock is a disabled button when drawing is not allowed: it says so, and a tap sends nothing', async () => {
+    const off = await open(scene(4, (v) => { v.canDraw = false; }));
+    assert.equal(await off.page.getAttribute('.cc-stock', 'aria-disabled'), 'true', 'the stock reports it is disabled');
+    await off.page.click('.cc-stock', { force: true });
+    assert.equal((await sent(off.page)).length, 0, 'a tap on the disabled stock sends nothing');
+    await off.ctx.close();
+    const on = await open(scene(4, (v) => { v.canDraw = true; }));
+    assert.equal(await on.page.getAttribute('.cc-stock', 'aria-disabled'), 'false', 'the stock is enabled on my turn');
+    await on.page.click('.cc-stock');
+    assert.deepEqual((await sent(on.page)).map((a) => a.action.type), ['draw']);
+    await on.ctx.close();
+  });
+
   await test('not your turn: no controls, nothing is flagged, tapping sends nothing; a spectator sees the table without a hand', async () => {
     const { page, ctx } = await open(scene(4, (v) => { v.myTurn = false; v.turn = 2; v.canDraw = false; v.hand = v.hand.map((c) => ({ ...c, ok: false })); }));
     assert.equal(await page.locator('.cc-controls').count(), 0);
