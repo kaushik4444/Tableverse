@@ -264,13 +264,15 @@
     const seatsNow = root.querySelector(".sr-seats");
     if (seatsNow) seatsNow.scrollTop = seatScroll;
     // the redraw removed the seat list that had keyboard focus: give it back, so arrow keys keep scrolling it
-    if (seatHadFocus && seatsNow) { const again = focusSel ? seatsNow.querySelector(focusSel) : null; (again || seatsNow).focus({ preventScroll: true }); }
-    // a wild card puts its end buttons on the runs: bring the first such run into view, so the choice is not hidden below the fold
+    let restored = null;
+    if (seatHadFocus && seatsNow) { restored = (focusSel ? seatsNow.querySelector(focusSel) : null) || null; (restored || seatsNow).focus({ preventScroll: true }); }
+    // a wild card puts its end buttons on the runs: bring the first such run into view, so the choice is not hidden below the fold;
+    // a restored control is the one the person is on, so it keeps the view instead
     const endRun = seatsNow && seatsNow.querySelector(".sr-ends button");
     // scroll only the seat list, never the page: scrollIntoView would also move the outer containers and can hide the hand
-    const endGroup = endRun && endRun.closest(".sr-group");
-    if (endGroup && seatsNow) {
-      const g = endGroup.getBoundingClientRect();
+    const target = restored || (endRun && endRun.closest(".sr-group"));
+    if (target && seatsNow) {
+      const g = target.getBoundingClientRect();
       const c = seatsNow.getBoundingClientRect();
       if (g.top < c.top) seatsNow.scrollTop += g.top - c.top;
       else if (g.bottom > c.bottom) seatsNow.scrollTop += g.bottom - c.bottom;
