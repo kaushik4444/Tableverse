@@ -255,8 +255,12 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     assert.ok(moving.filter((n) => n > 0).length >= 2, 'several cards of the row are on their way: ' + moving.join(','));
     // the card that was played (11) is not collected: only the five cards that were on the row move into the pile
     const identity = await page.evaluate(() => [...document.querySelectorAll('.pr-rows > .pr-row:first-child [data-cn]')].map((el) => [el.dataset.cn, el.getAnimations().length > 0]));
-    assert.ok(identity.filter(([n]) => n !== '11').every(([, moving2]) => moving2), 'the five collected cards move: ' + JSON.stringify(identity));
-    assert.ok(identity.filter(([n]) => n === '11').every(([, moving2]) => !moving2), 'the played card does not go into the pile: ' + JSON.stringify(identity));
+    const others = identity.filter(([n]) => n !== '11');
+    const played = identity.filter(([n]) => n === '11');
+    assert.equal(others.length, 5, 'all five cards that were on the row are there: ' + JSON.stringify(identity));
+    assert.ok(others.every(([, moving2]) => moving2), 'the five collected cards move: ' + JSON.stringify(identity));
+    assert.equal(played.length, 1, 'the played card is on the row: ' + JSON.stringify(identity));
+    assert.ok(played.every(([, moving2]) => !moving2), 'the played card does not go into the pile: ' + JSON.stringify(identity));
     assert.ok(await page.evaluate(() => !!document.querySelector('.prt .pr-chips li[data-pid]')), 'the taker has a chip to receive them');
     await ctx.close();
   });
