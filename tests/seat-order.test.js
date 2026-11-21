@@ -39,18 +39,23 @@ test('the members array is not changed by shuffling', () => {
 });
 
 test('the host can arrange the members: every id exactly once, or nothing', () => {
-  assert.deepEqual(ids(arrangeMembers(members(), ['c', 'a', 'd', 'b'])), ['c', 'a', 'd', 'b']);
-  assert.equal(arrangeMembers(members(), ['a', 'b', 'c']), null, 'a missing player');
-  assert.equal(arrangeMembers(members(), ['a', 'a', 'c', 'd']), null, 'a repeated player');
-  assert.equal(arrangeMembers(members(), ['a', 'b', 'c', 'x']), null, 'a stranger');
-  assert.equal(arrangeMembers(members(), 'abcd'), null, 'not a list');
-  assert.equal(ids(members()).join(), 'a,b,c,d', 'the input is not changed');
+  const input = members();
+  assert.deepEqual(ids(arrangeMembers(input, ['c', 'a', 'd', 'b'])), ['c', 'a', 'd', 'b']);
+  assert.equal(ids(input).join(), 'a,b,c,d', 'the input is not changed');
+  assert.equal(arrangeMembers(input, ['a', 'b', 'c']), null, 'a missing player');
+  assert.equal(arrangeMembers(input, ['a', 'a', 'c', 'd']), null, 'a repeated player');
+  assert.equal(arrangeMembers(input, ['a', 'b', 'c', 'x']), null, 'a stranger');
+  assert.equal(arrangeMembers(input, 'abcd'), null, 'not a list');
+  assert.equal(ids(input).join(), 'a,b,c,d', 'still not changed after the refused arrangements');
 });
 
 test('a shuffle is a permutation of the members, and the input is unchanged', () => {
-  const out = shuffleMembers(members(), lastRandom);
+  const input = members();
+  // every step swaps the seat with the first one, so the order really changes (lastRandom would only swap seats with themselves)
+  const out = shuffleMembers(input, () => 0);
+  assert.notDeepEqual(ids(out), ['a', 'b', 'c', 'd'], 'the order changed');
   assert.deepEqual(ids(out).slice().sort(), ['a', 'b', 'c', 'd']);
-  assert.deepEqual(ids(members()), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(ids(input), ['a', 'b', 'c', 'd'], 'the input is not changed');
 });
 
 test('an arranged order: a manual arrangement is kept and the start does not shuffle it again', () => {

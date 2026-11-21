@@ -69,7 +69,8 @@
     if (e && e.seq < st.seq) { st.epoch += 1; st.seq = 0; }
     if (!e || e.seq <= st.seq) return;
     st.seq = e.seq;
-    const text = eventText(v);
+    // a drawn card is private to the drawer: the shared feed says only that a card was drawn
+    const text = e.type === 'draw' && e.by === v.me && v.myDraw ? 'You drew a card.' : eventText(v);
     if (!text) return;
     const tone = e.type === 'over' || e.type === 'roundEnd' ? 'round' : e.penalised ? 'take' : e.skipped !== undefined || (e.card && e.card.k === 'flip') ? 'skip' : 'play';
     window.GameFeed.add(key, [{ id: `cc-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
@@ -209,6 +210,7 @@
     ui.summaryTimer = setTimeout(() => {
       ui.summaryTimer = null;
       if (ui.latest && summaryKeyOf(ui.latest) === key) { ui.summaryKey = key; if (ui.ctx) ui.ctx.rerender(); }
+      else if (ui.latest) armSummary(ui.latest); // a later result ended while this timer ran: arm its summary
     }, SUMMARY_MS);
   }
 
@@ -220,7 +222,9 @@
     if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.shown = null; ui.seenRound = null; ui.pending = null; ui.turnKey = ''; ui.holdUntil = 0; ui.log = []; ui.summaryKey = null; clearTimeout(ui.holdTimer); clearTimeout(ui.summaryTimer); ui.holdTimer = null; ui.summaryTimer = null; }
     react(state);
     // after each move the table holds still for a moment: nothing can be played in that time
-    const v = held() ? Object.assign({}, state, { myTurn: false, canDraw: false, held: true }) : state;
+    // and nothing can be played while a round or game summary waits to be shown (the next round is already dealt under it)
+    const pendingSummary = summaryKeyOf(state) !== null && summaryKeyOf(state) !== ui.summaryKey;
+    const v = held() || pendingSummary ? Object.assign({}, state, { myTurn: false, canDraw: false, held: true }) : state;
     armSummary(state);
     feedSync(v);
     const key = `${v.turn}:${v.event ? v.event.seq : 0}`;
@@ -253,7 +257,8 @@
     const v = ui.latest;
     const ctx = ui.ctx;
     if (!v || !ctx || !el) return;
-    if (['play', 'colour', 'draw', 'keep'].includes(el.dataset.cc) && held()) { window.CardTable.toast('Wait a moment: the last move is still being shown'); return; }
+    const summaryWaiting = ui.latest && summaryKeyOf(ui.latest) !== null && summaryKeyOf(ui.latest) !== ui.summaryKey;
+    if (['play', 'colour', 'draw', 'keep'].includes(el.dataset.cc) && (held() || summaryWaiting)) { window.CardTable.toast('Wait a moment: the last move is still being shown'); return; }
     switch (el.dataset.cc) {
       case 'log': ui.logOpen = !ui.logOpen; ctx.rerender(); break;
       case 'play': {
