@@ -212,7 +212,7 @@
     ui.latest = v;
     // table-local state belongs to one table: another table starts from its own first render (no replay, no dismissed round)
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
-    if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.seenRound = null; ui.sel = null; ui.flip = false; ui.turnKey = ''; }
+    if (ui.table !== tableKey) { ui.table = tableKey; ui.seq = null; ui.seenRound = null; ui.sel = null; ui.flip = false; ui.turnKey = ''; ui.summaryKey = null; }
     react(v);
     feedSync(v);
     const key = `${v.round}:${v.turn}:${v.event ? v.event.seq : 0}`;
