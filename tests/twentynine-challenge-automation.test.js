@@ -28,7 +28,7 @@ function socketFor(port, token, onState = () => {}) {
   });
   return c;
 }
-async function until(fn, label, ms = 4000) {
+async function until(fn, label, ms = 15000) { // the first round waits for Ready from everybody, and CI runners are slower
   const t0 = Date.now();
   for (;;) { const v = fn(); if (v) return v; if (Date.now() - t0 > ms) throw new Error('timeout waiting for ' + label); await sleep(5); }
 }
