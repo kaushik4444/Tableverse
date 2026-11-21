@@ -109,6 +109,92 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('phone scores sit above the board and wrap only when a fifth player joins', async () => {
+    const roster = [...four, ...['Eli', 'Fay', 'Gia', 'Hugo'].map((name) => ({ name }))];
+    for (const [players, expectedRows] of [[4, [4]], [5, [4, 1]], [8, [4, 4]]]) {
+      const { page, ctx } = await open(tableMessages('penaltyrows', roster.slice(0, players)), { width: 520, height: 700 });
+      try {
+        const chips = page.locator('.pr-chips');
+        assert.deepEqual(await chips.locator('.pr-chip-name').allInnerTexts(),
+          roster.slice(0, players).map(({ name }, i) => i === 0 ? name + ' (you)' : name));
+        const { rows, aboveStrip, clippedNames } = await chips.evaluate((el) => {
+          const lines = new Map();
+          for (const chip of el.children) {
+            const top = chip.offsetTop;
+            lines.set(top, (lines.get(top) || 0) + 1);
+          }
+          return {
+            rows: [...lines.values()],
+            aboveStrip: el.getBoundingClientRect().bottom <= el.parentElement.querySelector('.pr-strip').getBoundingClientRect().top,
+            clippedNames: [...el.querySelectorAll('.pr-chip-name')].filter((name) => name.scrollWidth > name.clientWidth)
+              .map((name) => name.textContent),
+          };
+        });
+        assert.deepEqual(rows, expectedRows, players + ' players');
+        assert.equal(aboveStrip, true, 'scores leave the played-card strip and lanes clear');
+        assert.deepEqual(clippedNames, [], 'each name fits in its score chip');
+      } finally {
+        await ctx.close();
+      }
+    }
+  });
+
+  await test('the Take 5 hand and empty-strip hint respect the phone height and width cutoffs', async () => {
+    const { page, ctx } = await open(tableMessages('penaltyrows', four), { width: 520, height: 700 });
+    try {
+      const hint = page.locator('.pr-strip .pr-hint');
+      const handCard = page.locator('.pr-hand .pr-card').first();
+      const chip = page.locator('.pr-chips li').first();
+      assert.equal(await hint.count(), 1, 'fixture has an empty played-card strip');
+      assert.equal(await hint.isVisible(), false, 'short phones hide the hint');
+      const shortWidth = (await handCard.boundingBox()).width;
+      const shortChipHeight = (await chip.boundingBox()).height;
+      await page.setViewportSize({ width: 520, height: 701 });
+      assert.equal(await hint.isVisible(), true, 'taller phones show the hint');
+      const tallWidth = (await handCard.boundingBox()).width;
+      assert.ok(tallWidth > shortWidth, 'taller phones enlarge the hand cards');
+      assert.ok((await chip.boundingBox()).height > shortChipHeight, 'short phones use more compact score chips');
+      await page.setViewportSize({ width: 521, height: 701 });
+      const wideWidth = (await handCard.boundingBox()).width;
+      assert.ok(wideWidth < tallWidth, 'the larger card width only applies to phones');
+      await page.setViewportSize({ width: 521, height: 700 });
+      assert.equal(await hint.isVisible(), true, 'a wider short screen keeps the hint');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  await test('a five-bomb badge uses smaller icons on phones and does not widen the page', async () => {
+    const { penaltyOf } = require('../../games/penaltyrows/engine');
+    const msgs = tableMessages('penaltyrows', four);
+    msgs[1].view.rows[0] = [{ n: 11, p: penaltyOf(11) }];
+    const { page, ctx } = await open(msgs, { width: 320, height: 640 });
+    try {
+      const badge = page.getByRole('img', { name: '5 penalty points', exact: true }).first();
+      const icons = badge.locator('.pr-pile-n');
+      assert.equal(await icons.textContent(), '💣'.repeat(5));
+      const phoneIconSize = await icons.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      for (const viewport of [{ width: 320, height: 640 }, { width: 667, height: 375 }, { width: 768, height: 1024 }]) {
+        await page.setViewportSize(viewport);
+        const { clips, pageFits } = await badge.evaluate((el) => {
+          const root = document.documentElement;
+          return {
+            clips: ['hidden', 'clip'].includes(getComputedStyle(el).overflowX),
+            pageFits: root.scrollWidth <= root.clientWidth,
+          };
+        });
+        assert.equal(clips, true, 'the badge contains its own overflow at width ' + viewport.width);
+        assert.equal(pageFits, true, 'the badge does not widen the page at width ' + viewport.width);
+        if (viewport.width > 520) {
+          const iconSize = await icons.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+          assert.ok(iconSize > phoneIconSize, 'phone badges use smaller icons');
+        }
+      }
+    } finally {
+      await ctx.close();
+    }
+  });
+
   await test('a turn plays out one card at a time: each placement appears in turn, paced by the table setting', async () => {
     const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
     const c = (n) => ({ n, p: pen(n) });
