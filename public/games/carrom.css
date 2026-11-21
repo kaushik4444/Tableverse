@@ -34,3 +34,5 @@
 .cb-moves { margin-top: 12px; max-width: 520px; margin-left: auto; margin-right: auto; }
 .cb-log { margin: 6px 0 0; padding-left: 20px; }
 
+
+.cb-fire[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }

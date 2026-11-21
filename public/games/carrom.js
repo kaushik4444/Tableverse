@@ -124,13 +124,14 @@
 
   function controlsHTML(v) {
     if (!v.myTurn || ui.anim) return '';
-    return `<p class="hint cb-tip" aria-live="polite">${tipText()}</p>`;
+    // a native button a tap or a touch screen reader can fire; it is disabled (aria-disabled) until a power is set
+    return `<p class="hint cb-tip" aria-live="polite">${tipText()}</p><button type="button" class="btn big cb-fire" data-cb="fire" aria-disabled="${ui.aim.power > 0 ? 'false' : 'true'}">Fire striker</button>`;
   }
 
   /** What the player can do now, with the live aim and power (there are no sliders). */
   function tipText() {
     const { angle, power } = ui.aim;
-    if (power <= 0) return 'Drag your striker along the baseline to place it (or use ← and → when it is focused). Then press on the board and drag back to set the aim and power.';
+    if (power <= 0) return 'Drag your striker along the baseline to place it (or use ← and → when it is focused). Then press on the board and drag back to set the aim and power. Keyboard: ← → move, Shift+← → turn, ↑ ↓ power, Enter fire.';
     return `Aim ${angle}° · power ${power}%. Let go to flick, or press Enter on the striker. Keyboard: ← → move, Shift+← → turn, ↑ ↓ power.`;
   }
 
@@ -298,6 +299,8 @@
     if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); striker.setAttribute('aria-valuenow', String(ui.aim.x)); }
     const tip = root.querySelector('.cb-tip');
     if (tip) tip.textContent = tipText();
+    const fireBtn = root.querySelector('[data-cb="fire"]');
+    if (fireBtn) fireBtn.setAttribute('aria-disabled', ui.aim.power > 0 ? 'false' : 'true');
   }
 
   function onPointerDown(e) {
@@ -394,6 +397,7 @@
     if (!el || !v || !ctx) return;
     switch (el.dataset.cb) {
       case 'rules': ctx.showRules(); break;
+      case 'fire': fire(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ui.resignArmed = false; ctx.leave(); break;
       case 'resign':
