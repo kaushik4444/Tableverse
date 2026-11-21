@@ -103,7 +103,7 @@
     const targets = v.targets.map((id) => { const p = v.players.find((x) => x.id === id); return `<button type="button" class="gf-chip wide ${ui.target === id ? 'on' : ''}" data-gf="target" data-id="${esc(id)}" aria-pressed="${ui.target === id}">${esc(p.name)}<small>${p.cards} card${p.cards === 1 ? '' : 's'}</small></button>`; }).join('');
     const ready = ui.rank && ui.target;
     const label = ready ? `Ask ${esc(v.players.find((p) => p.id === ui.target).name)} for ${word(ui.rank)}` : 'Pick a rank and a player';
-    return `<div class="gf-ask panel"><div class="gf-row"><span class="label">1 · Rank</span><div class="gf-chips">${ranks}</div></div>
+    return `<div class="gf-ask panel"><div class="gf-row"><span class="label">1 · Rank</span><div class="gf-chips ranks">${ranks}</div></div>
       <div class="gf-row"><span class="label">2 · Player</span><div class="gf-chips">${targets}</div></div>
       <button class="btn big" data-gf="ask" ${ready ? '' : 'disabled'}>${label}</button></div>`;
   }
