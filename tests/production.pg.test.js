@@ -90,7 +90,11 @@ function cookieSocket(port, cookie) {
       c.send({ t: 'setSeats', seats: 3 });
       c.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20', shuffleSeats: false, ...extra } });
       c.send({ t: 'start' });
-      await until(() => c.room && c.room.status === 'finished', 'game over');
+      // the table waits at each round for every seated person to press Ready; this player presses it whenever the table asks
+      await until(() => {
+        if (c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' });
+        return c.room && c.room.status === 'finished';
+      }, 'game over');
       return c;
     }
 
