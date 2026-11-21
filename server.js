@@ -8,7 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { createCloseCounter } = require('./lib/closeCounter');
-const { seatPlayers } = require('./lib/seatOrder');
+const { seatPlayers, arrangeMembers, shuffleMembers } = require('./lib/seatOrder');
 const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
@@ -1849,6 +1849,24 @@ function start(opts = {}) {
       broadcast(room); // also broadcasts the directory, removing private tables immediately
     },
 
+    arrangeSeats(p, msg) {
+      const room = hostRoom(p, 'lobby');
+      if (!room) return;
+      const arranged = arrangeMembers(room.members, msg.order);
+      if (!arranged) return sendError(p, 'Those seats could not be arranged. Try again.');
+      room.members.splice(0, room.members.length, ...arranged); // in place: the members array is shared with the room
+      room.seatsArranged = true;
+      broadcast(room);
+    },
+
+    shuffleSeats(p) {
+      const room = hostRoom(p, 'lobby');
+      if (!room) return;
+      room.members.splice(0, room.members.length, ...shuffleMembers(room.members));
+      room.seatsArranged = true;
+      broadcast(room);
+    },
+
     setSeats(p, msg) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
@@ -1873,7 +1891,9 @@ function start(opts = {}) {
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
-      const seats = seatPlayers(room.members, { shuffle: Boolean(room.options && room.options.shuffleSeats), offered });
+      // An arrangement the host made (or a shuffle they asked for) is kept: the option does not shuffle it again
+      const seats = seatPlayers(room.members, { shuffle: Boolean(room.options && room.options.shuffleSeats) && !room.seatsArranged, offered });
+      room.seatsArranged = false;
       room.game = def.create(seats, room.options, Math.random);
       // The member in each seat, in game order. Results are indexed by seat, so they are matched to people through this list.
       room.seated = seats.map((s) => room.members.find((m) => m.id === s.id)).filter(Boolean);
