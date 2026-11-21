@@ -101,6 +101,7 @@ function start(opts = {}) {
   const port = opts.port ?? Number(process.env.PORT || 3000);
   const botDelay = opts.botDelay || [900, 1600]; // ms range a bot "thinks"
   const autoAdvanceMs = opts.autoAdvanceMs ?? 8000; // pause between rounds
+  const kickTurns = opts.idleKickTurns ?? idlePolicy.IDLE_KICK_TURNS; // bot turns in a row before a person is removed (a test can raise it)
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
   const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket's session is re-checked this often
@@ -985,7 +986,7 @@ function start(opts = {}) {
     const sameBatch = room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id)) && (batched || prev.length > 1);
     room.waitingKey = key;
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
-    if (!limit || !humanWaiting) room.deadline = null;
+    if (!limit || !humanWaiting || room.gate) room.deadline = null; // while the table waits for Ready there is no turn clock
     else if (!sameBatch || !room.deadline) {
       const walkHold = typeof g.holdMs === 'function' ? g.holdMs() : 0;
       room.deadline = Date.now() + Math.max(0, (room.pauseUntil || 0) - Date.now(), walkHold) + limit;
@@ -1050,14 +1051,15 @@ function start(opts = {}) {
     if (!m || m.bot || !room.members.includes(m)) return;
     const n = idlePolicy.noteBotTurn(room, m.id);
     const q = players.get(m.id);
-    if (n < idlePolicy.IDLE_KICK_TURNS) {
+    if (n < kickTurns) {
       // every bot turn is a warning: the table sees it, and the person is told if they are connected
-      const left = idlePolicy.IDLE_KICK_TURNS - n;
-      if (q && q.connected) send(q.ws, { t: 'notice', text: `A bot played your turn while you were away (${n} of ${idlePolicy.IDLE_KICK_TURNS}). ${left} more in a row and you are removed from the table, with the same penalty as leaving.` });
-      sys(room, `⚠ A bot played ${m.name}'s turn (${n} of ${idlePolicy.IDLE_KICK_TURNS}).`);
+      const left = kickTurns - n;
+      if (q && q.connected) send(q.ws, { t: 'notice', text: `A bot played your turn while you were away (${n} of ${kickTurns}). ${left} more in a row and you are removed from the table, with the same penalty as leaving.` });
+      sys(room, `⚠ A bot played ${m.name}'s turn (${n} of ${kickTurns}).`);
       return;
     }
     const out = idlePolicy.kickIdle(room, m, Date.now());
+    if (room.hostId === m.id) ensureHost(room, { leaving: m.id }); // the removed person was the host: someone else takes it, so the table keeps its host controls
     if (q) {
       q.room = null;
       clearTimeout(q.dropTimer);
@@ -1071,6 +1073,11 @@ function start(opts = {}) {
     }
     if (voiceRelay.dropVoice(room, m.id)) broadcastVoice(room);
     sys(room, `🚫 ${m.name} was removed for being away: a bot played their last three turns.${out.penalised ? ' That counts as a loss.' : ''}`);
+  }
+
+  /** A move ended the turn (the turn, phase, batch or multiplier changed): several moves of one turn count as one bot turn. */
+  function turnPassed(a, b) {
+    return a.turn !== b.turn || a.phase !== b.phase || a.batch !== b.batch || a.multiplier !== b.multiplier;
   }
 
   /** Decide whether the server must act soon (bot turn, absent human, forced play, timeout, between rounds) and set one timer for it. */
@@ -1093,6 +1100,7 @@ function start(opts = {}) {
       if (!readyGate.gateOpen(room, isConnected)) return;
       room.gate = null;
       room.gatePassed = true;
+      touchTimer(room); // the turn limit starts now, not while the table waited for Ready
     }
 
     const waiting = awaitingOf(g);
@@ -1133,7 +1141,12 @@ function start(opts = {}) {
       }
       if (who) {
         delay = Math.max(who.bot ? (botMs !== null ? botMs : rand(botDelay[0], botDelay[1])) : absentMs, pause);
-        run = () => { const r = g.act(who.id, g.botAction(who.id)); if (r && r.ok) noteBotTurnFor(room, who); return r; };
+        run = () => {
+          const pre = publicState(g);
+          const r = g.act(who.id, g.botAction(who.id));
+          if (r && r.ok && turnPassed(pre, publicState(g))) noteBotTurnFor(room, who); // one bot turn, however many moves it took
+          return r;
+        };
         valid = () => awaitingOf(g).includes(who.id) && (who.bot || !isConnected(who));
       } else if (room.deadline) {
         // connected humans are thinking, but the table has a time limit
@@ -1153,7 +1166,7 @@ function start(opts = {}) {
               sys(room, `⏱ ${m.name} ran out of time. A bot played for them.`);
               const q = players.get(id);
               if (q && q.connected) send(q.ws, { t: 'notice', text: 'Time is up! A bot played for you.' });
-              noteBotTurnFor(room, m);
+              if (turnPassed(before, publicState(g))) noteBotTurnFor(room, m); // counted once, when their turn ends
             }
           }
           return res;
