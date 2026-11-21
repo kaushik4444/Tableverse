@@ -166,7 +166,7 @@
   function react(v) {
     const e = v.event;
     const snd = window.CardTable.sound;
-    if (ui.seq === null) { ui.seq = e ? e.seq : 0; ui.shown = ui.seq; ui.seenRound = v.roundResult ? v.roundResult.round : null; return; } // first render: do not replay an old event
+    if (ui.seq === null) { ui.seq = e ? e.seq : 0; ui.shown = ui.seq; ui.seenRound = v.roundResult ? v.roundResult.round : null; ui.summaryKey = summaryKeyOf(v); return; } // first render: do not replay an old event or hold the summary
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
     ui.holdUntil = Date.now() + HOLD_MS;
