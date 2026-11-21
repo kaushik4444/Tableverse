@@ -49,12 +49,23 @@ const sent = (page, t) => page.evaluate((x) => window.__sent.filter((m) => m.t =
     assert.equal((await sent(page, 'shuffleSeats')).length, 1);
   });
 
+  await run('keyboard focus stays on Shuffle seats when a broadcast redraws the lobby', async (page) => {
+    const base = lobby();
+    const reordered = JSON.parse(JSON.stringify(base));
+    reordered.room.members.reverse();
+    await page.focus('[data-act="shuffleSeats"]');
+    await page.keyboard.press('Enter');
+    await page.evaluate((m) => window.__push(m), reordered);
+    await page.waitForTimeout(150);
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.act), 'shuffleSeats');
+  });
+
   await run('a player who is not the host sees no seat controls', async (page) => {
     assert.equal(await page.$('[data-act="pickSeat"]'), null);
     assert.equal(await page.$('[data-act="shuffleSeats"]'), null);
   }, 'b2');
 
   await browser.close(); server.close();
-  console.log(`\n${4 - failed} lobby seat tests passed${failed ? `, ${failed} failed` : ''}`);
+  console.log(`\n${5 - failed} lobby seat tests passed${failed ? `, ${failed} failed` : ''}`);
   if (failed) process.exitCode = 1;
 })();

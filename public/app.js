@@ -2625,6 +2625,8 @@
     // keeps its keyboard focus: changing one setting must not slam the panel shut.
     const openFolds = [...document.querySelectorAll('details[id]')].filter((d) => d.open).map((d) => d.id);
     const focusedOpt = ae && ae.dataset && ae.dataset.opt ? ae.dataset.opt : null;
+    // seat swap and shuffle controls keep keyboard focus across a redraw, including one caused by another player's change
+    const focusedSeat = ae && ae.dataset && (ae.dataset.act === 'pickSeat' || ae.dataset.act === 'shuffleSeats') ? { act: ae.dataset.act, vid: ae.dataset.vid || null } : null;
     const saved = {};
     for (const id of KEEP_FIELDS) {
       const el = document.getElementById(id);
@@ -2648,6 +2650,7 @@
     showLevelUpDialog();
     for (const id of openFolds) { const d = document.getElementById(id); if (d && d.tagName === 'DETAILS') d.open = true; }
     if (focusedOpt) { const el = $app.querySelector(`[data-opt="${CSS.escape(focusedOpt)}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
+    if (focusedSeat) { const el = $app.querySelector(focusedSeat.vid ? `[data-act="${focusedSeat.act}"][data-vid="${CSS.escape(focusedSeat.vid)}"]` : `[data-act="${focusedSeat.act}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
     for (const id of KEEP_FIELDS) {
       const el = document.getElementById(id);
       const was = saved[id];
