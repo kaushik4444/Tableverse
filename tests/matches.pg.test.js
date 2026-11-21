@@ -57,7 +57,11 @@ function socket(port, cookie) {
       s.send({ t: 'setSeats', seats: 3 });
       s.send({ t: 'setOptions', options: { length: 'short', timeLimit: '20', ...extra } });
       s.send({ t: 'start' });
-      await until(() => s.room && s.room.status === 'finished', 'game over');
+      // the table waits at each round for every seated person to press Ready; this player presses it whenever the table asks
+      await until(() => {
+        if (s.room && s.room.gate && !(s.room.gate.ready || []).includes(s.id)) s.send({ t: 'ready' });
+        return s.room && s.room.status === 'finished';
+      }, 'game over');
     }
     const matchesIn = (code) => q('SELECT * FROM matches WHERE room_code = $1 ORDER BY finished_at, id', [code]);
 
