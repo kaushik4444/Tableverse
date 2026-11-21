@@ -237,32 +237,38 @@
       ? `Your goal, stage ${goalIdx + 1} · ${esc(stageName(v, goalIdx + 1))}: ${esc(goalText(v.goals[goalIdx]))}${me.laid ? ' ✓ laid down' : ''}`
       : `${v.stageCount} stages · watching`;
     const text = eventText(v);
-    const n = v.players.length;
-    const table = window.CardTable.pt.tableHTML({
-      n,
-      me: v.me,
-      seat: (i) => seatHTML(v, ctx, i),
-      card: () => null,
-      center: centreHTML(v),
-    });
+    // Stage 10 is not a table game: the piles sit in the middle and every seat follows in a list, you first, so it fits a phone
+    const order = v.players.map((_, i) => i).sort((a, b) => (a === v.me ? -1 : b === v.me ? 1 : a - b));
+    const seats = `<div class="sr-seats ${v.players.length > 4 ? 'many' : ''}" tabindex="0" role="region" aria-label="Every player's seat">${order.map((i) => seatHTML(v, ctx, i)).join('')}</div>`;
+    // a short phone scrolls the seat list: keep its position when the table is redrawn
+    const seatList = root.querySelector(".sr-seats");
+    const seatScroll = seatList ? seatList.scrollTop : 0;
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
         <div class="wz-round"><b>Stage 10</b><span class="label"> · round ${v.round}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Stages</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
-      <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
-        const st = shownStage(v, i);
-        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
-      }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
-      <div class="sr-table">${table}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
-      ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
+      <div class="sr-table">${centreHTML(v)}${seats}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
+      <p class="sr-event" role="status">${text || '&nbsp;'}</p>
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${traysHTML(v)}
       ${handHTML(v)}
       ${overlayHTML(v, ctx)}
     </div>`;
+    const seatsNow = root.querySelector(".sr-seats");
+    if (seatsNow) seatsNow.scrollTop = seatScroll;
+    // a wild card puts its end buttons on the runs: bring the first such run into view, so the choice is not hidden below the fold
+    const endRun = seatsNow && seatsNow.querySelector(".sr-ends button");
+    // scroll only the seat list, never the page: scrollIntoView would also move the outer containers and can hide the hand
+    const endGroup = endRun && endRun.closest(".sr-group");
+    if (endGroup && seatsNow) {
+      const g = endGroup.getBoundingClientRect();
+      const c = seatsNow.getBoundingClientRect();
+      if (g.top < c.top) seatsNow.scrollTop += g.top - c.top;
+      else if (g.bottom > c.bottom) seatsNow.scrollTop += g.bottom - c.bottom;
+    }
     root.onclick = onClick;
     const stagesSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
     if (stagesSheet) stagesSheet.onkeydown = (e) => {
