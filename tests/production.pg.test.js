@@ -524,7 +524,11 @@ function cookieSocket(port, cookie) {
         a.send({ t: 'start' });
         await until(() => b.view && b.room.status === 'playing', 'started');
         b.send({ t: 'leave' });
-        await until(() => a.room.status === 'finished', 'game over');
+        // the rounds wait for the one person left to press Ready, so this player presses it whenever the table asks
+        await until(() => {
+          if (a.room && a.room.gate && !(a.room.gate.ready || []).includes(a.id)) a.send({ t: 'ready' });
+          return a.room && a.room.status === 'finished';
+        }, 'game over');
         const [m] = await until(async () => { const r = await matchesOf(a.room.code); return r.length ? r : null; }, 'match row');
         const ps = await q('SELECT * FROM match_participants WHERE match_id = $1 ORDER BY seat', [m.id]);
         assert.deepEqual(ps.map((p) => [p.left_early, p.is_bot]), [[false, false], [true, false], [false, true]]);
