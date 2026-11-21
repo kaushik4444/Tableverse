@@ -243,6 +243,7 @@
     // a short phone scrolls the seat list: keep its position when the table is redrawn
     const seatList = root.querySelector(".sr-seats");
     const seatScroll = seatList ? seatList.scrollTop : 0;
+    const seatHadFocus = Boolean(seatList && seatList.contains(document.activeElement));
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
@@ -259,6 +260,8 @@
     </div>`;
     const seatsNow = root.querySelector(".sr-seats");
     if (seatsNow) seatsNow.scrollTop = seatScroll;
+    // the redraw removed the seat list that had keyboard focus: give it back, so arrow keys keep scrolling it
+    if (seatHadFocus && seatsNow) seatsNow.focus({ preventScroll: true });
     // a wild card puts its end buttons on the runs: bring the first such run into view, so the choice is not hidden below the fold
     const endRun = seatsNow && seatsNow.querySelector(".sr-ends button");
     // scroll only the seat list, never the page: scrollIntoView would also move the outer containers and can hide the hand
