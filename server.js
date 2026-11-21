@@ -1075,9 +1075,11 @@ function start(opts = {}) {
     sys(room, `🚫 ${m.name} was removed for being away: a bot played their last three turns.${out.penalised ? ' That counts as a loss.' : ''}`);
   }
 
-  /** A move ended the turn (the turn, phase, batch or multiplier changed): several moves of one turn count as one bot turn. */
+  /** A move ended the turn (the turn, batch or multiplier changed, or the phase moved on): several moves of one turn count as one bot turn.
+   *  Stage Rummy's draw moves the same player from "draw" to "play", which is still their turn: only the discard ends it. */
   function turnPassed(a, b) {
-    return a.turn !== b.turn || a.phase !== b.phase || a.batch !== b.batch || a.multiplier !== b.multiplier;
+    if (a.turn !== b.turn || a.batch !== b.batch || a.multiplier !== b.multiplier) return true;
+    return a.phase !== b.phase && !(a.phase === 'draw' && b.phase === 'play');
   }
 
   /** Decide whether the server must act soon (bot turn, absent human, forced play, timeout, between rounds) and set one timer for it. */
@@ -1144,7 +1146,8 @@ function start(opts = {}) {
         run = () => {
           const pre = publicState(g);
           const r = g.act(who.id, g.botAction(who.id));
-          if (r && r.ok && turnPassed(pre, publicState(g))) noteBotTurnFor(room, who); // one bot turn, however many moves it took
+          // one bot turn, however many moves it took: counted when the person's turn ends (or they are no longer awaited, as in a simultaneous bid)
+          if (r && r.ok && (turnPassed(pre, publicState(g)) || !awaitingOf(g).includes(who.id))) noteBotTurnFor(room, who);
           return r;
         };
         valid = () => awaitingOf(g).includes(who.id) && (who.bot || !isConnected(who));
@@ -1166,7 +1169,8 @@ function start(opts = {}) {
               sys(room, `⏱ ${m.name} ran out of time. A bot played for them.`);
               const q = players.get(id);
               if (q && q.connected) send(q.ws, { t: 'notice', text: 'Time is up! A bot played for you.' });
-              if (turnPassed(before, publicState(g))) noteBotTurnFor(room, m); // counted once, when their turn ends
+              // counted once per person, when their own turn ends: a simultaneous bid ends it without changing the table's turn
+              if (turnPassed(before, publicState(g)) || !awaitingOf(g).includes(id)) noteBotTurnFor(room, m);
             }
           }
           return res;
@@ -2003,8 +2007,8 @@ function start(opts = {}) {
       const room = rooms.get(p.room);
       if (!room || room.status !== 'playing' || !room.game) return;
       if (!readyGate.markReady(room, p.id)) return;
-      broadcast(room);
-      schedule(room);
+      schedule(room); // may open the gate: it clears the gate and starts the turn clock
+      broadcast(room); // after the schedule, so everybody sees the cleared Ready bar and the new deadline
     },
 
     /** A player who is not the host asks for another game (tap again to take it back). The host sees the count and starts it. */
