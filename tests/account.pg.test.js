@@ -51,7 +51,7 @@ function socket(port, cookie) {
     const { start } = require('../server');
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
-    const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80], matchLog: quiet() };
+    const fast = { port: 0, idleKickTurns: 1e9, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80], matchLog: quiet() };
     const srv = await start(fast);
     assert.equal(srv.database.mode, 'postgres');
     let seq = 1;
@@ -420,7 +420,12 @@ function socket(port, cookie) {
       late.ws.close();
       assert.equal((await q('SELECT count(*)::int AS n FROM players WHERE id = $1', [u.id]))[0].n, 0);
 
-      const [match] = await until(async () => { const r = await q('SELECT id FROM matches WHERE room_code = $1', [code]); return r.length ? r : null; }, 'the game finished and was recorded', 60000);
+      const [match] = await until(async () => {
+        // the surviving friend presses Ready at every later round gate until the game is recorded
+        if (f.room && f.room.gate && !(f.room.gate.ready || []).includes(f.id)) f.send({ t: 'ready' });
+        const r = await q('SELECT id FROM matches WHERE room_code = $1', [code]);
+        return r.length ? r : null;
+      }, 'the game finished and was recorded', 60000);
       const rows = await q('SELECT player_id, player_name, is_bot, left_early FROM match_participants WHERE match_id = $1 ORDER BY seat', [match.id]);
       assert.equal(rows.length, 3);
       assert.ok(rows.every((r) => r.player_name !== 'Secret Sam'), 'the real name is not in the record: ' + JSON.stringify(rows));
