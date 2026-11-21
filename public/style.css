@@ -288,6 +288,7 @@ select:disabled { opacity: .75; }
 select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .btn.big { width: 100%; font-size: 18px; min-height: 52px; }
 .btn.big small { font-weight: 500; opacity: .75; }
+@media (max-width: 520px) { .btn.big { min-height: 44px; font-size: 16px; } } /* main actions stay easy to hit, but leave room for the table and your cards */
 .btn.wa { background: #25d366; color: #05301a; }
 .rule { line-height: 1.5; margin: 0 0 10px; color: #e6e3d6; }
 .variants dt { font-weight: 700; margin-top: 8px; }
