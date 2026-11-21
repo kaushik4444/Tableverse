@@ -383,6 +383,8 @@ function socket(port, cookie) {
       const logHas = (c, text) => !!(c.view && (c.view.log || []).some((e) => `${e.by} ${e.card || e.text || ''}`.includes(text)));
       // the short turn limit may play for the human before this bid lands: either way the log names them
       for (let i = 0; i < 40 && !logHas(s, 'Secret Sam'); i++) {
+        // the first round waits for every seated person to press Ready
+        for (const c of [s, f]) if (c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' });
         if (s.view && s.view.myTurn) s.send({ t: 'act', action: { type: 'bid', amount: i % 2 } });
         await sleep(100);
       }
