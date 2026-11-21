@@ -245,8 +245,10 @@
     const game = root.querySelector('.hm-game');
     const sheet = game ? game.querySelector(':scope > .overlay') : null;
     if (game) [...game.children].forEach((el) => { if (el !== sheet) el.inert = Boolean(sheet); });
-    if (sheet && !ui.summaryOpen) { const first = sheet.querySelector('button'); if (first) first.focus({ preventScroll: true }); }
-    ui.summaryOpen = Boolean(sheet);
+    // focus the sheet whenever its summary changes (a round sheet can be replaced by the game-over sheet)
+    const summaryKey = sheet ? (v.phase === 'gameOver' ? 'over' : `round${v.roundResult.round}`) : null;
+    if (sheet && summaryKey !== ui.summaryKey) { const first = sheet.querySelector('button'); if (first) first.focus({ preventScroll: true }); }
+    ui.summaryKey = summaryKey;
     root.onclick = onClick;
   }
 
