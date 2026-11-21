@@ -81,6 +81,8 @@ function scene(n, edit) {
     const r = await open(scene(4));
     await r.page.click('.hm-card[data-id="r1"]');
     assert.equal(await r.page.locator('.hm-tool.fixable').count(), 1);
+    const box = await r.page.locator('.hm-tool.fixable').boundingBox();
+    assert.ok(box.width >= 40 && box.height >= 40, `repair target is big enough to tap (${box.width}x${box.height})`);
     await r.page.click('.hm-tool.fixable');
     assert.deepEqual((await sent(r.page)).at(-1).action, { type: 'repair', card: 'r1', target: 1, tool: 'pick' });
     await r.ctx.close();

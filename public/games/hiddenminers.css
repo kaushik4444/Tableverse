@@ -69,3 +69,21 @@
 .hm-game .hm-cell.spot:focus-visible, .hm-game .hm-cell.cave:focus-visible, .hm-game .hm-tool.fixable:focus-visible, .hm-game .hm-p.target:focus-visible, .hm-game .hm-card:focus-visible {
   outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--gold, #f2c14e);
 }
+
+/* compact miners and role chip so the board and your cards get the room */
+.hm-game { gap: 6px; }
+.hm-game .hm-role-row { margin: -2px 0; }
+.hm-youare { padding: 1px 10px; font-size: 12px; }
+.hm-players { gap: 4px; }
+.hm-players li { gap: 1px; }
+.hm-p { min-width: 0; padding: 2px 8px; border-radius: 10px; }
+.hm-nm { font-size: 12px; max-width: 96px; }
+.hm-meta { font-size: 10px; }
+.hm-tool { font-size: 13px; padding: 1px 3px; }
+.hm-card { width: clamp(64px, 19vw, 96px); }
+.hm-card .hm-face b { font-size: clamp(26px, 8vw, 40px); }
+.hm-game .wz-status { padding-top: 6px; padding-bottom: 6px; }
+
+/* a tool you can tap to repair is a real touch target, even though resting icons are compact */
+.hm-players .hm-tool.fixable { display: inline-grid; place-items: center; min-width: 40px; min-height: 40px; font-size: 18px; }
+.hm-players li:has(.hm-tool.fixable) .hm-tools { gap: 6px; }
