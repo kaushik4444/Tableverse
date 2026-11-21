@@ -123,6 +123,10 @@ function awaiting(g) {
 }
 
 function applyAction(g, playerId, action) {
+  if (g.phase === 'roundEnd') { // between rounds: nothing is played until everybody is ready, then the next round starts
+    if (action && action.type === 'continue') { startRound(g); return { ok: true }; }
+    return { ok: false, error: 'The next round starts when everybody is ready' };
+  }
   if (g.phase === 'gameOver') return { ok: false, error: 'The game is over' };
   const i = indexOf(g, playerId);
   if (i < 0) return { ok: false, error: 'You are not at this table' };
@@ -146,6 +150,7 @@ function reveal(g) {
   g.hands = g.hands.map((h, i) => h.filter((c) => c.n !== g.picks[i]));
   g.resolved = 0; g.lastTurn = [];
   g.before = g.rows.map((r) => r.map((c) => ({ n: c.n, p: c.p })));
+  linger(g, STEP_MS); // the opening snapshot, which the table shows before the first card lands
   play(g);
 }
 
@@ -174,7 +179,7 @@ function play(g) {
       g.rows[best] = [r.card];
       g.lastTurn.push({ by: r.by, n: r.card.n, p: r.card.p, row: best, kind: 'sweep', took: sum(taken) });
       say(g, g.players[r.by].name, `played the ${g.rowLimit + 1}th card: took row ${best + 1}, ${pts(sum(taken))}`, 'sweep');
-      linger(g, STEP_MS + SWEEP_MS);
+      linger(g, 3 * STEP_MS + SWEEP_MS); // the sixth card lands, the row is collected, then the card starts the row
     } else {
       g.rows[best].push(r.card);
       g.lastTurn.push({ by: r.by, n: r.card.n, p: r.card.p, row: best, kind: 'place', took: 0 });
@@ -192,7 +197,7 @@ function takeIt(g, i, row, card) {
   g.rows[row] = [card];
   g.lastTurn.push({ by: i, n: card.n, p: card.p, row, kind: 'take', took: sum(taken) });
   say(g, g.players[i].name, `${card.n} fits no row: took row ${row + 1}, ${pts(sum(taken))}`, 'take');
-  linger(g, STEP_MS + SWEEP_MS);
+  linger(g, 2 * STEP_MS + SWEEP_MS); // the row is collected, then the card starts it
 }
 
 function takeRow(g, i, action) {
@@ -237,7 +242,7 @@ function endTurn(g) {
     say(g, g.winners.map((i) => g.players[i].name).join(' & '), g.winners.length > 1 ? 'share the win!' : 'wins!', 'win');
     return;
   }
-  startRound(g);
+  g.phase = 'roundEnd'; // the next round starts once everybody has pressed Ready (the continue action)
 }
 
 /** The cost of playing `n` now, for a bot: what it would take. Lower is better. */

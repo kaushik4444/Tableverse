@@ -11,7 +11,7 @@ const { start } = require('../server');
 const guard = setTimeout(() => {
   console.error('FAIL smoke test timed out');
   process.exit(1);
-}, 60000);
+}, 150000);
 
 function get(port, path) {
   return new Promise((resolve, reject) => {
@@ -29,7 +29,7 @@ function client(port, name, token) {
   c.waiters = [];
   c.until = (pred, label) =>
     new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('timeout waiting for ' + label)), 20000);
+      const t = setTimeout(() => reject(new Error('timeout waiting for ' + label)), 60000); // a full 20-round game now waits for everybody's Ready at each round
       const check = () => {
         if (pred()) { clearTimeout(t); resolve(); return true; }
         return false;
@@ -40,8 +40,13 @@ function client(port, name, token) {
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'welcome') Object.assign(c, { id: m.id, token: m.token, games: m.games, tables: m.tables || [], rejoin: m.rejoin || [], announcement: m.announcement });
-    if (m.t === 'state') { c.room = m.room; c.view = m.view; if (c.playing) c.step(); }
-    if (m.t === 'error') c.errors.push(m.message);
+    if (m.t === 'state') {
+      c.room = m.room; c.view = m.view;
+      // the start and round gates need every person to press Ready before any move is accepted
+      if (c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' });
+      if (c.playing) c.step();
+    }
+    if (m.t === 'error') { c.errors.push(m.message); c.lastKey = null; } // a refused move may be sent again once the table allows it
     if (m.t === 'tables') { c.tables = m.tables || []; c.rejoin = m.rejoin || []; }
     if (m.t === 'chat') c.chats.push(m.m);
     if (m.t === 'notice') c.notices.push(m.text);

@@ -62,7 +62,7 @@ module.exports = {
       forcedPlay: () => null,
       stamp: () => g.round + ':' + g.turn, // changes when the turn passes (the server compares stamps with !==)
       botDelayMs: () => 1100 + g.rng() * 800, // bots pause long enough for people to follow each move
-      autoAction: () => null,
+      autoAction: () => (g.phase === 'roundEnd' ? { type: 'continue' } : null),
       isOver: () => g.phase === 'gameOver',
       results: () => engine.results(g),
     };

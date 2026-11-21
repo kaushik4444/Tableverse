@@ -133,7 +133,7 @@
     const stage = shownStage(v, i);
     const sub = `Stage ${stage}/${v.stageCount}`; // short, so it fits a phone seat; the card count is under the seat
     const count = `<div class="sr-nolay">${p.cards} cards · ${p.score} pts</div>`; // points stay on the seat: fewer is better
-    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay">Not down · ${p.cards} cards · ${p.score} pts</div>`);
+    const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay"><span class="sr-wide">Not down · </span>${p.cards} cards · ${p.score} pts</div>`);
     return window.CardTable.pt.seatHTML({
       pid: p.id,
       name: p.name + (i === v.me ? ' (you)' : ''),
@@ -237,32 +237,46 @@
       ? `Your goal, stage ${goalIdx + 1} · ${esc(stageName(v, goalIdx + 1))}: ${esc(goalText(v.goals[goalIdx]))}${me.laid ? ' ✓ laid down' : ''}`
       : `${v.stageCount} stages · watching`;
     const text = eventText(v);
-    const n = v.players.length;
-    const table = window.CardTable.pt.tableHTML({
-      n,
-      me: v.me,
-      seat: (i) => seatHTML(v, ctx, i),
-      card: () => null,
-      center: centreHTML(v),
-    });
+    // Stage 10 is not a table game: the piles sit in the middle and every seat follows in a list, you first, so it fits a phone
+    const order = v.players.map((_, i) => i).sort((a, b) => (a === v.me ? -1 : b === v.me ? 1 : a - b));
+    const seats = `<div class="sr-seats ${v.players.length > 4 ? 'many' : ''}" tabindex="0" role="region" aria-label="Every player's seat">${order.map((i) => seatHTML(v, ctx, i)).join('')}</div>`;
+    // a short phone scrolls the seat list: keep its position when the table is redrawn
+    const seatList = root.querySelector(".sr-seats");
+    const seatScroll = seatList ? seatList.scrollTop : 0;
+    const active = document.activeElement;
+    const seatHadFocus = Boolean(seatList && seatList.contains(active));
+    // the control that had focus (a wild-card end button, say), found again after the redraw by its data attributes
+    const focusSel = seatHadFocus && active !== seatList ? [...active.attributes].filter((a) => a.name.startsWith('data-')).map((a) => `[${a.name}="${CSS.escape(a.value)}"]`).join('') : '';
     root.innerHTML = `
     <div class="wz sr">
       <div class="wz-top">
         <div class="wz-round"><b>Stage 10</b><span class="label"> · round ${v.round}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Stages</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
-      <div class="wz-bids sr-stages" aria-label="Every player's stage">${v.players.map((p, i) => {
-        const st = shownStage(v, i);
-        return `<span class="${i === v.turn && v.phase !== 'gameOver' ? 'sr-now' : ''} ${stageDone(v, i, p) ? 'sr-stage-done' : ''}">${i === v.me ? 'You' : esc(p.name)} stage <b>${st}</b>/${v.stageCount}</span>`;
-      }).join('')}</div>
       <p class="sr-goal" role="status">${goalLine}</p>
-      <div class="sr-table">${table}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
-      ${text ? `<p class="sr-event" role="status">${text}</p>` : ''}
+      <div class="sr-table">${centreHTML(v)}${seats}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
+      <p class="sr-event" role="status">${text || '&nbsp;'}</p>
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${traysHTML(v)}
       ${handHTML(v)}
       ${overlayHTML(v, ctx)}
     </div>`;
+    const seatsNow = root.querySelector(".sr-seats");
+    if (seatsNow) seatsNow.scrollTop = seatScroll;
+    // the redraw removed the seat list that had keyboard focus: give it back, so arrow keys keep scrolling it
+    let restored = null;
+    if (seatHadFocus && seatsNow) { restored = (focusSel ? seatsNow.querySelector(focusSel) : null) || null; (restored || seatsNow).focus({ preventScroll: true }); }
+    // a wild card puts its end buttons on the runs: bring the first such run into view, so the choice is not hidden below the fold;
+    // a restored control is the one the person is on, so it keeps the view instead
+    const endRun = seatsNow && seatsNow.querySelector(".sr-ends button");
+    // scroll only the seat list, never the page: scrollIntoView would also move the outer containers and can hide the hand
+    const target = restored || (endRun && endRun.closest(".sr-group"));
+    if (target && seatsNow) {
+      const g = target.getBoundingClientRect();
+      const c = seatsNow.getBoundingClientRect();
+      if (g.top < c.top) seatsNow.scrollTop += g.top - c.top;
+      else if (g.bottom > c.bottom) seatsNow.scrollTop += g.bottom - c.bottom;
+    }
     root.onclick = onClick;
     const stagesSheet = root.querySelector('[aria-labelledby="sr-phases-title"]');
     if (stagesSheet) stagesSheet.onkeydown = (e) => {

@@ -52,11 +52,16 @@ function wsClient(port, token) {
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     c.messages.push(m);
-    if (m.t === 'welcome') { c.welcomed = true; c.rejoin = m.rejoin || []; }
+    if (m.t === 'welcome') { c.welcomed = true; c.id = m.id; c.rejoin = m.rejoin || []; }
     if (m.t === 'tables') c.rejoin = m.rejoin || [];
-    if (m.t === 'state') { c.room = m.room; c.view = m.view; c.step(); }
+    if (m.t === 'state') {
+      c.room = m.room; c.view = m.view;
+      // the start and round gates need every person to press Ready before a move is accepted
+      if (c.room && c.room.gate && !(c.room.gate.ready || []).includes(c.id)) c.send({ t: 'ready' });
+      c.step();
+    }
     if (m.t === 'left') { c.room = null; c.view = null; c.lefts++; }
-    if (m.t === 'error') c.errors.push(m.message);
+    if (m.t === 'error') { c.errors.push(m.message); c.lastKey = null; } // a refused move may be sent again once the table allows it
     if (m.t === 'notice') c.notices.push(m.text);
     if (m.t === 'socialPresence') c.presence.push(m);
     if (m.t === 'socialNotice') c.social = (c.social || []).concat(m);

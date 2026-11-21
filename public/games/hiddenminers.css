@@ -1,0 +1,89 @@
+/* Hidden Miners: the tunnel board, the miners and their tools, the cards in your hand. Builds on table.css. */
+.hm-game { --rock: #4a3b30; --rock-d: #2c231c; --way: #e9c57f; display: grid; gap: 8px; align-content: start; }
+.hm-game .hm-role-row { display: flex; justify-content: center; }
+.hm-youare { padding: 3px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .25); }
+.hm-youare.saboteur { background: rgba(180, 35, 24, .35); border-color: #ee6a55; }
+.hm-youare.digger { background: rgba(53, 184, 106, .28); border-color: #35b86a; }
+
+.hm-players { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.hm-players li { display: grid; gap: 2px; justify-items: center; }
+.hm-p { display: grid; justify-items: center; padding: 4px 10px; min-width: 84px; border-radius: 12px; background: rgba(0, 0, 0, .3); border: 2px solid transparent; color: inherit; font: inherit; }
+.hm-p.turn { border-color: var(--gold, #f2c14e); box-shadow: 0 0 10px rgba(242, 193, 78, .45); }
+.hm-p.me .hm-nm { color: var(--gold, #f2c14e); }
+.hm-p.target { cursor: pointer; border-color: #ee6a55; animation: hm-pulse 1.1s ease-in-out infinite; }
+.hm-nm { font-weight: 750; font-size: 13px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-meta { font-size: 11px; color: rgba(255, 255, 255, .75); }
+.hm-tools { display: flex; gap: 4px; }
+.hm-tool { font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 6px; background: rgba(255, 255, 255, .1); border: 0; color: inherit; }
+.hm-tool.broken { background: rgba(180, 35, 24, .55); filter: grayscale(.6); position: relative; text-decoration: line-through; }
+.hm-tool.broken::after { content: '✖'; position: absolute; right: -3px; top: -5px; font-size: 9px; color: #fff; }
+.hm-tool.fixable { min-width: 44px; min-height: 44px; cursor: pointer; filter: none; outline: 2px solid var(--gold, #f2c14e); animation: hm-pulse 1.1s ease-in-out infinite; }
+
+.hm-board-wrap { display: flex; justify-content: center; }
+.hm-board { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px; width: min(100%, 880px); padding: 4px; border-radius: 10px; background: #1b1511; }
+.hm-cell { position: relative; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: rgba(255, 255, 255, .035); overflow: hidden; color: inherit; font: inherit; }
+.hm-cell .hm-tile { width: 100%; height: 100%; display: block; }
+.hm-tile .rock { fill: var(--rock); }
+.hm-tile .way { fill: var(--way); }
+.hm-tile .plug { stroke: #8a2c20; stroke-width: 10; stroke-linecap: round; fill: none; }
+.hm-tile.ghost { opacity: .55; }
+.hm-cell.start { outline: 2px solid var(--gold, #f2c14e); outline-offset: -2px; }
+.hm-flag { position: absolute; font-size: clamp(10px, 3vw, 22px); line-height: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .7)); }
+.hm-cell.goal { background: repeating-linear-gradient(45deg, #3a3330 0 6px, #2b2522 6px 12px); font-size: clamp(14px, 4.4vw, 34px); }
+.hm-cell.goal.is-gold { background: radial-gradient(circle, #ffe38a, #c98a2b); }
+.hm-cell.goal.is-rock { background: #3b3835; }
+.hm-q { font-weight: 800; color: #d8c8a8; }
+.hm-seen { position: absolute; right: 2px; bottom: 0; font-size: clamp(9px, 2.4vw, 16px); }
+.hm-cell.spot, .hm-cell.cave { cursor: pointer; outline: 2px solid var(--gold, #f2c14e); outline-offset: -2px; animation: hm-pulse 1.1s ease-in-out infinite; }
+.hm-cell.cave { outline-color: #ee6a55; }
+@keyframes hm-pulse { 50% { filter: brightness(1.35); } }
+
+.hm-event { margin: 0; text-align: center; font-size: 13px; color: rgba(255, 255, 255, .9); }
+.hm-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.hm-hand { display: flex; gap: 8px; overflow-x: auto; padding: 14px 6px 6px; justify-content: safe center; -webkit-overflow-scrolling: touch; }
+.hm-card { flex: 0 0 auto; display: grid; justify-items: center; gap: 3px; width: clamp(54px, 15vw, 84px); padding: 4px; border-radius: 10px; background: #f3ead8; color: #2c231c; border: 2px solid #fff; font: inherit; transition: transform .15s ease; }
+.hm-card small { font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; }
+.hm-card .hm-face { display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 6px; overflow: hidden; position: relative; background: #e8dcc2; }
+.hm-card .hm-face b { font-size: clamp(20px, 6vw, 32px); line-height: 1; font-weight: 400; }
+.hm-card .hm-face i { position: absolute; right: 2px; bottom: 0; font-size: 13px; font-style: normal; }
+.hm-face.hm-bad { background: #f2c9c1; }
+.hm-face.hm-good { background: #c9ecd6; }
+.hm-card.playable { box-shadow: 0 0 0 2px rgba(242, 193, 78, .85), 0 6px 14px rgba(0, 0, 0, .45); }
+.hm-card.dim { filter: brightness(.6) saturate(.7); }
+.hm-card.sel { transform: translateY(-12px); box-shadow: 0 0 0 3px var(--gold, #f2c14e), 0 12px 20px rgba(0, 0, 0, .5); filter: none; }
+@media (hover: hover) { .hm-card.playable:hover { transform: translateY(-6px); } }
+
+.hm-final { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.hm-final li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, .07); }
+.hm-final li.win { background: rgba(242, 193, 78, .2); }
+.hm-role { font-style: normal; font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 999px; margin-left: 4px; }
+.hm-role.saboteur { background: rgba(180, 35, 24, .55); }
+.hm-role.digger { background: rgba(53, 184, 106, .45); }
+@media (prefers-reduced-motion: reduce) { .hm-p.target, .hm-tool.fixable, .hm-cell.spot, .hm-cell.cave { animation: none; } .hm-card { transition: none; } }
+
+/* the shared feed floats over the bottom of the board without taking room */
+.hm-boardwrap { position: relative; }
+.hm-boardwrap .gf-feed.gf-float { bottom: 8px; }
+
+/* the highlighted targets pulse, so a keyboard focus ring must look different from their resting outline */
+.hm-game .hm-cell.spot:focus-visible, .hm-game .hm-cell.cave:focus-visible, .hm-game .hm-tool.fixable:focus-visible, .hm-game .hm-p.target:focus-visible, .hm-game .hm-card:focus-visible {
+  outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--gold, #f2c14e);
+}
+
+/* compact miners and role chip so the board and your cards get the room */
+.hm-game { gap: 6px; }
+.hm-game .hm-role-row { margin: -2px 0; }
+.hm-youare { padding: 1px 10px; font-size: 12px; }
+.hm-players { gap: 4px; }
+.hm-players li { gap: 1px; }
+.hm-p { min-width: 0; padding: 2px 8px; border-radius: 10px; }
+.hm-nm { font-size: 12px; max-width: 96px; }
+.hm-meta { font-size: 10px; }
+.hm-tool { font-size: 13px; padding: 1px 3px; }
+.hm-card { width: clamp(64px, 19vw, 96px); }
+.hm-card .hm-face b { font-size: clamp(26px, 8vw, 40px); }
+.hm-game .wz-status { padding-top: 6px; padding-bottom: 6px; }
+
+/* a tool you can tap to repair is a real touch target, even though resting icons are compact */
+.hm-players .hm-tool.fixable { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; font-size: 18px; }
+.hm-players li:has(.hm-tool.fixable) .hm-tools { gap: 6px; }

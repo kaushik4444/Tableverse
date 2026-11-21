@@ -13,24 +13,24 @@ const ui = window.TVHomeUI({
   pendingSocial: () => 0,
 });
 const html = ui.comingSoonHTML();
-const buildOrder = ['Hidden Miners', 'Bullhead Run', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
+const buildOrder = ['Bingo', 'Cup Pong', 'Sudoku', 'Falling Blocks', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
 const additional = ['Secret Clues'];
-assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 6);
+assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 8);
 let previous = -1;
 for (const name of [...buildOrder, ...additional]) {
   const index = html.indexOf(name);
   assert.ok(index > previous, `roadmap order is wrong or missing: ${name}`);
   previous = index;
 }
-for (const protectedBrand of ['Monopoly', 'Saboteur', '6 nimmt!', 'UNO', 'CATAN', 'Connect Four', 'Codenames']) {
+for (const protectedBrand of ['Monopoly', 'Saboteur', 'Tetris', 'Bullhead', '6 nimmt!', 'UNO', 'CATAN', 'Connect Four', 'Codenames']) {
   assert.ok(!html.includes(protectedBrand), `protected commercial title should not be displayed: ${protectedBrand}`);
 }
 assert.match(html, /Development order/);
-assert.equal((html.match(/>In development</g) || []).length, 1, 'exactly one game is in development');
-assert.match(html, /Hidden Miners[\s\S]*?>In development</);
-assert.equal((html.match(/>Planned</g) || []).length, 5, 'the others are planned');
+assert.equal((html.match(/>In development</g) || []).length, 0, 'no game is in development right now');
+assert.ok(!html.includes('Hidden Miners'), 'Hidden Miners is playable, so it is no longer listed');
+assert.equal((html.match(/>Planned</g) || []).length, 8, 'all are are planned');
 assert.match(html, /Also on the list/);
-assert.match(html, /6 planned/);
+assert.match(html, /8 planned/);
 assert.match(html, /original artwork and presentation/);
 // What's new: the release history is public/whats-new-data.js; the home page shows the newest release's first three items.
 const releaseSource = fs.readFileSync(require.resolve('../public/whats-new-data.js'), 'utf8');
@@ -38,9 +38,11 @@ const sandbox = { window: {} };
 vm.runInNewContext(releaseSource, sandbox);
 const releases = sandbox.window.TV_RELEASES;
 assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history keeps every version (newest first)');
-// Releases are newest first. The latest is the twelve-games release; the game names note and the guest play release follow it.
+// Releases are newest first. Older releases are found by version so a new release at the top never breaks this test.
 const byVersion = (v) => releases.find((r) => r.version === v);
-assert.equal(releases[0].version, '2026-11-20-twelve-games', 'the newest release comes first');
+assert.equal(releases[0].version, '2026-11-21-color-clash-hidden-miners', 'the newest release comes first');
+assert.ok(releases.indexOf(byVersion('2026-11-20-twelve-games')) > 0, 'the twelve-games release follows it');
+assert.match(releases[0].items.map((i) => i.title).join('\n'), /Color Clash[\s\S]*Hidden Miners/);
 assert.ok(releases[0].items.length >= 1, 'the newest release has at least one item');
 assert.match(byVersion('2026-11-20-game-names').items.map((i) => i.title).join('\n'), /Three games have new names/);
 const newest = byVersion('2026-11-18-guest-play');
@@ -88,4 +90,4 @@ for (const shipped of ['Private tables and invitations', 'Host tools', 'Player c
 }
 assert.match(appSource, /<h3 class="stat-h"[^\n]*r\.version/, 'each Version history heading shows its version, since older releases have no date');
 assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
-console.log('Coming Soon and latest-release-note tests passed (6 games, requested order, alternate working titles, 3 current highlights).');
+console.log('Coming Soon and latest-release-note tests passed (8 games, requested order, alternate working titles, 3 current highlights).');

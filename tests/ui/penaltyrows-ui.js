@@ -109,6 +109,92 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('phone scores sit above the board and wrap only when a fifth player joins', async () => {
+    const roster = [...four, ...['Eli', 'Fay', 'Gia', 'Hugo'].map((name) => ({ name }))];
+    for (const [players, expectedRows] of [[4, [4]], [5, [4, 1]], [8, [4, 4]]]) {
+      const { page, ctx } = await open(tableMessages('penaltyrows', roster.slice(0, players)), { width: 520, height: 700 });
+      try {
+        const chips = page.locator('.pr-chips');
+        assert.deepEqual(await chips.locator('.pr-chip-name').allInnerTexts(),
+          roster.slice(0, players).map(({ name }, i) => i === 0 ? name + ' (you)' : name));
+        const { rows, aboveStrip, clippedNames } = await chips.evaluate((el) => {
+          const lines = new Map();
+          for (const chip of el.children) {
+            const top = chip.offsetTop;
+            lines.set(top, (lines.get(top) || 0) + 1);
+          }
+          return {
+            rows: [...lines.values()],
+            aboveStrip: el.getBoundingClientRect().bottom <= el.parentElement.querySelector('.pr-strip').getBoundingClientRect().top,
+            clippedNames: [...el.querySelectorAll('.pr-chip-name')].filter((name) => name.scrollWidth > name.clientWidth)
+              .map((name) => name.textContent),
+          };
+        });
+        assert.deepEqual(rows, expectedRows, players + ' players');
+        assert.equal(aboveStrip, true, 'scores leave the played-card strip and lanes clear');
+        assert.deepEqual(clippedNames, [], 'each name fits in its score chip');
+      } finally {
+        await ctx.close();
+      }
+    }
+  });
+
+  await test('the Take 5 hand and empty-strip hint respect the phone height and width cutoffs', async () => {
+    const { page, ctx } = await open(tableMessages('penaltyrows', four), { width: 520, height: 700 });
+    try {
+      const hint = page.locator('.pr-strip .pr-hint');
+      const handCard = page.locator('.pr-hand .pr-card').first();
+      const chip = page.locator('.pr-chips li').first();
+      assert.equal(await hint.count(), 1, 'fixture has an empty played-card strip');
+      assert.equal(await hint.isVisible(), false, 'short phones hide the hint');
+      const shortWidth = (await handCard.boundingBox()).width;
+      const shortChipHeight = (await chip.boundingBox()).height;
+      await page.setViewportSize({ width: 520, height: 701 });
+      assert.equal(await hint.isVisible(), true, 'taller phones show the hint');
+      const tallWidth = (await handCard.boundingBox()).width;
+      assert.ok(tallWidth > shortWidth, 'taller phones enlarge the hand cards');
+      assert.ok((await chip.boundingBox()).height > shortChipHeight, 'short phones use more compact score chips');
+      await page.setViewportSize({ width: 521, height: 701 });
+      const wideWidth = (await handCard.boundingBox()).width;
+      assert.ok(wideWidth < tallWidth, 'the larger card width only applies to phones');
+      await page.setViewportSize({ width: 521, height: 700 });
+      assert.equal(await hint.isVisible(), true, 'a wider short screen keeps the hint');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  await test('a five-bomb badge uses smaller icons on phones and does not widen the page', async () => {
+    const { penaltyOf } = require('../../games/penaltyrows/engine');
+    const msgs = tableMessages('penaltyrows', four);
+    msgs[1].view.rows[0] = [{ n: 11, p: penaltyOf(11) }];
+    const { page, ctx } = await open(msgs, { width: 320, height: 640 });
+    try {
+      const badge = page.getByRole('img', { name: '5 penalty points', exact: true }).first();
+      const icons = badge.locator('.pr-pile-n');
+      assert.equal(await icons.textContent(), '💣'.repeat(5));
+      const phoneIconSize = await icons.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      for (const viewport of [{ width: 320, height: 640 }, { width: 667, height: 375 }, { width: 768, height: 1024 }]) {
+        await page.setViewportSize(viewport);
+        const { clips, pageFits } = await badge.evaluate((el) => {
+          const root = document.documentElement;
+          return {
+            clips: ['hidden', 'clip'].includes(getComputedStyle(el).overflowX),
+            pageFits: root.scrollWidth <= root.clientWidth,
+          };
+        });
+        assert.equal(clips, true, 'the badge contains its own overflow at width ' + viewport.width);
+        assert.equal(pageFits, true, 'the badge does not widen the page at width ' + viewport.width);
+        if (viewport.width > 520) {
+          const iconSize = await icons.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+          assert.ok(iconSize > phoneIconSize, 'phone badges use smaller icons');
+        }
+      }
+    } finally {
+      await ctx.close();
+    }
+  });
+
   await test('a turn plays out one card at a time: each placement appears in turn, paced by the table setting', async () => {
     const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
     const c = (n) => ({ n, p: pen(n) });
@@ -161,6 +247,134 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     const feed = await page.textContent('.gf-feed');
     assert.match(feed, /played 7 on/, 'then the second');
     assert.match(feed, /played 18 on/, 'earlier moves stay in the feed');
+    await ctx.close();
+  });
+
+  await test('a sixth card: it lands as the sixth card, the row is collected with a line and a spotlight, then it starts the row again', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const full = [3, 5, 8, 9, 10];
+    const took = full.reduce((s, n) => s + pen(n), 0);
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [full.map(c), [c(12)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(11)], [c(12)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'sweep', by: 1, n: 11, p: pen(11), row: 0, took }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const k = first.view.paceK || 1;
+    const { page, ctx } = await open([first]);
+    const row1 = () => page.evaluate(() => [...document.querySelectorAll('.pr-row')][0].querySelectorAll('.pr-card').length);
+    await page.evaluate((m) => window.__push(m), second);
+    const t0 = Date.now();
+    // the steps: before 900k, sixth card 900k (to 1800k), row collected 1400k, restart 900k; sample each in its middle
+    const at = (ms) => page.waitForTimeout(Math.max(0, t0 + ms - Date.now()));
+    await at(300 * k);
+    assert.equal(await row1(), 5, 'the row is as it was before the card');
+    await at(1350 * k);
+    assert.equal(await row1(), 6, 'the sixth card lands in the row');
+    assert.match(await page.textContent('.pr-callout'), /6th card placed/, 'and says so on the row');
+    assert.equal(await page.$$eval('.pr-callout', (els) => els.length), 1, 'only the row that got the sixth card says so');
+    assert.equal(await page.locator('.pr-row').nth(0).locator('.pr-callout').count(), 1, 'and it is on row 1');
+    assert.match(await page.textContent('.gf-feed'), /played the 6th card on row 1/, 'the feed says the sixth card was placed');
+    await at(2500 * k);
+    assert.match(await page.textContent('.pr-callout'), /Bo took/, 'the row is collected: the taker is named');
+    assert.match(await page.textContent('.gf-feed'), /Bo collected row 1/, 'the feed says who collected it');
+    assert.match(await page.textContent('.gf-spot'), /Bo collected row 1/, 'the spotlight holds the collection');
+    await at(3650 * k);
+    assert.equal(await row1(), 1, 'then the played card starts the row again');
+    assert.match(await page.textContent('.gf-feed'), /11 starts row 1/, 'the feed says the new row starts with it');
+    await ctx.close();
+  });
+
+  await test('a played card glides from the strip into its row as it lands', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [[c(12)], [c(3)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(12), c(18)], [c(3), c(7)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'place', by: 1, n: 18, p: pen(18), row: 0, took: 0 }, { kind: 'place', by: 2, n: 7, p: pen(7), row: 1, took: 0 }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const k = first.view.paceK || 1;
+    const { page, ctx } = await open([first]);
+    await page.evaluate((m) => window.__push(m), second);
+    await page.waitForTimeout(900 * k + 120); // the first placement has just been drawn
+    // the glide is a Web Animation that moves the card from where it was on the strip; the old drop is a CSS animation
+    const glide = await page.evaluate(() => {
+      const el = document.querySelector('.pr-rows [data-cn="18"]');
+      if (!el) return null;
+      return el.getAnimations().map((a) => ({ css: Boolean(a.animationName), first: a.effect && a.effect.getKeyframes()[0].transform }));
+    });
+    assert.ok(glide && glide.some((a) => !a.css && /translate\(/.test(a.first)), 'the card that landed glides into its row: ' + JSON.stringify(glide));
+    await ctx.close();
+  });
+
+  await test('a collected row slides, card by card, into the taker\'s pile', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const full = [3, 5, 8, 9, 10];
+    const took = full.reduce((s, n) => s + pen(n), 0);
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [full.map(c), [c(12)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(11)], [c(12)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'sweep', by: 1, n: 11, p: pen(11), row: 0, took }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const k = first.view.paceK || 1;
+    const { page, ctx } = await open([first]);
+    await page.evaluate((m) => window.__push(m), second);
+    const t0 = Date.now();
+    await page.waitForTimeout(Math.max(0, t0 + 1800 * k + 200 - Date.now())); // the collect step has just been drawn
+    const moving = await page.evaluate(() => [...document.querySelectorAll('.pr-rows > .pr-row:first-child [data-cn]')].map((el) => el.getAnimations().length));
+    assert.ok(moving.filter((n) => n > 0).length >= 2, 'several cards of the row are on their way: ' + moving.join(','));
+    // the card that was played (11) is not collected: only the five cards that were on the row move into the pile
+    const identity = await page.evaluate(() => [...document.querySelectorAll('.pr-rows > .pr-row:first-child [data-cn]')].map((el) => [el.dataset.cn, el.getAnimations().length > 0]));
+    const others = identity.filter(([n]) => n !== '11');
+    const played = identity.filter(([n]) => n === '11');
+    assert.deepEqual(others.map(([n]) => n).sort(), full.map(String).sort(), 'exactly the five cards that were on the row are there: ' + JSON.stringify(identity));
+    assert.ok(others.every(([, moving2]) => moving2), 'the five collected cards move: ' + JSON.stringify(identity));
+    assert.equal(played.length, 1, 'the played card is on the row: ' + JSON.stringify(identity));
+    assert.ok(played.every(([, moving2]) => !moving2), 'the played card does not go into the pile: ' + JSON.stringify(identity));
+    assert.ok(await page.evaluate(() => !!document.querySelector('.prt .pr-chips li[data-pid]')), 'the taker has a chip to receive them');
+    await ctx.close();
+  });
+
+  await test('the feed sits under the rows and never covers row 4', async () => {
+    const pen = (n) => 1 + (n % 5 === 0 ? 1 : 0) + (n % 10 === 0 ? 1 : 0) + (n % 11 === 0 ? 4 : 0);
+    const c = (n) => ({ n, p: pen(n) });
+    const msgs = tableMessages('penaltyrows', four, { seed: 3 });
+    const before = [[c(12)], [c(3)], [c(38)], [c(44)]];
+    const first = JSON.parse(JSON.stringify(msgs[1]));
+    first.view.rows = before; first.view.before = before; first.view.lastTurn = []; first.view.seq = 1;
+    const second = JSON.parse(JSON.stringify(first));
+    second.view.before = before;
+    second.view.rows = [[c(12), c(18)], [c(3), c(7)], [c(38)], [c(44)]];
+    second.view.lastTurn = [{ kind: 'place', by: 1, n: 18, p: pen(18), row: 0, took: 0 }, { kind: 'place', by: 2, n: 7, p: pen(7), row: 1, took: 0 }];
+    second.view.seq = 2;
+    second.view.after = second.view.rows;
+    const { page, ctx } = await open([first]);
+    await page.evaluate((m) => window.__push(m), second);
+    await page.waitForSelector('.pr-feed .gf-item', { timeout: 4000 });
+    const boxes = await page.evaluate(() => {
+      const rows = document.querySelector('.pr-rows').getBoundingClientRect();
+      const feed = document.querySelector('.pr-feed').getBoundingClientRect();
+      const pos = getComputedStyle(document.querySelector('.pr-feed')).position;
+      return { rowsBottom: rows.bottom, feedTop: feed.top, pos };
+    });
+    assert.notEqual(boxes.pos, 'absolute', 'the feed is in the page flow, not floating over the table');
+    assert.ok(boxes.feedTop >= boxes.rowsBottom - 1, `the feed starts below the last row: ${JSON.stringify(boxes)}`);
     await ctx.close();
   });
 

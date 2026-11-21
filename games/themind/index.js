@@ -9,6 +9,7 @@ const { scrubDeep } = require('../scrub');
 module.exports = {
   id: 'themind',
   name: 'Mind',
+  ownReadyUp: true, // every level starts with its own Ready step (bots answer it at once), so the server does not add one
   icon: '🧠',
   accent: '#4f6bff',
   tagline: 'No turns, no talking. Play your numbers in ascending order by feel alone.',

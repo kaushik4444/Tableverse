@@ -1,4 +1,4 @@
-/* Carrom (games/carrom): the board as SVG, aiming by dragging on the board (with sliders for fine control), playing back each
+/* Carrom (games/carrom): the board as SVG, aiming by dragging on the board, playing back each
  * shot from its keyframes, and the end of the game. Styles in carrom.css.
  *
  * Frames: the server keeps the board in the bottom side's frame. A viewer sees their own side at the bottom, so every point is
@@ -12,7 +12,7 @@
   const ANGLE_MAX = 75;
   const TAP_PX = 8;       // a pointer that moves less than this from where it went down is a tap, not a flick
   const ui = { ctx: null, v: null, root: null, seq: null, anim: null, known: new Map(), dragging: false, dragMoved: false, resignArmed: false,
-    aim: { x: 50, angle: 0, power: 60 } };
+    aim: { x: 50, angle: 0, power: 0 } }; // no aim until the player sets one
 
   /** Rotates a point about the centre by k quarter turns, counter-clockwise (the same rotation the server uses). */
   const rotP = ([x, y], k) => { let p = [x, y]; for (let i = 0; i < ((k % 4) + 4) % 4; i++) p = [1 - p[1], p[0]]; return p; };
@@ -108,9 +108,9 @@
       return `<line class="cb-line" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
     }).join('');
     const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]);
-    const striker = aiming ? `<circle class="cb-striker ${colourOfMe(v) === 'w' ? 'w' : 'b'}" data-id="striker" cx="${sx}" cy="${sy}" r="0.026"/>` : '';
+    const striker = aiming ? `<circle class="cb-striker ${colourOfMe(v) === 'w' ? 'w' : 'b'}" data-id="striker" cx="${sx}" cy="${sy}" r="0.026" tabindex="0" role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}"/>` : '';
     const pockets = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => `<circle class="cb-pocket" cx="${x}" cy="${y}" r="0.05"/>`).join('');
-    return `<svg class="cb-svg" viewBox="-0.07 -0.07 1.14 1.14" role="img" aria-label="Carrom board">
+    return `<svg class="cb-svg" viewBox="-0.08 -0.08 1.16 1.16" role="img" aria-label="Carrom board">
       <rect class="cb-board" x="0" y="0" width="1" height="1" rx="0.02"/>
       <rect class="cb-inner" x="0.06" y="0.06" width="0.88" height="0.88"/>
       ${lines}
@@ -124,17 +124,15 @@
 
   function controlsHTML(v) {
     if (!v.myTurn || ui.anim) return '';
-    const { x, angle, power } = ui.aim;
-    return `<div class="cb-controls">
-      <label>Striker <output data-out="x">${x}%</output>
-        <input type="range" data-aim="x" min="20" max="80" step="1" value="${x}" aria-label="Striker position along your baseline"></label>
-      <label>Angle <output data-out="angle">${angle}°</output>
-        <input type="range" data-aim="angle" min="-${ANGLE_MAX}" max="${ANGLE_MAX}" step="1" value="${angle}" aria-label="Aim angle"></label>
-      <label>Power <output data-out="power">${power}%</output>
-        <input type="range" data-aim="power" min="0" max="100" step="1" value="${power}" aria-label="Flick power"></label>
-      <button type="button" class="btn cb-flick" data-cb="flick" ${power > 0 ? '' : 'disabled'}>Flick</button>
-    </div>
-    <p class="hint cb-tip">${power > 0 ? 'Drag on the board, back from the striker, to change the aim and power.' : 'Drag back from the striker on the board to set the power.'}</p>`;
+    // a native button a tap or a touch screen reader can fire; it is disabled (aria-disabled) until a power is set
+    return `<p class="hint cb-tip" aria-live="polite">${tipText()}</p><button type="button" class="btn big cb-fire" data-cb="fire" aria-disabled="${ui.aim.power > 0 ? 'false' : 'true'}">Fire striker</button>`;
+  }
+
+  /** What the player can do now, with the live aim and power (there are no sliders). */
+  function tipText() {
+    const { angle, power } = ui.aim;
+    if (power <= 0) return 'Drag your striker along the baseline to place it (or use ← and → when it is focused). Then press on the board and drag back to set the aim and power. Keyboard: ← → move, Shift+← → turn, ↑ ↓ power, Enter fire.';
+    return `Aim ${angle}° · power ${power}%. Let go to flick, or press Enter on the striker. Keyboard: ← → move, Shift+← → turn, ↑ ↓ power.`;
   }
 
   function logHTML(v) {
@@ -183,19 +181,41 @@
     requestAnimationFrame(step);
   }
 
+  /**
+   * Where each disc is at time t of a shot. Keyframes come about 30 times a second, so the discs move between the two
+   * keyframes either side of t (a straight line), not in steps. A disc that is gone by the next keyframe (pocketed) fades
+   * out over the interval. Returns [[id, x, y, alpha]]: alpha is 0..1 and only falls for a disc that is leaving.
+   */
+  function poseAt(frames, t) {
+    if (!frames.length) return [];
+    let i = 0;
+    while (i + 1 < frames.length && frames[i + 1].t <= t) i += 1;
+    const f0 = frames[i]; const f1 = frames[i + 1];
+    if (!f1) return f0.d.map(([id, x, y]) => [id, x, y, 1]);
+    const span = f1.t - f0.t;
+    const k = span > 0 ? Math.min(1, Math.max(0, (t - f0.t) / span)) : 1;
+    const next = new Map(f1.d.map(([id, x, y]) => [id, [x, y]]));
+    const pose = f0.d.map(([id, x, y]) => {
+      const n = next.get(id);
+      return n ? [id, x + (n[0] - x) * k, y + (n[1] - y) * k, 1] : [id, x, y, 1 - k];
+    });
+    for (const [id, x, y] of f1.d) if (!f0.d.some(([other]) => other === id)) pose.push([id, x, y, k]); // a disc that comes into view
+    return pose;
+  }
+  if (typeof window !== 'undefined') window.CarromPlayback = { poseAt }; // for the browser tests
+
   function drawFrame(now, a) {
     if (a.t0 === null) a.t0 = now;
     const t = (now - a.t0) / 1000;
-    let frame = a.frames[0];
-    for (const f of a.frames) if (f.t <= t) frame = f;
+    const pose = poseAt(a.frames, t);
     const svg = ui.root.querySelector('.cb-svg');
     if (svg) {
-      const seen = new Set(frame.d.map(([id]) => id));
-      for (const [id, x, y] of frame.d) {
+      const seen = new Set(pose.map(([id]) => id));
+      for (const [id, x, y, alpha] of pose) {
         const el = svg.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (el) {
           const [X, Y] = toSvg(ui.v, [x, y]);
-          el.setAttribute('cx', X); el.setAttribute('cy', Y); el.style.display = '';
+          el.setAttribute('cx', X); el.setAttribute('cy', Y); el.style.display = ''; el.style.opacity = String(alpha);
         }
       }
       svg.querySelectorAll('[data-id]').forEach((el) => { if (!seen.has(el.dataset.id)) el.style.display = 'none'; });
@@ -229,7 +249,7 @@
       <details class="cb-moves" open><summary>Shots</summary>${logHTML(v)}</details>
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
-    root.oninput = onInput;
+    root.onkeydown = onKey;
     root.onpointerdown = onPointerDown;
     root.onpointermove = onPointerMove;
     root.onpointerup = onPointerUp;
@@ -251,6 +271,9 @@
     return svgToDisp(q.x, q.y);
   }
 
+  /** The striker is grabbed within this distance of its spot on the board (display units). */
+  const STRIKER_GRAB = 0.06;
+
   /** Sets the aim from a pointer: the flick goes from the pointer towards the striker (pull back, let go). */
   function aimFrom([X, Y]) {
     const u = ui.aim.x / 100;
@@ -261,16 +284,10 @@
     syncAim();
   }
 
-  /** Updates the sliders, readouts, arrow and Flick button without rebuilding the board. */
+  /** Updates the arrow and tip text without rebuilding the board. */
   function syncAim() {
     const root = ui.root;
     if (!root) return;
-    for (const key of ['x', 'angle', 'power']) {
-      const input = root.querySelector(`[data-aim="${key}"]`);
-      if (input) input.value = String(ui.aim[key]);
-      const out = root.querySelector(`[data-out="${key}"]`);
-      if (out) out.textContent = key === 'angle' ? `${ui.aim.angle}°` : key === 'power' ? `${ui.aim.power}%` : `${ui.aim.x}%`;
-    }
     const svg = root.querySelector('.cb-svg');
     const line = svg && svg.querySelector('.cb-aim');
     if (line) {
@@ -279,11 +296,11 @@
       line.setAttribute('x2', to[0]); line.setAttribute('y2', to[1]);
     }
     const striker = svg && svg.querySelector('[data-id="striker"]');
-    if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); }
-    const fire = root.querySelector('[data-cb="flick"]');
-    if (fire) fire.disabled = ui.aim.power <= 0;
+    if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); striker.setAttribute('aria-valuenow', String(ui.aim.x)); }
     const tip = root.querySelector('.cb-tip');
-    if (tip) tip.textContent = ui.aim.power > 0 ? 'Drag on the board, back from the striker, to change the aim and power.' : 'Drag back from the striker on the board to set the power.';
+    if (tip) tip.textContent = tipText();
+    const fireBtn = root.querySelector('[data-cb="fire"]');
+    if (fireBtn) fireBtn.setAttribute('aria-disabled', ui.aim.power > 0 ? 'false' : 'true');
   }
 
   function onPointerDown(e) {
@@ -299,7 +316,21 @@
     const svg = e.target.closest('.cb-svg');
     if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
     const p = pointerDisplay(e);
-    if (p) aimFrom(p);
+    ui.mode = p && onStriker(p) ? 'place' : 'aim';
+    if (ui.mode === 'aim' && p) aimFrom(p);
+  }
+
+  /** The striker is grabbed when the pointer is on it (display coordinates). */
+  function onStriker([X, Y]) {
+    return Math.hypot(X - ui.aim.x / 100, Y - BASE_Y) <= STRIKER_GRAB;
+  }
+
+  /** Moves the striker along the baseline. A new spot needs a new aim, so the aim is cleared when it moves. */
+  function placeAt(x) {
+    const next = Math.round(Math.max(20, Math.min(80, x * 100)));
+    if (next === ui.aim.x) return;
+    ui.aim.x = next; ui.aim.angle = 0; ui.aim.power = 0;
+    syncAim();
   }
 
   function onPointerMove(e) {
@@ -307,15 +338,16 @@
     // a drag counts once the pointer is TAP_PX away from where it went down: a tap, or a pixel of jitter, only aims
     if (!ui.dragMoved && Math.hypot(e.clientX - ui.downAt[0], e.clientY - ui.downAt[1]) > TAP_PX) ui.dragMoved = true;
     const p = pointerDisplay(e);
-    if (p) aimFrom(p);
+    if (!p) return;
+    if (ui.mode === 'place') placeAt(p[0]); else aimFrom(p);
   }
 
-  /** Releasing a drag flicks with the aim it ends on. A tap only sets the aim, and a cancelled pointer never flicks. */
+  /** Releasing an aim drag flicks with the aim it ends on. Placing the striker never flicks. A tap only sets the aim, and a cancelled pointer never flicks. */
   function onPointerUp(e) {
     if (!ui.dragging || e.pointerId !== ui.pointerId) return;
     const moved = ui.dragMoved;
     ui.dragging = false;
-    if (moved) {
+    if (moved && ui.mode === 'aim') {
       const p = pointerDisplay(e);
       if (p) aimFrom(p);
       fire();
@@ -345,11 +377,17 @@
     ctx.act({ type: 'flick', x: ui.aim.x / 100, angle: (ui.aim.angle * Math.PI) / 180, power: ui.aim.power / 100, seq: v.seq });
   }
 
-  function onInput(e) {
-    const el = e.target.closest('[data-aim]');
-    if (!el || !ui.v) return;
-    const key = el.dataset.aim;
-    ui.aim[key] = Number(el.value);
+  /** The striker from the keyboard: Left/Right place it, Shift+Left/Right turn it, Up/Down set the power. */
+  function onKey(e) {
+    const v = ui.v;
+    if (!v || !v.myTurn || ui.anim || !e.target.closest || !e.target.closest('[data-id="striker"]')) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); return; }
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: 1, ArrowDown: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') ui.aim.power = Math.max(0, Math.min(100, ui.aim.power + 5 * step));
+    else if (e.shiftKey) ui.aim.angle = Math.max(-ANGLE_MAX, Math.min(ANGLE_MAX, ui.aim.angle + 2 * step));
+    else placeAt((ui.aim.x + step) / 100);
     syncAim();
   }
 
@@ -358,8 +396,8 @@
     const v = ui.v, ctx = ui.ctx;
     if (!el || !v || !ctx) return;
     switch (el.dataset.cb) {
-      case 'flick': fire(); break;
       case 'rules': ctx.showRules(); break;
+      case 'fire': fire(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ui.resignArmed = false; ctx.leave(); break;
       case 'resign':

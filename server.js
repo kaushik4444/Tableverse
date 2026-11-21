@@ -8,7 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { createCloseCounter } = require('./lib/closeCounter');
-const { seatPlayers } = require('./lib/seatOrder');
+const { seatPlayers, arrangeMembers, shuffleMembers } = require('./lib/seatOrder');
 const games = require('./games');
 const pacing = require('./games/pacing');
 const dbPool = require('./db/pool');
@@ -17,6 +17,8 @@ const { buildMatchRecord, buildForfeitRecord, buildShutdownForfeitRecords } = re
 const { matchXpOf } = require('./lib/progress');
 const { leaveStateOf, rejoinGraceMs, rejoinDecision, voluntaryLeave, reclaimSeat } = require('./lib/leavePolicy');
 const { startPlay, stopPlay, stopAllPlay } = require('./lib/playTime');
+const idlePolicy = require('./lib/idlePolicy');
+const readyGate = require('./lib/readyGate'); // everybody presses Ready before a round starts // three bot turns in a row for one person: removed with a penalty
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
@@ -99,6 +101,7 @@ function start(opts = {}) {
   const port = opts.port ?? Number(process.env.PORT || 3000);
   const botDelay = opts.botDelay || [900, 1600]; // ms range a bot "thinks"
   const autoAdvanceMs = opts.autoAdvanceMs ?? 8000; // pause between rounds
+  const kickTurns = opts.idleKickTurns ?? idlePolicy.IDLE_KICK_TURNS; // bot turns in a row before a person is removed (a test can raise it)
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
   const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket's session is re-checked this often
@@ -773,7 +776,7 @@ function start(opts = {}) {
       seatLabels: def.seatLabel ? Array.from({ length: room.seats }, (_, i) => def.seatLabel(i, room.seats)) : null,
       members: room.members.map((m) => ({ id: m.id, name: m.name, bot: m.bot, avatar: m.avatar, connected: isConnected(m), ping: pingOf(m), username: usernameOf(m), standIn: isStandIn(room, m) })),
       spectators: room.spectators.map((s) => ({ id: s.id, name: s.name, avatar: s.avatar, connected: isConnected(s), ping: pingOf(s), username: usernameOf(s) })),
-      outcome: room.status === 'finished' && room.outcome ? { id: room.outcome.at, winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, xp: room.outcome.xp || null } : null,
+      outcome: room.status === 'finished' && room.outcome ? { id: room.outcome.at, winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, playMs: room.outcome.playMs || 0, xp: room.outcome.xp || null } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
@@ -781,6 +784,7 @@ function start(opts = {}) {
       leaveState: room.status === 'playing' ? leaveStateOf(room) : null,
       // Per person: who has a penalty pending, and how many times each person has left this game. The client works out what
       // leaving means for its own player from this (a rejoin does not reset the count; the third leave is final).
+      gate: room.status === 'playing' ? readyGate.readyState(room, isConnected) : null,
       leaveInfo: room.status === 'playing' ? { abandoned: Boolean(room.abandoned), pending: [...(room.forfeits || [])], counts: Object.fromEntries(room.leaveCounts || []) } : null,
       rejoinWindowSeconds: Math.round(rejoinWindowMs / 1000), // how long a person who leaves may take the seat back
       now: Date.now(), // lets clients correct for clock differences
@@ -982,7 +986,7 @@ function start(opts = {}) {
     const sameBatch = room.waitingKey === key && now.length > 0 && now.every((id) => prev.includes(id)) && (batched || prev.length > 1);
     room.waitingKey = key;
     const humanWaiting = now.some((id) => room.members.some((m) => m.id === id && !m.bot));
-    if (!limit || !humanWaiting) room.deadline = null;
+    if (!limit || !humanWaiting || room.gate) room.deadline = null; // while the table waits for Ready there is no turn clock
     else if (!sameBatch || !room.deadline) {
       const walkHold = typeof g.holdMs === 'function' ? g.holdMs() : 0;
       room.deadline = Date.now() + Math.max(0, (room.pauseUntil || 0) - Date.now(), walkHold) + limit;
@@ -998,7 +1002,10 @@ function start(opts = {}) {
     const winners = Array.isArray(results) && results.length === seated.length
       ? seated.filter((m, i) => results[i] && results[i].winner).map((m) => ({ id: m.id, name: m.name }))
       : [];
-    return { winners, at: Date.now() };
+    // how long the last move is still being played out (a shot, a walk): the pop-up waits for it (see app.js endFlow)
+    let playMs = 0;
+    try { playMs = typeof g.holdMs === 'function' ? Math.max(0, Number(g.holdMs()) || 0) : 0; } catch { playMs = 0; }
+    return { winners, at: Date.now(), playMs };
   }
 
   function afterChange(room) {
@@ -1039,6 +1046,42 @@ function start(opts = {}) {
     schedule(room);
   }
 
+  /** A bot has played this person's turn (they are away, or ran out of the table's time). After three in a row they are removed. */
+  function noteBotTurnFor(room, m) {
+    if (!m || m.bot || !room.members.includes(m)) return;
+    const n = idlePolicy.noteBotTurn(room, m.id);
+    const q = players.get(m.id);
+    if (n < kickTurns) {
+      // every bot turn is a warning: the table sees it, and the person is told if they are connected
+      const left = kickTurns - n;
+      if (q && q.connected) send(q.ws, { t: 'notice', text: `A bot played your turn while you were away (${n} of ${kickTurns}). ${left} more in a row and you are removed from the table, with the same penalty as leaving.` });
+      sys(room, `⚠ A bot played ${m.name}'s turn (${n} of ${kickTurns}).`);
+      return;
+    }
+    const out = idlePolicy.kickIdle(room, m, Date.now());
+    if (room.hostId === m.id) ensureHost(room, { leaving: m.id }); // the removed person was the host: someone else takes it, so the table keeps its host controls
+    if (q) {
+      q.room = null;
+      clearTimeout(q.dropTimer);
+      q.dropAnnounced = false;
+      if (q.connected) {
+        send(q.ws, { t: 'left' });
+        send(q.ws, { t: 'notice', text: 'A bot played your last three turns while you were away, so you were removed from that table.' });
+        send(q.ws, tablesMsg(q));
+      }
+      schedulePresence(q.id);
+    }
+    if (voiceRelay.dropVoice(room, m.id)) broadcastVoice(room);
+    sys(room, `🚫 ${m.name} was removed for being away: a bot played their last three turns.${out.penalised ? ' That counts as a loss.' : ''}`);
+  }
+
+  /** A move ended the turn (the turn, batch or multiplier changed, or the phase moved on): several moves of one turn count as one bot turn.
+   *  The Stage 10 draw moves the same player from "draw" to "play", which is still their turn: only the discard ends it. */
+  function turnPassed(a, b) {
+    if (a.turn !== b.turn || a.batch !== b.batch || a.multiplier !== b.multiplier) return true;
+    return a.phase !== b.phase && !(a.phase === 'draw' && b.phase === 'play');
+  }
+
   /** Decide whether the server must act soon (bot turn, absent human, forced play, timeout, between rounds) and set one timer for it. */
   function schedule(room) {
     clearTimeout(room.timer);
@@ -1047,6 +1090,20 @@ function start(opts = {}) {
     const g = room.game;
     if (!g || room.status !== 'playing' || g.isOver()) return;
     if (!humans(room).some(isConnected)) return; // nobody watching: pause
+    // Ready-up: the first round, and each round boundary (the game waits only for its "continue"), wait until everybody has pressed Ready.
+    const boundaryAuto = typeof g.autoAction === 'function' ? g.autoAction() : null;
+    const boundary = !!boundaryAuto && boundaryAuto.type === 'continue';
+    if (!boundary) room.gatePassed = false;
+    else if (!room.gatePassed && !room.gate) {
+      readyGate.startGate(room);
+      broadcast(room); // everybody now sees the Ready bar; nothing else would send that state until someone acts
+    }
+    if (room.gate) {
+      if (!readyGate.gateOpen(room, isConnected)) return;
+      room.gate = null;
+      room.gatePassed = true;
+      touchTimer(room); // the turn limit starts now, not while the table waited for Ready
+    }
 
     const waiting = awaitingOf(g);
     // a game that is still animating a move (a token walking square by square) holds its bots back until the walk is done
@@ -1059,7 +1116,7 @@ function start(opts = {}) {
     if (!waiting.length) {
       const auto = g.autoAction();
       if (!auto) return;
-      delay = (typeof g.autoDelayMs === 'function' && g.autoDelayMs() * botScale) || autoAdvanceMs;
+      delay = boundary ? 1200 : (typeof g.autoDelayMs === 'function' && g.autoDelayMs() * botScale) || autoAdvanceMs; // after everybody is ready, a short pause
       run = () => g.act(null, auto);
       valid = () => awaitingOf(g).length === 0;
     } else if (forced) {
@@ -1086,7 +1143,13 @@ function start(opts = {}) {
       }
       if (who) {
         delay = Math.max(who.bot ? (botMs !== null ? botMs : rand(botDelay[0], botDelay[1])) : absentMs, pause);
-        run = () => g.act(who.id, g.botAction(who.id));
+        run = () => {
+          const pre = publicState(g);
+          const r = g.act(who.id, g.botAction(who.id));
+          // one bot turn, however many moves it took: counted when the person's turn ends (or they are no longer awaited, as in a simultaneous bid)
+          if (r && r.ok && (turnPassed(pre, publicState(g)) || !awaitingOf(g).includes(who.id))) noteBotTurnFor(room, who);
+          return r;
+        };
         valid = () => awaitingOf(g).includes(who.id) && (who.bot || !isConnected(who));
       } else if (room.deadline) {
         // connected humans are thinking, but the table has a time limit
@@ -1106,6 +1169,8 @@ function start(opts = {}) {
               sys(room, `⏱ ${m.name} ran out of time. A bot played for them.`);
               const q = players.get(id);
               if (q && q.connected) send(q.ws, { t: 'notice', text: 'Time is up! A bot played for you.' });
+              // counted once per person, when their own turn ends: a simultaneous bid ends it without changing the table's turn
+              if (turnPassed(before, publicState(g)) || !awaitingOf(g).includes(id)) noteBotTurnFor(room, m);
             }
           }
           return res;
@@ -1846,6 +1911,24 @@ function start(opts = {}) {
       broadcast(room); // also broadcasts the directory, removing private tables immediately
     },
 
+    arrangeSeats(p, msg) {
+      const room = hostRoom(p, 'lobby');
+      if (!room) return;
+      const arranged = arrangeMembers(room.members, msg.order);
+      if (!arranged) return sendError(p, 'Those seats could not be arranged. Try again.');
+      room.members.splice(0, room.members.length, ...arranged); // in place: the members array is shared with the room
+      room.seatsArranged = true;
+      broadcast(room);
+    },
+
+    shuffleSeats(p) {
+      const room = hostRoom(p, 'lobby');
+      if (!room) return;
+      room.members.splice(0, room.members.length, ...shuffleMembers(room.members));
+      room.seatsArranged = true;
+      broadcast(room);
+    },
+
     setSeats(p, msg) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
@@ -1870,7 +1953,9 @@ function start(opts = {}) {
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
-      const seats = seatPlayers(room.members, { shuffle: Boolean(room.options && room.options.shuffleSeats), offered });
+      // An arrangement the host made (or a shuffle they asked for) is kept: the option does not shuffle it again
+      const seats = seatPlayers(room.members, { shuffle: Boolean(room.options && room.options.shuffleSeats) && !room.seatsArranged, offered });
+      room.seatsArranged = false;
       room.game = def.create(seats, room.options, Math.random);
       // The member in each seat, in game order. Results are indexed by seat, so they are matched to people through this list.
       room.seated = seats.map((s) => room.members.find((m) => m.id === s.id)).filter(Boolean);
@@ -1888,6 +1973,8 @@ function start(opts = {}) {
       // Only seated people who are connected now earn time. A person who drops in the lobby starts when they come back (see hello).
       for (const m of room.seated) if (!m.bot && isConnected(m)) startPlay(room, m.id, room.startedAt);
       room.leftEarly = new Set();
+      room.idleTurns = new Map();
+      if (!def.ownReadyUp) readyGate.startGate(room); // the first round waits until everybody has pressed Ready (a game with its own ready step does not)
       room.forfeits = new Set();
       room.finalForfeits = new Set();
       room.leaveCounts = new Map();
@@ -1905,12 +1992,23 @@ function start(opts = {}) {
       // Once the server is stopping, a game must not move on: the shutdown record of a running table is written as it is now
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (isSpec(room, p.id)) return sendError(p, 'You are watching this game');
+      if (room.gate) return sendError(p, 'Everybody must press Ready before play continues');
       const res = room.game.act(p.id, msg.action);
       if (!res.ok) {
         sendError(p, res.error || 'Not allowed');
         return broadcast(room); // resync the sender's view
       }
+      idlePolicy.clearIdle(room, p.id); // they acted for themselves: their streak of bot turns starts again
       afterChange(room);
+    },
+
+    /** A seated person is ready for the next round (or for the first one). */
+    ready(p) {
+      const room = rooms.get(p.room);
+      if (!room || room.status !== 'playing' || !room.game) return;
+      if (!readyGate.markReady(room, p.id)) return;
+      schedule(room); // may open the gate: it clears the gate and starts the turn clock
+      broadcast(room); // after the schedule, so everybody sees the cleared Ready bar and the new deadline
     },
 
     /** A player who is not the host asks for another game (tap again to take it back). The host sees the count and starts it. */

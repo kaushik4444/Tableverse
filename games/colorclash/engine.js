@@ -143,7 +143,7 @@ function endRound(g, who) {
     return;
   }
   emit(g, { type: 'roundEnd', by: who, round: g.round, total });
-  startRound(g);
+  g.phase = 'roundEnd'; // the next round starts once everybody has pressed Ready (the continue action)
 }
 
 /** Moves the turn on after a play or a pass, applying the effect of the card that was played. */
@@ -170,6 +170,10 @@ function advance(g, who, card) {
 
 /** action: { type: 'play', card: id, colour?: 'R'|'Y'|'G'|'B' (Wilds) } | { type: 'draw' } | { type: 'pass' } (keep the card you drew) */
 function applyAction(g, playerId, action) {
+  if (g.phase === 'roundEnd') { // between rounds: nothing is played until everybody is ready, then the next round starts
+    if (action && action.type === 'continue') { startRound(g); g.phase = 'playing'; return { ok: true }; }
+    return { ok: false, error: 'The next round starts when everybody is ready' };
+  }
   if (g.phase === 'gameOver') return { ok: false, error: 'The game is over' };
   const who = indexOf(g, playerId);
   if (who < 0) return { ok: false, error: 'You are not a player in this game' };
@@ -225,7 +229,7 @@ function pass(g, who) {
   return { ok: true };
 }
 
-const awaiting = (g) => (g.phase === 'gameOver' ? [] : [g.players[g.turn].id]);
+const awaiting = (g) => (g.phase === 'gameOver' || g.phase === 'roundEnd' ? [] : [g.players[g.turn].id]);
 
 /** Bots see only their hand and the table. They play the highest-scoring card that fits, saving Wilds, and pick the colour they hold most of. */
 function botAction(g, playerId) {

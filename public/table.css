@@ -1,6 +1,9 @@
 /* Wizard table. Card size comes from --cw (set by wizard.js). */
 .wz { --cw: 78px; min-height: 100dvh; max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px); }
 .wz-top { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+/* the Ready bar keeps its height whatever it says, so the table below never moves */
+.ready-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; box-sizing: border-box; margin: 8px 0; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--panel-line, rgba(255, 255, 255, .2)); background: var(--panel, rgba(255, 255, 255, .06)); font-size: 14px; }
+.ready-bar > span { min-width: 0; }
 .wz-round { flex: none; white-space: nowrap; }
 .wz-top > .row { flex: 0 1 auto; min-width: 0; }
 .wz-top .row { flex-wrap: wrap; justify-content: flex-end; }
@@ -74,8 +77,8 @@ button.card { cursor: pointer; }
 .tbox.us { border-color: rgba(123, 224, 160, .5); }
 .tbox.them { border-color: rgba(255, 122, 107, .4); }
 .bidinfo { align-self: center; text-align: center; font-size: 12px; color: var(--gold); max-width: 110px; }
-.wz-players.four { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 480px) { .wz-players.four { grid-template-columns: repeat(2, 1fr); } }
+.wz-players.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 480px) { .wz-players.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .cpts { position: absolute; left: 50%; bottom: 5%; transform: translateX(-50%); min-width: calc(var(--cw) * .26); text-align: center; font-family: var(--sans); font-size: calc(var(--cw) * .17); line-height: 1.5; border-radius: 999px; background: rgba(0, 0, 0, .35); color: #fff; padding: 0 4px; }
 .card.suit-Y .cpts { background: rgba(0, 0, 0, .55); }
 
@@ -432,3 +435,4 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 /* Reactions: the emote bar wraps on a phone (21 emoji), and a spectator's reaction is labelled with their name. */
 .emote-bar { flex-wrap: wrap; justify-content: center; max-width: min(92vw, 360px); }
 .emote-tag { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); white-space: nowrap; font: 600 12px/1.2 var(--sans); padding: 3px 8px; border-radius: 999px; background: rgba(10, 13, 43, .85); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); }
+

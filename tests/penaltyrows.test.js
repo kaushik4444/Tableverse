@@ -120,6 +120,7 @@ test('two cards for one row in one turn: the second can be the sixth', () => {
 test('after 10 turns the round is scored and a new round is dealt', () => {
   const g = e.createGame(people(2), { target: 'long' }, rngFor(3));
   for (let i = 0; i < 400 && g.round === 1; i++) {
+    if (g.phase === 'roundEnd') { e.applyAction(g, null, { type: 'continue' }); continue; }
     for (const id of e.awaiting(g)) { const a = e.botAction(g, id); e.applyAction(g, id, a); }
   }
   assert.equal(g.round, 2);
@@ -190,6 +191,7 @@ test('bots always finish a game, at every size', () => {
     let steps = 0;
     while (g.phase !== 'gameOver') {
       assert.ok(++steps < 20000, 'stuck');
+      if (g.phase === 'roundEnd') { e.applyAction(g, null, { type: 'continue' }); continue; }
       const aw = e.awaiting(g);
       assert.ok(aw.length, 'someone is awaited');
       const f = e.forcedPlay(g);
@@ -245,6 +247,7 @@ test('table option: a hand of six cards gives six turns and a new round is dealt
   assert.equal(g.handSize, 6);
   assert.ok(g.hands.every((h) => h.length === 6));
   for (let i = 0; i < 400 && g.round === 1; i++) {
+    if (g.phase === 'roundEnd') { e.applyAction(g, null, { type: 'continue' }); continue; }
     for (const id of e.awaiting(g)) { const f = e.forcedPlay(g); e.applyAction(g, f ? f.playerId : id, f ? f.action : e.botAction(g, id)); }
   }
   assert.equal(g.round, 2);
@@ -320,7 +323,7 @@ test('Starting score 66: someone at 0 does not end the game mid-round; the round
   const g = setup(2, [[1], [2], [3], [4]], [[10, 30], [20, 40]], { target: 'countdown' });
   g.totals = [60, 0]; g.piles = [cards(55), []]; // 6 points taken now: 66 total would be reached, but the round goes on
   pick(g, 0, 10); pick(g, 1, 20);
-  assert.equal(g.phase, 'choose', 'the first turn of the round is not the end of it');
+  assert.notEqual(g.phase, 'gameOver', 'the game does not end mid-round: the round is scored first');
   assert.equal(g.totals[0], 60, 'totals only change when the round is scored');
 });
 
@@ -346,6 +349,8 @@ test('Starting score 66: equal points left share the win, and everyone at 0 mean
 
 test('Starting score 66: with points left on both sides the game goes on', () => {
   const g = finishRound([30, 20], [[5], []], [10, 20]);
+  assert.equal(g.phase, 'roundEnd', 'the round is scored and the table waits for everybody to be ready');
+  assert.equal(e.applyAction(g, null, { type: 'continue' }).ok, true);
   assert.equal(g.phase, 'choose');
   assert.deepEqual(g.losers, []);
 });

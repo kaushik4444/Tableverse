@@ -24,15 +24,11 @@
 .sr .sr-card.mini b { margin-top: 0; }
 .sr .sr-card.mini::before { height: 22%; }
 
-/* every player's stage, as Wizard shows bids: a strip under the top bar, and the stage on each seat */
-.sr .sr-stages { margin-bottom: 6px; }
-.sr .sr-stages span { padding: 2px 6px; border-radius: 8px; }
-.sr .sr-stages span.sr-now { outline: 2px solid var(--gold, #f2c14e); }
-.sr .sr-stages span.sr-stage-done b::after { content: " ✓"; color: #86efac; }
+/* every player's stage shows on their own seat; the boxes below reserve their height so nothing jumps when cards change */
 .sr .sr-card.mini { width: 28px; aspect-ratio: 3 / 4; }
 .sr .sr-card.mini b { font-size: 13px; }
 .sr .sr-card.mini i, .sr .sr-card.mini u { display: none; }
-.sr .sr-goal { margin: 8px 0 0; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-weight: 700; font-size: 14px; }
+.sr .sr-goal { box-sizing: border-box; min-height: 40px; margin: 8px 0 0; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-weight: 700; font-size: 14px; }
 .sr .sr-laid { display: grid; gap: 4px; margin-top: 4px; }
 .sr .sr-group { display: grid; gap: 2px; padding: 4px 6px; border-radius: 8px; background: rgba(0, 0, 0, .18); border: 2px solid transparent; color: inherit; font: inherit; text-align: left; }
 .sr .sr-group.hit { cursor: pointer; border-color: var(--gold, #f2c14e); min-height: 44px; }
@@ -40,13 +36,13 @@
 .sr .sr-glabel { font-size: 11px; opacity: .85; }
 .sr .sr-gcards { display: flex; flex-wrap: wrap; gap: 2px; }
 .sr .sr-piles { display: flex; justify-content: center; gap: 18px; margin-top: 8px; }
-.sr .sr-pile { display: grid; justify-items: center; gap: 4px; width: 72px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.sr .sr-pile { display: grid; justify-items: center; gap: 4px; width: 56px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .sr .sr-pile:disabled { cursor: default; opacity: .7; }
 .sr .sr-pile:not(:disabled) .sr-card, .sr .sr-pile:not(:disabled) .sr-back { box-shadow: 0 0 0 3px var(--gold, #f2c14e); }
 .sr .sr-back, .sr .sr-empty { display: grid; place-items: center; width: 100%; aspect-ratio: 3 / 4; border-radius: 8px; border: 2px solid rgba(255, 255, 255, .6); background: repeating-linear-gradient(45deg, #2a6f66 0 5px, #348c80 5px 10px); font-size: 22px; }
 .sr .sr-empty { background: transparent; border-style: dashed; }
 .sr .sr-pile small { font-size: 11px; opacity: .85; white-space: nowrap; }
-.sr .sr-event { margin: 8px 0 0; padding: 6px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+.sr .sr-event { box-sizing: border-box; min-height: 36px; margin: 8px 0 0; padding: 6px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-line); font-size: 13px; text-align: center; overflow-wrap: anywhere; }
 .sr .sr-trays { display: grid; gap: 8px; margin-top: 8px; }
 .sr .sr-tray { display: grid; gap: 4px; }
 .sr .sr-tray.done .sr-tlabel { color: #7fe0a0; }
@@ -63,16 +59,23 @@
 @media (max-width: 520px) and (max-height: 700px) {
   .sr .sr-goal { margin-top: 4px; padding: 4px 10px; font-size: 13px; }
   .sr .sr-piles { gap: 12px; margin-top: 4px; }
-  .sr .sr-pile { width: 60px; }
+  .sr .sr-pile { width: 56px; }
   .sr .sr-event { display: none; }
   .sr .sr-hand { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin-top: 6px; }
   .sr .sr-hand .sr-card { min-height: 44px; aspect-ratio: 1 / 1; }
 }
 
 /* The table: the shared felt with the seats around it. Stage 10 needs a little more room than the default for its laid groups. */
-.sr .sr-table { margin-top: 6px; position: relative; }
-.sr .sr-table .pt { --pt-min: 400px; }
-.sr .sr-table .pseat { max-width: 28vw; }
+.sr .sr-table { margin-top: 6px; position: relative; display: grid; gap: 10px; }
+/* the seats: two columns at every width, so four players take two rows of cards on a phone; you are first */
+.sr .sr-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+/* each seat has a reserved box: a laid group or the "not down" line fills it, and it never changes height */
+.sr .sr-seats .pseat { box-sizing: border-box; min-height: 132px; }
+.sr .sr-seats .pseat > .sr-laid { min-height: 52px; }
+.sr .sr-seats.many { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sr .sr-seats.many .pseat { min-height: 104px; }
+.sr .sr-seats.many .pseat > .sr-laid { min-height: 40px; }
+.sr .sr-seats.many .av { width: 30px; height: 30px; }
 .sr .sr-table { overflow-x: clip; }
 .sr .sr-table .sr-laid { display: grid; gap: 3px; margin-top: 4px; width: min(180px, 24vw); }
 .sr .sr-table .sr-laid .sr-group { padding: 3px 5px; }
@@ -85,20 +88,48 @@
 .sr .sr-tip { margin: 0; font-size: 12px; opacity: .85; }
 .sr .sr-piles { position: relative; }
 @media (max-width: 520px) {
-  .sr .sr-table .pt { --pt-min: 360px; }
   .sr .sr-table .sr-laid { width: min(170px, 42vw); }
 }
 @media (prefers-reduced-motion: reduce) { .sr .sr-float { animation: none; opacity: 1; } }
 @media (max-width: 520px) {
-  .sr .sr-table .pseat { max-width: 30vw; }
+  /* a hand of ten or more needs two rows: square, smaller cards keep both rows above the fold on a phone */
+  .sr .sr-hand { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin-top: 4px; }
+  .sr .sr-hand .sr-card { min-height: 40px; aspect-ratio: 1 / 1; }
+  /* with laid groups on the table, four players still leave the whole hand on the screen */
+  .sr .sr-goal { min-height: 32px; }
+  .sr .sr-table { gap: 6px; }
+  .sr .sr-pile { width: 50px; }
+  .sr .sr-event { min-height: 24px; margin-top: 4px; }
+  .sr .sr-goal { margin-top: 4px; }
+  .sr .sr-table { margin-top: 4px; }
+  .sr .sr-seats { gap: 4px; }
+  .sr .wz-status { min-height: 34px; }
   .sr .sr-table .sr-laid { width: 27vw; }
   .sr .sr-table .sr-gcards .sr-card.mini { width: 19px; }
   .sr .sr-table .sr-glabel { font-size: 10px; }
   .sr .sr-table .plate span { font-size: 10px; line-height: 1.2; }
 }
-/* the shared centre ignores the pointer so the felt is never in the way; the piles are the one thing in it you can press */
-.sr .pt-center .sr-piles { pointer-events: auto; }
-/* short phones (360x640): a smaller felt so the whole play area, hand included, fits the screen */
+/* short phones (360x640): tighter seats so the piles, every seat and the hand all fit above the fold */
 @media (max-width: 520px) and (max-height: 700px) {
-  .sr .sr-table .pt { --pt-min: 250px; }
+  .sr .sr-table { gap: 6px; }
+  .sr .sr-seats { gap: 4px; }
+  .sr .sr-seats .av { width: 30px; height: 30px; }
+  .sr .sr-seats .sr-laid { margin-top: 2px; }
+  .sr .sr-seats .sr-laid .sr-group { padding: 2px 4px; }
+  /* expanded laid groups scroll inside the seat region, so the hand always stays on the screen */
+}
+
+/* phones: compact seats that always show every player (no hidden seats), a larger hand, and one-line counts */
+@media (max-width: 520px) {
+  .sr .sr-wide { display: none; }
+  .sr .sr-seats .pseat, .sr .sr-seats.many .pseat { min-height: 0; padding-block: 4px; }
+  .sr .sr-seats .pseat > .sr-laid, .sr .sr-seats.many .pseat > .sr-laid { min-height: 0; }
+  .sr .sr-seats .sr-nolay { white-space: nowrap; font-size: 11px; margin: 0; }
+  .sr .sr-seats .av { width: 28px; height: 28px; }
+  .sr .sr-seats.many .av { width: 24px; height: 24px; }
+  .sr .sr-seats .pseat { row-gap: 2px; }
+  .sr .sr-seats:not(.many) { max-height: none; overflow: visible; }
+  .sr .sr-seats.many { max-height: 240px; overflow-y: auto; }
+  .sr .sr-hand { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+  .sr .sr-hand .sr-card { min-height: 52px; aspect-ratio: 3 / 4; font-size: 18px; }
 }

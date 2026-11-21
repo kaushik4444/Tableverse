@@ -84,6 +84,19 @@ function scene(n, edit) {
     await t.ctx.close();
   });
 
+  await test('the stock is a disabled button when drawing is not allowed: it says so, and a tap sends nothing', async () => {
+    const off = await open(scene(4, (v) => { v.canDraw = false; }));
+    assert.equal(await off.page.getAttribute('.cc-stock', 'aria-disabled'), 'true', 'the stock reports it is disabled');
+    await off.page.click('.cc-stock', { force: true });
+    assert.equal((await sent(off.page)).length, 0, 'a tap on the disabled stock sends nothing');
+    await off.ctx.close();
+    const on = await open(scene(4, (v) => { v.canDraw = true; }));
+    assert.equal(await on.page.getAttribute('.cc-stock', 'aria-disabled'), 'false', 'the stock is enabled on my turn');
+    await on.page.click('.cc-stock');
+    assert.deepEqual((await sent(on.page)).map((a) => a.action.type), ['draw']);
+    await on.ctx.close();
+  });
+
   await test('not your turn: no controls, nothing is flagged, tapping sends nothing; a spectator sees the table without a hand', async () => {
     const { page, ctx } = await open(scene(4, (v) => { v.myTurn = false; v.turn = 2; v.canDraw = false; v.hand = v.hand.map((c) => ({ ...c, ok: false })); }));
     assert.equal(await page.locator('.cc-controls').count(), 0);
@@ -105,6 +118,16 @@ function scene(n, edit) {
     const text = await page.textContent('.cc-event');
     assert.match(text, /Dmitri played Ruby Take 2/);
     assert.match(text, /You draw 2 and miss a turn/);
+    await ctx.close();
+  });
+
+  await test('a new action card floats a line over the table and is held in the middle for a moment; the first look shows no history', async () => {
+    const { page, ctx } = await open(scene(4));
+    assert.equal(await page.locator('.gf-item').count(), 0, 'nothing is replayed on the first look');
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.myTurn = false; v.turn = 2; v.event = { seq: 12, type: 'play', by: 3, card: { id: 'Ystopa', c: 'Y', k: 'stop', v: null }, colour: 'Y', left: 5, skipped: 0 }; })[1]);
+    await page.waitForSelector('.gf-spot');
+    assert.match(await page.textContent('.gf-spot'), /Dmitri played Sun Stop/);
+    assert.match(await page.textContent('.cc-tablewrap .gf-item'), /Dmitri played Sun Stop/);
     await ctx.close();
   });
 
@@ -135,6 +158,68 @@ function scene(n, edit) {
         await ctx.close();
       }
     }
+  });
+
+  await test('after each move the table holds still for a moment: nothing can be played, a tap says why, then play comes back', async () => {
+    const { page, ctx } = await open(scene(4));
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => {
+      v.top = { id: 'Y4x', c: 'Y', k: 'n', v: 4 }; v.colour = 'Y';
+      v.event = { seq: 30, type: 'play', by: 2, card: { id: 'Y4x', c: 'Y', k: 'n', v: 4 }, colour: 'Y', left: 3 };
+    })[1]);
+    await page.waitForFunction(() => /Charlotte played/.test(document.querySelector('.cc-event')?.textContent || ''), null, { timeout: 4000 });
+    assert.equal(await page.locator('.hand .card.playable').count(), 0, 'no card can be played during the hold');
+    assert.equal(await page.locator('.cc-controls').count(), 0, 'no draw or keep control during the hold');
+    await page.click('.hand .card[data-id="R9a"]', { force: true });
+    assert.equal((await sent(page)).length, 0, 'a tap during the hold sends nothing');
+    await page.waitForFunction(() => document.querySelectorAll('.hand .card.playable').length === 3, null, { timeout: 4000 });
+    await page.click('.hand .card[data-id="R9a"]');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'play', card: 'R9a' });
+    await ctx.close();
+  });
+
+  await test('the round summary waits about two seconds after the last move, then shows', async () => {
+    const { page, ctx } = await open(scene(4));
+    const result = { round: 1, winner: 2, total: 64, gains: [0, 0, 64, 0], hands: [[], [], [], []] };
+    const t0 = Date.now();
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.roundResult = result; v.round = 2; v.event = { seq: 40, type: 'roundEnd', by: 2, round: 1, total: 64 }; })[1]);
+    await page.waitForSelector('.overlay .sheet', { timeout: 6000 });
+    const waited = Date.now() - t0;
+    assert.ok(waited >= 1900, `the summary showed after ${waited}ms, not straight away`);
+    await ctx.close();
+  });
+
+  await test('recent moves lists the last moves in words, newest first, and opens on tap', async () => {
+    const { page, ctx } = await open(scene(4));
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => {
+      v.event = { seq: 50, type: 'play', by: 2, card: { id: 'Y4x', c: 'Y', k: 'n', v: 4 }, colour: 'Y', left: 3 };
+    })[1]);
+    await page.waitForFunction(() => /Charlotte played/.test(document.querySelector('.cc-event')?.textContent || ''), null, { timeout: 4000 });
+    await page.waitForTimeout(1200);
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => {
+      v.event = { seq: 51, type: 'draw', by: 3, count: 1, left: 3 };
+    })[1]);
+    await page.waitForFunction(() => /Dmitri drew/.test(document.querySelector('.cc-event')?.textContent || ''), null, { timeout: 4000 });
+    await page.waitForTimeout(1200);
+    await page.click('[data-cc="log"]');
+    const items = await page.locator('.cc-log li').allTextContents();
+    assert.equal(items.length, 2);
+    assert.match(items[0], /Dmitri drew a card/, 'newest first');
+    assert.match(items[1], /Charlotte played Sun 4/);
+    await ctx.close();
+  });
+
+  await test('the Ready bar waits for everybody: Ready sends the ready message, and the bar says who is still awaited', async () => {
+    const withGate = (ready, waiting) => scene(4, (v, m) => { m[1].room.gate = { ready, waiting }; });
+    const { page, ctx } = await open(withGate([], ['me', 'p1', 'p2', 'p3']));
+    assert.equal(await page.locator('.ready-bar').count(), 1, 'the bar shows while the table waits');
+    assert.match(await page.textContent('.ready-bar'), /Everybody presses Ready/);
+    await page.click('.ready-bar [data-act="readyUp"]');
+    const sentReady = await page.evaluate(() => window.__sent.filter((m) => m.t === 'ready').length);
+    assert.equal(sentReady, 1, 'the Ready button sends one ready message');
+    await page.evaluate((m) => window.__push(m), withGate(['me'], ['p1', 'p2', 'p3'])[1]);
+    await page.waitForFunction(() => /You are ready/.test(document.querySelector('.ready-bar')?.textContent || ''), null, { timeout: 4000 });
+    assert.equal(await page.locator('.ready-bar [data-act="readyUp"]').count(), 0, 'no second Ready for the same round');
+    await ctx.close();
   });
 
   await test('cards can be told apart without colour: every coloured card shows its shape, and every card has a name', async () => {

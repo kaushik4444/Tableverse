@@ -18,6 +18,8 @@
   const $toasts = document.getElementById('toasts');
 
   let sessionGen = 0; // bumped when the signed-in account changes, so an answer for the previous account is dropped
+  // how long a seat change may hold the seat controls while waiting for the server's state (a fallback; an error or the new order ends it sooner)
+  const SEAT_CHANGE_FALLBACK_MS = 10000;
   const S = {
     id: null,
     token: '', // short-lived websocket auth credential (never persisted)
@@ -1403,6 +1405,8 @@
         S.stateKey = stateKey;
         S.room = m.room;
         S.view = m.view;
+        // a seat change is confirmed when the table shows a new order; an error or the fallback timeout also ends the wait
+        if (S.seatChange && (Date.now() > S.seatChange.until || m.room.members.map((x) => x.id).join() !== S.seatChange.from)) S.seatChange = null;
         S.skew = (m.room.now || Date.now()) - Date.now();
         if (same) break; // identical to what is on screen (a presence or ping tick): keep the DOM, the focus and any animation
         setHash(m.room.code);
@@ -1440,6 +1444,7 @@
         if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
         break;
       case 'error':
+        S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
         if (m.code === 'guest_locked') { openAuthSheet('register', (m.feature && GUEST_LOCK_TEXT[m.feature]) || m.message || 'Create a free account to play this game.'); break; }
         toast(m.message);
         if (!S.room && hashCode()) setHash('');
@@ -2625,6 +2630,8 @@
     // keeps its keyboard focus: changing one setting must not slam the panel shut.
     const openFolds = [...document.querySelectorAll('details[id]')].filter((d) => d.open).map((d) => d.id);
     const focusedOpt = ae && ae.dataset && ae.dataset.opt ? ae.dataset.opt : null;
+    // seat swap and shuffle controls keep keyboard focus across a redraw, including one caused by another player's change
+    const focusedSeat = ae && ae.dataset && (ae.dataset.act === 'pickSeat' || ae.dataset.act === 'shuffleSeats') ? { act: ae.dataset.act, vid: ae.dataset.vid || null } : null;
     const saved = {};
     for (const id of KEEP_FIELDS) {
       const el = document.getElementById(id);
@@ -2648,6 +2655,7 @@
     showLevelUpDialog();
     for (const id of openFolds) { const d = document.getElementById(id); if (d && d.tagName === 'DETAILS') d.open = true; }
     if (focusedOpt) { const el = $app.querySelector(`[data-opt="${CSS.escape(focusedOpt)}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
+    if (focusedSeat) { const el = $app.querySelector(focusedSeat.vid ? `[data-act="${focusedSeat.act}"][data-vid="${CSS.escape(focusedSeat.vid)}"]` : `[data-act="${focusedSeat.act}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
     for (const id of KEEP_FIELDS) {
       const el = document.getElementById(id);
       const was = saved[id];
@@ -2803,6 +2811,7 @@
         ${label}
         ${m.id === r.hostId ? '<span class="tag host">host</span>' : ''}
         <span class="dot ${m.connected ? '' : 'off'}" title="${m.connected ? 'online' : 'offline'}"></span>
+        ${isHost && r.members.length > 1 ? `<button class="btn ghost small seat-swap${S.seatPick === m.id ? ' picked' : ''}" data-act="pickSeat" data-vid="${esc(m.id)}" aria-pressed="${S.seatPick === m.id}" aria-label="Swap the seat of ${esc(m.name)}">⇄</button>` : ''}
         ${isHost && m.bot ? `<button class="btn ghost small" data-act="removeBot" data-id="${esc(m.id)}" aria-label="Remove ${esc(m.name)}">✕</button>` : ''}
         ${isHost && !m.bot && m.id !== S.id ? `<span class="seat-actions"><button class="btn ghost small" data-act="makeHost" data-id="${esc(m.id)}" data-name="${esc(m.name)}" aria-label="Make ${esc(m.name)} the host" title="Make host">👑</button><button class="btn ghost small" data-act="kickPlayer" data-id="${esc(m.id)}" data-name="${esc(m.name)}" aria-label="Remove ${esc(m.name)} from the table" title="Remove from table">✕</button></span>` : ''}
       </li>`);
@@ -2851,6 +2860,7 @@
         </div>
         <p class="hint seat-status" id="seat-why" style="text-align:left;margin:8px 0 0">${esc([seatStatus, lessWhy, moreWhy].filter(Boolean).join(' '))}</p>
         <ul class="seats">${seats.join('')}</ul>
+        ${isHost && n >= 2 ? `<div class="row seat-tools" style="justify-content:space-between"><button class="btn ghost small" data-act="shuffleSeats">🔀 Shuffle seats</button><span class="hint">${S.seatPick ? 'Now tap the seat to swap with (tap ⇄ again to cancel).' : 'Tap ⇄ on two players to swap their seats.'}</span></div>` : ''}
         ${isHost && open > 0 ? `<div class="row" style="margin-top:12px"><button class="btn ghost small" data-act="addBot">+ Add a bot</button><button class="btn ghost small" data-act="fillBots">Fill ${open} open seat${open === 1 ? '' : 's'} with bots</button></div>` : ''}
       </section>
       ${opts ? `<details id="fold-options" class="panel fold"><summary><span class="fold-title">Game options</span><span class="fold-hint">${esc(optionsSummary(g, r))}</span></summary><div class="opts">${opts}</div>${isHost ? '' : '<p class="hint" style="margin-top:8px">Only the host can change these.</p>'}</details>` : ''}
@@ -3022,6 +3032,32 @@
     standInWatch.observe($app, { childList: true, subtree: true });
   }
 
+  /** The Ready bar: shown while the table waits for everybody to press Ready (the first round, and each round between). Generic for every game. */
+  /** The Ready gate as a game sees it: whether this seat is seated and ready, and who the table still waits for (null when no gate). */
+  function gateInfo() {
+    const gate = S.room && S.room.status === 'playing' && S.room.gate;
+    if (!gate) return null;
+    const nameOf = (id) => { const m = S.room.members.find((x) => x.id === id); return m ? m.name : 'Someone'; };
+    return {
+      seated: S.room.members.some((m) => m.id === S.id && !m.bot),
+      youReady: gate.ready.includes(S.id),
+      ready: gate.ready.length,
+      total: gate.ready.length + gate.waiting.length,
+      waiting: gate.waiting.map(nameOf),
+    };
+  }
+
+  function readyBarHTML() {
+    const gate = S.room && S.room.gate;
+    if (!gate || S.room.status !== 'playing') return '';
+    const nameOf = (id) => { const m = S.room.members.find((x) => x.id === id); return m ? esc(m.name) : 'Someone'; };
+    const seated = S.room.members.some((m) => m.id === S.id && !m.bot);
+    const total = gate.ready.length + gate.waiting.length;
+    if (seated && !gate.ready.includes(S.id)) return `<div class="ready-bar" role="status"><span><b>Everybody presses Ready to continue.</b> ${gate.ready.length} of ${total} ready</span><button class="btn" data-act="readyUp">Ready</button></div>`;
+    const waiting = gate.waiting.map(nameOf);
+    return `<div class="ready-bar" role="status"><span>${seated ? 'You are ready. ' : ''}${waiting.length ? `Waiting for ${waiting.join(', ')}` : 'Everybody is ready'}</span></div>`;
+  }
+
   function renderGame() {
     const plugin = plugins[S.room.gameId];
     if (!plugin || !S.view) {
@@ -3030,20 +3066,24 @@
     }
     const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
     const r = S.room;
-    if (r.status === 'finished' && (!S.endFlow || S.endFlow.code !== r.code)) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0), timer: null };
+    if (r.status === 'finished' && (!S.endFlow || S.endFlow.code !== r.code)) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0) + Math.max(0, (r.outcome && r.outcome.playMs) || 0), timer: null };
     plugin.render($app, S.view, {
       resultVisible: r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS,
       room: S.room,
+      gate: gateInfo(),
       game: gameMeta(S.room.gameId),
       isHost: S.room.hostId === S.id,
       activityLog: () => { if (!S.room || S.room.gameId !== 'gofish') openActivityLog(); },
       act: (action) => send({ t: 'act', action }),
+      ready: () => send({ t: 'ready' }), // this seat is ready for the next round (or the first)
       leave: () => requestLeave(),
       rematch: () => send({ t: 'rematch' }),
       showRules: () => showRules(S.room.gameId),
       rerender: render,
       toast,
     });
+    const readyBar = readyBarHTML();
+    if (readyBar) { const top = $app.querySelector('.wz-top'); if (top) top.insertAdjacentHTML('afterend', readyBar); else $app.insertAdjacentHTML('afterbegin', readyBar); }
     markStandIns($app);
     watchStandIns();
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
@@ -3335,8 +3375,29 @@
     },
     removeBot: (el) => send({ t: 'removeBot', id: el.dataset.id }),
     makeHost: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Make host', `<p class="hint">Make ${esc(el.dataset.name || 'this player')} the host of this table? You will stay at the table, but only the host can start the game and change settings.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="makeHostConfirm">Make host</button></div>`); },
+    readyUp: () => send({ t: 'ready' }),
     kickPlayer: (el) => { S.pendingModalTarget = el.dataset.id; openModal('Remove player', `<p class="hint">Remove ${esc(el.dataset.name || 'this player')} from this table? They will not be able to come back.</p><div class="row" style="margin-top:12px; gap:10px"><button class="btn ghost small" data-modal-close>Cancel</button><button class="btn" data-modal-act="kickPlayerConfirm">Remove</button></div>`); },
     seats: (el) => send({ t: 'setSeats', seats: Number(el.dataset.n) }),
+    shuffleSeats: () => {
+      if (S.seatChange && Date.now() < S.seatChange.until) return; // one seat change at a time: a second one would start from an order the server has not confirmed (the state update that confirms it, or an error, clears the wait)
+      S.seatPick = null; render();
+      S.seatChange = { from: S.room.members.map((m) => m.id).join(), until: Date.now() + SEAT_CHANGE_FALLBACK_MS };
+      send({ t: 'shuffleSeats' });
+    },
+    // the host swaps two players' seats: tap one, then the other (tapping the same one again cancels)
+    pickSeat: (el) => {
+      const id = el.dataset.vid;
+      const first = S.seatPick;
+      if (S.seatChange && Date.now() < S.seatChange.until) { S.seatPick = null; render(); return; } // wait for the last change to be confirmed
+      if (!first) { S.seatPick = id; render(); const btn = $app.querySelector('[data-act="pickSeat"][data-vid="' + CSS.escape(id) + '"]'); if (btn) btn.focus({ preventScroll: true }); return; }
+      S.seatPick = null;
+      const ids = S.room.members.map((m) => m.id);
+      const a = ids.indexOf(first); const b = ids.indexOf(id);
+      if (first === id || a < 0 || b < 0) { render(); return; }
+      [ids[a], ids[b]] = [ids[b], ids[a]];
+      S.seatChange = { from: S.room.members.map((m) => m.id).join(), until: Date.now() + SEAT_CHANGE_FALLBACK_MS };
+      send({ t: 'arrangeSeats', order: ids });
+    },
     start: () => send({ t: 'start' }),
     dismissBanner: (el) => dismissBanner(el.dataset.id),
     openAdmin: () => { S.menuOpen = false; location.href = '/admin.html'; },

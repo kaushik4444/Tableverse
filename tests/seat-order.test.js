@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { seatPlayers } = require('../lib/seatOrder');
+const { seatPlayers, arrangeMembers, shuffleMembers } = require('../lib/seatOrder');
 
 let passed = 0;
 function test(name, fn) {
@@ -36,6 +36,31 @@ test('the members array is not changed by shuffling', () => {
   const m = members();
   seatPlayers(m, { shuffle: true, offered: true, randomInt: () => 0 });
   assert.deepEqual(ids(m), ['a', 'b', 'c', 'd']);
+});
+
+test('the host can arrange the members: every id exactly once, or nothing', () => {
+  const input = members();
+  assert.deepEqual(ids(arrangeMembers(input, ['c', 'a', 'd', 'b'])), ['c', 'a', 'd', 'b']);
+  assert.equal(ids(input).join(), 'a,b,c,d', 'the input is not changed');
+  assert.equal(arrangeMembers(input, ['a', 'b', 'c']), null, 'a missing player');
+  assert.equal(arrangeMembers(input, ['a', 'a', 'c', 'd']), null, 'a repeated player');
+  assert.equal(arrangeMembers(input, ['a', 'b', 'c', 'x']), null, 'a stranger');
+  assert.equal(arrangeMembers(input, 'abcd'), null, 'not a list');
+  assert.equal(ids(input).join(), 'a,b,c,d', 'still not changed after the refused arrangements');
+});
+
+test('a shuffle is a permutation of the members, and the input is unchanged', () => {
+  const input = members();
+  // every step swaps the seat with the first one, so the order really changes (lastRandom would only swap seats with themselves)
+  const out = shuffleMembers(input, () => 0);
+  assert.notDeepEqual(ids(out), ['a', 'b', 'c', 'd'], 'the order changed');
+  assert.deepEqual(ids(out).slice().sort(), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(ids(input), ['a', 'b', 'c', 'd'], 'the input is not changed');
+});
+
+test('an arranged order: a manual arrangement is kept and the start does not shuffle it again', () => {
+  const arranged = arrangeMembers(members(), ['b', 'a', 'd', 'c']);
+  assert.deepEqual(ids(seatPlayers(arranged, { shuffle: false, offered: true })), ['b', 'a', 'd', 'c']);
 });
 
 console.log(`\n${passed} seat order tests passed`);
