@@ -257,7 +257,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     const identity = await page.evaluate(() => [...document.querySelectorAll('.pr-rows > .pr-row:first-child [data-cn]')].map((el) => [el.dataset.cn, el.getAnimations().length > 0]));
     const others = identity.filter(([n]) => n !== '11');
     const played = identity.filter(([n]) => n === '11');
-    assert.equal(others.length, 5, 'all five cards that were on the row are there: ' + JSON.stringify(identity));
+    assert.deepEqual(others.map(([n]) => n).sort(), full.map(String).sort(), 'exactly the five cards that were on the row are there: ' + JSON.stringify(identity));
     assert.ok(others.every(([, moving2]) => moving2), 'the five collected cards move: ' + JSON.stringify(identity));
     assert.equal(played.length, 1, 'the played card is on the row: ' + JSON.stringify(identity));
     assert.ok(played.every(([, moving2]) => !moving2), 'the played card does not go into the pile: ' + JSON.stringify(identity));
