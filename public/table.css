@@ -74,8 +74,8 @@ button.card { cursor: pointer; }
 .tbox.us { border-color: rgba(123, 224, 160, .5); }
 .tbox.them { border-color: rgba(255, 122, 107, .4); }
 .bidinfo { align-self: center; text-align: center; font-size: 12px; color: var(--gold); max-width: 110px; }
-.wz-players.four { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 480px) { .wz-players.four { grid-template-columns: repeat(2, 1fr); } }
+.wz-players.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 480px) { .wz-players.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .cpts { position: absolute; left: 50%; bottom: 5%; transform: translateX(-50%); min-width: calc(var(--cw) * .26); text-align: center; font-family: var(--sans); font-size: calc(var(--cw) * .17); line-height: 1.5; border-radius: 999px; background: rgba(0, 0, 0, .35); color: #fff; padding: 0 4px; }
 .card.suit-Y .cpts { background: rgba(0, 0, 0, .55); }
 
@@ -432,3 +432,4 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 /* Reactions: the emote bar wraps on a phone (21 emoji), and a spectator's reaction is labelled with their name. */
 .emote-bar { flex-wrap: wrap; justify-content: center; max-width: min(92vw, 360px); }
 .emote-tag { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); white-space: nowrap; font: 600 12px/1.2 var(--sans); padding: 3px 8px; border-radius: 999px; background: rgba(10, 13, 43, .85); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); }
+

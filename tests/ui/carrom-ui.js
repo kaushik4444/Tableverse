@@ -265,6 +265,24 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
+  await test('shot playback moves each disc smoothly between keyframes, and a pocketed disc fades out', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    const r = await page.evaluate(() => {
+      const P = window.CarromPlayback.poseAt;
+      const frames = [{ t: 0, d: [['a', 0, 0], ['b', 1, 1]] }, { t: 0.1, d: [['a', 1, 0]] }];
+      const mid = P(frames, 0.05);
+      const a = mid.find((p) => p[0] === 'a');
+      const b = mid.find((p) => p[0] === 'b');
+      return { ax: a[1], aAlpha: a[3], bAlpha: b[3], bx: b[1], start: P(frames, 0)[0], end: P(frames, 0.1)[0] };
+    });
+    assert.ok(Math.abs(r.ax - 0.5) < 1e-9, 'halfway between keyframes is halfway between the positions: ' + r.ax);
+    assert.equal(r.aAlpha, 1, 'a disc still on the board is fully shown');
+    assert.ok(Math.abs(r.bAlpha - 0.5) < 1e-9, 'a disc that is pocketed fades out over the interval: ' + r.bAlpha);
+    assert.deepEqual(r.start, ['a', 0, 0, 1]);
+    assert.deepEqual(r.end, ['a', 1, 0, 1]);
+    await ctx.close();
+  });
+
   await closeOpenContexts();
   await browser.close();
   server.close();
