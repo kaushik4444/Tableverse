@@ -113,5 +113,19 @@
   .sr .sr-seats .sr-laid { margin-top: 2px; }
   .sr .sr-seats .sr-laid .sr-group { padding: 2px 4px; }
   /* expanded laid groups scroll inside the seat region, so the hand always stays on the screen */
-  .sr .sr-seats { max-height: 200px; overflow-y: auto; }
+}
+
+/* phones: compact seats that always show every player (no hidden seats), a larger hand, and one-line counts */
+@media (max-width: 520px) {
+  .sr .sr-wide { display: none; }
+  .sr .sr-seats .pseat, .sr .sr-seats.many .pseat { min-height: 0; padding-block: 4px; }
+  .sr .sr-seats .pseat > .sr-laid, .sr .sr-seats.many .pseat > .sr-laid { min-height: 0; }
+  .sr .sr-seats .sr-nolay { white-space: nowrap; font-size: 11px; margin: 0; }
+  .sr .sr-seats .av { width: 28px; height: 28px; }
+  .sr .sr-seats.many .av { width: 24px; height: 24px; }
+  .sr .sr-seats .pseat { row-gap: 2px; }
+  .sr .sr-seats:not(.many) { max-height: none; overflow: visible; }
+  .sr .sr-seats.many { max-height: 240px; overflow-y: auto; }
+  .sr .sr-hand { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+  .sr .sr-hand .sr-card { min-height: 52px; aspect-ratio: 3 / 4; font-size: 18px; }
 }
