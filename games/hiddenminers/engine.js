@@ -20,9 +20,27 @@ const HAND = { 3: 6, 4: 6, 5: 5, 6: 5, 7: 4, 8: 4 };
 const MIN_PLAYERS = 3;
 const MAX_PLAYERS = 8;
 const ROUNDS = ['1', '3', '5'];
+// Pauses so people can follow the table: each move is held on screen before the next miner acts, and a round end is held longer.
+const MOVE_MS = 1600;
+const ROUND_MS = 3000;
+const HISTORY_KEEP = 80;
+const pacing = require('../pacing');
 
 const indexOf = (g, id) => g.players.findIndex((p) => p.id === id);
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
+/** Every move is public: it goes into the history the table reads, and counts toward that miner's tally for the round. */
+function record(g, who, entry) {
+  g.history.push({ round: g.round, by: who, ...entry });
+  if (g.history.length > HISTORY_KEEP) g.history.shift();
+  const t = g.tally[who];
+  if (entry.kind === 'tile') { t.tunnels++; if (entry.cut) t.deadEnds++; }
+  else if (entry.kind === 'break') t.breaks++;
+  else if (entry.kind === 'repair') t.repairs++;
+  else if (entry.kind === 'scout') t.scouts++;
+  else if (entry.kind === 'collapse') t.collapses++;
+  else if (entry.kind === 'discard') t.discards++;
+  pacing.hold(g, MOVE_MS);
+}
 const say = (g, by, text, kind) => { g.log.push({ by: by === null ? 'Table' : g.players[by].name, card: text, kind }); if (g.log.length > 60) g.log.shift(); };
 const flipMask = (m) => ((m << 2) | (m >> 2)) & 15;
 const key = (x, y) => `${x},${y}`;
@@ -78,6 +96,8 @@ function createGame(players, options, rng = Math.random) {
     roundResult: null,
     winners: [],
     log: [],
+    history: [],
+    tally: [],
     seq: 0,
     version: 0,
   };
@@ -97,6 +117,7 @@ function startRound(g) {
   g.roles = roles;
   g.broken = g.players.map(() => []);
   g.scouts = g.players.map(() => []);
+  g.tally = g.players.map(() => ({ tunnels: 0, deadEnds: 0, breaks: 0, repairs: 0, scouts: 0, collapses: 0, discards: 0 }));
   g.hands = g.players.map(() => []);
   for (let k = 0; k < HAND[g.n]; k++) for (let i = 0; i < g.n; i++) g.hands[i].push(g.deck.pop());
   g.turn = (g.round - 1) % g.n;
@@ -174,6 +195,7 @@ function endRound(g, side, finder, reveal) {
   gains.forEach((v, i) => { g.scores[i] += v; });
   g.roundResult = { round: g.round, side, finder: finder === undefined ? null : finder, roles: g.roles.slice(), gains, gold: g.goals.findIndex((q) => q.gold) };
   say(g, null, side === 'diggers' ? `The Diggers found the gold in round ${g.round}` : `The Saboteurs won round ${g.round}`, 'end');
+  pacing.hold(g, ROUND_MS);
   if (g.round >= Number(g.options.rounds)) {
     g.phase = 'gameOver';
     const best = Math.max(...g.scores);
@@ -223,6 +245,7 @@ function applyAction(g, playerId, action) {
     take(g, who, card.id); g.discards++;
     emit(g, { type: 'discard', by: who });
     say(g, who, 'threw a card away', 'discard');
+    record(g, who, { kind: 'discard' });
   } else if (type === 'tile') {
     if (card.k !== 'tile') return { ok: false, error: 'That is not a tunnel piece' };
     if (!canBuild(g, who)) return { ok: false, error: 'A broken tool stops you digging. Get it repaired first' };
@@ -243,6 +266,8 @@ function applyAction(g, playerId, action) {
         if (q.gold) found = true;
       }
     });
+    // the outcome of each chamber this move opened is stored with the move: a later round has different chambers
+    record(g, who, { kind: 'tile', mask, cut: card.cut, x: action.x, y: action.y, opened: g.event.revealed.map((i) => g.goals[i].gold) });
     // the round-ending event keeps what this move opened, so every client can still show the gold being found
     if (found) { endRound(g, 'diggers', who, { by: who, revealed: g.event.revealed.slice(), goldIndex: g.event.goldIndex }); return { ok: true }; }
   } else if (type === 'break') {
@@ -252,6 +277,7 @@ function applyAction(g, playerId, action) {
     g.broken[action.target].push(card.tool);
     emit(g, { type: 'break', by: who, target: action.target, tool: card.tool });
     say(g, who, `broke ${g.players[action.target].name}'s ${TOOL_NAMES[card.tool]}`, 'break');
+    record(g, who, { kind: 'break', tool: card.tool, target: action.target });
   } else if (type === 'repair') {
     if (card.k !== 'repair') return { ok: false, error: 'That is not a repair card' };
     if (!int(action.target) || !card.tools.includes(action.tool) || !repairTargets(g, who, card).some((t) => t.seat === action.target && t.tool === action.tool)) return { ok: false, error: 'There is nothing to repair' };
@@ -259,6 +285,7 @@ function applyAction(g, playerId, action) {
     g.broken[action.target] = g.broken[action.target].filter((t) => t !== action.tool);
     emit(g, { type: 'repair', by: who, target: action.target, tool: action.tool });
     say(g, who, `repaired ${g.players[action.target].name}'s ${TOOL_NAMES[action.tool]}`, 'repair');
+    record(g, who, { kind: 'repair', tool: action.tool, target: action.target });
   } else if (type === 'scout') {
     if (card.k !== 'scout') return { ok: false, error: 'That is not a scout card' };
     if (!int(action.goal) || action.goal < 0 || action.goal >= g.goals.length) return { ok: false, error: 'Pick a chamber' };
@@ -266,6 +293,7 @@ function applyAction(g, playerId, action) {
     g.scouts[who].push({ goal: action.goal, gold: g.goals[action.goal].gold });
     emit(g, { type: 'scout', by: who, goal: action.goal });
     say(g, who, 'scouted a chamber', 'scout');
+    record(g, who, { kind: 'scout', goal: action.goal });
   } else if (type === 'collapse') {
     if (card.k !== 'collapse') return { ok: false, error: 'That is not a collapse card' };
     const t = int(action.x) && int(action.y) ? g.board.get(key(action.x, action.y)) : null;
@@ -274,6 +302,7 @@ function applyAction(g, playerId, action) {
     g.board.delete(key(action.x, action.y));
     emit(g, { type: 'collapse', by: who, x: action.x, y: action.y });
     say(g, who, 'collapsed a tunnel piece', 'collapse');
+    record(g, who, { kind: 'collapse', x: action.x, y: action.y });
   } else return { ok: false, error: 'Unknown action' };
   g.version++;
   finishTurn(g, who);
@@ -379,6 +408,9 @@ function viewFor(g, playerId) {
     event: g.event ? { ...g.event, revealed: g.event.revealed ? g.event.revealed.slice() : undefined } : null,
     roundResult,
     winners: over ? g.winners.slice() : [],
+    // public to everyone: every move this round and what each miner has done this round, so the table can track who is digging
+    history: g.history.map((h) => ({ ...h })),
+    tally: g.tally.map((t) => ({ ...t })),
   };
 }
 
