@@ -174,6 +174,11 @@ test('multi-round match: roles are dealt again and the board resets', () => {
   g.hands = [[{ id: 'a', k: 'scout' }], [], []];
   g.turn = 0;
   e.applyAction(g, 'p0', { type: 'discard', card: 'a' });
+  assert.equal(g.phase, 'roundEnd', 'the next round waits for Ready');
+  assert.deepEqual(e.awaiting(g), []);
+  assert.equal(e.applyAction(g, 'p0', { type: 'discard', card: 'x' }).ok, false, 'nothing is played while waiting');
+  assert.ok(e.viewFor(g, 'p0').goals.every((q) => q.revealed && q.gold !== null), 'every chamber is shown at the end of a round');
+  assert.equal(e.applyAction(g, null, { type: 'continue' }).ok, true);
   assert.equal(g.phase, 'playing');
   assert.equal(g.round, 2);
   assert.equal(g.board.size, 1);
@@ -216,6 +221,7 @@ test('bots: 120 complete bot games (3-8 players) end with only legal moves', () 
     const g = fresh(n, { rounds: s % 2 ? '3' : '1' }, 1000 + s);
     let turns = 0;
     while (g.phase !== 'gameOver') {
+      if (g.phase === 'roundEnd') { assert.equal(e.applyAction(g, null, { type: 'continue' }).ok, true); continue; }
       const id = g.players[g.turn].id;
       const a = e.botAction(g, id);
       assert.ok(a, 'a bot always has a move');
