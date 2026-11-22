@@ -32,7 +32,7 @@
     const now = Date.now();
     const items = (feeds.get(key) || []).filter((x) => now - x.at < TTL).slice(-SHOW);
     if (!items.length) return '';
-    return `<ol class="gf-feed ${cls}" role="log" aria-live="polite" aria-label="What just happened">${items.map((x) => `<li class="gf-item gf-${x.tone}${now - x.at < 2500 ? ' gf-new' : ''}">${x.html}</li>`).join('')}</ol>`;
+    return `<ol class="gf-feed ${cls}" role="log" aria-live="polite" aria-label="What just happened">${items.map((x) => `<li class="gf-item gf-${x.tone}${now - x.at < 2500 ? ' gf-new' : ''}" style="--life:${Math.max(0, TTL - (now - x.at))}ms">${x.html}</li>`).join('')}</ol>`;
   }
 
   /** Holds a card and a caption in the middle of the screen for a moment. Replaces one already showing. */
