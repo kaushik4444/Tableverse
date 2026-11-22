@@ -13,7 +13,7 @@
   };
   const WORDS = { A: 'Aces', J: 'Jacks', Q: 'Queens', K: 'Kings' };
   const word = (r) => WORDS[r] || r + 's';
-  const ui = { ctx: null, latest: null, rank: null, target: null, seq: null, prevHand: null, scores: false, turnKey: '' };
+  const ui = { ctx: null, latest: null, rank: null, target: null, seq: null, feeds: new Map(), prevHand: null, scores: false, turnKey: '' };
 
   function cardHTML(c, cls = '', attrs = '', tag = 'div') {
     const s = SUITS[c.suit];
@@ -44,6 +44,29 @@
     }
   }
 
+  const feedKey = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
+  /** Each new event joins the shared feed (the last lines float over the table), so a run of bot turns can still be followed. A catch
+   * from you or by you, and any book, is also held in the middle of the screen. The first look at a table only records where it is. */
+  function feedSync(v) {
+    const key = feedKey();
+    const e = v.event;
+    if (!key || !window.GameFeed) return;
+    const st = ui.feeds.get(key);
+    if (!st) { ui.feeds.set(key, { seq: e ? e.seq : 0, epoch: 0 }); return; }
+    if (e && e.seq < st.seq) { st.epoch += 1; st.seq = 0; }
+    if (!e || e.seq <= st.seq) return;
+    st.seq = e.seq;
+    const text = eventText(v);
+    if (!text) return;
+    const book = e.books && e.books.length;
+    const tone = e.type === 'over' ? 'round' : book ? 'win' : e.type === 'take' ? 'take' : 'play';
+    window.GameFeed.add(key, [{ id: `gf-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
+    const mine = e.by === v.me || e.target === v.me;
+    if (e.type !== 'over' && (book || (e.type === 'take' && mine))) {
+      window.GameFeed.spotlight({ card: `<span class="gf-spot-ico">${book ? '📚' : '🎣'}</span>`, caption: text, tone, ms: 1800 });
+    }
+  }
+
   function guidance(v) {
     if (v.phase === 'gameOver') return v.winners.includes(v.me) ? 'You won!' : 'Game over';
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} is choosing`;
@@ -69,7 +92,8 @@
     const text = eventText(v);
     // The stock sits on the felt; what just happened is a line under the table (on a phone the felt has no room for both)
     const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>`;
-    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })
+    const feed = window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : '';
+    return `<div class="gf-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}${feed}</div>`
       + (text ? `<p class="gf-event gf-event-bar" role="status">${text}</p>` : '');
   }
 
@@ -134,6 +158,7 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
+    feedSync(v);
     react(v);
     // a new turn or a rank we no longer hold clears the pending choice
     const key = `${v.turn}:${v.event ? v.event.seq : 0}`;
