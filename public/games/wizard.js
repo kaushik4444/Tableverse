@@ -200,8 +200,8 @@
         })
         .join('');
       return `<div class="overlay"><div class="sheet"><h2>Round ${v.round} of ${v.totalRounds}</h2>
-        <div class="score-wrap"><table class="score"><thead><tr><th>Player</th><th>Bid</th><th>Won</th><th>Pts</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div>
-        ${readyRow(ctx)}</div></div>`;
+        ${readyRow(ctx)}
+        <div class="score-wrap"><table class="score"><thead><tr><th>Player</th><th>Bid</th><th>Won</th><th>Pts</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     }
     const order = v.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
     const win = v.winners.includes(v.players[v.me] && v.players[v.me].id);

@@ -195,9 +195,9 @@
     }
     if (r && v.phase === 'roundEnd') {
       return `<div class="overlay"><div class="sheet"><h2>${r.side === 'diggers' ? '⛏️ The Diggers found the gold!' : '🕳️ The Saboteurs win the round'}</h2>
+        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}
         <p class="hint" style="text-align:left">Round ${r.round}: the roles were:</p>
-        <ul class="hm-final">${list(sorted)}</ul>
-        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}</div></div>`;
+        <ul class="hm-final">${list(sorted)}</ul></div></div>`;
     }
     return '';
   }

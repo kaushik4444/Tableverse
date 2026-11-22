@@ -153,8 +153,8 @@
       .join('');
     const hands = r.showdown && r.hands.length > r.winners.length ? `<p class="hint">${r.hands.map((h) => `${esc(v.players[h.player].name)}: ${esc(h.hand)}`).join(' · ')}</p>` : '';
     const side = r.pots.length > 1 ? `<p class="hint">${r.pots.length} pots: ${r.pots.map((p) => fmt(p.amount)).join(' + ')}</p>` : '';
-    return `<div class="pk-result"><h3>Hand ${r.handNo}</h3><ul>${winners}</ul>${side}${hands}
-      ${window.CardTable.readyBox(ctx, { title: 'Ready for the next hand?', cls: 'in-sheet' })}</div>`;
+    return `<div class="pk-result"><h3>Hand ${r.handNo}</h3>
+        ${window.CardTable.readyBox(ctx, { title: 'Ready for the next hand?', cls: 'in-sheet' })}<ul>${winners}</ul>${side}${hands}</div>`;
   }
 
   function standingsHTML(v) {
