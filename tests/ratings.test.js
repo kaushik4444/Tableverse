@@ -141,6 +141,56 @@ assert.equal(r.monthKey(new Date('2026-11-30T23:59:59Z')), '2026-11');
 assert.equal(r.monthKey(new Date('2026-12-01T00:00:00Z')), '2026-12');
 assert.equal(r.monthKey(new Date('2026-01-05T12:00:00Z')), '2026-01');
 
+// mixed experience stays zero-sum: a newcomer's win costs a veteran exactly what it gives the newcomer
+{
+  const newcomerWin = r.matchDeltas('chess', [pl('N', 1000, 1, { ratedGames: 0 }), pl('V', 1000, 0, { ratedGames: 50 })]);
+  close(newcomerWin.N, -newcomerWin.V, 'newcomer vs veteran is symmetric');
+  close(sum(newcomerWin), 0, 'mixed-experience 1v1 is zero-sum');
+  const mixed = r.matchDeltas('wizard', [
+    pl('A', 1100, -1, { ratedGames: 2 }),
+    pl('B', 950, -2, { ratedGames: 40 }),
+    pl('C', 1000, -3, { ratedGames: 12 }),
+    pl('D', 1300, -4, { ratedGames: 0 }),
+  ]);
+  close(sum(mixed), 0, 'mixed-experience placing match is zero-sum');
+  const mixedTeams = r.matchDeltas('twentynine', [
+    pl('A1', 1000, 1, { teamId: 'X', ratedGames: 0 }),
+    pl('A2', 1000, 1, { teamId: 'X', ratedGames: 60 }),
+    pl('B1', 1000, 0, { teamId: 'Y', ratedGames: 3 }),
+    pl('B2', 1000, 0, { teamId: 'Y', ratedGames: 9 }),
+  ]);
+  close(sum(mixedTeams), 0, 'mixed-experience team match is zero-sum (equal teams)');
+}
+
+// team value is the lowest member's value, so the member order does not matter
+{
+  const one = r.matchDeltas('twentynine', [
+    pl('A1', 1000, 1, { teamId: 'X' }),
+    pl('A2', 1000, -Infinity, { teamId: 'X' }), // penalised leaver
+    pl('B1', 1000, 1, { teamId: 'Y' }),
+    pl('B2', 1000, 1, { teamId: 'Y' }),
+  ]);
+  const swapped = r.matchDeltas('twentynine', [
+    pl('A2', 1000, -Infinity, { teamId: 'X' }),
+    pl('A1', 1000, 1, { teamId: 'X' }),
+    pl('B2', 1000, 1, { teamId: 'Y' }),
+    pl('B1', 1000, 1, { teamId: 'Y' }),
+  ]);
+  close(one.A1, swapped.A1, 'team change does not depend on member order');
+  assert.ok(one.A1 < 0, 'a team with a penalised leaver loses');
+  assert.ok(Number.isFinite(one.A1) && Number.isFinite(one.B1), 'no infinite changes');
+}
+
+// cooperative: everyone gets the same change, and a penalised leaver is a loss for the table, with no infinity
+{
+  const cleared = r.matchDeltas('themind', [pl('A', 1000, 1, { ratedGames: 0 }), pl('B', 1400, 1, { ratedGames: 30 })]);
+  close(cleared.A, cleared.B, 'the same change for everyone at the table');
+  assert.ok(cleared.A > 0);
+  const forfeit = r.matchDeltas('themind', [pl('A', 1000, 1), pl('B', 1000, -Infinity, { forfeit: true })]);
+  close(forfeit.A, forfeit.B, 'a forfeit loses the table for everyone');
+  assert.ok(forfeit.A < 0 && Number.isFinite(forfeit.A), 'a finite loss');
+}
+
 // unknown games fall back to the placing family at full weight, like lib/gameSkill.js
 assert.deepEqual(r.gameRule('some-new-game'), { family: 'pairwise', weight: 1 });
 
