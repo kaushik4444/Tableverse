@@ -2676,8 +2676,8 @@
           <div class="row game-actions">
             <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}" ${open || guestLocked ? '' : 'disabled aria-disabled="true"'}>Create table</button>
             <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
-            ${g.id === 'wizard' ? (S.guest ? `<button class="btn ghost small" type="button" data-act="showLogin">Log in for offline scorecard</button>` : `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>`) : ''}
           </div>
+          ${g.id === 'wizard' ? `<p class="game-extra">${S.guest ? '<button type="button" class="linklike" data-act="showLogin">Log in for the offline scorecard</button>' : '<a href="/scorecard.html?game=wizard">Offline scorecard</a>'}</p>` : ''}
         </div>
       </article>`;
     }).join('');
