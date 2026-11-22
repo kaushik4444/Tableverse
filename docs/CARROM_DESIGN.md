@@ -31,9 +31,10 @@ Status: built, in review on `feat/carrom`. Two to four players in teams, drag-to
 
 ## Aiming (as built)
 
-Drag on the board: pull back from the striker and let go. The further you drag, the harder the flick, and the drag sets the
-angle (within 75 degrees). The Striker slider places the striker along your baseline. The Angle and Power sliders keep
-the same values in step, for fine control and for keyboard use.
+Drag the striker along your baseline to place it. Then drag back from the board and let go to flick. The further you
+drag, the harder the flick (within 75 degrees for the angle). Speed grows with the square root of power, so the distance the
+striker slides grows in a straight line with power. There are no sliders: the keyboard does the same job (← → place, Shift+←
+→ turn, ↑ ↓ power, Enter fires).
 
 ## Open questions
 

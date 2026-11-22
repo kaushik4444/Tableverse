@@ -24,9 +24,11 @@ const ANGLE_LIMIT = 75 * Math.PI / 180;
 /**
  * The velocity of a flick: angle from straight ahead (positive to the player's right), power 0..1. `forward` is +1 for the
  * player at the bottom of the board and -1 for the player at the top, whose right is the board's left.
+ * Speed grows with the square root of power, so the distance a disc slides (speed squared over friction) grows in a straight
+ * line with power: a drag twice as long slides the striker twice as far.
  */
 function flickVelocity(angle, power, forward = 1) {
-  const speed = Math.max(0, Math.min(1, power)) * MAX_SPEED;
+  const speed = Math.sqrt(Math.max(0, Math.min(1, power))) * MAX_SPEED;
   return { vx: forward * speed * Math.sin(angle), vy: forward * speed * Math.cos(angle) };
 }
 

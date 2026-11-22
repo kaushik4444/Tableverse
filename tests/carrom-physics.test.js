@@ -27,6 +27,19 @@ test('flick: power is clamped to 0..1 and angle sets the sideways part', () => {
   assert.ok(Math.abs(v.vx - P.MAX_SPEED * 0.5) < 1e-9);
 });
 
+test('the distance a flick slides is linear in power', () => {
+  const slide = (power) => {
+    const d = [{ id: 's', kind: 'striker', colour: 'w', x: 0.5, y: 0.2, vx: 0, vy: 0, r: P.RADIUS.striker }];
+    const v = P.flickVelocity(0, power, 1);
+    d[0].vx = v.vx; d[0].vy = v.vy;
+    const r = P.simulate(d);
+    return r.keyframes.at(-1).d[0][2] - 0.2;
+  };
+  const quarter = slide(0.25), half = slide(0.5), full = slide(1);
+  assert.ok(Math.abs(half / quarter - 2) < 0.05, `half power ${half} should slide twice a quarter ${quarter}`);
+  assert.ok(Math.abs(full / quarter - 4) < 0.1, `full power ${full} should slide four times a quarter ${quarter}`);
+});
+
 test('friction: a free disc stops after about v^2 / (2a) units, within 5%', () => {
   const r = P.simulate([disc('c', 0.5, 0.3, 0, 0.5)]);
   const travelled = at(r, 'c').y - 0.3;
