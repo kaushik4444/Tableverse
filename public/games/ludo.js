@@ -62,7 +62,7 @@
   const ringKey = (geo, seat, pos) => (pos >= 0 && pos < geo.lap ? 'r' + ((geo.starts[seat] + pos) % geo.track) : null);
 
   const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map(), seq: null, myTurnWas: false, isHex: false,
-    key: null, disp: new Map(), plans: new Map(), snaps: new Map(), timer: null, holdUntil: 0, geo: CROSS };
+    key: null, feeds: new Map(), disp: new Map(), plans: new Map(), snaps: new Map(), timer: null, holdUntil: 0, geo: CROSS };
   const STEP_MS = 400; // one square per step, so every square of the walk can be followed (the server waits for this too)
   const SNAP_MS = 800; // a captured token stays visible a moment before it goes back to its yard
   const busy = () => ui.plans.size > 0 || ui.snaps.size > 0 || Date.now() < ui.holdUntil;
@@ -107,6 +107,36 @@
     // directly would paint it over the home screen, because the root element stays in the page.
     if (ui.ctx && ui.ctx.rerender) ui.ctx.rerender();
     else render(ui.root, ui.latest, ui.ctx);
+  }
+
+  const feedKey = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
+  /** Every new log line goes into the shared feed (the last few float over the board), and the moments worth a look are held in the
+   * middle of the screen for a moment: a six, a token sent home, a token reaching the centre. The first look at a table only records
+   * where it is (no replay after a reload), and a game that starts over (the numbering going back) begins a new epoch. */
+  function feedSync(v) {
+    const key = feedKey();
+    if (!key || !window.GameFeed || !v.log) return;
+    const total = v.logTotal || 0;
+    const roll = v.lastRoll ? v.lastRoll.no : 0;
+    const st = ui.feeds.get(key);
+    if (!st) { ui.feeds.set(key, { total, roll, epoch: 0 }); return; }
+    if (total < st.total) { st.epoch += 1; st.total = 0; st.roll = 0; }
+    const fresh = v.log.filter((x) => x.id >= st.total);
+    st.total = total;
+    const sixNew = v.lastRoll && v.lastRoll.dice === 6 && v.lastRoll.no > st.roll;
+    st.roll = roll;
+    if (!fresh.length) return;
+    const ICON = { capture: '⚔️', home: '🏁', miss: '↪️', roll: '🎲', move: '•' };
+    window.GameFeed.add(key, fresh.map((x) => ({ id: `lt-${key}-${st.epoch}-${x.id}`, tone: x.kind === 'capture' ? 'take' : x.kind === 'home' ? 'win' : x.kind === 'miss' ? 'skip' : 'play', html: `${ICON[x.kind] || '•'} <b>${esc(x.by)}</b> ${esc(x.card)}` })));
+    if (v.phase === 'gameOver') return;
+    const cap = fresh.find((x) => x.kind === 'capture');
+    const home = fresh.find((x) => x.kind === 'home');
+    if (cap) window.GameFeed.spotlight({ card: '<span class="ludo-spot">⚔️</span>', caption: `${esc(cap.by)} ${esc(cap.card)}`, tone: 'take', ms: 1600 });
+    else if (home) window.GameFeed.spotlight({ card: '<span class="ludo-spot">🏁</span>', caption: `${esc(home.by)} ${esc(home.card)}`, tone: 'win', ms: 1500 });
+    else if (sixNew) {
+      const by = v.players[v.lastRoll.by] ? esc(v.players[v.lastRoll.by].name) : 'A player';
+      window.GameFeed.spotlight({ card: dieHTML(6, false), caption: v.lastRoll.outcome === 'forfeit' ? `${by} rolled a third six — turn lost` : `${by} rolled a six!`, tone: v.lastRoll.outcome === 'forfeit' ? 'skip' : 'lay', ms: 1400 });
+    }
   }
 
   /** Sounds for dice, moves, captures and the finish, from the shared soft palette other games already use. */
@@ -284,6 +314,8 @@
   function barHTML(v) {
     const turnSeat = v.players[v.turn] ? SEAT[Number.isInteger(v.players[v.turn].seat) ? v.players[v.turn].seat : seatsFor(v.n)[v.turn]] : SEAT[0];
     const rolling = v.dice !== null && v.dice !== undefined && ui.rollSeq !== null && v.event && v.event.seq !== ui.rollSeq;
+    // the latest roll stays on the die, so a roll that passed the turn can still be read (the log line says who rolled it)
+    const shownDie = v.dice || (v.lastRoll && v.phase !== 'ready' ? v.lastRoll.dice : null);
     let action = '';
     if (v.me >= 0) {
       if (v.phase === 'ready') action = `<button class="btn big ludo-roll" data-lt="ready" ${v.players[v.me].ready ? 'disabled' : ''}>${v.players[v.me].ready ? 'Waiting…' : 'I’m ready'}</button>`;
@@ -291,7 +323,7 @@
     }
     const sixes = v.sixes ? `<small>${v.sixes === 1 ? 'A six — roll again after moving' : 'Two sixes in a row — a third ends your turn'}</small>` : '';
     return `<div class="ludo-dice-panel ludo-status ${v.myTurn ? 'mine' : ''}" style="--turn:${turnSeat.hex}">
-      ${dieHTML(v.dice, rolling)}
+      ${dieHTML(shownDie, rolling)}
       <div class="ludo-dice-copy"><b>${statusLine(v)}</b>${sixes || (lastEvent(v) ? `<small>${lastEvent(v)}</small>` : '')}</div>
       ${action}
     </div>`;
@@ -319,14 +351,14 @@
     ui.latest = v; ui.ctx = ctx; ui.root = root;
     ui.isHex = !!v.board;
     ui.geo = v.board ? hexGeo(v.board) : CROSS_GEO;
-    react(v); planMoves(v);
+    feedSync(v); react(v); planMoves(v);
     // remember where tokens were so moves glide instead of jumping
     const before = new Map();
     root.querySelectorAll('.ludo-token[data-pid]').forEach((el) => before.set(el.dataset.pid, [el.style.left, el.style.top]));
     root.innerHTML = `<section class="ludo ${v.phase === 'gameOver' ? 'over' : ''}">
       <div class="wz-top"><div class="wz-round"><b>Ludo</b><span class="label"> · ${v.players.length} players</span></div>${CardTable.toolbarSeed('<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>', 'lt', 'ludo-tools')}</div>
       <div class="ludo-layout">
-        <div class="ludo-main">${barHTML(v)}<div class="ludo-board ${ui.isHex ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v)}<div class="ludo-tokens">${tokensHTML(v)}</div></div></div>
+        <div class="ludo-main">${barHTML(v)}<div class="ludo-boardwrap"><div class="ludo-board ${ui.isHex ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v)}<div class="ludo-tokens">${tokensHTML(v)}</div></div>${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div></div>
         <aside class="ludo-side">${playersHTML(v)}${endHTML(v, ctx)}</aside>
       </div>
     </section>`;
