@@ -5,6 +5,8 @@
   'use strict';
   const feeds = new Map(); // table key -> [{ id, html, tone, at }]
   const KEEP = 40;   // entries remembered per table
+  // SHOW is a deliberate screen-space limit, not a promise of TTL visibility: when more than SHOW entries arrive inside one TTL
+  // window, the oldest is hidden early. Showing all of them would cover the table on a phone. KEEP is the storage limit per table (40).
   const SHOW = 12;    // entries shown at once
   const TTL = 20000;  // an entry stays in the feed this long
   let spotTimer = null;
