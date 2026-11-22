@@ -201,3 +201,23 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 /* the purple end-of-game and busy cards join the palette */
 .end-pop-card { background: linear-gradient(160deg, #3a2a12, #1a1209); border: 1px solid rgba(230, 171, 74, .4); }
 .busy-card { background: #1a1209; border: 1px solid var(--wood-line); }
+
+/* while the game list loads, ghost cards hold the place and shimmer, so the page does not jump when the real ones arrive */
+.game-card.sk { min-height: 118px; display: grid; grid-template-columns: 56px 1fr; grid-template-rows: 20px 14px; gap: 10px 14px; animation: none; }
+.game-card.sk i { grid-row: 1 / 3; border-radius: 16px; background: rgba(255, 246, 222, .07); }
+.game-card.sk b, .game-card.sk span { border-radius: 6px; background: rgba(255, 246, 222, .07); }
+.game-card.sk span { width: 70%; }
+.game-card.sk::before { opacity: 1; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 246, 222, .09) 50%, transparent 70%); background-size: 220% 100%; animation: shimmer 1.6s linear infinite; }
+@keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@media (prefers-reduced-motion: reduce) { .game-card.sk::before { animation: none !important; } }
+/* numbers in the stat tiles read as figures, not as buttons */
+.stat-v { font-family: var(--serif); letter-spacing: -.02em; }
+.pg-bar > span { background: linear-gradient(90deg, #cf9137, #efbb5c); border-radius: inherit; }
+.avatar-ring, .tb-avatar { box-shadow: 0 0 0 2px rgba(230, 171, 74, .55); }
+
+/* narrow phones, signed out: three buttons share the bar with the name, so they get tighter padding and the name keeps its full width */
+@media (max-width: 440px) {
+  .topbar .btn.small, .topbar .btn.ghost.small { padding-inline: 10px; font-size: 14px; }
+  .topbar-actions, .tb-actions { gap: 6px; }
+  .tb-brand { font-size: 19px; flex: none; }
+}

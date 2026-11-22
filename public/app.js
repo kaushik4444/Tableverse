@@ -2709,7 +2709,7 @@
         ${publicTablesHTML()}
         <section class="home-section" id="games">
           <h2 class="section">Games</h2>
-          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
+          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…') + '<div class="game-grid skeleton" aria-hidden="true">' + '<div class="game-card sk"><i></i><b></b><span></span></div>'.repeat(4) + '</div>'}
         </section>
       </div>
       ${comingSoonHTML()}
