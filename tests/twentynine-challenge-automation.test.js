@@ -52,7 +52,7 @@ async function until(fn, label, ms = 15000) { // the first round waits for Ready
         for (let i = 0; i < 3; i++) ann.send({ t: 'addBot' });
         await until(() => ann.room.members.length === 4, 'three bots');
         ann.send({ t: 'start' });
-        await until(() => ann.phases.some((p) => p.startsWith('challenge') || p === 'playing' || p.startsWith('playing')), 'the auction ends', 4000);
+        await until(() => ann.phases.some((p) => p.startsWith('challenge') || p === 'playing' || p.startsWith('playing')), 'the auction ends', 15000); // CI runners are slower than a laptop: the budget is the same as the other waits
         if (ann.phases.includes('challenge:mine')) {
           found = true;
           await sleep(400); // far longer than a bot's delay here (0 to 3 ms)
