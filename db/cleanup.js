@@ -93,6 +93,9 @@ const EXPECTED_FKS = [
   { child: 'email_broadcast_recipients', parent: 'players', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'matches', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'players', onDelete: 'SET NULL' },
+  { child: 'rating_events', parent: 'matches', onDelete: 'CASCADE' },
+  { child: 'rating_events', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'player_ratings', parent: 'players', onDelete: 'CASCADE' },
 ];
 const ON_DELETE = { a: 'NO ACTION', r: 'RESTRICT', c: 'CASCADE', n: 'SET NULL', d: 'SET DEFAULT' };
 const MIGRATION_LOCK_KEY = 727274; // the advisory lock db/migrate.js holds while migrating

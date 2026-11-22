@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS player_ratings (
 CREATE INDEX IF NOT EXISTS idx_player_ratings_board ON player_ratings (game_id, scope, rating DESC);
 
 CREATE TABLE IF NOT EXISTS rating_events (
-  id            BIGSERIAL PRIMARY KEY,
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   match_id      UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
   player_id     UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   game_id       VARCHAR(32) NOT NULL,
