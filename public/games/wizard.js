@@ -210,7 +210,7 @@
       .join('');
     return `<div class="overlay"><div class="sheet"><h2>${win ? 'You won! 🎉' : 'Game over'}</h2><ol class="podium">${list}</ol>
       <div class="row">${ui.ctx.isHost ? '<button class="btn" data-wz="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}
-      <button class="btn ghost" data-wz="scores">Full scoreboard</button><button class="btn ghost" data-wz="leave">Leave table</button></div></div></div>`;
+      <button class="btn ghost" data-wz="scores">Full scoreboard</button></div></div></div>`;
   }
 
   function render(root, view, ctx) {

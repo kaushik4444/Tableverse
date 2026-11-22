@@ -196,7 +196,7 @@
       const title = v.me === champ ? 'You won! 🎉' : `${esc(v.players[champ].name)} wins!`;
       return `<div class="overlay"><div class="sheet"><h2>${title}</h2><ol class="podium">${rows}</ol>
         <div class="row">${ui.ctx.isHost ? '<button class="btn" data-pk="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}
-        <button class="btn ghost" data-pk="leave">Leave table</button></div></div></div>`;
+        </div></div></div>`;
     }
     if (ui.standings) {
       return `<div class="overlay" data-pk="closeStand"><div class="sheet" data-stop="1"><h2>Chip counts</h2>${standingsHTML(v)}<div class="row" style="margin-top:12px"><button class="btn" data-pk="closeStand">Close</button><button class="btn ghost" data-pk="rules">How to play</button></div></div></div>`;

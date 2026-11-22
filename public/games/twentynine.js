@@ -225,7 +225,7 @@
     const title = v.me < 0 ? `${v.winnerTeam === 0 ? 'Team A' : 'Team B'} won!` : won ? 'Your team won! 🎉' : 'Your team lost';
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>${result}
       <div class="row">${ui.ctx.isHost ? '<button class="btn" data-t9="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}
-      <button class="btn ghost" data-t9="scores">Full scoreboard</button><button class="btn ghost" data-t9="leave">Leave table</button></div></div></div>`;
+      <button class="btn ghost" data-t9="scores">Full scoreboard</button></div></div></div>`;
   }
 
   function render(root, view, ctx) {
