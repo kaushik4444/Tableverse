@@ -69,7 +69,7 @@ function finishedTable(gameId, n) {
               sideways: document.documentElement.scrollWidth > innerWidth + 1,
               names: [...document.querySelectorAll('.xp-name')].length,
               // Two amounts side by side, labelled, and never a combined total (there is no total element or heading)
-              // one table: no progress cards, and the headers are the game's skill XP and its lifetime
+              // one table: no progress cards, and the headers are this match, this month and all time
               cards: document.querySelectorAll('.end-xp .xp-card').length,
               progressShown: /Player Progress/.test(document.querySelector('.end-xp')?.textContent || ''),
               headers: [...document.querySelectorAll('.end-xp .xp-th [role=columnheader]')].map((h) => h.textContent.trim()),
@@ -86,8 +86,8 @@ function finishedTable(gameId, n) {
           assert.ok(r.names >= 1, 'the XP rows render');
           assert.equal(r.cards, 0, 'no progress cards on the game-over screen');
           assert.equal(r.progressShown, false, 'Player Progress is not shown on the game-over screen');
-          assert.equal(r.headers.length, 3, 'table has Player, this game and lifetime columns: ' + r.headers.join(' | '));
-          assert.ok(/Lifetime/.test(r.headers[2]), 'the third column is the lifetime game XP: ' + r.headers.join(' | '));
+          assert.equal(r.headers.length, 4, 'table has Player, this match, this month and all-time columns: ' + r.headers.join(' | '));
+          assert.ok(/All time/.test(r.headers[3]), 'the last column is the all-time rating: ' + r.headers.join(' | '));
           assert.equal(r.noTotal, true, 'there is no combined total on the game-over card');
           assert.ok(r.nameWide, 'the XP names keep their width');
           passed++; console.log('  ok  ' + name);

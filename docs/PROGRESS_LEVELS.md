@@ -81,7 +81,7 @@ The rules for leaving a running game, the 2-minute window to take a seat back, s
 Done on `development` (not released to `main`, not verified in production):
 1. Storage: `seconds_played` and `place` (migration 025), with a backfill for past games, for the people who stayed.
 2. Account XP and game points are calculated from the stored records (`lib/progress.js`; no separate totals table).
-3. The account level, the Game XP per game and the number of penalised leaves show on own and public profiles; the admin overview counts penalised leaves.
+3. The account level and the number of penalised leaves show on own and public profiles (Game XP is no longer shown; the skill ratings are); the admin overview counts penalised leaves.
 
 Done since (rejoin window and active play time, see `docs/LEAVING_AND_REJOINING.md`): a leaver keeps the time up to the moment they left; a dropped connection pauses play time; a person who took their seat back is counted for each stretch they played. Past games are not recalculated.
 
@@ -92,7 +92,7 @@ Still open:
 `match_participants` gets two columns: `place` (SMALLINT, NULL when the game has no place of its own, so the level is ranked by score) and `seconds_played` (INTEGER, default 0). From the active-play change on, `seconds_played` is the active play time written with the record (`secondsPlayed`), capped at 6 hours per game; bots get 0. Records without it fall back to the old rule (the match length for stayers, 0 for leavers and bots). The migration backfilled `seconds_played` for past games (stayers only) and is safe to re-run. No further migration was needed for the rejoin window. Both columns are additive and nullable or defaulted, so old application versions keep working, and they are restored together with the table. They are read by `getProgress` in `db/matches.js`, which feeds the profile pages.
 
 ## Weekly boards (opt-in)
-- Each game has a **weekly board**: the last 7 days, the top 10 players by their Game XP in that game. It uses the same rules as the profile (`boardFor` in `lib/progress.js`), so the numbers agree.
+- The **weekly Game XP board** is no longer shown in the interface. Each game's rankings are now the skill-rating boards (all time and this month). It uses the same rules as the profile (`boardFor` in `lib/progress.js`), so the numbers agree.
 - Only players who turn it on are shown (`players.leaderboard_opt_in`, migration 028). It is **off by default**; a player switches it on from a game's detail view on their own profile. The board shows the display name and that game's Game XP for the week. Nothing else about a player is shown.
 - `GET /api/leaderboard?game=` is public and read-only. The switch is `POST /api/me/leaderboard` (signed in, CSRF header, `{optIn: boolean}`).
 - Without a database the board is empty. The query reads one game's matches from the window; this is fine for the beta and would need an index or a cache at larger scale.
