@@ -73,9 +73,16 @@
     const log = v.log || [];
     const skip = (e) => e.kind === 'info' || (e.kind === 'auction' && /^(bid|passed)/.test(e.card)) || (cardShown && e.kind === 'card');
     const e = walking ? [...log].reverse().find((x) => x.kind === 'roll' || x.kind === 'lockup') : [...log].reverse().find((x) => !skip(x));
-    if (!e) return '';
+    // the squared box under the board: a fixed-height placeholder when there is nothing yet, so the page never jumps
+    if (!e) return '<p class="pr-news pr-news-empty" role="status">&nbsp;</p>';
     const text = e.by === 'System' || e.by === 'Table' ? e.card : `${e.by} ${e.card}`;
     return `<p class="pr-news k-${esc(e.kind)}" role="status">${esc(text)}</p>`;
+  }
+
+  function newsBox(v) {
+    const walking = Object.keys(ui.plans).length > 0;
+    const cardFresh = !walking && v.lastCard && v.event && v.event.seq - v.lastCard.seq <= 4;
+    return newsHTML(v, walking, cardFresh);
   }
 
   function centerHTML(v) {
@@ -87,7 +94,7 @@
     const jack = v.options.jackpot ? `<small>Rest Stop jackpot ${coins(v.jackpot)}</small>` : '';
     const cur = v.players[v.turn];
     const turn = v.phase !== 'gameOver' && cur ? `<div class="pr-turn ${colour(v, v.turn)}"><span class="pr-turntok">${cur.token}</span><b>${v.turn === v.me ? 'Your turn' : esc(cur.name) + '’s turn'}</b></div>` : '';
-    return `<div class="pr-mid">${turn}${dice}${newsHTML(v, walking, cardFresh)}<small>Round ${v.round}${v.options.rounds !== 'off' ? (v.options.goal ? ' · first to ' + Number(v.options.goal).toLocaleString('en-GB') + ' net worth' : ' / ' + v.options.rounds) : ''}</small>${jack}${card}</div>`;
+    return `<div class="pr-mid">${turn}${dice}<small>Round ${v.round}${v.options.rounds !== 'off' ? (v.options.goal ? ' · first to ' + Number(v.options.goal).toLocaleString('en-GB') + ' net worth' : ' / ' + v.options.rounds) : ''}</small>${jack}${card}</div>`;
   }
 
   function guidance(v) {
@@ -238,7 +245,7 @@
     ui.ctx = ctx; ui.v = v; ui.root = root; react(v); planMoves(v);
     if (!v.can.propose) ui.trade = null;
     if (v.phase !== 'auction') ui.bid = 0;
-    const board = `<div class="pr-board" role="group" aria-label="Game board">${v.squares.map((_, i) => squareHTML(v, i)).join('')}<div class="pr-center">${centerHTML(v)}</div></div>`;
+    const board = `<div class="pr-board" role="group" aria-label="Game board">${v.squares.map((_, i) => squareHTML(v, i)).join('')}<div class="pr-center">${centerHTML(v)}</div></div>${newsBox(v)}`;
     const focus = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.pr : null;
     // a live redraw must not jump a reader back to the top of the city card's rent table
     const scrolled = ['.pr-card-ov', '.pr-cardsheet'].map((sel) => { const el = root.querySelector(sel); return el ? el.scrollTop : null; });

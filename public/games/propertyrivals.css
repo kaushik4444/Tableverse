@@ -93,7 +93,9 @@
 .pr .pr-mid small { font-size: clamp(10px, 2.8vw, 15px); }
 
 /* The one line in the middle of the board that says what just happened (replaces the floating messages) */
-.pr .pr-news { margin: 0; max-width: 92%; padding: 4px 10px; border-radius: 999px; background: rgba(0, 0, 0, .38); font-size: clamp(10px, 2.9vw, 15px); line-height: 1.25; font-weight: 600; animation: pr-news-in .35s ease-out; }
+/* the squared box under the board: the latest thing that happened, fixed height so nothing below moves */
+.pr .pr-news { box-sizing: border-box; display: flex; align-items: center; justify-content: center; margin: 6px 0 0; height: 2.6em; padding: 4px 12px; border: 1px solid var(--panel-line); border-radius: 12px; background: var(--panel); font-size: 14px; line-height: 1.3; text-align: center; font-weight: 600; overflow: hidden; animation: pr-news-in .35s ease-out; }
+.pr .pr-news-empty { visibility: hidden; animation: none; }
 .pr .pr-news.k-rent, .pr .pr-news.k-tax, .pr .pr-news.k-debt, .pr .pr-news.k-bankrupt { background: rgba(160, 30, 40, .75); }
 .pr .pr-news.k-buy, .pr .pr-news.k-build, .pr .pr-news.k-salary { background: rgba(10, 90, 50, .8); }
 @keyframes pr-news-in { from { opacity: 0; transform: translateY(4px); } }
