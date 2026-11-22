@@ -40,9 +40,10 @@ const releases = sandbox.window.TV_RELEASES;
 assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history keeps every version (newest first)');
 // Releases are newest first. Older releases are found by version so a new release at the top never breaks this test.
 const byVersion = (v) => releases.find((r) => r.version === v);
-assert.equal(releases[0].version, '2026-11-21-color-clash-hidden-miners', 'the newest release comes first');
-assert.ok(releases.indexOf(byVersion('2026-11-20-twelve-games')) > 0, 'the twelve-games release follows it');
-assert.match(releases[0].items.map((i) => i.title).join('\n'), /Color Clash[\s\S]*Hidden Miners/);
+assert.equal(releases[0].version, '2026-11-22-clearer-tables', 'the newest release comes first');
+assert.ok(releases.indexOf(byVersion('2026-11-21-color-clash-hidden-miners')) > 0, 'the Color Clash release follows it');
+assert.match(byVersion('2026-11-21-color-clash-hidden-miners').items.map((i) => i.title).join('\n'), /Color Clash[\s\S]*Hidden Miners/);
+assert.ok(releases.indexOf(byVersion('2026-11-20-twelve-games')) > 1, 'the twelve-games release follows it');
 assert.ok(releases[0].items.length >= 1, 'the newest release has at least one item');
 assert.match(byVersion('2026-11-20-game-names').items.map((i) => i.title).join('\n'), /Three games have new names/);
 const newest = byVersion('2026-11-18-guest-play');

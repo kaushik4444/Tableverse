@@ -58,6 +58,9 @@
     state.csrf = ((await r.json()) || {}).csrfToken || '';
     return state.csrf;
   }
+  // Game ids are internal (penaltyrows, stagerummy, themind); the admin sees the names players see. An unknown id is shown as it is.
+  const gameNames = new Map();
+  const gname = (id) => gameNames.get(id) || id;
   let view = null; // AbortController of the tab on screen: switching tabs cancels the requests of the one before
   let generation = 0; // counts tab switches: an answer that arrives for an earlier tab is dropped, even without AbortController
   const cancelled = () => { const e = new Error('cancelled'); e.name = 'AbortError'; return e; };
@@ -190,7 +193,7 @@
     const matches = sum('matches'); const humans = sum('humans'); const left = sum('leftEarly');
     const rangeButtons = RANGES.map((d) => `<button class="ad-btn ${d === range ? 'primary' : ''}" data-days="${d}" aria-pressed="${d === range}">${rangeLabel(d)}</button>`).join('');
     const zoneButtons = ZONES.map(([z, n]) => `<button class="ad-btn ${z === o.zone ? 'primary' : ''}" data-zone="${z}" aria-pressed="${z === o.zone}">${n}</button>`).join('');
-    const gameRows = g.map((r) => `<tr><td data-l="Game">${esc(r.gameId)}</td><td data-l="Finished">${r.matches}</td><td data-l="Avg length">${mins(r.avgMinutes)}</td><td data-l="Median length">${mins(r.medianMinutes)}</td><td data-l="Avg seats">${r.avgSeats}</td><td data-l="Left early">${pctText(r.leftEarly, r.humans)}</td><td data-l="With a leaver">${pctText(r.withLeaver, r.matches)}</td><td data-l="Drawn">${pctText(r.draws, r.matches)}</td><td data-l="Finished of started">${pctText(r.finished, r.started)}</td></tr>`).join('');
+    const gameRows = g.map((r) => `<tr><td data-l="Game">${esc(gname(r.gameId))}</td><td data-l="Finished">${r.matches}</td><td data-l="Avg length">${mins(r.avgMinutes)}</td><td data-l="Median length">${mins(r.medianMinutes)}</td><td data-l="Avg seats">${r.avgSeats}</td><td data-l="Left early">${pctText(r.leftEarly, r.humans)}</td><td data-l="With a leaver">${pctText(r.withLeaver, r.matches)}</td><td data-l="Drawn">${pctText(r.draws, r.matches)}</td><td data-l="Finished of started">${pctText(r.finished, r.started)}</td></tr>`).join('');
     const pt = o.playtime; const buckets = ['under 10 min', '10–30 min', '30–60 min', '1–3 h', '3 h +'];
     const top = (o.top || []).map((r) => `<tr><td data-l="Player">${esc(r.displayName || r.username)} <span class="ad-muted">@${esc(r.username)}</span></td><td data-l="Games">${r.games}</td><td data-l="Wins">${r.wins}</td><td data-l="Played">${mins(r.minutes)}</td><td data-l="Usual hour">${r.peakHour == null ? '—' : hh(r.peakHour)}</td></tr>`).join('');
     const c = o.returning.cohort;
@@ -248,7 +251,7 @@
     // only more wins than the chance share is flagged; fewer wins is shown as not flagged, not as chance
     const note = (r) => (!r.enoughGames ? `not enough games yet (${sb.minGames} needed)` : r.flagged ? 'worth a look: more wins than chance' : 'not flagged for excess wins');
     el.innerHTML = `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Seats</th><th>Seat</th><th>Games</th><th>Win rate</th><th>Chance share</th><th>z</th><th>Note</th></tr></thead><tbody>${
-      sb.rows.map((r) => `<tr class="${r.flagged ? 'ad-flag' : ''}"><td data-l="Game">${esc(r.gameId)}</td><td data-l="Seats">${esc(r.seats)}</td><td data-l="Seat">${esc(r.seat + 1)}</td><td data-l="Games">${esc(r.games)}</td><td data-l="Win rate">${esc(r.winRate)}%</td><td data-l="Chance share">${esc(r.expectedRate)}%</td><td data-l="z">${esc(r.z)}</td><td data-l="Note">${esc(note(r))}</td></tr>`).join('')
+      sb.rows.map((r) => `<tr class="${r.flagged ? 'ad-flag' : ''}"><td data-l="Game">${esc(gname(r.gameId))}</td><td data-l="Seats">${esc(r.seats)}</td><td data-l="Seat">${esc(r.seat + 1)}</td><td data-l="Games">${esc(r.games)}</td><td data-l="Win rate">${esc(r.winRate)}%</td><td data-l="Chance share">${esc(r.expectedRate)}%</td><td data-l="z">${esc(r.z)}</td><td data-l="Note">${esc(note(r))}</td></tr>`).join('')
     }</tbody></table></div>
       <p class="ad-muted">Counts finished games, leaving out players who left early. A seat is flagged only with at least ${sb.minGames} games and a z-score of 3 or more, and checking several seats at once makes a chance flag more likely, so a flag is a prompt to look, not proof.</p>`;
   }
@@ -312,15 +315,15 @@
     o.zone = zone;
     const tile = (n, l) => `<div class="ad-card"><b>${esc(n)}</b><small>${esc(l)}</small></div>`;
     const zoneButtons = ZONES.map(([z, n]) => `<button class="ad-btn ${z === o.zone ? 'primary' : ''}" data-zone="${z}" aria-pressed="${z === o.zone}">${n}</button>`).join('');
-    const perGame = o.perGame.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Games">${g.games}</td><td data-l="Wins">${g.wins}</td><td data-l="Win rate">${pctText(g.wins, g.rated - g.draws)}</td><td data-l="Drawn">${g.draws}</td><td data-l="Left early">${g.leftEarly}</td><td data-l="Played">${mins(g.minutes)}</td></tr>`).join('');
-    const recent = o.recent.map((r) => `<tr><td data-l="When">${esc(when(r.at))}</td><td data-l="Game">${esc(r.gameId)}</td><td data-l="Seats">${r.seats}</td><td data-l="Result">${r.leftEarly ? 'left early' : r.unknown ? 'result not recorded' : r.draw ? 'draw' : r.won ? 'won' : 'lost'}</td><td data-l="Length">${mins(r.minutes)}</td></tr>`).join('');
+    const perGame = o.perGame.map((g) => `<tr><td data-l="Game">${esc(gname(g.gameId))}</td><td data-l="Games">${g.games}</td><td data-l="Wins">${g.wins}</td><td data-l="Win rate">${pctText(g.wins, g.rated - g.draws)}</td><td data-l="Drawn">${g.draws}</td><td data-l="Left early">${g.leftEarly}</td><td data-l="Played">${mins(g.minutes)}</td></tr>`).join('');
+    const recent = o.recent.map((r) => `<tr><td data-l="When">${esc(when(r.at))}</td><td data-l="Game">${esc(gname(r.gameId))}</td><td data-l="Seats">${r.seats}</td><td data-l="Result">${r.leftEarly ? 'left early' : r.unknown ? 'result not recorded' : r.draw ? 'draw' : r.won ? 'won' : 'lost'}</td><td data-l="Length">${mins(r.minutes)}</td></tr>`).join('');
     main.innerHTML = `<div class="ad-row"><button class="ad-btn" id="pBack">Back to players</button></div>
       <h2>${esc(p.displayName)} <small class="ad-muted">@${esc(p.username)}</small></h2>
       <p class="ad-muted">${p.country ? esc(countryName(p.country)) + ' · ' : ''}Role: ${esc(p.role)} · ${p.verified ? 'verified' : 'not verified'} · Joined ${esc(when(p.joinedAt))} · Last seen ${esc(when(p.lastSeenAt))}${p.suspended ? ' · <b>suspended</b>' : ''}</p>
       <div class="ad-grid">${tile(t.games, 'games played')}${tile(t.wins, 'wins')}${tile(pctText(t.wins, t.rated - t.draws), 'win rate (draws left out)')}${tile(t.draws, 'draws')}${tile(pctText(t.leftEarly, t.games), 'games left early')}${tile(mins(t.minutes), 'time played')}${tile(t.activeDays, 'days played')}</div>
       <p class="ad-muted">First game ${esc(when(t.firstGameAt))} · latest game ${esc(when(t.lastGameAt))}</p>
       <h3>Progress</h3><div class="ad-grid">${tile(pg.level, 'overall level')}${tile(pg.xp, 'Player Progress XP (time only)')}${tile(pg.penalisedLeaves, 'penalised leaves')}</div>
-      ${pg.games.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Game XP</th><th>Ranked games</th><th>Kind</th></tr></thead><tbody>${pg.games.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Game XP">${g.points > 0 ? '+' : ''}${g.points}</td><td data-l="Ranked games">${g.played}</td><td data-l="Kind">${g.rule === 'placing' ? 'Placing' : 'Win or lose'}</td></tr>`).join('')}</tbody></table>` : '<p class="ad-muted">No ranked games yet.</p>'}
+      ${pg.games.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Game XP</th><th>Ranked games</th><th>Kind</th></tr></thead><tbody>${pg.games.map((g) => `<tr><td data-l="Game">${esc(gname(g.gameId))}</td><td data-l="Game XP">${g.points > 0 ? '+' : ''}${g.points}</td><td data-l="Ranked games">${g.played}</td><td data-l="Kind">${g.rule === 'placing' ? 'Placing' : 'Win or lose'}</td></tr>`).join('')}</tbody></table>` : '<p class="ad-muted">No ranked games yet.</p>'}
       <p class="ad-muted">Player Progress is 1 XP per full minute of play and sets the level. Game XP is per game and never changes the level.</p>
       <h3>When this player plays</h3><div class="ad-row" role="group" aria-label="Time zone" style="margin-bottom:8px">${zoneButtons}</div>${hourColumns(o.hourly, o.zone)}
       <h3>By game</h3>${o.perGame.length ? `<table class="ad-t stack"><thead><tr><th>Game</th><th>Games</th><th>Wins</th><th>Win rate</th><th>Drawn</th><th>Left early</th><th>Played</th></tr></thead><tbody>${perGame}</tbody></table>` : '<p class="ad-muted">No finished games yet.</p>'}
@@ -486,7 +489,7 @@
     const gen = state.gen;
     const o = await api(`/api/admin/games?days=${days}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
-    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(g.gameId)}</td><td data-l="Finished">${g.finished}</td><td data-l="Last 7 days">${g.finished7d}</td><td data-l="Signed-in players">${g.signedInPlayers}</td><td data-l="Player-games">${g.playerGames}</td><td data-l="Avg minutes each">${g.avgMinutes}</td><td data-l="Penalised leaves">${g.penalisedLeaves}</td><td data-l="Penalised leave rate">${pctText(g.penalisedLeaves, g.playerGames)}</td><td data-l="Left, no penalty">${g.leftWithoutPenalty}</td></tr>`).join('');
+    const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(gname(g.gameId))}</td><td data-l="Finished">${g.finished}</td><td data-l="Last 7 days">${g.finished7d}</td><td data-l="Signed-in players">${g.signedInPlayers}</td><td data-l="Player-games">${g.playerGames}</td><td data-l="Avg minutes each">${g.avgMinutes}</td><td data-l="Penalised leaves">${g.penalisedLeaves}</td><td data-l="Penalised leave rate">${pctText(g.penalisedLeaves, g.playerGames)}</td><td data-l="Left, no penalty">${g.leftWithoutPenalty}</td></tr>`).join('');
     main.innerHTML = `<h2>Games <small class="ad-muted">last ${rangeLabel(o.days)}</small></h2>
       <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${RANGES.map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${rangeLabel(d)}</button>`).join('')}</div>
       ${o.games.length ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Last 7 days</th><th>Signed-in players</th><th>Player-games</th><th>Avg minutes each</th><th>Penalised leaves</th><th>Penalised leave rate</th><th>Left, no penalty</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="ad-muted">No finished games in this range.</p>'}
@@ -523,7 +526,7 @@
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     const rows = (o.tables || []).map((t) => {
       const people = t.humans === null || t.humans === undefined ? `${t.seats} seats` : `${t.humans} ${t.humans === 1 ? 'person' : 'people'}${t.bots ? ` + ${t.bots} bot${t.bots === 1 ? '' : 's'}` : ''}`;
-      return `<tr><td data-l="Game">${esc(t.gameId)}</td><td data-l="Room">${esc(t.roomCode)}</td><td data-l="Started">${esc(when(t.startedAt))}</td><td data-l="Ended">${esc(when(t.finishedAt))}</td><td data-l="Players">${esc(people)}</td><td data-l="Completed">${t.completed ? 'yes' : 'closed early'}</td></tr>`;
+      return `<tr><td data-l="Game">${esc(gname(t.gameId))}</td><td data-l="Room">${esc(t.roomCode)}</td><td data-l="Started">${esc(when(t.startedAt))}</td><td data-l="Ended">${esc(when(t.finishedAt))}</td><td data-l="Players">${esc(people)}</td><td data-l="Completed">${t.completed ? 'yes' : 'closed early'}</td></tr>`;
     }).join('');
     const body = list.querySelector('tbody');
     if (body) body.insertAdjacentHTML('beforeend', rows);
@@ -954,6 +957,7 @@
       const mailTab = tabs.querySelector('[data-tab="email"]');
       if (mailTab) mailTab.hidden = !me.isOwner; // hidden for admins; the server refuses them anyway
       tabs.hidden = false;
+      Object.entries(me.gameNames || {}).forEach(([id, name]) => gameNames.set(id, name)); // without names the tables show the ids
       show('overview');
     } catch (e) {
       main.innerHTML = e.status === 401
