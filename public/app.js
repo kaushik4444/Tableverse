@@ -265,6 +265,7 @@
     busyTimer = setTimeout(() => {
       const wasSigningIn = S.signingIn;
       if (httpBusy) { httpBusy = 0; httpBusyEpoch++; }
+      reqVeilOwned = false; // the veil is gone: a request that settles later must not hide a veil that comes after it
       S.signingIn = false;
       hideBusy();
       toast('That is taking longer than usual. Check your connection and try again.');
@@ -287,7 +288,7 @@
     httpBusy++;
     showBusy(label);
     try { return await fn(); } finally {
-      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy && !reqInFlight) hideBusy(); }
+      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy && !reqVeilOwned) hideBusy(); }
     }
   }
   // Every user-started request (postJson / getJson) shows a loading veil if it is still running after a short delay,
@@ -1288,7 +1289,8 @@
   }
 
   function onMessage(m) {
-    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy && !reqInFlight) hideBusy(); }
+    // A veil that a loading request owns stays until that request settles; any other veil (sign-in, an action) goes now
+    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy && !reqVeilOwned) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
       case 'role': {
