@@ -19,6 +19,17 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     return { page, ctx };
   };
 
+  await test('a row badge shows up to three bombs, then the count: five is "💣×5", never three bombs', async () => {
+    const m = tableMessages('penaltyrows', four);
+    const v = m.find((x) => x.t === 'state').view;
+    v.rows = [[{ n: 10, p: 5 }], [{ n: 20, p: 3 }], [{ n: 30, p: 4 }], [{ n: 40, p: 1 }]];
+    const { page, ctx } = await open(m);
+    await page.waitForSelector('.pr-pile-n', { timeout: 5000 });
+    const badges = await page.$$eval('.pr-pile-n', (els) => els.map((e) => e.textContent.trim()));
+    assert.deepEqual(badges.slice(0, 4), ['💣×5', '💣💣💣', '💣×4', '💣']);
+    await ctx.close();
+  });
+
   await test('four rows, ten cards in your hand, a scoreboard, and tapping a card sends that pick', async () => {
     const { page, ctx } = await open(tableMessages('penaltyrows', four));
     assert.equal(await page.locator('.pr-row').count(), 4);
@@ -172,7 +183,7 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     try {
       const badge = page.getByRole('img', { name: '5 penalty points', exact: true }).first();
       const icons = badge.locator('.pr-pile-n');
-      assert.equal(await icons.textContent(), '💣'.repeat(5));
+      assert.equal((await icons.textContent()).trim(), '💣×5'); // more than three bombs show as a count, so none are clipped
       const phoneIconSize = await icons.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       for (const viewport of [{ width: 320, height: 640 }, { width: 667, height: 375 }, { width: 768, height: 1024 }]) {
         await page.setViewportSize(viewport);
