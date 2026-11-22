@@ -1816,6 +1816,7 @@ function start(opts = {}) {
       p.totalsAt = now;
       const gameId = room.gameId;
       const matchId = room.outcome.at;
+      const matchKey = room.matchKey; // captured now: the host may start another game while this answer is being prepared
       const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
       (async () => {
         if (!ids.length) return { totals: {}, ratings: dbRatings.liveEnabled() ? {} : null };
@@ -1836,7 +1837,7 @@ function start(opts = {}) {
         let ratings = null;
         if (dbRatings.liveEnabled()) {
           await dbRatings.ratingsSettled();
-          ratings = (await dbRatings.ratingsForMatch({ matchKey: room.matchKey, gameId, playerIds: ids })) || {};
+          ratings = (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {};
         }
         return { totals, ratings };
       })().then(

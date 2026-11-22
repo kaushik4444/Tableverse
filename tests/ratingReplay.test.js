@@ -42,6 +42,9 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
   assert.equal(reasonOf(match('mind', 'themind', T(9), [part('A', { isWinner: true }), part('B', { isWinner: true })])), REASON.COOPERATIVE);
   assert.equal(reasonOf(match('colour', 'colorclash', T(9), [part('A', { score: 5 }), part('B', { score: 3 })])), REASON.RANKING, 'Colour Clash is not checked yet');
   assert.equal(replay([match('ludo', 'ludo', T(9), [part('A', { score: 5 }), part('B', { score: 3 })])]).results[0].rated, true, 'Ludo is verified by its placing');
+  // a game that ranks by place needs a stored place for everyone still in the match
+  assert.equal(reasonOf(match('poker-no-place', 'poker', T(9), [part('A', { place: 1, score: 9 }), part('B', { score: 3 })])), REASON.RANKING);
+  assert.equal(replay([match('poker-ok', 'poker', T(9), [part('A', { place: 1 }), part('B', { place: 2 })])]).results[0].rated, true);
   assert.equal(replay([match('wiz', 'wizard', T(9), [part('A', { score: 5 }), part('B', { score: 3 })])]).results[0].rated, true, 'Wizard is verified by score');
 }
 

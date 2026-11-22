@@ -57,19 +57,20 @@ async function insertChunks(client, sql, rowsOf, items) {
 }
 
 /** Computes the ratings from the stored matches. Read only. Returns { results, ratings, rep }. */
-async function computeRatings() {
-  const matches = await loadMatches();
-  const since = await forfeitRecordedSince();
+async function computeRatings(client = db) {
+  const matches = await loadMatches(client);
+  const since = await forfeitRecordedSince(client);
   const { results, ratings } = replay(matches, { forfeitRecordedSince: since, teamsRecorded: false });
   return { matchesRead: matches.length, forfeitsRecordedSince: since, results, ratings, report: report(results) };
 }
 
 /** Replaces the rating tables with the computed result, in one transaction. */
 async function rebuildRatings() {
-  const { results, ratings } = await computeRatings();
-  const events = results.flatMap((r) => r.events.map((e) => ({ ...e, matchId: r.id, gameId: r.gameId })));
-  await db.withTransaction(async (client) => {
+  return db.withTransaction(async (client) => {
+    // The lock is taken before the history is read, so a match committed by another rebuild's window cannot be missed.
     await client.query('SELECT pg_advisory_xact_lock($1)', [LOCK_KEY]);
+    const { results, ratings } = await computeRatings(client);
+    const events = results.flatMap((r) => r.events.map((e) => ({ ...e, matchId: r.id, gameId: r.gameId })));
     await client.query('DELETE FROM rating_events');
     await client.query('DELETE FROM player_ratings');
     await insertChunks(
@@ -87,8 +88,8 @@ async function rebuildRatings() {
     for (const r of results) {
       await client.query('UPDATE matches SET rated = $2, unrated_reason = $3 WHERE id = $1', [r.id, r.rated, r.reason]);
     }
+    return { matches: results.length, ratings: ratings.length, events: events.length };
   });
-  return { matches: results.length, ratings: ratings.length, events: events.length };
 }
 
 /** The live switch: ratings are rebuilt after each finished match only when RATINGS_LIVE=1 (off by default). */

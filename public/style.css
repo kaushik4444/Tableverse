@@ -679,10 +679,12 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .end-xp .xp-th .xp-c { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
 .end-xp .xp-name { min-width: 0; overflow-wrap: anywhere; }
 .end-xp .xp-tr.me { font-weight: 700; }
+.end-xp .xp-table-rating .xp-tr { grid-template-columns: minmax(0, 1fr) 56px 88px 64px; }
 .end-xp .xp-tag { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 4px; }
 @media (max-width: 420px) {
   .xp-summary { grid-template-columns: minmax(0, 1fr); }
   .end-xp .xp-tr { grid-template-columns: minmax(0, 1fr) 64px 56px; padding: 8px 10px; }
+  .end-xp .xp-table-rating .xp-tr { grid-template-columns: minmax(0, 1fr) 52px 76px 52px; }
   .end-xp .xp-num { font-size: 20px; }
 }
 

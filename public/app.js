@@ -3168,7 +3168,7 @@
       }
       return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${thisMatch}</span><span class="xp-c" role="cell">${month}</span><span class="xp-c" role="cell">${life}</span></div>`;
     }).join('');
-    const table = `<div class="xp-table" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">Lifetime</span></div>${body}</div>`;
+    const table = `<div class="xp-table xp-table-rating" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">Lifetime</span></div>${body}</div>`;
     return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${table}</section>`;
   }
 
