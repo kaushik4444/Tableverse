@@ -17,7 +17,7 @@ const LOCK_KEY = 727275; // distinct from the migration lock (727274)
 
 async function loadMatches(client = db) {
   const { rows } = await client.query(
-    `SELECT m.id, m.game_id, m.finished_at, m.completed,
+    `SELECT m.id, m.game_id, m.match_key, m.finished_at, m.completed,
             mp.player_id, mp.seat, mp.is_bot, mp.left_early, mp.forfeit, mp.is_winner, mp.is_draw, mp.place, mp.score
        FROM matches m
        JOIN match_participants mp ON mp.match_id = m.id
@@ -26,7 +26,7 @@ async function loadMatches(client = db) {
   const byId = new Map();
   for (const r of rows) {
     if (!byId.has(r.id)) {
-      byId.set(r.id, { id: r.id, gameId: r.game_id, finishedAt: r.finished_at, completed: r.completed, participants: [] });
+      byId.set(r.id, { id: r.id, gameId: r.game_id, matchKey: r.match_key, finishedAt: r.finished_at, completed: r.completed, participants: [] });
     }
     byId.get(r.id).participants.push({
       playerId: r.player_id, seat: r.seat, isBot: r.is_bot, leftEarly: r.left_early, forfeit: r.forfeit,
@@ -115,18 +115,25 @@ function liveEnabled(env = process.env) {
   return env.RATINGS_LIVE === '1';
 }
 
-let rebuildQueue = Promise.resolve(); // rebuilds run one after another, never at the same time
+let rebuildQueue = Promise.resolve(true); // rebuilds run one after another, never at the same time; resolves true when settled ok
 
 /**
  * Queues a rebuild after a match has been committed. It never blocks or fails the game: errors are logged. Called only when
  * liveEnabled() is true. ratingsSettled() waits for the queue (used by the game-over answer, so it sees the new ratings).
  */
 function scheduleLiveRebuild() {
-  rebuildQueue = rebuildQueue
-    .then(() => rebuildRatings())
-    .catch((err) => createLogger({ component: 'ratings' }).error('ratings.rebuild_failed', { err }));
+  rebuildQueue = rebuildQueue.then(async () => {
+    try {
+      await rebuildRatings();
+      return true;
+    } catch (err) {
+      createLogger({ component: 'ratings' }).error('ratings.rebuild_failed', { err });
+      return false;
+    }
+  });
 }
 
+/** Resolves true when the latest queued rebuild succeeded, false when it failed (the stored ratings may then be stale). */
 function ratingsSettled() {
   return rebuildQueue;
 }
