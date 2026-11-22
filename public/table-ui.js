@@ -126,7 +126,7 @@
    * act): who has pressed, who the table still waits for, and a Ready button. It is plain HTML; its button uses the page-wide
    * data-act="readyUp". The data-ready-here mark tells the page that this game shows Ready itself, so no extra bar is added.
    */
-  function readyBox(ctx, opts = {}) {
+  function readyBoxCore(ctx, opts = {}) {
     const g = ctx && ctx.gate;
     const e = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const title = opts.title || 'Ready for the next round?';
@@ -136,6 +136,12 @@
     if (g.seated && !g.youReady) return `<div class="${cls}" data-ready-here role="status"><span><b>${e(title)}</b> ${g.ready} of ${g.total} ready${names ? ` · waiting for ${names}` : ''}</span><button class="btn" data-act="readyUp">Ready</button></div>`;
     return `<div class="${cls}" data-ready-here role="status"><span>${g.seated ? 'You are ready. ' : ''}${names ? `Waiting for ${names}` : 'Everybody is ready'}</span></div>`;
   }
-  window.CardTable.readyBox = readyBox;
+  function readyBox(ctx, opts = {}) {
+  const html = readyBoxCore(ctx, opts);
+  // In a dialog the table behind is covered, so waiting players keep a way out.
+  if (!opts.cls || !/in-sheet/.test(opts.cls)) return html;
+  return html + '<div class="row" style="margin-top:8px"><button class="btn ghost" data-act="leave">Leave table</button></div>';
+}
+window.CardTable.readyBox = readyBox;
   window.CardTable.pt = { trickHold, layout, seatHTML, tableHTML, avatarOf, avatarColor, leaderOf };
 })();

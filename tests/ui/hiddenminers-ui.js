@@ -167,6 +167,7 @@ function scene(n, edit) {
     assert.match(await page.textContent('.overlay h2'), /Diggers found the gold/);
     assert.match(await page.textContent('.hm-final'), /Saboteur/);
     assert.equal(await page.locator('.overlay [data-ready-here] [data-act="readyUp"]').count(), 1, 'Ready lives in the round dialog');
+    assert.equal(await page.locator('.overlay [data-act="leave"]').count(), 1, 'a waiting player can still leave');
     await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.round = 2; v.roundResult = result; })[1]);
     await page.waitForFunction(() => !document.querySelector('.overlay'));
     await ctx.close();
