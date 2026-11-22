@@ -118,6 +118,12 @@
     if (over) setTimeout(() => snd.play(over), land + (v.gravity ? T.land : T.win));
   }
 
+  // what just happened: the newest log line, in the same squared box Colour Clash and Stage Rummy use
+  function eventBox(v) {
+    const last = (v.log || []).slice(-1)[0];
+    return `<p class="wz-event ${last ? 'has' : ''}" role="status">${last ? `<b>${esc(last.by)}</b> ${esc(last.card)}` : '&nbsp;'}</p>`;
+  }
+
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.v = v; react(v);
     root.innerHTML = `<div class="wz lg" data-game="${esc(v.game)}" style="--drop-base:${T.dropBase}ms;--drop-step:${T.dropStep}ms;--land:${T.land}ms;--draw:${T.draw}ms">
@@ -125,6 +131,7 @@
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-lg="rules">Rules</button>', 'lg')}</div>
       ${seatsHTML(v, ctx)}
       ${boardHTML(v)}
+      ${eventBox(v)}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;

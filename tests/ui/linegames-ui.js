@@ -21,6 +21,16 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     return { page, ctx };
   };
 
+  await test('the box under the board shows the newest move, and keeps its height when empty', async () => {
+    const { page, ctx } = await open(msgs('tictactoe', (v) => { v.log = [{ by: 'Aarav', card: 'made a move', kind: 'info' }, { by: 'Bo', card: 'made 3 in a row', kind: 'win' }]; }));
+    assert.match(await page.textContent('.wz-event'), /Bo\s+made 3 in a row/);
+    const filled = await page.locator('.wz-event').boundingBox();
+    await ctx.close();
+    const empty = await open(msgs('tictactoe', (v) => { v.log = []; }));
+    assert.equal(Math.round((await empty.page.locator('.wz-event').boundingBox()).height), Math.round(filled.height), 'same height with no log yet');
+    await empty.ctx.close();
+  });
+
   await test('tic-tac-toe: 9 squares, a tap sends the square, taken squares are disabled', async () => {
     const { page, ctx } = await open(msgs('tictactoe', (v) => { v.board[4] = 1; v.legal = v.legal.filter((k) => k !== 4); }));
     assert.equal(await page.locator('.lg-cell').count(), 9);
