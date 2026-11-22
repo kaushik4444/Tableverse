@@ -296,16 +296,21 @@
   let reqInFlight = 0;
   let reqVeilTimer = null;
   let reqVeilOwned = false;
+  // After 350 ms, take the veil unless another action holds it. If one does, look again shortly: the veil must still come
+  // when that action releases it while this request is still waiting.
+  function armReqVeil() {
+    reqVeilTimer = setTimeout(() => {
+      reqVeilTimer = null;
+      if (reqInFlight === 0 || reqVeilOwned) return;
+      if (httpBusy || document.getElementById('busyBlock')) { armReqVeil(); return; }
+      reqVeilOwned = true;
+      showBusy('Loading…', 20000, 'load');
+    }, 350);
+  }
   async function trackRequest(opts, fn) {
     if (opts && opts.quiet) return fn();
     reqInFlight++;
-    if (!reqVeilTimer && !reqVeilOwned) {
-      reqVeilTimer = setTimeout(() => {
-        reqVeilTimer = null;
-        // Only take the veil if nothing else holds it (an action's own spinner, a sign-in, or a table action)
-        if (reqInFlight > 0 && !httpBusy && !document.getElementById('busyBlock')) { reqVeilOwned = true; showBusy('Loading…', 20000, 'load'); }
-      }, 350);
-    }
+    if (!reqVeilTimer && !reqVeilOwned) armReqVeil();
     try { return await fn(); } finally {
       reqInFlight--;
       if (reqInFlight === 0) {
@@ -405,7 +410,7 @@
     try { data = await r.json(); } catch { /* ignore */ }
     if (r.status === 403 && /CSRF/i.test(data.error || '') && !retried) { // cookie expired or was cleared: fetch a fresh pair once
       await ensureCsrf(true);
-      return postJson(url, body, true);
+      return postJsonNow(url, body, true); // the outer call is already tracked, so the retry skips a second count
     }
     if (data && data.csrfToken) S.csrf = data.csrfToken;
     if (!r.ok || data.ok === false) {
