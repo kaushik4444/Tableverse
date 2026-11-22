@@ -83,6 +83,23 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     assert.equal(Math.round(mine.fire.y), Math.round(theirs.fire.y), 'the Fire button stays in place');
   });
 
+  await test('on one page, the board and the Fire button do not move when a shot passes the turn', async () => {
+    const g = fresh();
+    const opening = JSON.parse(JSON.stringify(g));
+    const { page: before, ctx: beforeCtx } = await open(msgsFor(opening, 'p0'));
+    const first = { board: await box(before, '.cb-svg'), fire: await box(before, '.cb-fire') };
+    await beforeCtx.close();
+    const res = E.applyAction(g, 'p0', { type: 'flick', x: 0.5, angle: 0, power: 0.6, seq: g.seq });
+    assert.equal(res.ok, true, `the shot should be legal: ${res.error || ''}`);
+    const { page, ctx } = await open(msgsFor(JSON.parse(JSON.stringify(opening)), 'p0', [g]));
+    await page.waitForFunction(() => !(document.querySelector('.cb-seat.turn') || { textContent: '' }).textContent.includes('Ann'), null, { timeout: 8000 });
+    const after = { board: await box(page, '.cb-svg'), fire: await box(page, '.cb-fire') };
+    assert.equal(Math.round(after.board.width), Math.round(first.board.width), 'the board keeps its width');
+    assert.equal(Math.round(after.board.height), Math.round(first.board.height), 'the board keeps its height');
+    assert.equal(Math.round(after.fire.y), Math.round(first.fire.y), 'the Fire button stays in place');
+    await ctx.close();
+  });
+
   await test('dragging forward of the striker (no pull back) sets no power and sends nothing', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
     const s = await box(page, '.cb-striker');
