@@ -4,7 +4,7 @@
   'use strict';
   const { esc } = window.CardTable;
   const ui = { ctx: null, v: null, root: null, seq: null, mgr: false, trade: null, bid: 0, scores: false,
-    disp: {}, plans: {}, stepTimer: null, card: null, returnSq: null };
+    disp: {}, plans: {}, stepTimer: null, card: null, returnSq: null, bankruptArmed: false };
   const STEP_MS = 480; // one square per step: slow enough to follow every tile (the server waits for the same time: games/propertyrivals/board.js)
   const FAST_MS = 320; // very long advances (over 14 squares) a little quicker
   const DWELL_MS = 800; // the token rests on the square it lands on before the text and buttons follow
@@ -169,7 +169,7 @@
     if (c.useCard) B.push('<button class="btn" data-pr="useCard">Use free card</button>');
     if (v.phase === 'buy' && v.myTurn) { const s = v.squares[v.players[v.me].pos]; B.push(`<button class="btn big" data-pr="buy" ${c.buy ? '' : 'disabled'}>Buy ${esc(s.name)} ${coins(s.price)}</button><button class="btn ghost" data-pr="decline">${v.options.auction ? 'Auction it' : 'Pass'}</button>`); }
     if (c.endTurn) B.push(`<button class="btn big" data-pr="endTurn">${v.again ? 'Roll again' : 'End turn'}</button>`);
-    if (v.phase === 'debt' && v.myTurn) B.push(`<button class="btn big" data-pr="pay" ${c.pay ? '' : 'disabled'}>Pay ${coins(v.debt.amount)}</button><button class="btn danger" data-pr="bankrupt">Go bankrupt</button>`);
+    if (v.phase === 'debt' && v.myTurn) B.push(`<button class="btn big" data-pr="pay" ${c.pay ? '' : 'disabled'}>Pay ${coins(v.debt.amount)}</button><button class="btn danger" data-pr="bankrupt">${ui.bankruptArmed ? 'Tap again to go bankrupt' : 'Go bankrupt'}</button>`);
     if (c.propose) B.push('<button class="btn ghost" data-pr="tradeOpen">🤝 Trade</button>');
     const myProps = v.land.map((l, k) => (l && l.owner === v.me ? k : -1)).filter((k) => k >= 0);
     if (myProps.length) B.push(`<button class="btn ghost" data-pr="mgr" aria-expanded="${ui.mgr}">🏘️ My properties (${myProps.length})</button>`);
@@ -238,6 +238,8 @@
     ui.ctx = ctx; ui.v = v; ui.root = root; react(v); planMoves(v);
     if (!v.can.propose) ui.trade = null;
     if (v.phase !== 'auction') ui.bid = 0;
+    // going bankrupt cannot be undone: the first tap only arms it, and the state must still be the same debt
+    if (v.phase !== 'debt' || !v.myTurn) ui.bankruptArmed = false;
     const board = `<div class="pr-board" role="group" aria-label="Game board">${v.squares.map((_, i) => squareHTML(v, i)).join('')}<div class="pr-center">${centerHTML(v)}</div></div>`;
     const focus = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.pr : null;
     // a live redraw must not jump a reader back to the top of the city card's rent table
@@ -292,7 +294,10 @@
     const sqi = Number(el.dataset.sq); const act = (a) => ctx.act(a);
     const toggle = (set) => { if (set.has(sqi)) set.delete(sqi); else set.add(sqi); ctx.rerender(); };
     switch (el.dataset.pr) {
-      case 'roll': case 'payLockup': case 'useCard': case 'buy': case 'decline': case 'endTurn': case 'pay': case 'bankrupt':
+      case 'bankrupt':
+        if (!ui.bankruptArmed) { ui.bankruptArmed = true; ctx.rerender(); break; }
+        ui.bankruptArmed = false; act({ type: 'bankrupt' }); break;
+      case 'roll': case 'payLockup': case 'useCard': case 'buy': case 'decline': case 'endTurn': case 'pay':
       case 'acceptTrade': case 'declineTrade': case 'cancelTrade': case 'passBid': act({ type: el.dataset.pr }); break;
       case 'build': case 'sell': case 'mortgage': case 'unmortgage': act({ type: el.dataset.pr, square: sqi }); break;
       case 'mgr': ui.mgr = !ui.mgr; ctx.rerender(); break;
