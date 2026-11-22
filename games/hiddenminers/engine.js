@@ -39,7 +39,7 @@ function record(g, who, entry) {
   else if (entry.kind === 'scout') t.scouts++;
   else if (entry.kind === 'collapse') t.collapses++;
   else if (entry.kind === 'discard') t.discards++;
-  pacing.hold(g, MOVE_MS);
+  pacing.holdLatest(g, MOVE_MS); // each move replaces the previous hold, so fast moves do not build a backlog
 }
 const say = (g, by, text, kind) => { g.log.push({ by: by === null ? 'Table' : g.players[by].name, card: text, kind }); if (g.log.length > 60) g.log.shift(); };
 const flipMask = (m) => ((m << 2) | (m >> 2)) & 15;
