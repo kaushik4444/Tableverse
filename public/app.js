@@ -287,7 +287,34 @@
     httpBusy++;
     showBusy(label);
     try { return await fn(); } finally {
-      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy) hideBusy(); }
+      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy && !reqInFlight) hideBusy(); }
+    }
+  }
+  // Every user-started request (postJson / getJson) shows a loading veil if it is still running after a short delay,
+  // so quick answers do not flash. Background polls pass { quiet: true } and never show it.
+  let reqInFlight = 0;
+  let reqVeilTimer = null;
+  let reqVeilOwned = false;
+  async function trackRequest(opts, fn) {
+    if (opts && opts.quiet) return fn();
+    reqInFlight++;
+    if (!reqVeilTimer && !reqVeilOwned) {
+      reqVeilTimer = setTimeout(() => {
+        reqVeilTimer = null;
+        // Only take the veil if nothing else holds it (an action's own spinner, a sign-in, or a table action)
+        if (reqInFlight > 0 && !httpBusy && !document.getElementById('busyBlock')) { reqVeilOwned = true; showBusy('Loading…', 20000, 'load'); }
+      }, 350);
+    }
+    try { return await fn(); } finally {
+      reqInFlight--;
+      if (reqInFlight === 0) {
+        clearTimeout(reqVeilTimer); reqVeilTimer = null;
+        if (reqVeilOwned) {
+          reqVeilOwned = false;
+          // a sign-in that is waiting for the socket keeps its own veil until welcome arrives
+          if (!httpBusy && !S.signingIn) hideBusy();
+        }
+      }
     }
   }
   /** Right after a successful login the socket still has to say welcome. Until then show the profile, spin, and block taps. */
@@ -356,7 +383,10 @@
     return S.csrf;
   }
 
-  async function postJson(url, body, retried) {
+  function postJson(url, body, retried) {
+    return trackRequest(null, () => postJsonNow(url, body, retried));
+  }
+  async function postJsonNow(url, body, retried) {
     await ensureCsrf();
     let r;
     try {
@@ -1258,7 +1288,7 @@
   }
 
   function onMessage(m) {
-    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
+    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy && !reqInFlight) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
       case 'role': {
@@ -1903,7 +1933,10 @@
   const errorBlock = (text, retryAct) => `<div class="error-block" role="alert"><p>${esc(text)}</p>${retryAct ? `<button type="button" class="btn ghost small" data-act="${retryAct}">Try again</button>` : ''}</div>`;
   const RESULT_LABEL = { won: 'Won', lost: 'Lost', draw: 'Draw', left: 'Left (not counted)', forfeit: 'Left (counts as a loss)' };
 
-  async function getJson(url) {
+  function getJson(url, opts) {
+    return trackRequest(opts, () => getJsonNow(url));
+  }
+  async function getJsonNow(url) {
     const r = await fetch(url, { credentials: 'same-origin' });
     let out = null;
     try { out = await r.json(); } catch { /* not json */ }
@@ -1978,7 +2011,7 @@
     const gen = sessionGen;
     const mine = ++levelRequest;
     try {
-      const me = await getJson('/api/me/profile');
+      const me = await getJson('/api/me/profile', { quiet: true });
       if (gen !== sessionGen || mine !== levelRequest) return; // another account or a newer profile response won
       const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
@@ -2507,7 +2540,7 @@
       };
       if (!S.guest && S.country === undefined) {
         const mineGen = sessionGen;
-        getJson('/api/me/profile').then((me) => {
+        getJson('/api/me/profile', { quiet: true }).then((me) => {
           if (mineGen !== sessionGen) return; // another account signed in meanwhile
           S.country = (me && me.profile && me.profile.country) || '';
           const sel = o.querySelector('#profileCountry');
