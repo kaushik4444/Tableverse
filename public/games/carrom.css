@@ -20,9 +20,9 @@
 .cb-diag { stroke: #8a4f2a; stroke-width: 0.0035; stroke-linecap: round; opacity: .85; }
 .cb-diag-head { fill: #8a4f2a; opacity: .85; }
 .cb-diag-ring { fill: #e8c996; stroke: #8a4f2a; stroke-width: 0.003; }
-.cb-centre { fill: none; stroke: #8a5a3b; stroke-width: 0.0045; opacity: .8; }
+.cb-centre { fill: none; stroke: #8a5a3b; stroke-width: 0.006; opacity: .85; }
 .cb-centre-inner { fill: none; stroke: #8a5a3b; stroke-width: 0.0035; opacity: .8; }
-.cb-star { fill: #c4573f; stroke: #8a3b2a; stroke-width: 0.002; opacity: .8; }
+.cb-star { fill: #c4573f; stroke: #8a3b2a; stroke-width: 0.003; opacity: .85; }
 .cb-hub { fill: #c4573f; stroke: #8a3b2a; stroke-width: 0.003; }
 .cb-cap { fill: url(#cb-copper); stroke: #5e2c12; stroke-width: 0.004; stroke-linejoin: round; }
 .cb-pocket { fill: url(#cb-pocket-g); }

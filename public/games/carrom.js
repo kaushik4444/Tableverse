@@ -113,22 +113,32 @@
     return `<g class="cb-grain" fill="none" stroke="#8a5a2b" stroke-linecap="round">${out.join('')}</g>`;
   })();
 
-  /** The compass in the middle of the board: eight points, the four main ones longer and red, inside two rings. */
+  /** The compass in the middle of the board: eight points, the four main ones longer and red, inside two rings. It reaches past the opening coins, so it still shows around them. */
   const COMPASS = (() => {
     const pts = [];
     for (let i = 0; i < 16; i++) {
-      const a = (i * Math.PI) / 8 - Math.PI / 2, r = i % 4 === 0 ? 0.135 : i % 2 === 0 ? 0.095 : 0.035;
+      const a = (i * Math.PI) / 8 - Math.PI / 2, r = i % 4 === 0 ? 0.175 : i % 2 === 0 ? 0.125 : 0.05;
       pts.push(`${fx(0.5 + r * Math.cos(a))},${fx(0.5 + r * Math.sin(a))}`);
     }
-    return `<circle class="cb-centre" cx="0.5" cy="0.5" r="0.1"/><circle class="cb-centre-inner" cx="0.5" cy="0.5" r="0.066"/>`
-      + `<polygon class="cb-star" points="${pts.join(' ')}"/><circle class="cb-hub" cx="0.5" cy="0.5" r="0.026"/>`;
+    return `<circle class="cb-centre" cx="0.5" cy="0.5" r="0.135"/><circle class="cb-centre-inner" cx="0.5" cy="0.5" r="0.098"/>`
+      + `<polygon class="cb-star" points="${pts.join(' ')}"/><circle class="cb-hub" cx="0.5" cy="0.5" r="0.03"/>`;
   })();
 
-  /** One corner's markings (drawn for the top-left corner, turned for the others): the diagonal with its arrow, and the curved arrow. */
-  const CORNER_ART = `<line class="cb-diag" x1="0.085" y1="0.085" x2="0.29" y2="0.29"/>`
-    + `<polygon class="cb-diag-head" points="0.075,0.075 0.112,0.088 0.088,0.112"/>`
-    + `<circle class="cb-diag-ring" cx="0.135" cy="0.135" r="0.013"/>`
-    + `<path class="cb-diag" fill="none" d="M0.255 0.205 A 0.05 0.05 0 1 0 0.205 0.255"/>`;
+  /** One corner's markings (drawn for the top-left corner, turned for the others): the diagonal from the pocket with its arrow, and,
+   * further in towards the middle of the table, the curved arrow that circles its end. */
+  const CORNER_ART = (() => {
+    const c = 0.3, r = 0.05;                       // centre and radius of the curved arrow, on the diagonal
+    const pt = (deg) => [c + r * Math.cos((deg * Math.PI) / 180), c + r * Math.sin((deg * Math.PI) / 180)];
+    const [x0, y0] = pt(80), [x1, y1] = pt(10);    // clockwise round the far side, leaving the gap that faces the centre
+    const tx = -Math.sin((10 * Math.PI) / 180), ty = Math.cos((10 * Math.PI) / 180); // direction of travel at the end
+    const nx = Math.cos((10 * Math.PI) / 180), ny = Math.sin((10 * Math.PI) / 180);
+    const head = [[x1 + tx * 0.018, y1 + ty * 0.018], [x1 + nx * 0.012, y1 + ny * 0.012], [x1 - nx * 0.012, y1 - ny * 0.012]].map((p) => `${fx(p[0])},${fx(p[1])}`).join(' ');
+    return `<line class="cb-diag" x1="0.09" y1="0.09" x2="${c}" y2="${c}"/>`
+      + `<polygon class="cb-diag-head" points="0.075,0.075 0.115,0.09 0.09,0.115"/>`
+      + `<circle class="cb-diag-ring" cx="0.19" cy="0.19" r="0.013"/>`
+      + `<path class="cb-diag" fill="none" d="M${fx(x0)} ${fx(y0)} A ${r} ${r} 0 1 1 ${fx(x1)} ${fx(y1)}"/>`
+      + `<polygon class="cb-diag-head" points="${head}"/>`;
+  })();
 
   /** The cap that wraps each corner of the frame, with the pocket under it. Drawn for the top-left and turned for the others. */
   const CAP = `<path class="cb-cap" d="M-0.075 0.16 L-0.075 -0.03 Q-0.075 -0.075 -0.03 -0.075 L0.16 -0.075 L0.16 -0.012 Q0.16 0 0.148 0 L0.012 0 Q0 0 0 0.012 L0 0.148 Q0 0.16 -0.012 0.16 Z"/>`;
