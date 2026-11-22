@@ -439,3 +439,8 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 
 /* Wizard and Twenty-Nine: on taller phones a seat keeps its box when a plate gains its third line (status) */
 @media (max-width: 520px) and (min-height: 701px) { .wz.wiz .pt-seat .plate, .wz.t29 .pt-seat .plate { box-sizing: border-box; height: 50px; justify-content: flex-start; } } /* phones only: short phones have no room for the taller seats, and desktops would clip the status line, so they keep the small move */
+/* Ready sits where the next thing happens. While you have not pressed it, the bid and action panels stay out of the way
+   (the table is not accepting moves yet), and the button is a full-size tap target. */
+.ready-box .btn { min-height: 44px; min-width: 96px; flex: none; }
+.ready-box.in-sheet { margin: 14px 0 0; }
+.ready-wait .bidbox:not(.ready-box) { display: none; }

@@ -135,12 +135,13 @@ function scene(n, edit) {
     const result = { round: 1, winner: 2, total: 64, gains: [0, 0, 64, 0], hands: [[], [], [], []] };
     const first = tableMessages('colorclash', people(4));
     const { page, ctx } = await open(first);
-    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.roundResult = result; v.round = 2; v.players = v.players.map((p, i) => ({ ...p, score: i === 2 ? 64 : 0 })); v.event = { seq: 20, type: 'roundEnd', by: 2, round: 1, total: 64 }; })[1]);
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.phase = 'roundEnd'; v.myTurn = false; v.roundResult = result; v.round = 2; v.players = v.players.map((p, i) => ({ ...p, score: i === 2 ? 64 : 0 })); v.event = { seq: 20, type: 'roundEnd', by: 2, round: 1, total: 64 }; })[1]);
     await page.waitForSelector('.overlay .sheet');
     assert.match(await page.textContent('.overlay h2'), /Charlotte went out/);
     assert.match(await page.textContent('.cc-final'), /\+64/);
-    await page.click('[data-cc="next"]');
-    assert.equal(await page.locator('.overlay').count(), 0);
+    assert.equal(await page.locator('.overlay [data-ready-here] [data-act="readyUp"]').count(), 1, 'Ready lives in the round dialog');
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.round = 2; v.roundResult = result; })[1]);
+    await page.waitForFunction(() => !document.querySelector('.overlay'));
     await ctx.close();
     const over = await open(scene(3, (v) => { v.phase = 'gameOver'; v.winners = [1]; v.myTurn = false; v.canDraw = false; v.players = v.players.map((p, i) => ({ ...p, score: [110, 215, 40][i] })); v.roundResult = { ...result, winner: 1, gains: [0, 64, 0] }; }));
     assert.match(await over.page.textContent('.overlay h2'), /Game over/);
@@ -181,7 +182,7 @@ function scene(n, edit) {
     const { page, ctx } = await open(scene(4));
     const result = { round: 1, winner: 2, total: 64, gains: [0, 0, 64, 0], hands: [[], [], [], []] };
     const t0 = Date.now();
-    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.roundResult = result; v.round = 2; v.event = { seq: 40, type: 'roundEnd', by: 2, round: 1, total: 64 }; })[1]);
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.phase = 'roundEnd'; v.roundResult = result; v.round = 2; v.event = { seq: 40, type: 'roundEnd', by: 2, round: 1, total: 64 }; })[1]);
     await page.waitForSelector('.overlay .sheet', { timeout: 6000 });
     const waited = Date.now() - t0;
     assert.ok(waited >= 1900, `the summary showed after ${waited}ms, not straight away`);
@@ -212,7 +213,8 @@ function scene(n, edit) {
     const withGate = (ready, waiting) => scene(4, (v, m) => { m[1].room.gate = { ready, waiting }; });
     const { page, ctx } = await open(withGate([], ['me', 'p1', 'p2', 'p3']));
     assert.equal(await page.locator('.ready-bar').count(), 1, 'the bar shows while the table waits');
-    assert.match(await page.textContent('.ready-bar'), /Everybody presses Ready/);
+    assert.match(await page.textContent('.ready-bar'), /Ready to continue\? 0 of 4 ready/);
+    assert.equal(await page.locator('.wz-status').first().isHidden(), true, 'the Ready box takes the place of the status line');
     await page.click('.ready-bar [data-act="readyUp"]');
     const sentReady = await page.evaluate(() => window.__sent.filter((m) => m.t === 'ready').length);
     assert.equal(sentReady, 1, 'the Ready button sends one ready message');

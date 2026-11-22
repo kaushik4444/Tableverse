@@ -180,13 +180,9 @@
       <p class="hint">Each cell: running score, then bid/won</p>`;
   }
 
-  /** The Ready control of the round-end summary: it shows whether this seat is ready and who the table is still waiting for. */
+  /** The Ready control of the round-end summary (shared box: who is ready and who the table still waits for). */
   function readyRow(ctx) {
-    const g = ctx && ctx.gate;
-    if (!g) return '<div class="row" style="margin-top:14px"><button class="btn" data-wz="next">Ready</button><span class="hint">Everybody presses Ready to start the next round</span></div>';
-    const waiting = g.waiting.length ? g.waiting.map((n) => esc(n)).join(', ') : '';
-    if (g.seated && g.youReady) return `<div class="row" style="margin-top:14px"><button class="btn" disabled>Ready</button><span class="hint">You are ready. ${waiting ? 'Waiting for ' + waiting : 'Everybody is ready'}</span></div>`;
-    return `<div class="row" style="margin-top:14px"><button class="btn" data-wz="next"${g.seated ? '' : ' disabled'}>Ready</button><span class="hint">${g.ready} of ${g.total} ready${waiting ? ' · waiting for ' + waiting : ''}</span></div>`;
+    return window.CardTable.readyBox(ctx, { title: 'Ready for the next round?', cls: 'in-sheet' });
   }
 
   function overlayHTML(v, ctx) {

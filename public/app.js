@@ -3047,15 +3047,21 @@
     };
   }
 
-  function readyBarHTML() {
-    const gate = S.room && S.room.gate;
-    if (!gate || S.room.status !== 'playing') return '';
-    const nameOf = (id) => { const m = S.room.members.find((x) => x.id === id); return m ? esc(m.name) : 'Someone'; };
-    const seated = S.room.members.some((m) => m.id === S.id && !m.bot);
-    const total = gate.ready.length + gate.waiting.length;
-    if (seated && !gate.ready.includes(S.id)) return `<div class="ready-bar" role="status"><span><b>Everybody presses Ready to continue.</b> ${gate.ready.length} of ${total} ready</span><button class="btn" data-act="readyUp">Ready</button></div>`;
-    const waiting = gate.waiting.map(nameOf);
-    return `<div class="ready-bar" role="status"><span>${seated ? 'You are ready. ' : ''}${waiting.length ? `Waiting for ${waiting.join(', ')}` : 'Everybody is ready'}</span></div>`;
+  /**
+   * Ready is shown where the game's next thing happens: a game's round summary or bid panel carries its own Ready box
+   * (marked data-ready-here); every other game gets it in place of the status line just above the hand. It never covers the table,
+   * and while you have not pressed it the bid panels are hidden (the table accepts no moves until everybody is ready).
+   */
+  function placeReady() {
+    const room = S.room;
+    const gate = gateInfo();
+    $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
+    if (!gate || room.status !== 'playing' || $app.querySelector('[data-ready-here]')) return;
+    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' });
+    const status = $app.querySelector('.wz-status');
+    if (status) { status.insertAdjacentHTML('beforebegin', box); status.hidden = true; return; }
+    const top = $app.querySelector('.wz-top');
+    if (top) top.insertAdjacentHTML('afterend', box); else $app.insertAdjacentHTML('afterbegin', box);
   }
 
   function renderGame() {
@@ -3082,8 +3088,7 @@
       rerender: render,
       toast,
     });
-    const readyBar = readyBarHTML();
-    if (readyBar) { const top = $app.querySelector('.wz-top'); if (top) top.insertAdjacentHTML('afterend', readyBar); else $app.insertAdjacentHTML('afterbegin', readyBar); }
+    placeReady();
     markStandIns($app);
     watchStandIns();
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');

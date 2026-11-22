@@ -33,9 +33,13 @@ function atPhase(gameId, n, phase) {
   const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk() });
   const browser = await chromium.launch();
   const cases = [
-    ['wizard', 3, 'roundEnd', '[data-wz="next"]', 'the Wizard round summary'],
-    ['twentynine', 4, 'handEnd', '[data-t9="next"]', 'the Twenty-Nine hand summary'],
-    ['poker', 3, 'handEnd', '[data-pk="next"]', 'the Poker hand summary'],
+    ['wizard', 3, 'roundEnd', '[data-ready-here] [data-act="readyUp"]', 'the Wizard round summary'],
+    ['twentynine', 4, 'handEnd', '[data-ready-here] [data-act="readyUp"]', 'the Twenty-Nine hand summary'],
+    ['poker', 3, 'handEnd', '[data-ready-here] [data-act="readyUp"]', 'the Poker hand summary'],
+    ['stagerummy', 4, 'roundEnd', '[data-ready-here] [data-act="readyUp"]', 'the Stage 10 round summary'],
+    ['penaltyrows', 4, 'roundEnd', '[data-ready-here] [data-act="readyUp"]', 'the Take 5 round summary'],
+    ['colorclash', 4, 'roundEnd', '[data-ready-here] [data-act="readyUp"]', 'the Color Clash round summary'],
+    ['hiddenminers', 4, 'roundEnd', '[data-ready-here] [data-act="readyUp"]', 'the Hidden Miners round summary'],
   ];
   for (const [gameId, n, phase, selector, label] of cases) {
     await test(`${label}: its button is Ready and sends the ready message`, async () => {
