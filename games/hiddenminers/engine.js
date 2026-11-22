@@ -182,7 +182,7 @@ function endRound(g, side, finder, reveal) {
     return;
   }
   emit(g, { type: 'roundEnd', side, round: g.round, ...(reveal || {}) });
-  startRound(g);
+  g.phase = 'roundEnd'; // the next round is dealt once everybody has pressed Ready (the continue action)
 }
 
 /** After a card is spent: draw back up, then give the turn to the next miner who still holds cards (or end the round). */
@@ -206,6 +206,10 @@ const take = (g, who, id) => {
  *       | { type: 'scout', card, goal } | { type: 'collapse', card, x, y } | { type: 'discard', card }
  */
 function applyAction(g, playerId, action) {
+  if (g.phase === 'roundEnd') {
+    if (action && action.type === 'continue') { startRound(g); g.phase = 'playing'; g.version++; return { ok: true }; }
+    return { ok: false, error: 'The next round starts when everybody is ready' };
+  }
   if (g.phase === 'gameOver') return { ok: false, error: 'The game is over' };
   const who = indexOf(g, playerId);
   if (who < 0) return { ok: false, error: 'You are not a player in this game' };
@@ -276,7 +280,7 @@ function applyAction(g, playerId, action) {
   return { ok: true };
 }
 
-const awaiting = (g) => (g.phase === 'gameOver' ? [] : [g.players[g.turn].id]);
+const awaiting = (g) => (g.phase === 'gameOver' || g.phase === 'roundEnd' ? [] : [g.players[g.turn].id]);
 
 /** Every legal move for a seat, as actions. */
 function legalMoves(g, who) {
@@ -366,7 +370,8 @@ function viewFor(g, playerId) {
     deck: g.deck.length,
     players: g.players.map((p, i) => ({ id: p.id, name: p.name, cards: g.hands[i].length, broken: g.broken[i].slice(), score: g.scores[i] })),
     board: [...g.board.values()].map((t) => ({ x: t.x, y: t.y, mask: t.mask, cut: t.cut, start: t.id === 'start' })),
-    goals: g.goals.map((q) => ({ x: q.x, y: q.y, revealed: q.revealed, gold: q.revealed ? q.gold : null })),
+    // once a round is over every chamber is shown, so the table can see where the gold was
+    goals: g.goals.map((q) => ({ x: q.x, y: q.y, revealed: q.revealed || g.phase !== 'playing', gold: q.revealed || g.phase !== 'playing' ? q.gold : null })),
     scouts: me >= 0 ? g.scouts[me].map((s) => ({ ...s })) : [],
     hand,
     spots,
