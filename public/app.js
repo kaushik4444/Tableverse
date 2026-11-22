@@ -419,6 +419,7 @@
 
   function clearClientSession() {
     S.isStaff = false;
+    S.welcomeBack = null; S.welcomeFor = null; S.welcomeLoaded = undefined; // another account must not see this one's card
     S.banners = [];
     S.token = '';
     S.csrf = '';
@@ -2662,7 +2663,33 @@
     }
   }
 
+  /** Once per session, a signed-in player's profile tells us whether they are returning after a break. */
+  function loadWelcome() {
+    if (S.guest || S.welcomeLoaded === sessionGen) return;
+    S.welcomeLoaded = sessionGen;
+    const mineGen = sessionGen;
+    getJson('/api/me/profile').then((me) => {
+      if (mineGen !== sessionGen) return; // another account signed in meanwhile
+      S.welcomeBack = (me && me.welcomeBack) || null;
+      S.welcomeFor = mineGen;
+      if (S.page === 'home') render();
+    }).catch(() => {});
+  }
+
+  /** The welcome-back card: shown once per visit after a day or more away. Dismissing it stores that visit, so a reload does not bring it back. */
+  function welcomeHTML() {
+    const w = S.welcomeBack;
+    if (!w || S.welcomeFor !== sessionGen || store.get('ct_welcome') === w.since) return '';
+    const away = w.awayDays === 1 ? 'a day' : `${w.awayDays} days`;
+    const streak = w.streak >= 2 ? `<span>You're on a ${w.streak}-day streak. Play today to keep it going.</span>` : '';
+    return `<section class="notice-bar welcome-back" role="status" aria-label="Welcome back">
+      <div class="welcome-text"><strong>Welcome back!</strong><span>It's been ${away} since your last visit.</span>${streak}</div>
+      <button type="button" class="wn-close" data-act="dismissWelcome" aria-label="Dismiss">✕</button>
+    </section>`;
+  }
+
   function renderHome() {
+    loadWelcome();
     const tiles = S.games.map((g) => {
       const open = gameOpenFor(g);
       const guestLocked = guestLockedFor(g); // a tap opens the account prompt (the button stays enabled)
@@ -2703,6 +2730,7 @@
       ${rejoinBannerHTML()}
       ${bannersHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
+      ${welcomeHTML()}
       ${friendsStripHTML()}
       <div class="home-split">
         ${publicTablesHTML()}
@@ -3430,6 +3458,11 @@
     dismissBanner: (el) => dismissBanner(el.dataset.id),
     openAdmin: () => { S.menuOpen = false; location.href = '/admin.html'; },
     openFeedback: () => { S.menuOpen = false; openFeedbackModal(); },
+    dismissWelcome: () => {
+      if (S.welcomeBack) store.set('ct_welcome', S.welcomeBack.since);
+      S.welcomeBack = null;
+      render();
+    },
     dismissAnnouncement: () => {
       S.dismissedAnnouncement = S.announcement;
       store.set('ct_ann', S.announcement);
