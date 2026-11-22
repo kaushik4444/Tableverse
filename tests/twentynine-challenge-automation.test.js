@@ -52,7 +52,17 @@ async function until(fn, label, ms = 15000) { // the first round waits for Ready
         for (let i = 0; i < 3; i++) ann.send({ t: 'addBot' });
         await until(() => ann.room.members.length === 4, 'three bots');
         ann.send({ t: 'start' });
-        await until(() => ann.phases.some((p) => p.startsWith('challenge') || p === 'playing' || p.startsWith('playing')), 'the auction ends', 15000); // CI runners are slower than a laptop: the budget is the same as the other waits
+        // If the human is the one asked to bid, nobody else can move until she does: leave this table and try another one.
+        let askedToBid = false;
+        await until(() => {
+          if (ann.view && ann.view.phase === 'bidding' && ann.view.myTurn) { askedToBid = true; return true; }
+          return ann.phases.some((p) => p.startsWith('challenge') || p === 'playing' || p.startsWith('playing'));
+        }, 'the auction ends', 15000); // CI runners are slower than a laptop: the budget is the same as the other waits
+        if (askedToBid) {
+          ann.send({ t: 'leave' });
+          await until(() => !ann.room, 'left the table');
+          continue;
+        }
         if (ann.phases.includes('challenge:mine')) {
           found = true;
           await sleep(400); // far longer than a bot's delay here (0 to 3 ms)
