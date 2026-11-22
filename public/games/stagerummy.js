@@ -66,8 +66,8 @@
   }
   /** The big moment for the spotlight: a skip (the Skip card shown large), a stage laid, a round over. Other moves need none. */
   function spotFor(v, e) {
-    if (e.type === 'skip') return { card: cardHTML({ k: 's' }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} played Skip · ${nameOf(v, e.who)} loses a turn`, tone: 'skip', ms: 1300 };
-    if (e.type === 'lay') return { caption: `${nameOf(v, e.by)} laid down stage ${e.stage}: ${esc(stageName(v, e.stage))}!`, tone: 'win', ms: 1300 };
+    if (e.type === 'skip') return { card: cardHTML({ k: 's' }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} played Skip · ${nameOf(v, e.who)} loses a turn`, tone: 'skip', ms: 2300 };
+    if (e.type === 'lay') return { caption: `${nameOf(v, e.by)} laid down stage ${e.stage}: ${esc(stageName(v, e.stage))}!`, tone: 'win', ms: 2300 };
     if (e.type === 'roundEnd') return { caption: `${nameOf(v, e.by)} went out. The round is over.`, tone: 'round', ms: 2300 };
     return null;
   }

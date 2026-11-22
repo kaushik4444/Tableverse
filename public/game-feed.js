@@ -5,7 +5,7 @@
   'use strict';
   const feeds = new Map(); // table key -> [{ id, html, tone, at }]
   const KEEP = 40;   // entries remembered per table
-  const SHOW = 6;    // entries shown at once
+  const SHOW = 12;    // entries shown at once
   const TTL = 20000;  // an entry stays in the feed this long
   let spotTimer = null;
 
