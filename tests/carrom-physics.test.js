@@ -28,22 +28,23 @@ test('flick: power is clamped to 0..1 and angle sets the sideways part', () => {
 });
 
 test('the distance a flick slides is linear in power', () => {
+  // Starts at y = 0.8 and slides up the board, so even a full flick stays clear of the cushions.
   const slide = (power) => {
-    const d = [{ id: 's', kind: 'striker', colour: 'w', x: 0.5, y: 0.2, vx: 0, vy: 0, r: P.RADIUS.striker }];
-    const v = P.flickVelocity(0, power, 1);
+    const d = [{ id: 's', kind: 'striker', colour: 'w', x: 0.5, y: 0.8, vx: 0, vy: 0, r: P.RADIUS.striker }];
+    const v = P.flickVelocity(0, power, -1);
     d[0].vx = v.vx; d[0].vy = v.vy;
     const r = P.simulate(d);
-    return r.keyframes.at(-1).d[0][2] - 0.2;
+    return 0.8 - r.keyframes.at(-1).d[0][2];
   };
-  const quarter = slide(0.25), half = slide(0.5), full = slide(1);
-  assert.ok(Math.abs(half / quarter - 2) < 0.05, `half power ${half} should slide twice a quarter ${quarter}`);
-  assert.ok(Math.abs(full / quarter - 4) < 0.1, `full power ${full} should slide four times a quarter ${quarter}`);
+  const quarter = slide(0.1), half = slide(0.2), full = slide(0.4);
+  assert.ok(Math.abs(half / quarter - 2) < 0.05, `double power ${half} should slide twice ${quarter}`);
+  assert.ok(Math.abs(full / quarter - 4) < 0.1, `four times power ${full} should slide four times ${quarter}`);
 });
 
 test('friction: a free disc stops after about v^2 / (2a) units, within 5%', () => {
   const r = P.simulate([disc('c', 0.5, 0.3, 0, 0.5)]);
   const travelled = at(r, 'c').y - 0.3;
-  const expected = 0.25 / (2 * 3.0);
+  const expected = 0.25 / (2 * 1.5);
   assert.ok(r.settled, 'the shot settles');
   // The fixed time step makes the distance a little under the continuous value; 5% is well inside a playable tolerance.
   assert.ok(Math.abs(travelled - expected) / expected < 0.05, `travelled ${travelled}, expected ${expected}`);
@@ -117,3 +118,14 @@ test('determinism: the same input gives the same keyframes, and the input is not
 });
 
 console.log(`\n${passed} carrom physics tests passed`);
+
+test('a striker hit sends a coin across a real distance, not a few millimetres', () => {
+  // Head-on hit from the middle of the board, at half power: the coin should travel well over a fifth of the board.
+  const v = P.flickVelocity(0, 0.5, -1);
+  const r = P.simulate([
+    { id: 'c', kind: 'coin', colour: 'b', x: 0.5, y: 0.6, vx: 0, vy: 0, r: P.RADIUS.coin },
+    { id: 's', kind: 'striker', colour: 'w', x: 0.5, y: 0.85, vx: v.vx, vy: v.vy, r: P.RADIUS.striker },
+  ]);
+  const coin = r.keyframes.at(-1).d.find((d) => d[0] === 'c');
+  assert.ok(0.6 - coin[2] > 0.2, `the coin should travel more than 0.2, it travelled ${(0.6 - coin[2]).toFixed(3)}`);
+});

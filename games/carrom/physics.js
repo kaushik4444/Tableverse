@@ -11,10 +11,10 @@
 const RADIUS = { coin: 0.022, queen: 0.022, striker: 0.026 };
 const POCKET_R = 0.05;
 const CORNERS = [[0, 0], [1, 0], [0, 1], [1, 1]];
-const DECEL = 3.0;          // friction, units per second squared (a full flick travels about 0.96 units)
+const DECEL = 1.5;          // friction, units per second squared (a full flick travels about 0.96 units)
 const RESTITUTION = 0.92;   // disc against disc
 const CUSHION = 0.75;       // disc against the edge of the board
-const MAX_SPEED = 2.4;      // a full-power flick, units per second
+const MAX_SPEED = 1.7;      // a full-power flick, units per second (lower friction keeps the speed for the coins)
 const DT = 1 / 240;         // fixed time step
 const MAX_TIME = 20;        // seconds of simulated play before the shot is stopped
 const SETTLE_SPEED = 0.01;  // every disc slower than this has stopped
