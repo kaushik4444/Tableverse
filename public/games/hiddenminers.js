@@ -170,11 +170,11 @@
         <ul class="hm-final">${list(sorted)}</ul>
         <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-hm="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-hm="leave">Leave table</button></div></div></div>`;
     }
-    if (r && ui.seenRound !== r.round) {
+    if (r && v.phase === 'roundEnd') {
       return `<div class="overlay"><div class="sheet"><h2>${r.side === 'diggers' ? '⛏️ The Diggers found the gold!' : '🕳️ The Saboteurs win the round'}</h2>
         <p class="hint" style="text-align:left">Round ${r.round}: the roles were:</p>
         <ul class="hm-final">${list(sorted)}</ul>
-        <div class="row" style="margin-top:12px"><button class="btn" data-hm="next">Next round</button></div></div></div>`;
+        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}</div></div>`;
     }
     return '';
   }
@@ -281,7 +281,6 @@
       case 'fix': if (c && c.k === 'repair') ctx.act({ type: 'repair', card: c.id, target: n('seat'), tool: el.dataset.tool }); break;
       case 'goal': if (c && c.k === 'scout') ctx.act({ type: 'scout', card: c.id, goal: n('i') }); break;
       case 'cave': if (c && c.k === 'collapse') ctx.act({ type: 'collapse', card: c.id, x: n('x'), y: n('y') }); break;
-      case 'next': ui.seenRound = v.roundResult ? v.roundResult.round : null; ctx.rerender(); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;
