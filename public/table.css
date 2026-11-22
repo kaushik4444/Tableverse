@@ -438,4 +438,4 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 
 
 /* Wizard and Twenty-Nine: on taller phones a seat keeps its box when a plate gains its third line (status) */
-@media (min-height: 701px) { .wz.wiz .pt-seat .plate, .wz.t29 .pt-seat .plate { box-sizing: border-box; height: 50px; justify-content: flex-start; } } /* short phones have no room for the taller seats, so they keep the small move */
+@media (max-width: 520px) and (min-height: 701px) { .wz.wiz .pt-seat .plate, .wz.t29 .pt-seat .plate { box-sizing: border-box; height: 50px; justify-content: flex-start; } } /* phones only: short phones have no room for the taller seats, and desktops would clip the status line, so they keep the small move */
