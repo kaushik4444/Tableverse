@@ -196,8 +196,8 @@
     if (v.phase === 'roundEnd' && v.lastRound) {
       const r = v.lastRound;
       const rows = v.players.map((p, i) => ({ p, i })).sort((a, b) => r.points[a.i] - r.points[b.i]).map(({ p, i }) => `<li class="${i === r.outBy ? 'win' : ''}"><span>${i === r.outBy ? '🏁 ' : ''}<b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b></span><span>${r.laid[i] ? '✅ stage done' : 'stage open'} · +${r.points[i]} · ${p.score} pts</span></li>`).join('');
-      return `<div class="overlay"><div class="sheet"><h2>Round ${r.round} complete</h2><p class="hint" style="text-align:left">${esc(v.players[r.outBy].name)} went out. Points left in hand are added to each total.</p><ul class="sr-final">${rows}</ul>
-        ${window.CardTable.readyBox(ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}</div></div>`;
+      return `<div class="overlay"><div class="sheet"><h2>Round ${r.round} complete</h2>
+        ${window.CardTable.readyBox(ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}<p class="hint" style="text-align:left">${esc(v.players[r.outBy].name)} went out. Points left in hand are added to each total.</p><ul class="sr-final">${rows}</ul></div></div>`;
     }
     if (v.phase !== 'gameOver') return '';
     const rows = v.players.map((p, i) => ({ p, i })).sort((a, b) => (b.p.stage - a.p.stage) || (a.p.score - b.p.score))

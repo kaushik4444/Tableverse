@@ -200,8 +200,8 @@
         })
         .join('');
       return `<div class="overlay"><div class="sheet"><h2>Round ${v.round} of ${v.totalRounds}</h2>
-        <div class="score-wrap"><table class="score"><thead><tr><th>Player</th><th>Bid</th><th>Won</th><th>Pts</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div>
-        ${readyRow(ctx)}</div></div>`;
+        ${readyRow(ctx)}
+        <div class="score-wrap"><table class="score"><thead><tr><th>Player</th><th>Bid</th><th>Won</th><th>Pts</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
     }
     const order = v.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
     const win = v.winners.includes(v.players[v.me] && v.players[v.me].id);
@@ -210,7 +210,7 @@
       .join('');
     return `<div class="overlay"><div class="sheet"><h2>${win ? 'You won! 🎉' : 'Game over'}</h2><ol class="podium">${list}</ol>
       <div class="row">${ui.ctx.isHost ? '<button class="btn" data-wz="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}
-      <button class="btn ghost" data-wz="scores">Full scoreboard</button><button class="btn ghost" data-wz="leave">Leave table</button></div></div></div>`;
+      <button class="btn ghost" data-wz="scores">Full scoreboard</button></div></div></div>`;
   }
 
   function render(root, view, ctx) {

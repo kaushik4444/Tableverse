@@ -153,8 +153,8 @@
       .join('');
     const hands = r.showdown && r.hands.length > r.winners.length ? `<p class="hint">${r.hands.map((h) => `${esc(v.players[h.player].name)}: ${esc(h.hand)}`).join(' · ')}</p>` : '';
     const side = r.pots.length > 1 ? `<p class="hint">${r.pots.length} pots: ${r.pots.map((p) => fmt(p.amount)).join(' + ')}</p>` : '';
-    return `<div class="pk-result"><h3>Hand ${r.handNo}</h3><ul>${winners}</ul>${side}${hands}
-      ${window.CardTable.readyBox(ctx, { title: 'Ready for the next hand?', cls: 'in-sheet' })}</div>`;
+    return `<div class="pk-result"><h3>Hand ${r.handNo}</h3>
+        ${window.CardTable.readyBox(ctx, { title: 'Ready for the next hand?', cls: 'in-sheet' })}<ul>${winners}</ul>${side}${hands}</div>`;
   }
 
   function standingsHTML(v) {
@@ -196,7 +196,7 @@
       const title = v.me === champ ? 'You won! 🎉' : `${esc(v.players[champ].name)} wins!`;
       return `<div class="overlay"><div class="sheet"><h2>${title}</h2><ol class="podium">${rows}</ol>
         <div class="row">${ui.ctx.isHost ? '<button class="btn" data-pk="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}
-        <button class="btn ghost" data-pk="leave">Leave table</button></div></div></div>`;
+        </div></div></div>`;
     }
     if (ui.standings) {
       return `<div class="overlay" data-pk="closeStand"><div class="sheet" data-stop="1"><h2>Chip counts</h2>${standingsHTML(v)}<div class="row" style="margin-top:12px"><button class="btn" data-pk="closeStand">Close</button><button class="btn ghost" data-pk="rules">How to play</button></div></div></div>`;

@@ -219,13 +219,14 @@
     const result = `<p><b>${esc(v.players[h.bidder].name)}</b> (${bidderMine ? usName(v).toLowerCase() : themName(v).toLowerCase()}) bid <b>${bidText(h)}</b> with trump ${SUITS[h.trumpSuit].sym} and took <b>${h.points[teamOf(h.bidder)]}</b> points: <b class="${h.made ? 'pos' : 'neg'}">${h.made ? 'bid made' : 'bid failed'}</b>. Hand result: ${gameText(h, mine, v)}.</p>
       <p>Hand points: ${usName(v).toLowerCase()} ${h.points[mine]}, ${themName(v).toLowerCase()} ${h.points[1 - mine]}.<br>Game points: ${usName(v).toLowerCase()} <b>${h.score[mine]}</b>, ${themName(v).toLowerCase()} <b>${h.score[1 - mine]}</b>.</p>`;
     if (v.phase === 'handEnd') {
-      return `<div class="overlay"><div class="sheet"><h2>Hand ${v.handNo} complete</h2>${result}${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next hand?', cls: 'in-sheet' })}</div></div>`;
+      return `<div class="overlay"><div class="sheet"><h2>Hand ${v.handNo} complete</h2>
+        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next hand?', cls: 'in-sheet' })}${result}</div></div>`;
     }
     const won = v.winnerTeam === mine;
     const title = v.me < 0 ? `${v.winnerTeam === 0 ? 'Team A' : 'Team B'} won!` : won ? 'Your team won! 🎉' : 'Your team lost';
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>${result}
       <div class="row">${ui.ctx.isHost ? '<button class="btn" data-t9="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}
-      <button class="btn ghost" data-t9="scores">Full scoreboard</button><button class="btn ghost" data-t9="leave">Leave table</button></div></div></div>`;
+      <button class="btn ghost" data-t9="scores">Full scoreboard</button></div></div></div>`;
   }
 
   function render(root, view, ctx) {

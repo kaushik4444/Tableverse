@@ -127,17 +127,18 @@ test('history retains known marks even when a game is absent from the menu', () 
   assert.doesNotMatch(result, /<unknown>/);
 });
 
-test('XP, favourite, per-game and recent results all retain marks without menu metadata', () => {
+test('favourite, per-game and recent results all retain marks without menu metadata', () => {
   const progress = { level: 1, games: { ludo: { points: 20 } } };
   for (const interactive of [true, false]) {
-    assert.ok(render.progressHTML(progress, interactive).includes(html('ludo')));
+    // the level card lists no games any more (Game XP is not shown)
+    assert.doesNotMatch(render.progressHTML(progress, interactive), /XP/);
     const result = render.statsHTML({
       played: 1, wins: 1, losses: 0, winRate: 100, favouriteGame: 'ludo',
       streak: { current: 1, best: 1 }, progress,
       perGame: [{ gameId: 'ludo', wins: 1, losses: 0, winRate: 100, best: null }],
       recent: [{ gameId: 'ludo', won: true, finishedAt: '2026-01-01' }],
     }, interactive);
-    assert.equal(result.split(html('ludo')).length - 1, 4, 'XP, favourite, by-game row and recent chip');
+    assert.equal(result.split(html('ludo')).length - 1, 3, 'favourite, by-game row and recent chip');
     assert.doesNotMatch(result, /undefined/);
   }
 });
