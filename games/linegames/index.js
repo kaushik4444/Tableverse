@@ -30,7 +30,7 @@ function make(variantId, meta) {
         act: (playerId, action) => { try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; } },
         awaiting: () => engine.awaiting(g),
         botAction: (playerId) => engine.botAction(g, playerId),
-        botDelayMs: () => 600 + g.rng() * 500,
+        botDelayMs: () => 1200 + g.rng() * 600,
         autoAction: () => null,
         isOver: () => g.phase === 'gameOver',
         // a win scores 1, a draw 0.5 for both, a loss 0

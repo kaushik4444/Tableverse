@@ -61,7 +61,7 @@ module.exports = {
       botAction: (playerId) => engine.botAction(g, playerId),
       forcedPlay: () => null,
       stamp: () => g.round + ':' + g.turn, // changes when the turn passes (the server compares stamps with !==)
-      botDelayMs: () => 1100 + g.rng() * 800, // bots pause long enough for people to follow each move
+      botDelayMs: () => 1600 + g.rng() * 900, // bots pause long enough for people to follow each move
       autoAction: () => (g.phase === 'roundEnd' ? { type: 'continue' } : null),
       isOver: () => g.phase === 'gameOver',
       results: () => engine.results(g),

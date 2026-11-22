@@ -96,7 +96,7 @@
   /** The spotlight for a row being collected: its taker and the points. Other steps need none. */
   function spotFor(v, e, phase) {
     if (phase !== 'collect') return null;
-    return { card: cardHTML({ n: e.n, p: e.p }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} collected ${rowName(e)} · ${penWord(e.took)}`, tone: 'take', ms: 1300 };
+    return { card: cardHTML({ n: e.n, p: e.p }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} collected ${rowName(e)} · ${penWord(e.took)}`, tone: 'take', ms: 2300 };
   }
   /** Shows one replayed step in the feed (and the spotlight, for a row collected). */
   function announce(anim, k) {

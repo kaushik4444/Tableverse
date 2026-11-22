@@ -107,7 +107,7 @@ module.exports = {
       forcedPlay: () => engine.forcedPlay(g),
       // lets the table show the played cards before the next turn is asked for
       stamp: () => g.seq, // a number that changes once per finished turn (the server compares stamps with !==)
-      botDelayMs: () => 700 + g.rng() * 900,
+      botDelayMs: () => 1500 + g.rng() * 900,
       holdMs: () => pacing.remaining(g), // the time the table needs to show the cards played (games/pacing.js)
       setPacingScale: (scale) => pacing.setScale(g, scale),
       autoAction: () => (g.phase === 'roundEnd' ? { type: 'continue' } : null),
