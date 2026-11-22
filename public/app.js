@@ -3316,7 +3316,12 @@
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
     reloadProfile: () => loadProfile(),
-    ratingScope: (el) => { const P = S.profile; if (!P) return; P.ratingScope = el.dataset.scope === 'month' ? 'month' : 'lifetime'; loadRatingBoard(P); render(); },
+    ratingScope: (el) => {
+      const P = S.profile; if (!P) return;
+      P.ratingScope = el.dataset.scope === 'month' ? 'month' : 'lifetime'; loadRatingBoard(P); render();
+      // the redraw replaces the period button, so give keyboard focus back to the same period
+      document.querySelector(`[data-act="ratingScope"][data-scope="${P.ratingScope}"]`)?.focus({ preventScroll: true });
+    },
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
