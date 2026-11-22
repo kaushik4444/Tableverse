@@ -194,3 +194,10 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
   .hero-fan:hover .c3 { transform: rotate(10deg) translateY(-8px); } .hero-fan:hover .c4 { transform: rotate(30deg) translateY(-4px); }
 }
 @media (prefers-reduced-motion: reduce) { .hc { transition: none !important; } }
+
+/* the sticky Start bar fades into the felt, not into the old indigo */
+.start-bar { background: linear-gradient(to top, #0a1a11 60%, rgba(10, 26, 17, 0)); }
+.start-bar.wait { background: linear-gradient(to top, #0a1a11 70%, rgba(10, 26, 17, 0)); }
+/* the purple end-of-game and busy cards join the palette */
+.end-pop-card { background: linear-gradient(160deg, #3a2a12, #1a1209); border: 1px solid rgba(230, 171, 74, .4); }
+.busy-card { background: #1a1209; border: 1px solid var(--wood-line); }
