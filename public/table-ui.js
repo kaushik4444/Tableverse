@@ -121,5 +121,21 @@
     for (let i = 0; i < n; i++) { const s = score(i); if (s > best) { best = s; at = i; tie = false; } else if (s === best) tie = true; }
     return !tie && best >= min ? at : -1;
   }
+  /**
+   * The Ready control every round game shows in the place where the next thing happens (the round summary, or where you bid or
+   * act): who has pressed, who the table still waits for, and a Ready button. It is plain HTML; its button uses the page-wide
+   * data-act="readyUp". The data-ready-here mark tells the page that this game shows Ready itself, so no extra bar is added.
+   */
+  function readyBox(ctx, opts = {}) {
+    const g = ctx && ctx.gate;
+    const e = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const title = opts.title || 'Ready for the next round?';
+    if (!g) return `<div class="ready-bar ready-box ${opts.cls || ''}" data-ready-here role="status"><span><b>${e(title)}</b></span><button class="btn" data-act="readyUp">Ready</button></div>`;
+    const names = g.waiting.map(e).join(', ');
+    const cls = `ready-bar ready-box ${opts.cls || ''}`;
+    if (g.seated && !g.youReady) return `<div class="${cls}" data-ready-here role="status"><span><b>${e(title)}</b> ${g.ready} of ${g.total} ready${names ? ` · waiting for ${names}` : ''}</span><button class="btn" data-act="readyUp">Ready</button></div>`;
+    return `<div class="${cls}" data-ready-here role="status"><span>${g.seated ? 'You are ready. ' : ''}${names ? `Waiting for ${names}` : 'Everybody is ready'}</span></div>`;
+  }
+  window.CardTable.readyBox = readyBox;
   window.CardTable.pt = { trickHold, layout, seatHTML, tableHTML, avatarOf, avatarColor, leaderOf };
 })();
