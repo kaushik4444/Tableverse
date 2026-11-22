@@ -236,7 +236,7 @@
 
   function render(root, v, ctx) {
     const key = (ctx.room && ctx.room.code) + ':' + v.players.map((p) => p.id).join();
-    if (ui.key !== key) { ui.key = key; ui.disp = {}; ui.plans = {}; ui.seq = null; ui.card = null; } // another table: start clean
+    if (ui.key !== key) { ui.key = key; ui.disp = {}; ui.plans = {}; ui.seq = null; ui.card = null; ui.bankruptArmed = null; } // another table: start clean
     ui.ctx = ctx; ui.v = v; ui.root = root; react(v); planMoves(v);
     if (!v.can.propose) ui.trade = null;
     if (v.phase !== 'auction') ui.bid = 0;
