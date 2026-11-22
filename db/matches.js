@@ -83,7 +83,7 @@ class MemoryMatchStore {
 }
 
 const memoryStore = new MemoryMatchStore();
-const { computeProgress, boardFor } = require('../lib/progress');
+const { computeProgress } = require('../lib/progress');
 
 /**
  * Persist a completed match and participant results, all-or-nothing.
@@ -252,37 +252,6 @@ async function pgProfile(playerId, memberSince) {
   });
 }
 
-/**
- * The weekly board for one game: the people who turned it on, ranked by Game XP in that game over the last `days`.
- * It reads the matches of the window for that game (every seat, so ranks are right) and ranks with lib/progress.
- * Empty without a database. Read-only; it names only the people who opted in.
- */
-async function weeklyBoard(gameId, { days = 7, limit = 10 } = {}) {
-  if (!db.hasDatabase()) return [];
-  const n = Math.min(30, Math.max(1, Math.floor(Number(days)) || 7));
-  const r = await db.query(
-    `SELECT m.id AS match_id, m.game_id, mp.seat, mp.player_id, mp.score, mp.place, mp.is_winner, mp.is_draw, mp.is_bot, mp.left_early, mp.forfeit, mp.seconds_played,
-            p.id AS eligible_id, p.username, p.display_name
-       FROM match_participants mp JOIN matches m ON m.id = mp.match_id
-       LEFT JOIN players p ON p.id = mp.player_id AND p.leaderboard_opt_in AND NOT mp.is_bot
-      WHERE m.game_id = $1 AND m.match_key IS NOT NULL
-        AND m.finished_at > NOW() - ($2::int * INTERVAL '1 day')
-        AND m.id IN (SELECT mp2.match_id FROM match_participants mp2 JOIN players p ON p.id = mp2.player_id
-                      WHERE p.leaderboard_opt_in AND NOT mp2.is_bot)
-      ORDER BY m.finished_at, m.id, mp.seat`,
-    [String(gameId).slice(0, 40), n]
-  );
-  const rows = r.rows.map((x) => ({
-    matchId: x.match_id, gameId: x.game_id, seat: x.seat, playerId: x.player_id, score: x.score, place: x.place, isWinner: x.is_winner, isDraw: x.is_draw,
-    isBot: x.is_bot, leftEarly: x.left_early, forfeit: x.forfeit, secondsPlayed: x.seconds_played,
-  }));
-  const people = new Map();
-  for (const p of r.rows) {
-    if (p.eligible_id) people.set(p.eligible_id, { id: p.eligible_id, username: p.username, displayName: p.display_name });
-  }
-  return boardFor(rows, [...people.values()], gameId, limit);
-}
-
 module.exports = {
   DELETED_NAME,
   isUuid,
@@ -290,5 +259,4 @@ module.exports = {
   getPlayerProfile,
   getProgress,
   getPlayerStats,
-  weeklyBoard,
 };
