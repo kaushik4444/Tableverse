@@ -203,6 +203,22 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('the feed keeps a fish event separate from a later refill', async () => {
+    const msgs = tableMessages('gofish', four);
+    const { page, ctx } = await open(msgs);
+    const next = msgs[1];
+    const refill = { seq: 2, type: 'empty', by: 0 };
+    next.view.event = refill;
+    next.view.events = [{ seq: 1, type: 'fish', by: 0, target: 1, rank: '9', wish: true, books: ['9'] }, refill];
+    next.view.myDraw = { seq: refill.seq, card: { id: 'HK', suit: 'H', rank: 'K', ord: 12 } };
+    await page.evaluate((m) => window.__push(m), next);
+    const entries = page.locator('.gf-float .gf-item');
+    assert.match(await entries.first().textContent(), /Go Fish! and drew the very card!/);
+    assert.equal(await entries.first().locator('.card.tiny').count(), 0);
+    assert.match(await entries.nth(1).textContent(), /You had no cards and drew one/);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;
