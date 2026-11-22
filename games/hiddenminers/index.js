@@ -1,6 +1,7 @@
 'use strict';
 /** Hidden Miners plugin: adapts the pure engine to the server's game interface. */
 const engine = require('./engine');
+const pacing = require('../pacing');
 const { scrubDeep } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
 
@@ -32,6 +33,7 @@ module.exports = {
     'On your turn play one card, or throw one away, then draw a card if the deck has any. Tunnel pieces must join a tunnel that runs from the start, and every side must match its neighbours (open to open, closed to closed). You may turn a piece upside down. Dead-end pieces connect but do not carry the tunnel on.',
     'Break a Lamp, Pick or Cart on another miner: they cannot add tunnel pieces until a matching Repair card mends it. Repair cards can help anyone, yourself included. Scout lets you secretly look at one chamber. Collapse removes one tunnel piece (never the start).',
     'If the gold chamber is reached the Diggers win the round: each Digger scores 3 and the miner who opened the gold scores 1 more. If the deck and every hand run out first, the Saboteurs win: each scores 3 (a lone Saboteur scores 4). All roles are shown when a round ends.',
+    'Every move is shown to the whole table in the move log, with its card. Under each miner\'s name are that round\'s counts: ⛏️ tunnels dug, 🕳️ dead ends dug, ✖ tools broken and 🔧 tools repaired. Watch who breaks tools and who digs dead ends.',
     'After the chosen number of rounds the highest score wins; equal scores share the win.',
     'Hidden Miners is Tableverse\'s own game, made with our own cards, wording and artwork. It is not affiliated with, endorsed by or licensed by the publisher of any similar game.',
   ],
@@ -46,7 +48,9 @@ module.exports = {
       },
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId),
-      botDelayMs: () => 900 + g.rng() * 800,
+      botDelayMs: () => 1800 + g.rng() * 900, // a bot thinks for a while, so people can follow each move (holdMs adds the reading pause)
+      holdMs: () => pacing.remaining(g),
+      setPacingScale: (scale) => pacing.setScale(g, scale),
       autoAction: () => (g.phase === 'roundEnd' ? { type: 'continue' } : null),
       isOver: () => g.phase === 'gameOver',
       results: () => engine.results(g),
