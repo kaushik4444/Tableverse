@@ -23,7 +23,7 @@ const pl = (g, seat, a) => E.plan(g, seat, a);
 
 /** The first angle (searched in steps) that pockets something the predicate accepts, found by the engine itself. */
 function findShot(g, seat, x, want) {
-  for (let deg = -70; deg <= 70; deg += 2) {
+  for (let deg = -70; deg <= 70; deg += 1) {
     const a = flick(x, 1, (deg * Math.PI) / 180);
     const p = pl(g, seat, a);
     if (!p.error && want(p.shot)) return a;
@@ -113,7 +113,7 @@ test('validation: bad x, angle, power, overlapping striker and invalid action ar
 
 test('pocketing your own coin gives an extra shot, and the coin counts for your team', () => {
   const g = four();
-  g.coins = [coin('w1', 'w', 0.035, 0.035), coin('b1', 'b', 0.6, 0.6), coin('b2', 'b', 0.9, 0.9)];
+  g.coins = [coin('w1', 'w', 0.03, 0.03), coin('b1', 'b', 0.6, 0.6), coin('b2', 'b', 0.9, 0.9)];
   assert.equal(act(g, 'p0', flick(0.2, 0.05)).ok, true);
   assert.equal(g.score.w, 1);
   assert.equal(g.turn, 0, 'the same seat shoots again');
@@ -123,7 +123,7 @@ test('pocketing your own coin gives an extra shot, and the coin counts for your 
 test('a partner (seat 2, White) pockets for the White team, and the turn goes on to the next seat', () => {
   const g = four();
   g.turn = 2;
-  g.coins = [coin('w1', 'w', 0.035, 0.035)]; // inside a pocket: pocketed on the first step of any shot
+  g.coins = [coin('w1', 'w', 0.03, 0.03)]; // inside a pocket: pocketed on the first step of any shot
   act(g, 'p2', flick(0.5, 0.05));
   assert.equal(g.score.w, 1, 'the partner scores for White');
   assert.equal(g.score.b, 0);
@@ -132,7 +132,7 @@ test('a partner (seat 2, White) pockets for the White team, and the turn goes on
 
 test('pocketing the other colour sends it back and passes the turn', () => {
   const g = four();
-  g.coins = [coin('b1', 'b', 0.035, 0.035)];
+  g.coins = [coin('b1', 'b', 0.03, 0.03)];
   act(g, 'p0', flick(0.2, 0.05));
   assert.equal(g.score.w, 0);
   assert.equal(g.turn, 1);
@@ -153,7 +153,7 @@ test('a foul when the striker is pocketed: the coins of that shot go back, and o
 
 test('an uncovered queen goes back to the centre', () => {
   const g = four();
-  g.coins = [queen(0.035, 0.035)];
+  g.coins = [queen(0.03, 0.03)];
   act(g, 'p0', flick(0.2, 0.05));
   assert.equal(g.queenHeld, null);
   assert.ok(g.coins.some((c) => c.kind === 'queen'));
@@ -162,14 +162,14 @@ test('an uncovered queen goes back to the centre', () => {
 test('the queen is covered by the team pocketing one of its coins in the same shot', () => {
   const g = four();
   // the queen and a white coin each sit inside a different corner pocket, so one shot takes both
-  g.coins = [queen(0.035, 0.035), coin('w1', 'w', 0.965, 0.035)];
+  g.coins = [queen(0.03, 0.03), coin('w1', 'w', 0.97, 0.03)];
   act(g, 'p0', flick(0.5, 0.05));
   assert.equal(g.queenHeld, 'w');
 });
 
 test('winning: a team with all nine coins and the queen wins, and the team is named', () => {
   const g = four();
-  g.coins = [queen(0.035, 0.035)];
+  g.coins = [queen(0.03, 0.03)];
   g.score = { w: 9, b: 0 };
   act(g, 'p0', flick(0.2, 0.05));
   assert.equal(g.phase, 'gameOver');
@@ -181,7 +181,7 @@ test('winning: a team with all nine coins and the queen wins, and the team is na
 
 test('a team with nine coins is not stuck: the queen still covers when it goes in alone', () => {
   const g = four();
-  g.coins = [queen(0.035, 0.035)];
+  g.coins = [queen(0.03, 0.03)];
   g.score = { w: 9, b: 0 };
   act(g, 'p0', flick(0.2, 0.05));
   assert.equal(g.winner, 'w');
@@ -189,7 +189,7 @@ test('a team with nine coins is not stuck: the queen still covers when it goes i
 
 test('a returned disc never shares an id with a disc already on the board (the opening uses c1 to c18)', () => {
   const g = four();
-  g.coins = [...E.opening(), coin('b99', 'b', 0.035, 0.035)]; // a black coin in a pocket goes back to the centre
+  g.coins = [...E.opening(), coin('b99', 'b', 0.03, 0.03)]; // a black coin in a pocket goes back to the centre
   assert.equal(act(g, 'p0', flick(0.2, 0.05)).ok, true);
   const ids = g.coins.map((c) => c.id);
   assert.equal(new Set(ids).size, ids.length, 'every disc on the board has its own id');
