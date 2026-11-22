@@ -172,6 +172,18 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('on a tall phone the table does not change size when the ask panel changes (more or fewer ranks in hand)', async () => {
+    const a = tableMessages('gofish', [{ name: 'Aarav' }, { name: 'Bo' }], { seed: 1 });
+    const b = tableMessages('gofish', [{ name: 'Aarav' }, { name: 'Bo' }], { seed: 7 });
+    const { page, ctx } = await open(a, { width: 393, height: 852 });
+    const felt = () => page.evaluate(() => Math.round(document.querySelector('.pt-felt').getBoundingClientRect().height));
+    const before = await felt();
+    await page.evaluate((m) => window.__push(m), b[1]);
+    await page.waitForTimeout(700);
+    assert.equal(await felt(), before, 'the felt keeps its height');
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;
