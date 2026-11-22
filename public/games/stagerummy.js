@@ -68,7 +68,7 @@
   function spotFor(v, e) {
     if (e.type === 'skip') return { card: cardHTML({ k: 's' }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} played Skip · ${nameOf(v, e.who)} loses a turn`, tone: 'skip', ms: 1300 };
     if (e.type === 'lay') return { caption: `${nameOf(v, e.by)} laid down stage ${e.stage}: ${esc(stageName(v, e.stage))}!`, tone: 'win', ms: 1300 };
-    if (e.type === 'roundEnd') return { caption: `${nameOf(v, e.by)} went out. The round is over.`, tone: 'round', ms: 1300 };
+    if (e.type === 'roundEnd') return { caption: `${nameOf(v, e.by)} went out. The round is over.`, tone: 'round', ms: 2300 };
     return null;
   }
   const feedKey = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
