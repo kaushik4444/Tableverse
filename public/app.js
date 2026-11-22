@@ -2909,7 +2909,7 @@
       : b.failed ? '<p class="hint" style="text-align:left">Could not load the board. Try again in a moment.</p>'
       : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${fmtXp(r.points)} XP</b><small>${r.played} game${r.played === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
       : '<p class="hint" style="text-align:left">No one on the board has played this game in the last 7 days.</p>';
-    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the weekly boards</button></div><p class="hint" style="text-align:left">Off by default. When on, your name and your ${esc(meta.name)} Game XP from the last 7 days can appear on this board.</p>` : '';
+    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the boards</button></div><p class="hint" style="text-align:left">On by default. When on, your name can appear on the weekly and skill-rating boards for ${esc(meta.name)}. Turn it off to leave the boards; your results stay on your profile.</p>` : '';
     return `<section class="progress-card" aria-label="Weekly board for ${esc(meta.name)}"><h3 class="stat-h">This week’s board</h3>${body}${toggle}</section>`;
   }
 
