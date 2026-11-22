@@ -125,15 +125,22 @@ async function authenticateToken(rawToken) {
   if (res.rows.length === 0) return null;
 
   const player = res.rows[0];
-  // Asynchronously update last_seen_at without blocking auth flow
-  // A return after a 30-minute gap starts a visit: the old last_seen_at becomes previous_seen_at and the visit starts now.
-  // It is awaited (a few ms) so the welcome-back read that follows sees the committed value; a failure is ignored.
-  await db.query(`UPDATE players SET
-    previous_seen_at = CASE WHEN last_seen_at < NOW() - INTERVAL '30 minutes' THEN last_seen_at ELSE previous_seen_at END,
-    visit_started_at = CASE WHEN last_seen_at < NOW() - INTERVAL '30 minutes' THEN NOW() ELSE visit_started_at END,
-    last_seen_at = NOW() WHERE id = $1`, [player.id]).catch(() => {});
+  // Not awaited: auth must not wait on the database write (a stalled write must not stall every request).
+  recordVisit(player.id);
 
   return player;
+}
+
+/**
+ * Records a visit for a signed-in request: last_seen_at moves to now. A return after a 30-minute gap starts a visit: the old
+ * last_seen_at becomes previous_seen_at and the visit starts now. Idempotent within a visit, so it is safe to call twice.
+ * Returns a promise that resolves when the write has finished (a failure is ignored).
+ */
+function recordVisit(playerId) {
+  return db.query(`UPDATE players SET
+    previous_seen_at = CASE WHEN last_seen_at < NOW() - INTERVAL '30 minutes' THEN last_seen_at ELSE previous_seen_at END,
+    visit_started_at = CASE WHEN last_seen_at < NOW() - INTERVAL '30 minutes' THEN NOW() ELSE visit_started_at END,
+    last_seen_at = NOW() WHERE id = $1`, [playerId]).catch(() => {});
 }
 
 /**
@@ -217,6 +224,7 @@ module.exports = {
   sessionTtlDays,
   revokeMemoryToken,
   authenticateToken,
+  recordVisit,
   createAnonymousPlayer,
   displayNameInUse,
   updateProfile,
