@@ -56,6 +56,22 @@ const cells = (page) => page.$$eval('.xp-table-rating .xp-tr:not(.xp-th) .xp-c',
       assert.ok(c.includes('+5') && c.includes('−5'), 'the final match deltas are shown: ' + JSON.stringify(c));
       await ctx.close();
     });
+
+    await test('a pending answer whose final message never arrives is asked for again, then shows the final numbers', async () => {
+      // After a reconnect the final message can be lost: the cached pending answer must not stop the client from asking again
+      const { at, messages } = finishedTable();
+      const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages });
+      await page.goto(srv.url + '/');
+      await page.waitForSelector('.end-xp', { timeout: 12000 });
+      await page.evaluate((id) => window.__push({ t: 'gameTotals', code: 'ENDTOT', id, ratings: {}, pending: true }), at);
+      await page.waitForFunction(() => /Updating ratings/.test((document.querySelector('.xp-status') || {}).textContent || ''), null, { timeout: 5000 });
+      await page.waitForFunction(() => window.__sent.filter((m) => m.t === 'gameTotals').length >= 2, null, { timeout: 9000 });
+      const ratings = { me: { rated: true, matchDelta: 5, monthRating: 1200, monthDelta: 3, lifetimeRating: 1100 }, p1: { rated: true, matchDelta: -5, monthRating: 1100, monthDelta: -3, lifetimeRating: 1000 } };
+      await page.evaluate((m) => window.__push(m), { t: 'gameTotals', code: 'ENDTOT', id: at, ratings, pending: false });
+      await page.waitForFunction(() => !document.querySelector('.xp-status'), null, { timeout: 5000 });
+      assert.ok((await cells(page)).includes('+5'), 'the final match deltas replace the pending state');
+      await ctx.close();
+    });
   } finally {
     await browser.close();
     srv.server.close();

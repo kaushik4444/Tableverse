@@ -3206,7 +3206,10 @@
       if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       // The ratings for this game come from the server once per finished game (the table's own game only)
-      const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
+      const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
+      // Only a final answer ends the asking. A pending one still needs its final message, which a reconnect can lose, so it is asked for again.
+      const gotTotals = cached && !cached.pending ? cached : null;
+      const waiting = Boolean(cached && cached.pending);
       // Asked again if the answer did not come (not connected, or the server could not save the game yet): at most three
       // tries, five seconds apart, so a failed request never leaves the saved players on an ellipsis for good.
       const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
@@ -3220,7 +3223,7 @@
         $app.querySelectorAll('.end-xp').forEach((n) => n.remove());
         // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
         const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
-        const state = gotTotals ? (gotTotals.pending ? 'pending' : 'ready') : (gaveUp ? 'unavailable' : 'loading');
+        const state = gotTotals ? 'ready' : (waiting ? 'pending' : (gaveUp ? 'unavailable' : 'loading'));
         const card = endRatingHTML(xpRows, statsGame(r.gameId).name, gotTotals && gotTotals.ratings ? gotTotals.ratings : {}, state);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.

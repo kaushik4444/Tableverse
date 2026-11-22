@@ -1843,11 +1843,15 @@ function start(opts = {}) {
         send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings, pending: Boolean(pending) });
         // The rebuild took longer than the reply window: the final ratings follow as a second message, not a client retry.
         if (pending) {
+          // Every path ends with a terminal message (pending: false), even an empty one, so the client never waits on an answer
+          // that will not come.
+          const finish = (ratings2) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings: ratings2, pending: false });
           dbRatings.ratingsSettled().then(async (ok) => {
-            if (!ok) return;
-            const ratings2 = (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {};
-            send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings: ratings2, pending: false });
-          }).catch((err) => console.error('[server] final game totals failed:', err.message));
+            finish(ok ? ((await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {}) : {});
+          }).catch((err) => {
+            console.error('[server] final game totals failed:', err.message);
+            finish({});
+          });
         }
       },
         (err) => {
