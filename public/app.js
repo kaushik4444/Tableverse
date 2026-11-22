@@ -1441,7 +1441,7 @@
         break;
       case 'gameTotals':
         // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
-        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
+        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {}, ratings: m.ratings || null }; render(); }
         break;
       case 'error':
         S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
@@ -3136,6 +3136,42 @@
     return `<section class="end-xp" aria-label="${game} XP for this game">${note}${table}</section>`;
   }
 
+  /**
+   * Game over, with the skill ratings on (RATINGS_LIVE=1): per person, this match's change, the monthly rating (and this
+   * match's change in it), and the lifetime rating in this game. Replaces the Game XP table when the ratings are on.
+   * `ratings` maps player id to { rated, reason, matchDelta, monthDelta, monthRating, lifetimeRating }, or is missing while
+   * the answer may still come.
+   */
+  function endRatingHTML(rows, gameName, ratings, gaveUp = false) {
+    const people = rows.filter((x) => !x.isBot);
+    if (!people.length) return '';
+    const game = esc(gameName || 'Game');
+    const mine = people.find((x) => x.id === S.id);
+    const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(Math.round(n));
+    const num = (n) => (Number.isFinite(n) ? String(Math.round(n)) : '–');
+    // This table is only drawn once the answer has come, so a player with no entry in it has no rating: a dash, not a wait.
+    const pending = () => null;
+    const note = mine && !mine.saved ? '<p class="xp-note">Guest games are not kept. Sign in to keep your ratings.</p>' : '';
+    const body = people.map((x) => {
+      const me = Boolean(mine) && x.id === S.id;
+      const name = me ? 'You' : esc(x.name || 'Player');
+      const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
+      const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
+      const q = ratings && x.saved ? ratings[x.id] : null;
+      let thisMatch = '–';
+      let month = '–';
+      let life = '–';
+      if (q) {
+        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : 'unrated';
+        month = q.monthRating !== null ? `${num(q.monthRating)}${q.monthDelta !== null ? ` (${signed(q.monthDelta)})` : ''}` : '–';
+        life = num(q.lifetimeRating);
+      }
+      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${thisMatch}</span><span class="xp-c" role="cell">${month}</span><span class="xp-c" role="cell">${life}</span></div>`;
+    }).join('');
+    const table = `<div class="xp-table xp-table-rating" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">Lifetime</span></div>${body}</div>`;
+    return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${table}</section>`;
+  }
+
   function endFlow(focusedResultAction) {
     const r = S.room;
     if (!r || r.status !== 'finished') { $app.classList.remove('endhold'); return; }
@@ -3210,7 +3246,10 @@
       if (xpRows.length && !$app.querySelector('.end-xp')) {
         // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
         const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
-        const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals, gaveUp);
+        const gotRatings = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.ratings : null;
+        const card = gotRatings
+          ? endRatingHTML(xpRows, statsGame(r.gameId).name, gotRatings, gaveUp)
+          : endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals, gaveUp);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.

@@ -25,6 +25,24 @@ const alwaysSix = () => 0.999999; // forces dice = 6
 
 console.log('engine');
 
+test('Ludo has its own ready step, so the server adds no second Ready; the last roll stays visible even when it passes the turn', async () => {
+  assert.equal(plugin.ownReadyUp, true);
+  const g = E.createGame(people(2), {}, rollOne);
+  readyAll(g);
+  must(g, 'p0', { type: 'roll' }); // a one with every token in the yard: no legal move, the turn passes
+  const v = E.viewFor(g, 'p1');
+  assert.equal(v.dice, null);
+  assert.deepEqual({ by: v.lastRoll.by, dice: v.lastRoll.dice, outcome: v.lastRoll.outcome }, { by: 0, dice: 1, outcome: 'none' });
+  assert.equal(v.turn, 1);
+  assert.ok(v.log.every((x, k) => Number.isInteger(x.id) && (k === 0 || x.id === v.log[k - 1].id + 1)), 'log lines are numbered');
+  assert.equal(v.logTotal, g.log.length);
+  const g6 = E.createGame(people(2), {}, alwaysSix);
+  readyAll(g6);
+  must(g6, 'p0', { type: 'roll' });
+  assert.equal(E.viewFor(g6, 'p0').lastRoll.outcome, 'moves');
+  assert.equal(E.viewFor(g6, 'p0').lastRoll.no, 1);
+});
+
 test('createGame: 2-6 players, 4 tokens each in the yard, phase ready', async () => {
   for (const n of [2, 3, 4, 5, 6]) {
     const g = E.createGame(people(n), {}, mulberry32(1));

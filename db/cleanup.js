@@ -42,6 +42,7 @@ const PLAN = [
   { table: 'player_blocks', stores: 'Chat blocks: which account hid which other account\'s table chat', references: ['players'] },
   { table: 'friend_requests', stores: 'Friend request participants and lifecycle status', references: ['players'] },
   { table: 'friendships', stores: 'Accepted player relationships', references: ['players'] },
+  { table: 'rating_events', stores: 'Skill-rating ledger: per player, per finished match, the rating change and the rating before and after (per game and per month)', references: ['matches', 'players'] },
   { table: 'matches', stores: 'Finished games (game, room code, seats, options, time, idempotency key)', references: [] },
   { table: 'auth_email_tokens', stores: 'Hashed single-use email verification and password-reset tokens with the address they were sent to', references: ['players'] },
   { table: 'auth_sessions', stores: 'Hashed session tokens (registered and legacy anonymous), expiry and revocation', references: ['players'] },
@@ -50,6 +51,7 @@ const PLAN = [
   { table: 'guest_upgrades', stores: 'Pending guest-to-account requests: the chosen e-mail and username, the password hash and a hash of the one-time link (removed when the link is used or ends)', references: ['players'] },
   { table: 'player_recent_tables', stores: 'Recently visited table codes per account', references: ['players'] },
   { table: 'auth_rate_limits', stores: 'Hashed per-address / per-email rate-limit counters', references: [] },
+  { table: 'player_ratings', stores: 'Current skill ratings per player, per game and per scope (lifetime or a UTC month)', references: ['players'] },
   { table: 'players', stores: 'Accounts: registered players and legacy anonymous players (username, display name, avatar, timestamps)', references: [] },
 ];
 const PRESERVE = [
@@ -91,6 +93,9 @@ const EXPECTED_FKS = [
   { child: 'email_broadcast_recipients', parent: 'players', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'matches', onDelete: 'CASCADE' },
   { child: 'match_participants', parent: 'players', onDelete: 'SET NULL' },
+  { child: 'rating_events', parent: 'matches', onDelete: 'CASCADE' },
+  { child: 'rating_events', parent: 'players', onDelete: 'CASCADE' },
+  { child: 'player_ratings', parent: 'players', onDelete: 'CASCADE' },
 ];
 const ON_DELETE = { a: 'NO ACTION', r: 'RESTRICT', c: 'CASCADE', n: 'SET NULL', d: 'SET DEFAULT' };
 const MIGRATION_LOCK_KEY = 727274; // the advisory lock db/migrate.js holds while migrating

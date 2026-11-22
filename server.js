@@ -22,6 +22,7 @@ const readyGate = require('./lib/readyGate'); // everybody presses Ready before 
 const dbPlayers = require('./db/players');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
+const dbRatings = require('./db/ratings');
 const { createMatchQueue, defaultSpoolDir } = require('./db/matchQueue');
 const gameFlags = require('./lib/gameFlags');
 const guestFeatures = require('./lib/guestFeatures'); // what guests may do, switched by the owner (Guests tab)
@@ -1815,9 +1816,10 @@ function start(opts = {}) {
       p.totalsAt = now;
       const gameId = room.gameId;
       const matchId = room.outcome.at;
+      const matchKey = room.matchKey; // captured now: the host may start another game while this answer is being prepared
       const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
       (async () => {
-        if (!ids.length) return {};
+        if (!ids.length) return { totals: {}, ratings: dbRatings.liveEnabled() ? {} : null };
         // This game's own save, waited for at most three seconds. The queue resolves { status: 'failed' } when its retries run
         // out, and a missing promise means nothing was queued: both count as "not saved".
         const saved = await new Promise((resolve) => {
@@ -1830,9 +1832,16 @@ function start(opts = {}) {
           const progress = await dbMatches.getProgress(id);
           totals[id] = (progress.games[gameId] || {}).points || 0;
         }));
-        return totals;
+        // With the live ratings on: wait for the rebuild that follows this game's save, then send this game's numbers.
+        // null when the ratings are off (the page keeps the Game XP table); {} when on but not available for this game.
+        let ratings = null;
+        if (dbRatings.liveEnabled()) {
+          await dbRatings.ratingsSettled();
+          ratings = (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {};
+        }
+        return { totals, ratings };
       })().then(
-        (totals) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, totals }),
+        ({ totals, ratings }) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, totals, ratings }),
         (err) => {
           console.error('[server] game totals failed:', err.message);
           sendError(p, 'Game totals are unavailable right now');
