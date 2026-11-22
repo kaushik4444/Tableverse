@@ -3050,8 +3050,16 @@
     const room = S.room;
     const gate = gateInfo();
     $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
-    if (!gate || room.status !== 'playing' || $app.querySelector('[data-ready-here]')) return;
-    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' });
+    // the box this function adds is rebuilt on every call, so its "waiting for" list and count never go stale; a game's own box is left alone
+    $app.querySelectorAll('[data-ready-placed]').forEach((el) => el.remove());
+    if (!gate || room.status !== 'playing') {
+      // the table has stopped waiting: the Ready button goes, and the status line comes back
+      const status = $app.querySelector('.wz-status');
+      if (status) status.hidden = false;
+      return;
+    }
+    if ($app.querySelector('[data-ready-here]')) return;
+    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
     const status = $app.querySelector('.wz-status');
     if (status) { status.insertAdjacentHTML('beforebegin', box); status.hidden = true; return; }
     const top = $app.querySelector('.wz-top');
