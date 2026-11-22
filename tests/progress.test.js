@@ -2,7 +2,7 @@
 // Progress from stored rows: the one overall level from time only, game XP per game (no game levels), penalised leaves counted. No database.
 require('./helpers/env'); // first: no test may reach a real database
 const assert = require('node:assert/strict');
-const { computeProgress, matchXpOf, boardFor } = require('../lib/progress');
+const { computeProgress, matchXpOf } = require('../lib/progress');
 const dbMatches = require('../db/matches');
 
 let passed = 0; let failed = 0;
@@ -154,34 +154,6 @@ const row = (matchId, gameId, seat, playerId, over = {}) => ({ matchId, gameId, 
     assert.equal(out[1].gameXp, 20);
   });
 
-  await test('weekly board: only the people who turned it on, ranked by Game XP in that game', () => {
-    // alice wins two Ludo games (both placings first), bob wins one and loses one, carol has not opted in
-    const rows = [
-      row('a1', 'ludo', 0, 'alice', { place: 1 }), row('a1', 'ludo', 1, 'bob', { place: 2 }),
-      row('a2', 'ludo', 0, 'alice', { place: 1 }), row('a2', 'ludo', 1, 'carol', { place: 2 }),
-      row('a3', 'ludo', 0, 'bob', { place: 1 }), row('a3', 'ludo', 1, 'alice', { place: 2 }),
-      row('a4', 'tictactoe', 0, 'carol', { isWinner: true }), row('a4', 'tictactoe', 1, 'bob'),
-    ];
-    const people = [{ id: 'alice', username: 'alice', displayName: 'Alice' }, { id: 'bob', username: 'bob' }];
-    const board = boardFor(rows, people, 'ludo');
-    assert.equal(board.length, 2, 'carol is not on the board: she did not opt in');
-    assert.equal(board[0].username, 'alice');
-    assert.equal(board[0].displayName, 'Alice');
-    assert.ok(board[0].points >= board[1].points, 'highest Game XP first');
-    assert.ok(board.every((x) => x.played > 0), 'only people with ranked games');
-  });
-  await test('weekly board: a player with no game in the window is left out; empty when nobody has played', () => {
-    assert.deepEqual(boardFor([], [{ id: 'alice', username: 'alice' }], 'ludo'), []);
-    const rows = [row('a1', 'tictactoe', 0, 'alice', { isWinner: true }), row('a1', 'tictactoe', 1, 'bob')];
-    assert.deepEqual(boardFor(rows, [{ id: 'alice', username: 'alice' }], 'ludo'), [], 'no Ludo games, so no Ludo board entry');
-  });
-  await test('weekly board: ties on points go to more games, then username; the list is capped', () => {
-    const rows = [row('w1', 'tictactoe', 0, 'p1', { isWinner: true }), row('w1', 'tictactoe', 1, 'p2')];
-    const people = [{ id: 'p2', username: 'zed' }, { id: 'p1', username: 'amy' }];
-    const b = boardFor(rows, people, 'tictactoe', 1);
-    assert.equal(b.length, 1, 'capped to the limit');
-    assert.equal(b[0].username, 'amy', 'a win first');
-  });
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

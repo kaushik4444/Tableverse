@@ -53,7 +53,6 @@ assert.match(highlights, /Play without an account/);
 assert.match(highlights, /Some games need an account/);
 assert.match(highlights, /Quiet reminders/);
 const history = releases.flatMap((r) => r.items.map((i) => i.title)).join('\n');
-assert.match(history, /Game XP at the end of a game, in one table/);
 assert.match(history, /Level-up dialog/);
 assert.match(history, /See how far you are to the next level/);
 assert.match(history, /A level-up notice, once/);
@@ -67,13 +66,12 @@ const gameOverRelease = releases.find((r) => r.version === '2026-11-17-game-over
 assert.ok(gameOverRelease, 'the game-over release remains in version history');
 assert.equal(gameOverRelease.date, '2026-11-17');
 assert.equal(gameOverRelease.title, 'One table at the end of a game');
+// The per-game XP table was removed from the game-over screen, so its two entries are no longer shown to players.
 assert.deepEqual(Array.from(gameOverRelease.items, (item) => item.title), [
-  'Game XP at the end of a game, in one table',
-  'Your lifetime XP in each game',
   'Level-up dialog',
-], 'the historical release keeps all three player-facing items in order');
+], 'the release keeps its remaining player-facing item');
 // each explanation still says what the item is about, so an edit cannot quietly change the topic
-const topics = [/XP/i, /lifetime XP/i, /level/i];
+const topics = [/level/i];
 gameOverRelease.items.forEach((item, i) => assert.match(item.text, topics[i], `${item.title} explains its topic`));
 for (const item of gameOverRelease.items) {
   assert.ok(typeof item.ico === 'string' && item.ico.trim(), `${item.title} has an icon`);

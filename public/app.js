@@ -1440,8 +1440,8 @@
         render();
         break;
       case 'gameTotals':
-        // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
-        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {}, ratings: m.ratings || null }; render(); }
+        // the skill ratings for the finished game at this table; the game-over table is redrawn with them
+        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null }; render(); }
         break;
       case 'error':
         S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
@@ -2872,9 +2872,6 @@
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
 
-  /** Signed XP number for display, e.g. +20 or -30. */
-  const fmtXp = (n) => (Number(n) > 0 ? `+${Number(n)}` : `${Number(n) || 0}`);
-
   /** The statistics block of a profile. Bot seats and games left without a penalty are never counted (the server leaves them out). */
   /**
    * This week's board for one game (the last 7 days, opted-in players only) and the player's own switch for it, which is off
@@ -3229,17 +3226,6 @@
     }
   }
 
-  function loadProfileBoard(prof) {
-    const id = prof.game;
-    const gen = sessionGen;
-    const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
-    prof.board = null;
-    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardGen === boardGen;
-    getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
-      .then((b) => { if (current()) { prof.board = b; render(); } })
-      .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
-    loadRatingBoard(prof);
-  }
 
   /** The rating board for the game on this profile page, for the chosen period. Public; the server says if ratings are off. */
   function loadRatingBoard(prof) {
@@ -3314,14 +3300,14 @@
       const prof = S.profile;
       if (!prof || !prof.data) return;
       const id = el.dataset.game;
-      prof.game = id; prof.gameHistory = null; prof.board = null; render();
+      prof.game = id; prof.gameHistory = null; render();
       // Apply the answer only to the same profile, still open on this game (a reload or a sign-out drops it).
       const gen = sessionGen; // another account signed in or out since the click: its answer is not for this screen
       const current = () => gen === sessionGen && S.profile === prof && prof.game === id;
       getJson(`/api/me/history?game=${encodeURIComponent(id)}&page=1`)
         .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
         .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
-      loadProfileBoard(prof);
+      loadRatingBoard(prof);
     },
     boardOptIn: async () => {
       const prof = S.profile;
