@@ -79,6 +79,16 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a book completed by a live move is held in the middle, even when the table was quiet when it was opened', async () => {
+    const { page, ctx } = await open(tableMessages('gofish', four));
+    const later = tableMessages('gofish', four);
+    later[1].view.event = { seq: 9, type: 'take', by: 1, target: 0, rank: '7', count: 2, books: ['7'] };
+    await page.evaluate((m) => window.__push(m), later[1]);
+    await page.waitForSelector('.gf-spot', { timeout: 3000 });
+    assert.match(await page.textContent('.gf-spot'), /Sevens|7s complete/);
+    await ctx.close();
+  });
+
   await test('what just happened is written out, with books and the card you drew', async () => {
     const msgs = tableMessages('gofish', four);
     const view = msgs[1].view;

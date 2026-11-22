@@ -85,9 +85,10 @@
     if (!key || !window.GameFeed) return;
     // the first look at a table shows its latest move in the feed too (so the line does not jump when the next one lands), but
     // it does not hold a book in the middle again: that happened before this page was opened
-    if (!ui.feeds.has(key)) ui.feeds.set(key, { seq: -1, epoch: 0 });
+    // "first" is only the first render of this table, so a live move that lands after a quiet first look is not treated as old
+    const first = !ui.feeds.has(key);
+    if (first) ui.feeds.set(key, { seq: -1, epoch: 0 });
     const st = ui.feeds.get(key);
-    const first = st.seq === -1;
     if (e && e.seq < st.seq) { st.epoch += 1; st.seq = -1; }
     if (!e || e.seq <= st.seq) return;
     st.seq = e.seq;
