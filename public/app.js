@@ -1441,7 +1441,7 @@
         break;
       case 'gameTotals':
         // the skill ratings for the finished game at this table; the game-over table is redrawn with them
-        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null }; render(); }
+        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending) }; render(); }
         break;
       case 'error':
         S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
@@ -3111,7 +3111,8 @@
    * in this game. `ratings` maps player id to { rated, reason, matchDelta, monthDelta, monthRating, lifetimeRating }; a player
    * without an entry shows dashes (the answer may still be on its way).
    */
-  function endRatingHTML(rows, gameName, ratings, gaveUp = false) {
+  /** state: 'loading' (asking the server), 'pending' (game saved, ratings still updating), 'ready', or 'unavailable'. */
+  function endRatingHTML(rows, gameName, ratings, state = 'ready') {
     const people = rows.filter((x) => !x.isBot);
     if (!people.length) return '';
     const game = esc(gameName || 'Game');
@@ -3125,9 +3126,11 @@
       const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
       const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
       const q = ratings && x.saved ? ratings[x.id] : null;
-      let thisMatch = '–';
-      let month = '–';
-      let life = '–';
+      const waiting = state === 'loading' || state === 'pending';
+      const none = waiting ? '…' : '–';
+      let thisMatch = none;
+      let month = none;
+      let life = none;
       if (q) {
         thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : 'unrated';
         month = q.monthRating !== null ? `${num(q.monthRating)}${q.monthDelta !== null ? ` (${signed(q.monthDelta)})` : ''}` : '–';
@@ -3135,8 +3138,10 @@
       }
       return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${thisMatch}</span><span class="xp-c" role="cell">${month}</span><span class="xp-c" role="cell">${life}</span></div>`;
     }).join('');
+    const status = { loading: 'Loading ratings…', pending: 'Updating ratings…', unavailable: 'Ratings are not available right now.' }[state] || '';
+    const statusLine = status ? `<p class="xp-status" role="status" aria-busy="${state === 'unavailable' ? 'false' : 'true'}">${status}</p>` : '';
     const table = `<div class="xp-table xp-table-rating" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">All time</span></div>${body}</div>`;
-    return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${table}</section>`;
+    return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${statusLine}${table}</section>`;
   }
 
   function endFlow(focusedResultAction) {
@@ -3210,10 +3215,13 @@
         f.totalsAsked = { at: Date.now(), tries: tries + 1 };
         setTimeout(() => render(), 5100); // one re-render later: endFlow asks again only if the answer is still missing
       }
-      if (xpRows.length && !$app.querySelector('.end-xp')) {
+      if (xpRows.length) {
+        // The card is replaced whenever its state changes (loading, updating, ready), so the placeholder never outlives the answer.
+        $app.querySelectorAll('.end-xp').forEach((n) => n.remove());
         // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
         const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
-        const card = endRatingHTML(xpRows, statsGame(r.gameId).name, gotTotals && gotTotals.ratings ? gotTotals.ratings : {}, gaveUp);
+        const state = gotTotals ? (gotTotals.pending ? 'pending' : 'ready') : (gaveUp ? 'unavailable' : 'loading');
+        const card = endRatingHTML(xpRows, statsGame(r.gameId).name, gotTotals && gotTotals.ratings ? gotTotals.ratings : {}, state);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
