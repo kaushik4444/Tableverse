@@ -98,56 +98,84 @@
     return `<line class="cb-aim" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>`;
   }
 
-  /** Triangle markers at both ends of a side's striker bar, pointing into the nearer corner pocket (as on a real board). */
-  function arrowsHTML(v, j) {
-    const out = [];
-    for (const [x0, cornerX] of [[0.13, 0], [0.87, 1]]) {
-      const dx = cornerX - x0, dy = 0 - BASE_Y;
-      const len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
-      const nx = -uy, ny = ux;
-      const tip = [x0 + ux * 0.034, BASE_Y + uy * 0.034];
-      const w1 = [x0 + nx * 0.016 - ux * 0.008, BASE_Y + ny * 0.016 - uy * 0.008];
-      const w2 = [x0 - nx * 0.016 - ux * 0.008, BASE_Y - ny * 0.016 - uy * 0.008];
-      const pts = [tip, w1, w2].map((p) => toSvg(v, rotP(p, j)).join(',')).join(' ');
-      out.push(`<polygon class="cb-arrow" points="${pts}"/>`);
-    }
-    return out.join('');
-  }
+  const fx = (n) => Math.round(n * 1000) / 1000;
 
-  /** A side's striker bar: a double-bordered strip along its baseline, with the corner arrows. */
-  function strikerBarHTML(v, j) {
-    const rect = (y0, y1) => [[0.2, y0], [0.8, y0], [0.8, y1], [0.2, y1]]
-      .map((p) => toSvg(v, rotP(p, j)).join(',')).join(' ');
-    return `<polygon class="cb-bar-outer" points="${rect(BASE_Y - 0.03, BASE_Y + 0.03)}"/>`
-      + `<polygon class="cb-bar-inner" points="${rect(BASE_Y - 0.015, BASE_Y + 0.015)}"/>`
-      + arrowsHTML(v, j);
+  /** Fine wood grain across the playing surface: fixed wavy lines, so the board looks the same on every client. */
+  const GRAIN = (() => {
+    let seed = 7;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const out = [];
+    for (let i = 0; i < 26; i++) {
+      const y = 0.02 + (i / 26) * 0.96 + rnd() * 0.02, w = 0.004 + rnd() * 0.012, o = 0.04 + rnd() * 0.07;
+      const a = rnd() * 0.02 - 0.01, b = rnd() * 0.02 - 0.01;
+      out.push(`<path d="M0 ${fx(y)} C 0.3 ${fx(y + a)}, 0.65 ${fx(y + b)}, 1 ${fx(y + a / 2)}" stroke-width="${fx(w)}" opacity="${fx(o)}"/>`);
+    }
+    return `<g class="cb-grain" fill="none" stroke="#8a5a2b" stroke-linecap="round">${out.join('')}</g>`;
+  })();
+
+  /** The compass in the middle of the board: eight points, the four main ones longer and red, inside two rings. */
+  const COMPASS = (() => {
+    const pts = [];
+    for (let i = 0; i < 16; i++) {
+      const a = (i * Math.PI) / 8 - Math.PI / 2, r = i % 4 === 0 ? 0.135 : i % 2 === 0 ? 0.095 : 0.035;
+      pts.push(`${fx(0.5 + r * Math.cos(a))},${fx(0.5 + r * Math.sin(a))}`);
+    }
+    return `<circle class="cb-centre" cx="0.5" cy="0.5" r="0.1"/><circle class="cb-centre-inner" cx="0.5" cy="0.5" r="0.066"/>`
+      + `<polygon class="cb-star" points="${pts.join(' ')}"/><circle class="cb-hub" cx="0.5" cy="0.5" r="0.026"/>`;
+  })();
+
+  /** One corner's markings (drawn for the top-left corner, turned for the others): the diagonal with its arrow, and the curved arrow. */
+  const CORNER_ART = `<line class="cb-diag" x1="0.085" y1="0.085" x2="0.29" y2="0.29"/>`
+    + `<polygon class="cb-diag-head" points="0.075,0.075 0.112,0.088 0.088,0.112"/>`
+    + `<circle class="cb-diag-ring" cx="0.135" cy="0.135" r="0.013"/>`
+    + `<path class="cb-diag" fill="none" d="M0.255 0.205 A 0.05 0.05 0 1 0 0.205 0.255"/>`;
+
+  /** The cap that wraps each corner of the frame, with the pocket under it. Drawn for the top-left and turned for the others. */
+  const CAP = `<path class="cb-cap" d="M-0.075 0.16 L-0.075 -0.03 Q-0.075 -0.075 -0.03 -0.075 L0.16 -0.075 L0.16 -0.012 Q0.16 0 0.148 0 L0.012 0 Q0 0 0 0.012 L0 0.148 Q0 0.16 -0.012 0.16 Z"/>`;
+
+  /** A side's baseline: two lines with a red circle at each end, where the striker may be placed. */
+  function baselineHTML(v, j) {
+    const P2 = (p) => toSvg(v, rotP(p, j)).map(fx).join(' ');
+    const dot = (x) => { const [X, Y] = toSvg(v, rotP([x, BASE_Y], j)); return `<circle class="cb-base-ring" cx="${fx(X)}" cy="${fx(Y)}" r="0.04"/><circle class="cb-base-dot" cx="${fx(X)}" cy="${fx(Y)}" r="0.03"/>`; };
+    const line = (y) => `<path class="cb-bar-outer" d="M${P2([0.2, y])} L${P2([0.8, y])}"/>`;
+    return line(BASE_Y - 0.03) + line(BASE_Y + 0.03) + dot(0.2) + dot(0.8);
   }
 
   /** The board. Shows the discs (from the view, or the current frame of a shot) and, on your turn, the striker and aim. */
   function boardHTML(v, frame) {
     const discs = discsFor(frame) || v.board;
     const aiming = !frame && v.myTurn && !ui.anim;
-    const bars = [0, 1, 2, 3].map((j) => strikerBarHTML(v, j)).join('');
+    const bars = [0, 1, 2, 3].map((j) => baselineHTML(v, j)).join('');
+    const turns = [0, 90, 180, 270];
+    const corners = turns.map((a) => `<g transform="rotate(${a} 0.5 0.5)">${CORNER_ART}</g>`).join('');
+    const caps = turns.map((a) => `<g transform="rotate(${a} 0.5 0.5)">${CAP}</g>`).join('');
     const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]);
     const striker = aiming ? `<circle class="cb-striker ${colourOfMe(v) === 'w' ? 'w' : 'b'}" data-id="striker" cx="${sx}" cy="${sy}" r="0.026" tabindex="0" role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}"/>` : '';
-    const pockets = CORNERS_VIS.map(([x, y]) => `<circle class="cb-pocket-rim" cx="${x}" cy="${y}" r="0.058"/><circle class="cb-pocket" cx="${x}" cy="${y}" r="0.05"/>`).join('');
+    const pockets = CORNERS_VIS.map(([x, y]) => `<circle class="cb-pocket-rim" cx="${x}" cy="${y}" r="0.057"/><circle class="cb-pocket" cx="${x}" cy="${y}" r="0.05"/><circle class="cb-pocket-mesh" cx="${x}" cy="${y}" r="0.05"/>`).join('');
+    const bands = (stops) => stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('');
     return `<svg class="cb-svg" viewBox="-0.09 -0.09 1.18 1.18" role="img" aria-label="Carrom board">
       <defs>
-        <linearGradient id="cb-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9a5f2b"/><stop offset="1" stop-color="#6b3d17"/></linearGradient>
-        <linearGradient id="cb-surface" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0d3a0"/><stop offset="1" stop-color="#d8a66a"/></linearGradient>
-        <radialGradient id="cb-pocket-g" cx="0.4" cy="0.4" r="0.7"><stop offset="0" stop-color="#2a2420"/><stop offset="1" stop-color="#050403"/></radialGradient>
-        <radialGradient id="cb-coin-w" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#ffffff"/><stop offset="0.7" stop-color="#f1e6cc"/><stop offset="1" stop-color="#c9b888"/></radialGradient>
-        <radialGradient id="cb-coin-b" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#5a4d43"/><stop offset="0.7" stop-color="#231d19"/><stop offset="1" stop-color="#0c0908"/></radialGradient>
-        <radialGradient id="cb-queen-g" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#f97316"/><stop offset="1" stop-color="#9a3412"/></radialGradient>
+        <linearGradient id="cb-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6e4222"/><stop offset="0.5" stop-color="#4a2a14"/><stop offset="1" stop-color="#5d3519"/></linearGradient>
+        <linearGradient id="cb-surface" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3d9ab"/><stop offset="1" stop-color="#e2b982"/></linearGradient>
+        <linearGradient id="cb-copper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8a36a"/><stop offset="0.55" stop-color="#bd6a35"/><stop offset="1" stop-color="#8a4420"/></linearGradient>
+        <radialGradient id="cb-pocket-g" cx="0.4" cy="0.4" r="0.7"><stop offset="0" stop-color="#241d19"/><stop offset="1" stop-color="#030202"/></radialGradient>
+        <pattern id="cb-mesh" width="0.014" height="0.014" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0 H0.014 M0 0 V0.014" stroke="#6b5a4a" stroke-width="0.0016" opacity="0.55"/></pattern>
+        <radialGradient id="cb-coin-w" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#fffdf6'], [0.28, '#f1e8d2'], [0.31, '#c9bb98'], [0.36, '#f6efdc'], [0.56, '#ebe0c6'], [0.6, '#c2b38f'], [0.66, '#f1e9d4'], [0.88, '#dcd0b3'], [1, '#a99870']])}</radialGradient>
+        <radialGradient id="cb-coin-b" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#6c625b'], [0.28, '#3a322d'], [0.31, '#0d0a09'], [0.36, '#4a403a'], [0.56, '#2b241f'], [0.6, '#0a0807'], [0.66, '#3c332d'], [0.88, '#1d1815'], [1, '#050404']])}</radialGradient>
+        <radialGradient id="cb-queen-g" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#ff8a6a'], [0.28, '#e0442f'], [0.31, '#8f1d12'], [0.36, '#e65a43'], [0.56, '#cc3a26'], [0.6, '#7d170e'], [0.66, '#d9482f'], [0.88, '#b52d1b'], [1, '#5e0f08']])}</radialGradient>
+        <radialGradient id="cb-striker-g" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#fff2b8'], [0.16, '#e2b84a'], [0.2, '#3a2a8a'], [0.5, '#5a46b8'], [0.56, '#e2b84a'], [0.62, '#44349a'], [0.86, '#2a1d6e'], [0.9, '#e2b84a'], [1, '#8a6a1c']])}</radialGradient>
+        <filter id="cb-shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0.004" dy="0.008" stdDeviation="0.005" flood-color="#2a1608" flood-opacity="0.5"/></filter>
       </defs>
-      <rect class="cb-frame" x="-0.07" y="-0.07" width="1.14" height="1.14" rx="0.03"/>
+      <rect class="cb-frame" x="-0.075" y="-0.075" width="1.15" height="1.15" rx="0.045"/>
+      <rect class="cb-cushion" x="-0.006" y="-0.006" width="1.012" height="1.012"/>
       <rect class="cb-board" x="0" y="0" width="1" height="1"/>
+      ${GRAIN}
       ${bars}
-      <circle class="cb-centre" cx="0.5" cy="0.5" r="0.1"/>
-      <circle class="cb-centre-inner" cx="0.5" cy="0.5" r="0.06"/>
+      ${corners}
+      ${COMPASS}
+      ${caps}
       ${pockets}
-      ${discs.map((d) => discHTML(v, d)).join('')}
-      ${striker}
+      <g filter="url(#cb-shadow)">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
       ${aiming ? aimHTML() : ''}
     </svg>`;
   }
@@ -193,7 +221,7 @@
     if (!e) { ui.anim = null; ui.seq = 0; return; } // a fresh match (Play again) has no shot yet: drop the old playback
     if (e.seq === ui.seq) return;
     ui.seq = e.seq;
-    ui.anim = { seq: e.seq, frames: e.keyframes, t0: null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0 };
+    ui.anim = { seq: e.seq, frames: e.keyframes, events: Array.isArray(e.events) ? e.events : [], nextEvent: 0, t0: null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0 };
     if (snd) snd.play('place');
     if (v.phase === 'gameOver' && snd) {
       const mine = colourOfMe(v);
@@ -242,6 +270,12 @@
     if (a.t0 === null) a.t0 = now;
     const t = (now - a.t0) / 1000;
     const pose = poseAt(a.frames, t);
+    // a sound for each impact the server reported, when playback reaches its time
+    const snd = window.CardTable.sound;
+    while (snd && a.nextEvent < a.events.length && a.events[a.nextEvent][0] <= t) {
+      const [, kind, speed] = a.events[a.nextEvent++];
+      snd.play(kind === 2 ? 'pocket' : kind === 1 ? 'rail' : 'clack', speed);
+    }
     const svg = ui.root.querySelector('.cb-svg');
     if (svg) {
       const seen = new Set(pose.map(([id]) => id));

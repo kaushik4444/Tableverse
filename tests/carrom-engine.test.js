@@ -317,3 +317,24 @@ test('a shot holds the next bot turn until it has been played out', () => {
 });
 
 console.log(`\n${passed} carrom engine tests passed`);
+
+test('opening: the colours alternate round the inner ring of six and the outer ring of twelve', () => {
+  const g = four();
+  const centre = g.coins.find((c) => c.kind === 'queen');
+  const ring = (lo, hi) => g.coins.filter((c) => c.kind === 'coin' && Math.hypot(c.x - centre.x, c.y - centre.y) > lo && Math.hypot(c.x - centre.x, c.y - centre.y) < hi)
+    .sort((a, b) => Math.atan2(a.y - centre.y, a.x - centre.x) - Math.atan2(b.y - centre.y, b.x - centre.x));
+  const inner = ring(0, 0.06), outer = ring(0.06, 0.2);
+  assert.equal(inner.length, 6);
+  assert.equal(outer.length, 12);
+  for (const r of [inner, outer]) r.forEach((c, i) => assert.notEqual(c.colour, r[(i + 1) % r.length].colour, 'neighbours in a ring differ'));
+});
+
+test('a shot reports its impacts as [time, kind, speed] for the clients to make a sound for', () => {
+  const g = four();
+  const p = pl(g, 0, flick(0.5, 1, 0));
+  assert.ok(Array.isArray(p.shot.events) && p.shot.events.length > 0);
+  for (const [t, kind, speed] of p.shot.events) {
+    assert.ok(t >= 0 && [0, 1, 2].includes(kind) && speed > 0);
+  }
+  assert.equal(p.shot.events[0][1], 0, 'the first impact is the striker hitting the opening');
+});

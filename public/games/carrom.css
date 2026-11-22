@@ -11,22 +11,29 @@
 
 .cb-board-wrap { display: flex; justify-content: center; flex: none; width: 100%; }
 .cb-svg { flex: none; width: min(100%, 520px); height: auto; aspect-ratio: 1; display: block; overflow: visible; touch-action: none; user-select: none; }
-.cb-frame { fill: url(#cb-wood); stroke: #4a2810; stroke-width: 0.006; }
+.cb-frame { fill: url(#cb-wood); stroke: #2c180a; stroke-width: 0.005; }
+.cb-cushion { fill: none; stroke: #3a2010; stroke-width: 0.012; }
 .cb-board { fill: url(#cb-surface); }
-.cb-bar-outer { fill: none; stroke: #7a4a1f; stroke-width: 0.005; }
-.cb-bar-inner { fill: none; stroke: #7a4a1f; stroke-width: 0.005; }
-.cb-arrow { fill: #7a4a1f; opacity: .85; }
-.cb-centre { fill: none; stroke: #8a5a2b; stroke-width: 0.005; }
-.cb-centre-inner { fill: none; stroke: #8a5a2b; stroke-width: 0.004; stroke-dasharray: 0.012 0.008; }
+.cb-bar-outer { fill: none; stroke: #8a4f2a; stroke-width: 0.004; stroke-linecap: round; }
+.cb-base-dot { fill: #d9684f; stroke: #a8402b; stroke-width: 0.003; }
+.cb-base-ring { fill: none; stroke: #8a4f2a; stroke-width: 0.004; }
+.cb-diag { stroke: #8a4f2a; stroke-width: 0.0035; stroke-linecap: round; opacity: .85; }
+.cb-diag-head { fill: #8a4f2a; opacity: .85; }
+.cb-diag-ring { fill: #e8c996; stroke: #8a4f2a; stroke-width: 0.003; }
+.cb-centre { fill: none; stroke: #8a5a3b; stroke-width: 0.0045; opacity: .8; }
+.cb-centre-inner { fill: none; stroke: #8a5a3b; stroke-width: 0.0035; opacity: .8; }
+.cb-star { fill: #c4573f; stroke: #8a3b2a; stroke-width: 0.002; opacity: .8; }
+.cb-hub { fill: #c4573f; stroke: #8a3b2a; stroke-width: 0.003; }
+.cb-cap { fill: url(#cb-copper); stroke: #5e2c12; stroke-width: 0.004; stroke-linejoin: round; }
 .cb-pocket { fill: url(#cb-pocket-g); }
-.cb-pocket-rim { fill: #3f2612; }
-.cb-coin { stroke-width: 0.004; }
-.cb-coin.w { fill: url(#cb-coin-w); stroke: #a8966f; }
-.cb-coin.b { fill: url(#cb-coin-b); stroke: #0f0c0a; }
-.cb-queen { fill: url(#cb-queen-g); stroke: #7c2d12; stroke-width: 0.004; }
-.cb-striker { fill: #f59e0b; stroke: #7c4a03; stroke-width: 0.006; cursor: grab; touch-action: none; }
-.cb-striker.w { fill: #fde68a; }
-.cb-striker.b { fill: #f59e0b; }
+.cb-pocket-mesh { fill: url(#cb-mesh); }
+.cb-pocket-rim { fill: #4a2a14; }
+.cb-coin { stroke-width: 0.003; }
+.cb-coin.w { fill: url(#cb-coin-w); stroke: #8f7f58; }
+.cb-coin.b { fill: url(#cb-coin-b); stroke: #000; }
+.cb-queen { fill: url(#cb-queen-g); stroke: #5e0f08; stroke-width: 0.003; }
+.cb-striker { fill: url(#cb-striker-g); stroke: #3a2a0a; stroke-width: 0.004; cursor: grab; touch-action: none; }
+.cb-striker:focus-visible { outline: none; stroke: #fff; stroke-width: 0.008; }
 .cb-aim { stroke: #ffffff; stroke-width: 0.008; stroke-dasharray: 0.03 0.02; stroke-linecap: round; opacity: .9; }
 .cb-controls { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 7.6em; }
 .cb-controls .cb-tip { min-height: 3.6em; margin: 12px 0 0; text-align: center; }

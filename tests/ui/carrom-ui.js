@@ -193,7 +193,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
   /** A won game: the last coin of the winning team goes in, so the board goes to game over with the final shot. */
   function winningShot() {
     const g = fresh();
-    g.coins = [{ id: 'w1', kind: 'coin', colour: 'w', x: 0.035, y: 0.035, r: 0.022 }]; // inside a pocket
+    g.coins = [{ id: 'w1', kind: 'coin', colour: 'w', x: 0.03, y: 0.03, r: 0.022 }]; // inside a pocket
     g.score = { w: 8, b: 0 }; g.queenHeld = 'w';
     const before = msgsFor(g, 'p0');
     E.applyAction(g, 'p0', { seq: g.seq, type: 'flick', x: 0.2, angle: 0, power: 0.05 });

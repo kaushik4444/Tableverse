@@ -129,3 +129,14 @@ test('a striker hit sends a coin across a real distance, not a few millimetres',
   const coin = r.keyframes.at(-1).d.find((d) => d[0] === 'c');
   assert.ok(0.6 - coin[2] > 0.2, `the coin should travel more than 0.2, it travelled ${(0.6 - coin[2]).toFixed(3)}`);
 });
+
+test('the striker is heavier than a coin: it carries on after a head-on hit, and the coin leaves faster than the striker was going', () => {
+  const discs = [
+    { id: 's', kind: 'striker', x: 0.5, y: 0.3, vx: 0, vy: 0.8, r: P.RADIUS.striker },
+    { id: 1, kind: 'coin', x: 0.5, y: 0.3 + P.RADIUS.striker + P.RADIUS.coin + 0.001, vx: 0, vy: 0, r: P.RADIUS.coin },
+  ];
+  for (let i = 0; i < 4; i++) P.step(discs);
+  const s = discs[0], c = discs[1];
+  assert.ok(s.vy > 0.2, 'the striker keeps moving forward');
+  assert.ok(c.vy > 0.8, 'the coin is thrown faster than the striker was going');
+});
