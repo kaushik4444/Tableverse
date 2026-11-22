@@ -43,13 +43,25 @@ const msg = (room, view) => ({ t: 'state', room, view });
         await page.evaluate((m) => window.__push(m), msg(room, six));
         await page.waitForSelector('.gf-spot');
         assert.match(await page.textContent('.gf-spot'), /Bo rolled a six/);
-        assert.match(await page.textContent('.ludo-boardwrap .gf-feed'), /Bo.*rolled a 6/);
+        assert.match(await page.textContent('.ludo-status'), /Bo.*rolled a 6/);
         const cap = withLog([{ by: 'Bo', card: 'rolled a 6', kind: 'roll' }, { by: 'Bo', card: 'sent Cy home', kind: 'capture' }, { by: 'Bo', card: 'moved token 1 by 6', kind: 'move' }], { by: 1, dice: 6, no: 2, outcome: 'moves' }, 5);
         await page.evaluate((m) => window.__push(m), msg(room, cap));
         await page.waitForFunction(() => /sent Cy home/.test(document.querySelector('.gf-spot')?.textContent || ''));
         const home = withLog([{ by: 'Bo', card: 'rolled a 6', kind: 'roll' }, { by: 'Bo', card: 'sent Cy home', kind: 'capture' }, { by: 'Bo', card: 'moved token 1 by 6', kind: 'move' }, { by: 'Bo', card: 'got a token home', kind: 'home' }], { by: 1, dice: 6, no: 2, outcome: 'moves' }, 6);
         await page.evaluate((m) => window.__push(m), msg(room, home));
         await page.waitForFunction(() => /got a token home/.test(document.querySelector('.gf-spot')?.textContent || ''));
+      } finally { await ctx.close(); }
+    });
+
+    await test('a pending six still names the player who rolled it after a reload', async () => {
+      const pending = { ...withLog([{ by: 'Bo', card: 'rolled a 6', kind: 'roll' }], { by: 1, dice: 6, no: 2, outcome: 'moves' }, 4), sixes: 1 };
+      const { page, ctx } = await scriptedPage(browser, { viewport: { width: 393, height: 852 }, messages: [w, msg(room, pending)] });
+      try {
+        await page.goto(url + '/');
+        await page.waitForSelector('.ludo-status');
+        const status = await page.textContent('.ludo-status');
+        assert.match(status, /Bo.*rolled a 6/, 'the roller is named while a six is pending');
+        assert.match(status, /roll again/, 'the six note is still shown');
       } finally { await ctx.close(); }
     });
 
