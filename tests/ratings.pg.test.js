@@ -75,7 +75,8 @@ async function test(name, fn) {
     await test('the lifetime board names only opted-in people with at least 5 rated games', async () => {
       const board = await ratings.ratingBoard({ gameId: 'chess', scope: 'lifetime' });
       assert.deepEqual(board.map((r) => r.username), ['ann'], 'Bo and Di opted out; Cy has only 3 games');
-      assert.equal(board[0].ratedGames, 7, 'Ann has seven rated games against Bo; the bot match is unrated and does not count');
+      // Seven matches in one day: the 6th and 7th are over the pair limit (24 hours) and unrated, so Ann has five rated games.
+      assert.equal(board[0].ratedGames, 5, 'Ann has five rated games against Bo: the pair limit leaves the 6th and 7th unrated, and the bot match does not count');
     });
 
     await test('the game-over lookup returns each player for one match', async () => {
