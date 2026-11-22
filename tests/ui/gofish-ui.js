@@ -187,14 +187,17 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
   await test('new events join a floating feed, a catch involving you is held mid-screen, and a first look replays nothing', async () => {
     const msgs = tableMessages('gofish', four);
     msgs[1].view.event = { seq: 5, type: 'take', by: 1, target: 2, rank: '7', count: 1 };
+    msgs[1].view.events = [msgs[1].view.event]; // the server sends every recent event, oldest first
     const { page, ctx } = await open(msgs);
     assert.equal(await page.locator('.gf-spot').count(), 0, 'nothing is replayed on the first look');
     const next = JSON.parse(JSON.stringify(msgs[1]));
     next.view.event = { seq: 6, type: 'take', by: 1, target: 0, rank: 'K', count: 2 };
+    next.view.events = [next.view.event];
     await page.evaluate((m) => window.__push(m), next);
     await page.waitForSelector('.gf-spot');
     assert.match(await page.textContent('.gf-spot'), /asked you for/);
     next.view.event = { seq: 7, type: 'take', by: 2, target: 3, rank: '4', count: 1 };
+    next.view.events = [next.view.event];
     await page.evaluate((m) => window.__push(m), next);
     await page.waitForFunction(() => document.querySelectorAll('.gf-tablewrap .gf-feed .gf-item').length === 2);
     await ctx.close();

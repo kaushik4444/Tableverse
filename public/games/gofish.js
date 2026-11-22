@@ -55,7 +55,8 @@
     if (!st) { ui.feeds.set(key, { seq: latest, epoch: 0 }); return; }
     if (latest < st.seq) { st.epoch += 1; st.seq = 0; }
     // Every event since the last look, in order: an action and the automatic refill after it are both shown.
-    for (const e of v.events || []) {
+    // v.events holds every recent event; a view without it (older servers) carries just the latest one.
+    for (const e of v.events || (v.event ? [v.event] : [])) {
       if (e.seq <= st.seq) continue;
       st.seq = e.seq;
       const text = eventText({ ...v, event: e });
