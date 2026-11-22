@@ -66,7 +66,9 @@
   /** The move log: the last few public moves, newest at the bottom, with a fixed height so the board below never jumps. */
   function logHTML(v) {
     const rows = (v.history || []).slice(-4);
-    const items = rows.map((h, i) => `<li class="${i === rows.length - 1 ? 'hm-last' : ''}"><span class="hm-r">R${h.round}</span> ${moveLine(v, h)}</li>`).join('');
+    // The text is already escaped HTML, so it is safe as an attribute once its tags are removed. The title shows the whole line
+    // where the narrow log clips it (hover, or a long press on touch screens that offer it).
+    const items = rows.map((h, i) => `<li class="${i === rows.length - 1 ? 'hm-last' : ''}" title="${moveLine(v, h).replace(/<[^>]+>/g, '')}"><span class="hm-r">R${h.round}</span> ${moveLine(v, h)}</li>`).join('');
     return `<ol class="hm-log" role="log" aria-live="polite" aria-label="Moves this game">${items || '<li class="hm-empty">Moves appear here as the miners dig.</li>'}</ol>`;
   }
 
