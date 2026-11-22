@@ -11,7 +11,8 @@
 const pacing = require('../pacing');
 const BOARD = require('./board');
 // Milliseconds the clients take to walk a token one square, to send a captured token home, and the pause after (public/games/ludo.js)
-const WALK = { step: 400, capture: 800, settle: 1300 };
+// roll: the die is on show before a bot moves; noMove: a roll that passes the turn stays readable before the next player rolls
+const WALK = { step: 400, capture: 800, settle: 1300, roll: 1000, noMove: 2600 };
 const TOKENS = 4;
 const HOME_COL = 5; // squares in each home column
 // Board shapes. 'square' is the classic cross board for 2-4 players: a ring of 52 squares, the seats at 13-square
@@ -211,10 +212,13 @@ function applyAction(g, playerId, action) {
     case 'roll': {
       if (g.phase !== 'rolling' || g.turn !== who) return { ok: false, error: 'Not your turn to roll' };
       const d = Math.floor(g.rng() * 6) + 1;
+      g.rollNo = (g.rollNo || 0) + 1;
       // A third consecutive six forfeits that roll and ends the turn immediately.
       // Do not let the player move on the third six.
       if (d === 6 && g.sixes === 2) {
         g.log.push({ by: g.players[who].name, card: 'rolled three sixes — turn forfeited', kind: 'miss' });
+        g.lastRoll = { by: who, dice: d, no: g.rollNo, outcome: 'forfeit' };
+        pacing.hold(g, WALK.noMove);
         g.dice = null;
         g.sixes = 0;
         endTurn(g);
@@ -224,6 +228,8 @@ function applyAction(g, playerId, action) {
       g.dice = d;
       g.sixes = d === 6 ? g.sixes + 1 : 0;
       const moves = legalMoves(g, who);
+      g.lastRoll = { by: who, dice: d, no: g.rollNo, outcome: moves.length ? 'moves' : 'none' };
+      pacing.hold(g, moves.length ? WALK.roll : WALK.noMove);
       if (moves.length === 0) {
         g.log.push({ by: g.players[who].name, card: `rolled a ${d} — no legal moves, turn passed`, kind: 'miss' });
         g.dice = null;
@@ -373,7 +379,10 @@ function viewFor(g, playerId) {
     event: g.event,
     lastMove: g.lastMove,
     bonus: g.bonus,
-    log: g.log ? g.log.slice(-30) : [],
+    // each entry carries its running number, so the client can tell new lines from old ones after a reconnect
+    log: g.log ? g.log.slice(-30).map((x, k, a) => Object.assign({ id: g.log.length - a.length + k }, x)) : [],
+    logTotal: g.log ? g.log.length : 0,
+    lastRoll: g.lastRoll || null, // the latest roll stays on show, even when it passed the turn
   };
 }
 
