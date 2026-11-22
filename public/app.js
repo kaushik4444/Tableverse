@@ -3223,7 +3223,8 @@
         $app.querySelectorAll('.end-xp').forEach((n) => n.remove());
         // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
         const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
-        const state = gotTotals ? 'ready' : (waiting ? 'pending' : (gaveUp ? 'unavailable' : 'loading'));
+        // Out of retries with only a pending answer: say so, rather than "updating" with nothing left to ask for
+        const state = gotTotals ? 'ready' : (gaveUp ? 'unavailable' : (waiting ? 'pending' : 'loading'));
         const card = endRatingHTML(xpRows, statsGame(r.gameId).name, gotTotals && gotTotals.ratings ? gotTotals.ratings : {}, state);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
