@@ -42,6 +42,7 @@
     el.className = `gf-spot gf-${tone}`;
     el.setAttribute('role', 'status');
     el.innerHTML = `${card ? `<div class="gf-spot-card">${card}</div>` : ''}<div class="gf-spot-cap">${caption}</div>`;
+    el.style.animationDuration = `${ms}ms`; // the fade in game-feed.css is spread over the same time it is on screen
     document.body.appendChild(el);
     spotTimer = setTimeout(() => el.remove(), ms);
   }
