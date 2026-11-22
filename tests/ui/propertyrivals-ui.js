@@ -55,6 +55,30 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('going bankrupt needs a second tap: the first only asks, and nothing is sent until the second', async () => {
+    const { page, ctx } = await open(mutate((v) => { v.phase = 'debt'; v.myTurn = true; v.turn = v.me; v.debt = { amount: 300, to: -1 }; v.can = { ...v.can, roll: false, pay: false }; }));
+    assert.equal((await page.textContent('[data-pr="bankrupt"]')).trim(), 'Go bankrupt');
+    await page.click('[data-pr="bankrupt"]');
+    assert.equal((await page.textContent('[data-pr="bankrupt"]')).trim(), 'Tap again to go bankrupt', 'the first tap asks for confirmation');
+    assert.equal((await sent(page)).filter((m) => m.action && m.action.type === 'bankrupt').length, 0, 'nothing is sent on the first tap');
+    await page.click('[data-pr="bankrupt"]');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'bankrupt' });
+    await ctx.close();
+  });
+
+  await test('a first tap does not carry over to a later debt: a new event clears it, and focus stays on the button', async () => {
+    const m = mutate((v) => { v.phase = 'debt'; v.myTurn = true; v.turn = v.me; v.debt = { amount: 300, to: -1 }; v.event = { seq: 7, type: 'debt' }; v.can = { ...v.can, roll: false, pay: false }; });
+    const { page, ctx } = await open(m);
+    await page.click('[data-pr="bankrupt"]');
+    await page.waitForFunction(() => /Tap again/.test(document.querySelector('[data-pr="bankrupt"]').textContent));
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.pr), 'bankrupt', 'focus stays on the armed button');
+    await page.evaluate((st) => window.__push({ t: 'state', room: st.room, view: st.view }), { room: m[1].room, view: { ...m[1].view, event: { seq: 8, type: 'debt' } } });
+    await page.waitForFunction(() => /^Go bankrupt$/.test(document.querySelector('[data-pr="bankrupt"]').textContent.trim()));
+    await page.click('[data-pr="bankrupt"]');
+    assert.equal((await sent(page)).filter((x) => x.action && x.action.type === 'bankrupt').length, 0, 'a new debt needs its own first tap');
+    await ctx.close();
+  });
+
   await test('auction: bid input sends the amount, pass sends passBid', async () => {
     const { page, ctx } = await open(mutate((v) => { v.phase = 'auction'; v.auction = { sq: 3, high: 30, highBy: 1, out: [], cur: 0 }; v.can.roll = false; }));
     assert.match(await page.textContent('.pr-panel'), /High bid.*30.*Bo/);

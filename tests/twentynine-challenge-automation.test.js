@@ -12,6 +12,11 @@ const { sessionSocket } = require('./helpers/auth');
 const guard = setTimeout(() => { console.error('FAIL challenge automation test timed out'); process.exit(1); }, 90000);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let passed = 0;
+// A seeded generator (mulberry32) so the table's randomness is the same on every run.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
 async function test(name, fn) { try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { console.error('FAIL  ' + name + '\n' + e.stack); process.exitCode = 1; } }
 const quiet = () => ({ log() {}, warn() {}, error() {} });
 
@@ -39,30 +44,52 @@ async function until(fn, label, ms = 15000) { // the first round waits for Ready
   // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
   require('./helpers/openGuestFeatures')();
   const { rawToken } = await dbPlayers.createAnonymousPlayer({ displayName: 'Ann', avatar: '🧙' });
-  const ann = socketFor(srv.port, rawToken);
+  // The connected human plays her own turns: a pass (or the minimum bid where a pass is not allowed), then the trump. Nobody
+  // else can move while she is asked, so a table never waits on her.
+  const playOwnTurn = (c) => {
+    const v = c.view;
+    if (!c.room || !v) return;
+    // While the table waits for Ready (the first round, and each round boundary), the server refuses actions: press Ready first.
+    if (c.room.gate && !(c.room.gate.ready || []).includes(c.id)) { c.send({ t: 'ready' }); return; }
+    if (!v.myTurn) return;
+    const key = `${c.room.code}:${v.phase}:${v.turn}:${v.highBid}:${v.passed.join('')}`;
+    if (c.lastAction === key) return;
+    c.lastAction = key;
+    if (v.phase === 'bidding') c.send({ t: 'act', action: v.canPass ? { type: 'bid', pass: true } : { type: 'bid', amount: v.minBid } });
+    else if (v.phase === 'chooseTrump') c.send({ t: 'act', action: { type: 'chooseTrump', suit: v.hand[0].suit } });
+  };
+  const ann = socketFor(srv.port, rawToken, playOwnTurn);
   try {
     await until(() => ann.id, 'welcome');
     await test('a bot partner does not answer the double while the connected human can decide', async () => {
-      // Who wins the bid is random: play tables until the human's side is the one asked, then check it stays open.
+      // The deal, dealer and bot choices come from Math.random, so they are fixed by a seed for this test. Tables are played
+      // until the human's side is the one asked, then the check runs. The seed is restored afterwards.
+      const realRandom = Math.random;
+      Math.random = mulberry32(29);
       let found = false;
-      for (let attempt = 0; attempt < 30 && !found; attempt++) {
-        ann.phases.length = 0;
-        ann.send({ t: 'create', gameId: 'twentynine', visibility: 'private', options: { doubleChallenge: true } });
-        await until(() => ann.room && ann.room.members.some((m) => m.id === ann.id), 'table');
-        for (let i = 0; i < 3; i++) ann.send({ t: 'addBot' });
-        await until(() => ann.room.members.length === 4, 'three bots');
-        ann.send({ t: 'start' });
-        await until(() => ann.phases.some((p) => p.startsWith('challenge') || p === 'playing' || p.startsWith('playing')), 'the auction ends', 4000);
-        if (ann.phases.includes('challenge:mine')) {
-          found = true;
-          await sleep(400); // far longer than a bot's delay here (0 to 3 ms)
-          assert.equal(ann.view.phase, 'challenge', 'the challenge is still open for the human');
-          assert.equal(ann.view.myTurn, true, 'the human can still answer');
+      try {
+        for (let attempt = 0; attempt < 30 && !found; attempt++) {
+          ann.phases.length = 0;
+        ann.lastAction = null; // a new table: its turns must not match the last table's
+          ann.send({ t: 'create', gameId: 'twentynine', visibility: 'private', options: { doubleChallenge: true } });
+          await until(() => ann.room && ann.room.members.some((m) => m.id === ann.id), 'table');
+          for (let i = 0; i < 3; i++) ann.send({ t: 'addBot' });
+          await until(() => ann.room.members.length === 4, 'three bots');
+          ann.send({ t: 'start' });
+          await until(() => ann.phases.some((p) => p.startsWith('challenge') || p === 'playing' || p.startsWith('playing')), 'the auction ends', 15000); // CI runners are slower than a laptop: the budget is the same as the other waits
+          if (ann.phases.includes('challenge:mine')) {
+            found = true;
+            await sleep(400); // far longer than a bot's delay here (0 to 3 ms)
+            assert.equal(ann.view.phase, 'challenge', 'the challenge is still open for the human');
+            assert.equal(ann.view.myTurn, true, 'the human can still answer');
+          }
+          ann.send({ t: 'leave' });
+          await until(() => !ann.room, 'left the table');
         }
-        ann.send({ t: 'leave' });
-        await until(() => !ann.room, 'left the table');
+        assert.ok(found, 'a table where the human answers the double was reached');
+      } finally {
+        Math.random = realRandom;
       }
-      assert.ok(found, 'a table where the human answers the double was reached');
     });
     await test('reclaiming a bot seat restores the timeout during a challenge', async () => {
       const timedSrv = await start({ port: 0, trustProxy: false, botDelay: [150, 1700], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 40, env: { ...process.env } });

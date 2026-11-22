@@ -62,7 +62,8 @@ test('Ludo: the plugin scales the engine reservation for fast bots', () => {
   g.act('p1', { type: 'ready' });
   g.act('me', { type: 'roll' });
   g.act('me', { type: 'move', token: 0 });
-  assert.ok(g.holdMs() > 800 && g.holdMs() <= 850, `scaled one-step hold is about 850 ms, got ${g.holdMs()}`);
+  // the roll's own 1000 ms hold (so a die can be read) queues in front of the 1700 ms walk, both halved: 1350 ms
+  assert.ok(g.holdMs() > 1300 && g.holdMs() <= 1350, `scaled roll + one-step hold is about 1350 ms, got ${g.holdMs()}`);
 });
 
 test('a scale shortens the reservation at the time it is made, so the bots wait exactly that long', () => {

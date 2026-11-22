@@ -37,7 +37,7 @@ module.exports = {
       },
       awaiting: () => (g.phase === 'playing' ? [players[g.turn].id] : []),
       botAction: () => engine.botAction(g, g.turn, rng),
-      botDelayMs: () => 900 + rng() * 500,
+      botDelayMs: () => 1400 + rng() * 500,
       // a bot's next shot waits until the last shot has been played out (see the engine)
       holdMs: () => pacing.remaining(g),
       setPacingScale: (scale) => pacing.setScale(g, scale),

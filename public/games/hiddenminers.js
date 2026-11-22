@@ -35,21 +35,41 @@
 
   function selected(v) { return ui.sel ? v.hand.find((c) => c.id === ui.sel && c.ok) || null : null; }
 
+  /** One public move, in words with its card: "🔧 Circe repaired your 🔦 Lamp". Used by the floater and the move log alike. */
+  function moveLine(v, h) {
+    const by = h.by !== undefined ? nameOf(v, h.by) : '';
+    const poss = (seat) => (seat === v.me ? 'your' : `${nameOf(v, seat)}’s`);
+    switch (h.kind) {
+      case 'tile': return `⛏️ ${by} dug ${h.cut ? 'a dead end 🕳️' : 'a tunnel'}${h.opened && h.opened.length ? `, opening ${h.opened.map((gold) => (gold ? '<b>the gold chamber</b>' : 'a chamber of plain rock')).join(' and ')}` : ''}`;
+      case 'break': return `✖ ${by} broke ${poss(h.target)} ${TOOLS[h.tool].icon} ${TOOLS[h.tool].name}`;
+      case 'repair': return `🔧 ${by} repaired ${poss(h.target)} ${TOOLS[h.tool].icon} ${TOOLS[h.tool].name}`;
+      case 'scout': return `🔭 ${by} scouted chamber ${h.goal + 1}`;
+      case 'collapse': return `💥 ${by} collapsed a tunnel piece`;
+      case 'discard': return `${by} threw a card away`;
+      default: return '';
+    }
+  }
+
   function eventText(v) {
     const e = v.event;
     if (!e) return '';
-    const by = e.by !== undefined ? nameOf(v, e.by) : '';
     switch (e.type) {
-      case 'tile': return `${by} dug ${e.cut ? 'a dead end' : 'a tunnel'}${e.revealed && e.revealed.length ? `, opening ${e.revealed.map((i) => (v.goals[i].gold ? '<b>the gold chamber</b>' : 'a chamber of plain rock')).join(' and ')}` : ''}.`;
-      case 'break': return `${by} broke ${e.target === v.me ? 'your' : `${nameOf(v, e.target)}’s`} ${TOOLS[e.tool].name}.`;
-      case 'repair': return `${by} repaired ${e.target === v.me ? 'your' : `${nameOf(v, e.target)}’s`} ${TOOLS[e.tool].name}.`;
-      case 'scout': return `${by} scouted chamber ${e.goal + 1}.`;
-      case 'collapse': return `${by} collapsed a tunnel piece.`;
-      case 'discard': return `${by} threw a card away.`;
+      // a live move reads its chambers from this round's view (they are open now); the history keeps their outcomes
+      case 'tile': return moveLine(v, { ...e, kind: e.type, opened: (e.revealed || []).map((i) => Boolean(v.goals[i] && v.goals[i].gold)) });
+      case 'break': case 'repair': case 'scout': case 'collapse': case 'discard': return moveLine(v, { ...e, kind: e.type });
       case 'roundEnd': return e.side === 'diggers' ? 'The Diggers found the gold. A new round starts.' : 'The deck ran out: the Saboteurs win the round. A new round starts.';
       case 'over': return 'The match is over.';
       default: return '';
     }
+  }
+
+  /** The move log: the last few public moves, newest at the bottom, with a fixed height so the board below never jumps. */
+  function logHTML(v) {
+    const rows = (v.history || []).slice(-4);
+    // The text is already escaped HTML, so it is safe as an attribute once its tags are removed. The title shows the whole line
+    // where the narrow log clips it (hover, or a long press on touch screens that offer it).
+    const items = rows.map((h, i) => `<li class="${i === rows.length - 1 ? 'hm-last' : ''}" title="${moveLine(v, h).replace(/<[^>]+>/g, '')}"><span class="hm-r">R${h.round}</span> ${moveLine(v, h)}</li>`).join('');
+    return `<ol class="hm-log" role="log" aria-live="polite" aria-label="Moves this game">${items || '<li class="hm-empty">Moves appear here as the miners dig.</li>'}</ol>`;
   }
 
   const feedKey = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
@@ -72,9 +92,9 @@
     const tone = e.type === 'over' || e.type === 'roundEnd' || gold ? 'win' : e.type === 'break' || e.type === 'collapse' ? 'take' : e.type === 'repair' ? 'lay' : 'play';
     window.GameFeed.add(key, [{ id: `hm-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
     const big = (face) => `<span style="font-size:44px;line-height:1" aria-hidden="true">${face}</span>`;
-    if (opened.length) window.GameFeed.spotlight({ card: big(gold ? '🪙' : '🪨'), caption: gold ? 'The gold chamber is open!' : 'That chamber holds only rock', tone: gold ? 'win' : 'skip', ms: 1400 });
-    else if (e.type === 'collapse') window.GameFeed.spotlight({ card: big('💥'), caption: text, tone: 'take', ms: 1200 });
-    else if ((e.type === 'break' || e.type === 'repair') && e.target === v.me && e.by !== v.me) window.GameFeed.spotlight({ card: big(TOOLS[e.tool].icon), caption: text, tone: e.type === 'break' ? 'take' : 'lay', ms: 1200 });
+    if (opened.length) window.GameFeed.spotlight({ card: big(gold ? '🪙' : '🪨'), caption: gold ? 'The gold chamber is open!' : 'That chamber holds only rock', tone: gold ? 'win' : 'skip', ms: 2300 });
+    else if (e.type === 'collapse') window.GameFeed.spotlight({ card: big('💥'), caption: text, tone: 'take', ms: 2200 });
+    else if ((e.type === 'break' || e.type === 'repair') && e.target === v.me && e.by !== v.me) window.GameFeed.spotlight({ card: big(TOOLS[e.tool].icon), caption: text, tone: e.type === 'break' ? 'take' : 'lay', ms: 2200 });
   }
 
   function guidance(v) {
@@ -109,8 +129,11 @@
       }).join('');
       const attack = hit.has(i);
       const tag = attack ? 'button' : 'div';
-      return `<li><${tag} ${attack ? `type="button" data-hm="hit" data-seat="${i}"` : ''} class="hm-p ${i === v.turn && v.phase === 'playing' ? 'turn' : ''} ${i === v.me ? 'me' : ''} ${attack ? 'target' : ''}" ${attack ? `aria-label="Break a tool of ${esc(p.name)}"` : ''}><span class="hm-nm">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><span class="hm-meta">${p.cards} card${p.cards === 1 ? '' : 's'} · ${p.score} pts</span></${tag}><span class="hm-tools">${tools}</span></li>`;
-    }).join('')}</ul>`;
+      const t = (v.tally && v.tally[i]) || { tunnels: 0, deadEnds: 0, breaks: 0, repairs: 0 };
+      const tallyTip = `This round: ${t.tunnels} tunnel${t.tunnels === 1 ? '' : 's'} dug, ${t.deadEnds} dead end${t.deadEnds === 1 ? '' : 's'}, ${t.breaks} tool${t.breaks === 1 ? '' : 's'} broken, ${t.repairs} repaired`;
+      const tally = `<span class="hm-tally" title="${tallyTip}" aria-label="${tallyTip}">⛏️${t.tunnels} 🕳️${t.deadEnds} ✖${t.breaks} 🔧${t.repairs}</span>`;
+      return `<li><${tag} ${attack ? `type="button" data-hm="hit" data-seat="${i}"` : ''} class="hm-p ${i === v.turn && v.phase === 'playing' ? 'turn' : ''} ${i === v.me ? 'me' : ''} ${attack ? 'target' : ''}" ${attack ? `aria-label="Break a tool of ${esc(p.name)}"` : ''}><span class="hm-nm">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><span class="hm-meta">${p.cards} card${p.cards === 1 ? '' : 's'} · ${p.score} pts</span>${tally}</${tag}><span class="hm-tools">${tools}</span></li>`;
+    }).join('')}</ul><p class="hm-legend">This round: ⛏️ tunnels dug · 🕳️ dead ends · ✖ tools broken · 🔧 tools repaired</p>`;
   }
 
   function boardHTML(v) {
@@ -170,11 +193,11 @@
         <ul class="hm-final">${list(sorted)}</ul>
         <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-hm="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-hm="leave">Leave table</button></div></div></div>`;
     }
-    if (r && ui.seenRound !== r.round) {
+    if (r && v.phase === 'roundEnd') {
       return `<div class="overlay"><div class="sheet"><h2>${r.side === 'diggers' ? '⛏️ The Diggers found the gold!' : '🕳️ The Saboteurs win the round'}</h2>
         <p class="hint" style="text-align:left">Round ${r.round}: the roles were:</p>
         <ul class="hm-final">${list(sorted)}</ul>
-        <div class="row" style="margin-top:12px"><button class="btn" data-hm="next">Next round</button></div></div></div>`;
+        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}</div></div>`;
     }
     return '';
   }
@@ -218,7 +241,6 @@
     const key = `${v.round}:${v.turn}:${v.event ? v.event.seq : 0}`;
     if (key !== ui.turnKey) { ui.turnKey = key; ui.sel = null; ui.flip = false; }
     if (!v.myTurn || (ui.sel && !v.hand.some((c) => c.id === ui.sel))) ui.sel = null; // a card that cannot be played stays chosen so it can be thrown away
-    const text = eventText(v);
     const role = v.role ? `<span class="hm-youare ${v.role}" title="Only you can see this">You are a ${roleName(v.role)}</span>` : '';
     const handEl = root.querySelector('.hm-hand');
     const scroll = handEl ? handEl.scrollLeft : 0;
@@ -232,7 +254,7 @@
       ${role ? `<div class="hm-role-row">${role}</div>` : ''}
       ${playersHTML(v)}
       <div class="hm-boardwrap">${boardHTML(v)}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
-      ${text ? `<p class="hm-event" role="status">${text}</p>` : ''}
+      ${logHTML(v)}
       <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${controlsHTML(v)}
       ${handHTML(v)}
@@ -281,7 +303,6 @@
       case 'fix': if (c && c.k === 'repair') ctx.act({ type: 'repair', card: c.id, target: n('seat'), tool: el.dataset.tool }); break;
       case 'goal': if (c && c.k === 'scout') ctx.act({ type: 'scout', card: c.id, goal: n('i') }); break;
       case 'cave': if (c && c.k === 'collapse') ctx.act({ type: 'collapse', card: c.id, x: n('x'), y: n('y') }); break;
-      case 'next': ui.seenRound = v.roundResult ? v.roundResult.round : null; ctx.rerender(); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ctx.leave(); break;

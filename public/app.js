@@ -1441,7 +1441,7 @@
         break;
       case 'gameTotals':
         // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
-        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {} }; render(); }
+        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {}, ratings: m.ratings || null }; render(); }
         break;
       case 'error':
         S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
@@ -2886,6 +2886,24 @@
    * This week's board for one game (the last 7 days, opted-in players only) and the player's own switch for it, which is off
    * by default. The board is public and read-only.
    */
+  /**
+   * The skill-rating board for this game: lifetime, or this UTC month (Lifetime / This month). Nothing is shown while the
+   * ratings are off on the server. Only people who turned on the boards appear, with at least 5 rated games in the scope.
+   */
+  function ratingBoardHTML(P, meta) {
+    // Hidden until the server has confirmed the ratings are on; a board that belongs to another game is never shown.
+    const enabled = P.ratingsEnabled === true;
+    if (!enabled) return '';
+    const b = P.ratingBoard && P.ratingBoard.game === P.game ? P.ratingBoard : null;
+    const month = P.ratingScope === 'month';
+    const tabs = `<div class="row" role="group" aria-label="Rating period"><button type="button" class="btn ghost small" data-act="ratingScope" data-scope="lifetime" aria-pressed="${!month}">Lifetime</button><button type="button" class="btn ghost small" data-act="ratingScope" data-scope="month" aria-pressed="${month}">This month</button></div>`;
+    const body = !b ? '<p class="hint" style="text-align:left">Loading ratings…</p>'
+      : b.failed ? '<p class="hint" style="text-align:left">Could not load the ratings. Try again in a moment.</p>'
+      : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${r.rating}</b><small>${r.ratedGames} rated game${r.ratedGames === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
+      : `<p class="hint" style="text-align:left">No one has 5 rated games in ${esc(meta.name)} ${month ? 'this month' : 'yet'}.</p>`;
+    return `<section class="progress-card" aria-label="Skill ratings for ${esc(meta.name)}"><h3 class="stat-h">Skill ratings</h3>${tabs}${body}</section>`;
+  }
+
   function weeklyBoardHTML(P, id, meta) {
     const b = P.board;
     const on = !!(P.data && P.data.profile && P.data.profile.leaderboardOptIn);
@@ -2893,7 +2911,7 @@
       : b.failed ? '<p class="hint" style="text-align:left">Could not load the board. Try again in a moment.</p>'
       : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${fmtXp(r.points)} XP</b><small>${r.played} game${r.played === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
       : '<p class="hint" style="text-align:left">No one on the board has played this game in the last 7 days.</p>';
-    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the weekly boards</button></div><p class="hint" style="text-align:left">Off by default. When on, your name and your ${esc(meta.name)} Game XP from the last 7 days can appear on this board.</p>` : '';
+    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the boards</button></div><p class="hint" style="text-align:left">On by default. When on, your name can appear on the weekly and skill-rating boards for ${esc(meta.name)}. Turn it off to leave the boards; your results stay on your profile.</p>` : '';
     return `<section class="progress-card" aria-label="Weekly board for ${esc(meta.name)}"><h3 class="stat-h">This week’s board</h3>${body}${toggle}</section>`;
   }
 
@@ -2949,6 +2967,7 @@
         <p class="hint" style="text-align:left">${esc(rule)}</p>
       </section>
       ${weeklyBoardHTML(P, id, meta)}
+      ${ratingBoardHTML(P, meta)}
       <div class="stat-grid">
         ${tile('Played', g.played)}
         ${tile('Wins', g.wins, 'good')}
@@ -3047,15 +3066,21 @@
     };
   }
 
-  function readyBarHTML() {
-    const gate = S.room && S.room.gate;
-    if (!gate || S.room.status !== 'playing') return '';
-    const nameOf = (id) => { const m = S.room.members.find((x) => x.id === id); return m ? esc(m.name) : 'Someone'; };
-    const seated = S.room.members.some((m) => m.id === S.id && !m.bot);
-    const total = gate.ready.length + gate.waiting.length;
-    if (seated && !gate.ready.includes(S.id)) return `<div class="ready-bar" role="status"><span><b>Everybody presses Ready to continue.</b> ${gate.ready.length} of ${total} ready</span><button class="btn" data-act="readyUp">Ready</button></div>`;
-    const waiting = gate.waiting.map(nameOf);
-    return `<div class="ready-bar" role="status"><span>${seated ? 'You are ready. ' : ''}${waiting.length ? `Waiting for ${waiting.join(', ')}` : 'Everybody is ready'}</span></div>`;
+  /**
+   * Ready is shown where the game's next thing happens: a game's round summary or bid panel carries its own Ready box
+   * (marked data-ready-here); every other game gets it in place of the status line just above the hand. It never covers the table,
+   * and while you have not pressed it the bid panels are hidden (the table accepts no moves until everybody is ready).
+   */
+  function placeReady() {
+    const room = S.room;
+    const gate = gateInfo();
+    $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
+    if (!gate || room.status !== 'playing' || $app.querySelector('[data-ready-here]')) return;
+    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' });
+    const status = $app.querySelector('.wz-status');
+    if (status) { status.insertAdjacentHTML('beforebegin', box); status.hidden = true; return; }
+    const top = $app.querySelector('.wz-top');
+    if (top) top.insertAdjacentHTML('afterend', box); else $app.insertAdjacentHTML('afterbegin', box);
   }
 
   function renderGame() {
@@ -3082,8 +3107,7 @@
       rerender: render,
       toast,
     });
-    const readyBar = readyBarHTML();
-    if (readyBar) { const top = $app.querySelector('.wz-top'); if (top) top.insertAdjacentHTML('afterend', readyBar); else $app.insertAdjacentHTML('afterbegin', readyBar); }
+    placeReady();
     markStandIns($app);
     watchStandIns();
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
@@ -3129,6 +3153,42 @@
     }).join('');
     const table = `<div class="xp-table" role="table" aria-label="${game} XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">${game} XP</span><span class="xp-c" role="columnheader">Lifetime ${game} XP</span></div>${body}</div>`;
     return `<section class="end-xp" aria-label="${game} XP for this game">${note}${table}</section>`;
+  }
+
+  /**
+   * Game over, with the skill ratings on (RATINGS_LIVE=1): per person, this match's change, the monthly rating (and this
+   * match's change in it), and the lifetime rating in this game. Replaces the Game XP table when the ratings are on.
+   * `ratings` maps player id to { rated, reason, matchDelta, monthDelta, monthRating, lifetimeRating }, or is missing while
+   * the answer may still come.
+   */
+  function endRatingHTML(rows, gameName, ratings, gaveUp = false) {
+    const people = rows.filter((x) => !x.isBot);
+    if (!people.length) return '';
+    const game = esc(gameName || 'Game');
+    const mine = people.find((x) => x.id === S.id);
+    const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(Math.round(n));
+    const num = (n) => (Number.isFinite(n) ? String(Math.round(n)) : '–');
+    // This table is only drawn once the answer has come, so a player with no entry in it has no rating: a dash, not a wait.
+    const pending = () => null;
+    const note = mine && !mine.saved ? '<p class="xp-note">Guest games are not kept. Sign in to keep your ratings.</p>' : '';
+    const body = people.map((x) => {
+      const me = Boolean(mine) && x.id === S.id;
+      const name = me ? 'You' : esc(x.name || 'Player');
+      const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
+      const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
+      const q = ratings && x.saved ? ratings[x.id] : null;
+      let thisMatch = '–';
+      let month = '–';
+      let life = '–';
+      if (q) {
+        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : 'unrated';
+        month = q.monthRating !== null ? `${num(q.monthRating)}${q.monthDelta !== null ? ` (${signed(q.monthDelta)})` : ''}` : '–';
+        life = num(q.lifetimeRating);
+      }
+      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${thisMatch}</span><span class="xp-c" role="cell">${month}</span><span class="xp-c" role="cell">${life}</span></div>`;
+    }).join('');
+    const table = `<div class="xp-table xp-table-rating" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">Lifetime</span></div>${body}</div>`;
+    return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${table}</section>`;
   }
 
   function endFlow(focusedResultAction) {
@@ -3205,7 +3265,10 @@
       if (xpRows.length && !$app.querySelector('.end-xp')) {
         // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
         const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
-        const card = endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals, gaveUp);
+        const gotRatings = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.ratings : null;
+        const card = gotRatings
+          ? endRatingHTML(xpRows, statsGame(r.gameId).name, gotRatings, gaveUp)
+          : endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals, gaveUp);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
@@ -3227,6 +3290,20 @@
     getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
       .then((b) => { if (current()) { prof.board = b; render(); } })
       .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
+    loadRatingBoard(prof);
+  }
+
+  /** The rating board for the game on this profile page, for the chosen period. Public; the server says if ratings are off. */
+  function loadRatingBoard(prof) {
+    const id = prof.game;
+    const gen = sessionGen;
+    const scope = prof.ratingScope === 'month' ? 'month' : 'lifetime';
+    const boardGen = prof.ratingBoardGen = (prof.ratingBoardGen || 0) + 1;
+    prof.ratingBoard = null;
+    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.ratingBoardGen === boardGen;
+    getJson(`/api/ratings/board?game=${encodeURIComponent(id)}&scope=${scope}`)
+      .then((b) => { if (current()) { prof.ratingsEnabled = b.enabled === true; prof.ratingBoard = { ...b, game: id }; render(); } })
+      .catch(() => { if (current()) { prof.ratingBoard = { failed: true, game: id }; render(); } });
   }
 
   // ------------------------------------------------------------ events
@@ -3239,6 +3316,12 @@
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
     reloadProfile: () => loadProfile(),
+    ratingScope: (el) => {
+      const P = S.profile; if (!P) return;
+      P.ratingScope = el.dataset.scope === 'month' ? 'month' : 'lifetime'; loadRatingBoard(P); render();
+      // the redraw replaces the period button, so give keyboard focus back to the same period
+      document.querySelector(`[data-act="ratingScope"][data-scope="${P.ratingScope}"]`)?.focus({ preventScroll: true });
+    },
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {

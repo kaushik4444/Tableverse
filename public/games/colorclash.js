@@ -76,7 +76,7 @@
     window.GameFeed.add(key, [{ id: `cc-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
     const notable = e.type === 'play' && e.card && (e.card.k !== 'n');
     if (notable && (e.by !== v.me || (e.penalised && e.penalised.target === v.me))) {
-      window.GameFeed.spotlight({ card: cardHTML(e.card, '', 'style="--cw:56px"', 'span'), caption: text, tone, ms: 1300 });
+      window.GameFeed.spotlight({ card: cardHTML(e.card, '', 'style="--cw:56px"', 'span'), caption: text, tone, ms: 2300 });
     }
   }
 
@@ -162,11 +162,11 @@
         <ul class="cc-final">${rows(sorted)}</ul>
         <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-cc="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-cc="leave">Leave table</button></div></div></div>`;
     }
-    if (r && ui.seenRound !== r.round) {
+    if (r && v.phase === 'roundEnd') { // the summary stays until everybody is ready and the next round is dealt
       return `<div class="overlay"><div class="sheet"><h2>${nameOf(v, r.winner)} went out!</h2>
         <p class="hint" style="text-align:left">${r.total} points for round ${r.round}. First to ${v.target}.</p>
         <ul class="cc-final">${rows(sorted)}</ul>
-        <div class="row" style="margin-top:12px"><button class="btn" data-cc="next">Ready</button><span class="hint">Everybody presses Ready to start the next round</span></div></div></div>`;
+        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}</div></div>`;
     }
     return '';
   }

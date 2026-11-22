@@ -30,7 +30,7 @@ module.exports = {
       },
       awaiting: () => (g.phase === 'playing' ? [players[engine.turnSeat(g)].id] : []),
       botAction: () => engine.botAction(g),
-      botDelayMs: () => 700 + g.rng() * 500,
+      botDelayMs: () => 1200 + g.rng() * 600,
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       results: () => g.players.map((_, i) => ({

@@ -8,6 +8,17 @@
 (function () {
   window.TV_RELEASES = [
     {
+      version: '2026-11-22-clearer-tables',
+      date: '2026-11-22',
+      title: 'Easier to follow at the table',
+      items: [
+        { ico: '✅', title: 'Ready is where you need it', text: 'Between rounds, Ready sits in the round summary with the scores. At the start of a round it takes the place of the bid or the status line, so it never covers the table.' },
+        { ico: '🎲', title: 'Ludo shows every roll', text: 'The last roll stays on the dice, even when it cannot be played. Sixes, captured tokens and tokens reaching home are announced, and the latest moves float over the board.' },
+        { ico: '🎣', title: 'Go Fish keeps a short feed', text: 'The last asks stay on screen, and a book or a catch that involves you is announced.' },
+        { ico: '⛏️', title: 'Hidden Miners pauses between rounds', text: 'After each round everyone sees the chambers and the scores, then presses Ready for the next one.' },
+      ],
+    },
+    {
       version: '2026-11-21-color-clash-hidden-miners',
       date: '2026-11-21',
       title: 'Two new games',

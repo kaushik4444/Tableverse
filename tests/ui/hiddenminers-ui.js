@@ -129,9 +129,49 @@ function scene(n, edit) {
   });
 
   await test('a broken tool of yours is explained; the table says what just happened', async () => {
-    const { page, ctx } = await open(scene(4, (v) => { v.players[v.me].broken = ['lamp']; v.event = { seq: 4, type: 'break', by: 1, target: v.me, tool: 'lamp' }; }));
+    const { page, ctx } = await open(scene(4, (v) => {
+      v.players[v.me].broken = ['lamp'];
+      v.event = { seq: 4, type: 'break', by: 1, target: v.me, tool: 'lamp' };
+      v.history = [{ round: 1, by: 1, kind: 'break', target: v.me, tool: 'lamp' }];
+    }));
     assert.match(await page.textContent('.wz-status'), /broken/);
-    assert.match(await page.textContent('.hm-event'), /Bo broke your Lamp/);
+    assert.match(await page.textContent('.hm-log'), /Bo broke your .*Lamp/);
+    await ctx.close();
+  });
+
+  await test('the move log keeps its height as moves are added, names each move with its card, and every miner has a tally', async () => {
+    const moves = (n) => (v) => {
+      v.history = [
+        { round: 1, by: 1, kind: 'tile', mask: 10, cut: false, x: 1, y: 2, revealed: [] },
+        { round: 1, by: 2, kind: 'break', target: 0, tool: 'pick' },
+        { round: 1, by: 3, kind: 'repair', target: 1, tool: 'lamp' },
+        { round: 1, by: 0, kind: 'scout', goal: 2 },
+        { round: 1, by: 1, kind: 'collapse', x: 3, y: 2 },
+      ].slice(0, n);
+      v.tally = v.players.map((_, i) => ({ tunnels: i, deadEnds: 0, breaks: 0, repairs: 0, scouts: 0, collapses: 0, discards: 0 }));
+    };
+    const { page, ctx } = await open(scene(4, moves(2)));
+    const h1 = await page.evaluate(() => Math.round(document.querySelector('.hm-log').getBoundingClientRect().height));
+    await page.evaluate((m) => window.__push(m), scene(4, moves(5))[1]);
+    await page.waitForTimeout(300);
+    const h2 = await page.evaluate(() => Math.round(document.querySelector('.hm-log').getBoundingClientRect().height));
+    assert.equal(h2, h1, 'the log is the same height with two moves and with five');
+    const log = await page.textContent('.hm-log');
+    assert.match(log, /repaired .*Lamp/, 'a repair is named with its tool');
+    assert.match(log, /collapsed a tunnel piece/, 'a collapse is named');
+    assert.doesNotMatch(log, /dug a tunnel/, 'the first move has scrolled out of the last four');
+    assert.equal(await page.locator('.hm-log li').count(), 4, 'the last four moves are shown');
+    assert.equal(await page.locator('.hm-tally').count(), 4, 'every miner shows a tally');
+    assert.match(await page.textContent('.hm-legend'), /tunnels dug/);
+    await ctx.close();
+  });
+
+  await test('a move from an earlier round keeps what its chamber held, even when this round has other chambers', async () => {
+    const { page, ctx } = await open(scene(4, (v) => {
+      v.goals = v.goals.map((q) => ({ ...q, revealed: false, gold: null }));
+      v.history = [{ round: 1, by: 1, kind: 'tile', mask: 10, cut: false, x: 7, y: 2, opened: [true] }];
+    }));
+    assert.match(await page.textContent('.hm-log'), /opening the gold chamber/);
     await ctx.close();
   });
 
@@ -162,12 +202,14 @@ function scene(n, edit) {
   await test('round summary reveals every role once and is dismissed; the final sheet shows winners and Play again', async () => {
     const result = { round: 1, side: 'diggers', finder: 0, roles: ['digger', 'saboteur', 'digger', 'digger'], gains: [4, 0, 3, 3], gold: 1 };
     const { page, ctx } = await open(scene(4));
-    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.roundResult = result; v.round = 2; v.event = { seq: 30, type: 'roundEnd', side: 'diggers', round: 1 }; })[1]);
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.phase = 'roundEnd'; v.myTurn = false; v.roundResult = result; v.round = 2; v.event = { seq: 30, type: 'roundEnd', side: 'diggers', round: 1 }; })[1]);
     await page.waitForSelector('.overlay .sheet');
     assert.match(await page.textContent('.overlay h2'), /Diggers found the gold/);
     assert.match(await page.textContent('.hm-final'), /Saboteur/);
-    await page.click('[data-hm="next"]');
-    assert.equal(await page.locator('.overlay').count(), 0);
+    assert.equal(await page.locator('.overlay [data-ready-here] [data-act="readyUp"]').count(), 1, 'Ready lives in the round dialog');
+    assert.equal(await page.locator('.overlay [data-act="leave"]').count(), 1, 'a waiting player can still leave');
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.round = 2; v.roundResult = result; })[1]);
+    await page.waitForFunction(() => !document.querySelector('.overlay'));
     await ctx.close();
     const over = await open(scene(4, (v) => { v.phase = 'gameOver'; v.winners = [0]; v.myTurn = false; v.roundResult = result; v.players = v.players.map((p, i) => ({ ...p, score: [10, 3, 8, 6][i] })); }));
     assert.match(await over.page.textContent('.overlay h2'), /You won/);

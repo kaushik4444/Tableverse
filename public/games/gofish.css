@@ -56,3 +56,10 @@
   .gf .gf-chip { flex-direction: column; align-items: center; gap: 0; }
   .gf .gf-chip small { display: block; font-size: 10px; line-height: 1.1; }
 }
+
+/* on taller phones the rank chips keep two rows, so the felt does not change size when your hand changes; short phones have no room for that */
+@media (max-width: 520px) and (min-height: 701px) { .gf .gf-chips.ranks { min-height: 94px; align-content: flex-start; } }
+
+/* the last lines of what happened float over the foot of the table (shared feed) */
+.gf .gf-tablewrap { position: relative; }
+.gf-spot-ico { font-size: 44px; line-height: 1; }

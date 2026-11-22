@@ -174,6 +174,11 @@ test('multi-round match: roles are dealt again and the board resets', () => {
   g.hands = [[{ id: 'a', k: 'scout' }], [], []];
   g.turn = 0;
   e.applyAction(g, 'p0', { type: 'discard', card: 'a' });
+  assert.equal(g.phase, 'roundEnd', 'the next round waits for Ready');
+  assert.deepEqual(e.awaiting(g), []);
+  assert.equal(e.applyAction(g, 'p0', { type: 'discard', card: 'x' }).ok, false, 'nothing is played while waiting');
+  assert.ok(e.viewFor(g, 'p0').goals.every((q) => q.revealed && q.gold !== null), 'every chamber is shown at the end of a round');
+  assert.equal(e.applyAction(g, null, { type: 'continue' }).ok, true);
   assert.equal(g.phase, 'playing');
   assert.equal(g.round, 2);
   assert.equal(g.board.size, 1);
@@ -216,6 +221,7 @@ test('bots: 120 complete bot games (3-8 players) end with only legal moves', () 
     const g = fresh(n, { rounds: s % 2 ? '3' : '1' }, 1000 + s);
     let turns = 0;
     while (g.phase !== 'gameOver') {
+      if (g.phase === 'roundEnd') { assert.equal(e.applyAction(g, null, { type: 'continue' }).ok, true); continue; }
       const id = g.players[g.turn].id;
       const a = e.botAction(g, id);
       assert.ok(a, 'a bot always has a move');
@@ -242,6 +248,50 @@ test('plugin: interface, registry and rules', () => {
   const name = inst.view('p0').players[0].name;
   inst.scrub([name], 'Former player');
   assert.equal(inst.view('p0').players[0].name, 'Former player');
+});
+
+test('history: every move is public, names who did it, and the tally counts it for the round', () => {
+  const g = fresh(4, {}, 41);
+  const who = g.turn;
+  const target = (who + 1) % g.n;
+  g.hands[who] = [{ id: 'bk', k: 'break', tool: 'lamp' }, { id: 'dz', k: 'tile', mask: 5, cut: true }, ...g.hands[who].slice(2)];
+  assert.equal(e.applyAction(g, g.players[who].id, { type: 'break', card: 'bk', target }).ok, true);
+  const h = e.viewFor(g, g.players[target].id).history;
+  assert.deepEqual(h.at(-1), { round: 1, by: who, kind: 'break', tool: 'lamp', target });
+  assert.equal(e.viewFor(g, 'p0').tally[who].breaks, 1);
+  assert.equal(e.viewFor(g, 'p0').tally[target].breaks, 0, 'being broken is not counted as breaking');
+});
+
+test('history: a dead-end tile and a discard are tallied for that miner only', () => {
+  const g = fresh(4, {}, 43);
+  const who = g.turn;
+  const pid = g.players[who].id;
+  g.hands[who] = [{ id: 'dz', k: 'tile', mask: 5, cut: true }, { id: 'dc', k: 'collapse' }, ...g.hands[who].slice(2)];
+  const at = [...g.board.values()].find((t) => t.id === 'start');
+  const spot = e.legalMoves(g, who).find((m) => m.type === 'tile' && m.card === 'dz');
+  assert.ok(spot, 'the dead end has somewhere to go from the start');
+  assert.equal(e.applyAction(g, pid, spot).ok, true);
+  assert.equal(at.id, 'start');
+  const t = e.viewFor(g, pid).tally[who];
+  assert.equal(t.tunnels, 1);
+  assert.equal(t.deadEnds, 1);
+  const next = g.turn;
+  g.hands[next] = [{ id: 'dd', k: 'collapse' }, ...g.hands[next].slice(1)];
+  e.applyAction(g, g.players[next].id, { type: 'discard', card: 'dd' });
+  assert.equal(e.viewFor(g, pid).tally[next].discards, 1);
+  assert.equal(e.viewFor(g, pid).tally[who].discards, 0);
+});
+
+test('pacing: a move holds the table for a moment, and a round end holds it longer', () => {
+  const pacing = require('../games/pacing');
+  const g = fresh(4, {}, 47);
+  const who = g.turn;
+  const pid = g.players[who].id;
+  g.hands[who] = [{ id: 'dd', k: 'collapse' }, ...g.hands[who].slice(1)];
+  assert.equal(pacing.remaining(g), 0);
+  e.applyAction(g, pid, { type: 'discard', card: 'dd' });
+  const move = pacing.remaining(g);
+  assert.ok(move > 1000 && move <= 1600, `a move holds about 1.6s (got ${move})`);
 });
 
 console.log(`${count} hidden miners tests passed`);

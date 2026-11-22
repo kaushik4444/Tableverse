@@ -6,9 +6,10 @@
 .gf-item.gf-skip { border-left-color: #f472b6; background: rgba(244, 114, 182, .12); }
 .gf-item.gf-lay, .gf-item.gf-win { border-left-color: #34d399; }
 .gf-item.gf-round { border-left-color: #a78bfa; }
-.gf-item.gf-new { animation: gf-in .35s ease-out, gf-out 9s linear forwards; }
-/* A line fades out on its own, so one left on screen between redraws does not stay. */
-.gf-item { animation: gf-out 9s linear forwards; }
+/* A line fades out on its own as it expires: --life is the time it has left when it is drawn (game-feed.js), so a line drawn
+   late does not outlive its 20 s. One left on screen between redraws does not stay. */
+.gf-item.gf-new { animation: gf-in .35s ease-out, gf-out var(--life, 20s) linear forwards; }
+.gf-item { animation: gf-out var(--life, 20s) linear forwards; }
 @keyframes gf-out { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
 /* A floater: laid over a table, two lines at most; it takes no room in the layout and does not catch taps. */
 .gf-feed.gf-float { position: absolute; left: 8px; right: 8px; bottom: 4px; z-index: 3; margin: 0; max-width: none; gap: 2px; pointer-events: none; }
@@ -31,4 +32,4 @@
   82% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(.98); }
 }
-@media (prefers-reduced-motion: reduce) { .gf-item.gf-new { animation: gf-out 9s linear forwards; } .gf-spot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .gf-item.gf-new { animation: gf-out var(--life, 20s) linear forwards; } .gf-spot { animation: none; } }

@@ -172,6 +172,53 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('on a tall phone the table does not change size when the ask panel changes (more or fewer ranks in hand)', async () => {
+    const a = tableMessages('gofish', [{ name: 'Aarav' }, { name: 'Bo' }], { seed: 1 });
+    const b = tableMessages('gofish', [{ name: 'Aarav' }, { name: 'Bo' }], { seed: 7 });
+    const { page, ctx } = await open(a, { width: 393, height: 852 });
+    const felt = () => page.evaluate(() => Math.round(document.querySelector('.pt-felt').getBoundingClientRect().height));
+    const before = await felt();
+    await page.evaluate((m) => window.__push(m), b[1]);
+    await page.waitForTimeout(700);
+    assert.equal(await felt(), before, 'the felt keeps its height');
+    await ctx.close();
+  });
+
+  await test('new events join a floating feed, a catch involving you is held mid-screen, and a first look replays nothing', async () => {
+    const msgs = tableMessages('gofish', four);
+    msgs[1].view.event = { seq: 5, type: 'take', by: 1, target: 2, rank: '7', count: 1 };
+    msgs[1].view.events = [msgs[1].view.event]; // the server sends every recent event, oldest first
+    const { page, ctx } = await open(msgs);
+    assert.equal(await page.locator('.gf-spot').count(), 0, 'nothing is replayed on the first look');
+    const next = JSON.parse(JSON.stringify(msgs[1]));
+    next.view.event = { seq: 6, type: 'take', by: 1, target: 0, rank: 'K', count: 2 };
+    next.view.events = [next.view.event];
+    await page.evaluate((m) => window.__push(m), next);
+    await page.waitForSelector('.gf-spot');
+    assert.match(await page.textContent('.gf-spot'), /asked you for/);
+    next.view.event = { seq: 7, type: 'take', by: 2, target: 3, rank: '4', count: 1 };
+    next.view.events = [next.view.event];
+    await page.evaluate((m) => window.__push(m), next);
+    await page.waitForFunction(() => document.querySelectorAll('.gf-tablewrap .gf-feed .gf-item').length === 2);
+    await ctx.close();
+  });
+
+  await test('the feed keeps a fish event separate from a later refill', async () => {
+    const msgs = tableMessages('gofish', four);
+    const { page, ctx } = await open(msgs);
+    const next = msgs[1];
+    const refill = { seq: 2, type: 'empty', by: 0 };
+    next.view.event = refill;
+    next.view.events = [{ seq: 1, type: 'fish', by: 0, target: 1, rank: '9', wish: true, books: ['9'] }, refill];
+    next.view.myDraw = { seq: refill.seq, card: { id: 'HK', suit: 'H', rank: 'K', ord: 12 } };
+    await page.evaluate((m) => window.__push(m), next);
+    const entries = page.locator('.gf-float .gf-item');
+    assert.match(await entries.first().textContent(), /Go Fish! and drew the very card!/);
+    assert.equal(await entries.first().locator('.card.tiny').count(), 0);
+    assert.match(await entries.nth(1).textContent(), /You had no cards and drew one/);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;

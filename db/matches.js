@@ -1,5 +1,6 @@
 'use strict';
 const db = require('./pool');
+const { liveEnabled, scheduleLiveRebuild } = require('./ratings');
 const { computeProfile } = require('./stats');
 const { isForfeitOnly } = require('./matchRecord');
 
@@ -106,7 +107,7 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
     return memoryStore.recordMatch({ matchKey, roomCode, gameId, seats, options, startedAt, finishedAt, participants, completed, tableHumans, tableBots });
   }
 
-  return db.withTransaction(async (client) => {
+  const recorded = await db.withTransaction(async (client) => {
     const matchRes = await client.query(
       `INSERT INTO matches (match_key, room_code, game_id, seats, options, started_at, finished_at, completed, table_humans, table_bots)
        VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), LEAST(COALESCE($7::timestamptz, NOW()), NOW()), $8, $9, $10)
@@ -153,6 +154,10 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
 
     return { matchId };
   });
+  // The ratings are rebuilt only after the match is committed, and only when the live switch is on (RATINGS_LIVE=1).
+  // A duplicate also schedules one: an earlier rebuild for this match may have failed, and the next one repairs it.
+  if (liveEnabled()) scheduleLiveRebuild();
+  return recorded;
 }
 
 /**

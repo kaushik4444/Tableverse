@@ -55,7 +55,7 @@ module.exports = {
       },
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId),
-      botDelayMs: () => 800 + g.rng() * 700,
+      botDelayMs: () => 1600 + g.rng() * 900,
       autoAction: () => (g.phase === 'roundEnd' ? { type: 'continue' } : null),
       isOver: () => g.phase === 'gameOver',
       results: () => engine.results(g),
