@@ -7,6 +7,7 @@ module.exports = {
   id: 'ludo',
   name: 'Ludo',
   icon: '🎲',
+  ownReadyUp: true, // the game has its own "I'm ready" step beside the dice, so the server does not add a second Ready
   accent: '#f59e0b',
   tagline: 'Race your four tokens home. Roll a six to get out, send opponents back to start, and finish by exact count.',
   seats: { min: 2, max: 6, default: 4 },
