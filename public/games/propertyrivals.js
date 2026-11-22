@@ -4,7 +4,9 @@
   'use strict';
   const { esc } = window.CardTable;
   const ui = { ctx: null, v: null, root: null, seq: null, mgr: false, trade: null, bid: 0, scores: false,
-    disp: {}, plans: {}, stepTimer: null, card: null, returnSq: null, bankruptArmed: false };
+    disp: {}, plans: {}, stepTimer: null, card: null, returnSq: null, bankruptArmed: null };
+  // the event a bankruptcy first tap was made on: a later event (a payment, a new debt) makes the first tap count again
+  const armKey = (v) => (v.event ? v.event.seq : 0);
   const STEP_MS = 480; // one square per step: slow enough to follow every tile (the server waits for the same time: games/propertyrivals/board.js)
   const FAST_MS = 320; // very long advances (over 14 squares) a little quicker
   const DWELL_MS = 800; // the token rests on the square it lands on before the text and buttons follow
@@ -169,7 +171,7 @@
     if (c.useCard) B.push('<button class="btn" data-pr="useCard">Use free card</button>');
     if (v.phase === 'buy' && v.myTurn) { const s = v.squares[v.players[v.me].pos]; B.push(`<button class="btn big" data-pr="buy" ${c.buy ? '' : 'disabled'}>Buy ${esc(s.name)} ${coins(s.price)}</button><button class="btn ghost" data-pr="decline">${v.options.auction ? 'Auction it' : 'Pass'}</button>`); }
     if (c.endTurn) B.push(`<button class="btn big" data-pr="endTurn">${v.again ? 'Roll again' : 'End turn'}</button>`);
-    if (v.phase === 'debt' && v.myTurn) B.push(`<button class="btn big" data-pr="pay" ${c.pay ? '' : 'disabled'}>Pay ${coins(v.debt.amount)}</button><button class="btn danger" data-pr="bankrupt">${ui.bankruptArmed ? 'Tap again to go bankrupt' : 'Go bankrupt'}</button>`);
+    if (v.phase === 'debt' && v.myTurn) B.push(`<button class="btn big" data-pr="pay" ${c.pay ? '' : 'disabled'}>Pay ${coins(v.debt.amount)}</button><button class="btn danger" data-pr="bankrupt">${ui.bankruptArmed !== null && ui.bankruptArmed === armKey(v) ? 'Tap again to go bankrupt' : 'Go bankrupt'}</button>`);
     if (c.propose) B.push('<button class="btn ghost" data-pr="tradeOpen">🤝 Trade</button>');
     const myProps = v.land.map((l, k) => (l && l.owner === v.me ? k : -1)).filter((k) => k >= 0);
     if (myProps.length) B.push(`<button class="btn ghost" data-pr="mgr" aria-expanded="${ui.mgr}">🏘️ My properties (${myProps.length})</button>`);
@@ -238,8 +240,9 @@
     ui.ctx = ctx; ui.v = v; ui.root = root; react(v); planMoves(v);
     if (!v.can.propose) ui.trade = null;
     if (v.phase !== 'auction') ui.bid = 0;
-    // going bankrupt cannot be undone: the first tap only arms it, and the state must still be the same debt
-    if (v.phase !== 'debt' || !v.myTurn) ui.bankruptArmed = false;
+    // going bankrupt cannot be undone: the first tap only arms it. Arming is tied to the event it was armed on, so a payment
+    // (a new event) or a new debt clears it, and the second tap must follow a fresh first one
+    if (v.phase !== 'debt' || !v.myTurn || ui.bankruptArmed !== armKey(v)) ui.bankruptArmed = null;
     const board = `<div class="pr-board" role="group" aria-label="Game board">${v.squares.map((_, i) => squareHTML(v, i)).join('')}<div class="pr-center">${centerHTML(v)}</div></div>`;
     const focus = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.pr : null;
     // a live redraw must not jump a reader back to the top of the city card's rent table
@@ -250,7 +253,8 @@
       ${board}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${actionsHTML(v)}${auctionHTML(v)}${tradeOfferHTML(v)}${tradeComposerHTML(v)}${playersHTML(v, ctx)}${overlayHTML(v)}${cardHTML(v)}</div>`;
-    if (focus === 'bidv') { const el = root.querySelector('[data-pr="bidv"]'); if (el) el.focus(); }
+    // keep keyboard focus on the control the player is using: the bid box, or the bankruptcy button after its first tap
+    if (focus === 'bidv' || focus === 'bankrupt') { const el = root.querySelector(`[data-pr="${focus}"]`); if (el) el.focus(); }
     root.onclick = onClick; root.onchange = onChange;
     // the card takes focus when it opens and keeps it through live redraws; when it closes, focus returns to its holding
     ['.pr-card-ov', '.pr-cardsheet'].forEach((sel, i) => { const el = root.querySelector(sel); if (el && scrolled[i] != null) el.scrollTop = scrolled[i]; });
@@ -295,8 +299,8 @@
     const toggle = (set) => { if (set.has(sqi)) set.delete(sqi); else set.add(sqi); ctx.rerender(); };
     switch (el.dataset.pr) {
       case 'bankrupt':
-        if (!ui.bankruptArmed) { ui.bankruptArmed = true; ctx.rerender(); break; }
-        ui.bankruptArmed = false; act({ type: 'bankrupt' }); break;
+        if (ui.bankruptArmed !== armKey(v)) { ui.bankruptArmed = armKey(v); ctx.rerender(); break; }
+        ui.bankruptArmed = null; act({ type: 'bankrupt' }); break;
       case 'roll': case 'payLockup': case 'useCard': case 'buy': case 'decline': case 'endTurn': case 'pay':
       case 'acceptTrade': case 'declineTrade': case 'cancelTrade': case 'passBid': act({ type: el.dataset.pr }); break;
       case 'build': case 'sell': case 'mortgage': case 'unmortgage': act({ type: el.dataset.pr, square: sqi }); break;
