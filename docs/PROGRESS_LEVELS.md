@@ -94,6 +94,6 @@ Still open:
 
 ## Rankings (opt-in)
 - The **weekly Game XP board** is no longer shown in the interface. Each game's rankings are the skill-rating boards, all time and this month, read from `GET /api/ratings/board` (`player_ratings`). A player appears on a board only after five rated games in that period.
-- Only players who turn it on are shown (`players.leaderboard_opt_in`, migration 028). It applies to both boards. It is **off by default**; a player switches it on from a game's detail view on their own profile. The board shows the display name and that player's rating. Nothing else about a player is shown.
+- Only players who turn it on are shown (`players.leaderboard_opt_in`, migration 028). It applies to both boards. It is **off by default**; a player switches it on from a game's detail view on their own profile. The board shows each player's rank, display name, rating and rated-games count. Nothing else about a player is shown.
 - The switch is `POST /api/me/leaderboard` (signed in, CSRF header, `{optIn: boolean}`). The old weekly Game XP endpoint `GET /api/leaderboard?game=` is still served but no screen uses it.
 - Without a database the board is empty. The board reads one period's ratings for one game, which is fine for the beta and would need an index or a cache at larger scale.
