@@ -324,7 +324,7 @@
     const sixes = v.sixes ? `<small>${v.sixes === 1 ? 'A six — roll again after moving' : 'Two sixes in a row — a third ends your turn'}</small>` : '';
     return `<div class="ludo-dice-panel ludo-status ${v.myTurn ? 'mine' : ''}" style="--turn:${turnSeat.hex}">
       ${dieHTML(shownDie, rolling)}
-      <div class="ludo-dice-copy"><b>${statusLine(v)}</b>${sixes || (lastEvent(v) ? `<small>${lastEvent(v)}</small>` : '')}</div>
+      <div class="ludo-dice-copy"><b>${statusLine(v)}</b>${sixes}${lastEvent(v) ? `<small>${lastEvent(v)}</small>` : ''}</div>
       ${action}
     </div>`;
   }

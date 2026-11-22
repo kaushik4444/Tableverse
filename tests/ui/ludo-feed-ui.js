@@ -53,6 +53,18 @@ const msg = (room, view) => ({ t: 'state', room, view });
       } finally { await ctx.close(); }
     });
 
+    await test('a pending six still names the player who rolled it after a reload', async () => {
+      const pending = { ...withLog([{ by: 'Bo', card: 'rolled a 6', kind: 'roll' }], { by: 1, dice: 6, no: 2, outcome: 'moves' }, 4), sixes: 1 };
+      const { page, ctx } = await scriptedPage(browser, { viewport: { width: 393, height: 852 }, messages: [w, msg(room, pending)] });
+      try {
+        await page.goto(url + '/');
+        await page.waitForSelector('.ludo-status');
+        const status = await page.textContent('.ludo-status');
+        assert.match(status, /Bo.*rolled a 6/, 'the roller is named while a six is pending');
+        assert.match(status, /roll again/, 'the six note is still shown');
+      } finally { await ctx.close(); }
+    });
+
     await test('a reload with a long log does not replay old lines', async () => {
       const six = withLog([{ by: 'Bo', card: 'rolled a 6', kind: 'roll' }], { by: 1, dice: 6, no: 2, outcome: 'moves' }, 4);
       const { page, ctx } = await scriptedPage(browser, { viewport: { width: 393, height: 852 }, messages: [w, msg(room, six)] });

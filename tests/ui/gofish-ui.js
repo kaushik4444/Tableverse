@@ -200,7 +200,8 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     next.view.event = { seq: 7, type: 'take', by: 2, target: 3, rank: '4', count: 1 };
     next.view.events = [next.view.event];
     await page.evaluate((m) => window.__push(m), next);
-    await page.waitForFunction((was) => (document.querySelector('.gf-event') || {}).textContent !== was, first, { timeout: 9000 });
+    await page.waitForSelector('.gf-event');
+    await page.waitForFunction((was) => { const el = document.querySelector('.gf-event'); return !!el && el.textContent !== was; }, first, { timeout: 9000 });
     await ctx.close();
   });
 

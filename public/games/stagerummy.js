@@ -31,7 +31,7 @@
     switch (e.type) {
       case 'draw': return e.from === 'discard' ? `${by} took the top discard.` : `${by} drew from the stock.`;
       case 'lay': return `<b>${by} laid down stage ${e.stage}: ${esc(stageName(v, e.stage))}!</b>`;
-      case 'hit': return `${by} added a card to a group.`;
+      case 'hit': return `${by} added ${e.label ? esc(e.label) : 'a card'} to a group.`;
       case 'discard': return `${by} discarded a card.`;
       case 'skip': return `${nameOf(v, e.who)} loses a turn (a skip card was discarded).`;
       case 'roundEnd': return `<b>${by} went out. The round is over.</b>`;
