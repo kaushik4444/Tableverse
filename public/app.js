@@ -2896,11 +2896,17 @@
       : (b.board || []).length ? `<ol class="board-list">${b.board.map((r, i) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span class="bl-rank">${i + 1}</span><span class="bl-name">${esc(r.displayName)}</span><b class="bl-val">${r.rating}</b><small class="bl-sub">${r.ratedGames} games</small></li>`).join('')}</ol>`
       : `<p class="hint" style="text-align:left">Nobody has 5 rated ${esc(meta.name)} games ${month ? 'this month' : 'yet'}.</p>`;
     const on = !!(P.data && P.data.profile && P.data.profile.leaderboardOptIn);
+    // Your own rating is shown even when you are not on the boards (the board lists opted-in players only).
+    const when = month ? ' this month' : '';
+    const mine = P.data && b && b.me !== undefined ? (b.me
+      ? `<p class="hint" style="text-align:left">Your rating: <b>${b.me.rating}</b> from ${b.me.ratedGames} rated games${when}.</p>`
+      : `<p class="hint" style="text-align:left">No rating here yet. A rating appears after 5 rated games${when}.</p>`) : '';
     const switchBtn = P.data ? `<button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On: your name is on the boards' : 'Off: your name is not on the boards'}</button>` : '';
     return `<section class="progress-card" aria-label="Skill ratings for ${esc(meta.name)}">
       <h3 class="stat-h">Skill ratings</h3>
       <p class="hint" style="text-align:left">Everyone starts at 1000. Beating stronger players raises your rating, losing to weaker ones lowers it. A rating appears after 5 rated games.</p>
       <div class="seg" role="group" aria-label="Rating period">${seg('lifetime', 'All time')}${seg('month', 'This month')}</div>
+      ${mine}
       ${rows}
       <div class="board-foot">${switchBtn}<small>Your results stay on your profile either way.</small></div>
     </section>`;

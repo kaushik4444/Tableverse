@@ -110,6 +110,16 @@ async function ratingBoard({ gameId, scope, limit = BOARD_LIMIT }) {
   return rankRows(rows.map((r) => ({ username: r.username, displayName: r.display_name, rating: r.rating, ratedGames: r.rated_games })), { minRated: MIN_RATED_GAMES, limit });
 }
 
+/** One player's own rating for one game and scope, shown to that player whether or not they are on the boards. Read only. */
+async function ratingOwn({ playerId, gameId, scope }) {
+  const { rows } = await db.query(
+    "SELECT rating, rated_games FROM player_ratings WHERE player_id = $1 AND game_id = $2 AND scope = $3",
+    [playerId, String(gameId).slice(0, 40), String(scope).slice(0, 16)],
+  );
+  if (!rows[0]) return null;
+  return { rating: rows[0].rating, ratedGames: rows[0].rated_games };
+}
+
 /** The live switch: ratings are rebuilt after each finished match only when RATINGS_LIVE=1 (off by default). */
 function liveEnabled(env = process.env) {
   return env.RATINGS_LIVE === '1';
@@ -175,4 +185,4 @@ async function ratingsForMatch({ matchKey, gameId, playerIds }) {
   return out;
 }
 
-module.exports = { computeRatings, rebuildRatings, liveEnabled, scheduleLiveRebuild, ratingsSettled, ratingsForMatch, ratingBoard, loadMatches, forfeitRecordedSince, LOCK_KEY };
+module.exports = { computeRatings, rebuildRatings, liveEnabled, scheduleLiveRebuild, ratingsSettled, ratingsForMatch, ratingBoard, ratingOwn, loadMatches, forfeitRecordedSince, LOCK_KEY };

@@ -57,7 +57,7 @@ Rules that apply to every game:
   - **Player**: the name, with a guest or left-early mark where that applies.
   - **This match**: the skill-rating change from this game (`–` when the game was not rated, for example a game against bots only, or a game past the pair limit, see the rating rules).
   - **This month** and **All time**: that person's skill rating for this game in the current calendar month and across all stored matches. They are read from the database when the game ends (`gameTotals.ratings` in `server.js`), after this game's own record is written. Guests show `–` (their games are not kept).
-- Game XP is not shown on this screen. It is still stored and still moves the overall level.
+- Game XP is not shown on this screen. It is still stored, and it does not affect the overall level.
 - Time played (Player Progress) is not shown on this screen. It still moves the overall level, and it is on the profile.
 - The lifetime column may show `…` for a moment while the server answers. The client asks once per finished game; if the answer is lost, the column stays `…` for that game (the game itself is unaffected).
 

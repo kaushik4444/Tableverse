@@ -672,7 +672,7 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .bl-val { font-variant-numeric: tabular-nums; color: var(--gold); font-size: 16px; }
 .bl-sub { grid-column: 2 / -1; color: var(--muted); font-size: 12px; }
 .seg { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(255,255,255,.06); align-self: flex-start; }
-.seg-btn { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.seg-btn { min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
 .seg-btn[aria-pressed="true"] { background: var(--gold); color: #1a1a1a; font-weight: 700; }
 .board-foot { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-top: 6px; }
 .board-foot small { color: var(--muted); font-size: 12px; }
