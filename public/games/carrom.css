@@ -11,19 +11,26 @@
 
 .cb-board-wrap { display: flex; justify-content: center; flex: none; width: 100%; }
 .cb-svg { flex: none; width: min(100%, 520px); height: auto; aspect-ratio: 1; display: block; overflow: visible; touch-action: none; user-select: none; }
-.cb-board { fill: #b97c3a; stroke: #5b3f22; stroke-width: 0.012; }
-.cb-inner { fill: #d9a463; stroke: none; }
-.cb-line { stroke: #7a4a1f; stroke-width: 0.006; stroke-linecap: round; }
-.cb-centre { fill: none; stroke: #7a4a1f; stroke-width: 0.006; }
-.cb-pocket { fill: #151210; stroke: #5b3f22; stroke-width: 0.006; }
-.cb-coin { stroke-width: 0.005; }
-.cb-coin.w { fill: #f7f1e3; stroke: #a8966f; }
-.cb-coin.b { fill: #2b2521; stroke: #0f0c0a; }
-.cb-queen { fill: #c2410c; stroke: #7c2d12; stroke-width: 0.005; }
+.cb-frame { fill: url(#cb-wood); stroke: #4a2810; stroke-width: 0.006; }
+.cb-board { fill: url(#cb-surface); }
+.cb-bar-outer { fill: none; stroke: #7a4a1f; stroke-width: 0.005; }
+.cb-bar-inner { fill: none; stroke: #7a4a1f; stroke-width: 0.005; }
+.cb-arrow { fill: #7a4a1f; opacity: .85; }
+.cb-centre { fill: none; stroke: #8a5a2b; stroke-width: 0.005; }
+.cb-centre-inner { fill: none; stroke: #8a5a2b; stroke-width: 0.004; stroke-dasharray: 0.012 0.008; }
+.cb-pocket { fill: url(#cb-pocket-g); }
+.cb-pocket-rim { fill: #3f2612; }
+.cb-coin { stroke-width: 0.004; }
+.cb-coin.w { fill: url(#cb-coin-w); stroke: #a8966f; }
+.cb-coin.b { fill: url(#cb-coin-b); stroke: #0f0c0a; }
+.cb-queen { fill: url(#cb-queen-g); stroke: #7c2d12; stroke-width: 0.004; }
 .cb-striker { fill: #f59e0b; stroke: #7c4a03; stroke-width: 0.006; cursor: grab; touch-action: none; }
 .cb-striker.w { fill: #fde68a; }
 .cb-striker.b { fill: #f59e0b; }
 .cb-aim { stroke: #ffffff; stroke-width: 0.008; stroke-dasharray: 0.03 0.02; stroke-linecap: round; opacity: .9; }
+.cb-controls { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 7.6em; }
+.cb-controls .cb-tip { min-height: 3.6em; margin: 12px 0 0; text-align: center; }
+.carrom-game .wz-status { min-height: 3.4em; }
 
 .cb-tip { margin: 12px 0 0; text-align: center; }
 
