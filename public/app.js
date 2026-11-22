@@ -2891,8 +2891,10 @@
    * ratings are off on the server. Only people who turned on the boards appear, with at least 5 rated games in the scope.
    */
   function ratingBoardHTML(P, meta) {
-    const b = P.ratingBoard;
-    if (b && b.enabled === false) return '';
+    // Hidden until the server has confirmed the ratings are on; a board that belongs to another game is never shown.
+    const enabled = P.ratingsEnabled === true;
+    if (!enabled) return '';
+    const b = P.ratingBoard && P.ratingBoard.game === P.game ? P.ratingBoard : null;
     const month = P.ratingScope === 'month';
     const tabs = `<div class="row" role="group" aria-label="Rating period"><button type="button" class="btn ghost small" data-act="ratingScope" data-scope="lifetime" aria-pressed="${!month}">Lifetime</button><button type="button" class="btn ghost small" data-act="ratingScope" data-scope="month" aria-pressed="${month}">This month</button></div>`;
     const body = !b ? '<p class="hint" style="text-align:left">Loading ratings…</p>'
@@ -3300,8 +3302,8 @@
     prof.ratingBoard = null;
     const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.ratingBoardGen === boardGen;
     getJson(`/api/ratings/board?game=${encodeURIComponent(id)}&scope=${scope}`)
-      .then((b) => { if (current()) { prof.ratingBoard = b; render(); } })
-      .catch(() => { if (current()) { prof.ratingBoard = { failed: true }; render(); } });
+      .then((b) => { if (current()) { prof.ratingsEnabled = b.enabled === true; prof.ratingBoard = { ...b, game: id }; render(); } })
+      .catch(() => { if (current()) { prof.ratingBoard = { failed: true, game: id }; render(); } });
   }
 
   // ------------------------------------------------------------ events

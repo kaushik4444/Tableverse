@@ -33,6 +33,13 @@ const row = (username, rating, ratedGames, displayName) => ({ username, displayN
   assert.equal(r.rating, 1050);
 }
 
+// ordering uses the exact rating: 1050.4 is above 1049.6 even though both round to 1050
+{
+  const board = rankRows([row('ann', 1049.6, 5), row('bo', 1050.4, 5)]);
+  assert.deepEqual(board.map((r) => r.username), ['bo', 'ann']);
+  assert.equal(board[0].rating, 1050);
+}
+
 // rows without a finite rating are dropped
 assert.deepEqual(rankRows([row('nan', Number.NaN, 9)]), []);
 
