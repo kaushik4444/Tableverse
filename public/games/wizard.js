@@ -264,7 +264,7 @@
     const canPlay = v.phase === 'playing' && v.myTurn && ui.selected && !v.autoPlay;
     const trump = v.trumpSuit ? suitPill(v.trumpSuit) : '<b>No trump</b>';
     root.innerHTML = `
-    <div class="wz" style="--cw:${z.cw}px;--tcw:${z.tcw}px;--cw0:${z.cw}px">
+    <div class="wz wiz" style="--cw:${z.cw}px;--tcw:${z.tcw}px;--cw0:${z.cw}px">
       <div class="wz-top">
         <div class="wz-round"><b>Round ${v.round}</b><span class="label"> / ${v.totalRounds}</span></div>
         <div class="wz-trump">${v.phase === 'chooseTrump' ? '<span class="label">Trump: dealer picks</span>' : `<span class="label">Trump</span> ${trump}`}</div>

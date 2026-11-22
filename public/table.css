@@ -436,3 +436,6 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 .emote-bar { flex-wrap: wrap; justify-content: center; max-width: min(92vw, 360px); }
 .emote-tag { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); white-space: nowrap; font: 600 12px/1.2 var(--sans); padding: 3px 8px; border-radius: 999px; background: rgba(10, 13, 43, .85); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); }
 
+
+/* Wizard and Twenty-Nine: on taller phones a seat keeps its box when a plate gains its third line (status) */
+@media (min-height: 701px) { .wz.wiz .pt-seat .plate, .wz.t29 .pt-seat .plate { box-sizing: border-box; height: 50px; justify-content: flex-start; } } /* short phones have no room for the taller seats, so they keep the small move */
