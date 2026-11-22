@@ -162,12 +162,14 @@ function scene(n, edit) {
   await test('round summary reveals every role once and is dismissed; the final sheet shows winners and Play again', async () => {
     const result = { round: 1, side: 'diggers', finder: 0, roles: ['digger', 'saboteur', 'digger', 'digger'], gains: [4, 0, 3, 3], gold: 1 };
     const { page, ctx } = await open(scene(4));
-    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.roundResult = result; v.round = 2; v.event = { seq: 30, type: 'roundEnd', side: 'diggers', round: 1 }; })[1]);
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.phase = 'roundEnd'; v.myTurn = false; v.roundResult = result; v.round = 2; v.event = { seq: 30, type: 'roundEnd', side: 'diggers', round: 1 }; })[1]);
     await page.waitForSelector('.overlay .sheet');
     assert.match(await page.textContent('.overlay h2'), /Diggers found the gold/);
     assert.match(await page.textContent('.hm-final'), /Saboteur/);
-    await page.click('[data-hm="next"]');
-    assert.equal(await page.locator('.overlay').count(), 0);
+    assert.equal(await page.locator('.overlay [data-ready-here] [data-act="readyUp"]').count(), 1, 'Ready lives in the round dialog');
+    assert.equal(await page.locator('.overlay [data-act="leave"]').count(), 1, 'a waiting player can still leave');
+    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.round = 2; v.roundResult = result; })[1]);
+    await page.waitForFunction(() => !document.querySelector('.overlay'));
     await ctx.close();
     const over = await open(scene(4, (v) => { v.phase = 'gameOver'; v.winners = [0]; v.myTurn = false; v.roundResult = result; v.players = v.players.map((p, i) => ({ ...p, score: [10, 3, 8, 6][i] })); }));
     assert.match(await over.page.textContent('.overlay h2'), /You won/);
