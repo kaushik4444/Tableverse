@@ -44,6 +44,7 @@ const gameList = () => ({ ok: true, guestPlay: true, games: games.list().map((g)
       await page.click('[data-act="dismissWelcome"]');
       await page.waitForSelector('.welcome-back', { state: 'detached', timeout: 5000 });
       await page.reload();
+      await page.waitForLoadState('networkidle'); // the profile request has finished and the home screen has re-rendered
       await page.waitForSelector('#games', { timeout: 8000 });
       assert.equal(await page.$('.welcome-back'), null, 'a reload does not bring the card back');
       await ctx.close();
@@ -54,6 +55,7 @@ const gameList = () => ({ ok: true, guestPlay: true, games: games.list().map((g)
     async (url) => {
       const { page, ctx } = await scriptedPage(browser, { messages: [welcome()] });
       await page.goto(url + '/');
+      await page.waitForLoadState('networkidle'); // the profile request has finished and the home screen has re-rendered
       await page.waitForSelector('#games', { timeout: 8000 });
       assert.equal(await page.$('.welcome-back'), null);
       await ctx.close();

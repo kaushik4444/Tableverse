@@ -41,4 +41,10 @@ test('a return after days away reports the days, the streak, and the previous vi
   assert.deepEqual(s, { awayDays: 3, streak: 2, since: ago(3) });
 });
 
+test('days away end at the return, so a player who stays active is not counted as away longer', () => {
+  // left 4 days ago, came back 2.4 hours ago: 3 full days away, not 4 measured to now
+  const s = summarize({ previousSeenAt: ago(4), visitStartedAt: ago(0.1), dayKeys: [], now: NOW });
+  assert.equal(s.awayDays, 3);
+});
+
 console.log('welcome-back tests passed');

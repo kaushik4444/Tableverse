@@ -419,6 +419,7 @@
 
   function clearClientSession() {
     S.isStaff = false;
+    S.welcomeBack = null; S.welcomeFor = null; S.welcomeLoaded = undefined; // another account must not see this one's card
     S.banners = [];
     S.token = '';
     S.csrf = '';
@@ -2670,6 +2671,7 @@
     getJson('/api/me/profile').then((me) => {
       if (mineGen !== sessionGen) return; // another account signed in meanwhile
       S.welcomeBack = (me && me.welcomeBack) || null;
+      S.welcomeFor = mineGen;
       if (S.page === 'home') render();
     }).catch(() => {});
   }
@@ -2677,7 +2679,7 @@
   /** The welcome-back card: shown once per visit after a day or more away. Dismissing it stores that visit, so a reload does not bring it back. */
   function welcomeHTML() {
     const w = S.welcomeBack;
-    if (!w || store.get('ct_welcome') === w.since) return '';
+    if (!w || S.welcomeFor !== sessionGen || store.get('ct_welcome') === w.since) return '';
     const away = w.awayDays === 1 ? 'a day' : `${w.awayDays} days`;
     const streak = w.streak >= 2 ? `<span>You're on a ${w.streak}-day streak. Play today to keep it going.</span>` : '';
     return `<section class="notice-bar welcome-back" role="status" aria-label="Welcome back">

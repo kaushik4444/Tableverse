@@ -126,8 +126,12 @@ async function authenticateToken(rawToken) {
 
   const player = res.rows[0];
   // Asynchronously update last_seen_at without blocking auth flow
-  // previous_seen_at keeps the last visit before a return after a 30-minute gap, so a session is one visit.
-  db.query(`UPDATE players SET previous_seen_at = CASE WHEN last_seen_at < NOW() - INTERVAL '30 minutes' THEN last_seen_at ELSE previous_seen_at END, last_seen_at = NOW() WHERE id = $1`, [player.id]).catch(() => {});
+  // A return after a 30-minute gap starts a visit: the old last_seen_at becomes previous_seen_at and the visit starts now.
+  // It is awaited (a few ms) so the welcome-back read that follows sees the committed value; a failure is ignored.
+  await db.query(`UPDATE players SET
+    previous_seen_at = CASE WHEN last_seen_at < NOW() - INTERVAL '30 minutes' THEN last_seen_at ELSE previous_seen_at END,
+    visit_started_at = CASE WHEN last_seen_at < NOW() - INTERVAL '30 minutes' THEN NOW() ELSE visit_started_at END,
+    last_seen_at = NOW() WHERE id = $1`, [player.id]).catch(() => {});
 
   return player;
 }
