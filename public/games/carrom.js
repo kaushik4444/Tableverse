@@ -10,6 +10,7 @@
   const BASE_Y = 0.12;     // a side's baseline in the bottom frame
   const MAX_DRAG = 0.45;   // a drag of this length on the board is a full-power flick
   const ANGLE_MAX = 75;
+  const CORNERS_VIS = [[0, 0], [1, 0], [0, 1], [1, 1]]; // the pockets, where the physics takes a disc (games/carrom/physics.js)
   const TAP_PX = 8;       // a pointer that moves less than this from where it went down is a tap, not a flick
   const ui = { ctx: null, v: null, root: null, seq: null, anim: null, known: new Map(), dragging: false, dragMoved: false, resignArmed: false,
     aim: { x: 50, angle: 0, power: 0 } }; // no aim until the player sets one
@@ -97,24 +98,53 @@
     return `<line class="cb-aim" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>`;
   }
 
+  /** Triangle markers at both ends of a side's striker bar, pointing into the nearer corner pocket (as on a real board). */
+  function arrowsHTML(v, j) {
+    const out = [];
+    for (const [x0, cornerX] of [[0.13, 0], [0.87, 1]]) {
+      const dx = cornerX - x0, dy = 0 - BASE_Y;
+      const len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+      const nx = -uy, ny = ux;
+      const tip = [x0 + ux * 0.034, BASE_Y + uy * 0.034];
+      const w1 = [x0 + nx * 0.016 - ux * 0.008, BASE_Y + ny * 0.016 - uy * 0.008];
+      const w2 = [x0 - nx * 0.016 - ux * 0.008, BASE_Y - ny * 0.016 - uy * 0.008];
+      const pts = [tip, w1, w2].map((p) => toSvg(v, rotP(p, j)).join(',')).join(' ');
+      out.push(`<polygon class="cb-arrow" points="${pts}"/>`);
+    }
+    return out.join('');
+  }
+
+  /** A side's striker bar: a double-bordered strip along its baseline, with the corner arrows. */
+  function strikerBarHTML(v, j) {
+    const rect = (y0, y1) => [[0.2, y0], [0.8, y0], [0.8, y1], [0.2, y1]]
+      .map((p) => toSvg(v, rotP(p, j)).join(',')).join(' ');
+    return `<polygon class="cb-bar-outer" points="${rect(BASE_Y - 0.03, BASE_Y + 0.03)}"/>`
+      + `<polygon class="cb-bar-inner" points="${rect(BASE_Y - 0.015, BASE_Y + 0.015)}"/>`
+      + arrowsHTML(v, j);
+  }
+
   /** The board. Shows the discs (from the view, or the current frame of a shot) and, on your turn, the striker and aim. */
   function boardHTML(v, frame) {
     const discs = discsFor(frame) || v.board;
     const aiming = !frame && v.myTurn && !ui.anim;
-    // the baselines of all four sides, each seen from this viewer's side
-    const lines = [0, 1, 2, 3].map((j) => {
-      const [x1, y1] = toSvg(v, rotP([0.2, BASE_Y], j));
-      const [x2, y2] = toSvg(v, rotP([0.8, BASE_Y], j));
-      return `<line class="cb-line" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
-    }).join('');
+    const bars = [0, 1, 2, 3].map((j) => strikerBarHTML(v, j)).join('');
     const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]);
     const striker = aiming ? `<circle class="cb-striker ${colourOfMe(v) === 'w' ? 'w' : 'b'}" data-id="striker" cx="${sx}" cy="${sy}" r="0.026" tabindex="0" role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}"/>` : '';
-    const pockets = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => `<circle class="cb-pocket" cx="${x}" cy="${y}" r="0.05"/>`).join('');
-    return `<svg class="cb-svg" viewBox="-0.08 -0.08 1.16 1.16" role="img" aria-label="Carrom board">
-      <rect class="cb-board" x="0" y="0" width="1" height="1" rx="0.02"/>
-      <rect class="cb-inner" x="0.06" y="0.06" width="0.88" height="0.88"/>
-      ${lines}
-      <circle class="cb-centre" cx="0.5" cy="0.5" r="0.09"/>
+    const pockets = CORNERS_VIS.map(([x, y]) => `<circle class="cb-pocket-rim" cx="${x}" cy="${y}" r="0.058"/><circle class="cb-pocket" cx="${x}" cy="${y}" r="0.05"/>`).join('');
+    return `<svg class="cb-svg" viewBox="-0.09 -0.09 1.18 1.18" role="img" aria-label="Carrom board">
+      <defs>
+        <linearGradient id="cb-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9a5f2b"/><stop offset="1" stop-color="#6b3d17"/></linearGradient>
+        <linearGradient id="cb-surface" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0d3a0"/><stop offset="1" stop-color="#d8a66a"/></linearGradient>
+        <radialGradient id="cb-pocket-g" cx="0.4" cy="0.4" r="0.7"><stop offset="0" stop-color="#2a2420"/><stop offset="1" stop-color="#050403"/></radialGradient>
+        <radialGradient id="cb-coin-w" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#ffffff"/><stop offset="0.7" stop-color="#f1e6cc"/><stop offset="1" stop-color="#c9b888"/></radialGradient>
+        <radialGradient id="cb-coin-b" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#5a4d43"/><stop offset="0.7" stop-color="#231d19"/><stop offset="1" stop-color="#0c0908"/></radialGradient>
+        <radialGradient id="cb-queen-g" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#f97316"/><stop offset="1" stop-color="#9a3412"/></radialGradient>
+      </defs>
+      <rect class="cb-frame" x="-0.07" y="-0.07" width="1.14" height="1.14" rx="0.03"/>
+      <rect class="cb-board" x="0" y="0" width="1" height="1"/>
+      ${bars}
+      <circle class="cb-centre" cx="0.5" cy="0.5" r="0.1"/>
+      <circle class="cb-centre-inner" cx="0.5" cy="0.5" r="0.06"/>
       ${pockets}
       ${discs.map((d) => discHTML(v, d)).join('')}
       ${striker}
@@ -122,17 +152,21 @@
     </svg>`;
   }
 
+  /** The controls under the board. They keep the same height on every turn, so the page does not jump when your turn starts. */
   function controlsHTML(v) {
-    if (!v.myTurn || ui.anim) return '';
-    // a native button a tap or a touch screen reader can fire; it is disabled (aria-disabled) until a power is set
-    return `<p class="hint cb-tip" aria-live="polite">${tipText()}</p><button type="button" class="btn big cb-fire" data-cb="fire" aria-disabled="${ui.aim.power > 0 ? 'false' : 'true'}">Fire striker</button>`;
+    const on = v.myTurn && !ui.anim;
+    const tip = on ? tipText() : 'Wait for your turn. Aim and flick when the striker is yours.';
+    return `<div class="cb-controls">`
+      + `<p class="hint cb-tip" aria-live="polite">${tip}</p>`
+      + `<button type="button" class="btn big cb-fire" data-cb="fire" ${on ? '' : 'tabindex="-1"'} aria-disabled="${on && ui.aim.power > 0 ? 'false' : 'true'}">Fire striker</button>`
+      + `</div>`;
   }
 
-  /** What the player can do now, with the live aim and power (there are no sliders). */
+  /** What the player can do now, with the live aim and power. Short on purpose: the full keys are on the Rules sheet. */
   function tipText() {
     const { angle, power } = ui.aim;
-    if (power <= 0) return 'Drag your striker along the baseline to place it (or use ← and → when it is focused). Then press on the board and drag back to set the aim and power. Keyboard: ← → move, Shift+← → turn, ↑ ↓ power, Enter fire.';
-    return `Aim ${angle}° · power ${power}%. Let go to flick, or press Enter on the striker. Keyboard: ← → move, Shift+← → turn, ↑ ↓ power.`;
+    if (power <= 0) return 'Drag your striker along the baseline, then drag back from the board to aim and set power. Let go to flick.';
+    return `Aim ${angle}° · power ${power}%. Let go to flick, or press Enter on the striker.`;
   }
 
   function logHTML(v) {
