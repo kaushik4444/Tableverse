@@ -149,3 +149,48 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
   .home-intro p { font-size: 15px; }
   .join-form { padding: 10px 12px; }
 }
+
+/* ---------- in-game surfaces: the old indigo panels become warm, dark walnut so nothing on screen belongs to another palette */
+:root { --wood-d: rgba(24, 15, 8, .72); --wood-line: rgba(230, 171, 74, .22); }
+.overlay { background: rgba(6, 12, 8, .66); backdrop-filter: blur(4px); animation: veil .22s ease-out both; }
+.sheet {
+  background:
+    radial-gradient(520px 260px at 50% -10%, rgba(230, 171, 74, .14), transparent 70%),
+    linear-gradient(170deg, #1f2a1f, #121a13);
+  border: 1px solid rgba(255, 240, 205, .14); border-radius: 22px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 30px 70px -10px rgba(0, 0, 0, .75);
+  animation: rise .34s var(--ease) both;
+}
+.sheet h2 { font-size: 28px; }
+@keyframes veil { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
+.menu { background: #17231a; border-color: rgba(255, 240, 205, .14); }
+.menu-item:hover, .menu-item:focus-visible { background: rgba(255, 246, 222, .09); }
+.chat { background: #141f17; }
+.bidbox, .pk-raise { background: var(--wood-d); border-color: var(--wood-line); border-radius: 16px; }
+.pk-pot, .pk-bet, .standin { background: var(--wood-d); border: 1px solid var(--wood-line); }
+.score-badge { background: #1b1209; border: 1px solid var(--wood-line); color: var(--ink); }
+.emote-bar, .watchers { background: rgba(24, 15, 8, .85); border: 1px solid var(--wood-line); }
+.toast { background: rgba(24, 15, 8, .92); border: 1px solid var(--wood-line); font-weight: 600; }
+.social-search input, .social-search select { background: rgba(6, 16, 10, .55); }
+.bdg.d { color: #2a1a05; background: #f4eddc; }
+.pseat.turn .av { animation-duration: 1.6s; }
+@media (prefers-reduced-motion: reduce) { .overlay, .sheet { animation: none !important; } }
+
+/* ---------- a fanned hand of cards in the home hero (wide screens only; it is decoration) */
+.home-hero { position: relative; }
+.hero-fan { display: none; }
+@media (min-width: 980px) {
+  .hero-fan { display: block; position: absolute; left: 53%; top: 2px; width: 180px; height: 112px; pointer-events: auto; transform: translateX(-50%); }
+  .hc {
+    position: absolute; left: 50%; bottom: 0; width: 62px; height: 88px; margin-left: -31px; border-radius: 8px; background: #f7f1e1; color: #1d2a22;
+    font-style: normal; font-size: 24px; line-height: 1; padding: 6px 0 0 8px; box-shadow: 0 10px 18px -6px rgba(0, 0, 0, .7), inset 0 0 0 1px rgba(0, 0, 0, .08);
+    transform-origin: 50% 160%; transition: transform .45s var(--ease);
+  }
+  .hc b { display: block; font-size: 18px; font-family: var(--serif); }
+  .hc.red { color: #b3342b; }
+  .c1 { transform: rotate(-21deg); } .c2 { transform: rotate(-7deg); } .c3 { transform: rotate(7deg); } .c4 { transform: rotate(21deg); }
+  .hero-fan:hover .c1 { transform: rotate(-30deg) translateY(-4px); } .hero-fan:hover .c2 { transform: rotate(-10deg) translateY(-8px); }
+  .hero-fan:hover .c3 { transform: rotate(10deg) translateY(-8px); } .hero-fan:hover .c4 { transform: rotate(30deg) translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) { .hc { transition: none !important; } }
