@@ -31,7 +31,7 @@ test('schema_migrations and the game switches are preserved and are not in the d
 test('the delete order puts every table before the tables it references', () => {
   const fks = c.EXPECTED_FKS.map((f) => ({ ...f, name: `${f.child}_fk` }));
   assert.doesNotThrow(() => c.validateOrder(c.CLEAN_TABLES, fks));
-  assert.deepEqual(c.CLEAN_TABLES, ['announcement_dismissals', 'admin_audit_log', 'feedback', 'announcements', 'email_broadcast_recipients', 'email_broadcasts', 'analytics_active', 'analytics_batches', 'analytics_meta', 'analytics_daily', 'match_participants', 'private_table_invitations', 'chat_reports', 'player_reports', 'player_blocks', 'friend_requests', 'friendships', 'matches', 'auth_email_tokens', 'auth_sessions', 'auth_devices', 'auth_identities', 'guest_upgrades', 'player_recent_tables', 'auth_rate_limits', 'players']);
+  assert.deepEqual(c.CLEAN_TABLES, ['announcement_dismissals', 'admin_audit_log', 'feedback', 'announcements', 'email_broadcast_recipients', 'email_broadcasts', 'analytics_active', 'analytics_batches', 'analytics_meta', 'analytics_daily', 'match_participants', 'private_table_invitations', 'chat_reports', 'player_reports', 'player_blocks', 'friend_requests', 'friendships', 'rating_events', 'matches', 'auth_email_tokens', 'auth_sessions', 'auth_devices', 'auth_identities', 'guest_upgrades', 'player_recent_tables', 'auth_rate_limits', 'player_ratings', 'players']);
   assert.equal(c.CLEAN_TABLES[c.CLEAN_TABLES.length - 1], 'players', 'accounts last: everything refers to them');
 });
 test('an order that deletes a parent before its child is refused', () => {
