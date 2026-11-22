@@ -98,8 +98,7 @@
     const text = eventText(v);
     // The stock sits on the felt; what just happened is a line under the table (on a phone the felt has no room for both)
     const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>`;
-    const feed = window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : '';
-    return `<div class="gf-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}${feed}</div>`
+    return `<div class="gf-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}</div>`
       + (text ? `<p class="gf-event gf-event-bar" role="status">${text}</p>` : '');
   }
 

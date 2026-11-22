@@ -260,7 +260,7 @@
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sr="phases">Stages</button> <button class="btn ghost small" data-sr="rules">How to play</button>', 'sr')}
       </div>
       <p class="sr-goal" role="status">${goalLine}</p>
-      <div class="sr-table">${centreHTML(v)}${seats}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
+      <div class="sr-table">${centreHTML(v)}${seats}</div>
       <p class="sr-event" role="status">${text || '&nbsp;'}</p>
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${traysHTML(v)}

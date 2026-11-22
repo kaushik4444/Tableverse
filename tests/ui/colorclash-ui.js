@@ -127,7 +127,7 @@ function scene(n, edit) {
     await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.myTurn = false; v.turn = 2; v.event = { seq: 12, type: 'play', by: 3, card: { id: 'Ystopa', c: 'Y', k: 'stop', v: null }, colour: 'Y', left: 5, skipped: 0 }; })[1]);
     await page.waitForSelector('.gf-spot');
     assert.match(await page.textContent('.gf-spot'), /Dmitri played Sun Stop/);
-    assert.match(await page.textContent('.cc-tablewrap .gf-item'), /Dmitri played Sun Stop/);
+    assert.match(await page.textContent('.cc-event-bar'), /Dmitri played Sun Stop/); // the box under the table is the one line for the newest event
     await ctx.close();
   });
 

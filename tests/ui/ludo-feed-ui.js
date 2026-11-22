@@ -43,7 +43,7 @@ const msg = (room, view) => ({ t: 'state', room, view });
         await page.evaluate((m) => window.__push(m), msg(room, six));
         await page.waitForSelector('.gf-spot');
         assert.match(await page.textContent('.gf-spot'), /Bo rolled a six/);
-        assert.match(await page.textContent('.ludo-boardwrap .gf-feed'), /Bo.*rolled a 6/);
+        assert.match(await page.textContent('.ludo-status'), /Bo.*rolled a 6/);
         const cap = withLog([{ by: 'Bo', card: 'rolled a 6', kind: 'roll' }, { by: 'Bo', card: 'sent Cy home', kind: 'capture' }, { by: 'Bo', card: 'moved token 1 by 6', kind: 'move' }], { by: 1, dice: 6, no: 2, outcome: 'moves' }, 5);
         await page.evaluate((m) => window.__push(m), msg(room, cap));
         await page.waitForFunction(() => /sent Cy home/.test(document.querySelector('.gf-spot')?.textContent || ''));

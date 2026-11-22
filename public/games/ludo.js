@@ -358,7 +358,7 @@
     root.innerHTML = `<section class="ludo ${v.phase === 'gameOver' ? 'over' : ''}">
       <div class="wz-top"><div class="wz-round"><b>Ludo</b><span class="label"> · ${v.players.length} players</span></div>${CardTable.toolbarSeed('<button class="btn ghost small" data-act="activityLog" aria-label="Open game log">📜 Log</button>', 'lt', 'ludo-tools')}</div>
       <div class="ludo-layout">
-        <div class="ludo-main">${barHTML(v)}<div class="ludo-boardwrap"><div class="ludo-board ${ui.isHex ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v)}<div class="ludo-tokens">${tokensHTML(v)}</div></div>${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div></div>
+        <div class="ludo-main">${barHTML(v)}<div class="ludo-boardwrap"><div class="ludo-board ${ui.isHex ? 'hex' : ''}" style="--n:${v.n}">${boardSVG(v)}<div class="ludo-tokens">${tokensHTML(v)}</div></div></div></div>
         <aside class="ludo-side">${playersHTML(v)}${endHTML(v, ctx)}</aside>
       </div>
     </section>`;

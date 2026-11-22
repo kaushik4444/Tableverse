@@ -90,7 +90,6 @@
     const opened = e.revealed && e.revealed.length ? e.revealed : [];
     const gold = e.goldIndex !== undefined && e.goldIndex >= 0;
     const tone = e.type === 'over' || e.type === 'roundEnd' || gold ? 'win' : e.type === 'break' || e.type === 'collapse' ? 'take' : e.type === 'repair' ? 'lay' : 'play';
-    window.GameFeed.add(key, [{ id: `hm-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
     const big = (face) => `<span style="font-size:44px;line-height:1" aria-hidden="true">${face}</span>`;
     if (opened.length) window.GameFeed.spotlight({ card: big(gold ? '🪙' : '🪨'), caption: gold ? 'The gold chamber is open!' : 'That chamber holds only rock', tone: gold ? 'win' : 'skip', ms: 2300 });
     else if (e.type === 'collapse') window.GameFeed.spotlight({ card: big('💥'), caption: text, tone: 'take', ms: 2200 });
@@ -253,7 +252,7 @@
       </div>
       ${role ? `<div class="hm-role-row">${role}</div>` : ''}
       ${playersHTML(v)}
-      <div class="hm-boardwrap">${boardHTML(v)}${window.GameFeed && feedKey() ? window.GameFeed.html(feedKey(), 'gf-float') : ''}</div>
+      <div class="hm-boardwrap">${boardHTML(v)}</div>
       ${logHTML(v)}
       <div class="wz-status ${v.myTurn && v.phase === 'playing' ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${controlsHTML(v)}
