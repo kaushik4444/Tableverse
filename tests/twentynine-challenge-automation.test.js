@@ -48,8 +48,11 @@ async function until(fn, label, ms = 15000) { // the first round waits for Ready
   // else can move while she is asked, so a table never waits on her.
   const playOwnTurn = (c) => {
     const v = c.view;
-    if (!c.room || !v || !v.myTurn) return;
-    const key = `${v.phase}:${v.turn}:${v.highBid}:${v.passed.join('')}`;
+    if (!c.room || !v) return;
+    // While the table waits for Ready (the first round, and each round boundary), the server refuses actions: press Ready first.
+    if (c.room.gate && !(c.room.gate.ready || []).includes(c.id)) { c.send({ t: 'ready' }); return; }
+    if (!v.myTurn) return;
+    const key = `${c.room.code}:${v.phase}:${v.turn}:${v.highBid}:${v.passed.join('')}`;
     if (c.lastAction === key) return;
     c.lastAction = key;
     if (v.phase === 'bidding') c.send({ t: 'act', action: v.canPass ? { type: 'bid', pass: true } : { type: 'bid', amount: v.minBid } });
@@ -67,6 +70,7 @@ async function until(fn, label, ms = 15000) { // the first round waits for Ready
       try {
         for (let attempt = 0; attempt < 30 && !found; attempt++) {
           ann.phases.length = 0;
+        ann.lastAction = null; // a new table: its turns must not match the last table's
           ann.send({ t: 'create', gameId: 'twentynine', visibility: 'private', options: { doubleChallenge: true } });
           await until(() => ann.room && ann.room.members.some((m) => m.id === ann.id), 'table');
           for (let i = 0; i < 3; i++) ann.send({ t: 'addBot' });
