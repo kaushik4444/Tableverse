@@ -3279,6 +3279,18 @@
     }
   }
 
+  function loadProfileBoard(prof) {
+    const id = prof.game;
+    const gen = sessionGen;
+    const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
+    prof.board = null;
+    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardGen === boardGen;
+    getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
+      .then((b) => { if (current()) { prof.board = b; render(); } })
+      .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
+    loadRatingBoard(prof);
+  }
+
   /** The rating board for the game on this profile page, for the chosen period. Public; the server says if ratings are off. */
   function loadRatingBoard(prof) {
     const id = prof.game;
@@ -3290,18 +3302,6 @@
     getJson(`/api/ratings/board?game=${encodeURIComponent(id)}&scope=${scope}`)
       .then((b) => { if (current()) { prof.ratingBoard = b; render(); } })
       .catch(() => { if (current()) { prof.ratingBoard = { failed: true }; render(); } });
-  }
-
-  function loadProfileBoard(prof) {
-    const id = prof.game;
-    const gen = sessionGen;
-    const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
-    prof.board = null;
-    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardGen === boardGen;
-    getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
-      .then((b) => { if (current()) { prof.board = b; render(); } })
-      .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
-    loadRatingBoard(prof);
   }
 
   // ------------------------------------------------------------ events
