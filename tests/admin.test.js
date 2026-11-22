@@ -281,6 +281,8 @@ const ADMIN_POSTS = [
       for (const p of ADMIN_GETS) assert.equal((await admin.b.get(p)).status, 200, p);
       const me = await admin.b.get('/api/admin/me');
       assert.deepEqual([me.json.isAdmin, me.json.isOwner], [true, false]);
+      assert.equal(me.json.gameNames.penaltyrows, 'Take 5', 'the console shows the names players see, not internal ids');
+      assert.equal(me.json.gameNames.stagerummy, 'Stage 10');
     });
     await test('the user list never contains e-mail addresses', async () => {
       const r = await owner.b.get('/api/admin/users');
