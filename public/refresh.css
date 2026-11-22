@@ -217,7 +217,12 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 
 /* narrow phones, signed out: three buttons share the bar with the name, so they get tighter padding and the name keeps its full width */
 @media (max-width: 440px) {
-  .topbar .btn.small, .topbar .btn.ghost.small { padding-inline: 10px; font-size: 14px; }
+  .topbar .btn.small, .topbar .btn.ghost.small { padding-inline: 8px; font-size: 13px; }
   .topbar-actions, .tb-actions { gap: 6px; }
-  .tb-brand { font-size: 19px; flex: none; }
+  .tb-brand { font-size: 19px; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+}
+@media (max-width: 380px) {
+  .topbar .btn.small, .topbar .btn.ghost.small { padding-inline: 8px; font-size: 13px; }
+  .tb-brand { font-size: 17px; gap: 6px; }
+  .tb-right { gap: 4px; }
 }
