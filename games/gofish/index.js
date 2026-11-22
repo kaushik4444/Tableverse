@@ -37,7 +37,7 @@ module.exports = {
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId),
       forcedPlay: () => engine.forcedPlay(g),
-      botDelayMs: () => 800 + g.rng() * 600,
+      botDelayMs: () => 1600 + g.rng() * 800,
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       // most books wins; ties share the win

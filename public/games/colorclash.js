@@ -76,7 +76,7 @@
     window.GameFeed.add(key, [{ id: `cc-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
     const notable = e.type === 'play' && e.card && (e.card.k !== 'n');
     if (notable && (e.by !== v.me || (e.penalised && e.penalised.target === v.me))) {
-      window.GameFeed.spotlight({ card: cardHTML(e.card, '', 'style="--cw:56px"', 'span'), caption: text, tone, ms: 1300 });
+      window.GameFeed.spotlight({ card: cardHTML(e.card, '', 'style="--cw:56px"', 'span'), caption: text, tone, ms: 2300 });
     }
   }
 

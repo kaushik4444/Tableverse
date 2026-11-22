@@ -90,9 +90,9 @@
     const tone = e.type === 'over' || e.type === 'roundEnd' || gold ? 'win' : e.type === 'break' || e.type === 'collapse' ? 'take' : e.type === 'repair' ? 'lay' : 'play';
     window.GameFeed.add(key, [{ id: `hm-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
     const big = (face) => `<span style="font-size:44px;line-height:1" aria-hidden="true">${face}</span>`;
-    if (opened.length) window.GameFeed.spotlight({ card: big(gold ? '🪙' : '🪨'), caption: gold ? 'The gold chamber is open!' : 'That chamber holds only rock', tone: gold ? 'win' : 'skip', ms: 1400 });
-    else if (e.type === 'collapse') window.GameFeed.spotlight({ card: big('💥'), caption: text, tone: 'take', ms: 1200 });
-    else if ((e.type === 'break' || e.type === 'repair') && e.target === v.me && e.by !== v.me) window.GameFeed.spotlight({ card: big(TOOLS[e.tool].icon), caption: text, tone: e.type === 'break' ? 'take' : 'lay', ms: 1200 });
+    if (opened.length) window.GameFeed.spotlight({ card: big(gold ? '🪙' : '🪨'), caption: gold ? 'The gold chamber is open!' : 'That chamber holds only rock', tone: gold ? 'win' : 'skip', ms: 2300 });
+    else if (e.type === 'collapse') window.GameFeed.spotlight({ card: big('💥'), caption: text, tone: 'take', ms: 2200 });
+    else if ((e.type === 'break' || e.type === 'repair') && e.target === v.me && e.by !== v.me) window.GameFeed.spotlight({ card: big(TOOLS[e.tool].icon), caption: text, tone: e.type === 'break' ? 'take' : 'lay', ms: 2200 });
   }
 
   function guidance(v) {
