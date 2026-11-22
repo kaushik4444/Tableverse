@@ -155,7 +155,8 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
     return { matchId };
   });
   // The ratings are rebuilt only after the match is committed, and only when the live switch is on (RATINGS_LIVE=1).
-  if (recorded.matchId && liveEnabled()) scheduleLiveRebuild();
+  // A duplicate also schedules one: an earlier rebuild for this match may have failed, and the next one repairs it.
+  if (liveEnabled()) scheduleLiveRebuild();
   return recorded;
 }
 

@@ -1836,8 +1836,9 @@ function start(opts = {}) {
         // null when the ratings are off (the page keeps the Game XP table); {} when on but not available for this game.
         let ratings = null;
         if (dbRatings.liveEnabled()) {
-          await dbRatings.ratingsSettled();
-          ratings = (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {};
+          // A failed rebuild leaves the stored ratings stale: say they are not available instead of showing old numbers.
+          const settled = await dbRatings.ratingsSettled();
+          ratings = settled ? (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {} : {};
         }
         return { totals, ratings };
       })().then(

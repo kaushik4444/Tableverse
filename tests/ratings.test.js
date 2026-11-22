@@ -205,5 +205,8 @@ assert.equal(r.monthKey(new Date('2026-01-05T12:00:00Z')), '2026-01');
 
 // unknown games fall back to the placing family at full weight, like lib/gameSkill.js
 assert.deepEqual(r.gameRule('some-new-game'), { family: 'pairwise', weight: 1 });
+// an id that is an Object.prototype property is not a game: it gets the default rule, not a prototype value
+assert.deepEqual(r.gameRule('constructor'), { family: 'pairwise', weight: 1 });
+assert.deepEqual(r.gameRule('toString'), { family: 'pairwise', weight: 1 });
 
 console.log('ratings: all tests passed');
