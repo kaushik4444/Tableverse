@@ -39,6 +39,19 @@
 @keyframes hm-pulse { 50% { filter: brightness(1.35); } }
 
 .hm-event { margin: 0; text-align: center; font-size: 13px; color: rgba(255, 255, 255, .9); }
+/* The move log: four lines, always reserved, so the board and the hand below never move when a move is added */
+.hm-log { list-style: none; margin: 0; padding: 6px 10px; box-sizing: border-box; height: 104px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; border-radius: 12px; background: rgba(0, 0, 0, .25); font-size: 13px; color: rgba(255, 255, 255, .92); }
+.hm-log li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .7; }
+.hm-log li.hm-last { opacity: 1; font-weight: 600; }
+.hm-log .hm-r { display: inline-block; min-width: 2.2em; font-size: 11px; color: rgba(255, 255, 255, .6); }
+.hm-log .hm-empty { opacity: .6; text-align: center; }
+.hm-tally { font-size: 11px; color: rgba(255, 255, 255, .8); white-space: nowrap; }
+.hm-legend { margin: 4px 0 0; text-align: center; font-size: 11px; color: rgba(255, 255, 255, .65); }
+/* short phones (360x640): two log lines, and no legend line (the Rules explain each tally), so the board and hand fit above the fold */
+@media (max-height: 700px) {
+  .hm-log { height: 52px; padding: 4px 8px; font-size: 12px; }
+  .hm-legend { display: none; }
+}
 .hm-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .hm-hand { display: flex; gap: 8px; overflow-x: auto; padding: 14px 6px 6px; justify-content: safe center; -webkit-overflow-scrolling: touch; }
 .hm-card { flex: 0 0 auto; display: grid; justify-items: center; gap: 3px; width: clamp(54px, 15vw, 84px); padding: 4px; border-radius: 10px; background: #f3ead8; color: #2c231c; border: 2px solid #fff; font: inherit; transition: transform .15s ease; }
