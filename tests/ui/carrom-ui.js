@@ -68,6 +68,21 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
+  await test('the board and the Fire button keep their size and place when the turn passes', async () => {
+    const measure = async (viewer) => {
+      const { page, ctx } = await open(msgsFor(fresh(), viewer));
+      const board = await box(page, '.cb-svg');
+      const fire = await box(page, '.cb-fire');
+      await ctx.close();
+      return { board, fire };
+    };
+    const mine = await measure('p0');
+    const theirs = await measure('p1');
+    assert.equal(Math.round(mine.board.width), Math.round(theirs.board.width), 'the board keeps its width');
+    assert.equal(Math.round(mine.board.height), Math.round(theirs.board.height), 'the board keeps its height');
+    assert.equal(Math.round(mine.fire.y), Math.round(theirs.fire.y), 'the Fire button stays in place');
+  });
+
   await test('dragging forward of the striker (no pull back) sets no power and sends nothing', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
     const s = await box(page, '.cb-striker');
