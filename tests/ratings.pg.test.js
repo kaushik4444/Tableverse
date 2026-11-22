@@ -27,8 +27,8 @@ async function test(name, fn) {
     const [A, B, C, D] = await Promise.all([
       q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('ann','Ann',TRUE) RETURNING id"),
       q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('bob','Bo',FALSE) RETURNING id"),
-      q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('cy','Cy',TRUE) RETURNING id"),
-      q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('di','Di',FALSE) RETURNING id"),
+      q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('cyn','Cy',TRUE) RETURNING id"),
+      q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('dia','Di',FALSE) RETURNING id"),
     ]).then((rows) => rows.map((r) => r[0].id));
 
     // seven chess matches between A and B, one hour apart (A wins four, B wins three)
