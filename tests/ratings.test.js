@@ -181,6 +181,18 @@ assert.equal(r.monthKey(new Date('2026-01-05T12:00:00Z')), '2026-01');
   assert.ok(Number.isFinite(one.A1) && Number.isFinite(one.B1), 'no infinite changes');
 }
 
+// unequal teams (a 2v2 where one winner left without a penalty): the total still balances to zero
+{
+  const ps = [
+    pl('A1', 1000, 1, { teamId: 'X' }),
+    pl('B1', 1000, 0, { teamId: 'Y' }),
+    pl('B2', 1000, 0, { teamId: 'Y' }),
+  ];
+  const d = r.matchDeltas('twentynine', ps);
+  close(sum(d), 0, 'unequal teams are zero-sum');
+  assert.ok(d.A1 > 0 && d.B1 < 0, 'the winner gains and the losing team loses');
+}
+
 // cooperative: everyone gets the same change, and a penalised leaver is a loss for the table, with no infinity
 {
   const cleared = r.matchDeltas('themind', [pl('A', 1000, 1, { ratedGames: 0 }), pl('B', 1400, 1, { ratedGames: 30 })]);
