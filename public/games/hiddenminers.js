@@ -40,7 +40,7 @@
     const by = h.by !== undefined ? nameOf(v, h.by) : '';
     const poss = (seat) => (seat === v.me ? 'your' : `${nameOf(v, seat)}’s`);
     switch (h.kind) {
-      case 'tile': return `⛏️ ${by} dug ${h.cut ? 'a dead end 🕳️' : 'a tunnel'}${h.revealed && h.revealed.length ? `, opening ${h.revealed.map((i) => (v.goals[i].gold ? '<b>the gold chamber</b>' : 'a chamber of plain rock')).join(' and ')}` : ''}`;
+      case 'tile': return `⛏️ ${by} dug ${h.cut ? 'a dead end 🕳️' : 'a tunnel'}${h.opened && h.opened.length ? `, opening ${h.opened.map((gold) => (gold ? '<b>the gold chamber</b>' : 'a chamber of plain rock')).join(' and ')}` : ''}`;
       case 'break': return `✖ ${by} broke ${poss(h.target)} ${TOOLS[h.tool].icon} ${TOOLS[h.tool].name}`;
       case 'repair': return `🔧 ${by} repaired ${poss(h.target)} ${TOOLS[h.tool].icon} ${TOOLS[h.tool].name}`;
       case 'scout': return `🔭 ${by} scouted chamber ${h.goal + 1}`;
@@ -54,7 +54,9 @@
     const e = v.event;
     if (!e) return '';
     switch (e.type) {
-      case 'tile': case 'break': case 'repair': case 'scout': case 'collapse': case 'discard': return moveLine(v, { ...e, kind: e.type });
+      // a live move reads its chambers from this round's view (they are open now); the history keeps their outcomes
+      case 'tile': return moveLine(v, { ...e, kind: e.type, opened: (e.revealed || []).map((i) => Boolean(v.goals[i] && v.goals[i].gold)) });
+      case 'break': case 'repair': case 'scout': case 'collapse': case 'discard': return moveLine(v, { ...e, kind: e.type });
       case 'roundEnd': return e.side === 'diggers' ? 'The Diggers found the gold. A new round starts.' : 'The deck ran out: the Saboteurs win the round. A new round starts.';
       case 'over': return 'The match is over.';
       default: return '';

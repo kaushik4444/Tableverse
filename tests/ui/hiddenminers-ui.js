@@ -166,6 +166,15 @@ function scene(n, edit) {
     await ctx.close();
   });
 
+  await test('a move from an earlier round keeps what its chamber held, even when this round has other chambers', async () => {
+    const { page, ctx } = await open(scene(4, (v) => {
+      v.goals = v.goals.map((q) => ({ ...q, revealed: false, gold: null }));
+      v.history = [{ round: 1, by: 1, kind: 'tile', mask: 10, cut: false, x: 7, y: 2, opened: [true] }];
+    }));
+    assert.match(await page.textContent('.hm-log'), /opening the gold chamber/);
+    await ctx.close();
+  });
+
   await test('new events float over the board; opening the gold chamber is held in the middle; the first look shows no history', async () => {
     const { page, ctx } = await open(scene(4));
     assert.equal(await page.locator('.gf-item').count(), 0);

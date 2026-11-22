@@ -41,7 +41,7 @@
 .hm-event { margin: 0; text-align: center; font-size: 13px; color: rgba(255, 255, 255, .9); }
 /* The move log: four lines, always reserved, so the board and the hand below never move when a move is added */
 .hm-log { list-style: none; margin: 0; padding: 6px 10px; box-sizing: border-box; height: 104px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; border-radius: 12px; background: rgba(0, 0, 0, .25); font-size: 13px; color: rgba(255, 255, 255, .92); }
-.hm-log li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .7; }
+.hm-log li { flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .7; }
 .hm-log li.hm-last { opacity: 1; font-weight: 600; }
 .hm-log .hm-r { display: inline-block; min-width: 2.2em; font-size: 11px; color: rgba(255, 255, 255, .6); }
 .hm-log .hm-empty { opacity: .6; text-align: center; }

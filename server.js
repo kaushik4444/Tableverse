@@ -1116,7 +1116,7 @@ function start(opts = {}) {
     if (!waiting.length) {
       const auto = g.autoAction();
       if (!auto) return;
-      delay = boundary ? 1200 : (typeof g.autoDelayMs === 'function' && g.autoDelayMs() * botScale) || autoAdvanceMs; // after everybody is ready, a short pause
+      delay = boundary ? Math.max(1200, pause) : (typeof g.autoDelayMs === 'function' && g.autoDelayMs() * botScale) || autoAdvanceMs; // after everybody is ready, a short pause, but never before a round-end hold has been shown
       run = () => g.act(null, auto);
       valid = () => awaitingOf(g).length === 0;
     } else if (forced) {

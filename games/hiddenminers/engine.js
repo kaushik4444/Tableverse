@@ -266,7 +266,8 @@ function applyAction(g, playerId, action) {
         if (q.gold) found = true;
       }
     });
-    record(g, who, { kind: 'tile', mask, cut: card.cut, x: action.x, y: action.y, revealed: g.event.revealed.slice() });
+    // the outcome of each chamber this move opened is stored with the move: a later round has different chambers
+    record(g, who, { kind: 'tile', mask, cut: card.cut, x: action.x, y: action.y, opened: g.event.revealed.map((i) => g.goals[i].gold) });
     // the round-ending event keeps what this move opened, so every client can still show the gold being found
     if (found) { endRound(g, 'diggers', who, { by: who, revealed: g.event.revealed.slice(), goldIndex: g.event.goldIndex }); return { ok: true }; }
   } else if (type === 'break') {
