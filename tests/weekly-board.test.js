@@ -21,7 +21,8 @@ function client() {
     toast: (e) => errors.push(e),
     loadProfile: async () => { reloads.push(context.S.profile); },
     postJson: () => { const d = deferred(); saves.push(d); return d.promise; },
-    getJson: (url) => { const d = deferred(); boards.push({ ...d, url }); return d.promise; },
+    // only the weekly leaderboard is counted here; the rating board is a separate request with its own tests
+    getJson: (url) => { const d = deferred(); if (url.startsWith('/api/leaderboard')) boards.push({ ...d, url }); return d.promise; },
   };
   const helper = source.slice(source.indexOf('  function loadProfileBoard('), source.indexOf('  // ------------------------------------------------------------ events'));
   const handler = source.slice(source.indexOf('    boardOptIn: async () =>'), source.indexOf('    closeGameStats:'));

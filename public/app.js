@@ -2886,6 +2886,24 @@
    * This week's board for one game (the last 7 days, opted-in players only) and the player's own switch for it, which is off
    * by default. The board is public and read-only.
    */
+  /**
+   * The skill-rating board for this game: lifetime, or this UTC month (Lifetime / This month). Nothing is shown while the
+   * ratings are off on the server. Only people who turned on the boards appear, with at least 5 rated games in the scope.
+   */
+  function ratingBoardHTML(P, meta) {
+    // Hidden until the server has confirmed the ratings are on; a board that belongs to another game is never shown.
+    const enabled = P.ratingsEnabled === true;
+    if (!enabled) return '';
+    const b = P.ratingBoard && P.ratingBoard.game === P.game ? P.ratingBoard : null;
+    const month = P.ratingScope === 'month';
+    const tabs = `<div class="row" role="group" aria-label="Rating period"><button type="button" class="btn ghost small" data-act="ratingScope" data-scope="lifetime" aria-pressed="${!month}">Lifetime</button><button type="button" class="btn ghost small" data-act="ratingScope" data-scope="month" aria-pressed="${month}">This month</button></div>`;
+    const body = !b ? '<p class="hint" style="text-align:left">Loading ratings…</p>'
+      : b.failed ? '<p class="hint" style="text-align:left">Could not load the ratings. Try again in a moment.</p>'
+      : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${r.rating}</b><small>${r.ratedGames} rated game${r.ratedGames === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
+      : `<p class="hint" style="text-align:left">No one has 5 rated games in ${esc(meta.name)} ${month ? 'this month' : 'yet'}.</p>`;
+    return `<section class="progress-card" aria-label="Skill ratings for ${esc(meta.name)}"><h3 class="stat-h">Skill ratings</h3>${tabs}${body}</section>`;
+  }
+
   function weeklyBoardHTML(P, id, meta) {
     const b = P.board;
     const on = !!(P.data && P.data.profile && P.data.profile.leaderboardOptIn);
@@ -2893,7 +2911,7 @@
       : b.failed ? '<p class="hint" style="text-align:left">Could not load the board. Try again in a moment.</p>'
       : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${fmtXp(r.points)} XP</b><small>${r.played} game${r.played === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
       : '<p class="hint" style="text-align:left">No one on the board has played this game in the last 7 days.</p>';
-    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the weekly boards</button></div><p class="hint" style="text-align:left">Off by default. When on, your name and your ${esc(meta.name)} Game XP from the last 7 days can appear on this board.</p>` : '';
+    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the boards</button></div><p class="hint" style="text-align:left">On by default. When on, your name can appear on the weekly and skill-rating boards for ${esc(meta.name)}. Turn it off to leave the boards; your results stay on your profile.</p>` : '';
     return `<section class="progress-card" aria-label="Weekly board for ${esc(meta.name)}"><h3 class="stat-h">This week’s board</h3>${body}${toggle}</section>`;
   }
 
@@ -2949,6 +2967,7 @@
         <p class="hint" style="text-align:left">${esc(rule)}</p>
       </section>
       ${weeklyBoardHTML(P, id, meta)}
+      ${ratingBoardHTML(P, meta)}
       <div class="stat-grid">
         ${tile('Played', g.played)}
         ${tile('Wins', g.wins, 'good')}
@@ -3271,6 +3290,20 @@
     getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
       .then((b) => { if (current()) { prof.board = b; render(); } })
       .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
+    loadRatingBoard(prof);
+  }
+
+  /** The rating board for the game on this profile page, for the chosen period. Public; the server says if ratings are off. */
+  function loadRatingBoard(prof) {
+    const id = prof.game;
+    const gen = sessionGen;
+    const scope = prof.ratingScope === 'month' ? 'month' : 'lifetime';
+    const boardGen = prof.ratingBoardGen = (prof.ratingBoardGen || 0) + 1;
+    prof.ratingBoard = null;
+    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.ratingBoardGen === boardGen;
+    getJson(`/api/ratings/board?game=${encodeURIComponent(id)}&scope=${scope}`)
+      .then((b) => { if (current()) { prof.ratingsEnabled = b.enabled === true; prof.ratingBoard = { ...b, game: id }; render(); } })
+      .catch(() => { if (current()) { prof.ratingBoard = { failed: true, game: id }; render(); } });
   }
 
   // ------------------------------------------------------------ events
@@ -3283,6 +3316,12 @@
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
     reloadProfile: () => loadProfile(),
+    ratingScope: (el) => {
+      const P = S.profile; if (!P) return;
+      P.ratingScope = el.dataset.scope === 'month' ? 'month' : 'lifetime'; loadRatingBoard(P); render();
+      // the redraw replaces the period button, so give keyboard focus back to the same period
+      document.querySelector(`[data-act="ratingScope"][data-scope="${P.ratingScope}"]`)?.focus({ preventScroll: true });
+    },
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {

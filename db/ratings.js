@@ -10,6 +10,7 @@
 const db = require('./pool');
 const { replay, report } = require('../lib/ratingReplay');
 const { createLogger } = require('../lib/log');
+const { rankRows, MIN_RATED_GAMES, BOARD_LIMIT } = require('../lib/ratingBoard');
 
 const CHUNK = 500;
 const LOCK_KEY = 727275; // distinct from the migration lock (727274)
@@ -92,6 +93,23 @@ async function rebuildRatings() {
   });
 }
 
+/**
+ * The people on one rating board: opted in to the boards (the same switch as the weekly board), with at least the minimum
+ * rated games in this scope. `scope` is 'lifetime' or 'YYYY-MM'. Read only.
+ */
+async function ratingBoard({ gameId, scope, limit = BOARD_LIMIT }) {
+  const { rows } = await db.query(
+    `SELECT p.username, p.display_name, pr.rating, pr.rated_games
+       FROM player_ratings pr
+       JOIN players p ON p.id = pr.player_id AND p.leaderboard_opt_in
+      WHERE pr.game_id = $1 AND pr.scope = $2 AND pr.rated_games >= $3
+      ORDER BY pr.rating DESC, p.username ASC
+      LIMIT $4`,
+    [String(gameId).slice(0, 40), String(scope).slice(0, 16), MIN_RATED_GAMES, limit],
+  );
+  return rankRows(rows.map((r) => ({ username: r.username, displayName: r.display_name, rating: r.rating, ratedGames: r.rated_games })), { minRated: MIN_RATED_GAMES, limit });
+}
+
 /** The live switch: ratings are rebuilt after each finished match only when RATINGS_LIVE=1 (off by default). */
 function liveEnabled(env = process.env) {
   return env.RATINGS_LIVE === '1';
@@ -157,4 +175,4 @@ async function ratingsForMatch({ matchKey, gameId, playerIds }) {
   return out;
 }
 
-module.exports = { computeRatings, rebuildRatings, liveEnabled, scheduleLiveRebuild, ratingsSettled, ratingsForMatch, loadMatches, forfeitRecordedSince, LOCK_KEY };
+module.exports = { computeRatings, rebuildRatings, liveEnabled, scheduleLiveRebuild, ratingsSettled, ratingsForMatch, ratingBoard, loadMatches, forfeitRecordedSince, LOCK_KEY };
