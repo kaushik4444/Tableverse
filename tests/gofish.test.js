@@ -64,6 +64,16 @@ test('with an empty stock a failed ask just ends the turn', () => {
   assert.equal(g.event.empty, true); assert.equal(g.turn, 1);
 });
 
+test('a book that empties the hand is shown together with the refill from the stock (no event is lost)', () => {
+  // p0 holds four 5s and nothing else: asking p1 for 5s takes one, the book is laid down, and the empty hand is refilled from the stock
+  const g = rigged(2, [[['5', 'S'], ['5', 'H'], ['5', 'D']], [['5', 'C'], ['2', 'C']]], [['9', 'S'], ['3', 'D']]);
+  must(g, 'p0', { type: 'ask', target: 'p1', rank: '5' });
+  const kinds = E.viewFor(g, 'p0').events.map((ev) => ev.type);
+  assert.deepEqual(kinds, ['take', 'empty'], 'the take stays in the feed, followed by the refill');
+  assert.deepEqual(E.viewFor(g, 'p0').events[0].books, ['5']);
+  assert.ok(E.viewFor(g, 'p0').events[0].seq < E.viewFor(g, 'p0').events[1].seq);
+});
+
 test('four of a rank is laid down as a book at once (by a take, a draw or in the opening hand)', () => {
   const g = rigged(2, [[['5', 'S'], ['5', 'H'], ['5', 'D'], ['K', 'H']], [['5', 'C'], ['2', 'C']]], [['9', 'S']]);
   must(g, 'p0', { type: 'ask', target: 'p1', rank: '5' });

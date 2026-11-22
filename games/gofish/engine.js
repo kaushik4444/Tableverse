@@ -14,7 +14,12 @@ const rankWord = (r) => ({ A: 'Aces', J: 'Jacks', Q: 'Queens', K: 'Kings' }[r] |
 
 const indexOf = (g, id) => g.players.findIndex((p) => p.id === id);
 const sortHand = (h) => h.sort((a, b) => a.ord - b.ord || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit));
-const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
+// The latest event is the primary one (g.event). Every event is also kept in g.recent, so a refill that follows an action
+// (a book that empties the hand) cannot hide the action from the feed.
+const emit = (g, e) => {
+  g.event = { seq: ++g.seq, ...e };
+  g.recent = [...(g.recent || []), g.event].slice(-8);
+};
 const say = (g, by, text, kind) => { g.log.push({ by: g.players[by].name, card: text, kind }); if (g.log.length > 60) g.log.shift(); };
 
 function shuffled(rng) {
@@ -40,6 +45,7 @@ function createGame(players, options, rng = Math.random) {
     turn: 0,
     phase: 'playing', // playing | gameOver
     event: null,
+    recent: [], // the last few events, oldest first (see emit)
     lastDraw: null, // { seq, by, card }: what the last player to fish drew; only that player's view shows it
     log: [],
     seq: 0,
@@ -208,6 +214,7 @@ function viewFor(g, playerId) {
     canDraw: myTurn && targets.length === 0 && g.stock.length > 0,
     players: g.players.map((p, i) => ({ id: p.id, name: p.name, cards: g.hands[i].length, books: g.books[i].slice(), bookCount: g.books[i].length })),
     event: g.event ? { ...g.event } : null,
+    events: (g.recent || []).map((ev) => ({ ...ev })), // every recent event, oldest first, so the feed shows each one
     myDraw: draw ? { seq: draw.seq, card: { ...draw.card } } : null,
     winners: over && g.event && g.event.type === 'over' ? g.event.winners.slice() : [],
   };

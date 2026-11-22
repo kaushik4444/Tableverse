@@ -34,7 +34,9 @@
     switch (e.type) {
       case 'take': return `${by} asked ${to} for ${word(e.rank)} and got <b>${e.count}</b>.${bookText}`;
       case 'fish': {
-        const drew = you && v.myDraw ? ` You drew ${cardHTML(v.myDraw.card, 'tiny', '', 'span')}` : e.wish ? ' and drew the very card!' : '';
+        const drew = you && v.myDraw && v.myDraw.seq === e.seq
+          ? ` You drew ${cardHTML(v.myDraw.card, 'tiny', '', 'span')}`
+          : e.wish ? ' and drew the very card!' : '';
         return `${by} asked ${to} for ${word(e.rank)}: <b>Go Fish!</b>${e.empty ? ' (the stock is empty)' : drew}${bookText}`;
       }
       case 'empty': return `${by} had no cards and drew one.`;
@@ -49,21 +51,25 @@
    * from you or by you, and any book, is also held in the middle of the screen. The first look at a table only records where it is. */
   function feedSync(v) {
     const key = feedKey();
-    const e = v.event;
     if (!key || !window.GameFeed) return;
     const st = ui.feeds.get(key);
-    if (!st) { ui.feeds.set(key, { seq: e ? e.seq : 0, epoch: 0 }); return; }
-    if (e && e.seq < st.seq) { st.epoch += 1; st.seq = 0; }
-    if (!e || e.seq <= st.seq) return;
-    st.seq = e.seq;
-    const text = eventText(v);
-    if (!text) return;
-    const book = e.books && e.books.length;
-    const tone = e.type === 'over' ? 'round' : book ? 'win' : e.type === 'take' ? 'take' : 'play';
-    window.GameFeed.add(key, [{ id: `gf-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
-    const mine = e.by === v.me || e.target === v.me;
-    if (e.type !== 'over' && (book || (e.type === 'take' && mine))) {
-      window.GameFeed.spotlight({ card: `<span class="gf-spot-ico">${book ? '📚' : '🎣'}</span>`, caption: text, tone, ms: 1800 });
+    const latest = v.event ? v.event.seq : 0;
+    if (!st) { ui.feeds.set(key, { seq: latest, epoch: 0 }); return; }
+    if (latest < st.seq) { st.epoch += 1; st.seq = 0; }
+    // Every event since the last look, in order: an action and the automatic refill after it are both shown.
+    // v.events holds every recent event; a view without it (older servers) carries just the latest one.
+    for (const e of v.events || (v.event ? [v.event] : [])) {
+      if (e.seq <= st.seq) continue;
+      st.seq = e.seq;
+      const text = eventText({ ...v, event: e });
+      if (!text) continue;
+      const book = e.books && e.books.length;
+      const tone = e.type === 'over' ? 'round' : book ? 'win' : e.type === 'take' ? 'take' : 'play';
+      window.GameFeed.add(key, [{ id: `gf-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
+      const mine = e.by === v.me || e.target === v.me;
+      if (e.type !== 'over' && (book || (e.type === 'take' && mine))) {
+        window.GameFeed.spotlight({ card: `<span class="gf-spot-ico">${book ? '📚' : '🎣'}</span>`, caption: text, tone, ms: 1800 });
+      }
     }
   }
 
