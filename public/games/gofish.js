@@ -13,7 +13,7 @@
   };
   const WORDS = { A: 'Aces', J: 'Jacks', Q: 'Queens', K: 'Kings' };
   const word = (r) => WORDS[r] || r + 's';
-  const ui = { ctx: null, latest: null, rank: null, target: null, seq: null, feeds: new Map(), prevHand: null, scores: false, turnKey: '' };
+  const ui = { ctx: null, latest: null, rank: null, target: null, seq: null, feeds: new Map(), prevHand: null, scores: false, turnKey: '', box: null };
 
   function cardHTML(c, cls = '', attrs = '', tag = 'div') {
     const s = SUITS[c.suit];
@@ -94,8 +94,22 @@
     return askable ? html.replace('class="pseat', `data-gf-seat="${esc(p.id)}" class="pseat gf-askable ${ui.target === p.id ? 'gf-picked' : ''}`) : html;
   }
 
+  /** The events since the box last changed, oldest first, so a fish and the refill after it both show. A re-render of the same
+   *  view gives the same lines, and a first look shows only the latest event, so nothing old is replayed. */
+  function boxTexts(v, ctx) {
+    const key = ctx && ctx.room ? ctx.room.code : '';
+    const latest = v.event ? v.event.seq : 0;
+    const box = ui.box;
+    if (box && box.key === key && box.seq === latest) return box.texts;
+    const all = v.events && v.events.length ? v.events : (v.event ? [v.event] : []);
+    const fresh = box && box.key === key ? all.filter((e) => e.seq > box.seq) : (v.event ? [v.event] : []);
+    const texts = fresh.map((e) => eventText({ ...v, event: e })).filter(Boolean);
+    ui.box = { key, seq: latest, texts };
+    return texts;
+  }
+
   function tableHTML(v, ctx) {
-    const text = eventText(v);
+    const text = boxTexts(v, ctx).join(' · ');
     // The stock sits on the felt; what just happened is a line under the table (on a phone the felt has no room for both)
     const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>`;
     return `<div class="gf-tablewrap">${pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })}</div>`

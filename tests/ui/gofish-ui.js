@@ -184,6 +184,23 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a fish and the refill after it both show in the box', async () => {
+    const msgs = tableMessages('gofish', four);
+    msgs[1].view.event = { seq: 5, type: 'draw', by: 1 };
+    msgs[1].view.events = [msgs[1].view.event];
+    const { page, ctx } = await open(msgs);
+    const fish = { seq: 6, type: 'fish', by: 1, target: 2, rank: '9', wish: false };
+    const refill = { seq: 7, type: 'draw', by: 2 };
+    const next = JSON.parse(JSON.stringify(msgs[1]));
+    next.view.event = refill; next.view.events = [fish, refill];
+    await page.evaluate((m) => window.__push(m), next);
+    await page.waitForFunction(() => /Go Fish!/.test((document.querySelector('.gf-event') || {}).textContent || ''));
+    const box = await page.textContent('.gf-event');
+    assert.match(box, /Go Fish!/, 'the fish stays in the box');
+    assert.match(box, /drew a card/, 'the refill after it shows too');
+    await ctx.close();
+  });
+
   await test('new events update the box under the table, a catch involving you is held mid-screen, and a first look replays nothing', async () => {
     const msgs = tableMessages('gofish', four);
     msgs[1].view.event = { seq: 5, type: 'take', by: 1, target: 2, rank: '7', count: 1 };
