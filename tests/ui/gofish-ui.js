@@ -84,14 +84,14 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     const view = msgs[1].view;
     view.event = { seq: 5, type: 'take', by: 1, target: 0, rank: '7', count: 2, books: ['7'] };
     let { page, ctx } = await open(msgs);
-    assert.match(await page.textContent('.gf-feed'), /Bo asked you for 7s and got 2/);
-    assert.match(await page.textContent('.gf-feed'), /Sevens|7s complete|📚 7s/);
+    assert.match(await page.textContent('.gf-event'), /Bo asked you for 7s and got 2/);
+    assert.match(await page.textContent('.gf-event'), /Sevens|7s complete|📚 7s/);
     await ctx.close();
     view.event = { seq: 6, type: 'fish', by: 0, target: 1, rank: '9', wish: false };
     view.myDraw = { seq: 6, card: { id: 'HK', suit: 'H', rank: 'K', ord: 12 } };
     ({ page, ctx } = await open(msgs));
-    assert.match(await page.textContent('.gf-feed'), /You asked Bo for 9s: Go Fish!/);
-    assert.equal(await page.locator('.gf-feed .card.tiny').count(), 1, 'you see the card you drew');
+    assert.match(await page.textContent('.gf-event'), /You asked Bo for 9s: Go Fish!/);
+    assert.equal(await page.locator('.gf-event .card.tiny').count(), 1, 'you see the card you drew');
     await ctx.close();
   });
 

@@ -13,7 +13,7 @@
   };
   const WORDS = { A: 'Aces', J: 'Jacks', Q: 'Queens', K: 'Kings' };
   const word = (r) => WORDS[r] || r + 's';
-  const ui = { ctx: null, latest: null, rank: null, target: null, seq: null, prevHand: null, scores: false, turnKey: '', feeds: new Map() };
+  const ui = { ctx: null, latest: null, rank: null, target: null, seq: null, prevHand: null, scores: false, turnKey: '' };
 
   function cardHTML(c, cls = '', attrs = '', tag = 'div') {
     const s = SUITS[c.suit];
@@ -67,37 +67,10 @@
 
   function tableHTML(v, ctx) {
     const text = eventText(v);
-    // The stock sits on the felt. What just happened floats over the felt as the last two lines (the same floater as the other
-    // card games), so the table does not change size when a move lands; without a room to key it, the line sits under the table.
+    // The stock sits on the felt; what just happened is a line under the table (on a phone the felt has no room for both)
     const center = `<div class="gf-stock" title="Stock"><div class="gf-pile">${v.stock ? backHTML() : '<div class="card slot"></div>'}</div><b>${v.stock}</b><small>in the stock</small></div>`;
-    const key = feedKey(ctx);
-    const table = pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null });
-    if (window.GameFeed && key) return `<div class="gf-tablewrap">${table}${window.GameFeed.html(key, 'gf-float')}</div>`; // the floater may be empty between moves; the layout stays
-    return table + (text ? `<p class="gf-event gf-event-bar" role="status">${text}</p>` : '');
-  }
-
-  const feedKey = (ctx) => (ctx && ctx.room ? ctx.room.code : null);
-  /** New moves go into the shared feed, one per event (by sequence number, so a redraw never repeats one). A completed book is
-   * also held in the middle of the table for a moment. The first look at a table only records where it is. */
-  function feedSync(v, ctx) {
-    const key = feedKey(ctx);
-    const e = v.event;
-    if (!key || !window.GameFeed) return;
-    // the first look at a table shows its latest move in the feed too (so the line does not jump when the next one lands), but
-    // it does not hold a book in the middle again: that happened before this page was opened
-    if (!ui.feeds.has(key)) ui.feeds.set(key, { seq: -1, epoch: 0 });
-    const st = ui.feeds.get(key);
-    const first = st.seq === -1;
-    if (e && e.seq < st.seq) { st.epoch += 1; st.seq = -1; }
-    if (!e || e.seq <= st.seq) return;
-    st.seq = e.seq;
-    const text = eventText(v);
-    if (!text) return;
-    const tone = e.type === 'over' ? 'win' : e.books && e.books.length ? 'win' : e.type === 'take' ? 'take' : 'play';
-    window.GameFeed.add(key, [{ id: `gf-${key}-${st.epoch}-${e.seq}`, tone, html: text }]);
-    if (!first && e.books && e.books.length) {
-      window.GameFeed.spotlight({ card: '<span style="font-size:44px;line-height:1" aria-hidden="true">📚</span>', caption: `${e.books.map(word).join(', ')} complete!`, tone: 'win', ms: 1400 });
-    }
+    return pt.tableHTML({ n: v.players.length, me: v.me, seat: (i) => seatHTML(v, ctx, i), center, card: () => null })
+      + (text ? `<p class="gf-event gf-event-bar" role="status">${text}</p>` : '');
   }
 
   function sizes(v) {
@@ -161,7 +134,6 @@
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
-    feedSync(v, ctx);
     react(v);
     // a new turn or a rank we no longer hold clears the pending choice
     const key = `${v.turn}:${v.event ? v.event.seq : 0}`;
