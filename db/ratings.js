@@ -96,14 +96,57 @@ function liveEnabled(env = process.env) {
   return env.RATINGS_LIVE === '1';
 }
 
+let rebuildQueue = Promise.resolve(); // rebuilds run one after another, never at the same time
+
 /**
- * Starts a rebuild after a match has been committed. It never blocks or fails the game: errors are logged. Called only when
- * liveEnabled() is true.
+ * Queues a rebuild after a match has been committed. It never blocks or fails the game: errors are logged. Called only when
+ * liveEnabled() is true. ratingsSettled() waits for the queue (used by the game-over answer, so it sees the new ratings).
  */
 function scheduleLiveRebuild() {
-  setImmediate(() => {
-    rebuildRatings().catch((err) => createLogger({ component: 'ratings' }).error('ratings.rebuild_failed', { err }));
-  });
+  rebuildQueue = rebuildQueue
+    .then(() => rebuildRatings())
+    .catch((err) => createLogger({ component: 'ratings' }).error('ratings.rebuild_failed', { err }));
 }
 
-module.exports = { computeRatings, rebuildRatings, liveEnabled, scheduleLiveRebuild, loadMatches, forfeitRecordedSince, LOCK_KEY };
+function ratingsSettled() {
+  return rebuildQueue;
+}
+
+/**
+ * The numbers the game-over screen shows for each player of one saved match: the change in this match, the monthly rating
+ * and its change, and the lifetime rating. Returns null when the match is not stored under that key.
+ */
+async function ratingsForMatch({ matchKey, gameId, playerIds }) {
+  if (!matchKey || !playerIds.length) return null;
+  const m = await db.query(
+    "SELECT id, rated, unrated_reason, to_char(finished_at AT TIME ZONE 'UTC', 'YYYY-MM') AS month FROM matches WHERE match_key = $1",
+    [matchKey],
+  );
+  if (!m.rows.length) return null;
+  const { id: matchId, rated, unrated_reason: reason, month } = m.rows[0];
+  const ev = await db.query(
+    'SELECT player_id, scope, delta FROM rating_events WHERE match_id = $1 AND game_id = $2 AND player_id = ANY($3::uuid[])',
+    [matchId, gameId, playerIds],
+  );
+  const cur = await db.query(
+    'SELECT player_id, scope, rating FROM player_ratings WHERE game_id = $1 AND player_id = ANY($2::uuid[]) AND scope IN (\'lifetime\', $3)',
+    [gameId, playerIds, month],
+  );
+  const out = {};
+  for (const id of playerIds) out[id] = { rated: Boolean(rated), reason: reason || null, matchDelta: null, monthDelta: null, monthRating: null, lifetimeRating: null };
+  for (const e of ev.rows) {
+    const o = out[e.player_id];
+    if (!o) continue;
+    if (e.scope === 'lifetime') o.matchDelta = Number(e.delta);
+    else o.monthDelta = Number(e.delta);
+  }
+  for (const c of cur.rows) {
+    const o = out[c.player_id];
+    if (!o) continue;
+    if (c.scope === 'lifetime') o.lifetimeRating = Number(c.rating);
+    else o.monthRating = Number(c.rating);
+  }
+  return out;
+}
+
+module.exports = { computeRatings, rebuildRatings, liveEnabled, scheduleLiveRebuild, ratingsSettled, ratingsForMatch, loadMatches, forfeitRecordedSince, LOCK_KEY };
