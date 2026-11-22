@@ -91,7 +91,7 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 
 /* cards come in one after the other when the home page opens */
 @keyframes deal { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-.game-card { animation: deal .5s var(--ease) both; }
+.game-card { animation: deal .5s var(--ease) backwards; }
 .game-card:nth-child(2) { animation-delay: .04s; } .game-card:nth-child(3) { animation-delay: .08s; } .game-card:nth-child(4) { animation-delay: .12s; }
 .game-card:nth-child(5) { animation-delay: .16s; } .game-card:nth-child(6) { animation-delay: .2s; } .game-card:nth-child(n+7) { animation-delay: .24s; }
 
@@ -152,14 +152,14 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 
 /* ---------- in-game surfaces: the old indigo panels become warm, dark walnut so nothing on screen belongs to another palette */
 :root { --wood-d: rgba(24, 15, 8, .72); --wood-line: rgba(230, 171, 74, .22); }
-.overlay { background: rgba(6, 12, 8, .66); backdrop-filter: blur(4px); animation: veil .22s ease-out both; }
+.overlay { background: rgba(6, 12, 8, .66); backdrop-filter: blur(4px); animation: veil .22s ease-out backwards; }
 .sheet {
   background:
     radial-gradient(520px 260px at 50% -10%, rgba(230, 171, 74, .14), transparent 70%),
     linear-gradient(170deg, #1f2a1f, #121a13);
   border: 1px solid rgba(255, 240, 205, .14); border-radius: 22px;
   box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 30px 70px -10px rgba(0, 0, 0, .75);
-  animation: rise .34s var(--ease) both;
+  animation: rise .34s var(--ease) backwards;
 }
 .sheet h2 { font-size: 28px; }
 @keyframes veil { from { opacity: 0; } to { opacity: 1; } }
