@@ -257,6 +257,8 @@ const DAY = 24 * 60 * 60 * 1000;
         player_blocks: ['c'],
         player_recent_tables: ['c'],
         private_table_invitations: ['c'],
+        player_ratings: ['c'],
+        rating_events: ['c'],
       }, 'c = CASCADE, n = SET NULL; a new reference must be classified here and in docs/DATA_CLEANUP.md');
     });
 

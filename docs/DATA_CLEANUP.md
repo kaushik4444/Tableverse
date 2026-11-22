@@ -33,6 +33,7 @@ this code version.
 | 15 | `player_blocks` | Chat blocks (migration 010): which account hid which other account's table chat | **Empty** | `players` (CASCADE, 2 keys) |
 | 16 | `friend_requests` | Friend request participants and lifecycle status | **Empty** | `players` (CASCADE, 2 keys) |
 | 17 | `friendships` | Accepted player relationships | **Empty** | `players` (CASCADE, 2 keys) |
+| 17a | `rating_events` | Skill-rating ledger (migration 035): per player, per finished match, the rating change and the rating before and after, for each game and each scope (lifetime or a UTC month) | **Empty** | `matches` (CASCADE), `players` (CASCADE) |
 | 18 | `matches` | Finished games (game, room code, seats, options, time, idempotency `match_key`) | **Empty** | referenced by `match_participants` (deleted before it) |
 | 19 | `auth_email_tokens` | Hashed single-use verification / password-reset tokens and the address they were sent to | **Empty** | `players` (CASCADE) |
 | 20 | `auth_sessions` | Hashed session tokens: registered **and legacy anonymous**, with expiry / revocation | **Empty** | `players` (CASCADE), `auth_devices` (SET NULL, migration 019) |
@@ -41,6 +42,7 @@ this code version.
 | 23 | `player_recent_tables` | Recently visited table codes per account (migration 005) | **Empty** | `players` (CASCADE) |
 | – | `guest_upgrades` | Pending guest-to-account requests (migration 031): chosen username and e-mail, password hash, hash of the one-time link, expiry | **Empty** | `players` (CASCADE) |
 | 24 | `auth_rate_limits` | Hashed per-address / per-email rate-limit counters | **Empty** | none |
+| 24a | `player_ratings` | Current skill ratings per player, per game and per scope (migration 035) | **Empty** | `players` (CASCADE) |
 | 25 | `players` | Accounts: registered players and **legacy anonymous players** | **Empty** (last) | referenced by the tables above |
 | – | `schema_migrations` | Which migration files were applied | **PRESERVE, never touched** | none, not in the plan |
 | – | `game_flags` | Owner switches: which games are on or off (configuration, not player data) | **PRESERVE, never touched** | none, not in the plan |
@@ -233,3 +235,6 @@ Recorded from the owner's report of the first production dry run. Counts only; n
 | `CLEANUP_EXECUTE` | `false` (unchanged; deletion is not enabled) |
 
 Consequence: nothing was deleted and no production data was changed. Any later `--execute` run needs its own dry-run evidence, reviewed before the repository variable is changed.
+
+
+**Migration 035 (skill ratings, Stage 20.x scoring) adds two tables**, `rating_events` and `player_ratings`, emptied in the plan above (rows `17a` and `24a`). Both reference `players` with `ON DELETE CASCADE`, so an account deletion removes its ratings. `rating_events` also references `matches` (CASCADE) and is deleted before it. The migration adds two nullable or defaulted columns to `matches` (`rated`, `unrated_reason`); neither holds personal data.
