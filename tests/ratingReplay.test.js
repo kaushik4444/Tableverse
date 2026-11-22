@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { replay, report, REASON } = require('../lib/ratingReplay');
 
 const part = (playerId, extra = {}) => ({ playerId, isBot: false, leftEarly: false, forfeit: false, isWinner: false, isDraw: false, place: null, score: 0, ...extra });
-const match = (id, gameId, finishedAt, participants, extra = {}) => ({ id, gameId, finishedAt, completed: true, participants, ...extra });
+const match = (id, gameId, finishedAt, participants, extra = {}) => ({ id, gameId, finishedAt, completed: true, matchKey: 'key-' + id, participants, ...extra });
 const sumScope = (events, scope) => events.filter((e) => e.scope === scope).reduce((s, e) => s + e.delta, 0);
 const lifetimeEvent = (result, playerId) => result.events.find((e) => e.playerId === playerId && e.scope === 'lifetime');
 
@@ -67,8 +67,8 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
   const rs = replay(ms).results;
   assert.ok(Math.abs(lifetimeEvent(rs[0], 'A').delta) > 1, 'the first match counts');
   assert.ok(lifetimeEvent(rs[3], 'A').delta !== 0, 'the 4th match still counts (at half)');
-  assert.equal(lifetimeEvent(rs[5], 'A').delta, 0, 'the 6th match in 24 hours counts for nothing');
-  assert.equal(lifetimeEvent(rs[5], 'B').delta, 0);
+  assert.equal(rs[5].rated, false, 'the 6th match in 24 hours is not rated');
+  assert.equal(rs[5].reason, REASON.PAIR_LIMIT);
 }
 
 // 6. daily cap: one player cannot gain more than the cap in one UTC day, against different opponents
@@ -104,6 +104,36 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
   assert.equal(rep.chess.rated, 1);
   assert.equal(rep.colorclash.unrated, 2);
   assert.equal(rep.colorclash.reasons[REASON.RANKING], 2);
+}
+
+// 9. a match with no stored match key (written before results were reported) is unrated: its winners are unknown
+{
+  const legacy = match('old', 'chess', T(9), [part('A', { isWinner: true }), part('B')], { matchKey: null });
+  assert.equal(replay([legacy]).results[0].reason, REASON.LEGACY);
+}
+
+// 10. the daily cap keeps each match zero-sum: one capped player scales the whole match, the other side loses the same
+{
+  // A has already moved +59 today in chess, then wins against a fresh opponent: the win is cut to +1 for A and
+  // B's loss is cut by the same factor, so the two changes still add up to zero.
+  const ms = [0, 1].map((i) => match('warm' + i, 'chess', T(9 + i * 0.5), [part('A', { isWinner: true }), part('W' + i)]));
+  const later = match('cap-zs', 'chess', T(12), [part('A', { isWinner: true }), part('B')]);
+  const rs = replay([...ms, later]).results;
+  const capped = rs[2];
+  assert.ok(Math.abs(sumScope(capped.events, 'lifetime')) < 1e-9, 'a capped match is still zero-sum');
+  assert.ok(Math.abs(sumScope(capped.events, '2026-11')) < 1e-9, 'and in the month too');
+  const total = rs.reduce((s, r) => s + lifetimeEvent(r, 'A').delta, 0);
+  assert.ok(total <= 60 + 1e-9, `A's day total stays within the cap (got ${total.toFixed(2)})`);
+}
+
+// 11. when every pair has used up the 24-hour limit, the match is unrated with reason pair-limit, and it still counts
+{
+  const ms = [0, 1, 2, 3, 4, 5, 6].map((i) => match('pl' + i, 'chess', T(9 + i * 0.1), [part('A', { isWinner: i % 2 === 0 }), part('B', { isWinner: i % 2 !== 0 })]));
+  const rs = replay(ms).results;
+  assert.equal(rs[6].rated, false);
+  assert.equal(rs[6].reason, REASON.PAIR_LIMIT);
+  assert.equal(rs[5].reason, REASON.PAIR_LIMIT, 'the 6th match of the pair is suppressed too');
+  assert.equal(rs[4].rated, true, 'the 5th match is still rated (at half)');
 }
 
 console.log('rating replay: all tests passed');
