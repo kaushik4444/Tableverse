@@ -295,9 +295,9 @@
         const total = v.countdown ? `${p.left} left` : `${p.total} pts`;
         return `<li class="${r.penalties[i] === least ? 'win' : ''}"><span><b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b></span><span>${r.penalties[i] ? `+${r.penalties[i]} penalty` : 'no penalty'} · ${total}</span></li>`;
       }).join('');
-      return `<div class="overlay"><div class="sheet"><h2>Round ${r.round} complete</h2><p class="hint" style="text-align:left">${v.countdown ? 'Penalty points come off everyone\'s 66. Whoever reaches 0 first loses.' : 'The fewest penalty points is best.'}</p>
-        <ul class="pr-final">${rows}</ul>
-        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}</div></div>`;
+      return `<div class="overlay"><div class="sheet"><h2>Round ${r.round} complete</h2>
+        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}<p class="hint" style="text-align:left">${v.countdown ? 'Penalty points come off everyone\'s 66. Whoever reaches 0 first loses.' : 'The fewest penalty points is best.'}</p>
+        <ul class="pr-final">${rows}</ul></div></div>`;
     }
     if (v.phase !== 'gameOver') return '';
     const rows = v.players.map((p, i) => ({ p, i }))

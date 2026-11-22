@@ -164,9 +164,9 @@
     }
     if (r && v.phase === 'roundEnd') { // the summary stays until everybody is ready and the next round is dealt
       return `<div class="overlay"><div class="sheet"><h2>${nameOf(v, r.winner)} went out!</h2>
+        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}
         <p class="hint" style="text-align:left">${r.total} points for round ${r.round}. First to ${v.target}.</p>
-        <ul class="cc-final">${rows(sorted)}</ul>
-        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}</div></div>`;
+        <ul class="cc-final">${rows(sorted)}</ul></div></div>`;
     }
     return '';
   }

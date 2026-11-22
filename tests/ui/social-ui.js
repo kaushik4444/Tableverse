@@ -215,9 +215,9 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await page.waitForSelector('.pcard-head');
     const head = await page.textContent('.pcard-head');
     assert.match(head, /Ann/); assert.match(head, /@ann/); assert.match(head, /75 ms · Good/);
-    // the card shows the player's level and their lifetime XP in the game being played (wizard)
+    // the card shows the player's level (Game XP is no longer shown)
     await page.waitForSelector('.pcard-xp');
-    assert.match(await page.textContent('.pcard-xp'), /Level 7 · Lifetime Wizard XP \+35/);
+    assert.equal(await page.textContent('.pcard-xp'), 'Level 7');
     await page.waitForFunction(() => /12\s*Games/.test(document.querySelector('.pcard-stats')?.textContent.replace(/\s+/g, '') ? document.querySelector('.pcard-stats').textContent.replace(/(\d)([A-Za-z])/g, '$1 $2') : ''));
     const before = calls.filter((c) => c.method === 'POST' && c.path === '/api/me/friend-requests').length;
     await page.click('[data-modal-act="cardAdd"]');

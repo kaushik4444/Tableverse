@@ -529,6 +529,9 @@ html { scroll-behavior: auto; }
 .game-card { min-width: 0; }
 .game-card .game-actions { flex-wrap: wrap; }
 .game-card .game-actions .btn { min-height: 38px; }
+.game-card .game-actions { flex-wrap: nowrap; }
+.game-card .game-extra { margin: 2px 0 0; font-size: 13px; }
+.game-card .game-extra a { color: var(--gold); display: inline-flex; align-items: center; min-height: 44px; }
 .coming-roadmap { padding-top: 4px; }
 .soon-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
 .soon-heading .section { margin-bottom: 2px; }
@@ -659,6 +662,20 @@ button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px so
 .pg-btn { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; padding: 6px 8px; margin: 0; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .pg-btn:hover, .pg-btn:focus-visible { background: rgba(255,255,255,.06); }
 .pg-btn b { white-space: nowrap; color: var(--gold); }
+/* Rankings: one row per player, rank, name, rating on the right and the number of rated games under it */
+.board-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+.board-list li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 10px; align-items: baseline; padding: 9px 8px; border-top: 1px solid var(--panel-line); }
+.board-list li:first-child { border-top: 0; }
+.board-list li.me { background: rgba(242, 193, 78, .12); border-radius: 10px; }
+.bl-rank { color: var(--muted); font-variant-numeric: tabular-nums; }
+.bl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bl-val { font-variant-numeric: tabular-nums; color: var(--gold); font-size: 16px; }
+.bl-sub { grid-column: 2 / -1; color: var(--muted); font-size: 12px; }
+.seg { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(255,255,255,.06); align-self: flex-start; }
+.seg-btn { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.seg-btn[aria-pressed="true"] { background: var(--gold); color: #1a1a1a; font-weight: 700; }
+.board-foot { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-top: 6px; }
+.board-foot small { color: var(--muted); font-size: 12px; }
 .pg-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .stat-game-btn { width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 .stat-game-btn:hover, .stat-game-btn:focus-visible { background: rgba(255,255,255,.06); }

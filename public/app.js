@@ -1661,17 +1661,11 @@
   }
   const roomPerson = (pid) => S.room && [...(S.room.members || []), ...(S.room.spectators || [])].find((x) => x.id === pid);
 
-  /**
-   * The game-related numbers on a player card: their overall level, and their lifetime XP in the game being played (their
-   * stored game points across all their matches). Time played is not a game amount, so it is not shown here.
-   */
+  /** The level on a player card (from time played). Game XP is not shown; skill ratings are on the profile. */
   function cardXpHTML(prof) {
     const prog = prof && prof.progress;
     if (!prog || prog.level == null) return '';
-    const gameId = S.room && S.room.gameId;
-    const row = gameId && prog.games ? prog.games[gameId] : null;
-    const name = esc(statsGame(gameId || '').name);
-    return `<p class="pcard-xp">Level ${Number(prog.level)} · Lifetime ${name} XP ${fmtXp(row ? row.xp : 0)}</p>`;
+    return `<p class="pcard-xp">Level ${Number(prog.level)}</p>`;
   }
 
   function cardHTML() {
@@ -1997,7 +1991,7 @@
       S.latestProgressRequest = mine;
       setAccount(progress);
       noteLevelUp();
-      // Keep the open profile in step, including Game XP changes that do not advance a time-based level.
+      // Keep the open profile in step, including game changes that do not advance a time-based level.
       if (S.profile && S.profile.data && S.profile.data.stats && progress) S.profile.data.stats.progress = progress;
       const progressAfter = JSON.stringify(S.profile && S.profile.data && S.profile.data.stats && S.profile.data.stats.progress || null);
       if (key(S.account) !== before || progressAfter !== progressBefore || JSON.stringify(S.levelUp) !== noticeBefore) render();
@@ -2682,8 +2676,8 @@
           <div class="row game-actions">
             <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}" ${open || guestLocked ? '' : 'disabled aria-disabled="true"'}>Create table</button>
             <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
-            ${g.id === 'wizard' ? (S.guest ? `<button class="btn ghost small" type="button" data-act="showLogin">Log in for offline scorecard</button>` : `<a class="btn ghost small" href="/scorecard.html?game=wizard">Wizard offline scorecard</a>`) : ''}
           </div>
+          ${g.id === 'wizard' ? `<p class="game-extra">${S.guest ? '<button type="button" class="linklike" data-act="showLogin">Log in for the offline scorecard</button>' : '<a href="/scorecard.html?game=wizard">Offline scorecard</a>'}</p>` : ''}
         </div>
       </article>`;
     }).join('');
@@ -2890,84 +2884,58 @@
    * The skill-rating board for this game: lifetime, or this UTC month (Lifetime / This month). Nothing is shown while the
    * ratings are off on the server. Only people who turned on the boards appear, with at least 5 rated games in the scope.
    */
+  /** The skill ratings for one game: what they mean, all-time or this month, the board, and the switch that shows you on it. */
   function ratingBoardHTML(P, meta) {
     // Hidden until the server has confirmed the ratings are on; a board that belongs to another game is never shown.
-    const enabled = P.ratingsEnabled === true;
-    if (!enabled) return '';
+    if (P.ratingsEnabled !== true) return '';
     const b = P.ratingBoard && P.ratingBoard.game === P.game ? P.ratingBoard : null;
     const month = P.ratingScope === 'month';
-    const tabs = `<div class="row" role="group" aria-label="Rating period"><button type="button" class="btn ghost small" data-act="ratingScope" data-scope="lifetime" aria-pressed="${!month}">Lifetime</button><button type="button" class="btn ghost small" data-act="ratingScope" data-scope="month" aria-pressed="${month}">This month</button></div>`;
-    const body = !b ? '<p class="hint" style="text-align:left">Loading ratings…</p>'
+    const seg = (scope, label) => `<button type="button" class="seg-btn" data-act="ratingScope" data-scope="${scope}" aria-pressed="${month === (scope === 'month')}">${label}</button>`;
+    const rows = !b ? '<p class="hint" style="text-align:left">Loading ratings…</p>'
       : b.failed ? '<p class="hint" style="text-align:left">Could not load the ratings. Try again in a moment.</p>'
-      : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${r.rating}</b><small>${r.ratedGames} rated game${r.ratedGames === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
-      : `<p class="hint" style="text-align:left">No one has 5 rated games in ${esc(meta.name)} ${month ? 'this month' : 'yet'}.</p>`;
-    return `<section class="progress-card" aria-label="Skill ratings for ${esc(meta.name)}"><h3 class="stat-h">Skill ratings</h3>${tabs}${body}</section>`;
-  }
-
-  function weeklyBoardHTML(P, id, meta) {
-    const b = P.board;
+      : (b.board || []).length ? `<ol class="board-list">${b.board.map((r, i) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span class="bl-rank">${i + 1}</span><span class="bl-name">${esc(r.displayName)}</span><b class="bl-val">${r.rating}</b><small class="bl-sub">${r.ratedGames} games</small></li>`).join('')}</ol>`
+      : `<p class="hint" style="text-align:left">Nobody has 5 rated ${esc(meta.name)} games ${month ? 'this month' : 'yet'}.</p>`;
     const on = !!(P.data && P.data.profile && P.data.profile.leaderboardOptIn);
-    const body = !b ? '<p class="hint" style="text-align:left">Loading this week’s board…</p>'
-      : b.failed ? '<p class="hint" style="text-align:left">Could not load the board. Try again in a moment.</p>'
-      : (b.board || []).length ? `<ol class="board-list">${b.board.map((r) => `<li class="${S.username && r.username === S.username ? 'me' : ''}"><span>${esc(r.displayName)}</span><b>${fmtXp(r.points)} XP</b><small>${r.played} game${r.played === 1 ? '' : 's'}</small></li>`).join('')}</ol>`
-      : '<p class="hint" style="text-align:left">No one on the board has played this game in the last 7 days.</p>';
-    const toggle = P.data ? `<div class="row"><button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On' : 'Off'}: show me on the boards</button></div><p class="hint" style="text-align:left">On by default. When on, your name can appear on the weekly and skill-rating boards for ${esc(meta.name)}. Turn it off to leave the boards; your results stay on your profile.</p>` : '';
-    return `<section class="progress-card" aria-label="Weekly board for ${esc(meta.name)}"><h3 class="stat-h">This week’s board</h3>${body}${toggle}</section>`;
+    const switchBtn = P.data ? `<button type="button" class="btn ghost small" data-act="boardOptIn" aria-pressed="${on}">${on ? 'On: your name is on the boards' : 'Off: your name is not on the boards'}</button>` : '';
+    return `<section class="progress-card" aria-label="Skill ratings for ${esc(meta.name)}">
+      <h3 class="stat-h">Skill ratings</h3>
+      <p class="hint" style="text-align:left">Everyone starts at 1000. Beating stronger players raises your rating, losing to weaker ones lowers it. A rating appears after 5 rated games.</p>
+      <div class="seg" role="group" aria-label="Rating period">${seg('lifetime', 'All time')}${seg('month', 'This month')}</div>
+      ${rows}
+      <div class="board-foot">${switchBtn}<small>Your results stay on your profile either way.</small></div>
+    </section>`;
   }
 
-  /** Account level (time played), Game XP per game (skill) and penalised leaves. `pr` is the progress the server sends; nothing when absent. */
+  /** Account level (from time played) and penalised leaves. `pr` is the progress the server sends; nothing when absent. */
   function progressHTML(pr, interactive = true) {
-    // Own profile: `account` carries the level bar. Another player's profile (getPublicProfile) has only `level` and each
-    // game's `xp`, so it shows the level and the game XP without the bar, minutes or leave counts.
+    // Own profile: `account` carries the level bar. Another player's profile has only `level`, so it shows the level alone.
     if (!pr || (!pr.account && (pr.level === undefined || pr.level === null))) return '';
     const a = pr.account || null;
     const level = a ? a.level : pr.level;
     const pct = a && a.need ? Math.min(100, Math.round((a.into / a.need) * 100)) : 0;
-    const gameXp = (g) => Number(g.points !== undefined ? g.points : g.xp) || 0;
-    const games = Object.entries(pr.games || {}).sort((x, y) => gameXp(y[1]) - gameXp(x[1])).map(([id, g]) => {
-      const meta = statsGame(id);
-      const label = `<span>${gameMark(meta)} ${esc(meta.name)}</span><b>${fmtXp(gameXp(g))} XP</b>`;
-      // Another player's profile shows the same numbers but has no detail view for them, so its rows are plain text.
-      return interactive
-        ? `<li class="pg-row"><button type="button" class="pg-btn" data-act="openGameStats" data-game="${esc(id)}" aria-label="${esc(meta.name)}: ${fmtXp(gameXp(g))} Game XP, details">${label}</button></li>`
-        : `<li class="pg-row">${label}</li>`;
-    }).join('');
     const levelBlock = a
-      ? `<div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · next level in <b>${Math.max(0, a.need - a.into)} min</b> of play</span>
+      ? `<div class="pg-level"><span class="stat-v">Level ${a.level}</span><span class="stat-l">${a.minutes} min played · ${Math.max(0, a.need - a.into)} min to level ${a.level + 1}</span>
         <div class="pg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${a.into}" aria-label="Progress to level ${a.level + 1}"><span style="width:${pct}%"></span></div></div>`
       : `<div class="pg-level"><span class="stat-v">Level ${Number(level) || 0}</span></div>`;
     const left = pr.penalisedLeaves > 0 ? `<p class="hint" style="text-align:left">Left ${pr.penalisedLeaves} game${pr.penalisedLeaves === 1 ? '' : 's'} early (counted as a loss).</p>` : '';
     const levelUp = interactive && S.levelUp && S.levelUp.username === S.username ? `<div class="levelup-note" role="status"><b>Level up!</b> You reached level ${Number(S.levelUp.to)}. <button type="button" class="btn small" data-act="levelUpAck">Got it</button></div>` : '';
-    return `<section class="progress-card" aria-label="Progress">${levelUp}
-      ${levelBlock}
-      ${games ? `<h3 class="stat-h">Game XP${interactive ? ' <small>(tap a game for details)</small>' : ''}</h3><ul class="plain-list pg-games">${games}</ul>` : ''}${left}</section>`;
+    return `<section class="progress-card" aria-label="Level">${levelUp}${levelBlock}${left}</section>`;
   }
 
-  /** One game from "By game": its Game XP and how it is earned, the record, and that game's recent results. */
+  /** One game from "By game": the record, its skill ratings, and that game's recent results. */
   function gameDetailHTML(P) {
     const id = P.game;
     const meta = statsGame(id);
     const head = `<div class="pg-head"><button type="button" class="btn ghost small" data-act="closeGameStats">← All games</button><b>${gameMark(meta)} ${esc(meta.name)}</b></div>`;
     const st = P.data.stats;
     const g = (st.perGame || []).find((x) => x.gameId === id);
-    if (!g) return `${head}${emptyState('🃏', 'Not played yet', 'Play this game and your Game XP and record show up here.')}`;
-    const pg = (st.progress && st.progress.games && st.progress.games[id]) || { points: 0, rule: 'placing' };
-    // Only people still in the game at the end are ranked (bots are not). Leaving while others play costs -30 on top.
-    const rule = pg.rule === 'win-lose'
-      ? 'Among the people (bots are not ranked) still in the game: win +20, loss −10, draw 0. Leaving while others are still playing −30.'
-      : 'Among the people (bots are not ranked) still in the game: first place +20, the lowest place −10, and the places in between spread evenly. If only one person is ranked, or everyone ties, it is 0. Leaving while others are still playing −30.';
+    if (!g) return `${head}${emptyState('🃏', 'Not played yet', 'Play this game and your record and ratings show up here.')}`;
     const tile = (label, value, cls = '') => `<div class="stat-tile ${cls}"><span class="stat-v">${value}</span><span class="stat-l">${label}</span></div>`;
     const hist = P.gameHistory;
     const histHTML = !hist ? '<p class="hint" style="text-align:left">Loading recent games…</p>'
       : hist.failed ? '<p class="hint" style="text-align:left">Could not load this game’s history. Try again in a moment.</p>'
       : historyHTML({ ...hist, pages: 1 });
     return `${head}
-      <section class="progress-card" aria-label="${esc(meta.name)} Game XP">
-        <div class="pg-level"><span class="stat-v">${fmtXp(pg.points)} XP</span><span class="stat-l">Game XP in ${esc(meta.name)}</span></div>
-        <p class="hint" style="text-align:left">${esc(rule)}</p>
-      </section>
-      ${weeklyBoardHTML(P, id, meta)}
-      ${ratingBoardHTML(P, meta)}
       <div class="stat-grid">
         ${tile('Played', g.played)}
         ${tile('Wins', g.wins, 'good')}
@@ -2975,6 +2943,7 @@
         ${tile('Win rate', g.winRate + '%')}
         ${g.best !== null && g.bestLabel ? tile(esc(g.bestLabel), esc(g.bestText), 'wide') : ''}
       </div>
+      ${ratingBoardHTML(P, meta)}
       <h3 class="stat-h">Recent ${esc(meta.name)} games</h3>
       ${histHTML}`;
   }
@@ -3002,7 +2971,7 @@
       </div>
       <h3 class="stat-h">By game</h3>
       <div class="stat-games">${games}</div>
-      <h3 class="stat-h">Last ${s.recent.length} games <small>(newest first)</small></h3>
+      <h3 class="stat-h">Last ${s.recent.length} game${s.recent.length === 1 ? '' : 's'} <small>(newest first)</small></h3>
       <div class="stat-recent">${recent}</div>
       <p class="hint" style="text-align:left;margin-top:12px">Ties share the win. Leaving while others are still playing counts as a loss.</p>`;
   }
@@ -3127,39 +3096,9 @@
   const END_WINNER_MS = 2800; // then the "<name> won" pop-up
   /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
   /**
-   * Game over: one table for every person at the table. Per game only: this game's skill XP, and the lifetime skill XP
-   * this person has earned in this same game across all their stored matches. Time-played (Player Progress) XP is not
-   * shown here. `totals` maps player id to lifetime game XP, or is null while the server has not answered yet.
-   */
-  function endXpHTML(rows, gameName, totals, gaveUp = false) {
-    const people = rows.filter((x) => !x.isBot);
-    if (!people.length) return '';
-    const game = esc(gameName || 'Game');
-    const mine = people.find((x) => x.id === S.id);
-    const unranked = (x) => x.gameXp === null || x.gameXp === undefined;
-    const lifetime = (x) => {
-      if (!x.saved) return '–'; // guests have no stored history
-      // "…" while the answer may still come; "n/a" once every try has gone unanswered (a late answer still replaces it)
-      if (!totals) return gaveUp ? 'n/a' : '…';
-      return fmtXp(totals[x.id] || 0);
-    };
-    const note = mine && !mine.saved ? '<p class="xp-note">Guest games are not kept. Sign in to keep your game XP.</p>' : '';
-    const body = people.map((x) => {
-      const me = Boolean(mine) && x.id === S.id;
-      const name = me ? 'You' : esc(x.name || 'Player');
-      const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
-      const left = x.penalised ? '<small class="xp-tag">left early (−30)</small>' : '';
-      return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${unranked(x) ? '–' : fmtXp(x.gameXp)}</span><span class="xp-c" role="cell">${lifetime(x)}</span></div>`;
-    }).join('');
-    const table = `<div class="xp-table" role="table" aria-label="${game} XP for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">${game} XP</span><span class="xp-c" role="columnheader">Lifetime ${game} XP</span></div>${body}</div>`;
-    return `<section class="end-xp" aria-label="${game} XP for this game">${note}${table}</section>`;
-  }
-
-  /**
-   * Game over, with the skill ratings on (RATINGS_LIVE=1): per person, this match's change, the monthly rating (and this
-   * match's change in it), and the lifetime rating in this game. Replaces the Game XP table when the ratings are on.
-   * `ratings` maps player id to { rated, reason, matchDelta, monthDelta, monthRating, lifetimeRating }, or is missing while
-   * the answer may still come.
+   * Game over: per person, this match's change, the monthly rating (and this match's change in it), and the all-time rating
+   * in this game. `ratings` maps player id to { rated, reason, matchDelta, monthDelta, monthRating, lifetimeRating }; a player
+   * without an entry shows dashes (the answer may still be on its way).
    */
   function endRatingHTML(rows, gameName, ratings, gaveUp = false) {
     const people = rows.filter((x) => !x.isBot);
@@ -3168,8 +3107,6 @@
     const mine = people.find((x) => x.id === S.id);
     const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(Math.round(n));
     const num = (n) => (Number.isFinite(n) ? String(Math.round(n)) : '–');
-    // This table is only drawn once the answer has come, so a player with no entry in it has no rating: a dash, not a wait.
-    const pending = () => null;
     const note = mine && !mine.saved ? '<p class="xp-note">Guest games are not kept. Sign in to keep your ratings.</p>' : '';
     const body = people.map((x) => {
       const me = Boolean(mine) && x.id === S.id;
@@ -3187,7 +3124,7 @@
       }
       return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${thisMatch}</span><span class="xp-c" role="cell">${month}</span><span class="xp-c" role="cell">${life}</span></div>`;
     }).join('');
-    const table = `<div class="xp-table xp-table-rating" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">Lifetime</span></div>${body}</div>`;
+    const table = `<div class="xp-table xp-table-rating" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">All time</span></div>${body}</div>`;
     return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${table}</section>`;
   }
 
@@ -3252,8 +3189,8 @@
       const gameNudge = guestNudge('gameover');
       if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }
       const xpRows = (r.outcome && r.outcome.xp) || [];
-      // Lifetime game XP comes from the server once per finished game (the table's own game only)
-      const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.totals : null;
+      // The ratings for this game come from the server once per finished game (the table's own game only)
+      const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
       // Asked again if the answer did not come (not connected, or the server could not save the game yet): at most three
       // tries, five seconds apart, so a failed request never leaves the saved players on an ellipsis for good.
       const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
@@ -3265,10 +3202,7 @@
       if (xpRows.length && !$app.querySelector('.end-xp')) {
         // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
         const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
-        const gotRatings = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals.ratings : null;
-        const card = gotRatings
-          ? endRatingHTML(xpRows, statsGame(r.gameId).name, gotRatings, gaveUp)
-          : endXpHTML(xpRows, statsGame(r.gameId).name, gotTotals, gaveUp);
+        const card = endRatingHTML(xpRows, statsGame(r.gameId).name, gotTotals && gotTotals.ratings ? gotTotals.ratings : {}, gaveUp);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
