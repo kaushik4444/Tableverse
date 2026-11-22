@@ -129,9 +129,49 @@ function scene(n, edit) {
   });
 
   await test('a broken tool of yours is explained; the table says what just happened', async () => {
-    const { page, ctx } = await open(scene(4, (v) => { v.players[v.me].broken = ['lamp']; v.event = { seq: 4, type: 'break', by: 1, target: v.me, tool: 'lamp' }; }));
+    const { page, ctx } = await open(scene(4, (v) => {
+      v.players[v.me].broken = ['lamp'];
+      v.event = { seq: 4, type: 'break', by: 1, target: v.me, tool: 'lamp' };
+      v.history = [{ round: 1, by: 1, kind: 'break', target: v.me, tool: 'lamp' }];
+    }));
     assert.match(await page.textContent('.wz-status'), /broken/);
-    assert.match(await page.textContent('.hm-event'), /Bo broke your Lamp/);
+    assert.match(await page.textContent('.hm-log'), /Bo broke your .*Lamp/);
+    await ctx.close();
+  });
+
+  await test('the move log keeps its height as moves are added, names each move with its card, and every miner has a tally', async () => {
+    const moves = (n) => (v) => {
+      v.history = [
+        { round: 1, by: 1, kind: 'tile', mask: 10, cut: false, x: 1, y: 2, revealed: [] },
+        { round: 1, by: 2, kind: 'break', target: 0, tool: 'pick' },
+        { round: 1, by: 3, kind: 'repair', target: 1, tool: 'lamp' },
+        { round: 1, by: 0, kind: 'scout', goal: 2 },
+        { round: 1, by: 1, kind: 'collapse', x: 3, y: 2 },
+      ].slice(0, n);
+      v.tally = v.players.map((_, i) => ({ tunnels: i, deadEnds: 0, breaks: 0, repairs: 0, scouts: 0, collapses: 0, discards: 0 }));
+    };
+    const { page, ctx } = await open(scene(4, moves(2)));
+    const h1 = await page.evaluate(() => Math.round(document.querySelector('.hm-log').getBoundingClientRect().height));
+    await page.evaluate((m) => window.__push(m), scene(4, moves(5))[1]);
+    await page.waitForTimeout(300);
+    const h2 = await page.evaluate(() => Math.round(document.querySelector('.hm-log').getBoundingClientRect().height));
+    assert.equal(h2, h1, 'the log is the same height with two moves and with five');
+    const log = await page.textContent('.hm-log');
+    assert.match(log, /repaired .*Lamp/, 'a repair is named with its tool');
+    assert.match(log, /collapsed a tunnel piece/, 'a collapse is named');
+    assert.doesNotMatch(log, /dug a tunnel/, 'the first move has scrolled out of the last four');
+    assert.equal(await page.locator('.hm-log li').count(), 4, 'the last four moves are shown');
+    assert.equal(await page.locator('.hm-tally').count(), 4, 'every miner shows a tally');
+    assert.match(await page.textContent('.hm-legend'), /tunnels dug/);
+    await ctx.close();
+  });
+
+  await test('a move from an earlier round keeps what its chamber held, even when this round has other chambers', async () => {
+    const { page, ctx } = await open(scene(4, (v) => {
+      v.goals = v.goals.map((q) => ({ ...q, revealed: false, gold: null }));
+      v.history = [{ round: 1, by: 1, kind: 'tile', mask: 10, cut: false, x: 7, y: 2, opened: [true] }];
+    }));
+    assert.match(await page.textContent('.hm-log'), /opening the gold chamber/);
     await ctx.close();
   });
 
