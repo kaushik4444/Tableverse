@@ -1847,12 +1847,12 @@ function start(opts = {}) {
         if (pending) {
           // Every path ends with a terminal message (pending: false), even an empty one, so the client never waits on an answer
           // that will not come.
-          const finish = (ratings2) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings: ratings2, pending: false });
+          const finish = (ratings2, failed = false) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings: ratings2, pending: false, failed: Boolean(failed) });
           settling.then(async (ok) => {
             finish(ok ? ((await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {}) : {});
           }).catch((err) => {
             console.error('[server] final game totals failed:', err.message);
-            finish({});
+            finish({}, true);
           });
         }
       },

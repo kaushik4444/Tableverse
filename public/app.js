@@ -1485,9 +1485,9 @@
       case 'gameTotals':
         // the skill ratings for the finished game at this table; the game-over table is redrawn with them
         if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) {
-          // a late pending reply must not replace a final answer already stored for this match
+          // a late pending reply, or a failed lookup, must not replace a final answer already stored for this match
           const haveFinal = S.gameTotals && S.gameTotals.code === m.code && S.gameTotals.id === m.id && !S.gameTotals.pending;
-          if (!(m.pending && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending) }; render(); }
+          if (!((m.pending || m.failed) && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending) }; render(); }
         }
         break;
       case 'error':

@@ -72,6 +72,20 @@ const cells = (page) => page.$$eval('.xp-table-rating .xp-tr:not(.xp-th) .xp-c',
       assert.ok((await cells(page)).includes('+5'), 'the final match deltas replace the pending state');
       await ctx.close();
     });
+
+    await test('a failed follow-up lookup does not replace final ratings already shown', async () => {
+      const { at, messages } = finishedTable();
+      const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages });
+      await page.goto(srv.url + '/');
+      await page.waitForSelector('.end-xp', { timeout: 12000 });
+      const ratings = { me: { rated: true, matchDelta: 5, monthRating: 1200, monthDelta: 3, lifetimeRating: 1100 }, p1: { rated: true, matchDelta: -5, monthRating: 1100, monthDelta: -3, lifetimeRating: 1000 } };
+      await page.evaluate((m) => window.__push(m), { t: 'gameTotals', code: 'ENDTOT', id: at, ratings, pending: false });
+      await page.waitForFunction(() => !document.querySelector('.xp-status'), null, { timeout: 5000 });
+      await page.evaluate((id) => window.__push({ t: 'gameTotals', code: 'ENDTOT', id, ratings: {}, pending: false, failed: true }), at);
+      await page.waitForTimeout(400);
+      assert.ok((await cells(page)).includes('+5'), 'the stored final ratings survive a failed lookup');
+      await ctx.close();
+    });
   } finally {
     await browser.close();
     srv.server.close();
