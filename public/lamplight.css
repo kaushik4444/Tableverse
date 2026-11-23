@@ -1,0 +1,62 @@
+/* Lamplight: the modern layer. Loaded after every other sheet, it restyles what is already there (nothing is removed or moved):
+   a lamp-lit felt ground, glass surfaces with a hairline top light, game cards that glow in their own colour under the pointer,
+   and a tab pill that slides to whatever you hover. Gold stays for "you" and the one action that matters; mint marks everyone else.
+   Hover effects are off on touch screens, and every animation is off for people who ask for reduced motion. */
+:root {
+  --felt-1: #0c1f17; --felt-2: #07130e;
+  --ink: #f0fdf4; --muted: #9fc2ae; --first: #86efac;
+  --panel: rgba(240, 253, 244, .045); --panel-line: rgba(240, 253, 244, .1);
+  --radius: 20px;
+  --lamp: rgba(251, 191, 36, .13); --mint-soft: rgba(134, 239, 172, .12); --glass-hi: rgba(240, 253, 244, .07);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+body {
+  background:
+    radial-gradient(760px 440px at 50% -70px, var(--lamp), transparent 70%),
+    radial-gradient(900px 620px at 100% 35%, var(--mint-soft), transparent 70%),
+    linear-gradient(180deg, #0c1f17, #07130e 85%) fixed;
+}
+
+/* top bar: glass, with the tabs in the middle */
+.topbar { background: rgba(7, 19, 14, .62); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); border-bottom: 1px solid rgba(240, 253, 244, .07); }
+.tb-tabs { position: relative; display: none; gap: 2px; padding: 4px; border-radius: 999px; background: var(--panel); border: 1px solid var(--panel-line); margin-inline: auto; }
+.tb-tab { position: relative; z-index: 1; border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 14px; padding: 8px 16px; border-radius: 999px; min-height: 36px; text-decoration: none; transition: color .2s; }
+.tb-tab:hover, .tb-tab:focus-visible, .tb-tab[aria-current="page"] { color: var(--ink); }
+.tb-pill { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 999px; background: var(--glass-hi); border: 1px solid rgba(240, 253, 244, .12); box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 8px 18px -10px rgba(0, 0, 0, .8); transition: transform .35s var(--ease), width .35s var(--ease); pointer-events: none; }
+@media (min-width: 760px) { .tb-tabs { display: flex; } }
+
+/* buttons */
+.btn { transition: transform .2s var(--ease), filter .2s, box-shadow .25s var(--ease); }
+@media (hover: hover) { .btn:not(.ghost):not(:disabled):hover { transform: translateY(-2px); } }
+.btn:active { transform: translateY(0) scale(.98); }
+.btn.ghost { background: var(--panel); border: 1px solid var(--panel-line); }
+@media (hover: hover) { .btn.ghost:hover { border-color: rgba(134, 239, 172, .4); background: var(--mint-soft); } }
+
+/* home */
+.home-intro h1 { background: none; -webkit-text-fill-color: currentColor; color: var(--ink); letter-spacing: -.03em; }
+.join-form, .friends-strip, .panel { background: var(--panel); border: 1px solid var(--panel-line); box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 18px 40px -28px rgba(0, 0, 0, .9); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.join-form input:focus-visible { border-color: var(--gold); box-shadow: 0 0 0 5px var(--lamp); }
+.section { display: flex; align-items: center; gap: 10px; }
+.section::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--first); box-shadow: 0 0 0 4px var(--mint-soft); flex: none; }
+
+/* game cards: a glow in the game's own colour that follows the pointer */
+.game-card { position: relative; overflow: hidden; isolation: isolate; background: var(--panel); border: 1px solid var(--panel-line); border-radius: var(--radius); box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 18px 40px -28px rgba(0, 0, 0, .9); transition: transform .35s var(--ease), border-color .3s, box-shadow .35s var(--ease), background .3s; }
+.game-card::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .3s; background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%); }
+.game-card::after { content: ""; position: absolute; width: 150px; height: 150px; right: -44px; top: -56px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 32%, transparent), transparent 70%); transition: transform .5s var(--ease); }
+.game-card .game-art { transition: transform .35s var(--ease); }
+@media (hover: hover) {
+  .game-card:not(.is-locked):hover, .game-card:not(.is-locked):focus-within { transform: translateY(-4px); background: var(--panel); border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 26px 44px -26px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .game-card:not(.is-locked):hover::before, .game-card:not(.is-locked):focus-within::before { opacity: 1; }
+  .game-card:not(.is-locked):hover::after { transform: scale(1.5) translate(-10px, 10px); }
+  .game-card:not(.is-locked):hover .game-art { transform: rotate(-6deg) scale(1.08); }
+}
+
+/* open tables and friends */
+.public-table { border-radius: 16px; background: var(--panel); transition: transform .3s var(--ease), border-color .3s, background .3s; }
+.fs-chip { transition: transform .25s var(--ease), background .25s; }
+@media (hover: hover) {
+  .public-table:hover { transform: translateY(-3px); border-color: rgba(134, 239, 172, .4); background: var(--glass-hi); }
+  .fs-chip:hover { transform: translateY(-2px); background: var(--mint-soft); }
+}
+
+@media (prefers-reduced-motion: reduce) { .btn, .game-card, .game-card::before, .game-card::after, .game-card .game-art, .public-table, .fs-chip, .tb-pill { transition: none !important; } }
