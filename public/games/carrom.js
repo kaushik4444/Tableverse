@@ -101,7 +101,7 @@
 
   function aimHTML() {
     const { from, to } = aimPoints();
-    return `<line class="cb-aim" marker-end="url(#cb-arrowhead)" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>`;
+    return `<line class="cb-aim${ui.aim.power > 0 ? '' : ' idle'}" marker-end="url(#cb-arrowhead)" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>`;
   }
 
   const fx = (n) => Math.round(n * 1000) / 1000;
@@ -419,6 +419,7 @@
       const { from, to } = aimPoints();
       line.setAttribute('x1', from[0]); line.setAttribute('y1', from[1]);
       line.setAttribute('x2', to[0]); line.setAttribute('y2', to[1]);
+      line.classList.toggle('idle', ui.aim.power <= 0);
     }
     const striker = svg && svg.querySelector('[data-id="striker"]');
     if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); striker.setAttribute('aria-valuenow', String(ui.aim.x)); }
