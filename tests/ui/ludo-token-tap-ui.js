@@ -56,14 +56,14 @@ function messagesFor(g) {
             const el = document.querySelector('.ludo-token.legal');
             const b = el.getBoundingClientRect();
             const cx = b.left + b.width / 2; const cy = b.top + b.height / 2;
-            // A finger 14px right of the centre: outside the drawn token (about 5px radius at 320px), inside the invisible legal area.
+            // A finger 14px right of the centre: outside the drawn token (about 8px radius on a phone), inside the invisible legal area.
             const x = cx + 14;
             const hit = document.elementFromPoint(x, cy);
             const hitBtn = hit && hit.closest('.ludo-token');
             // Same element, not just any legal token: a neighbouring token's area must not count.
             return { tokenW: b.width, hitIsThis: hitBtn === el, x, y: cy, lt: el.dataset.lt };
           });
-          assert.ok(r.tokenW < 14, `the drawn token is small (${r.tokenW.toFixed(1)}px), so the tap needs the invisible area`);
+          assert.ok(r.tokenW / 2 < 14, `the 14px offset is outside the drawn token (radius ${(r.tokenW / 2).toFixed(1)}px); the drawn token is small (${r.tokenW.toFixed(1)}px), so the tap needs the invisible area`);
           assert.ok(r.hitIsThis, `a tap 14px from the token centre (x ${Math.round(r.x)}) reaches that same token, not a neighbour`);
           // Real touch input (the context has hasTouch), then read the move the page sent: it must be for the measured token.
           await page.evaluate(() => { window.__sent = []; });
