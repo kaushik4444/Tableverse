@@ -536,6 +536,8 @@
   function clearClientSession() {
     S.isStaff = false;
     S.welcomeBack = null; S.welcomeFor = null; S.welcomeLoaded = undefined; // another account must not see this one's card
+    // requests of the previous session must not hold the loading veil into the next sign-in
+    reqVeilOwned = false; reqPending.clear(); clearTimeout(reqVeilTimer); reqVeilTimer = null;
     S.banners = [];
     S.token = '';
     S.csrf = '';
@@ -2109,12 +2111,28 @@
   }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
   let levelRequest = 0; // shared ordering for both profile loaders
+  // Welcome-back answers come from three profile requests (first load, reconnect refresh, profile page). They are applied in
+  // the order they were asked for, so an older answer that arrives late cannot overwrite a newer one.
+  let welcomeAsked = 0;
+  let welcomeAccepted = 0;
+  function applyWelcome(me, gen, asked) {
+    if (gen !== sessionGen || asked < welcomeAccepted) return;
+    welcomeAccepted = asked;
+    const wb = (me && me.welcomeBack) || null;
+    const changed = JSON.stringify(wb) !== JSON.stringify(S.welcomeBack) || S.welcomeFor !== gen;
+    S.welcomeBack = wb; S.welcomeFor = gen; S.welcomeLoaded = gen;
+    if (changed && S.page === 'home') render();
+  }
   async function refreshLevel() {
     const gen = sessionGen;
     const mine = ++levelRequest;
+    const asked = ++welcomeAsked;
     try {
       const me = await getJson('/api/me/profile', { quiet: true });
-      if (gen !== sessionGen || mine !== levelRequest) return; // another account or a newer profile response won
+      if (gen !== sessionGen) return; // another account signed in
+      // a returning socket reconnect keeps the session, so the welcome-back answer is taken from this refresh too
+      if (!S.guest) applyWelcome(me, gen, asked);
+      if (mine !== levelRequest) return; // a newer profile response won the progress
       const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
@@ -2137,11 +2155,13 @@
     const keepTab = S.profile && S.profile.tab;
     const gen = sessionGen; // an answer for an account that has since signed out (or changed) is dropped
     const mine = ++levelRequest; // profile and background refreshes share one response-ordering policy
+    const asked = ++welcomeAsked;
     S.profile = { loading: true, error: '', data: null, history: null, tab: keepTab || 'overview', historyPage };
     render();
     try {
       const [me, hist] = await Promise.all([getJson('/api/me/profile'), getJson(`/api/me/history?page=${historyPage}`)]);
       if (gen !== sessionGen) return;
+      if (!S.guest) applyWelcome(me, gen, asked); // this profile is as current as any, so its welcome-back answer counts too
       const hasNewerAcceptedProgress = S.latestProgressRequest > mine
         && S.latestProgressUser === (S.username || null)
         && S.latestProgress;
@@ -2815,11 +2835,10 @@
     if (S.guest || S.welcomeLoaded === sessionGen) return;
     S.welcomeLoaded = sessionGen;
     const mineGen = sessionGen;
+    const asked = ++welcomeAsked;
     getJson('/api/me/profile', { quiet: true }).then((me) => {
       if (mineGen !== sessionGen) return; // another account signed in meanwhile
-      S.welcomeBack = (me && me.welcomeBack) || null;
-      S.welcomeFor = mineGen;
-      if (S.page === 'home') render();
+      applyWelcome(me, mineGen, asked);
     }).catch(() => {});
   }
 
