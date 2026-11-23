@@ -151,7 +151,7 @@ async function playerProfile({ username, actorId }) {
   profile.progress = {
     level: pr.account.level, xp: pr.account.xp, into: pr.account.into, need: pr.account.need, minutes: pr.account.minutes,
     penalisedLeaves: pr.penalisedLeaves,
-    games: Object.entries(pr.games).map(([gameId, g]) => ({ gameId, points: g.points, played: g.played, rule: g.rule })),
+    games: Object.entries(pr.games).map(([gameId, g]) => ({ gameId, played: g.played, rule: g.rule })),
   };
   return profile;
 }
