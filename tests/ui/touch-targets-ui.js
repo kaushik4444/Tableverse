@@ -36,6 +36,10 @@ const MEASURE = (selector) => {
   return out;
 };
 
+
+// entrance animations move cards by fractions of a pixel, which can read a 44 px button as 43.9999; measure once they have settled
+const settle = (page) => page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect && a.effect.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
+
 const HOME_CONTROLS = '#app button, #app a[href], #app [role=button]';
 const TOOLBAR_CONTROLS = '[aria-label="Open chat"], [aria-label="Send a reaction"], [aria-label="Leave table"], [aria-label="More options"], [aria-label^="Join voice chat"]';
 
@@ -62,6 +66,7 @@ async function check(name, fn) {
           await page.waitForSelector('.fs-chip', { timeout: 5000 });
           await page.waitForSelector('.wn-close', { timeout: 5000 });
           await page.waitForSelector('.recent-table', { timeout: 5000 }); // a recent table's button is measured too
+          await settle(page);
           const r = await page.evaluate(MEASURE, HOME_CONTROLS);
           assert.equal(r.overflowX, 0, 'page scrolls sideways');
           assert.ok(r.count >= 6, `expected the home controls, found ${r.count}`);
@@ -79,7 +84,8 @@ async function check(name, fn) {
           try {
             await page.goto(srv.url + '/', { waitUntil: 'load' });
             await page.waitForSelector(TOOLBAR_CONTROLS, { timeout: 5000 });
-            const r = await page.evaluate(MEASURE, TOOLBAR_CONTROLS);
+            await settle(page);
+          const r = await page.evaluate(MEASURE, TOOLBAR_CONTROLS);
             assert.equal(r.overflowX, 0, 'page scrolls sideways');
             assert.ok(r.count >= 4, `expected the toolbar, found ${r.count}`);
             assert.deepEqual(r.short, [], 'toolbar controls under 44 px');
