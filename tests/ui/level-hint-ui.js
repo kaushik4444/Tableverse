@@ -14,15 +14,15 @@ const profileApi = (level) => ({
   'GET /api/me/history?page=1': () => ({ ok: true, items: [], page: 1, total: 0, pageSize: 20 }),
 });
 
-async function run(name, { level = 3, seen = null }, check) {
+async function run(name, { level = 3, seen = null, url = '#profile' }, check) {
   const srv = await serve(profileApi(level));
   const browser = await chromium.launch();
   try {
     const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list() })] });
     try {
       if (seen !== null) await page.addInitScript((v) => { try { localStorage.setItem('ct_level_seen_aarav', v); } catch {} }, seen);
-      await page.goto(srv.url + '/#profile');
-      await page.waitForSelector('.progress-card', { timeout: 12000 });
+      await page.goto(srv.url + '/' + url);
+      if (url === '#profile') await page.waitForSelector('.progress-card', { timeout: 12000 });
       await check(page);
       passed++; console.log('  ok  ' + name);
     } finally { await ctx.close(); }
@@ -33,21 +33,22 @@ async function run(name, { level = 3, seen = null }, check) {
 (async () => {
   await run('the profile says how many minutes are left to the next level', { level: 3 }, async (page) => {
     const text = await page.textContent('.progress-card .pg-level');
-    assert.match(text, /next level in 130 min/);
+    assert.match(text, /130 min to level 4/);
   });
 
-  await run('a level reached since this device last looked shows a level-up notice, and "Got it" clears it', { level: 3, seen: '2' }, async (page) => {
-    await page.waitForSelector('.levelup-note');
-    assert.match(await page.textContent('.levelup-note'), /Level up!.*level 3/);
-    await page.click('[data-act="levelUpAck"]');
-    await page.waitForSelector('.levelup-note', { state: 'detached', timeout: 5000 });
+  await run('a level reached since this device last looked opens a one-time level-up dialog on the menu', { level: 3, seen: '2', url: '#home' }, async (page) => {
+    await page.waitForSelector('#modal-overlay');
+    assert.match(await page.textContent('#modal-overlay'), /Congratulations on reaching level 3/);
+    assert.match(await page.textContent('#modal-overlay'), /Next level in 130 min/);
+    await page.click('[data-modal-close]');
+    await page.waitForSelector('#modal-overlay', { state: 'detached', timeout: 5000 });
     const stored = await page.evaluate(() => localStorage.getItem('ct_level_seen_aarav'));
     assert.equal(stored, '3', 'the device remembers level 3 now');
   });
 
   await run('a device that has never seen the account announces nothing', { level: 3, seen: null }, async (page) => {
     await page.waitForTimeout(500);
-    assert.equal(await page.locator('.levelup-note').count(), 0, 'no notice on a first visit');
+    assert.equal(await page.locator('#modal-overlay').count(), 0, 'no notice on a first visit');
     const stored = await page.evaluate(() => localStorage.getItem('ct_level_seen_aarav'));
     assert.equal(stored, '3', 'the current level is remembered');
   });

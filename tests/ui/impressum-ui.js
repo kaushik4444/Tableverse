@@ -95,23 +95,26 @@ async function assertVisibleAndClickable(page, selector, label) {
         await ctx.close();
       });
 
-      await test(`(${size}): no fixed footer is rendered, and no visible clickable fixed element sits over the home page`, async () => {
+      await test(`(${size}): no fixed footer is rendered; the only clickable fixed element on the home page is the phone tab bar`, async () => {
         const { page, ctx } = await scriptedPage(browser, { viewport: vp, messages: [welcome({ id: 'me', name: 'Aarav', games: games.list(), impressumPublished: true }), { t: 'state', room: null, view: null }] });
         await page.goto(url + '/');
         await page.waitForSelector('.home-foot', { timeout: 8000 });
         const fixed = await page.evaluate(() => {
           return {
             legalFoot: !!document.querySelector('.legal-foot'),
+            legalInBar: !!document.querySelector('.tb-tabs .legal-foot, .tb-tabs a[href*="impressum"], .tb-tabs a[href^="/privacy"], .tb-tabs a[href^="/terms"]'),
             fixed: [...document.querySelectorAll('body *')].filter((el) => {
               const cs = getComputedStyle(el);
               const b = el.getBoundingClientRect();
-              // only fixed elements that can take clicks matter; pointer-events:none ones (the 1px voice audio root) cannot obstruct
-              return cs.position === 'fixed' && cs.pointerEvents !== 'none' && cs.display !== 'none' && cs.visibility !== 'hidden' && b.width > 0 && b.height > 0;
+              // only fixed elements that can take clicks matter; pointer-events:none ones (the 1px voice audio root) cannot obstruct.
+              // The phone bottom tab bar is the one allowed fixed element: it is navigation, not a footer, and holds no legal links.
+              return cs.position === 'fixed' && cs.pointerEvents !== 'none' && cs.display !== 'none' && cs.visibility !== 'hidden' && b.width > 0 && b.height > 0 && !el.closest('.tb-tabs');
             }).map((el) => el.id || el.className || el.tagName),
           };
         });
         assert.equal(fixed.legalFoot, false, 'no .legal-foot');
-        assert.deepEqual(fixed.fixed, [], 'no visible, clickable fixed element on the home page');
+        assert.equal(fixed.legalInBar, false, 'the tab bar holds no legal links');
+        assert.deepEqual(fixed.fixed, [], 'no visible, clickable fixed element on the home page other than the phone tab bar');
         await ctx.close();
       });
     }

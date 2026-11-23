@@ -166,6 +166,7 @@ function inPage() {
       ];
       for (const size of SIZES) {
         const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, hasTouch: size.width < 800 });
+        await ctx.addInitScript(() => { try { localStorage.setItem('tv_howto_all', '1'); } catch (e) { /* ignore */ } }); // no first-time cards in the way
         const page = await ctx.newPage();
         const errors = [];
         page.on('pageerror', (e) => errors.push(e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).join(' | ').replace(/http:\/\/127\.0\.0\.1:\d+/g, '')));

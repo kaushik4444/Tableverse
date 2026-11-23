@@ -10,14 +10,16 @@ function client() {
   const c = vm.createContext({
     S: { guest: true, username: 'alice', pending: [], routed: true },
     sessionGen: 0, httpBusy: false, reqVeilOwned: false, // the loading veil's ownership flag, read by onMessage
+    reqPending: new Set(), reqVeilTimer: null, clearTimeout: () => {}, // cleared by clearClientSession with the veil flag
     levelRequest: 0, // the newest refresh counter lives at app scope (`let levelRequest` next to refreshLevel), so the sandbox needs its own
+    welcomeAsked: 0, welcomeAccepted: 0, // welcome-back ordering counters, also app scope
     store: { get: (key) => values.get(key) ?? null, set: (key, value) => values.set(key, value) },
     location: { hash: '' },
     getJson: async () => ({ stats: { progress: { account: { level: 3, into: 10, need: 140 } } } }),
     hashCode: () => '', policyRequiresVerification: () => false,
   });
   for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
-  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'refreshLevel', 'loadProfile', 'applyLegal', 'onMessage']) {
+  for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'applyWelcome', 'refreshLevel', 'loadProfile', 'applyLegal', 'onMessage']) {
     const match = source.match(new RegExp('^  (?:async )?function ' + name + '\\([^]*?^  }', 'm'));
     assert.ok(match, name);
     vm.runInContext(match[0], c);

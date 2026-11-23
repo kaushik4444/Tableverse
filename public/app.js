@@ -200,10 +200,20 @@
   const inviteUrl = () => `${location.origin}/#${S.room.code}`;
   const safeTableUrl = () => S.room && S.room.visibility === 'public' ? inviteUrl() : `${location.origin}/`;
 
-  // ------------------------------------------------------------ rules dialog
-  function showRules(gameId) {
-    const g = gameMeta(gameId);
-    if (!g) return;
+  // ------------------------------------------------------------ how to play: cards
+  // Each rule paragraph of a game is one card (the "made with our own cards" notice goes under the last one). Games can draw
+  // a picture for a card: CardTable.howtoArt[gameId] = (cardIndex, game) => html; without one the game's mark is shown.
+  // The cards open by themselves the first time someone is seated in a running game, and from "How to play" in the ⋯ menu.
+  window.CardTable.howtoArt = window.CardTable.howtoArt || {};
+  const OWN_GAME = /made with our own cards/i;
+  function howtoCards(g) {
+    const rules = g.rules || [], titles = g.ruleTitles || [];
+    const cards = [];
+    let note = '';
+    rules.forEach((text, i) => {
+      if (OWN_GAME.test(text)) { note = text; return; }
+      cards.push({ title: titles[i] || `Step ${cards.length + 1}`, text, art: i });
+    });
     const variants = (g.options || [])
       .filter((o) => (o.type === 'select' || o.desc) && !o.noRules)
       .map((o) => {
@@ -211,17 +221,83 @@
         return o.choices.filter((c) => c.value !== o.default || o.choices.length > 2).map((c) => `<dt>${esc(o.label)}: ${esc(c.label)}</dt><dd>${esc(c.desc)}</dd>`).join('');
       })
       .join('');
+    if (variants) cards.push({ title: 'Options', html: `<dl class="variants">${variants}</dl>`, art: -1 });
+    return { cards, note };
+  }
+
+  let howtoOpen = null; // the open overlay, so there is only ever one
+  function showRules(gameId, opts = {}) {
+    const g = gameMeta(gameId);
+    if (!g) return;
+    if (howtoOpen) howtoOpen.close();
+    const { cards, note } = howtoCards(g);
+    if (!cards.length) return;
+    let i = 0;
     const el = document.createElement('div');
-    el.className = 'overlay';
-    el.innerHTML = `<div class="sheet" role="dialog" aria-label="How to play ${esc(g.name)}">
-      <h2>${gameMark(g)} How to play ${esc(g.name)}</h2>
-      ${(g.rules || []).map((p) => `<p class="rule">${esc(p)}</p>`).join('')}
-      ${variants ? `<h3 style="margin:16px 0 6px">Options</h3><dl class="variants">${variants}</dl>` : ''}
-      <div class="row" style="margin-top:14px"><button class="btn" data-close="1">Got it</button></div></div>`;
-    el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('[data-close]')) el.remove(); });
+    el.className = 'overlay ht-overlay';
+    const inerted = [...document.body.children].filter((n) => n.tagName !== 'SCRIPT' && n.id !== 'toasts' && !n.hasAttribute('inert'));
+    const opener = document.activeElement;
+    const close = () => {
+      inerted.forEach((n) => n.removeAttribute('inert'));
+      el.remove();
+      howtoOpen = null;
+      store.set(`tv_howto_${gameId}`, '1');
+      // A redraw can replace the opener while the dialog is open.
+      const back = opener && opener.isConnected && opener.focus ? opener
+        : document.querySelector(`button[data-act="rules"][data-game="${CSS.escape(gameId)}"]:not([hidden], [hidden] *)`) || document.querySelector('.tb-more-btn');
+      if (back && back.focus) back.focus();
+    };
+    const paint = () => {
+      const c = cards[i], last = i === cards.length - 1;
+      const artFn = window.CardTable.howtoArt[gameId];
+      const art = (c.art >= 0 && artFn && artFn(c.art, g)) || `<span class="ht-mark">${gameMark(g)}</span>`;
+      el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">
+        <div class="ht-kicker">How to play ${esc(g.name)} · ${i + 1} of ${cards.length}</div>
+        <h2>${esc(c.title)}</h2>
+        <div class="ht-art" aria-hidden="true">${art}</div>
+        ${c.html || `<p class="rule">${esc(c.text)}</p>`}
+        ${last && note ? `<p class="ht-note">${esc(note)}</p>` : ''}
+        <div class="ht-dots" aria-hidden="true">${cards.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="row ht-actions">${i > 0 ? '<button class="btn ghost" type="button" data-ht="back">Back</button>' : ''}${last ? '<button class="btn" type="button" data-ht="done" data-close="1">Got it</button>' : '<button class="btn" type="button" data-ht="next">Next</button>'}${last ? '' : '<button class="btn ghost" type="button" data-ht="done" data-close="1">Skip</button>'}</div>
+      </div>`;
+      const primary = el.querySelector('[data-ht="next"], [data-ht="done"]');
+      if (primary) primary.focus();
+    };
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-ht]');
+      if (e.target === el) return close();
+      if (!b) return;
+      if (b.dataset.ht === 'next') { i = Math.min(cards.length - 1, i + 1); paint(); }
+      else if (b.dataset.ht === 'back') { i = Math.max(0, i - 1); paint(); }
+      else close();
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); }
+      else if (e.key === 'ArrowRight' && i < cards.length - 1) { i++; paint(); }
+      else if (e.key === 'ArrowLeft' && i > 0) { i--; paint(); }
+      else if (e.key === 'Tab') { // keep focus inside the card
+        const f = [...el.querySelectorAll('button')];
+        if (!f.length) return;
+        const first = f[0], lastB = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastB.focus(); }
+        else if (!e.shiftKey && document.activeElement === lastB) { e.preventDefault(); first.focus(); }
+        else if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      }
+    });
     document.body.appendChild(el);
+    inerted.forEach((n) => n.setAttribute('inert', ''));
+    howtoOpen = { close };
+    paint();
   }
   window.CardTable.showRules = showRules;
+
+  /** The first time someone is seated in a running game of this kind on this device, the cards open by themselves. */
+  function autoHowTo() {
+    const r = S.room;
+    if (!r || r.status !== 'playing' || isSpectator() || howtoOpen || store.get('tv_howto_all') || store.get(`tv_howto_${r.gameId}`)) return;
+    store.set(`tv_howto_${r.gameId}`, '1'); // decided once: a closed or skipped card is not shown again
+    showRules(r.gameId, { auto: true });
+  }
 
   // ------------------------------------------------------------ auth + connection
   // Every click that waits on the server puts up a spinner that blocks all other taps until the answer arrives.
@@ -461,6 +537,8 @@
   function clearClientSession() {
     S.isStaff = false;
     S.welcomeBack = null; S.welcomeFor = null; S.welcomeLoaded = undefined; // another account must not see this one's card
+    // requests of the previous session must not hold the loading veil into the next sign-in
+    reqVeilOwned = false; reqPending.clear(); clearTimeout(reqVeilTimer); reqVeilTimer = null;
     S.banners = [];
     S.token = '';
     S.csrf = '';
@@ -1266,7 +1344,7 @@
     const rows = S.publicTables.map((t) => {
       const g = gameMeta(t.gameId) || { id: t.gameId, name: t.gameId, icon: '🎴' };
       const action = publicTableAction(t);
-      return `<div class="public-table"><span class="public-game-icon">${gameMark(g)}</span><div class="public-table-info"><b>${esc(g.name)}</b><span>${esc(t.host)}'s table · ${t.members}/${t.seats} players${t.spectators ? ` · 👁 ${t.spectators}` : ''}</span></div><button class="btn ${action.cls} small" data-act="joinPublic" data-code="${esc(t.code)}" ${action.disabled ? 'disabled' : ''}>${action.label}</button></div>`;
+      return `<div class="public-table"><span class="public-game-icon">${gameMark(g)}</span><div class="public-table-info"><b>${esc(g.name)}</b><span>${esc(t.host)}'s table · ${t.members}/${t.seats} players <span class="seat-dots" aria-hidden="true">${Array.from({ length: Math.min(t.seats, 8) }, (_, k) => `<i class="${k < t.members ? 'on' : ''}"></i>`).join('')}</span>${t.spectators ? ` · 👁 ${t.spectators}` : ''}</span></div><button class="btn ${action.cls} small" data-act="joinPublic" data-code="${esc(t.code)}" ${action.disabled ? 'disabled' : ''}>${action.label}</button></div>`;
     }).join('');
     return `<section class="home-section public-tables-panel"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 class="section">Open tables <span class="session-count">${count}</span></h2></div><button class="btn ghost small" data-act="toggleSessions" aria-expanded="${S.sessionListOpen}">${S.sessionListOpen ? 'Hide' : 'Show'}</button></div>${S.sessionListOpen ? count ? `<div class="public-tables">${rows}</div>` : emptyState('🪑', 'No open tables', 'Create a table and make it public, and it appears here for everyone.') : ''}</section>`;
   }
@@ -1499,8 +1577,8 @@
         // the skill ratings for the finished game at this table; the game-over table is redrawn with them
         if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) {
           // a late pending reply, or a failed lookup, must not replace a final answer already stored for this match
-          const haveFinal = S.gameTotals && S.gameTotals.code === m.code && S.gameTotals.id === m.id && !S.gameTotals.pending;
-          if (!((m.pending || m.failed) && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending) }; render(); }
+          const haveFinal = S.gameTotals && S.gameTotals.code === m.code && S.gameTotals.id === m.id && !S.gameTotals.pending && !S.gameTotals.failed;
+          if (!((m.pending || m.failed) && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending), failed: Boolean(m.failed) }; render(); }
         }
         break;
       case 'error':
@@ -1937,6 +2015,7 @@
   }
 
   let lastTickSec = -1;
+  let timebarDl = null, timebarTotal = 0; // the deadline being drawn, and its length as first seen (used when the server does not say)
   function updateTimer() {
     if (!S.room && lastTickSec === -1) return; // home screen: no timers to update
     const dl = S.room && S.room.status === 'playing' ? S.room.deadline : null;
@@ -1949,6 +2028,15 @@
       el.hidden = false;
       el.textContent = `⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
       el.classList.toggle('warn', left <= 10);
+    });
+    // the same clock as a bar under the status line: it drains and turns red in the last ten seconds
+    if (left !== null && dl !== timebarDl) { timebarDl = dl; timebarTotal = left; }
+    const total = S.room && S.room.turnMs ? S.room.turnMs / 1000 : timebarTotal;
+    document.querySelectorAll('.ct-timebar').forEach((el) => {
+      el.classList.toggle('on', left !== null);
+      el.classList.toggle('warn', left !== null && left <= 10);
+      const fill = el.firstElementChild;
+      if (fill) fill.style.transform = `scaleX(${left === null || !total ? 0 : Math.max(0, Math.min(1, (dl - (Date.now() + S.skew)) / 1000 / total))})`;
     });
     if (left !== null && left <= 5 && left > 0 && left !== lastTickSec && S.view && S.view.myTurn) CardTable.sound.play('tick');
     lastTickSec = left === null ? -1 : left;
@@ -2037,12 +2125,28 @@
   }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
   let levelRequest = 0; // shared ordering for both profile loaders
+  // Welcome-back answers come from three profile requests (first load, reconnect refresh, profile page). They are applied in
+  // the order they were asked for, so an older answer that arrives late cannot overwrite a newer one.
+  let welcomeAsked = 0;
+  let welcomeAccepted = 0;
+  function applyWelcome(me, gen, asked) {
+    if (gen !== sessionGen || asked < welcomeAccepted) return;
+    welcomeAccepted = asked;
+    const wb = (me && me.welcomeBack) || null;
+    const changed = JSON.stringify(wb) !== JSON.stringify(S.welcomeBack) || S.welcomeFor !== gen;
+    S.welcomeBack = wb; S.welcomeFor = gen; S.welcomeLoaded = gen;
+    if (changed && S.page === 'home') render();
+  }
   async function refreshLevel() {
     const gen = sessionGen;
     const mine = ++levelRequest;
+    const asked = ++welcomeAsked;
     try {
       const me = await getJson('/api/me/profile', { quiet: true });
-      if (gen !== sessionGen || mine !== levelRequest) return; // another account or a newer profile response won
+      if (gen !== sessionGen) return; // another account signed in
+      // a returning socket reconnect keeps the session, so the welcome-back answer is taken from this refresh too
+      if (!S.guest) applyWelcome(me, gen, asked);
+      if (mine !== levelRequest) return; // a newer profile response won the progress
       const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
@@ -2065,11 +2169,13 @@
     const keepTab = S.profile && S.profile.tab;
     const gen = sessionGen; // an answer for an account that has since signed out (or changed) is dropped
     const mine = ++levelRequest; // profile and background refreshes share one response-ordering policy
+    const asked = ++welcomeAsked;
     S.profile = { loading: true, error: '', data: null, history: null, tab: keepTab || 'overview', historyPage };
     render();
     try {
       const [me, hist] = await Promise.all([getJson('/api/me/profile'), getJson(`/api/me/history?page=${historyPage}`)]);
       if (gen !== sessionGen) return;
+      if (!S.guest) applyWelcome(me, gen, asked); // this profile is as current as any, so its welcome-back answer counts too
       const hasNewerAcceptedProgress = S.latestProgressRequest > mine
         && S.latestProgressUser === (S.username || null)
         && S.latestProgress;
@@ -2309,6 +2415,11 @@
   const WHATS_NEW = RELEASES.length ? RELEASES[0].items.slice(0, 3) : [];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
+  /** "Friday evening": the day and the part of it, from the player's own clock. */
+  function dayPart(d = new Date()) {
+    const h = d.getHours(), part = h < 5 ? 'night' : h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
+    return `${d.toLocaleDateString(undefined, { weekday: 'long' })} ${part}`;
+  }
   /** Friend requests + table invitations waiting for an answer (drives the menu badge and the home strip). */
   const pendingSocial = () => S.friendRequests.incoming.length + S.invitations.incoming.length;
   const hasNewNews = () => S.wnSeen !== WHATS_NEW_VERSION;
@@ -2338,7 +2449,15 @@
         ${item('logout', '🚪', 'Log out')}
         ${item('logoutAll', '🔒', 'Log out everywhere', '', 'dim')}
       </div>` : '';
-    return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}${S.account ? `, level ${Number(S.account.level)}` : ''}">${av}${S.account ? `<span class="tb-level" title="Your overall level">Lv ${Number(S.account.level)}</span>` : ''}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
+    const tab = (act, label, on) => `<button type="button" class="tb-tab" data-act="${act}"${on ? ' aria-current="page"' : ''}>${label}</button>`;
+    const tabs = `<div class="tb-tabs" role="group" aria-label="Sections"><span class="tb-pill" aria-hidden="true"></span>${tab('goHome', 'Home', S.page !== 'friends' && S.page !== 'profile')}${tab('goGames', 'Games', false)}${tab('openFriendsPage', 'Friends', S.page === 'friends')}${tab('openProfilePage', 'Profile', S.page === 'profile')}</div>`;
+    const ICON = {
+      goHome: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', goGames: '<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>',
+      openFriendsPage: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14c2.6 0 4.5 1.8 4.5 4.5"/>', openProfilePage: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+    };
+    const btab = (act, label, on) => `<button type="button" class="tb-tab bn-tab" data-act="${act}"${on ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[act]}</svg><span>${label}</span></button>`;
+    const bottom = `<nav class="tb-tabs bn" aria-label="Sections"><span class="tb-pill" aria-hidden="true"></span>${btab('goHome', 'Home', S.page !== 'friends' && S.page !== 'profile')}${btab('goGames', 'Games', false)}${btab('openFriendsPage', 'Friends', S.page === 'friends')}${btab('openProfilePage', 'Profile', S.page === 'profile')}</nav>`;
+    return `<nav class="topbar" aria-label="Main">${brand}${tabs}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}${S.account ? `, level ${Number(S.account.level)}` : ''}">${av}${S.account ? `<span class="tb-level" title="Your overall level">Lv ${Number(S.account.level)}</span>` : ''}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>${bottom}`;
   }
 
   /**
@@ -2730,11 +2849,10 @@
     if (S.guest || S.welcomeLoaded === sessionGen) return;
     S.welcomeLoaded = sessionGen;
     const mineGen = sessionGen;
+    const asked = ++welcomeAsked;
     getJson('/api/me/profile', { quiet: true }).then((me) => {
       if (mineGen !== sessionGen) return; // another account signed in meanwhile
-      S.welcomeBack = (me && me.welcomeBack) || null;
-      S.welcomeFor = mineGen;
-      if (S.page === 'home') render();
+      applyWelcome(me, mineGen, asked);
     }).catch(() => {});
   }
 
@@ -2779,6 +2897,7 @@
       <section class="home-hero">
         <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
         <div class="home-intro">
+          ${name && !S.guest ? `<small class="eyebrow">${dayPart()}</small>` : ''}
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
           <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
           ${S.guest ? `<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button>${S.guestPlay ? '<button type="button" class="btn ghost" data-act="playAsGuest">Play as a guest</button>' : ''}</div>` : ''}
@@ -3189,8 +3308,12 @@
     endFlow(focusedResultAction);
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const bar = $app.querySelector('.wz-status');
-    if (bar) bar.insertAdjacentHTML('beforeend', '<span class="ct-timer" hidden></span>');
+    if (bar) {
+      bar.insertAdjacentHTML('beforeend', '<span class="ct-timer" hidden></span>');
+      bar.insertAdjacentHTML('beforeend', '<div class="ct-timebar" aria-hidden="true"><i></i></div>');
+    }
     updateTimer();
+    autoHowTo();
   }
 
   // ------------------------------------------------------------ end of a game
@@ -3299,8 +3422,8 @@
       const xpRows = (r.outcome && r.outcome.xp) || [];
       // The ratings for this game come from the server once per finished game (the table's own game only)
       const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
-      // Only a final answer ends the asking. A pending one still needs its final message, which a reconnect can lose, so it is asked for again.
-      const gotTotals = cached && !cached.pending ? cached : null;
+      // Only a successful final answer stops retries.
+      const gotTotals = cached && !cached.pending && !cached.failed ? cached : null;
       const waiting = Boolean(cached && cached.pending);
       // Asked again if the answer did not come (not connected, or the server could not save the game yet): at most three
       // tries, five seconds apart, so a failed request never leaves the saved players on an ellipsis for good.
@@ -3353,6 +3476,7 @@
     avatar: (el) => { S.avatarOpen = false; changeAvatar(el.dataset.a); },
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
+    goGames: () => { if (S.page !== 'home') openPage('home'); requestAnimationFrame(() => { const el = document.getElementById('games'); if (el) el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); }); },
     reloadProfile: () => loadProfile(),
     ratingScope: (el) => {
       const P = S.profile; if (!P) return;

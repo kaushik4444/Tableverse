@@ -82,6 +82,7 @@ const SIZES = [
   const msgs = buildMessages(GAME, seats, seed);
   for (const size of SIZES) {
     const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2, hasTouch: size.width < 800 });
+    await ctx.addInitScript(() => { try { localStorage.setItem('tv_howto_all', '1'); } catch (e) { /* ignore */ } }); // no first-time cards in the way
     const page = await ctx.newPage();
     await page.addInitScript((messages) => {
       window.__clientMessages = [];
