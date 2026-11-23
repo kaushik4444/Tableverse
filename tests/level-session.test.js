@@ -9,7 +9,7 @@ function client() {
   const values = new Map();
   const c = vm.createContext({
     S: { guest: true, username: 'alice', pending: [], routed: true },
-    sessionGen: 0, httpBusy: false,
+    sessionGen: 0, httpBusy: false, reqVeilOwned: false, // the loading veil's ownership flag, read by onMessage
     levelRequest: 0, // the newest refresh counter lives at app scope (`let levelRequest` next to refreshLevel), so the sandbox needs its own
     store: { get: (key) => values.get(key) ?? null, set: (key, value) => values.set(key, value) },
     location: { hash: '' },

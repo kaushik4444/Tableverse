@@ -143,8 +143,8 @@ async function getPublicProfile(username, { viewerId = null } = {}) {
     blockedByMe = blocked.rows.length > 0;
   }
   const [s, pr] = await Promise.all([getPlayerProfile(row.id, { memberSince: row.created_at }), getProgress(row.id)]);
-  // Public progress is the level and each game's XP and games played only: no minutes, leave counts or match list.
-  const progress = { level: pr.account.level, games: Object.fromEntries(Object.entries(pr.games).map(([id, g]) => [id, { xp: g.points, played: g.played }])) };
+  // Public progress is the level and each game's games played only: no minutes, leave counts, points or match list.
+  const progress = { level: pr.account.level, games: Object.fromEntries(Object.entries(pr.games).map(([id, g]) => [id, { played: g.played }])) };
   return { progress, username: row.username, displayName: row.display_name, avatar: row.avatar, joinedAt: iso(row.created_at), played: s.played, wins: s.wins, winRate: s.winRate, blockedByMe };
 }
 
