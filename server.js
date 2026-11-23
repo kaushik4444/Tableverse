@@ -112,6 +112,11 @@ function start(opts = {}) {
   // do not wait for a check; this is the backstop. The first message after a quiet spell is checked before it is acted on.
   const idleSessionCheckMs = opts.idleSessionCheckMs ?? 30 * 60 * 1000;
   const backgroundReadMs = opts.backgroundReadMs ?? 15 * 60 * 1000; // switches and queued broadcasts: re-read this often while somebody is connected
+  // Somebody is "using" the site when a socket connected or sent a message in the last backgroundActiveMs. A tab left open with
+  // nobody at it stops counting after that, so it does not keep the database awake; the next connection or message wakes it again.
+  const backgroundActiveMs = opts.backgroundActiveMs ?? 30 * 60 * 1000;
+  let lastActivityAt = Date.now();
+  const siteInUse = () => wss.clients.size > 0 && Date.now() - lastActivityAt < backgroundActiveMs;
   const backgroundStaleMs = opts.backgroundStaleMs ?? 5 * 60 * 1000; // ... and when somebody connects after the last read is older than this
   const maxMsgsPerSec = opts.maxMsgsPerSec ?? 30; // per socket; humans send a handful of messages per minute
   const maxQueuedMessages = opts.maxQueuedMessages ?? 100; // bound async work queued behind slow database operations
@@ -2340,6 +2345,7 @@ function start(opts = {}) {
   }
 
   wss.on('connection', (ws, req) => {
+    lastActivityAt = Date.now();
     if (flagPoller) void flagPoller.touch(); // the first person after a quiet spell gets switches that are not older than backgroundStaleMs
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
     const openedAt = Date.now();
@@ -2368,7 +2374,7 @@ function start(opts = {}) {
     // nobody is using, when the long backstop is due).
     const sessionTimer = setInterval(() => {
       const since = Date.now() - ws.sessionCheckedAt;
-      if (ws.lastMsgAt > ws.sessionCheckedAt || since >= idleSessionCheckMs) void checkSocketSession(ws);
+      if (ws.lastMsgAt > ws.sessionCheckedAt || (since >= idleSessionCheckMs && siteInUse())) void checkSocketSession(ws);
     }, sessionCheckMs);
     sessionTimer.unref();
     ws.once('close', () => clearInterval(sessionTimer));
@@ -2401,6 +2407,7 @@ function start(opts = {}) {
       // flood guard; counters are reset every second. Voice setup messages come in bursts (several ICE candidates per
       // person at the table), so they have their own, larger allowance and do not use up the normal one.
       if (msg.t === 'rtc') { if (++ws.rtcMsgs > maxRtcPerSec) return ws.close(1008, 'slow down'); } else if (++ws.msgs > maxMsgsPerSec) return ws.close(1008, 'slow down');
+      lastActivityAt = Date.now();
       if (msg.t === 'hello') {
         // onHello is async (database lookup): a failure must close this socket, not crash the process with an unhandled rejection
         onHello(ws, msg).catch((e) => {
@@ -2412,6 +2419,7 @@ function start(opts = {}) {
       const p = ws.player;
       if (!p || !Object.hasOwn(handlers, msg.t)) return;
       ws.lastMsgAt = Date.now();
+      lastActivityAt = ws.lastMsgAt;
       const run = async () => {
         // queued behind an earlier message: the session may have ended while it waited
         if (ws.revoked || ws.readyState !== 1 || ws.player !== p) return;
@@ -2602,7 +2610,7 @@ function start(opts = {}) {
         // Not a plain interval: with nobody connected this process must not query Neon (it could never autosuspend). While sockets
         // are open it reads every backgroundReadMs, and the first connection after a quiet spell reads at once when the snapshot is
         // older than backgroundStaleMs. A change made in this process is applied immediately and does not wait for any of this.
-        flagPoller = createIdlePoller({ run: refreshFlags, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: () => wss.clients.size > 0 });
+        flagPoller = createIdlePoller({ run: refreshFlags, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: siteInUse });
         flagPoller.markFresh();
         flagPoller.start();
       }
@@ -2619,7 +2627,7 @@ function start(opts = {}) {
       if (broadcastWorker) {
         // Queued sends start at once (onBroadcastQueued) and a restart resumes the one that was half sent (the kick above); this
         // timer is only a backstop for a lease that ran out, so it runs while somebody is connected and not once a minute.
-        broadcastPoller = createIdlePoller({ run: kickBroadcasts, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: () => wss.clients.size > 0 });
+        broadcastPoller = createIdlePoller({ run: kickBroadcasts, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: siteInUse });
         broadcastPoller.start();
       }
     }

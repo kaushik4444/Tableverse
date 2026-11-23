@@ -65,15 +65,15 @@ Tables, games in progress, chat and presence live in memory and are **lost** on 
 
 Neon's free plan allows 100 compute-hours a month, and the compute autosuspends after 5 minutes without a query. A recurring query keeps it awake, so what matters is which background work asks the database while nobody is playing.
 
-**Expected behaviour when nobody is connected:** the server runs no recurring database query. The only periodic work is in-memory (socket keep-alives, table clean-up, a stats log line), a file check for unsaved match results every 10 minutes (it queries only when a file is waiting), and analytics, which write only when a counter changed. Neon should suspend 5 minutes after the last real request and stay suspended until the next one. `/healthz` does not touch the database; `/readyz` does (one `SELECT 1`), so do not point an uptime monitor at `/readyz` every few minutes.
+**Expected behaviour when nobody is connected:** the server runs no recurring database query. The only periodic work is in-memory (socket keep-alives, table clean-up, a stats log line), the 6-hourly clean-up of expired sessions and old rows (a few short queries; it wakes Neon briefly four times a day), a file check for unsaved match results every 10 minutes (it queries only when a file is waiting), and analytics, which write only when a counter changed. Neon should suspend 5 minutes after the last real request and stay suspended until the next one. `/healthz` does not touch the database; `/readyz` does (one `SELECT 1`), so do not point an uptime monitor at `/readyz` every few minutes.
 
-**While somebody is connected** (all values are constants in `server.js`, overridable in tests):
+**While the site is in use** (a socket connected or sent a message in the last 30 minutes; a tab left open with nobody at it stops counting after that), the background work runs as below (all values are constants in `server.js`, overridable in tests):
 
 | Work | Before | Now |
 | --- | --- | --- |
-| Game switches and guest features (2 queries) | every 15 s, always | every 15 min while a socket is open, and on a connection when the last read is older than 5 min (`lib/idlePoller.js`). A change made in the console applies in-process at once |
-| Queued e-mail broadcasts (claim query) | every 60 s, always | at start, when the owner queues one, and every 15 min while a socket is open |
-| Session check per open socket | every 60 s per socket | every 60 s only for a socket that was used since its last check; an unused socket every 30 min; the first message after a quiet spell is checked before it is acted on |
+| Game switches and guest features (2 queries) | every 15 s, always | every 15 min while the site is in use, and on a connection when the last read is older than 5 min (`lib/idlePoller.js`). A change made in the console applies in-process at once |
+| Queued e-mail broadcasts (claim query) | every 60 s, always | at start, when the owner queues one, and every 15 min while the site is in use |
+| Session check per open socket | every 60 s per socket | every 60 s only for a socket that was used since its last check; an unused socket every 30 min while the site is in use by others, never when nobody is; the first message after a quiet spell is checked before it is acted on |
 | Browser: banners, friends, requests, invitations (5-6 requests) | every 60 s per tab, hidden or not | every 60 s only while the tab is visible and the person did something in the last 5 min; refresh on return |
 | Admin console "Right now" | every 15 s, hidden tab included | every 15 s only while the tab is visible and used in the last 10 min |
 
