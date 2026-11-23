@@ -102,7 +102,7 @@ async function assertVisibleAndClickable(page, selector, label) {
         const fixed = await page.evaluate(() => {
           return {
             legalFoot: !!document.querySelector('.legal-foot'),
-            legalInBar: !!document.querySelector('.tb-tabs .legal-foot, .tb-tabs a[href*="impressum"]'),
+            legalInBar: !!document.querySelector('.tb-tabs .legal-foot, .tb-tabs a[href*="impressum"], .tb-tabs a[href^="/privacy"], .tb-tabs a[href^="/terms"]'),
             fixed: [...document.querySelectorAll('body *')].filter((el) => {
               const cs = getComputedStyle(el);
               const b = el.getBoundingClientRect();
