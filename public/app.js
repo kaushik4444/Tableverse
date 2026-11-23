@@ -3217,7 +3217,8 @@
       return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${thisMatch}</span><span class="xp-c" role="cell">${month}</span><span class="xp-c" role="cell">${life}</span></div>`;
     }).join('');
     const status = { loading: 'Loading ratings…', pending: 'Updating ratings…', unavailable: 'Ratings are not available right now.' }[state] || '';
-    const statusLine = status ? `<p class="xp-status" role="status" aria-busy="${state === 'unavailable' ? 'false' : 'true'}">${status}</p>` : '';
+    // role=status stays outside any busy region, so the loading and updating text is announced
+    const statusLine = status ? `<p class="xp-status" role="status">${status}</p>` : '';
     const table = `<div class="xp-table xp-table-rating" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">All time</span></div>${body}</div>`;
     return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${statusLine}${table}</section>`;
   }
