@@ -1877,6 +1877,7 @@
   }
 
   let lastTickSec = -1;
+  let timebarDl = null, timebarTotal = 0; // the deadline being drawn, and its length as first seen (used when the server does not say)
   function updateTimer() {
     if (!S.room && lastTickSec === -1) return; // home screen: no timers to update
     const dl = S.room && S.room.status === 'playing' ? S.room.deadline : null;
@@ -1889,6 +1890,15 @@
       el.hidden = false;
       el.textContent = `⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
       el.classList.toggle('warn', left <= 10);
+    });
+    // the same clock as a bar under the status line: it drains and turns red in the last ten seconds
+    if (left !== null && dl !== timebarDl) { timebarDl = dl; timebarTotal = left; }
+    const total = S.room && S.room.turnMs ? S.room.turnMs / 1000 : timebarTotal;
+    document.querySelectorAll('.ct-timebar').forEach((el) => {
+      el.classList.toggle('on', left !== null);
+      el.classList.toggle('warn', left !== null && left <= 10);
+      const fill = el.firstElementChild;
+      if (fill) fill.style.transform = `scaleX(${left === null || !total ? 0 : Math.max(0, Math.min(1, (dl - (Date.now() + S.skew)) / 1000 / total))})`;
     });
     if (left !== null && left <= 5 && left > 0 && left !== lastTickSec && S.view && S.view.myTurn) CardTable.sound.play('tick');
     lastTickSec = left === null ? -1 : left;
@@ -3093,7 +3103,10 @@
     endFlow(focusedResultAction);
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const bar = $app.querySelector('.wz-status');
-    if (bar) bar.insertAdjacentHTML('beforeend', '<span class="ct-timer" hidden></span>');
+    if (bar) {
+      bar.insertAdjacentHTML('beforeend', '<span class="ct-timer" hidden></span>');
+      bar.insertAdjacentHTML('beforeend', '<div class="ct-timebar" aria-hidden="true"><i></i></div>');
+    }
     updateTimer();
   }
 
