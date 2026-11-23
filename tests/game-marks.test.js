@@ -93,8 +93,7 @@ vm.createContext(renderContext);
 vm.runInContext([
   declaration('  const esc =', '\n  const store ='),
   declaration('  const gameMeta =', '\n  /**'),
-  declaration('  const statsGame =', '\n  /** Signed XP'),
-  declaration('  const fmtXp =', '\n  /**'),
+  declaration('  const statsGame =', '\n  /** The statistics block of a profile'),
   declaration('  function progressHTML(', '\n  /** One game'),
   declaration('  function gameDetailHTML(', '\n  function statsHTML('),
   declaration('  function rejoinBannerHTML(', '\n  function tableByCode('),

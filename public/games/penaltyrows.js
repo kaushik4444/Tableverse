@@ -221,7 +221,7 @@
       : collected ? `${nameOf(v, e.by)} took ${e.took}` : '';
     const callout = calloutText ? `<span class="pr-callout">${calloutText}</span>` : '';
     const inner = `<span class="pr-rowhead"><span class="label">Row ${k + 1}</span></span><span class="pr-cards" style="--cols:${cols}">${slots}</span>`
-      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${points <= 5 ? (starsOf(points) || '0') : `💣×${points}`}</span></span>${callout}`;
+      + `<span class="pr-pile" role="img" aria-label="${points} penalty point${points === 1 ? '' : 's'}" title="Penalty points on this row"><span class="pr-pile-n" aria-hidden="true">${points <= 3 ? (starsOf(points) || '0') : `💣×${points}`}</span></span>${callout}`;
     return taking
       ? `<button type="button" class="pr-row take" data-pr="take" data-row="${k}" aria-label="${esc('Take ' + label)}">${inner}</button>`
       : `<div class="pr-row ${full ? 'full' : ''}${collected ? ' collected' : ''}" role="group" aria-label="${esc(label)}">${inner}</div>`;

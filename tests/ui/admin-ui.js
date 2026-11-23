@@ -577,7 +577,7 @@ const api = (role) => ({
     await s.close();
   });
 
-  await test('players: a profile shows the overall level, Player Progress XP, and Game XP per game', async () => {
+  await test('players: a profile shows the overall level and Player Progress XP, and no Game XP', async () => {
     const s = await open('admin');
     await s.page.waitForSelector('.ad-grid');
     await tab(s.page, 'players');
@@ -586,9 +586,8 @@ const api = (role) => ({
     await s.page.waitForSelector('#pBack');
     const text = await s.page.textContent('#adMain');
     assert.match(text, /overall level/); assert.match(text, /Player Progress XP/);
-    assert.match(text, /\+15/, 'a positive Game XP shows its sign');
-    assert.match(text, /-10/);
-    assert.match(text, /Win or lose/); assert.match(text, /Placing/);
+    assert.doesNotMatch(text, /Game XP/, 'the legacy per-game XP is not shown');
+    assert.doesNotMatch(text, /Win or lose|Placing/, 'no XP rule labels are shown');
     await s.close();
   });
 

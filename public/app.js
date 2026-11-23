@@ -338,6 +338,11 @@
     busyTimer = setTimeout(() => {
       const wasSigningIn = S.signingIn;
       if (httpBusy) { httpBusy = 0; httpBusyEpoch++; }
+      reqVeilOwned = false; // the veil is gone: a request that settles later must not hide a veil that comes after it
+      // The person was told to try again. Requests still waiting stop counting toward the veil, so they cannot bring it back;
+      // a request started later counts again.
+      reqPending.clear();
+      clearTimeout(reqVeilTimer); reqVeilTimer = null;
       S.signingIn = false;
       hideBusy();
       toast('That is taking longer than usual. Check your connection and try again.');
@@ -360,7 +365,40 @@
     httpBusy++;
     showBusy(label);
     try { return await fn(); } finally {
-      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy) hideBusy(); }
+      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy && !reqVeilOwned) hideBusy(); }
+    }
+  }
+  // Every user-started request (postJson / getJson) shows a loading veil if it is still running after a short delay,
+  // so quick answers do not flash. Background polls pass { quiet: true } and never show it.
+  let reqPending = new Set(); // requests that may still own the veil; a timed-out veil clears it
+  let reqVeilTimer = null;
+  let reqVeilOwned = false;
+  // After 350 ms, take the veil unless another action holds it. If one does, look again shortly: the veil must still come
+  // when that action releases it while this request is still waiting.
+  function armReqVeil() {
+    reqVeilTimer = setTimeout(() => {
+      reqVeilTimer = null;
+      if (reqPending.size === 0 || reqVeilOwned) return;
+      if (httpBusy || document.getElementById('busyBlock')) { armReqVeil(); return; }
+      reqVeilOwned = true;
+      showBusy('Loading…', 20000, 'load');
+    }, 350);
+  }
+  async function trackRequest(opts, fn) {
+    if (opts && opts.quiet) return fn();
+    const token = {};
+    reqPending.add(token);
+    if (!reqVeilTimer && !reqVeilOwned) armReqVeil();
+    try { return await fn(); } finally {
+      reqPending.delete(token);
+      if (reqPending.size === 0) {
+        clearTimeout(reqVeilTimer); reqVeilTimer = null;
+        if (reqVeilOwned) {
+          reqVeilOwned = false;
+          // a sign-in that is waiting for the socket keeps its own veil until welcome arrives
+          if (!httpBusy && !S.signingIn) hideBusy();
+        }
+      }
     }
   }
   /** Right after a successful login the socket still has to say welcome. Until then show the profile, spin, and block taps. */
@@ -429,7 +467,10 @@
     return S.csrf;
   }
 
-  async function postJson(url, body, retried) {
+  function postJson(url, body, retried, opts) {
+    return trackRequest(opts, () => postJsonNow(url, body, retried));
+  }
+  async function postJsonNow(url, body, retried) {
     await ensureCsrf();
     let r;
     try {
@@ -447,7 +488,7 @@
     try { data = await r.json(); } catch { /* ignore */ }
     if (r.status === 403 && /CSRF/i.test(data.error || '') && !retried) { // cookie expired or was cleared: fetch a fresh pair once
       await ensureCsrf(true);
-      return postJson(url, body, true);
+      return postJsonNow(url, body, true); // the outer call is already tracked, so the retry skips a second count
     }
     if (data && data.csrfToken) S.csrf = data.csrfToken;
     if (!r.ok || data.ok === false) {
@@ -492,6 +533,7 @@
 
   function clearClientSession() {
     S.isStaff = false;
+    S.welcomeBack = null; S.welcomeFor = null; S.welcomeLoaded = undefined; // another account must not see this one's card
     S.banners = [];
     S.token = '';
     S.csrf = '';
@@ -1331,7 +1373,8 @@
   }
 
   function onMessage(m) {
-    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
+    // A veil that a loading request owns stays until that request settles; any other veil (sign-in, an action) goes now
+    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy && !reqVeilOwned) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
       case 'role': {
@@ -1513,8 +1556,12 @@
         render();
         break;
       case 'gameTotals':
-        // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
-        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {}, ratings: m.ratings || null }; render(); }
+        // the skill ratings for the finished game at this table; the game-over table is redrawn with them
+        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) {
+          // a late pending reply, or a failed lookup, must not replace a final answer already stored for this match
+          const haveFinal = S.gameTotals && S.gameTotals.code === m.code && S.gameTotals.id === m.id && !S.gameTotals.pending;
+          if (!((m.pending || m.failed) && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending) }; render(); }
+        }
         break;
       case 'error':
         S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
@@ -1986,7 +2033,10 @@
   const errorBlock = (text, retryAct) => `<div class="error-block" role="alert"><p>${esc(text)}</p>${retryAct ? `<button type="button" class="btn ghost small" data-act="${retryAct}">Try again</button>` : ''}</div>`;
   const RESULT_LABEL = { won: 'Won', lost: 'Lost', draw: 'Draw', left: 'Left (not counted)', forfeit: 'Left (counts as a loss)' };
 
-  async function getJson(url) {
+  function getJson(url, opts) {
+    return trackRequest(opts, () => getJsonNow(url));
+  }
+  async function getJsonNow(url) {
     const r = await fetch(url, { credentials: 'same-origin' });
     let out = null;
     try { out = await r.json(); } catch { /* not json */ }
@@ -2061,7 +2111,7 @@
     const gen = sessionGen;
     const mine = ++levelRequest;
     try {
-      const me = await getJson('/api/me/profile');
+      const me = await getJson('/api/me/profile', { quiet: true });
       if (gen !== sessionGen || mine !== levelRequest) return; // another account or a newer profile response won
       const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
@@ -2592,7 +2642,7 @@
       };
       if (!S.guest && S.country === undefined) {
         const mineGen = sessionGen;
-        getJson('/api/me/profile').then((me) => {
+        getJson('/api/me/profile', { quiet: true }).then((me) => {
           if (mineGen !== sessionGen) return; // another account signed in meanwhile
           S.country = (me && me.profile && me.profile.country) || '';
           const sel = o.querySelector('#profileCountry');
@@ -2679,7 +2729,7 @@
     const list = (newest.items || []).filter((w) => S.voiceEnabled || !w.voice).slice(0, 3)
       .map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
     openModal('Welcome to Tableverse', `<p class="hint" style="text-align:left">Tableverse is a place to play classic card and board games online, with friends and other players. Find a table, sit down and play. Your games and progress are kept on your profile, so you can see how you are getting on.</p>${list ? `<h3>What’s new</h3><ul class="wn-list">${list}</ul>` : ''}<div class="row" style="margin-top:12px"><button type="button" class="btn primary" data-modal-act="welcomeStart">Start playing</button></div>`);
-    postJson('/api/me/welcome-seen', {}).catch(() => {}); // shown: remember it on the account (a failed save only means it may show once more)
+    postJson('/api/me/welcome-seen', {}, false, { quiet: true }).catch(() => {}); // shown: remember it on the account (a failed save only means it may show once more)
   }
 
   /** Every release, newest first, with its items (voice items only when voice chat is on). */
@@ -2747,7 +2797,33 @@
     }
   }
 
+  /** Once per session, a signed-in player's profile tells us whether they are returning after a break. */
+  function loadWelcome() {
+    if (S.guest || S.welcomeLoaded === sessionGen) return;
+    S.welcomeLoaded = sessionGen;
+    const mineGen = sessionGen;
+    getJson('/api/me/profile', { quiet: true }).then((me) => {
+      if (mineGen !== sessionGen) return; // another account signed in meanwhile
+      S.welcomeBack = (me && me.welcomeBack) || null;
+      S.welcomeFor = mineGen;
+      if (S.page === 'home') render();
+    }).catch(() => {});
+  }
+
+  /** The welcome-back card: shown once per visit after a day or more away. Dismissing it stores that visit, so a reload does not bring it back. */
+  function welcomeHTML() {
+    const w = S.welcomeBack;
+    if (!w || S.welcomeFor !== sessionGen || store.get('ct_welcome') === w.since) return '';
+    const away = w.awayDays === 1 ? 'a day' : `${w.awayDays} days`;
+    const streak = w.streak >= 2 ? `<span>You're on a ${w.streak}-day streak. Play today to keep it going.</span>` : '';
+    return `<section class="notice-bar welcome-back" role="status" aria-label="Welcome back">
+      <div class="welcome-text"><strong>Welcome back!</strong><span>It's been ${away} since your last visit.</span>${streak}</div>
+      <button type="button" class="wn-close" data-act="dismissWelcome" aria-label="Dismiss">✕</button>
+    </section>`;
+  }
+
   function renderHome() {
+    loadWelcome();
     const tiles = S.games.map((g) => {
       const open = gameOpenFor(g);
       const guestLocked = guestLockedFor(g); // a tap opens the account prompt (the button stays enabled)
@@ -2773,6 +2849,7 @@
     ${topbarHTML()}
     <main class="page wide home">
       <section class="home-hero">
+        <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
           <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
@@ -2788,12 +2865,13 @@
       ${rejoinBannerHTML()}
       ${bannersHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
+      ${welcomeHTML()}
       ${friendsStripHTML()}
       <div class="home-split">
         ${publicTablesHTML()}
         <section class="home-section" id="games">
           <h2 class="section">Games</h2>
-          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
+          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…') + '<div class="game-grid skeleton" aria-hidden="true">' + '<div class="game-card sk"><i></i><b></b><span></span></div>'.repeat(4) + '</div>'}
         </section>
       </div>
       ${comingSoonHTML()}
@@ -2956,9 +3034,6 @@
   const statsGame = (id) => gameMeta(id) || { id, name: id, icon: '🎴' }; // the id too, so a game's mark still shows without its menu entry
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
-
-  /** Signed XP number for display, e.g. +20 or -30. */
-  const fmtXp = (n) => (Number(n) > 0 ? `+${Number(n)}` : `${Number(n) || 0}`);
 
   /** The statistics block of a profile. Bot seats and games left without a penalty are never counted (the server leaves them out). */
   /**
@@ -3135,8 +3210,16 @@
     const room = S.room;
     const gate = gateInfo();
     $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
-    if (!gate || room.status !== 'playing' || $app.querySelector('[data-ready-here]')) return;
-    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' });
+    // the box this function adds is rebuilt on every call, so its "waiting for" list and count never go stale; a game's own box is left alone
+    $app.querySelectorAll('[data-ready-placed]').forEach((el) => el.remove());
+    if (!gate || room.status !== 'playing') {
+      // the table has stopped waiting: the Ready button goes, and the status line comes back
+      const status = $app.querySelector('.wz-status');
+      if (status) status.hidden = false;
+      return;
+    }
+    if ($app.querySelector('[data-ready-here]')) return;
+    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
     const status = $app.querySelector('.wz-status');
     if (status) { status.insertAdjacentHTML('beforebegin', box); status.hidden = true; return; }
     const top = $app.querySelector('.wz-top');
@@ -3195,7 +3278,8 @@
    * in this game. `ratings` maps player id to { rated, reason, matchDelta, monthDelta, monthRating, lifetimeRating }; a player
    * without an entry shows dashes (the answer may still be on its way).
    */
-  function endRatingHTML(rows, gameName, ratings, gaveUp = false) {
+  /** state: 'loading' (asking the server), 'pending' (game saved, ratings still updating), 'ready', or 'unavailable'. */
+  function endRatingHTML(rows, gameName, ratings, state = 'ready') {
     const people = rows.filter((x) => !x.isBot);
     if (!people.length) return '';
     const game = esc(gameName || 'Game');
@@ -3209,9 +3293,11 @@
       const guest = x.saved ? '' : '<small class="xp-tag">guest</small>';
       const left = x.penalised ? '<small class="xp-tag">left early</small>' : '';
       const q = ratings && x.saved ? ratings[x.id] : null;
-      let thisMatch = '–';
-      let month = '–';
-      let life = '–';
+      const waiting = state === 'loading' || state === 'pending';
+      const none = waiting ? '…' : '–';
+      let thisMatch = none;
+      let month = none;
+      let life = none;
       if (q) {
         thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : 'unrated';
         month = q.monthRating !== null ? `${num(q.monthRating)}${q.monthDelta !== null ? ` (${signed(q.monthDelta)})` : ''}` : '–';
@@ -3219,8 +3305,11 @@
       }
       return `<div class="xp-tr${me ? ' me' : ''}" role="row"><span class="xp-name" role="cell">${name} ${guest}${left}</span><span class="xp-c" role="cell">${thisMatch}</span><span class="xp-c" role="cell">${month}</span><span class="xp-c" role="cell">${life}</span></div>`;
     }).join('');
+    const status = { loading: 'Loading ratings…', pending: 'Updating ratings…', unavailable: 'Ratings are not available right now.' }[state] || '';
+    // role=status stays outside any busy region, so the loading and updating text is announced
+    const statusLine = status ? `<p class="xp-status" role="status">${status}</p>` : '';
     const table = `<div class="xp-table xp-table-rating" role="table" aria-label="${game} ratings for each player"><div class="xp-tr xp-th" role="row"><span role="columnheader">Player</span><span class="xp-c" role="columnheader">This match</span><span class="xp-c" role="columnheader">This month</span><span class="xp-c" role="columnheader">All time</span></div>${body}</div>`;
-    return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${table}</section>`;
+    return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${statusLine}${table}</section>`;
   }
 
   function endFlow(focusedResultAction) {
@@ -3285,7 +3374,10 @@
       if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       // The ratings for this game come from the server once per finished game (the table's own game only)
-      const gotTotals = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
+      const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
+      // Only a final answer ends the asking. A pending one still needs its final message, which a reconnect can lose, so it is asked for again.
+      const gotTotals = cached && !cached.pending ? cached : null;
+      const waiting = Boolean(cached && cached.pending);
       // Asked again if the answer did not come (not connected, or the server could not save the game yet): at most three
       // tries, five seconds apart, so a failed request never leaves the saved players on an ellipsis for good.
       const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
@@ -3294,10 +3386,14 @@
         f.totalsAsked = { at: Date.now(), tries: tries + 1 };
         setTimeout(() => render(), 5100); // one re-render later: endFlow asks again only if the answer is still missing
       }
-      if (xpRows.length && !$app.querySelector('.end-xp')) {
+      if (xpRows.length) {
+        // The card is replaced whenever its state changes (loading, updating, ready), so the placeholder never outlives the answer.
+        $app.querySelectorAll('.end-xp').forEach((n) => n.remove());
         // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
         const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
-        const card = endRatingHTML(xpRows, statsGame(r.gameId).name, gotTotals && gotTotals.ratings ? gotTotals.ratings : {}, gaveUp);
+        // Out of retries with only a pending answer: say so, rather than "updating" with nothing left to ask for
+        const state = gotTotals ? 'ready' : (gaveUp ? 'unavailable' : (waiting ? 'pending' : 'loading'));
+        const card = endRatingHTML(xpRows, statsGame(r.gameId).name, gotTotals && gotTotals.ratings ? gotTotals.ratings : {}, state);
         const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
         // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
         // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
@@ -3310,17 +3406,6 @@
     }
   }
 
-  function loadProfileBoard(prof) {
-    const id = prof.game;
-    const gen = sessionGen;
-    const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
-    prof.board = null;
-    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardGen === boardGen;
-    getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
-      .then((b) => { if (current()) { prof.board = b; render(); } })
-      .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
-    loadRatingBoard(prof);
-  }
 
   /** The rating board for the game on this profile page, for the chosen period. Public; the server says if ratings are off. */
   function loadRatingBoard(prof) {
@@ -3396,14 +3481,14 @@
       const prof = S.profile;
       if (!prof || !prof.data) return;
       const id = el.dataset.game;
-      prof.game = id; prof.gameHistory = null; prof.board = null; render();
+      prof.game = id; prof.gameHistory = null; render();
       // Apply the answer only to the same profile, still open on this game (a reload or a sign-out drops it).
       const gen = sessionGen; // another account signed in or out since the click: its answer is not for this screen
       const current = () => gen === sessionGen && S.profile === prof && prof.game === id;
       getJson(`/api/me/history?game=${encodeURIComponent(id)}&page=1`)
         .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
         .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
-      loadProfileBoard(prof);
+      loadRatingBoard(prof);
     },
     boardOptIn: async () => {
       const prof = S.profile;
@@ -3515,6 +3600,11 @@
     dismissBanner: (el) => dismissBanner(el.dataset.id),
     openAdmin: () => { S.menuOpen = false; location.href = '/admin.html'; },
     openFeedback: () => { S.menuOpen = false; openFeedbackModal(); },
+    dismissWelcome: () => {
+      if (S.welcomeBack) store.set('ct_welcome', S.welcomeBack.since);
+      S.welcomeBack = null;
+      render();
+    },
     dismissAnnouncement: () => {
       S.dismissedAnnouncement = S.announcement;
       store.set('ct_ann', S.announcement);

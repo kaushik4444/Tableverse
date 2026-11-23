@@ -1807,8 +1807,8 @@ function start(opts = {}) {
       broadcast(room);
     },
 
-    // Game over: the lifetime game XP of each signed-in person at this table, for this game (their stored game points across
-    // all matches). Only the table's own finished game is answered, so nobody can ask for totals outside their table.
+    // Game over: the skill ratings of each signed-in person at this table, for this game. Only the table's own finished game is
+    // answered, so nobody can ask for ratings outside their table.
     gameTotals(p) {
       const room = rooms.get(p.room);
       if (!room || room.status !== 'finished' || !room.outcome || !Array.isArray(room.outcome.xp)) return;
@@ -1820,7 +1820,7 @@ function start(opts = {}) {
       const matchKey = room.matchKey; // captured now: the host may start another game while this answer is being prepared
       const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
       (async () => {
-        if (!ids.length) return { totals: {}, ratings: dbRatings.liveEnabled() ? {} : null };
+        if (!ids.length) return { ratings: {} };
         // This game's own save, waited for at most three seconds. The queue resolves { status: 'failed' } when its retries run
         // out, and a missing promise means nothing was queued: both count as "not saved".
         const saved = await new Promise((resolve) => {
@@ -1828,22 +1828,35 @@ function start(opts = {}) {
           Promise.resolve(room.matchSaved).then((res) => { clearTimeout(timer); resolve(res || null); });
         });
         if (!saved || saved.status === 'failed') throw new Error('this game is not saved yet');
-        const totals = {};
-        await Promise.all(ids.map(async (id) => {
-          const progress = await dbMatches.getProgress(id);
-          totals[id] = (progress.games[gameId] || {}).points || 0;
-        }));
-        // With the live ratings on: wait for the rebuild that follows this game's save, then send this game's numbers.
-        // null when the ratings are off (the page keeps the Game XP table); {} when on but not available for this game.
-        let ratings = null;
+        // Wait for the rebuild that follows this game's save, then send this game's ratings. {} when they are not available
+        // for this game; a failed rebuild leaves the stored ratings stale, so they are not shown as current.
+        // The rebuild queue can be long (every finished game queues one), so the reply waits at most 3 seconds; after that the
+        // answer goes out now as pending and the final ratings follow when the rebuild has settled.
+        let ratings = {};
+        let settling = null; // the one settlement this answer waits for; the late path reuses it, so a later rebuild cannot stand in
         if (dbRatings.liveEnabled()) {
-          // A failed rebuild leaves the stored ratings stale: say they are not available instead of showing old numbers.
-          const settled = await dbRatings.ratingsSettled();
+          settling = dbRatings.ratingsSettled();
+          const settled = await Promise.race([settling, new Promise((resolve) => setTimeout(() => resolve('late'), 3000))]);
+          if (settled === 'late') return { ratings: {}, pending: true, settling };
           ratings = settled ? (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {} : {};
         }
-        return { totals, ratings };
+        return { ratings };
       })().then(
-        ({ totals, ratings }) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, totals, ratings }),
+        ({ ratings, pending, settling }) => {
+        send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings, pending: Boolean(pending) });
+        // The rebuild took longer than the reply window: the final ratings follow as a second message, not a client retry.
+        if (pending) {
+          // Every path ends with a terminal message (pending: false), even an empty one, so the client never waits on an answer
+          // that will not come.
+          const finish = (ratings2, failed = false) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings: ratings2, pending: false, failed: Boolean(failed) });
+          settling.then(async (ok) => {
+            finish(ok ? ((await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {}) : {});
+          }).catch((err) => {
+            console.error('[server] final game totals failed:', err.message);
+            finish({}, true);
+          });
+        }
+      },
         (err) => {
           console.error('[server] game totals failed:', err.message);
           sendError(p, 'Game totals are unavailable right now');
