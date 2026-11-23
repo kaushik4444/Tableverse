@@ -260,3 +260,10 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
   input[type="range"][data-pk="slider"] { min-height: 44px; }
   .cc-game .wz-status .btn.small, .cc-game .cc-log .btn { min-height: 44px; }
 }
+
+/* Ludo on phones: pieces on the track were 10-14px; a bit larger reads better and stays inside a cell */
+@media (max-width: 560px) {
+  .ludo-board:not(.hex) .ludo-token { width: 4.4%; }
+  .ludo-board:not(.hex) .ludo-token.stacked { width: 3.4%; }
+  .ludo-board:not(.hex) .ludo-token.done { width: 3%; }
+}
