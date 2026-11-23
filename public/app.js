@@ -536,6 +536,8 @@
   function clearClientSession() {
     S.isStaff = false;
     S.welcomeBack = null; S.welcomeFor = null; S.welcomeLoaded = undefined; // another account must not see this one's card
+    // requests of the previous session must not hold the loading veil into the next sign-in
+    reqVeilOwned = false; reqPending.clear(); clearTimeout(reqVeilTimer); reqVeilTimer = null;
     S.banners = [];
     S.token = '';
     S.csrf = '';
@@ -2115,6 +2117,11 @@
     try {
       const me = await getJson('/api/me/profile', { quiet: true });
       if (gen !== sessionGen || mine !== levelRequest) return; // another account or a newer profile response won
+      // a returning socket reconnect does not start a new session, so take the welcome-back answer from this refresh too
+      if (me && !S.guest && 'welcomeBack' in me && S.welcomeLoaded === gen) {
+        const wb = me.welcomeBack || null;
+        if (JSON.stringify(wb) !== JSON.stringify(S.welcomeBack)) { S.welcomeBack = wb; S.welcomeFor = gen; if (S.page === 'home') render(); }
+      }
       const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
       const before = key(S.account);
