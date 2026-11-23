@@ -51,8 +51,9 @@ async function homeCheck(browser, url) {
     await page.goto(url + '/');
     await page.waitForSelector('.game-grid .game-card');
     const r = await page.evaluate(() => ({ h: document.documentElement.scrollHeight, soonOpen: !!document.querySelector('details.soon-fold[open]'), soonCards: document.querySelectorAll('.soon-card').length, soonCount: (document.querySelector('.soon-count')||{}).textContent, emptyBlock: !!document.querySelector('.public-tables-panel'), games: document.querySelectorAll('.game-grid .game-card').length }));
-    // the page chrome stays short (700px) and every game card adds at most 190px, so shipping a game never needs a new budget
-    const budget = 700 + r.games * 190;
+    // the page chrome stays short (700px, plus the 88px of bottom space the fixed phone tab bar reserves so no content hides
+    // under it) and every game card adds at most 190px, so shipping a game never needs a new budget
+    const budget = 788 + r.games * 190;
     assert.ok(r.h <= budget, `the home page stays short on a phone (${r.h}px, budget ${budget}px for ${r.games} games)`);
     assert.equal(r.soonOpen, false, 'the roadmap starts folded');
     assert.equal(r.soonCards, parseInt(r.soonCount, 10), 'the roadmap lists every planned game');
