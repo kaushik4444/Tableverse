@@ -2,7 +2,15 @@
 // Carrom in a real browser: the board and pieces, dragging to place and aim, the keyboard, four
 // seats and each seat's view, the shot playback, the game-over sheet and a phone-width layout.
 const assert = require('node:assert/strict');
-const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk, closeOpenContexts } = require('./harness');
+const harness = require('./harness');
+const { serve, loadPlaywright, tableMessages, sessionOk, closeOpenContexts } = harness;
+/** Opens a scripted page with the how-to-play cards already seen (they open by themselves the first time), unless a test asks for them. */
+async function scriptedPage(browser, opts = {}) {
+  const { freshPlayer, ...rest } = opts;
+  const r = await harness.scriptedPage(browser, rest);
+  if (!freshPlayer) await r.page.addInitScript(() => { try { localStorage.setItem('cb_tour', '1'); } catch (e) { /* ignore */ } });
+  return r;
+}
 const { chromium } = loadPlaywright();
 const E = require('../../games/carrom/engine');
 
@@ -263,6 +271,32 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.evaluate(() => document.querySelector('.cb-svg').dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 })));
     await page.mouse.up();
     assert.equal((await sent(page)).length, 0, 'a cancelled drag does not fire');
+    await ctx.close();
+  });
+
+  await test('the first time: the four how-to-play cards open, step through, and do not open again', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: msgsFor(fresh()), viewport: { width: 390, height: 844 }, freshPlayer: true });
+    await page.goto(url + '/');
+    await page.waitForSelector('.cb-tour', { timeout: 8000 });
+    const titles = [];
+    for (let i = 0; i < 4; i++) {
+      titles.push(await page.textContent('.cb-tour h2'));
+      await page.click(i < 3 ? '[data-cb="tour-next"]' : '[data-cb="tour-close"]');
+    }
+    assert.deepEqual(titles, ['Win the game', 'Positioning', 'Take the shot', 'Cover the queen']);
+    assert.equal(await page.locator('.cb-tour').count(), 0);
+    await ctx.close();
+  });
+
+  await test('the striker track under the board places the striker, and the score pills show both teams', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    assert.equal(await page.locator('.cb-pill').count(), 2);
+    const before = await page.getAttribute('[data-slider]', 'aria-valuenow');
+    const b = await box(page, '.cb-track');
+    await page.mouse.click(b.x + b.width * 0.85, b.y + b.height / 2);
+    const after = Number(await page.getAttribute('[data-slider]', 'aria-valuenow'));
+    assert.ok(after > Number(before) + 15, `the striker moved right (${before} to ${after})`);
+    assert.equal((await sent(page)).length, 0, 'placing the striker never flicks');
     await ctx.close();
   });
 

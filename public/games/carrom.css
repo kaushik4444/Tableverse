@@ -50,3 +50,43 @@
 
 
 .cb-fire[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+
+/* score pills */
+.cb-score { display: flex; justify-content: center; gap: 10px; margin: 0 0 10px; }
+.cb-pill { display: flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 999px; background: rgba(0, 0, 0, .28); border: 1px solid var(--panel-line, rgba(255,255,255,.1)); min-width: 128px; justify-content: center; }
+.cb-pill b { font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1; }
+.cb-pill small { opacity: .7; }
+.cb-pill.queen { border-color: #e0442f; }
+.cb-pill .cb-colour { width: 20px; height: 20px; }
+
+/* the striker's track under the board */
+.cb-slider { position: relative; height: 54px; margin: 10px auto 0; width: min(100%, 460px); touch-action: none; user-select: none; cursor: grab; }
+.cb-slider.off { opacity: .45; cursor: default; pointer-events: none; }
+.cb-track { position: absolute; left: 0; right: 0; top: 8px; bottom: 8px; border-radius: 999px; background: linear-gradient(180deg, #f3d9ab, #e2b982); box-shadow: inset 0 3px 6px rgba(74, 42, 20, .45), 0 0 0 4px #4a2a14, 0 0 0 7px #bd6a35; }
+.cb-end { position: absolute; top: 50%; left: 6%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: #d9684f; box-shadow: 0 0 0 3px #f3d9ab, 0 0 0 4.5px #8a4f2a; }
+.cb-end.r { left: 94%; }
+.cb-thumb { position: absolute; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, #fff2b8 0 16%, #e2b84a 20%, #3a2a8a 22% 50%, #5a46b8 52%, #e2b84a 56% 62%, #44349a 64% 86%, #e2b84a 90%, #8a6a1c); box-shadow: 0 4px 8px rgba(0, 0, 0, .5), 0 0 0 2px #3a2a0a; pointer-events: none; }
+.cb-slider:focus-visible { outline: 2px solid var(--gold, #fbbf24); outline-offset: 6px; border-radius: 999px; }
+
+/* aim ring */
+.cb-ring { fill: none; stroke: #fff; stroke-width: 0.006; stroke-dasharray: 0.018 0.014; opacity: .75; transform-box: fill-box; transform-origin: center; animation: cb-pulse 1.6s ease-in-out infinite; pointer-events: none; }
+.cb-ring.set { animation: none; opacity: .9; }
+@keyframes cb-pulse { 50% { transform: scale(1.18); opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .cb-ring { animation: none; } }
+
+/* how-to-play cards */
+.cb-tour-sheet { text-align: center; max-width: 340px; }
+.cb-tour-sheet h2 { margin-bottom: 10px; }
+.cb-art { display: grid; place-items: center; margin: 8px 0; }
+.cb-art svg { width: 190px; height: auto; }
+.cb-art .a-board { fill: #e8c996; stroke: #7a4a1f; stroke-width: 2; }
+.cb-art .a-pocket { fill: #1c1410; }
+.cb-art .a-queen, .cb-art .a-red { fill: #d9684f; }
+.cb-art .a-b { fill: #231d19; } .cb-art .a-w { fill: #f6efdc; stroke: #8f7f58; }
+.cb-art .a-striker { fill: #5a46b8; stroke: #e2b84a; stroke-width: 2; }
+.cb-art .a-line { fill: none; stroke: #fff; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.cb-art .a-dash { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 4 4; stroke-linecap: round; }
+.cb-art .a-guide { fill: rgba(255, 255, 255, .08); stroke: #fff; stroke-width: 1.5; stroke-dasharray: 4 4; }
+.cb-dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+.cb-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .25); }
+.cb-dots i.on { background: var(--gold, #fbbf24); }

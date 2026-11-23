@@ -93,9 +93,15 @@
     return { from, to };
   }
 
+  /** A ring round the striker: it pulses until the shot is aimed, then shows how far the striker can be pulled. */
+  function ringHTML() {
+    const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]);
+    return `<circle class="cb-ring${ui.aim.power > 0 ? ' set' : ''}" cx="${sx}" cy="${sy}" r="0.07"/>`;
+  }
+
   function aimHTML() {
     const { from, to } = aimPoints();
-    return `<line class="cb-aim" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>`;
+    return `<line class="cb-aim" marker-end="url(#cb-arrowhead)" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>`;
   }
 
   const fx = (n) => Math.round(n * 1000) / 1000;
@@ -165,6 +171,7 @@
     const bands = (stops) => stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('');
     return `<svg class="cb-svg" viewBox="-0.09 -0.09 1.18 1.18" role="img" aria-label="Carrom board">
       <defs>
+        <marker id="cb-arrowhead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#fff"/></marker>
         <linearGradient id="cb-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6e4222"/><stop offset="0.5" stop-color="#4a2a14"/><stop offset="1" stop-color="#5d3519"/></linearGradient>
         <linearGradient id="cb-surface" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3d9ab"/><stop offset="1" stop-color="#e2b982"/></linearGradient>
         <linearGradient id="cb-copper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8a36a"/><stop offset="0.55" stop-color="#bd6a35"/><stop offset="1" stop-color="#8a4420"/></linearGradient>
@@ -186,8 +193,45 @@
       ${caps}
       ${pockets}
       <g filter="url(#cb-shadow)">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
-      ${aiming ? aimHTML() : ''}
+      ${aiming ? ringHTML() + aimHTML() : ''}
     </svg>`;
+  }
+
+  /** Coins each team has pocketed, as two pills with the coin colour, like the scoreboard of a real match. */
+  function scoreHTML(v) {
+    const pill = (c) => `<div class="cb-pill ${c}${v.queenHeld === c ? ' queen' : ''}"><span class="cb-colour ${c}" aria-hidden="true"></span><b>${v.score[c]}</b><small>of 9${v.queenHeld === c ? ' · queen' : ''}</small></div>`;
+    return `<div class="cb-score" aria-label="Coins pocketed">${pill('w')}${pill('b')}</div>`;
+  }
+
+  /** The striker's track under the board: drag the striker along it (or press the arrow keys) to place it on the baseline. */
+  function sliderHTML(v) {
+    const on = v.myTurn && !ui.anim;
+    const pct = ((ui.aim.x - 20) / 60) * 100;
+    return `<div class="cb-slider${on ? '' : ' off'}" data-slider role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}" aria-disabled="${on ? 'false' : 'true'}" tabindex="${on ? '0' : '-1'}">`
+      + `<span class="cb-track"><i class="cb-end"></i><i class="cb-end r"></i></span><span class="cb-thumb ${colourOfMe(v) === 'w' ? 'w' : 'b'}" style="left:${pct}%"></span></div>`;
+  }
+
+  const TOUR = [
+    { title: 'Win the game', text: 'Pocket all your coins to win. Your team plays the white or the black coins; pocketing one gives you another shot.',
+      art: '<svg viewBox="0 0 120 60" aria-hidden="true"><rect x="8" y="4" width="104" height="52" rx="8" class="a-board"/><circle cx="14" cy="10" r="6" class="a-pocket"/><circle cx="106" cy="10" r="6" class="a-pocket"/><circle cx="14" cy="50" r="6" class="a-pocket"/><circle cx="106" cy="50" r="6" class="a-pocket"/><circle cx="60" cy="30" r="5" class="a-queen"/><circle cx="48" cy="26" r="4" class="a-b"/><circle cx="72" cy="34" r="4" class="a-w"/></svg>' },
+    { title: 'Positioning', text: 'Slide the striker left and right along your baseline with the track under the board.',
+      art: '<svg viewBox="0 0 120 60" aria-hidden="true"><rect x="10" y="20" width="100" height="20" rx="10" class="a-board"/><circle cx="20" cy="30" r="6" class="a-red"/><circle cx="100" cy="30" r="6" class="a-red"/><path d="M40 30h40M46 24l-8 6 8 6M74 24l8 6-8 6" class="a-line"/><circle cx="82" cy="30" r="8" class="a-striker"/></svg>' },
+    { title: 'Take the shot', text: 'Drag back from the striker to aim and set the power. Let go to flick: the further you pull, the harder it goes.',
+      art: '<svg viewBox="0 0 120 60" aria-hidden="true"><circle cx="50" cy="38" r="22" class="a-guide"/><circle cx="50" cy="38" r="7" class="a-striker"/><path d="M52 34 L82 10M82 10l-9 1M82 10l-1 9" class="a-line"/><path d="M48 42 L32 56" class="a-dash"/></svg>' },
+    { title: 'Cover the queen', text: 'Pocket the queen, then pocket one of your own coins in the same shot or the next one to keep her. Do it before your last coin.',
+      art: '<svg viewBox="0 0 120 60" aria-hidden="true"><rect x="8" y="4" width="104" height="52" rx="8" class="a-board"/><circle cx="16" cy="12" r="7" class="a-pocket"/><circle cx="40" cy="34" r="5" class="a-queen"/><path d="M44 31 L24 17" class="a-line"/><circle cx="80" cy="40" r="5" class="a-w"/><path d="M76 37 L98 20" class="a-dash"/></svg>' },
+  ];
+  const tourSeen = () => { try { return localStorage.getItem('cb_tour') === '1'; } catch { return false; } };
+  const tourDone = () => { try { localStorage.setItem('cb_tour', '1'); } catch { /* ignore */ } };
+
+  function tourHTML() {
+    if (ui.tour === null || ui.tour === undefined) return '';
+    const i = Math.max(0, Math.min(TOUR.length - 1, ui.tour)), t = TOUR[i], last = i === TOUR.length - 1;
+    return `<div class="overlay cb-tour" role="dialog" aria-label="How to play Carrom"><div class="sheet cb-tour-sheet">
+      <h2>${esc(t.title)}</h2><div class="cb-art">${t.art}</div><p>${esc(t.text)}</p>
+      <div class="cb-dots" aria-hidden="true">${TOUR.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+      <div class="row" style="justify-content:center;margin-top:12px">${last ? '<button class="btn" data-cb="tour-close">Close</button>' : '<button class="btn" data-cb="tour-next">Next</button><button class="btn ghost" data-cb="tour-close">Skip</button>'}</div>
+    </div></div>`;
   }
 
   /** The controls under the board. They keep the same height on every turn, so the page does not jump when your turn starts. */
@@ -313,6 +357,7 @@
     ui.dragging = false; ui.dragMoved = false; ui.dragKey = null; ui.deferred = null;
     remember(v);
     react(v, ctx);
+    if (ui.tour === undefined) ui.tour = v.me >= 0 && v.phase === 'playing' && !tourSeen() ? 0 : null; // the how-to-play cards open by themselves the first time
     const playing = v.phase === 'playing' && v.me >= 0;
     // a resignation confirmation belongs to one match at one table: a new shot, a finished game or another table clears it
     if (ui.resignArmed && ui.armKey !== armKeyOf(v, ctx)) ui.resignArmed = false;
@@ -321,11 +366,13 @@
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.shots} shots</span></div>
         ${CardTable.toolbarSeed(`<button class="btn ghost small" data-cb="rules">Rules</button>${playing ? `<button class="btn ghost small" data-cb="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'cb')}</div>
       ${seatsHTML(v)}
+      ${scoreHTML(v)}
       <div class="cb-board-wrap">${boardHTML(v, frame)}</div>
+      ${sliderHTML(v)}
       ${controlsHTML(v)}
       <div class="wz-status ${v.myTurn && !ui.anim ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       <details class="cb-moves" open><summary>Shots</summary>${logHTML(v)}</details>
-      ${overlayHTML(v)}</div>`;
+      ${overlayHTML(v)}${tourHTML()}</div>`;
     root.onclick = onClick;
     root.onkeydown = onKey;
     root.onpointerdown = onPointerDown;
@@ -375,6 +422,11 @@
     }
     const striker = svg && svg.querySelector('[data-id="striker"]');
     if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); striker.setAttribute('aria-valuenow', String(ui.aim.x)); }
+    const ring = svg && svg.querySelector('.cb-ring');
+    if (ring) { const [rx, ry] = dispToSvg([ui.aim.x / 100, BASE_Y]); ring.setAttribute('cx', rx); ring.setAttribute('cy', ry); ring.classList.toggle('set', ui.aim.power > 0); }
+    const thumb = root.querySelector('.cb-thumb'), slider = root.querySelector('[data-slider]');
+    if (thumb) thumb.style.left = `${((ui.aim.x - 20) / 60) * 100}%`;
+    if (slider) slider.setAttribute('aria-valuenow', String(ui.aim.x));
     const tip = root.querySelector('.cb-tip');
     if (tip) tip.textContent = tipText();
     const fireBtn = root.querySelector('[data-cb="fire"]');
@@ -383,7 +435,8 @@
 
   function onPointerDown(e) {
     const v = ui.v;
-    if (!v || !v.myTurn || ui.anim || !e.target.closest('.cb-svg')) return;
+    const slider = e.target.closest && e.target.closest('[data-slider]');
+    if (!v || !v.myTurn || ui.anim || !(slider || e.target.closest('.cb-svg'))) return;
     if (e.button !== 0) return; // a middle or right button does not flick
     if (ui.dragging) return; // a second finger does not take over the drag
     ui.dragging = true;
@@ -391,11 +444,25 @@
     ui.dragMoved = false;
     ui.dragKey = boardKeyOf(v, ui.ctx);
     ui.downAt = [e.clientX, e.clientY];
+    if (slider) {
+      ui.mode = 'slide';
+      if (slider.setPointerCapture) slider.setPointerCapture(e.pointerId);
+      placeAt(sliderX(e));
+      return;
+    }
     const svg = e.target.closest('.cb-svg');
     if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
     const p = pointerDisplay(e);
     ui.mode = p && onStriker(p) ? 'place' : 'aim';
     if (ui.mode === 'aim' && p) aimFrom(p);
+  }
+
+  /** The striker's spot along the baseline (0.2 to 0.8) for a pointer on the slider track under the board. */
+  function sliderX(e) {
+    const track = ui.root && ui.root.querySelector('.cb-track');
+    if (!track) return ui.aim.x / 100;
+    const r = track.getBoundingClientRect();
+    return 0.2 + 0.6 * Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1)));
   }
 
   /** The striker is grabbed when the pointer is on it (display coordinates). */
@@ -415,6 +482,7 @@
     if (!ui.dragging || e.pointerId !== ui.pointerId) return;
     // a drag counts once the pointer is TAP_PX away from where it went down: a tap, or a pixel of jitter, only aims
     if (!ui.dragMoved && Math.hypot(e.clientX - ui.downAt[0], e.clientY - ui.downAt[1]) > TAP_PX) ui.dragMoved = true;
+    if (ui.mode === 'slide') { placeAt(sliderX(e)); return; }
     const p = pointerDisplay(e);
     if (!p) return;
     if (ui.mode === 'place') placeAt(p[0]); else aimFrom(p);
@@ -458,7 +526,9 @@
   /** The striker from the keyboard: Left/Right place it, Shift+Left/Right turn it, Up/Down set the power. */
   function onKey(e) {
     const v = ui.v;
-    if (!v || !v.myTurn || ui.anim || !e.target.closest || !e.target.closest('[data-id="striker"]')) return;
+    if (!v || !v.myTurn || ui.anim || !e.target.closest) return;
+    if (e.target.closest('[data-slider]') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); placeAt((ui.aim.x + (e.key === 'ArrowLeft' ? -1 : 1)) / 100); return; }
+    if (!e.target.closest('[data-id="striker"]')) return;
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); return; }
     const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: 1, ArrowDown: -1 }[e.key];
     if (!step) return;
@@ -474,7 +544,9 @@
     const v = ui.v, ctx = ui.ctx;
     if (!el || !v || !ctx) return;
     switch (el.dataset.cb) {
-      case 'rules': ctx.showRules(); break;
+      case 'rules': ui.tour = 0; ctx.rerender(); break;
+      case 'tour-next': ui.tour = (ui.tour || 0) + 1; ctx.rerender(); break;
+      case 'tour-close': ui.tour = null; tourDone(); ctx.rerender(); break;
       case 'fire': fire(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ui.resignArmed = false; ctx.leave(); break;
