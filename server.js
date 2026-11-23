@@ -780,6 +780,7 @@ function start(opts = {}) {
       outcome: room.status === 'finished' && room.outcome ? { id: room.outcome.at, winners: room.outcome.winners, sinceMs: Date.now() - room.outcome.at, playMs: room.outcome.playMs || 0, xp: room.outcome.xp || null } : null,
       votes: room.status === 'finished' && room.votes ? [...room.votes] : [], // people who want to play again
       deadline: room.status === 'playing' ? room.deadline : null, // epoch ms when the awaited human(s) get auto-played
+      turnMs: room.status === 'playing' && room.deadline ? limitMs(room) || null : null, // the length of that turn, so clients can draw the clock as a bar
       // What leaving a running game does now, so the leave prompt says the truth: 'counts' (a loss), 'abandons' (the next
       // leaver abandons the game, nobody penalised), 'abandoned' (already abandoned: nothing counts). Null when not playing.
       leaveState: room.status === 'playing' ? leaveStateOf(room) : null,

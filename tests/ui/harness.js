@@ -48,8 +48,10 @@ function serve(api = {}) {
  * later: window.__push({ t: 'latency', ms: 42 }).
  */
 const openContexts = new Set();
-async function scriptedPage(browser, { viewport = { width: 390, height: 844 }, messages = [], hasTouch = viewport.width < 800 } = {}) {
+async function scriptedPage(browser, { viewport = { width: 390, height: 844 }, messages = [], hasTouch = viewport.width < 800, firstTime = false } = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, hasTouch });
+  // the how-to-play cards open by themselves the first time a game is played; tests switch that off unless they are about it
+  if (!firstTime) await ctx.addInitScript(() => { try { localStorage.setItem('tv_howto_all', '1'); } catch (e) { /* ignore */ } });
   openContexts.add(ctx);
   ctx.on('close', () => openContexts.delete(ctx));
   const page = await ctx.newPage();

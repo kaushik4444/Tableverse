@@ -2,9 +2,13 @@
  * coming-soon cards. Pure string builders; app.js owns state, rendering and events and passes what they need in. */
 'use strict';
 window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial }) {
+  /** A small dot on a friend's avatar: mint when online, gold when at a table, hollow when away. */
+  const presence = (f) => `<i class="presence ${f.online ? (f.playing ? 'playing' : 'online') : 'off'}" aria-hidden="true"></i>`;
+  const presenceText = (f) => (f.online ? (f.playing ? 'Playing' : 'Online') : 'Offline');
+
   function socialHTML() {
     if (S.guest) return '';
-    const friends = S.friends.map((f) => `<li class="social-row"><span class="social-avatar">${esc(f.avatar || '🧙')}</span><span class="social-info"><button type="button" class="friend-name" data-act="openProfile" data-username="${esc(f.username)}">${esc(f.display_name || f.username)}</button><small>@${esc(f.username)} · ${f.online ? (f.playing ? '🎮 Playing ' + esc((gameMeta(f.playing) || {}).name || f.playing) : '🟢 Online') + ' · ' + pingBadge(f.ping) : 'Last seen ' + (f.last_seen ? new Date(f.last_seen).toLocaleString() : 'unknown')}</small></span><button class="btn ghost small" data-act="removeFriend" data-id="${esc(f.id)}">Remove</button></li>`).join('');
+    const friends = S.friends.map((f) => `<li class="social-row"><span class="social-avatar">${esc(f.avatar || '🧙')}${presence(f)}</span><span class="social-info"><button type="button" class="friend-name" data-act="openProfile" data-username="${esc(f.username)}">${esc(f.display_name || f.username)}</button><small>@${esc(f.username)} · ${f.online ? (f.playing ? '🎮 Playing ' + esc((gameMeta(f.playing) || {}).name || f.playing) : '🟢 Online') + ' · ' + pingBadge(f.ping) : 'Last seen ' + (f.last_seen ? new Date(f.last_seen).toLocaleString() : 'unknown')}</small></span><button class="btn ghost small" data-act="removeFriend" data-id="${esc(f.id)}">Remove</button></li>`).join('');
     const friendNames = new Set(S.friends.map((friend) => friend.username));
     const requestNames = new Set([...S.friendRequests.incoming, ...S.friendRequests.outgoing].map((request) => request.username));
     const invitationNames = new Set(S.invitations.incoming.map((invitation) => invitation.username));
@@ -44,9 +48,9 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
     if (S.guest) return '';
     const online = S.friends.filter((f) => f.online);
     const pend = pendingSocial();
-    const chips = online.slice(0, 6).map((f) => `<button type="button" class="fs-chip" data-act="openProfile" data-username="${esc(f.username)}" title="@${esc(f.username)}"><span class="social-avatar">${esc(f.avatar || '🧙')}</span>${esc(f.display_name || f.username)}</button>`).join('');
+    const chips = online.slice(0, 6).map((f) => `<button type="button" class="fs-chip" data-act="openProfile" data-username="${esc(f.username)}" title="@${esc(f.username)} · ${presenceText(f)}"><span class="social-avatar">${esc(f.avatar || '🧙')}${presence(f)}</span>${esc(f.display_name || f.username)}</button>`).join('');
     const summary = S.friends.length
-      ? (online.length ? `${online.length} of ${S.friends.length} friends online` : `${S.friends.length} friend${S.friends.length === 1 ? '' : 's'}, none online`)
+      ? (online.length ? `<span class="seat-dots friends-dots" aria-hidden="true">${online.slice(0, 6).map((f) => `<i class="${f.playing ? 'playing' : 'on'}"></i>`).join('')}<i class="you"></i></span>${online.length} of ${S.friends.length} friends online` : `${S.friends.length} friend${S.friends.length === 1 ? '' : 's'}, none online`)
       : 'Add friends to play private tables.';
     return `<section class="home-section friends-strip" aria-label="Friends">
       <div class="fs-head"><button type="button" class="fs-title" data-act="openFriendsPage" aria-label="Open friends"><h2 class="section">Friends</h2><span class="hint">${summary}${pend ? ` · <b>${pend} waiting in your bell</b>` : ''}</span></button><button type="button" class="btn ghost small" data-act="openFriendsPage">Manage</button></div>

@@ -193,7 +193,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
   /** A won game: the last coin of the winning team goes in, so the board goes to game over with the final shot. */
   function winningShot() {
     const g = fresh();
-    g.coins = [{ id: 'w1', kind: 'coin', colour: 'w', x: 0.035, y: 0.035, r: 0.022 }]; // inside a pocket
+    g.coins = [{ id: 'w1', kind: 'coin', colour: 'w', x: 0.03, y: 0.03, r: 0.022 }]; // inside a pocket
     g.score = { w: 8, b: 0 }; g.queenHeld = 'w';
     const before = msgsFor(g, 'p0');
     E.applyAction(g, 'p0', { seq: g.seq, type: 'flick', x: 0.2, angle: 0, power: 0.05 });
@@ -263,6 +263,37 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.evaluate(() => document.querySelector('.cb-svg').dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 })));
     await page.mouse.up();
     assert.equal((await sent(page)).length, 0, 'a cancelled drag does not fire');
+    await ctx.close();
+  });
+
+  await test('the first time: the how-to-play cards open with the real board, step through, keep focus, and do not open again', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: msgsFor(fresh()), viewport: { width: 390, height: 844 }, firstTime: true });
+    await page.goto(url + '/');
+    await page.waitForSelector('.ht-overlay', { timeout: 8000 });
+    const titles = [];
+    for (let i = 0; i < 6; i++) {
+      titles.push(await page.textContent('.ht-overlay h2'));
+      assert.ok(await page.locator('.ht-overlay svg.cb-svg .cb-pocket').count() === 4, 'the card shows the real board with four pockets');
+      const focused = await page.evaluate(() => document.activeElement && document.activeElement.dataset.ht);
+      assert.ok(focused === 'next' || focused === 'done', `focus sits on the primary button (${focused})`);
+      assert.equal(await page.evaluate(() => document.querySelector('#app').hasAttribute('inert')), true, 'the game behind the card is inert');
+      await page.click(i < 5 ? '[data-ht="next"]' : '[data-ht="done"]');
+    }
+    assert.deepEqual(titles, ['The board', 'Take the shot', 'Pocketing', 'The queen', 'The striker', 'Winning']);
+    assert.equal(await page.locator('.ht-overlay').count(), 0);
+    assert.equal(await page.evaluate(() => document.querySelector('#app').hasAttribute('inert')), false);
+    await ctx.close();
+  });
+
+  await test('the striker track under the board places the striker, and the score pills show both teams', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    assert.equal(await page.locator('.cb-pill').count(), 2);
+    const before = await page.getAttribute('[data-slider]', 'aria-valuenow');
+    const b = await box(page, '.cb-track');
+    await page.mouse.click(b.x + b.width * 0.85, b.y + b.height / 2);
+    const after = Number(await page.getAttribute('[data-slider]', 'aria-valuenow'));
+    assert.ok(after > Number(before) + 15, `the striker moved right (${before} to ${after})`);
+    assert.equal((await sent(page)).length, 0, 'placing the striker never flicks');
     await ctx.close();
   });
 
