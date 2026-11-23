@@ -1850,7 +1850,7 @@ function start(opts = {}) {
           // that will not come.
           const finish = (ratings2, failed = false) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings: ratings2, pending: false, failed: Boolean(failed) });
           settling.then(async (ok) => {
-            finish(ok ? ((await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {}) : {});
+            finish(ok ? ((await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {}) : {}, !ok);
           }).catch((err) => {
             console.error('[server] final game totals failed:', err.message);
             finish({}, true);
