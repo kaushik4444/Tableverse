@@ -118,7 +118,7 @@ function step(discs, ev) {
       }
     }
     if (!any) break;
-    cushions(discs, null); // a push from a neighbour never puts a disc through the edge
+    cushions(discs, ev); // a push from a neighbour never puts a disc through the edge (and the bounce it causes is heard)
   }
   return pocketed;
 }

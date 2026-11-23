@@ -316,7 +316,6 @@ test('a shot holds the next bot turn until it has been played out', () => {
   assert.ok(pacing.remaining(g) > 0, 'a bot waits after a shot, so people can follow it');
 });
 
-console.log(`\n${passed} carrom engine tests passed`);
 
 test('opening: the colours alternate round the inner ring of six and the outer ring of twelve', () => {
   const g = four();
@@ -338,3 +337,5 @@ test('a shot reports its impacts as [time, kind, speed] for the clients to make 
   }
   assert.equal(p.shot.events[0][1], 0, 'the first impact is the striker hitting the opening');
 });
+
+console.log(`\n${passed} carrom engine tests passed`);

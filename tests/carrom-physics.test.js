@@ -117,7 +117,6 @@ test('determinism: the same input gives the same keyframes, and the input is not
   assert.equal(JSON.stringify(input), before, 'the caller’s discs are copied, not moved');
 });
 
-console.log(`\n${passed} carrom physics tests passed`);
 
 test('a striker hit sends a coin across a real distance, not a few millimetres', () => {
   // Head-on hit from the middle of the board, at half power: the coin should travel well over a fifth of the board.
@@ -140,3 +139,13 @@ test('the striker is heavier than a coin: it carries on after a head-on hit, and
   assert.ok(s.vy > 0.2, 'the striker keeps moving forward');
   assert.ok(c.vy > 0.8, 'the coin is thrown faster than the striker was going');
 });
+
+test('a coin driven into the cushion by the striker makes a cushion sound, not only the hit', () => {
+  const r = P.simulate([
+    { id: 1, kind: 'coin', colour: 'w', x: 0.022, y: 0.5, vx: 0, vy: 0, r: P.RADIUS.coin },
+    { id: 's', kind: 'striker', colour: 'w', x: 0.075, y: 0.5, vx: -1.2, vy: 0, r: P.RADIUS.striker },
+  ]);
+  assert.ok(r.events.some(([, kind]) => kind === P.CUSHION_HIT), 'a cushion impact is reported');
+});
+
+console.log(`\n${passed} carrom physics tests passed`);
