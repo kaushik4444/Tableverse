@@ -151,7 +151,7 @@
   // ---------------------------------------------------------------- insights
   const ZONES = [['UTC', 'UTC'], ['Europe/Berlin', 'Germany'], ['Asia/Kolkata', 'India']];
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
+  const pct = (a, b) => (b > 0 && Number.isFinite(a) ? Math.round((a / b) * 100) : null);
   const pctText = (a, b) => { const p = pct(a, b); return p === null ? '—' : p + '%'; };
   const hh = (h) => String(h).padStart(2, '0') + ':00';
   const mins = (m) => (m >= 120 ? (m / 60).toFixed(1) + ' h' : Math.round(m) + ' min');
