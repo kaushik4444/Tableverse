@@ -266,6 +266,9 @@
       const wasSigningIn = S.signingIn;
       if (httpBusy) { httpBusy = 0; httpBusyEpoch++; }
       reqVeilOwned = false; // the veil is gone: a request that settles later must not hide a veil that comes after it
+      // The person was told to try again, so a request still waiting must not bring the veil back for another 20 seconds.
+      // Its settle still clears reqInFlight; a later tracked request arms the veil again.
+      clearTimeout(reqVeilTimer); reqVeilTimer = null;
       S.signingIn = false;
       hideBusy();
       toast('That is taking longer than usual. Check your connection and try again.');
