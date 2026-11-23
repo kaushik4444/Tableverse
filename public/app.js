@@ -2758,6 +2758,7 @@
     ${topbarHTML()}
     <main class="page wide home">
       <section class="home-hero">
+        <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
           <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
@@ -2779,7 +2780,7 @@
         ${publicTablesHTML()}
         <section class="home-section" id="games">
           <h2 class="section">Games</h2>
-          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
+          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…') + '<div class="game-grid skeleton" aria-hidden="true">' + '<div class="game-card sk"><i></i><b></b><span></span></div>'.repeat(4) + '</div>'}
         </section>
       </div>
       ${comingSoonHTML()}
