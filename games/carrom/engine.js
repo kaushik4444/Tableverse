@@ -52,15 +52,24 @@ const colourOf = (seat) => (seat % 2 === 0 ? 'w' : 'b');
 const forwardOf = () => 1;
 
 /** The opening layout: a queen in the centre and nine coins of each colour in two hexagonal rings, alternating. */
+/** The opening, as on a real board: the queen in the centre, then a ring of six and a ring of twelve, the colours alternating round each ring. */
 function opening() {
-  const coins = [];
-  let n = 0;
+  const cells = [];
   for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {
     if (Math.abs(a + b) > 2) continue;
     const x = 0.5 + COIN_SPACING * (a + b / 2), y = 0.5 + COIN_SPACING * (b * Math.sqrt(3) / 2);
-    if (a === 0 && b === 0) { coins.push({ id: 'q', kind: 'queen', colour: null, x, y, r: P.RADIUS.queen }); continue; }
-    const colour = n++ % 2 === 0 ? 'w' : 'b';
-    coins.push({ id: 'c' + n, kind: 'coin', colour, x, y, r: P.RADIUS.coin });
+    cells.push({ x, y, ring: Math.max(Math.abs(a), Math.abs(b), Math.abs(a + b)), angle: Math.atan2(y - 0.5, x - 0.5) });
+  }
+  const colourAt = new Map();
+  for (const ring of [1, 2]) {
+    cells.filter((c) => c.ring === ring).sort((p, q) => p.angle - q.angle).forEach((c, i) => colourAt.set(c, i % 2 === 0 ? 'w' : 'b'));
+  }
+  const coins = [];
+  let n = 0;
+  for (const c of cells) {
+    if (c.ring === 0) { coins.push({ id: 'q', kind: 'queen', colour: null, x: c.x, y: c.y, r: P.RADIUS.queen }); continue; }
+    n++;
+    coins.push({ id: 'c' + n, kind: 'coin', colour: colourAt.get(c), x: c.x, y: c.y, r: P.RADIUS.coin });
   }
   return coins;
 }
@@ -80,7 +89,7 @@ function createGame(players) {
     reason: null,
     shots: 0,
     nextId: COINS_EACH * 2 + 1, // the opening uses q, c1 to c18: returned discs start after them, so ids stay unique
-    shot: null,                 // the last shot: { seq, seat, colour, foul, scored, keyframes, pocketed }
+    shot: null,                 // the last shot: { seq, seat, colour, foul, scored, keyframes, events, pocketed }
     seq: 0,
     log: [],
   };
@@ -153,7 +162,7 @@ function plan(g, seat, a) {
   const winner = !foul && score[colour] >= COINS_EACH && queenHeld === colour ? colour : null;
   const extra = !foul && own.length > 0 && winner === null;
   const shot = {
-    seat, colour, foul, scored: foul ? 0 : own.length, keyframes: res.keyframes,
+    seat, colour, foul, scored: foul ? 0 : own.length, keyframes: res.keyframes, events: res.events,
     pocketed: res.pocketed.map((p) => ({ kind: p.kind, colour: p.colour })),
   };
   const nextTurn = extra ? seat : (seat + 1) % g.players.length;

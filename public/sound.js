@@ -124,11 +124,27 @@
     chip: () => { [0, 0.05, 0.1].forEach((t, i) => { tone(2000 + i * 220, t, 0.05, { type: 'triangle', vol: 0.06 }); swish(t, 0.03, { vol: 0.1, f0: 6000, f1: 3800, q: 1.5 }); }); },
     allin: () => { for (let i = 0; i < 7; i++) { const t = i * 0.05; tone(1800 + (i % 3) * 260, t, 0.05, { type: 'triangle', vol: 0.05 }); swish(t, 0.03, { vol: 0.09, f0: 6000, f1: 3800, q: 1.5 }); } tone(140, 0.3, 0.3, { type: 'sine', vol: 0.15, slide: 0.6 }); },
     fold: () => swish(0, 0.14, { vol: 0.18, f0: 3200, f1: 900, q: 0.7 }),
+    // carrom: `power` is the impact speed, 0 to about 2; harder impacts are louder and a little brighter
+    clack: (power = 0.5) => {
+      const k = Math.min(1, Math.max(0.15, power / 1.2));
+      tone(1500 + 900 * k, 0, 0.05, { type: 'triangle', vol: 0.05 + 0.16 * k, slide: 0.6 });
+      tone(420, 0, 0.035, { type: 'sine', vol: 0.04 + 0.1 * k });
+    },
+    rail: (power = 0.5) => {
+      const k = Math.min(1, Math.max(0.15, power / 1.2));
+      tone(150, 0, 0.07, { type: 'sine', vol: 0.06 + 0.16 * k, slide: 0.55 });
+      swish(0, 0.05, { vol: 0.04 + 0.08 * k, f0: 1500, f1: 600, q: 0.8 });
+    },
+    pocket: () => {
+      tone(190, 0, 0.12, { type: 'sine', vol: 0.2, slide: 0.45 });
+      swish(0.02, 0.1, { vol: 0.1, f0: 1200, f1: 400, q: 0.8 });
+      tone(95, 0.1, 0.09, { type: 'triangle', vol: 0.14 });
+    },
   };
 
   window.CardTable = window.CardTable || {};
   window.CardTable.sound = {
-    play(name) { if (muted || !SOUNDS[name]) return; try { SOUNDS[name](); } catch { /* ignore */ } },
+    play(name, arg) { if (muted || !SOUNDS[name]) return; try { SOUNDS[name](arg); } catch { /* ignore */ } },
     toggle() {
       muted = !muted;
       try { localStorage.setItem('ct_mute', muted ? '1' : '0'); } catch { /* ignore */ }

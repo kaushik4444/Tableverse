@@ -41,6 +41,7 @@ function home({ old = null, tables = true, guest = false, games = [] } = {}) {
     esc: (value) => String(value == null ? '' : value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
     gameMark: (g) => String(g.icon || '🎴').replaceAll('<', '&lt;'), // the real mark helper is covered by tests/game-marks.test.js
     gameOpenFor: () => true, guestLockedFor: () => false, range: () => '2–4',
+    loadWelcome: () => {}, welcomeHTML: () => '', // the welcome card has its own UI test (tests/ui/welcome-back-ui.js)
     guestNudge: () => '', topbarHTML: () => '', rejoinBannerHTML: () => '', bannersHTML: () => '', friendsStripHTML: () => '',
     publicTablesHTML: () => { calls++; return tables ? '<section class="public-tables-panel"><div class="public-tables"></div></section>' : ''; },
     comingSoonHTML: () => '<details class="soon-fold"></details>',

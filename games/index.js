@@ -19,6 +19,8 @@ const registry = {
   ...Object.fromEntries(require('./linegames').map((game) => [game.id, game])),
 };
 
+const ruleTitles = require('./ruleTitles');
+
 module.exports = {
   get: (id) => (typeof id === 'string' && Object.hasOwn(registry, id) ? registry[id] : null),
   list: () =>
@@ -31,5 +33,6 @@ module.exports = {
       seats,
       options,
       rules,
+      ruleTitles: ruleTitles[id] || [],
     })),
 };
