@@ -697,10 +697,14 @@
   const LIVE_IDLE_MS = 10 * 60 * 1000;
   let lastInputAt = Date.now();
   let liveResume = null;
-  for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel', 'mousemove']) {
-    window.addEventListener(ev, () => { lastInputAt = Date.now(); if (liveResume) liveResume(); }, { passive: true, capture: true });
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel', 'mousemove']) {
+      window.addEventListener(ev, () => { lastInputAt = Date.now(); if (liveResume) liveResume(); }, { passive: true, capture: true });
+    }
   }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { lastInputAt = Date.now(); if (liveResume) liveResume(); } });
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { lastInputAt = Date.now(); if (liveResume) liveResume(); } });
+  }
   function startLive() {
     const token = ++liveToken;
     const tick = async () => {
