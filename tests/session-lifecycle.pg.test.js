@@ -27,7 +27,7 @@ const PW = 'TestPass123!';
     const dbPlayers = require('../db/players');
     const argon2 = require('@node-rs/argon2');
     const { start } = require('../server');
-    const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 50 });
+    const srv = await start({ port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 50, idleSessionCheckMs: 50 });
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
     let seq = 1;

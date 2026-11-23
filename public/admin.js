@@ -692,10 +692,24 @@
   // The live block refreshes itself while it is on the page. Each overview draw starts one loop with a new token; an older loop
   // stops at its next tick, and a loop also stops once its block has left the page.
   let liveToken = 0;
+  // The figures are a convenience for someone watching: a hidden tab, or a console nobody has touched for 10 minutes, does not
+  // ask the server (every request checks the session in the database, which would keep it awake). Looking again refreshes at once.
+  const LIVE_IDLE_MS = 10 * 60 * 1000;
+  let lastInputAt = Date.now();
+  let liveResume = null;
+  for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel', 'mousemove']) {
+    window.addEventListener(ev, () => { lastInputAt = Date.now(); if (liveResume) liveResume(); }, { passive: true, capture: true });
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { lastInputAt = Date.now(); if (liveResume) liveResume(); } });
   function startLive() {
     const token = ++liveToken;
     const tick = async () => {
       if (token !== liveToken || !document.getElementById('liveNow')) return;
+      if (document.visibilityState !== 'visible' || Date.now() - lastInputAt >= LIVE_IDLE_MS) {
+        // paused: no request, no timer; the next input or return to the tab starts the loop again
+        liveResume = () => { liveResume = null; if (token === liveToken) tick(); };
+        return;
+      }
       try {
         const l = await api('/api/admin/live');
         const el = document.getElementById('liveNow');
@@ -709,6 +723,7 @@
       }
       setTimeout(tick, 15000);
     };
+    liveResume = null;
     tick();
   }
   async function audit(page = 1) {

@@ -1115,8 +1115,21 @@
     try { await postJson('/api/announcements/dismiss', { id, revision: dismissed ? dismissed.revision : undefined }); } catch { /* it comes back on the next refresh if the server did not record it */ }
   }
   // the schedule is decided on the server, so a banner can appear, expire or be ended while the page is open: look again now and then
-  setInterval(() => { if (document.visibilityState === 'visible') loadBanners(); }, 60 * 1000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadBanners(); });
+  // Background refreshes follow use: they run only while the page is visible and the person has done something in the last
+  // 5 minutes. A tab left open all day would otherwise ask the server (and so the database) every minute, which keeps the
+  // database awake for nobody. Coming back, or the first input after a pause, refreshes at once.
+  const POLL_IDLE_MS = 5 * 60 * 1000;
+  let lastInputAt = Date.now();
+  let polling = true; // false once the pause has begun
+  const pollWanted = () => document.visibilityState === 'visible' && Date.now() - lastInputAt < POLL_IDLE_MS;
+  const refreshBackground = () => { loadBanners(); if (S.ready && !S.room) loadSocial({ quiet: true }); };
+  const noteInput = () => {
+    lastInputAt = Date.now();
+    if (!polling && document.visibilityState === 'visible') { polling = true; refreshBackground(); }
+  };
+  for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel', 'mousemove']) window.addEventListener(ev, noteInput, { passive: true, capture: true });
+  setInterval(() => { if (pollWanted()) refreshBackground(); else polling = false; }, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { lastInputAt = Date.now(); polling = true; refreshBackground(); } });
 
   function openFeedbackModal() {
     openModal('Send feedback', `<form id="fbForm" class="fb-form">
@@ -3615,6 +3628,6 @@
     }
   });
 
-  setInterval(() => { if (S.ready && !S.room) loadSocial({ quiet: true }); }, 60000);
+  // friends, requests and invitations are refreshed by the same visibility/idle-aware timer as the banners (see POLL_IDLE_MS)
 
 })();

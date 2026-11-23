@@ -43,7 +43,7 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
 
 (async () => {
   if (db.hasDatabase()) { console.log('socket session (memory) checks skipped: DATABASE_URL is set'); return; }
-  const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 40 };
+  const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 40, idleSessionCheckMs: 40 };
   const srv = await start({ ...fast, env: { ...process.env, RL_LOGOUT_IP_LIMIT: '1000', VOICE_ENABLED: 'true' } });
   // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
   require('./helpers/openGuestFeatures')();
@@ -188,6 +188,52 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
   } finally {
     for (const s of open) { try { s.ws.terminate(); } catch { /* closed */ } }
     await srv.close();
+  }
+
+  // Neon cannot autosuspend while open sockets ask it a question every minute. A socket nobody is using is checked only by a long
+  // backstop; a socket in use is still checked, and the first message after a quiet spell is checked before it is acted on.
+  const slow = await start({ ...fast, sessionCheckMs: 40, idleSessionCheckMs: 600000, env: { ...process.env, RL_LOGOUT_IP_LIMIT: '1000', VOICE_ENABLED: 'true' } });
+  const open2 = [];
+  const realAuth = dbPlayers.authenticateToken;
+  let lookups = 0;
+  dbPlayers.authenticateToken = (...args) => { lookups++; return realAuth.apply(dbPlayers, args); };
+  try {
+    await test('an idle socket does not ask the database about its session, however many check intervals pass', async () => {
+      const { rawToken } = await newPlayer('Quiet');
+      const s = socketFor(slow.port, rawToken); open2.push(s);
+      await until(() => s.welcomed(), 'welcome');
+      await sleep(100); // let the hello's own lookup finish
+      const before = lookups;
+      await sleep(400); // about ten check intervals
+      assert.equal(lookups, before, 'no session lookups while the socket is idle');
+      assert.equal(s.closed, null, 'and it stays open');
+    });
+
+    await test('the first message after a quiet spell checks the session before acting: a healthy one goes through, a revoked one is closed', async () => {
+      const ok = await newPlayer('Back');
+      const s = socketFor(slow.port, ok.rawToken); open2.push(s);
+      await until(() => s.welcomed(), 'welcome');
+      await sleep(120);
+      const before = lookups;
+      s.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+      await until(() => s.room && s.room.code, 'the table is created');
+      assert.ok(lookups > before, 'the session was checked before the message was served');
+
+      const gone = await newPlayer('Gone2');
+      const r = socketFor(slow.port, gone.rawToken); open2.push(r);
+      await until(() => r.welcomed(), 'welcome');
+      assert.equal(await dbAuth.revokeSession(gone.rawToken), true);
+      await sleep(120); // longer than sessionCheckMs, shorter than the idle backstop: nothing has noticed yet
+      assert.equal(r.closed, null);
+      r.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+      await until(() => r.closed !== null, 'the revoked socket is closed by its next message', 2000);
+      assert.equal(r.closed, 4001);
+      assert.equal(r.room, null, 'and the message was not acted on');
+    });
+  } finally {
+    dbPlayers.authenticateToken = realAuth;
+    for (const s of open2) { try { s.ws.terminate(); } catch { /* closed */ } }
+    await slow.close();
   }
   console.log(`${passed} socket session checks passed`);
 })().catch((e) => { console.error(e); process.exit(1); });
