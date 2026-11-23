@@ -3,6 +3,16 @@
    the pointer (and back to the current one). Pure decoration: with this file missing nothing stops working. */
 (function () {
   const hover = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+  // a tap (or click) on a game card: the glow blooms from the point you touched
+  document.addEventListener('pointerdown', (e) => {
+    const card = e.target.closest && e.target.closest('.game-card');
+    if (!card || card.classList.contains('is-locked')) return;
+    const r = card.getBoundingClientRect();
+    card.style.setProperty('--mx', `${Math.round(e.clientX - r.left)}px`);
+    card.style.setProperty('--my', `${Math.round(e.clientY - r.top)}px`);
+    card.classList.remove('is-tapped'); void card.offsetWidth; card.classList.add('is-tapped');
+    setTimeout(() => card.classList.remove('is-tapped'), 700);
+  }, { passive: true });
   if (hover) {
     document.addEventListener('pointermove', (e) => {
       const card = e.target.closest && e.target.closest('.game-card');

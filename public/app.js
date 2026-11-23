@@ -1326,7 +1326,7 @@
     const rows = S.publicTables.map((t) => {
       const g = gameMeta(t.gameId) || { id: t.gameId, name: t.gameId, icon: '🎴' };
       const action = publicTableAction(t);
-      return `<div class="public-table"><span class="public-game-icon">${gameMark(g)}</span><div class="public-table-info"><b>${esc(g.name)}</b><span>${esc(t.host)}'s table · ${t.members}/${t.seats} players${t.spectators ? ` · 👁 ${t.spectators}` : ''}</span></div><button class="btn ${action.cls} small" data-act="joinPublic" data-code="${esc(t.code)}" ${action.disabled ? 'disabled' : ''}>${action.label}</button></div>`;
+      return `<div class="public-table"><span class="public-game-icon">${gameMark(g)}</span><div class="public-table-info"><b>${esc(g.name)}</b><span>${esc(t.host)}'s table · ${t.members}/${t.seats} players <span class="seat-dots" aria-hidden="true">${Array.from({ length: Math.min(t.seats, 8) }, (_, k) => `<i class="${k < t.members ? 'on' : ''}"></i>`).join('')}</span>${t.spectators ? ` · 👁 ${t.spectators}` : ''}</span></div><button class="btn ${action.cls} small" data-act="joinPublic" data-code="${esc(t.code)}" ${action.disabled ? 'disabled' : ''}>${action.label}</button></div>`;
     }).join('');
     return `<section class="home-section public-tables-panel"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 class="section">Open tables <span class="session-count">${count}</span></h2></div><button class="btn ghost small" data-act="toggleSessions" aria-expanded="${S.sessionListOpen}">${S.sessionListOpen ? 'Hide' : 'Show'}</button></div>${S.sessionListOpen ? count ? `<div class="public-tables">${rows}</div>` : emptyState('🪑', 'No open tables', 'Create a table and make it public, and it appears here for everyone.') : ''}</section>`;
   }
@@ -2379,6 +2379,11 @@
   const WHATS_NEW = RELEASES.length ? RELEASES[0].items.slice(0, 3) : [];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
+  /** "Friday evening": the day and the part of it, from the player's own clock. */
+  function dayPart(d = new Date()) {
+    const h = d.getHours(), part = h < 5 ? 'night' : h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
+    return `${d.toLocaleDateString(undefined, { weekday: 'long' })} ${part}`;
+  }
   /** Friend requests + table invitations waiting for an answer (drives the menu badge and the home strip). */
   const pendingSocial = () => S.friendRequests.incoming.length + S.invitations.incoming.length;
   const hasNewNews = () => S.wnSeen !== WHATS_NEW_VERSION;
@@ -2410,7 +2415,13 @@
       </div>` : '';
     const tab = (act, label, on) => `<button type="button" class="tb-tab" data-act="${act}"${on ? ' aria-current="page"' : ''}>${label}</button>`;
     const tabs = `<div class="tb-tabs" role="group" aria-label="Sections"><span class="tb-pill" aria-hidden="true"></span>${tab('goHome', 'Home', S.page !== 'friends' && S.page !== 'profile')}${tab('goGames', 'Games', false)}${tab('openFriendsPage', 'Friends', S.page === 'friends')}${tab('openProfilePage', 'Profile', S.page === 'profile')}</div>`;
-    return `<nav class="topbar" aria-label="Main">${brand}${tabs}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}${S.account ? `, level ${Number(S.account.level)}` : ''}">${av}${S.account ? `<span class="tb-level" title="Your overall level">Lv ${Number(S.account.level)}</span>` : ''}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
+    const ICON = {
+      goHome: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', goGames: '<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>',
+      openFriendsPage: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14c2.6 0 4.5 1.8 4.5 4.5"/>', openProfilePage: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+    };
+    const btab = (act, label, on) => `<button type="button" class="tb-tab bn-tab" data-act="${act}"${on ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[act]}</svg><span>${label}</span></button>`;
+    const bottom = `<nav class="tb-tabs bn" aria-label="Sections"><span class="tb-pill" aria-hidden="true"></span>${btab('goHome', 'Home', S.page !== 'friends' && S.page !== 'profile')}${btab('goGames', 'Games', false)}${btab('openFriendsPage', 'Friends', S.page === 'friends')}${btab('openProfilePage', 'Profile', S.page === 'profile')}</nav>`;
+    return `<nav class="topbar" aria-label="Main">${brand}${tabs}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}${S.account ? `, level ${Number(S.account.level)}` : ''}">${av}${S.account ? `<span class="tb-level" title="Your overall level">Lv ${Number(S.account.level)}</span>` : ''}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>${bottom}`;
   }
 
   /**
@@ -2851,6 +2862,7 @@
       <section class="home-hero">
         <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
         <div class="home-intro">
+          ${name && !S.guest ? `<small class="eyebrow">${dayPart()}</small>` : ''}
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
           <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
           ${S.guest ? `<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button>${S.guestPlay ? '<button type="button" class="btn ghost" data-act="playAsGuest">Play as a guest</button>' : ''}</div>` : ''}
