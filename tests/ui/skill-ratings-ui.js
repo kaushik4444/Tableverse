@@ -8,7 +8,7 @@ const { chromium } = loadPlaywright();
 let passed = 0; let failed = 0;
 
 const game = { gameId: 'ludo', games: 5, played: 5, wins: 2, losses: 3, draws: 0, leftEarly: 0, minutes: 50 };
-const progress = { account: { level: 2, xp: 60, into: 10, need: 100, minutes: 60 }, games: { ludo: { points: 15, played: 5, rule: 'placing' } }, penalisedLeaves: 0 };
+const progress = { account: { level: 2, xp: 60, into: 10, need: 100, minutes: 60 }, games: { ludo: { played: 5, rule: 'placing' } }, penalisedLeaves: 0 };
 const stats = () => ({ streak: { current: 0, best: 0 }, played: 5, wins: 2, losses: 3, draws: 0, leftEarly: 0, minutes: 50, perGame: [game], progress, recent: [], hourly: {} });
 const api = (state) => ({
   'GET /api/auth/session': () => sessionOk({ welcome: false }),

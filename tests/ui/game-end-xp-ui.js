@@ -22,7 +22,7 @@ function finishedTable(gameId, n) {
     g.act(id, f ? f.action : g.botAction(id));
   }
   assert.ok(g.isOver(), gameId + ' finishes in the engine');
-  const xp = players.map((p, i) => ({ seat: i, id: p.id, name: p.name, saved: p.id !== 'p3', isBot: false, timeXp: 10 + i, gameXp: 20 - i * 10, total: 30 - i * 10, minutes: 3, penalised: false }));
+  const xp = players.map((p, i) => ({ seat: i, id: p.id, name: p.name, saved: p.id !== 'p3', isBot: false, timeXp: 10 + i, minutes: 3, penalised: false }));
   const room = { code: 'ENDXP1', gameId, hostId: 'p1', status: 'finished', options: {}, visibility: 'private', seats: n, min: def.seats.min, max: def.seats.max, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
     outcome: { winners: [{ id: 'p1', name: 'Bo' }], sinceMs: 60000, at: Date.now() - 60000, xp },
     members: players.map((p) => ({ id: p.id, name: p.name, bot: false, avatar: p.avatar, connected: true })) };
