@@ -251,3 +251,12 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 @media (max-width: 1200px) and (pointer: coarse) {
   .game-card .game-actions .btn, [data-act="openFriendsPage"], .home-foot .linklike { min-height: 44px; }
 }
+
+/* touch: leftovers the device sweep found under 44px */
+@media (max-width: 1200px) and (pointer: coarse), (max-width: 1024px) {
+  .back-link { display: inline-flex; align-items: center; min-height: 44px; }
+  [data-modal-close], [data-auth-close] { min-width: 44px; min-height: 44px; }
+  .pk-step { width: 44px; height: 44px; }
+  input[type="range"][data-pk="slider"] { min-height: 44px; }
+  .cc-game .wz-status .btn.small, .cc-game .cc-log .btn { min-height: 44px; }
+}
