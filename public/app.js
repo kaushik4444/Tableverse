@@ -265,6 +265,11 @@
     busyTimer = setTimeout(() => {
       const wasSigningIn = S.signingIn;
       if (httpBusy) { httpBusy = 0; httpBusyEpoch++; }
+      reqVeilOwned = false; // the veil is gone: a request that settles later must not hide a veil that comes after it
+      // The person was told to try again. Requests still waiting stop counting toward the veil, so they cannot bring it back;
+      // a request started later counts again.
+      reqPending.clear();
+      clearTimeout(reqVeilTimer); reqVeilTimer = null;
       S.signingIn = false;
       hideBusy();
       toast('That is taking longer than usual. Check your connection and try again.');
@@ -287,7 +292,40 @@
     httpBusy++;
     showBusy(label);
     try { return await fn(); } finally {
-      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy) hideBusy(); }
+      if (epoch === httpBusyEpoch) { httpBusy--; if (!httpBusy && !reqVeilOwned) hideBusy(); }
+    }
+  }
+  // Every user-started request (postJson / getJson) shows a loading veil if it is still running after a short delay,
+  // so quick answers do not flash. Background polls pass { quiet: true } and never show it.
+  let reqPending = new Set(); // requests that may still own the veil; a timed-out veil clears it
+  let reqVeilTimer = null;
+  let reqVeilOwned = false;
+  // After 350 ms, take the veil unless another action holds it. If one does, look again shortly: the veil must still come
+  // when that action releases it while this request is still waiting.
+  function armReqVeil() {
+    reqVeilTimer = setTimeout(() => {
+      reqVeilTimer = null;
+      if (reqPending.size === 0 || reqVeilOwned) return;
+      if (httpBusy || document.getElementById('busyBlock')) { armReqVeil(); return; }
+      reqVeilOwned = true;
+      showBusy('Loading…', 20000, 'load');
+    }, 350);
+  }
+  async function trackRequest(opts, fn) {
+    if (opts && opts.quiet) return fn();
+    const token = {};
+    reqPending.add(token);
+    if (!reqVeilTimer && !reqVeilOwned) armReqVeil();
+    try { return await fn(); } finally {
+      reqPending.delete(token);
+      if (reqPending.size === 0) {
+        clearTimeout(reqVeilTimer); reqVeilTimer = null;
+        if (reqVeilOwned) {
+          reqVeilOwned = false;
+          // a sign-in that is waiting for the socket keeps its own veil until welcome arrives
+          if (!httpBusy && !S.signingIn) hideBusy();
+        }
+      }
     }
   }
   /** Right after a successful login the socket still has to say welcome. Until then show the profile, spin, and block taps. */
@@ -356,7 +394,10 @@
     return S.csrf;
   }
 
-  async function postJson(url, body, retried) {
+  function postJson(url, body, retried, opts) {
+    return trackRequest(opts, () => postJsonNow(url, body, retried));
+  }
+  async function postJsonNow(url, body, retried) {
     await ensureCsrf();
     let r;
     try {
@@ -374,7 +415,7 @@
     try { data = await r.json(); } catch { /* ignore */ }
     if (r.status === 403 && /CSRF/i.test(data.error || '') && !retried) { // cookie expired or was cleared: fetch a fresh pair once
       await ensureCsrf(true);
-      return postJson(url, body, true);
+      return postJsonNow(url, body, true); // the outer call is already tracked, so the retry skips a second count
     }
     if (data && data.csrfToken) S.csrf = data.csrfToken;
     if (!r.ok || data.ok === false) {
@@ -1259,7 +1300,8 @@
   }
 
   function onMessage(m) {
-    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy) hideBusy(); }
+    // A veil that a loading request owns stays until that request settles; any other veil (sign-in, an action) goes now
+    if (m.t === 'state' || m.t === 'left' || m.t === 'error' || m.t === 'welcome') { S.signingIn = false; if (!httpBusy && !reqVeilOwned) hideBusy(); }
     else if ((m.t === 'notice' || m.t === 'blocks') && BUSY_MOD.has(busyKind) && !httpBusy) hideBusy();
     switch (m.t) {
       case 'role': {
@@ -1904,7 +1946,10 @@
   const errorBlock = (text, retryAct) => `<div class="error-block" role="alert"><p>${esc(text)}</p>${retryAct ? `<button type="button" class="btn ghost small" data-act="${retryAct}">Try again</button>` : ''}</div>`;
   const RESULT_LABEL = { won: 'Won', lost: 'Lost', draw: 'Draw', left: 'Left (not counted)', forfeit: 'Left (counts as a loss)' };
 
-  async function getJson(url) {
+  function getJson(url, opts) {
+    return trackRequest(opts, () => getJsonNow(url));
+  }
+  async function getJsonNow(url) {
     const r = await fetch(url, { credentials: 'same-origin' });
     let out = null;
     try { out = await r.json(); } catch { /* not json */ }
@@ -1979,7 +2024,7 @@
     const gen = sessionGen;
     const mine = ++levelRequest;
     try {
-      const me = await getJson('/api/me/profile');
+      const me = await getJson('/api/me/profile', { quiet: true });
       if (gen !== sessionGen || mine !== levelRequest) return; // another account or a newer profile response won
       const progress = me && me.stats && me.stats.progress;
       const key = (a) => (a ? `${a.level}|${a.into}|${a.need}` : '');
@@ -2508,7 +2553,7 @@
       };
       if (!S.guest && S.country === undefined) {
         const mineGen = sessionGen;
-        getJson('/api/me/profile').then((me) => {
+        getJson('/api/me/profile', { quiet: true }).then((me) => {
           if (mineGen !== sessionGen) return; // another account signed in meanwhile
           S.country = (me && me.profile && me.profile.country) || '';
           const sel = o.querySelector('#profileCountry');
@@ -2595,7 +2640,7 @@
     const list = (newest.items || []).filter((w) => S.voiceEnabled || !w.voice).slice(0, 3)
       .map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
     openModal('Welcome to Tableverse', `<p class="hint" style="text-align:left">Tableverse is a place to play classic card and board games online, with friends and other players. Find a table, sit down and play. Your games and progress are kept on your profile, so you can see how you are getting on.</p>${list ? `<h3>What’s new</h3><ul class="wn-list">${list}</ul>` : ''}<div class="row" style="margin-top:12px"><button type="button" class="btn primary" data-modal-act="welcomeStart">Start playing</button></div>`);
-    postJson('/api/me/welcome-seen', {}).catch(() => {}); // shown: remember it on the account (a failed save only means it may show once more)
+    postJson('/api/me/welcome-seen', {}, false, { quiet: true }).catch(() => {}); // shown: remember it on the account (a failed save only means it may show once more)
   }
 
   /** Every release, newest first, with its items (voice items only when voice chat is on). */
@@ -2668,7 +2713,7 @@
     if (S.guest || S.welcomeLoaded === sessionGen) return;
     S.welcomeLoaded = sessionGen;
     const mineGen = sessionGen;
-    getJson('/api/me/profile').then((me) => {
+    getJson('/api/me/profile', { quiet: true }).then((me) => {
       if (mineGen !== sessionGen) return; // another account signed in meanwhile
       S.welcomeBack = (me && me.welcomeBack) || null;
       S.welcomeFor = mineGen;
