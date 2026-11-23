@@ -302,13 +302,17 @@
   if (typeof window !== 'undefined') window.CarromPlayback = { poseAt }; // for the browser tests
 
   function drawFrame(now, a) {
+    // the table left the page (the player went elsewhere): stop the shot instead of drawing into a detached tree
+    if (!ui.root.isConnected) { ui.anim = null; return; }
     if (a.t0 === null) a.t0 = now;
     const t = (now - a.t0) / 1000;
     const pose = poseAt(a.frames, t);
     // a sound for each impact the server reported, when playback reaches its time
     const snd = window.CardTable.sound;
     while (snd && a.nextEvent < a.events.length && a.events[a.nextEvent][0] <= t) {
-      const [, kind, speed] = a.events[a.nextEvent++];
+      const [at, kind, speed] = a.events[a.nextEvent++];
+      // a late frame (background tab, slow device) skips impacts it is well past instead of bursting them out at once
+      if (t - at > 0.2) continue;
       snd.play(kind === 2 ? 'pocket' : kind === 1 ? 'rail' : 'clack', speed);
     }
     const svg = ui.root.querySelector('.cb-svg');

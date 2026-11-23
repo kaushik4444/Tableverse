@@ -242,7 +242,9 @@
       el.remove();
       howtoOpen = null;
       store.set(`tv_howto_${gameId}`, '1');
-      if (opener && opener.isConnected && opener.focus) opener.focus();
+      // the opener can be gone (re-rendered): fall back to the stable menu button rather than leaving focus on the body
+      const back = opener && opener.isConnected && opener.focus ? opener : document.querySelector('.tb-more-btn');
+      if (back && back.focus) back.focus();
     };
     const paint = () => {
       const c = cards[i], last = i === cards.length - 1;
