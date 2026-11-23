@@ -64,15 +64,18 @@ const gameList = () => ({ ok: true, guestPlay: true, games: games.list().map((g)
   await test('a returning socket reconnect refreshes the welcome-back card without a reload', async () => {
     // The first profile has no break to show. The reconnect sends welcome again in the same session, and its profile has one.
     let answer = null;
+    let profileAnswers = 0; // counts each profile answer as it is decided, so the test knows the startup one has been given
     const { server: s2, url: u2 } = await serve({
       'GET /api/auth/session': () => sessionOk(),
-      'GET /api/me/profile': () => ({ ok: true, profile: {}, stats: {}, welcomeBack: answer }),
+      'GET /api/me/profile': () => { profileAnswers++; return { ok: true, profile: {}, stats: {}, welcomeBack: answer }; },
       'GET /api/games': gameList,
     });
     try {
       const { page, ctx } = await scriptedPage(browser, { messages: [welcome()] });
       await page.goto(u2 + '/');
       await page.waitForSelector('#games', { timeout: 8000 });
+      for (let i = 0; i < 400 && profileAnswers < 1; i++) await new Promise((r) => setTimeout(r, 20)); // startup answer decided first
+      assert.ok(profileAnswers >= 1, 'the startup profile was answered');
       assert.equal(await page.$('.welcome-back'), null, 'no card on the first load');
       answer = { awayDays: 5, streak: 0, since: SINCE };
       await page.evaluate((m) => window.__push(m), welcome());
