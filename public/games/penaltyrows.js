@@ -166,7 +166,9 @@
   const starsOf = (n) => (n <= 0 ? '' : '💣'.repeat(Math.min(n, 12)) + (n > 12 ? `×${n}` : ''));
 
   function cardHTML(c, { cls = '', attrs = '', tag = 'div' } = {}) {
-    const dots = `<span class="pr-pips" aria-hidden="true">${starsOf(c.p)}</span>`;
+    // many bombs get smaller on the card, so the row stays inside a phone-width card instead of being clipped
+    const size = c.p >= 5 ? ' pips-3' : c.p >= 4 ? ' pips-2' : '';
+    const dots = `<span class="pr-pips${size}" aria-hidden="true">${starsOf(c.p)}</span>`;
     return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" data-cn="${c.n}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}><em class="pr-tl" aria-hidden="true">${c.n}</em><b>${c.n}</b>${dots}</${tag}>`;
   }
   const backHTML = (cls = '') => `<div class="pr-card back tiny ${cls}" aria-hidden="true"></div>`;
