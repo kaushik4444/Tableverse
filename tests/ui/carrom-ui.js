@@ -297,6 +297,28 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
+  await test('the striker track supports keyboard placement and ignores input outside your turn', async () => {
+    const mine = await open(msgsFor(fresh()));
+    const track = mine.page.locator('[data-slider]');
+    const before = Number(await track.getAttribute('aria-valuenow'));
+    await track.press('ArrowLeft');
+    assert.equal(await track.getAttribute('aria-valuenow'), String(before - 1));
+    await track.press('ArrowRight');
+    assert.equal(await track.getAttribute('aria-valuenow'), String(before));
+    assert.equal((await sent(mine.page)).length, 0);
+    await mine.ctx.close();
+
+    const theirs = await open(msgsFor(fresh(), 'p1'));
+    const disabled = theirs.page.locator('[data-slider]');
+    assert.equal(await disabled.getAttribute('aria-disabled'), 'true');
+    assert.equal(await disabled.getAttribute('tabindex'), '-1');
+    const old = await disabled.getAttribute('aria-valuenow');
+    await disabled.dispatchEvent('keydown', { key: 'ArrowRight' });
+    assert.equal(await disabled.getAttribute('aria-valuenow'), old);
+    assert.equal((await sent(theirs.page)).length, 0);
+    await theirs.ctx.close();
+  });
+
   await test('phone width (375px): the board is on screen and wide, and the page does not scroll sideways', async () => {
     const { page, ctx } = await open(msgsFor(fresh()), { width: 375, height: 667 });
     const s = await box(page, '.cb-svg');

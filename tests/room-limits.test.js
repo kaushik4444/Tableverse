@@ -41,6 +41,25 @@ async function until(fn, label, ms = 5000) {
     const open = await tables();
     assert.ok(open.length <= 1, `after 12 create/start/leave loops at most one parked table remains (found ${open.length})`);
     console.log('  ok  a create/start/leave loop leaves at most one parked table per account');
+    for (const timeLimit of ['30', 'off']) {
+      const previousLeft = left;
+      ws.send(JSON.stringify({ t: 'create', gameId: 'tictactoe' }));
+      await until(() => room && room.gameId === 'tictactoe', 'clock test lobby');
+      ws.send(JSON.stringify({ t: 'setOptions', options: { starter: 'host', timeLimit } }));
+      await until(() => room.options.timeLimit === timeLimit, 'clock options set');
+      assert.equal(room.turnMs, null, 'a lobby has no active turn length');
+      ws.send(JSON.stringify({ t: 'start' }));
+      await until(() => room.status === 'playing' && room.gate, 'clock test game is waiting for Ready');
+      assert.equal(room.turnMs, null, 'the clock stays off while waiting for Ready');
+      ws.send(JSON.stringify({ t: 'ready' }));
+      await until(() => room.status === 'playing' && !room.gate, 'clock test game is taking turns');
+      assert.equal(room.turnMs, timeLimit === 'off' ? null : 30000);
+      if (timeLimit === 'off') assert.equal(room.deadline, null);
+      else assert.ok(room.deadline > room.now, 'the host has an active deadline');
+      ws.send(JSON.stringify({ t: 'leave' }));
+      await until(() => left > previousLeft, 'left clock test table');
+    }
+    console.log('  ok  room snapshots give the configured duration only for an active clock');
     ws.close();
   } catch (e) { console.error('FAIL', e.stack); process.exitCode = 1; }
   clearTimeout(guard);

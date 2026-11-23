@@ -3,6 +3,8 @@
 // queen, winning, resignation, the bot and piece conservation.
 require('./helpers/env');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
 const E = require('../games/carrom/engine');
 const P = require('../games/carrom/physics');
 const games = require('../games');
@@ -336,6 +338,99 @@ test('a shot reports its impacts as [time, kind, speed] for the clients to make 
     assert.ok(t >= 0 && [0, 1, 2].includes(kind) && speed > 0);
   }
   assert.equal(p.shot.events[0][1], 0, 'the first impact is the striker hitting the opening');
+});
+
+test('a played shot exposes the planned sound cues to the shooter, opponent and spectators', () => {
+  const g = four();
+  const a = flick(0.5, 1);
+  const expected = pl(g, 0, a).shot.events;
+  assert.ok(expected.some(([, kind]) => kind === P.HIT));
+  assert.equal(act(g, 'p0', a).ok, true);
+  for (const viewer of ['p0', 'p1', 'spectator']) {
+    const { shot } = E.viewFor(g, viewer);
+    assert.deepEqual(shot.events, expected);
+    assert.ok(shot.events.every(([t], i) => t <= shot.keyframes.at(-1).t && (i === 0 || t >= shot.events[i - 1][0])),
+      'the cues are in playback order and fit inside the shot');
+  }
+});
+
+test('client playback emits each cue once at its frame time and drops cues on a fresh match', () => {
+  const frames = [], sounds = [];
+  let render;
+  const CardTable = {
+    register: (id, plugin) => { if (id === 'carrom') render = plugin.render; },
+    toolbarSeed: (html) => html,
+    esc: String,
+    sound: { play: (...args) => sounds.push(args) },
+  };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/games/carrom.js'), 'utf8'), {
+    window: { CardTable }, CardTable, requestAnimationFrame: (fn) => frames.push(fn),
+  });
+  const root = { querySelector: () => null };
+  const ctx = { room: { code: 'ABCDEF' }, rerender() {} };
+  const initial = E.viewFor(four(), 'p0');
+  const tick = (time) => frames.shift()(time);
+  render(root, initial, ctx);
+  const shot = {
+    seq: 1,
+    keyframes: [{ t: 0, d: [] }, { t: 1, d: [] }],
+    events: [[0.1, P.HIT, 0.8], [0.3, P.CUSHION_HIT, 0.4], [0.3, P.POCKET_FALL, 0.2], [0.9, P.HIT, 0.5]],
+  };
+  const after = { ...initial, shots: 1, shot };
+  render(root, after, ctx);
+  sounds.length = 0; // ignore the existing generic sound when a shot begins
+  tick(1000);
+  tick(1099);
+  assert.deepEqual(sounds, []);
+  tick(1100);
+  assert.deepEqual(sounds, [['clack', 0.8]]);
+  render(root, after, ctx); // an unrelated redraw can repeat the same shot
+  tick(1300);
+  tick(1400);
+  assert.deepEqual(sounds, [['clack', 0.8], ['rail', 0.4], ['pocket', 0.2]]);
+  render(root, initial, ctx);
+  tick(2000);
+  assert.equal(sounds.length, 3, 'the superseded shot cannot make its last sound');
+
+  render(root, { ...after, shot: { seq: 1, keyframes: shot.keyframes } }, ctx);
+  sounds.length = 0;
+  tick(2100);
+  tick(3400);
+  assert.deepEqual(sounds, [], 'older snapshots without events still replay silently');
+});
+
+test('Carrom sound effects synthesize audible cues and bound the volume at extreme speeds', () => {
+  const peaks = [];
+  const param = () => ({ setValueAtTime() {}, exponentialRampToValueAtTime() {} });
+  const node = (fields) => ({ connect: (target) => target, start() {}, stop() {}, ...fields });
+  class AudioContext {
+    currentTime = 0;
+    sampleRate = 100;
+    destination = {};
+    createOscillator() { return node({ frequency: param() }); }
+    createBuffer() { return { getChannelData: () => new Float32Array(this.sampleRate) }; }
+    createBufferSource() { return node({}); }
+    createBiquadFilter() { return node({ frequency: param(), Q: {} }); }
+    createGain() {
+      return node({ gain: { ...param(), exponentialRampToValueAtTime: (value) => {
+        if (value > 0.0001) peaks.push(value);
+      } } });
+    }
+  }
+  const window = { AudioContext, addEventListener() {} };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/sound.js'), 'utf8'), { window });
+  const sound = window.CardTable.sound;
+  const volumes = (name, speed) => { sound.play(name, speed); return peaks.splice(0); };
+  for (const name of ['clack', 'rail']) {
+    const quiet = volumes(name, 0.2);
+    const hard = volumes(name, 1.2);
+    assert.ok(quiet.length > 0 && quiet.length === hard.length, name);
+    assert.ok(hard.every((peak, i) => peak > quiet[i]), name + ' gets louder');
+    assert.deepEqual(volumes(name, 100), hard, name + ' cannot exceed full volume');
+  }
+  assert.ok(volumes('pocket', 0).length > 0, 'even a stationary drop has a sound');
+  sound.toggle();
+  for (const name of ['clack', 'rail', 'pocket']) assert.deepEqual(volumes(name, 1), [], name + ' respects mute');
 });
 
 console.log(`\n${passed} carrom engine tests passed`);

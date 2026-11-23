@@ -65,8 +65,81 @@ const OWN = /made with our own cards/i;
     await phone.page.waitForSelector('.topbar');
     assert.equal(await phone.page.evaluate(() => getComputedStyle(document.querySelector('.topbar .tb-tabs')).display), 'none');
     assert.equal(await phone.page.evaluate(() => getComputedStyle(document.querySelector('.bn')).position), 'fixed', 'the bottom tab bar shows on a phone');
-    assert.equal(await phone.page.locator('[data-act="openFriendsPage"]').count() >= 1, true, 'the account menu still has Friends');
+    const bottom = phone.page.getByRole('navigation', { name: 'Sections' });
+    await bottom.getByRole('button', { name: 'Friends' }).click();
+    await phone.page.waitForSelector('#friends-panel');
+    assert.equal(await bottom.getByRole('button', { name: 'Friends' }).getAttribute('aria-current'), 'page');
+    await bottom.getByRole('button', { name: 'Games' }).click();
+    await phone.page.waitForSelector('#games .game-grid');
+    assert.equal(await bottom.getByRole('button', { name: 'Home' }).getAttribute('aria-current'), 'page');
     await phone.ctx.close();
+  });
+
+  await test('tap bloom uses the contact point and open tables show occupied and empty seats', async () => {
+    const table = { code: 'ABCDEF', gameId: 'carrom', host: 'Ann', members: 2, seats: 4, status: 'lobby' };
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: games.list(), tables: [table] })] });
+    await page.goto(url + '/');
+    const dots = page.locator('.public-table').filter({ hasText: "Ann's table" }).locator('.seat-dots');
+    await dots.waitFor();
+    assert.equal(await dots.getAttribute('aria-hidden'), 'true');
+    assert.equal(await dots.locator('i.on').count(), 2);
+    assert.equal(await dots.locator('i:not(.on)').count(), 2);
+
+    const card = page.locator('.game-card:not(.is-locked)').filter({ has: page.getByRole('heading', { name: /^Carrom/ }) });
+    const bloom = await card.evaluate((el) => {
+      const { left, top } = el.getBoundingClientRect();
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', clientX: left + 24, clientY: top + 36 }));
+      return [el.classList.contains('is-tapped'), el.style.getPropertyValue('--mx'), el.style.getPropertyValue('--my')];
+    });
+    assert.deepEqual(bloom, [true, '24px', '36px']);
+    await page.waitForSelector('.game-card.is-tapped', { state: 'detached', timeout: 2500 });
+    await ctx.close();
+  });
+
+  await test('spectators can open rules manually, but never receive the first-play overlay', async () => {
+    const messages = tableMessages('chess', [{ id: 'p1', name: 'Ann' }, { id: 'p2', name: 'Bo' }], {
+      roomExtra: { spectators: [{ id: 'me', name: 'Watcher' }] },
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages, firstTime: true });
+    await page.goto(url + '/');
+    await page.waitForSelector('.wz-status');
+    assert.equal(await page.locator('.ht-overlay').count(), 0);
+    assert.equal(await page.evaluate(() => localStorage.getItem('tv_howto_chess')), null);
+    await page.evaluate(() => window.CardTable.showRules('chess'));
+    await page.waitForSelector('.ht-overlay');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.textContent('.ht-overlay h2'), 'The pieces');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.textContent('.ht-overlay h2'), 'Moving');
+    await page.getByRole('button', { name: 'Skip' }).click();
+    assert.equal(await page.locator('#app[inert]').count(), 0);
+    await ctx.close();
+  });
+
+  await test('the turn bar uses the full server duration, warns, clamps and clears', async () => {
+    const now = Date.UTC(2026, 0, 1);
+    const messages = tableMessages('chess', [{ name: 'Ann' }, { name: 'Bo' }], {
+      roomExtra: { now, deadline: now + 15000, turnMs: 30000 },
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages });
+    await page.clock.setFixedTime(now);
+    await page.goto(url + '/');
+    const bar = page.locator('.ct-timebar');
+    const fill = bar.locator('i');
+    const waitForScale = (scale) => page.waitForFunction((x) =>
+      document.querySelector('.ct-timebar i')?.style.transform === `scaleX(${x})`, scale);
+    await waitForScale(0.5);
+    assert.equal(await page.locator('.ct-timebar.on:not(.warn)').count(), 1);
+    await page.clock.setFixedTime(now + 7500);
+    await waitForScale(0.25);
+    assert.equal(await page.locator('.ct-timebar.on.warn').count(), 1);
+    await page.clock.setFixedTime(now + 16000);
+    await waitForScale(0);
+    await page.evaluate((m) => window.__push(m), { ...messages[1], room: { ...messages[1].room, now: now + 16000, deadline: null, turnMs: null } });
+    await page.waitForSelector('.ct-timebar.on', { state: 'detached' });
+    assert.equal(await fill.evaluate((el) => el.style.transform), 'scaleX(0)');
+    assert.equal(await page.locator('.ct-timebar.warn').count(), 0);
+    await ctx.close();
   });
 
   await closeOpenContexts();

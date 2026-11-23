@@ -132,6 +132,10 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     const text = await page.evaluate(() => [...document.querySelectorAll('.social-row')].map((r) => r.textContent.replace(/\s+/g, ' ')));
     const bo = text.find((t) => t.includes('@bob')); const cy = text.find((t) => t.includes('@cyd')); const di = text.find((t) => t.includes('@dia'));
     assert.match(bo, /Online · 38 ms/); assert.match(cy, /Playing Wizard · 310 ms/ ); assert.doesNotMatch(di, / ms/);
+    for (const [username, state] of [['bob', 'online'], ['cyd', 'playing'], ['dia', 'off']]) {
+      const row = page.locator('.social-row').filter({ hasText: '@' + username });
+      assert.equal(await row.locator(`.presence.${state}[aria-hidden="true"]`).count(), 1);
+    }
     await ctx.close();
   });
 
@@ -141,6 +145,11 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     await page.waitForSelector('.friends-strip');
     assert.equal(await page.$('#friends-panel'), null, 'no full friends panel on home');
     assert.match(await page.textContent('.friends-strip'), /friends online|none online|Add friends/);
+    const strip = page.locator('.friends-strip');
+    await strip.getByTitle('@bob · Online', { exact: true }).waitFor();
+    assert.equal(await strip.getByTitle('@cyd · Playing', { exact: true }).count(), 1);
+    assert.equal(await strip.locator('.fs-chip[data-username="dia"]').count(), 0);
+    assert.match(await strip.textContent(), /2 of 3 friends online/);
     const soon = await page.textContent('.coming-roadmap');
     for (const n of ['Bingo', 'Cup Pong', 'Sudoku', 'Falling Blocks', 'Sea Battle', 'Resource Isles', 'Secret Clues']) assert.ok(soon.includes(n), `missing roadmap game: ${n}`);
     assert.equal(await page.$('.soon-card button'), null, 'coming-soon cards are not playable');

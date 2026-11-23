@@ -148,4 +148,47 @@ test('a coin driven into the cushion by the striker makes a cushion sound, not o
   assert.ok(r.events.some(([, kind]) => kind === P.CUSHION_HIT), 'a cushion impact is reported');
 });
 
+test('nearby rail impacts keep the first timestamp and the loudest speed, while a later bounce plays separately', () => {
+  const r = P.simulate([
+    disc('first', 0.25, 0.025, 0, -1),
+    disc('louder', 0.5, 0.045, 0, -2),
+    disc('later', 0.75, 0.075, 0, -1),
+  ]);
+  const rail = r.events.filter(([, kind]) => kind === P.CUSHION_HIT);
+  assert.equal(rail.length, 2);
+  assert.ok(rail[0][0] < 0.01 && rail[0][2] > 1.9, 'the early sound takes the later, harder impact’s speed');
+  assert.ok(rail[1][0] > 0.05 && rail[1][2] < 1, 'the last impact is outside the merge window');
+});
+
+test('one frame can report a pocket, a rail bounce and a clack without merging unlike sounds', () => {
+  const input = [
+    disc('pocket', 0.03, 0.03),
+    disc('rail', 0.75, 0.025, 0, -1),
+    disc('shooter', 0.3, 0.5, 1),
+    disc('target', 0.345, 0.5),
+  ];
+  const r = P.simulate(input);
+  assert.deepEqual(r.pocketed, [{ id: 'pocket', kind: 'coin', colour: 'w' }]);
+  assert.deepEqual(r.events.map(([, kind]) => kind).sort(), [P.HIT, P.CUSHION_HIT, P.POCKET_FALL].sort());
+  assert.equal(new Set(r.events.map(([t]) => t)).size, 1, 'all three impacts happened on the same step');
+  assert.deepEqual(P.simulate(input).events, r.events, 'a replay gets the same sound cues');
+});
+
+test('a quiet contact and a separating overlap do not make clacks', () => {
+  for (const [x, speed] of [[0.3441, 0.04], [0.343, -0.1]]) {
+    const r = P.simulate([disc('a', 0.3, 0.5, speed), disc('b', x, 0.5)]);
+    assert.deepEqual(r.events, []);
+    assert.ok(r.settled);
+  }
+});
+
+test('a full flick from the baseline reaches the far rail and bounces back', () => {
+  const { vx, vy } = P.flickVelocity(0, 1);
+  const r = P.simulate([disc('s', 0.5, 0.12, vx, vy, 'striker')]);
+  assert.deepEqual(r.events.map(([, kind]) => kind), [P.CUSHION_HIT]);
+  const furthest = Math.max(...r.keyframes.map(({ d }) => d[0][2]));
+  assert.ok(furthest > 0.95, 'the striker reaches the far edge');
+  assert.ok(at(r, 's').y < furthest - 0.1, 'it comes back into the board');
+});
+
 console.log(`\n${passed} carrom physics tests passed`);
