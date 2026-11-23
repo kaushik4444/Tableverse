@@ -419,6 +419,7 @@
 
   function clearClientSession() {
     S.isStaff = false;
+    S.welcomeBack = null; S.welcomeFor = null; S.welcomeLoaded = undefined; // another account must not see this one's card
     S.banners = [];
     S.token = '';
     S.csrf = '';
@@ -1440,8 +1441,8 @@
         render();
         break;
       case 'gameTotals':
-        // lifetime game XP for the finished game at this table; the game-over table is redrawn with it
-        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, totals: m.totals || {}, ratings: m.ratings || null }; render(); }
+        // the skill ratings for the finished game at this table; the game-over table is redrawn with them
+        if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null }; render(); }
         break;
       case 'error':
         S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
@@ -2672,7 +2673,33 @@
     }
   }
 
+  /** Once per session, a signed-in player's profile tells us whether they are returning after a break. */
+  function loadWelcome() {
+    if (S.guest || S.welcomeLoaded === sessionGen) return;
+    S.welcomeLoaded = sessionGen;
+    const mineGen = sessionGen;
+    getJson('/api/me/profile').then((me) => {
+      if (mineGen !== sessionGen) return; // another account signed in meanwhile
+      S.welcomeBack = (me && me.welcomeBack) || null;
+      S.welcomeFor = mineGen;
+      if (S.page === 'home') render();
+    }).catch(() => {});
+  }
+
+  /** The welcome-back card: shown once per visit after a day or more away. Dismissing it stores that visit, so a reload does not bring it back. */
+  function welcomeHTML() {
+    const w = S.welcomeBack;
+    if (!w || S.welcomeFor !== sessionGen || store.get('ct_welcome') === w.since) return '';
+    const away = w.awayDays === 1 ? 'a day' : `${w.awayDays} days`;
+    const streak = w.streak >= 2 ? `<span>You're on a ${w.streak}-day streak. Play today to keep it going.</span>` : '';
+    return `<section class="notice-bar welcome-back" role="status" aria-label="Welcome back">
+      <div class="welcome-text"><strong>Welcome back!</strong><span>It's been ${away} since your last visit.</span>${streak}</div>
+      <button type="button" class="wn-close" data-act="dismissWelcome" aria-label="Dismiss">✕</button>
+    </section>`;
+  }
+
   function renderHome() {
+    loadWelcome();
     const tiles = S.games.map((g) => {
       const open = gameOpenFor(g);
       const guestLocked = guestLockedFor(g); // a tap opens the account prompt (the button stays enabled)
@@ -2698,6 +2725,7 @@
     ${topbarHTML()}
     <main class="page wide home">
       <section class="home-hero">
+        <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
         <div class="home-intro">
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
           <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
@@ -2713,12 +2741,13 @@
       ${rejoinBannerHTML()}
       ${bannersHTML()}
       ${S.announcement && S.dismissedAnnouncement !== S.announcement ? `<div class="notice-bar" role="status"><span>${esc(S.announcement)}</span><button type="button" class="wn-close" data-act="dismissAnnouncement" aria-label="Dismiss announcement">✕</button></div>` : ''}
+      ${welcomeHTML()}
       ${friendsStripHTML()}
       <div class="home-split">
         ${publicTablesHTML()}
         <section class="home-section" id="games">
           <h2 class="section">Games</h2>
-          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…')}
+          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…') + '<div class="game-grid skeleton" aria-hidden="true">' + '<div class="game-card sk"><i></i><b></b><span></span></div>'.repeat(4) + '</div>'}
         </section>
       </div>
       ${comingSoonHTML()}
@@ -2881,9 +2910,6 @@
   const statsGame = (id) => gameMeta(id) || { id, name: id, icon: '🎴' }; // the id too, so a game's mark still shows without its menu entry
   const KIND_NOTE = { team: 'team game: a win means your team won', coop: 'co-operative: the whole table wins or loses together' };
   const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
-
-  /** Signed XP number for display, e.g. +20 or -30. */
-  const fmtXp = (n) => (Number(n) > 0 ? `+${Number(n)}` : `${Number(n) || 0}`);
 
   /** The statistics block of a profile. Bot seats and games left without a penalty are never counted (the server leaves them out). */
   /**
@@ -3060,8 +3086,16 @@
     const room = S.room;
     const gate = gateInfo();
     $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
-    if (!gate || room.status !== 'playing' || $app.querySelector('[data-ready-here]')) return;
-    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' });
+    // the box this function adds is rebuilt on every call, so its "waiting for" list and count never go stale; a game's own box is left alone
+    $app.querySelectorAll('[data-ready-placed]').forEach((el) => el.remove());
+    if (!gate || room.status !== 'playing') {
+      // the table has stopped waiting: the Ready button goes, and the status line comes back
+      const status = $app.querySelector('.wz-status');
+      if (status) status.hidden = false;
+      return;
+    }
+    if ($app.querySelector('[data-ready-here]')) return;
+    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
     const status = $app.querySelector('.wz-status');
     if (status) { status.insertAdjacentHTML('beforebegin', box); status.hidden = true; return; }
     const top = $app.querySelector('.wz-top');
@@ -3234,17 +3268,6 @@
     }
   }
 
-  function loadProfileBoard(prof) {
-    const id = prof.game;
-    const gen = sessionGen;
-    const boardGen = prof.boardGen = (prof.boardGen || 0) + 1;
-    prof.board = null;
-    const current = () => gen === sessionGen && S.profile === prof && prof.game === id && prof.boardGen === boardGen;
-    getJson(`/api/leaderboard?game=${encodeURIComponent(id)}`)
-      .then((b) => { if (current()) { prof.board = b; render(); } })
-      .catch(() => { if (current()) { prof.board = { failed: true }; render(); } });
-    loadRatingBoard(prof);
-  }
 
   /** The rating board for the game on this profile page, for the chosen period. Public; the server says if ratings are off. */
   function loadRatingBoard(prof) {
@@ -3319,14 +3342,14 @@
       const prof = S.profile;
       if (!prof || !prof.data) return;
       const id = el.dataset.game;
-      prof.game = id; prof.gameHistory = null; prof.board = null; render();
+      prof.game = id; prof.gameHistory = null; render();
       // Apply the answer only to the same profile, still open on this game (a reload or a sign-out drops it).
       const gen = sessionGen; // another account signed in or out since the click: its answer is not for this screen
       const current = () => gen === sessionGen && S.profile === prof && prof.game === id;
       getJson(`/api/me/history?game=${encodeURIComponent(id)}&page=1`)
         .then((h) => { if (current()) { prof.gameHistory = h; render(); } })
         .catch(() => { if (current()) { prof.gameHistory = { failed: true }; render(); } });
-      loadProfileBoard(prof);
+      loadRatingBoard(prof);
     },
     boardOptIn: async () => {
       const prof = S.profile;
@@ -3438,6 +3461,11 @@
     dismissBanner: (el) => dismissBanner(el.dataset.id),
     openAdmin: () => { S.menuOpen = false; location.href = '/admin.html'; },
     openFeedback: () => { S.menuOpen = false; openFeedbackModal(); },
+    dismissWelcome: () => {
+      if (S.welcomeBack) store.set('ct_welcome', S.welcomeBack.since);
+      S.welcomeBack = null;
+      render();
+    },
     dismissAnnouncement: () => {
       S.dismissedAnnouncement = S.announcement;
       store.set('ct_ann', S.announcement);

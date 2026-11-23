@@ -110,7 +110,5 @@
 
 /* what just happened floats over the foot of the board (the last two lines) and the big moments are held mid-screen */
 .ludo-boardwrap { position: relative; }
-.ludo-boardwrap .gf-feed.gf-float { bottom: 10px; left: 14px; right: 14px; }
-.ludo-boardwrap .gf-feed.gf-float .gf-item:nth-last-child(n+3) { display: none; }
 .ludo-spot { font-size: 46px; line-height: 1; }
 .gf-spot .ludo-die { width: 64px; height: 64px; }
