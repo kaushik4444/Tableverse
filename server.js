@@ -2220,6 +2220,9 @@ function start(opts = {}) {
 
     // Blocks are stored per account and applied on every table; load them once per account on this server.
     if (!p.blocked) p.blocked = dbPool.hasDatabase() ? await dbModeration.loadBlockedIds(p.id) : new Set();
+    // The first person after a quiet spell gets switches no older than backgroundStaleMs: wait for that read (nothing extra when
+    // the snapshot is fresh). It is before the ownership checks below, which are re-evaluated after this await.
+    if (flagPoller) await flagPoller.touch();
 
     // The socket may have closed while the database answered above. A closed socket must not take over the account:
     // it must not replace the open socket, and there would be nothing left to clean it up.
@@ -2327,8 +2330,13 @@ function start(opts = {}) {
    */
   async function checkSocketSession(ws) {
     const p = ws.player;
-    if (!p || ws.revoked || ws.readyState !== 1 || ws.checkingSession) return;
-    ws.checkingSession = true;
+    if (!p || ws.revoked || ws.readyState !== 1) return;
+    // a check already running is waited for, not skipped: a caller (the first message after a quiet spell) must get the real answer
+    if (ws.sessionCheck) return ws.sessionCheck;
+    ws.sessionCheck = runSocketSessionCheck(ws, p).finally(() => { ws.sessionCheck = null; });
+    return ws.sessionCheck;
+  }
+  async function runSocketSessionCheck(ws, p) {
     try {
       const current = await dbPlayers.authenticateToken(ws.authToken);
       ws.sessionCheckedAt = Date.now();
@@ -2340,14 +2348,12 @@ function start(opts = {}) {
     } catch (err) {
       // a database fault does not prove the session ended: keep the socket and check again on the next interval
       wsLog.warn('session.check_failed', { connId: ws.connId, err });
-    } finally {
-      ws.checkingSession = false;
     }
   }
 
   wss.on('connection', (ws, req) => {
     lastActivityAt = Date.now();
-    if (flagPoller) void flagPoller.touch(); // the first person after a quiet spell gets switches that are not older than backgroundStaleMs
+    if (flagPoller) void flagPoller.touch(); // starts the read early; the hello waits for it (onHello)
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
     const openedAt = Date.now();
     ws.once('close', (code) => {
@@ -2630,6 +2636,7 @@ function start(opts = {}) {
         // timer is only a backstop for a lease that ran out, so it runs while somebody is connected and not once a minute.
         broadcastPoller = createIdlePoller({ run: kickBroadcasts, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: siteInUse });
         broadcastPoller.start();
+        kickBroadcasts(); // a broadcast that was queued or half sent when the process stopped resumes now, without waiting for a connection
       }
     }
     // no database (memory mode): there are no switches, so every game is on; with a database the switches were read above
