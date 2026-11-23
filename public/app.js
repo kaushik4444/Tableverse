@@ -242,8 +242,9 @@
       el.remove();
       howtoOpen = null;
       store.set(`tv_howto_${gameId}`, '1');
-      // the opener can be gone (re-rendered): fall back to the stable menu button rather than leaving focus on the body
-      const back = opener && opener.isConnected && opener.focus ? opener : document.querySelector('.tb-more-btn');
+      // A redraw can replace the opener while the dialog is open.
+      const back = opener && opener.isConnected && opener.focus ? opener
+        : document.querySelector(`button[data-act="rules"][data-game="${CSS.escape(gameId)}"]:not([hidden], [hidden] *)`) || document.querySelector('.tb-more-btn');
       if (back && back.focus) back.focus();
     };
     const paint = () => {
@@ -1563,8 +1564,8 @@
         // the skill ratings for the finished game at this table; the game-over table is redrawn with them
         if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) {
           // a late pending reply, or a failed lookup, must not replace a final answer already stored for this match
-          const haveFinal = S.gameTotals && S.gameTotals.code === m.code && S.gameTotals.id === m.id && !S.gameTotals.pending;
-          if (!((m.pending || m.failed) && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending) }; render(); }
+          const haveFinal = S.gameTotals && S.gameTotals.code === m.code && S.gameTotals.id === m.id && !S.gameTotals.pending && !S.gameTotals.failed;
+          if (!((m.pending || m.failed) && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending), failed: Boolean(m.failed) }; render(); }
         }
         break;
       case 'error':
@@ -3408,8 +3409,8 @@
       const xpRows = (r.outcome && r.outcome.xp) || [];
       // The ratings for this game come from the server once per finished game (the table's own game only)
       const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
-      // Only a final answer ends the asking. A pending one still needs its final message, which a reconnect can lose, so it is asked for again.
-      const gotTotals = cached && !cached.pending ? cached : null;
+      // Only a successful final answer stops retries.
+      const gotTotals = cached && !cached.pending && !cached.failed ? cached : null;
       const waiting = Boolean(cached && cached.pending);
       // Asked again if the answer did not come (not connected, or the server could not save the game yet): at most three
       // tries, five seconds apart, so a failed request never leaves the saved players on an ellipsis for good.
