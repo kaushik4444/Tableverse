@@ -74,7 +74,13 @@ const gameList = () => ({ ok: true, guestPlay: true, games: games.list().map((g)
       const { page, ctx } = await scriptedPage(browser, { messages: [welcome()] });
       await page.goto(u2 + '/');
       await page.waitForSelector('#games', { timeout: 8000 });
-      for (let i = 0; i < 400 && profileAnswers < 1; i++) await new Promise((r) => setTimeout(r, 20)); // startup answer decided first
+      // wait until the startup profile requests (session load and the first welcome) have all been answered: the count is stable for 0.5 s
+      let last = -1;
+      for (let i = 0; i < 400; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        if (profileAnswers >= 1 && profileAnswers === last) break;
+        last = profileAnswers;
+      }
       assert.ok(profileAnswers >= 1, 'the startup profile was answered');
       assert.equal(await page.$('.welcome-back'), null, 'no card on the first load');
       answer = { awayDays: 5, streak: 0, since: SINCE };
