@@ -1832,21 +1832,23 @@ function start(opts = {}) {
         // The rebuild queue can be long (every finished game queues one), so the reply waits at most 3 seconds; after that the
         // answer goes out now as pending and the final ratings follow when the rebuild has settled.
         let ratings = {};
+        let settling = null; // the one settlement this answer waits for; the late path reuses it, so a later rebuild cannot stand in
         if (dbRatings.liveEnabled()) {
-          const settled = await Promise.race([dbRatings.ratingsSettled(), new Promise((resolve) => setTimeout(() => resolve('late'), 3000))]);
-          if (settled === 'late') return { ratings: {}, pending: true };
+          settling = dbRatings.ratingsSettled();
+          const settled = await Promise.race([settling, new Promise((resolve) => setTimeout(() => resolve('late'), 3000))]);
+          if (settled === 'late') return { ratings: {}, pending: true, settling };
           ratings = settled ? (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {} : {};
         }
         return { ratings };
       })().then(
-        ({ ratings, pending }) => {
+        ({ ratings, pending, settling }) => {
         send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings, pending: Boolean(pending) });
         // The rebuild took longer than the reply window: the final ratings follow as a second message, not a client retry.
         if (pending) {
           // Every path ends with a terminal message (pending: false), even an empty one, so the client never waits on an answer
           // that will not come.
           const finish = (ratings2) => send(p.ws, { t: 'gameTotals', code: room.code, gameId, id: matchId, ratings: ratings2, pending: false });
-          dbRatings.ratingsSettled().then(async (ok) => {
+          settling.then(async (ok) => {
             finish(ok ? ((await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {}) : {});
           }).catch((err) => {
             console.error('[server] final game totals failed:', err.message);
