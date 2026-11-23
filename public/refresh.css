@@ -231,7 +231,7 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 }
 
 /* touch devices: the in-table icon buttons were 38-40px wide; give them a full 44px square */
-@media (pointer: coarse), (max-width: 1024px) {
+@media (any-pointer: coarse), (max-width: 1024px) {
   .btn[data-act="chat"], .btn[data-act="emotes"], .btn[data-act="toggleTools"], .btn[aria-label="Leave table"], .wz-top .row .btn.small, .ludo-tools .btn.small { min-width: 44px !important; min-height: 44px; flex: 0 0 auto !important; }
 }
 
@@ -242,18 +242,18 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 }
 
 /* tablets in landscape: style.css only enforces 44px below 900px wide, but iPads are still touched */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .btn.small, .tb-brand { min-height: 44px; }
 }
 @media (max-width: 1024px) {
   .btn.small, .tb-brand { min-height: 44px; }
 }
-@media (max-width: 1200px) and (pointer: coarse) {
+@media (max-width: 1200px) and (any-pointer: coarse) {
   .game-card .game-actions .btn, [data-act="openFriendsPage"], .home-foot .linklike { min-height: 44px; }
 }
 
 /* touch: leftovers the device sweep found under 44px */
-@media (pointer: coarse), (max-width: 1024px) {
+@media (any-pointer: coarse), (max-width: 1024px) {
   .back-link { display: inline-flex; align-items: center; min-height: 44px; }
   [data-modal-close], [data-auth-close] { min-width: 44px; min-height: 44px; }
   .pk-step { width: 44px; height: 44px; }
