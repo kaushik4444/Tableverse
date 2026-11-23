@@ -266,8 +266,9 @@
       const wasSigningIn = S.signingIn;
       if (httpBusy) { httpBusy = 0; httpBusyEpoch++; }
       reqVeilOwned = false; // the veil is gone: a request that settles later must not hide a veil that comes after it
-      // The person was told to try again, so a request still waiting must not bring the veil back for another 20 seconds.
-      // Its settle still clears reqInFlight; a later tracked request arms the veil again.
+      // The person was told to try again. Requests still waiting stop counting toward the veil, so they cannot bring it back;
+      // a request started later counts again.
+      reqPending.clear();
       clearTimeout(reqVeilTimer); reqVeilTimer = null;
       S.signingIn = false;
       hideBusy();
@@ -296,7 +297,7 @@
   }
   // Every user-started request (postJson / getJson) shows a loading veil if it is still running after a short delay,
   // so quick answers do not flash. Background polls pass { quiet: true } and never show it.
-  let reqInFlight = 0;
+  let reqPending = new Set(); // requests that may still own the veil; a timed-out veil clears it
   let reqVeilTimer = null;
   let reqVeilOwned = false;
   // After 350 ms, take the veil unless another action holds it. If one does, look again shortly: the veil must still come
@@ -304,7 +305,7 @@
   function armReqVeil() {
     reqVeilTimer = setTimeout(() => {
       reqVeilTimer = null;
-      if (reqInFlight === 0 || reqVeilOwned) return;
+      if (reqPending.size === 0 || reqVeilOwned) return;
       if (httpBusy || document.getElementById('busyBlock')) { armReqVeil(); return; }
       reqVeilOwned = true;
       showBusy('Loading…', 20000, 'load');
@@ -312,11 +313,12 @@
   }
   async function trackRequest(opts, fn) {
     if (opts && opts.quiet) return fn();
-    reqInFlight++;
+    const token = {};
+    reqPending.add(token);
     if (!reqVeilTimer && !reqVeilOwned) armReqVeil();
     try { return await fn(); } finally {
-      reqInFlight--;
-      if (reqInFlight === 0) {
+      reqPending.delete(token);
+      if (reqPending.size === 0) {
         clearTimeout(reqVeilTimer); reqVeilTimer = null;
         if (reqVeilOwned) {
           reqVeilOwned = false;
