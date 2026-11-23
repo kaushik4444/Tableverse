@@ -74,20 +74,5 @@
 .cb-ring.set { animation: none; opacity: .9; }
 @keyframes cb-pulse { 50% { transform: scale(1.18); opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .cb-ring { animation: none; } }
-
-/* how-to-play cards */
-.cb-tour-sheet { text-align: center; max-width: 340px; }
-.cb-tour-sheet h2 { margin-bottom: 10px; }
-.cb-art { display: grid; place-items: center; margin: 8px 0; }
-.cb-art svg { width: 190px; height: auto; }
-.cb-art .a-board { fill: #e8c996; stroke: #7a4a1f; stroke-width: 2; }
-.cb-art .a-pocket { fill: #1c1410; }
-.cb-art .a-queen, .cb-art .a-red { fill: #d9684f; }
-.cb-art .a-b { fill: #231d19; } .cb-art .a-w { fill: #f6efdc; stroke: #8f7f58; }
-.cb-art .a-striker { fill: #5a46b8; stroke: #e2b84a; stroke-width: 2; }
-.cb-art .a-line { fill: none; stroke: #fff; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-.cb-art .a-dash { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 4 4; stroke-linecap: round; }
-.cb-art .a-guide { fill: rgba(255, 255, 255, .08); stroke: #fff; stroke-width: 1.5; stroke-dasharray: 4 4; }
-.cb-dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
-.cb-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .25); }
-.cb-dots i.on { background: var(--gold, #fbbf24); }
+.cb-aim.dashed { stroke-dasharray: 0.02 0.016; }
+.cb-cross line { stroke: #e0442f; stroke-width: 0.018; stroke-linecap: round; }

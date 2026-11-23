@@ -161,15 +161,19 @@
   function boardHTML(v, frame) {
     const discs = discsFor(frame) || v.board;
     const aiming = !frame && v.myTurn && !ui.anim;
+    const striker = aiming ? `<circle class="cb-striker ${colourOfMe(v) === 'w' ? 'w' : 'b'}" data-id="striker" cx="${dispToSvg([ui.aim.x / 100, BASE_Y])[0]}" cy="${dispToSvg([ui.aim.x / 100, BASE_Y])[1]}" r="0.026" tabindex="0" role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}"/>` : '';
+    return boardSVG(v, discs, striker, aiming ? ringHTML() + aimHTML() : '');
+  }
+
+  /** The board drawn from a viewpoint `v` (only its side matters), the discs, and any extras (striker, aim, markings) on top. Used for play and for the how-to-play cards. */
+  function boardSVG(v, discs, striker, over, cls = '') {
     const bars = [0, 1, 2, 3].map((j) => baselineHTML(v, j)).join('');
     const turns = [0, 90, 180, 270];
     const corners = turns.map((a) => `<g transform="rotate(${a} 0.5 0.5)">${CORNER_ART}</g>`).join('');
     const caps = turns.map((a) => `<g transform="rotate(${a} 0.5 0.5)">${CAP}</g>`).join('');
-    const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]);
-    const striker = aiming ? `<circle class="cb-striker ${colourOfMe(v) === 'w' ? 'w' : 'b'}" data-id="striker" cx="${sx}" cy="${sy}" r="0.026" tabindex="0" role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}"/>` : '';
     const pockets = CORNERS_VIS.map(([x, y]) => `<circle class="cb-pocket-rim" cx="${x}" cy="${y}" r="0.057"/><circle class="cb-pocket" cx="${x}" cy="${y}" r="0.05"/><circle class="cb-pocket-mesh" cx="${x}" cy="${y}" r="0.05"/>`).join('');
     const bands = (stops) => stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('');
-    return `<svg class="cb-svg" viewBox="-0.09 -0.09 1.18 1.18" role="img" aria-label="Carrom board">
+    return `<svg class="cb-svg ${cls}" viewBox="-0.09 -0.09 1.18 1.18" role="img" aria-label="Carrom board">
       <defs>
         <marker id="cb-arrowhead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#fff"/></marker>
         <linearGradient id="cb-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6e4222"/><stop offset="0.5" stop-color="#4a2a14"/><stop offset="1" stop-color="#5d3519"/></linearGradient>
@@ -193,7 +197,7 @@
       ${caps}
       ${pockets}
       <g filter="url(#cb-shadow)">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
-      ${aiming ? ringHTML() + aimHTML() : ''}
+      ${over || ''}
     </svg>`;
   }
 
@@ -209,29 +213,6 @@
     const pct = ((ui.aim.x - 20) / 60) * 100;
     return `<div class="cb-slider${on ? '' : ' off'}" data-slider role="slider" aria-label="Striker position along your baseline" aria-valuemin="20" aria-valuemax="80" aria-valuenow="${ui.aim.x}" aria-disabled="${on ? 'false' : 'true'}" tabindex="${on ? '0' : '-1'}">`
       + `<span class="cb-track"><i class="cb-end"></i><i class="cb-end r"></i></span><span class="cb-thumb ${colourOfMe(v) === 'w' ? 'w' : 'b'}" style="left:${pct}%"></span></div>`;
-  }
-
-  const TOUR = [
-    { title: 'Win the game', text: 'Pocket all your coins to win. Your team plays the white or the black coins; pocketing one gives you another shot.',
-      art: '<svg viewBox="0 0 120 60" aria-hidden="true"><rect x="8" y="4" width="104" height="52" rx="8" class="a-board"/><circle cx="14" cy="10" r="6" class="a-pocket"/><circle cx="106" cy="10" r="6" class="a-pocket"/><circle cx="14" cy="50" r="6" class="a-pocket"/><circle cx="106" cy="50" r="6" class="a-pocket"/><circle cx="60" cy="30" r="5" class="a-queen"/><circle cx="48" cy="26" r="4" class="a-b"/><circle cx="72" cy="34" r="4" class="a-w"/></svg>' },
-    { title: 'Positioning', text: 'Slide the striker left and right along your baseline with the track under the board.',
-      art: '<svg viewBox="0 0 120 60" aria-hidden="true"><rect x="10" y="20" width="100" height="20" rx="10" class="a-board"/><circle cx="20" cy="30" r="6" class="a-red"/><circle cx="100" cy="30" r="6" class="a-red"/><path d="M40 30h40M46 24l-8 6 8 6M74 24l8 6-8 6" class="a-line"/><circle cx="82" cy="30" r="8" class="a-striker"/></svg>' },
-    { title: 'Take the shot', text: 'Drag back from the striker to aim and set the power. Let go to flick: the further you pull, the harder it goes.',
-      art: '<svg viewBox="0 0 120 60" aria-hidden="true"><circle cx="50" cy="38" r="22" class="a-guide"/><circle cx="50" cy="38" r="7" class="a-striker"/><path d="M52 34 L82 10M82 10l-9 1M82 10l-1 9" class="a-line"/><path d="M48 42 L32 56" class="a-dash"/></svg>' },
-    { title: 'Cover the queen', text: 'Pocket the queen, then pocket one of your own coins in the same shot or the next one to keep her. Do it before your last coin.',
-      art: '<svg viewBox="0 0 120 60" aria-hidden="true"><rect x="8" y="4" width="104" height="52" rx="8" class="a-board"/><circle cx="16" cy="12" r="7" class="a-pocket"/><circle cx="40" cy="34" r="5" class="a-queen"/><path d="M44 31 L24 17" class="a-line"/><circle cx="80" cy="40" r="5" class="a-w"/><path d="M76 37 L98 20" class="a-dash"/></svg>' },
-  ];
-  const tourSeen = () => { try { return localStorage.getItem('cb_tour') === '1'; } catch { return false; } };
-  const tourDone = () => { try { localStorage.setItem('cb_tour', '1'); } catch { /* ignore */ } };
-
-  function tourHTML() {
-    if (ui.tour === null || ui.tour === undefined) return '';
-    const i = Math.max(0, Math.min(TOUR.length - 1, ui.tour)), t = TOUR[i], last = i === TOUR.length - 1;
-    return `<div class="overlay cb-tour" role="dialog" aria-label="How to play Carrom"><div class="sheet cb-tour-sheet">
-      <h2>${esc(t.title)}</h2><div class="cb-art">${t.art}</div><p>${esc(t.text)}</p>
-      <div class="cb-dots" aria-hidden="true">${TOUR.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
-      <div class="row" style="justify-content:center;margin-top:12px">${last ? '<button class="btn" data-cb="tour-close">Close</button>' : '<button class="btn" data-cb="tour-next">Next</button><button class="btn ghost" data-cb="tour-close">Skip</button>'}</div>
-    </div></div>`;
   }
 
   /** The controls under the board. They keep the same height on every turn, so the page does not jump when your turn starts. */
@@ -357,7 +338,6 @@
     ui.dragging = false; ui.dragMoved = false; ui.dragKey = null; ui.deferred = null;
     remember(v);
     react(v, ctx);
-    if (ui.tour === undefined) ui.tour = v.me >= 0 && v.phase === 'playing' && !tourSeen() ? 0 : null; // the how-to-play cards open by themselves the first time
     const playing = v.phase === 'playing' && v.me >= 0;
     // a resignation confirmation belongs to one match at one table: a new shot, a finished game or another table clears it
     if (ui.resignArmed && ui.armKey !== armKeyOf(v, ctx)) ui.resignArmed = false;
@@ -372,7 +352,7 @@
       ${controlsHTML(v)}
       <div class="wz-status ${v.myTurn && !ui.anim ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       <details class="cb-moves" open><summary>Shots</summary>${logHTML(v)}</details>
-      ${overlayHTML(v)}${tourHTML()}</div>`;
+      ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
     root.onkeydown = onKey;
     root.onpointerdown = onPointerDown;
@@ -545,9 +525,7 @@
     const v = ui.v, ctx = ui.ctx;
     if (!el || !v || !ctx) return;
     switch (el.dataset.cb) {
-      case 'rules': ui.tour = 0; ctx.rerender(); break;
-      case 'tour-next': ui.tour = (ui.tour || 0) + 1; ctx.rerender(); break;
-      case 'tour-close': ui.tour = null; tourDone(); ctx.rerender(); break;
+      case 'rules': ctx.showRules(); break;
       case 'fire': fire(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ui.resignArmed = false; ctx.leave(); break;
@@ -556,6 +534,47 @@
         ui.resignArmed = false; ctx.act({ type: 'resign' }); break;
     }
   }
+
+
+  // ---- how-to-play pictures: the real board, drawn with the same code as the table ----
+
+  /** The opening layout, the same rings as games/carrom/engine.js: the queen, then six and twelve coins alternating in colour. */
+  function openingCoins() {
+    const sp = 2 * 0.022, cells = [];
+    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {
+      if (Math.abs(a + b) > 2) continue;
+      const x = 0.5 + sp * (a + b / 2), y = 0.5 + sp * (b * Math.sqrt(3) / 2);
+      cells.push({ x, y, ring: Math.max(Math.abs(a), Math.abs(b), Math.abs(a + b)), angle: Math.atan2(y - 0.5, x - 0.5) });
+    }
+    const colour = new Map();
+    for (const ring of [1, 2]) cells.filter((c) => c.ring === ring).sort((p, q) => p.angle - q.angle).forEach((c, i) => colour.set(c, i % 2 === 0 ? 'w' : 'b'));
+    return cells.map((c, i) => c.ring === 0 ? { id: 'q', kind: 'queen', colour: null, x: c.x, y: c.y, r: 0.022 } : { id: 'c' + i, kind: 'coin', colour: colour.get(c), x: c.x, y: c.y, r: 0.022 });
+  }
+
+  const arrowTo = (a, b, dashed) => { const [x1, y1] = dispToSvg(a), [x2, y2] = dispToSvg(b); return `<line class="cb-aim${dashed ? ' dashed' : ''}" marker-end="url(#cb-arrowhead)" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`; };
+  const strikerAt = (x, y) => ({ id: 'striker', kind: 'striker', colour: 'w', x, y, r: 0.026 });
+  const coinAt = (id, colour, x, y) => ({ id, kind: 'coin', colour, x, y, r: 0.022 });
+  const queenAt = (x, y) => ({ id: 'q', kind: 'queen', colour: null, x, y, r: 0.022 });
+
+  /** The picture for each rule card, in the order of the rules in games/carrom/index.js. */
+  const SCENES = [
+    () => ({ discs: openingCoins() }),                                           // the board
+    () => ({ discs: openingCoins().concat(strikerAt(0.5, BASE_Y)), over: arrowTo([0.5, BASE_Y], [0.5, 0.36]) + `<circle class="cb-ring set" cx="0.5" cy="${1 - BASE_Y}" r="0.07"/>` }), // take the shot
+    () => ({ discs: [coinAt('c1', 'w', 0.3, 0.3), strikerAt(0.45, 0.18), coinAt('c2', 'b', 0.62, 0.6)], over: arrowTo([0.3, 0.3], [0.05, 0.05], true) + arrowTo([0.45, 0.18], [0.33, 0.28]) }), // pocketing
+    () => ({ discs: [queenAt(0.7, 0.7), coinAt('c1', 'w', 0.62, 0.62), strikerAt(0.5, 0.35)], over: arrowTo([0.7, 0.7], [0.95, 0.95], true) + arrowTo([0.62, 0.62], [0.9, 0.98], true) }), // the queen
+    () => ({ discs: [strikerAt(0.06, 0.06), coinAt('c1', 'w', 0.4, 0.4)], over: `<g class="cb-cross"><line x1="0.12" y1="0.9" x2="0.2" y2="0.98"/><line x1="0.2" y1="0.9" x2="0.12" y2="0.98"/></g>` }), // the striker
+    () => ({ discs: [coinAt('c1', 'w', 0.8, 0.8), coinAt('c2', 'w', 0.3, 0.7), coinAt('c3', 'b', 0.55, 0.45)], over: arrowTo([0.8, 0.8], [0.97, 0.97], true) }), // winning
+  ];
+  window.CardTable.howtoArt = window.CardTable.howtoArt || {};
+  window.CardTable.howtoArt.carrom = (i) => {
+    const scene = SCENES[i];
+    if (!scene) return '';
+    const { discs, over } = scene();
+    const strikerDisc = discs.find((d) => d.kind === 'striker');
+    const rest = discs.filter((d) => d.kind !== 'striker');
+    const sHTML = strikerDisc ? discHTML({ me: -1 }, strikerDisc).replace('data-id="striker"', '') : '';
+    return boardSVG({ me: -1 }, rest, sHTML, over || '', 'cb-art-board');
+  };
 
   window.CardTable.register('carrom', { render });
 })();

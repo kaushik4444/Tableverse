@@ -200,10 +200,20 @@
   const inviteUrl = () => `${location.origin}/#${S.room.code}`;
   const safeTableUrl = () => S.room && S.room.visibility === 'public' ? inviteUrl() : `${location.origin}/`;
 
-  // ------------------------------------------------------------ rules dialog
-  function showRules(gameId) {
-    const g = gameMeta(gameId);
-    if (!g) return;
+  // ------------------------------------------------------------ how to play: cards
+  // Each rule paragraph of a game is one card (the "made with our own cards" notice goes under the last one). Games can draw
+  // a picture for a card: CardTable.howtoArt[gameId] = (cardIndex, game) => html; without one the game's mark is shown.
+  // The cards open by themselves the first time someone is seated in a running game, and from "How to play" in the ⋯ menu.
+  window.CardTable.howtoArt = window.CardTable.howtoArt || {};
+  const OWN_GAME = /made with our own cards/i;
+  function howtoCards(g) {
+    const rules = g.rules || [], titles = g.ruleTitles || [];
+    const cards = [];
+    let note = '';
+    rules.forEach((text, i) => {
+      if (OWN_GAME.test(text)) { note = text; return; }
+      cards.push({ title: titles[i] || `Step ${cards.length + 1}`, text, art: i });
+    });
     const variants = (g.options || [])
       .filter((o) => (o.type === 'select' || o.desc) && !o.noRules)
       .map((o) => {
@@ -211,17 +221,80 @@
         return o.choices.filter((c) => c.value !== o.default || o.choices.length > 2).map((c) => `<dt>${esc(o.label)}: ${esc(c.label)}</dt><dd>${esc(c.desc)}</dd>`).join('');
       })
       .join('');
+    if (variants) cards.push({ title: 'Options', html: `<dl class="variants">${variants}</dl>`, art: -1 });
+    return { cards, note };
+  }
+
+  let howtoOpen = null; // the open overlay, so there is only ever one
+  function showRules(gameId, opts = {}) {
+    const g = gameMeta(gameId);
+    if (!g) return;
+    if (howtoOpen) howtoOpen.close();
+    const { cards, note } = howtoCards(g);
+    if (!cards.length) return;
+    let i = 0;
     const el = document.createElement('div');
-    el.className = 'overlay';
-    el.innerHTML = `<div class="sheet" role="dialog" aria-label="How to play ${esc(g.name)}">
-      <h2>${gameMark(g)} How to play ${esc(g.name)}</h2>
-      ${(g.rules || []).map((p) => `<p class="rule">${esc(p)}</p>`).join('')}
-      ${variants ? `<h3 style="margin:16px 0 6px">Options</h3><dl class="variants">${variants}</dl>` : ''}
-      <div class="row" style="margin-top:14px"><button class="btn" data-close="1">Got it</button></div></div>`;
-    el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('[data-close]')) el.remove(); });
+    el.className = 'overlay ht-overlay';
+    const inerted = [...document.body.children].filter((n) => n.tagName !== 'SCRIPT' && n.id !== 'toasts' && !n.hasAttribute('inert'));
+    const opener = document.activeElement;
+    const close = () => {
+      inerted.forEach((n) => n.removeAttribute('inert'));
+      el.remove();
+      howtoOpen = null;
+      store.set(`tv_howto_${gameId}`, '1');
+      if (opener && opener.isConnected && opener.focus) opener.focus();
+    };
+    const paint = () => {
+      const c = cards[i], last = i === cards.length - 1;
+      const artFn = window.CardTable.howtoArt[gameId];
+      const art = (c.art >= 0 && artFn && artFn(c.art, g)) || `<span class="ht-mark">${gameMark(g)}</span>`;
+      el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">
+        <div class="ht-kicker">How to play ${esc(g.name)} · ${i + 1} of ${cards.length}</div>
+        <h2>${esc(c.title)}</h2>
+        <div class="ht-art" aria-hidden="true">${art}</div>
+        ${c.html || `<p class="rule">${esc(c.text)}</p>`}
+        ${last && note ? `<p class="ht-note">${esc(note)}</p>` : ''}
+        <div class="ht-dots" aria-hidden="true">${cards.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="row ht-actions">${i > 0 ? '<button class="btn ghost" type="button" data-ht="back">Back</button>' : ''}${last ? '<button class="btn" type="button" data-ht="done" data-close="1">Got it</button>' : '<button class="btn" type="button" data-ht="next">Next</button>'}${last ? '' : '<button class="btn ghost" type="button" data-ht="done" data-close="1">Skip</button>'}</div>
+      </div>`;
+      const primary = el.querySelector('[data-ht="next"], [data-ht="done"]');
+      if (primary) primary.focus();
+    };
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-ht]');
+      if (e.target === el) return close();
+      if (!b) return;
+      if (b.dataset.ht === 'next') { i = Math.min(cards.length - 1, i + 1); paint(); }
+      else if (b.dataset.ht === 'back') { i = Math.max(0, i - 1); paint(); }
+      else close();
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); }
+      else if (e.key === 'ArrowRight' && i < cards.length - 1) { i++; paint(); }
+      else if (e.key === 'ArrowLeft' && i > 0) { i--; paint(); }
+      else if (e.key === 'Tab') { // keep focus inside the card
+        const f = [...el.querySelectorAll('button')];
+        if (!f.length) return;
+        const first = f[0], lastB = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastB.focus(); }
+        else if (!e.shiftKey && document.activeElement === lastB) { e.preventDefault(); first.focus(); }
+        else if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      }
+    });
     document.body.appendChild(el);
+    inerted.forEach((n) => n.setAttribute('inert', ''));
+    howtoOpen = { close };
+    paint();
   }
   window.CardTable.showRules = showRules;
+
+  /** The first time someone is seated in a running game of this kind on this device, the cards open by themselves. */
+  function autoHowTo() {
+    const r = S.room;
+    if (!r || r.status !== 'playing' || isSpectator() || howtoOpen || store.get('tv_howto_all') || store.get(`tv_howto_${r.gameId}`)) return;
+    store.set(`tv_howto_${r.gameId}`, '1'); // decided once: a closed or skipped card is not shown again
+    showRules(r.gameId, { auto: true });
+  }
 
   // ------------------------------------------------------------ auth + connection
   // Every click that waits on the server puts up a spinner that blocks all other taps until the answer arrives.
@@ -2285,7 +2358,9 @@
         ${item('logout', '🚪', 'Log out')}
         ${item('logoutAll', '🔒', 'Log out everywhere', '', 'dim')}
       </div>` : '';
-    return `<nav class="topbar" aria-label="Main">${brand}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}${S.account ? `, level ${Number(S.account.level)}` : ''}">${av}${S.account ? `<span class="tb-level" title="Your overall level">Lv ${Number(S.account.level)}</span>` : ''}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
+    const tab = (act, label, on) => `<button type="button" class="tb-tab" data-act="${act}"${on ? ' aria-current="page"' : ''}>${label}</button>`;
+    const tabs = `<div class="tb-tabs" role="group" aria-label="Sections"><span class="tb-pill" aria-hidden="true"></span>${tab('goHome', 'Home', S.page !== 'friends' && S.page !== 'profile')}${tab('goGames', 'Games', false)}${tab('openFriendsPage', 'Friends', S.page === 'friends')}${tab('openProfilePage', 'Profile', S.page === 'profile')}</div>`;
+    return `<nav class="topbar" aria-label="Main">${brand}${tabs}<div class="tb-right">${bellHTML()}<div class="menu-wrap"><button type="button" class="tb-avatar-btn" data-act="toggleMenu" aria-haspopup="menu" aria-expanded="${S.menuOpen}" aria-label="Account menu for ${esc(name)}${S.account ? `, level ${Number(S.account.level)}` : ''}">${av}${S.account ? `<span class="tb-level" title="Your overall level">Lv ${Number(S.account.level)}</span>` : ''}${hasNewNews() ? '<span class="tb-dot" aria-hidden="true"></span>' : ''}<span class="tb-caret" aria-hidden="true">▾</span></button>${menu}</div></div></nav>`;
   }
 
   /**
@@ -3108,6 +3183,7 @@
       bar.insertAdjacentHTML('beforeend', '<div class="ct-timebar" aria-hidden="true"><i></i></div>');
     }
     updateTimer();
+    autoHowTo();
   }
 
   // ------------------------------------------------------------ end of a game
@@ -3268,6 +3344,7 @@
     avatar: (el) => { S.avatarOpen = false; changeAvatar(el.dataset.a); },
     scrollGames: () => document.getElementById('games')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
     goHome: (el, e) => { if (e) e.preventDefault(); openPage('home'); },
+    goGames: () => { if (S.page !== 'home') openPage('home'); requestAnimationFrame(() => { const el = document.getElementById('games'); if (el) el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); }); },
     reloadProfile: () => loadProfile(),
     ratingScope: (el) => {
       const P = S.profile; if (!P) return;

@@ -2,15 +2,7 @@
 // Carrom in a real browser: the board and pieces, dragging to place and aim, the keyboard, four
 // seats and each seat's view, the shot playback, the game-over sheet and a phone-width layout.
 const assert = require('node:assert/strict');
-const harness = require('./harness');
-const { serve, loadPlaywright, tableMessages, sessionOk, closeOpenContexts } = harness;
-/** Opens a scripted page with the how-to-play cards already seen (they open by themselves the first time), unless a test asks for them. */
-async function scriptedPage(browser, opts = {}) {
-  const { freshPlayer, ...rest } = opts;
-  const r = await harness.scriptedPage(browser, rest);
-  if (!freshPlayer) await r.page.addInitScript(() => { try { localStorage.setItem('cb_tour', '1'); } catch (e) { /* ignore */ } });
-  return r;
-}
+const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk, closeOpenContexts } = require('./harness');
 const { chromium } = loadPlaywright();
 const E = require('../../games/carrom/engine');
 
@@ -274,17 +266,22 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
-  await test('the first time: the four how-to-play cards open, step through, and do not open again', async () => {
-    const { page, ctx } = await scriptedPage(browser, { messages: msgsFor(fresh()), viewport: { width: 390, height: 844 }, freshPlayer: true });
+  await test('the first time: the how-to-play cards open with the real board, step through, keep focus, and do not open again', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: msgsFor(fresh()), viewport: { width: 390, height: 844 }, firstTime: true });
     await page.goto(url + '/');
-    await page.waitForSelector('.cb-tour', { timeout: 8000 });
+    await page.waitForSelector('.ht-overlay', { timeout: 8000 });
     const titles = [];
-    for (let i = 0; i < 4; i++) {
-      titles.push(await page.textContent('.cb-tour h2'));
-      await page.click(i < 3 ? '[data-cb="tour-next"]' : '[data-cb="tour-close"]');
+    for (let i = 0; i < 6; i++) {
+      titles.push(await page.textContent('.ht-overlay h2'));
+      assert.ok(await page.locator('.ht-overlay svg.cb-svg .cb-pocket').count() === 4, 'the card shows the real board with four pockets');
+      const focused = await page.evaluate(() => document.activeElement && document.activeElement.dataset.ht);
+      assert.ok(focused === 'next' || focused === 'done', `focus sits on the primary button (${focused})`);
+      assert.equal(await page.evaluate(() => document.querySelector('#app').hasAttribute('inert')), true, 'the game behind the card is inert');
+      await page.click(i < 5 ? '[data-ht="next"]' : '[data-ht="done"]');
     }
-    assert.deepEqual(titles, ['Win the game', 'Positioning', 'Take the shot', 'Cover the queen']);
-    assert.equal(await page.locator('.cb-tour').count(), 0);
+    assert.deepEqual(titles, ['The board', 'Take the shot', 'Pocketing', 'The queen', 'The striker', 'Winning']);
+    assert.equal(await page.locator('.ht-overlay').count(), 0);
+    assert.equal(await page.evaluate(() => document.querySelector('#app').hasAttribute('inert')), false);
     await ctx.close();
   });
 
