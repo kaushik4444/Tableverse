@@ -49,12 +49,12 @@
     const p = centre(head), q = centre(tail);
     const dx = p.x - q.x, dy = p.y - q.y, len = Math.hypot(dx, dy) || 1;
     const ux = dx / len, uy = dy / len, nx = -uy, ny = ux; // u: tail to head, n: its normal
-    const waves = Math.max(1.5, len / 24), amp = Math.min(4, 1.2 + len / 16);
+    const waves = Math.max(1.5, len / 30) + (i % 2) * 0.5, amp = Math.min(2.6, 0.9 + len / 26); // each snake gets its own wiggle
     const at = (t) => { // centreline point, t 0 at the tail, 1 at the head
       const bend = Math.sin(t * waves * 2 * Math.PI) * amp * (1 - 0.5 * t);
       return { x: q.x + dx * t + nx * bend, y: q.y + dy * t + ny * bend };
     };
-    const width = (t) => 0.55 + 1.9 * Math.pow(t, 0.7); // thin tail, fuller body and head end
+    const width = (t) => 0.22 + 0.72 * Math.pow(t, 0.8); // slim tail, body and head only a little wider than a line
     const N = Math.max(20, Math.round(len * 2));
     const L = [], R = [], S = [];
     for (let k = 0; k <= N; k++) {
@@ -70,23 +70,27 @@
     body += `A${width(1).toFixed(2)},${width(1).toFixed(2)} 0 0 1 ${f(R[N])}`;
     body += `L${R.slice(0, N).reverse().map(f).join('L')}Z`;
     // dorsal blotches, darker, spaced along the back and thinning toward the tail
+    // three patterns, one per snake: diamond blotches, round spots, or cross-bands
+    const variant = i % 3, step = Math.max(3, Math.round(N / (waves * 5 + 3)));
     let spots = '';
-    for (let k = Math.round(N * 0.18); k < N - 4; k += Math.max(3, Math.round(N / (waves * 6 + 4)))) {
+    for (let k = Math.round(N * 0.2); k < N - 4; k += step) {
       const s = S[k], ang = Math.atan2(s.ty, s.tx) * 180 / Math.PI;
-      spots += `<ellipse cx="${s.P.x.toFixed(2)}" cy="${s.P.y.toFixed(2)}" rx="${(s.w * 0.85).toFixed(2)}" ry="${(s.w * 0.5).toFixed(2)}" transform="rotate(${ang.toFixed(1)} ${s.P.x.toFixed(2)} ${s.P.y.toFixed(2)})"/>`;
+      if (variant === 0) spots += `<ellipse cx="${s.P.x.toFixed(2)}" cy="${s.P.y.toFixed(2)}" rx="${(s.w * 0.9).toFixed(2)}" ry="${(s.w * 0.45).toFixed(2)}" transform="rotate(${ang.toFixed(1)} ${s.P.x.toFixed(2)} ${s.P.y.toFixed(2)})"/>`;
+      else if (variant === 1) spots += `<circle cx="${s.P.x.toFixed(2)}" cy="${s.P.y.toFixed(2)}" r="${(s.w * 0.4).toFixed(2)}"/>`;
+      else spots += `<path class="band" d="M${f(L[k])}L${f(R[k])}"/>`;
     }
     // head: an oval along the last tangent, slit eyes, forked tongue
     const H = S[N], hx = H.P.x + H.tx * 0.9, hy = H.P.y + H.ty * 0.9, hang = Math.atan2(H.ty, H.tx) * 180 / Math.PI;
     const ex = (sx, sy) => `${(hx + H.tx * sx + H.ex * sy).toFixed(2)},${(hy + H.ty * sx + H.ey * sy).toFixed(2)}`;
     const eyes = [1, -1].map((side) => {
-      const c = ex(0.5, side * 1.25);
+      const c = ex(0.45, side * 0.85);
       const [cx, cy] = c.split(',').map(Number);
-      return `<circle class="eye" cx="${cx}" cy="${cy}" r="0.8"/><ellipse class="pupil" cx="${cx + H.tx * 0.2}" cy="${cy + H.ty * 0.2}" rx="0.22" ry="0.55" transform="rotate(${hang.toFixed(1)} ${cx} ${cy})"/>`;
+      return `<circle class="eye" cx="${cx}" cy="${cy}" r="0.55"/><ellipse class="pupil" cx="${cx + H.tx * 0.15}" cy="${cy + H.ty * 0.15}" rx="0.16" ry="0.4" transform="rotate(${hang.toFixed(1)} ${cx} ${cy})"/>`;
     }).join('');
-    const tongue = `M${ex(2.3, 0)} L${ex(3.4, 0)} L${ex(4.0, 0.5)} M${ex(3.4, 0)} L${ex(4.0, -0.5)}`;
+    const tongue = `M${ex(1.7, 0)} L${ex(2.6, 0)} L${ex(3.1, 0.4)} M${ex(2.6, 0)} L${ex(3.1, -0.4)}`;
     const hue = ['sl-s1', 'sl-s2', 'sl-s3'][i % 3];
     return `<g class="sl-snake ${hue}"><path class="body" d="${body}"/><g class="blotch">${spots}</g>`
-      + `<ellipse class="head" cx="${hx.toFixed(2)}" cy="${hy.toFixed(2)}" rx="2.5" ry="2.05" transform="rotate(${hang.toFixed(1)} ${hx.toFixed(2)} ${hy.toFixed(2)})"/>`
+      + `<ellipse class="head" cx="${hx.toFixed(2)}" cy="${hy.toFixed(2)}" rx="1.75" ry="1.45" transform="rotate(${hang.toFixed(1)} ${hx.toFixed(2)} ${hy.toFixed(2)})"/>`
       + `${eyes}<path class="tongue" d="${tongue}"/></g>`;
   }
 

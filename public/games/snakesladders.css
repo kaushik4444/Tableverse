@@ -10,12 +10,13 @@
 .sl-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); }
 .sl-sq { position: relative; background: #fffdf6; border: 1px solid #e4e0d3; min-width: 0; min-height: 0; }
 .sl-sq.alt { background: #f3efdf; }
-.sl-sq.goal { background: #f6e3a1; }
+.sl-sq.goal { background: repeating-conic-gradient(#f6e3a1 0 25%, #fff3c4 0 50%) 0 0 / 16px 16px; }
 .sl-sq i { position: absolute; left: 3px; top: 1px; font-style: normal; font-size: clamp(7px, 1.6vw, 12px); font-weight: 700; color: #5c5640; line-height: 1.2; }
 .sl-art { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .78; }
 .sl-ladder { fill: none; stroke: #9a6a2f; stroke-width: .8; stroke-linecap: round; opacity: .92; }
 .sl-snake .body { fill: var(--snake, #4e8f3a); stroke: var(--snake-dk, #24421b); stroke-width: .25; stroke-linejoin: round; }
-.sl-snake .blotch ellipse { fill: var(--snake-spot, #1f3b17); opacity: .55; }
+.sl-snake .blotch > * { fill: var(--snake-spot, #1f3b17); opacity: .55; }
+.sl-snake .blotch .band { fill: none; stroke: var(--snake-spot, #1f3b17); stroke-width: .5; stroke-linecap: round; opacity: .6; }
 .sl-snake .head { fill: var(--snake, #4e8f3a); stroke: var(--snake-dk, #24421b); stroke-width: .3; }
 .sl-snake .eye { fill: #f6f1c4; stroke: #1b1b1b; stroke-width: .15; }
 .sl-snake .pupil { fill: #111; }
@@ -24,6 +25,7 @@
 .sl-s2 { --snake: #c9a04a; --snake-dk: #6b4c1c; --snake-spot: #6b4a1a; }   /* sand */
 .sl-s3 { --snake: #a4543a; --snake-dk: #5b2a1b; --snake-spot: #4a1f14; }   /* rust */
 .sl-token { position: absolute; z-index: 3; width: 5%; height: 5%; min-width: 14px; min-height: 14px; border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 2px 5px #0005; transition: left .42s ease-in-out, top .42s ease-in-out; }
+.sl-token::after { content: ''; position: absolute; inset: 18%; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff9 0 12%, #0000 45%, #0003 100%); pointer-events: none; }
 .sl-token.hop { animation: sl-hop .48s ease-out; }
 @keyframes sl-hop { 40% { margin-top: -1.8%; } }
 .sl-token.red { background: var(--sl-red); } .sl-token.blue { background: var(--sl-blue); } .sl-token.green { background: var(--sl-green); } .sl-token.yellow { background: var(--sl-yellow); } .sl-token.orange { background: var(--sl-orange); } .sl-token.purple { background: var(--sl-purple); }
