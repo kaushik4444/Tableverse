@@ -266,6 +266,55 @@ const api = (role) => ({
     assert.deepEqual(errors, []);
     await ctx.close(); server.close();
   });
+  await test('Right now pauses when hidden or idle and resumes only while Overview is open', async () => {
+    const { server, url, calls } = await serve(api('admin'));
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const liveCalls = () => calls.filter((c) => c.path === '/api/admin/live').length;
+    const settle = () => page.waitForLoadState('networkidle');
+    const visibility = (value) => page.evaluate((value) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, value);
+    const input = () => page.evaluate(() => window.dispatchEvent(new Event('keydown')));
+    live.fail = false;
+    try {
+      await page.clock.install();
+      await page.goto(url + '/admin.html');
+      await page.waitForSelector('#liveNow .ad-card b:not(:text("…"))');
+      await settle();
+      const before = liveCalls();
+      await visibility('hidden');
+      await page.clock.runFor(30000);
+      await input();
+      await settle();
+      assert.equal(liveCalls(), before, 'neither a timer nor hidden input polls');
+
+      await visibility('visible');
+      await input();
+      await settle();
+      assert.equal(liveCalls(), before + 1, 'returning starts one immediate refresh');
+      await page.clock.fastForward(11 * 60000);
+      await settle();
+      assert.equal(liveCalls(), before + 1, 'the overdue timer does not poll after eleven idle minutes');
+      await input();
+      await input();
+      await settle();
+      assert.equal(liveCalls(), before + 2, 'the first input resumes polling once');
+      await page.clock.runFor(15000);
+      await settle();
+      assert.equal(liveCalls(), before + 3, 'one loop continues after resuming');
+
+      await visibility('hidden');
+      await page.clock.runFor(15000);
+      await tab(page, 'users');
+      await page.waitForFunction(() => !document.getElementById('liveNow'));
+      await visibility('visible');
+      await page.clock.runFor(30000);
+      await settle();
+      assert.equal(liveCalls(), before + 3, 'return cannot revive an Overview that has been left');
+    } finally { await ctx.close(); server.close(); }
+  });
   await test('signup funnel: the Insights tab shows the three stages and a CSV link for the range', async () => {
     const s = await open('admin');
     await tab(s.page, 'insights');

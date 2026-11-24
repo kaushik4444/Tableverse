@@ -185,6 +185,37 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
       assert.equal(s.closed, null, 'still open');
       assert.equal(s.ws.readyState, WebSocket.OPEN);
     });
+
+    await test('a command waits for an in-flight timer check that discovers a revoked session', async () => {
+      const { rawToken } = await newPlayer('Checking');
+      const s = socketFor(srv.port, rawToken); open.push(s);
+      await until(() => s.welcomed(), 'welcome');
+      const authenticate = dbPlayers.authenticateToken;
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      let checks = 0;
+      dbPlayers.authenticateToken = async (token) => {
+        if (token === rawToken) { checks++; await gate; }
+        return authenticate(token);
+      };
+      try {
+        await until(() => checks === 1, 'the background check has started');
+        assert.equal(await dbAuth.revokeSession(rawToken), true);
+        s.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+        // WebSocket frames are ordered: pong confirms the server received the preceding command while auth was held.
+        const pong = new Promise((resolve) => s.ws.once('pong', resolve));
+        s.ws.ping();
+        await Promise.race([pong, sleep(1000).then(() => { throw new Error('no pong after create'); })]);
+        assert.equal(checks, 1, 'the command shares the pending lookup');
+        release();
+        await until(() => s.closed !== null, 'the pending check closes the revoked socket');
+        assert.equal(s.closed, 4001);
+        assert.equal(s.room, null, 'the table was never created');
+      } finally {
+        release();
+        dbPlayers.authenticateToken = authenticate;
+      }
+    });
   } finally {
     for (const s of open) { try { s.ws.terminate(); } catch { /* closed */ } }
     await srv.close();
@@ -235,5 +266,66 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
     for (const s of open2) { try { s.ws.terminate(); } catch { /* closed */ } }
     await slow.close();
   }
+
+  await test('the broadcast backstop follows site activity and a stale welcome waits for both switch reads', async () => {
+    const adminStore = require('../db/admin');
+    const broadcastStore = require('../db/broadcast');
+    let games = 0; let features = 0; let claims = 0;
+    let release;
+    const pendingFeatures = new Promise((resolve) => { release = resolve; });
+    const stubs = [
+      [adminStore, 'listGameFlags', async () => ++games === 1 ? [] : [{ game_id: 'wizard', access: 'owner' }]],
+      [adminStore, 'listGuestFeatures', async () => ++features === 1 ? [] : pendingFeatures],
+      [adminStore, 'bootstrapOwner', async () => ({ claimed: false })],
+      [adminStore, 'purge', async () => {}],
+      [dbAuth, 'purgeExpired', async () => {}],
+      [broadcastStore, 'claimNext', async () => { claims++; return null; }],
+    ];
+    const restore = stubs.map(([store, key, fake]) => {
+      const original = store[key];
+      store[key] = fake;
+      return () => { store[key] = original; };
+    });
+    const hasDatabase = db.hasDatabase;
+    let server; let s;
+    try {
+      // Enable database-backed workers at startup with fake stores; socket authentication below stays in memory.
+      db.hasDatabase = () => true;
+      server = await start({
+        ...fast, database: { prepare: async () => ({ mode: 'postgres' }) }, matchSpoolDir: null,
+        env: { ...process.env, ANALYTICS_ENABLED: '0' }, log: quiet(), emailSender: { enabled: true },
+        backgroundReadMs: 40, backgroundStaleMs: 80, backgroundActiveMs: 1000, idleSessionCheckMs: 600000,
+      });
+      db.hasDatabase = hasDatabase;
+      assert.deepEqual([games, features, claims], [1, 1, 1], 'startup reads switches and claims queued mail once');
+      await sleep(120);
+      assert.deepEqual([games, features, claims], [1, 1, 1], 'no recurring work without a connection');
+
+      const { rawToken } = await newPlayer('SwitchReader');
+      s = socketFor(server.port, rawToken);
+      await until(() => features === 2 && claims > 1, 'stale reads and the active broadcast backstop');
+      await sleep(80); // allow both the hello and another background tick to reach the held read
+      assert.deepEqual([games, features], [2, 2], 'hello and timer share the refresh already started on connect');
+      assert.equal(s.welcomed(), false, 'welcome waits even when only the guest switches are still loading');
+      release([{ feature: 'rejoin', enabled: true }]);
+      await until(() => s.welcomed(), 'welcome with fresh switches');
+      const welcome = s.msgs.find((m) => m.t === 'welcome');
+      assert.equal(welcome.games.find((g) => g.id === 'wizard').enabled, false);
+      assert.equal(welcome.guestLocked.includes('rejoin'), false);
+
+      await sleep(1100);
+      assert.equal(s.ws.readyState, WebSocket.OPEN, 'the connection remains open without activity');
+      const idle = [games, features, claims];
+      await sleep(120);
+      assert.deepEqual([games, features, claims], idle, 'an unused open socket does not keep either worker active');
+      s.send({ t: 'leave' });
+      await until(() => games > idle[0] && features > idle[1] && claims > idle[2], 'a message resumes both workers');
+    } finally {
+      release([]);
+      if (s) s.ws.terminate();
+      db.hasDatabase = hasDatabase;
+      try { if (server) await server.close(); } finally { restore.forEach((fn) => fn()); }
+    }
+  });
   console.log(`${passed} socket session checks passed`);
 })().catch((e) => { console.error(e); process.exit(1); });

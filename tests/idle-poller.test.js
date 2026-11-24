@@ -88,5 +88,49 @@ const MIN = 60 * 1000;
     assert.equal(reads, 3);
   });
 
+  await test('a touch at the staleness boundary waits for the same read as a fresh touch and an active tick', async () => {
+    const time = fakeTime(); let reads = 0; let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const poller = createIdlePoller({
+      run: () => { reads++; return gate; }, everyMs: 2 * MIN, staleMs: MIN, active: () => true, ...time,
+    });
+    poller.markFresh();
+    poller.start();
+    await time.advance(MIN - 1);
+    await poller.touch();
+    assert.equal(reads, 0, 'one millisecond before the deadline is still fresh');
+    await time.advance(1);
+    const stale = poller.touch();
+    const fresh = poller.touch();
+    let finished = false;
+    const both = Promise.all([stale, fresh]).then(() => { finished = true; });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(reads, 1, 'the deadline itself triggers a read');
+    await time.advance(MIN);
+    assert.equal(reads, 1, 'the active timer cannot start a second read before this one finishes');
+    assert.equal(finished, false);
+    assert.equal(fresh, stale, 'a fresh touch still waits for the current snapshot');
+    release();
+    await both;
+    await time.advance(2 * MIN);
+    assert.equal(reads, 2, 'the active timer reads again after the pending read finishes');
+  });
+
+  await test('starting twice or restarting after stop keeps only one interval', async () => {
+    const time = fakeTime(); let reads = 0;
+    const poller = createIdlePoller({
+      run: () => { reads++; }, everyMs: MIN, staleMs: MIN, active: () => true, ...time,
+    });
+    poller.start(); poller.start();
+    await time.advance(MIN);
+    assert.equal(reads, 1);
+    poller.stop(); poller.stop();
+    await time.advance(MIN);
+    assert.equal(reads, 1);
+    poller.start();
+    await time.advance(MIN);
+    assert.equal(reads, 2);
+  });
+
   console.log(`\n${passed} passed`);
 })();
