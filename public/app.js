@@ -3534,8 +3534,11 @@
     const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
     const gotTotals = cached && !cached.pending && !cached.failed ? cached : null; // only a successful final answer stops retries
     const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
-    const due = !f.totalsAsked || (Date.now() - f.totalsAsked.at >= 5000);
-    return { cached, gotTotals, waiting: Boolean(cached && cached.pending), tries, askNow: !gotTotals && due && tries < 3 };
+    const sinceAsk = f.totalsAsked ? Date.now() - f.totalsAsked.at : Infinity;
+    const waiting = Boolean(cached && cached.pending);
+    // A pending answer may take longer (the rebuild queue), so it gets more asks; the server answers each one on the socket.
+    const maxTries = waiting ? 6 : 3;
+    return { cached, gotTotals, waiting, sinceAsk, tries, maxTries, askNow: !gotTotals && sinceAsk >= 5000 && tries < maxTries };
   }
 
   /** The game-over ratings card for the current answer. */
@@ -3544,7 +3547,7 @@
     const xpRows = (r.outcome && r.outcome.xp) || [];
     const t = endTotalsState(f);
     // out of retries with only a pending answer: say so, rather than "updating" with nothing left to ask for
-    const gaveUp = !t.gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
+    const gaveUp = !t.gotTotals && !!f.totalsAsked && t.tries >= t.maxTries && t.sinceAsk >= 5000;
     const state = t.gotTotals ? 'ready' : (gaveUp ? 'unavailable' : (t.waiting ? 'pending' : 'loading'));
     return endRatingHTML(xpRows, statsGame(r.gameId).name, t.gotTotals && t.gotTotals.ratings ? t.gotTotals.ratings : {}, state);
   }

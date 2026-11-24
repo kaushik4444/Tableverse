@@ -131,8 +131,13 @@ let rebuildQueue = Promise.resolve(true); // rebuilds run one after another, nev
  * Queues a rebuild after a match has been committed. It never blocks or fails the game: errors are logged. Called only when
  * liveEnabled() is true. ratingsSettled() waits for the queue (used by the game-over answer, so it sees the new ratings).
  */
+// A rebuild that is queued but has not started yet. It reads every committed match when it starts, so a match committed
+// before that moment is covered by it: a second queued rebuild would only repeat the same work.
+let rebuildWaiting = null;
 function scheduleLiveRebuild() {
-  rebuildQueue = rebuildQueue.then(async () => {
+  if (rebuildWaiting) return;
+  const job = rebuildQueue.then(async () => {
+    rebuildWaiting = null; // started: a match committed from now on needs a rebuild of its own
     try {
       await rebuildRatings();
       return true;
@@ -141,6 +146,8 @@ function scheduleLiveRebuild() {
       return false;
     }
   });
+  rebuildWaiting = job;
+  rebuildQueue = job;
 }
 
 /** Resolves true when the latest queued rebuild succeeded, false when it failed (the stored ratings may then be stale). */
