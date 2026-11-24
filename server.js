@@ -306,8 +306,16 @@ function start(opts = {}) {
       headers: m.unsubscribeUrl ? { 'List-Unsubscribe': `<${m.unsubscribeUrl}>` } : {},
     }),
   }) : null;
+  // One retry, at the moment a held lease ends, when a run found a broadcast another run still holds. Not a poll: it is scheduled only
+  // when a lease exists, and a lease exists only while a broadcast is being sent (at most a few minutes, then it is claimed or done).
+  let leaseRetry = null;
   const kickBroadcasts = () => {
-    if (broadcastWorker) broadcastWorker.runOnce().catch((e) => (opts.log || console).error('[broadcast] sending failed: ' + e.message));
+    if (!broadcastWorker) return;
+    broadcastWorker.runOnce().then((r) => {
+      if (!r || r.retryInMs == null || leaseRetry) return;
+      leaseRetry = setTimeout(() => { leaseRetry = null; kickBroadcasts(); }, r.retryInMs + 2000);
+      if (leaseRetry.unref) leaseRetry.unref();
+    }).catch((e) => (opts.log || console).error('[broadcast] sending failed: ' + e.message));
   };
   // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
@@ -2348,6 +2356,9 @@ function start(opts = {}) {
         revokeSocket(ws, 4001, 'session ended');
       }
     } catch (err) {
+      // a database fault does not prove the session ended: keep the socket (and admit its messages, as before). A failed check still
+      // counts as the last attempt, so during a fault the next check comes one interval later, not one per message.
+      ws.sessionCheckedAt = Date.now();
       // a database fault does not prove the session ended: keep the socket and check again on the next interval
       wsLog.warn('session.check_failed', { connId: ws.connId, err });
     }
