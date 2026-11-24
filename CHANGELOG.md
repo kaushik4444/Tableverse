@@ -1,6 +1,15 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Friends: an action (refresh, add, accept) keeps the scroll position and does not jump back to the top or the Games tab. The page no longer repaints when nothing changed.
+- Game cards play their entrance animation once; they no longer replay on a redraw, and the home page no longer flickers.
+- Game over: the score card comes up sooner (about 2.5 s), the winner announcement is shown once (no duplicate pop-up beside the result sheet), and the card updates in place.
+- Carrom: the striker no longer shows black patches while it is dragged across the board.
+- Profile: the raw legacy "Highest score" is no longer shown; the rating-based figures are used.
+- Appearance: Dark (default), Light or Follow system, set in the Account tab and remembered on this device. Light mode covers the app chrome; games keep their own look.
+- How-to cards show a picture for each game (Carrom keeps its own board).
+- Public profiles: opening one profile and then another can no longer leave the second empty when the first answer arrives late.
+- Home page: when every game is switched off, or the game list cannot be loaded, the page says so instead of showing a loading placeholder forever.
 - What's new: a release note for Color Clash and Hidden Miners and the smaller phone buttons.
 - New game: Hidden Miners (3–8 players), Tableverse's own hidden-role tunnel game: build tunnels toward the gold, break and repair tools, scout and collapse, with secret Digger and Saboteur roles, round scoring and bots. Removed from the coming-soon list.
 - Coming soon list: Bullhead Run removed (it is Take 5, already playable); Bingo, Cup Pong, Sudoku and Falling Blocks added. Titles are working names; see `docs/PLANNED_GAMES.md` for name notes.
