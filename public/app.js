@@ -1578,6 +1578,8 @@
         S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
         if (m.code === 'guest_locked') { openAuthSheet('register', (m.feature && GUEST_LOCK_TEXT[m.feature]) || m.message || 'Create a free account to play this game.'); break; }
         toast(m.message);
+        // a refused leave means the profile this tap asked for must not open later, on some other leave
+        S.pendingPage = null;
         if (!S.room && hashCode()) setHash('');
         if (S.page === 'player') resyncPlayerBlock(true, m.message); // a refused block or unblock must not stay on the page
         break;

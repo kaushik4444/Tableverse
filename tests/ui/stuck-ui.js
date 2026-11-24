@@ -69,6 +69,24 @@ const player = (username, displayName) => ({ ok: true, profile: { username, disp
     srv.server.close();
   });
 
+  await test('a refused leave does not open the profile later, on some other leave', async () => {
+    const { tableMessages } = require('./harness');
+    const seats = [{ id: 'p0', name: 'Ann', username: 'ann' }, { id: 'p1', name: 'Bo', username: 'bo' }, { id: 'p2', name: 'Cy', username: 'cy' }];
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMessages('wizard', seats), viewport: { width: 390, height: 844 } });
+    await page.goto(url + '/');
+    await page.waitForSelector('[data-act="playerCard"][data-pid="p1"]', { timeout: 8000 });
+    await page.click('[data-act="playerCard"][data-pid="p1"]');
+    await page.click('[data-modal-act="cardProfile"]');
+    await page.click('[data-modal-act="cardProfileConfirm"]');
+    await page.waitForFunction(() => (window.__sent || []).some((m) => m && m.t === 'leave'), null, { timeout: 3000 });
+    await page.evaluate(() => window.__push({ t: 'error', message: 'You cannot leave right now.' }));
+    await page.waitForTimeout(200);
+    await page.evaluate(() => window.__push({ t: 'left' })); // a later, ordinary leave
+    await page.waitForTimeout(400);
+    assert.ok(!/#u\//.test(await page.evaluate(() => location.hash)), 'the refused leave opened the profile later');
+    await ctx.close();
+  });
+
   await browser.close();
   server.close();
   console.log(`\nstuck ui: ${passed} passed, ${failed} failed`);
