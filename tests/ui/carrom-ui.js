@@ -273,7 +273,10 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.goto(url + '/');
     await page.waitForSelector('.ht-overlay', { timeout: 8000 });
     const titles = [];
+    const expected = ['The board', 'Take the shot', 'Pocketing', 'The queen', 'The striker', 'Winning'];
     for (let i = 0; i < 6; i++) {
+      // wait for this card to be the one showing (a card that is still animating in or out would be read, or clicked, too early)
+      await page.waitForFunction((t) => (document.querySelector('.ht-overlay h2') || {}).textContent === t, expected[i], { timeout: 4000 });
       titles.push(await page.textContent('.ht-overlay h2'));
       assert.ok(await page.locator('.ht-overlay svg.cb-svg .cb-pocket').count() === 4, 'the card shows the real board with four pockets');
       const focused = await page.evaluate(() => document.activeElement && document.activeElement.dataset.ht);
@@ -281,7 +284,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
       assert.equal(await page.evaluate(() => document.querySelector('#app').hasAttribute('inert')), true, 'the game behind the card is inert');
       await page.click(i < 5 ? '[data-ht="next"]' : '[data-ht="done"]');
     }
-    assert.deepEqual(titles, ['The board', 'Take the shot', 'Pocketing', 'The queen', 'The striker', 'Winning']);
+    assert.deepEqual(titles, expected);
     assert.equal(await page.locator('.ht-overlay').count(), 0);
     assert.equal(await page.evaluate(() => document.querySelector('#app').hasAttribute('inert')), false);
     await ctx.close();
