@@ -3305,7 +3305,7 @@
     if (act && GATE_OPEN_ACTS.has(act.dataset.act)) return;
     e.stopPropagation(); e.preventDefault();
   };
-  ['pointerdown', 'mousedown', 'touchstart', 'click', 'keydown'].forEach((type) => $app.addEventListener(type, gateGuard, { capture: true, passive: false }));
+  ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'touchstart', 'touchmove', 'touchend', 'click', 'dblclick', 'keydown', 'keyup', 'dragstart'].forEach((type) => $app.addEventListener(type, gateGuard, { capture: true, passive: false }));
 
   /** The Ready bar: shown while the table waits for everybody to press Ready (the first round, and each round between). Generic for every game. */
   function placeReady() {

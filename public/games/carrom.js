@@ -256,7 +256,7 @@
     if (!e) { ui.anim = null; ui.seq = 0; return; } // a fresh match (Play again) has no shot yet: drop the old playback
     if (e.seq === ui.seq) return;
     ui.seq = e.seq;
-    ui.anim = { seq: e.seq, frames: e.keyframes, events: Array.isArray(e.events) ? e.events : [], nextEvent: 0, t0: null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0 };
+    ui.anim = { seq: e.seq, frames: e.keyframes, events: Array.isArray(e.events) ? e.events : [], nextEvent: 0, t0: null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0, setup: setupFor(e, v) };
     if (snd) snd.play('place');
     if (v.phase === 'gameOver' && snd) {
       const mine = colourOfMe(v);
@@ -265,6 +265,25 @@
       setTimeout(() => { if (ui.animTable === tableKey && ui.root && ui.root.isConnected) snd.play(sound); }, 900);
     }
     play(ui.anim);
+  }
+
+  /**
+   * Another seat's striker is shown first on its own bar, slid along the bar to the spot it was set on, and held there for a
+   * moment, so it never appears from off the board. A seat's own shot needs no setup: it already aimed from there.
+   * Bottom-frame coordinates; `move` and `ms` are in milliseconds.
+   */
+  function setupFor(e, v) {
+    if (v.me >= 0 && e.seat === v.me) return null;
+    const first = e.keyframes[0] && e.keyframes[0].d.find(([id]) => id === 'striker');
+    if (!first) return null;
+    return { from: [0.5, BASE_Y], to: [first[1], first[2]], move: 900, ms: 1250 };
+  }
+
+  /** The first frame of a shot as it is shown before playback starts: the striker still on its bar. */
+  function startFrame(a) {
+    const f0 = a.frames[0];
+    if (!a.setup) return f0;
+    return { t: 0, d: f0.d.map(([id, x, y]) => (id === 'striker' ? [id, a.setup.from[0], a.setup.from[1]] : [id, x, y])) };
   }
 
   /** Plays one shot's keyframes on the board, then redraws from the final view. Stops if a newer state has replaced it. */
@@ -305,11 +324,20 @@
     // the table left the page (the player went elsewhere): stop the shot instead of drawing into a detached tree
     if (!ui.root.isConnected) { ui.anim = null; return; }
     if (a.t0 === null) a.t0 = now;
-    const t = (now - a.t0) / 1000;
-    const pose = poseAt(a.frames, t);
+    const lead = a.setup ? a.setup.ms : 0; // the set-up slide and pause come before the keyframes
+    const elapsed = now - a.t0;
+    const inSetup = elapsed < lead;
+    const t = inSetup ? 0 : (elapsed - lead) / 1000;
+    let pose;
+    if (inSetup) {
+      const k = Math.min(1, elapsed / a.setup.move);
+      const e2 = k < 0.5 ? 2 * k * k : 1 - ((-2 * k + 2) ** 2) / 2; // ease in and out along the bar
+      const sx = a.setup.from[0] + (a.setup.to[0] - a.setup.from[0]) * e2, sy = a.setup.from[1] + (a.setup.to[1] - a.setup.from[1]) * e2;
+      pose = a.frames[0].d.map(([id, x, y]) => (id === 'striker' ? [id, sx, sy, 1] : [id, x, y, 1]));
+    } else pose = poseAt(a.frames, t);
     // a sound for each impact the server reported, when playback reaches its time
     const snd = window.CardTable.sound;
-    while (snd && a.nextEvent < a.events.length && a.events[a.nextEvent][0] <= t) {
+    while (!inSetup && snd && a.nextEvent < a.events.length && a.events[a.nextEvent][0] <= t) {
       const [at, kind, speed] = a.events[a.nextEvent++];
       // a late frame (background tab, slow device) skips impacts it is well past instead of bursting them out at once
       if (t - at > 0.2) continue;
@@ -328,7 +356,7 @@
       svg.querySelectorAll('[data-id]').forEach((el) => { if (!seen.has(el.dataset.id)) el.style.display = 'none'; });
     }
     // the app redraws the table (with its turn timer and toolbar) from the current state
-    if (t >= a.end + 0.25 || t > 25) { ui.anim = null; ui.ctx.rerender(); return; }
+    if (!inSetup && (t >= a.end + 0.25 || t > 25)) { ui.anim = null; ui.ctx.rerender(); return; }
     requestAnimationFrame((next) => { if (ui.anim === a) drawFrame(next, a); });
   }
 
@@ -345,7 +373,7 @@
     const playing = v.phase === 'playing' && v.me >= 0;
     // a resignation confirmation belongs to one match at one table: a new shot, a finished game or another table clears it
     if (ui.resignArmed && ui.armKey !== armKeyOf(v, ctx)) ui.resignArmed = false;
-    const frame = ui.anim ? ui.anim.frames[0] : null;
+    const frame = ui.anim ? startFrame(ui.anim) : null;
     root.innerHTML = `<div class="wz carrom-game" data-game="carrom">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.shots} shots</span></div>
         ${CardTable.toolbarSeed(`<button class="btn ghost small" data-cb="rules">Rules</button>${playing ? `<button class="btn ghost small" data-cb="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'cb')}</div>
@@ -382,7 +410,6 @@
   }
 
   /** The striker is grabbed within this distance of its spot on the board (display units). */
-  const STRIKER_GRAB = 0.06;
 
   /** Sets the aim from a pointer: the flick goes from the pointer towards the striker (pull back, let go). */
   function aimFrom([X, Y]) {
@@ -477,9 +504,10 @@
     }
     const svg = e.target.closest('.cb-svg');
     if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
+    // the striker is set only from the slider under the board; a drag on the board pulls the aim back, never moves the striker
+    ui.mode = 'aim';
     const p = pointerDisplay(e);
-    ui.mode = p && onStriker(p) ? 'place' : 'aim';
-    if (ui.mode === 'aim' && p) aimFrom(p);
+    if (p) aimFrom(p);
   }
 
   /** The striker's spot along the baseline (0.2 to 0.8) for a pointer on the slider track under the board. */
@@ -488,11 +516,6 @@
     if (!track) return ui.aim.x / 100;
     const r = track.getBoundingClientRect();
     return 0.2 + 0.6 * Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1)));
-  }
-
-  /** The striker is grabbed when the pointer is on it (display coordinates). */
-  function onStriker([X, Y]) {
-    return Math.hypot(X - ui.aim.x / 100, Y - BASE_Y) <= STRIKER_GRAB;
   }
 
   /** Moves the striker along the baseline. A new spot needs a new aim, so the aim is cleared when it moves. */
@@ -510,7 +533,7 @@
     if (ui.mode === 'slide') { placeAt(sliderX(e)); return; }
     const p = pointerDisplay(e);
     if (!p) return;
-    if (ui.mode === 'place') placeAt(p[0]); else aimFrom(p);
+    aimFrom(p);
   }
 
   /** Releasing an aim drag flicks with the aim it ends on. Placing the striker never flicks. A tap only sets the aim, and a cancelled pointer never flicks. */

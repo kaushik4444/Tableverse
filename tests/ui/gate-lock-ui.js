@@ -26,14 +26,28 @@ const people = [{ name: 'Aarav' }, { name: 'Bo' }];
   };
   const acts = (page) => page.evaluate(() => (window.__sent || []).filter((m) => m.t === 'act').length);
   try {
-    await test('carrom: a flick on the board is not sent before Ready', async () => {
-      const { page, ctx } = await open(waiting('carrom'));
-      try {
-        const tr = await page.evaluate(() => { const b = document.querySelector('.cb-board').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height * 0.85 }; });
-        await page.mouse.move(tr.x, tr.y); await page.mouse.down(); await page.mouse.move(tr.x, tr.y - 120, { steps: 8 }); await page.mouse.up();
+    await test('carrom: setting the striker and pulling it send nothing before Ready; after Ready the same pull is sent', async () => {
+      const pull = async (page) => {
+        const st = await page.evaluate(() => { const s = document.querySelector('.cb-svg [data-id="striker"]'); if (!s) return null; const b = s.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+        if (!st) return 'no striker';
+        await page.mouse.move(st.x, st.y); await page.mouse.down(); await page.mouse.move(st.x, st.y + 70, { steps: 8 }); await page.mouse.up();
         await page.waitForTimeout(200);
-        assert.equal(await acts(page), 0, 'an action was sent while Ready is pending');
-      } finally { await ctx.close(); }
+        return 'ok';
+      };
+      const locked = await open(waiting('carrom'));
+      try {
+        const before = await locked.page.evaluate(() => document.querySelector('[data-slider]').getAttribute('aria-valuenow'));
+        const tr = await locked.page.evaluate(() => { const b = document.querySelector('.cb-track').getBoundingClientRect(); return { l: b.left, r: b.right, y: b.top + b.height / 2 }; });
+        await locked.page.mouse.click(tr.l + 4, tr.y); await locked.page.waitForTimeout(150);
+        assert.equal(await locked.page.evaluate(() => document.querySelector('[data-slider]').getAttribute('aria-valuenow')), before, 'the striker moved on the slider before Ready');
+        assert.equal(await pull(locked.page), 'ok');
+        assert.equal(await acts(locked.page), 0, 'a flick was sent while Ready is pending');
+      } finally { await locked.ctx.close(); }
+      const ready = await open(waiting('carrom', ['me']));
+      try {
+        assert.equal(await pull(ready.page), 'ok');
+        assert.equal(await acts(ready.page), 1, 'after Ready, the pull should be sent as a flick (proves the test can see a flick)');
+      } finally { await ready.ctx.close(); }
     });
     await test('wizard: a card press is not sent before Ready, and the Ready button blinks', async () => {
       const { page, ctx } = await open(waiting('wizard'));
