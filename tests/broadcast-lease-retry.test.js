@@ -3,6 +3,7 @@
 // server can try again then. Without a held lease, nothing is scheduled.
 const assert = require('node:assert/strict');
 const { createBroadcastWorker } = require('../lib/broadcast');
+const { leaseDelayFrom } = require('../db/broadcast');
 
 let passed = 0;
 async function test(name, fn) {
@@ -32,6 +33,17 @@ function store(overrides = {}) {
     const s = store(); delete s.leaseRetryMs;
     const w = createBroadcastWorker({ store: s, deliver: async () => {}, logger: { error() {} } });
     assert.deepEqual(await w.runOnce(), { idle: true, retryInMs: null });
+  });
+
+  await test('an empty table (no lease at all) gives no delay: a NULL minimum is not turned into a retry at 0', async () => {
+    assert.equal(leaseDelayFrom({ ms: null }), null);
+    assert.equal(leaseDelayFrom({ ms: undefined }), null);
+    assert.equal(leaseDelayFrom(undefined), null);
+  });
+
+  await test('a held lease gives its remaining time (the database may return a numeric string); an expired one is 0', async () => {
+    assert.equal(leaseDelayFrom({ ms: '240000.5' }), 240000.5);
+    assert.equal(leaseDelayFrom({ ms: -10 }), 0);
   });
 
   console.log(`\n${passed} passed`);

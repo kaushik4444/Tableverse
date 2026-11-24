@@ -49,7 +49,7 @@ const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
 const { debugTokensEnabled, assertSafeDebugConfig } = require('./lib/debugTokens');
 const { createReadinessCheck } = require('./lib/health');
-const { createIdlePoller } = require('./lib/idlePoller'); // background database reads that only run while somebody is connected
+const { createIdlePoller, retryWithBackoff } = require('./lib/idlePoller'); // background database reads that only run while somebody is connected
 const { createAnalytics, lengthBucket } = require('./lib/analytics');
 const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
@@ -222,6 +222,7 @@ function start(opts = {}) {
   }
   let purgeTimer = null;
   let spoolTimer = null;
+  let flagRetry = null; // retries a failed first read of the switches (bounded)
   let flagPoller = null; // re-reads the owner's switches while somebody is connected (lib/gameFlags.js, lib/idlePoller.js)
   let flagsStopped = false;
   let flagsReady = Promise.resolve(); // resolves after the first switch read, so no game starts before the switches are known
@@ -309,14 +310,21 @@ function start(opts = {}) {
   // One retry, at the moment a held lease ends, when a run found a broadcast another run still holds. Not a poll: it is scheduled only
   // when a lease exists, and a lease exists only while a broadcast is being sent (at most a few minutes, then it is claimed or done).
   let leaseRetry = null;
-  const kickBroadcasts = () => {
-    if (!broadcastWorker) return;
-    broadcastWorker.runOnce().then((r) => {
-      if (!r || r.retryInMs == null || leaseRetry) return;
-      leaseRetry = setTimeout(() => { leaseRetry = null; kickBroadcasts(); }, r.retryInMs + 2000);
-      if (leaseRetry.unref) leaseRetry.unref();
-    }).catch((e) => (opts.log || console).error('[broadcast] sending failed: ' + e.message));
-  };
+  // A failed run (the database did not answer) is retried a few times with a growing delay, then left to the periodic poller.
+  const kickFailures = retryWithBackoff(() => {
+    if (!broadcastWorker) return true;
+    return broadcastWorker.runOnce().then((r) => {
+      if (r && r.retryInMs != null && !leaseRetry) {
+        leaseRetry = setTimeout(() => { leaseRetry = null; kickBroadcasts(); }, r.retryInMs + 2000);
+        if (leaseRetry.unref) leaseRetry.unref();
+      }
+      return true;
+    }, (e) => {
+      (opts.log || console).error('[broadcast] sending failed: ' + e.message);
+      return false;
+    });
+  }, [60 * 1000, 2 * 60 * 1000, 5 * 60 * 1000]);
+  const kickBroadcasts = () => { void kickFailures.run(); };
   // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
@@ -2463,7 +2471,8 @@ function start(opts = {}) {
           wsLog.error('game.handler_failed', { connId: ws.connId, type: msg.t, room: p.room || null, err: e });
           // A block or unblock that fails before its write (a name lookup, a list fetch) gets its own failure message, so the
           // profile page releases its "Saving…" lock and checks the server again, as it does for a failed write.
-          sendError(p, msg.t === 'block' ? BLOCK_SAVE_FAILED : msg.t === 'unblock' ? UNBLOCK_SAVE_FAILED : 'Something went wrong');
+          if (msg.t === 'leave') send(p.ws, { t: 'error', code: 'leave_failed', message: 'Could not leave the table. Try again.' });
+          else sendError(p, msg.t === 'block' ? BLOCK_SAVE_FAILED : msg.t === 'unblock' ? UNBLOCK_SAVE_FAILED : 'Something went wrong');
         }
       };
       // one message at a time per socket: a join that waits for the database must finish before the next message
@@ -2573,6 +2582,8 @@ function start(opts = {}) {
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
     if (flagPoller) flagPoller.stop();
+    if (flagRetry) flagRetry.stop();
+    kickFailures.stop();
     flagsStopped = true; // a read still in flight must not publish after shutdown
     unsubscribeGames();
     if (broadcastPoller) broadcastPoller.stop();
@@ -2617,22 +2628,27 @@ function start(opts = {}) {
         // a new server lifecycle in this process starts with no snapshot: a failed first read must not leave the last one in force
         gameFlags.reset();
         guestFeatures.reset();
+        // resolves true when the read worked; a failure is logged and reported as false (never thrown)
         const refreshFlags = () => {
-          if (flagsStopped) return Promise.resolve();
+          if (flagsStopped) return Promise.resolve(true);
           const token = gameFlags.begin(); // reads are applied in the order they started
           const gToken = guestFeatures.begin();
           const guestRead = dbAdmin.listGuestFeatures ? dbAdmin.listGuestFeatures().then((rows) => { if (!flagsStopped) guestFeatures.apply(rows, gToken); }) : Promise.resolve();
           return Promise.all([dbAdmin.listGameFlags().then((rows) => { if (!flagsStopped) gameFlags.apply(rows, token); }), guestRead])
-            .catch((e) => (opts.log || console).error('[games] switches not loaded (games stay unavailable until they are): ' + e.message));
+            .then(() => true, (e) => {
+              (opts.log || console).error('[games] switches not loaded (games stay unavailable until they are): ' + e.message);
+              return false;
+            });
         };
+        // a failed first read is retried on a short schedule; the snapshot is only marked fresh once a read has worked
+        flagRetry = retryWithBackoff(refreshFlags, [30 * 1000, 60 * 1000, 2 * 60 * 1000, 4 * 60 * 1000, 5 * 60 * 1000]);
         unsubscribeGames = gameFlags.onChange(broadcastGames); // connected players get the new list at once
-        flagsReady = refreshFlags();
         // Not a plain interval: with nobody connected this process must not query Neon (it could never autosuspend). While sockets
         // are open it reads every backgroundReadMs, and the first connection after a quiet spell reads at once when the snapshot is
         // older than backgroundStaleMs. A change made in this process is applied immediately and does not wait for any of this.
         flagPoller = createIdlePoller({ run: refreshFlags, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: siteInUse });
-        flagPoller.markFresh();
         flagPoller.start();
+        flagsReady = flagRetry.run().then((ok) => { if (ok && flagPoller) flagPoller.markFresh(); });
       }
       // old rate-limit rows, expired sessions and used tokens: once now, then every 6 hours (best effort)
       const purge = () => dbAuth.purgeExpired().catch((e) => (opts.log || console).error('[auth] housekeeping failed: ' + e.message));

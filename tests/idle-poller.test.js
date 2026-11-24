@@ -2,7 +2,7 @@
 // Background database reads must follow use: nothing runs while nobody is connected (so Neon can autosuspend), the first
 // connection after a quiet spell reads at once when the snapshot is stale, and reads never overlap.
 const assert = require('node:assert/strict');
-const { createIdlePoller } = require('../lib/idlePoller');
+const { createIdlePoller, retryWithBackoff } = require('../lib/idlePoller');
 
 let passed = 0;
 async function test(name, fn) {
@@ -31,6 +31,15 @@ function fakeTime() {
   };
 }
 const MIN = 60 * 1000;
+
+/** The fake clock's timers repeat (for intervals); a one-shot timer removes itself the first time it fires. */
+function oneShot(time) {
+  return {
+    now: time.now,
+    setTimer: (fn, ms) => { const id = time.setTimer(() => { time.clearTimer(id); fn(); }, ms); return id; },
+    clearTimer: time.clearTimer,
+  };
+}
 
 (async () => {
   await test('idle for a whole day: not one read, however many ticks pass', async () => {
@@ -151,6 +160,44 @@ const MIN = 60 * 1000;
     await time.advance(1);
     await poller.touch();
     assert.equal(attempts, 2, 'a connection can retry without waiting for a periodic read');
+  });
+
+  await test('a failed first read retries a bounded number of times, then stops', async () => {
+    const time = fakeTime(); let tries = 0;
+    const r = retryWithBackoff(async () => { tries++; return false; }, [1000, 2000], oneShot(time));
+    assert.equal(await r.run(), false);
+    await time.advance(1000);
+    await time.advance(2000);
+    await time.advance(10 * MIN);
+    assert.equal(tries, 3, 'the first attempt plus two retries, then nothing');
+  });
+
+  await test('a retry that works ends the sequence; a later failure starts a fresh sequence', async () => {
+    const time = fakeTime(); let tries = 0; let works = false;
+    const r = retryWithBackoff(async () => { tries++; return works; }, [1000, 2000], oneShot(time));
+    await r.run();
+    works = true;
+    await time.advance(1000);
+    assert.equal(tries, 2);
+    await time.advance(10 * MIN);
+    assert.equal(tries, 2, 'no further attempts after success');
+    works = false;
+    await r.run();
+    await time.advance(1000);
+    assert.equal(tries, 4, 'a new failure gets the full sequence again');
+  });
+
+  await test('a throw counts as a failure; run() replaces a pending retry instead of adding one', async () => {
+    const time = fakeTime(); let tries = 0;
+    const r = retryWithBackoff(async () => { tries++; throw new Error('down'); }, [1000], oneShot(time));
+    await r.run();
+    assert.equal(time.timers(), 1);
+    await r.run();
+    assert.equal(time.timers(), 1, 'one pending retry, not two');
+    r.stop();
+    assert.equal(time.timers(), 0);
+    await time.advance(10 * MIN);
+    assert.equal(tries, 2);
   });
 
   console.log(`\n${passed} passed`);
