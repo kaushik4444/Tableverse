@@ -120,6 +120,42 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('at 360×640 a full hand fits on one line and each bomb is visible', async () => {
+    const msgs = tableMessages('penaltyrows', four);
+    const penalties = [1, 2, 3, 4, 5, 6, 7, 5, 2, 1];
+    msgs[1].view.hand = penalties.map((p, i) => ({ n: i + 1, p }));
+    const { page, ctx } = await open(msgs, { width: 360, height: 640 });
+    try {
+      const cards = await page.locator('.pr-hand .pr-card').evaluateAll((cards) => cards.map((card) => {
+        const { top, left, right, bottom } = card.getBoundingClientRect();
+        const pips = card.querySelector('.pr-pips');
+        const bounds = pips.getBoundingClientRect();
+        const text = pips.firstChild;
+        const range = document.createRange();
+        let offset = 0;
+        let visible = 0;
+        for (const bomb of text.data) {
+          range.setStart(text, offset);
+          offset += bomb.length;
+          range.setEnd(text, offset);
+          const rect = range.getBoundingClientRect();
+          const y = (rect.top + rect.bottom) / 2;
+          if (rect.left >= bounds.left && rect.right <= bounds.right &&
+              [rect.left + 0.25, rect.right - 0.25].every((x) => card.contains(document.elementFromPoint(x, y)))) {
+            visible++;
+          }
+        }
+        return { top, left, right, bottom, visible };
+      }));
+      assert.deepEqual(cards.map(({ visible }) => visible), penalties, 'all bombs clear the clip edge and adjacent cards');
+      assert.equal(new Set(cards.map(({ top }) => top)).size, 1, 'ten cards stay on one line');
+      assert.ok(cards.every(({ top, left, right, bottom }) => top >= 0 && left >= 0 && right <= 360 && bottom <= 640),
+        'the entire hand is inside the viewport');
+    } finally {
+      await ctx.close();
+    }
+  });
+
   await test('phone scores sit above the board and wrap only when a fifth player joins', async () => {
     const roster = [...four, ...['Eli', 'Fay', 'Gia', 'Hugo'].map((name) => ({ name }))];
     for (const [players, expectedRows] of [[4, [4]], [5, [4, 1]], [8, [4, 4]]]) {

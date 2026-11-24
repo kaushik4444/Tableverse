@@ -177,6 +177,10 @@
 @media (max-width: 520px) and (max-height: 700px) {
   .prt .pr-hand .pr-card { width: 42px; }
   .prt .pr-hand .pr-card + .pr-card { margin-left: -16px; } /* the hand overlaps into one row */
+  /* The 5px hand gap leaves 11px of overlap. Wrap bombs in the exposed part of the card. */
+  .prt .pr-hand .pr-card b { margin-top: 0; }
+  .prt .pr-hand .pr-pips { right: 11px; font-size: 7px; white-space: normal; overflow-wrap: anywhere; }
+  .prt .pr-hand .pr-pips.pips-3 { font-size: 5.5px; }
 }
 /* up to five bombs must stay inside the badge on a phone */
 @media (max-width: 520px) {
