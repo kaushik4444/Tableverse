@@ -46,6 +46,29 @@ const player = (username, displayName) => ({ ok: true, profile: { username, disp
     await ctx.close();
   });
 
+  await test('a signed-in player with every game switched off sees a clear message, not a loading skeleton', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: [] })], viewport: { width: 390, height: 844 } });
+    await page.goto(url + '/');
+    await page.waitForFunction(() => /No games are open right now/.test(document.querySelector('#app').textContent), null, { timeout: 5000 });
+    assert.equal(await page.$('.game-card.sk'), null, 'the loading skeleton is still shown');
+    await ctx.close();
+  });
+
+  await test('a signed-out visitor whose game list fails sees an error, not a loading skeleton forever', async () => {
+    const anon = { ok: true, authenticated: false, emailVerificationRequired: false, csrfToken: 'c' };
+    const srv = await serve({
+      'GET /api/auth/session': () => anon,
+      'GET /api/auth/csrf': () => ({ csrfToken: 'c' }),
+      'GET /api/games': () => ({ __status: 500, body: { ok: false, error: 'boom' } }),
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages: [] });
+    await page.goto(srv.url + '/');
+    await page.waitForFunction(() => /Could not load the games/.test(document.querySelector('#app').textContent), null, { timeout: 8000 });
+    assert.equal(await page.$('.game-card.sk'), null, 'the loading skeleton is still shown');
+    await ctx.close();
+    srv.server.close();
+  });
+
   await browser.close();
   server.close();
   console.log(`\nstuck ui: ${passed} passed, ${failed} failed`);

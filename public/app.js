@@ -29,6 +29,8 @@
     name: store.get('ct_name') || '',
     username: store.get('ct_username') || '',
     games: [],
+    gamesLoaded: false, // the game list has arrived at least once (an empty list is then an answer, not a loading state)
+    gamesFailed: false, // the guest request for the list failed and nothing has arrived since
     room: null,
     view: null,
     ready: false,
@@ -1254,6 +1256,7 @@
       const out = await r.json();
       if (out && out.ok) {
         S.games = out.games || [];
+        S.gamesLoaded = true; S.gamesFailed = false;
         S.guestPlay = out.guestPlay === true;
         if (Number(out.guestHours) > 0) S.guestHours = Number(out.guestHours);
         syncGuestOption();
@@ -1262,8 +1265,8 @@
         // signed-out visitors get the publication flag here (they have no welcome); only a real boolean may change it
         applyLegal(out);
         syncImpressumLink();
-      }
-    } catch { /* offline: the home screen still renders, just without live data */ }
+      } else if (!S.gamesLoaded) S.gamesFailed = true; // the server answered with an error: say so, do not show a loading state forever
+    } catch { S.gamesFailed = !S.gamesLoaded; /* offline: the home screen still renders; the game list says so instead of loading forever */ }
     render();
     loadBanners();
   }
@@ -1393,6 +1396,7 @@
       case 'games': {
         // the owner switched a game on or off: the home page and the create buttons update at once
         S.games = m.games;
+        S.gamesLoaded = true; S.gamesFailed = false;
         render();
         break;
       }
@@ -1417,6 +1421,7 @@
         S.guest = false;
         refreshLevel(); // detect levels only after welcome confirms the signed-in account
         S.games = m.games;
+        S.gamesLoaded = true; S.gamesFailed = false;
         S.publicTables = m.tables || [];
         S.rejoin = m.rejoin || [];
         S.announcement = typeof m.announcement === 'string' ? m.announcement : '';
@@ -2940,7 +2945,10 @@
         ${publicTablesHTML()}
         <section class="home-section" id="games">
           <h2 class="section">Games</h2>
-          ${tiles ? `<div class="game-grid">${tiles}</div>` : loadingBlock('Loading games…') + '<div class="game-grid skeleton" aria-hidden="true">' + '<div class="game-card sk"><i></i><b></b><span></span></div>'.repeat(4) + '</div>'}
+          ${tiles ? `<div class="game-grid">${tiles}</div>`
+            : S.gamesFailed ? '<p class="game-off" role="status">Could not load the games. Check your connection, then reload the page.</p>'
+            : S.gamesLoaded ? '<p class="game-off" role="status">No games are open right now.</p>'
+            : loadingBlock('Loading games…') + '<div class="game-grid skeleton" aria-hidden="true">' + '<div class="game-card sk"><i></i><b></b><span></span></div>'.repeat(4) + '</div>'}
         </section>
       </div>
       ${comingSoonHTML()}

@@ -31,7 +31,7 @@ const table = (code) => ({ code, gameId: 'wizard', host: 'Bo', seats: 4, members
 
   // the open tables are on the games page (the friends page does not show them, so a change there is correctly not a redraw)
   await test('an identical directory update does not rebuild the screen; a changed one does', async () => {
-    const { page, ctx } = await open('#', '.game-grid');
+    const { page, ctx } = await open('#', '#app .game-off, #app .game-grid'); // with no games the home page shows its empty-state line
     const push = (tables) => page.evaluate((t) => window.__push({ t: 'tables', tables: t, rejoin: [] }), tables);
     await push([table('AAAAAA')]);
     await page.waitForTimeout(60);
