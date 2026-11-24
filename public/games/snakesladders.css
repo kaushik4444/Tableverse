@@ -14,16 +14,18 @@
 .sl-sq i { position: absolute; z-index: 2; left: 3px; top: 1px; font-style: normal; font-size: clamp(9px, 2.4vw, 13px); font-weight: 700; color: #5c5640; line-height: 1.2; text-shadow: 0 0 2px #fffdf6, 0 0 2px #fffdf6; }
 .sl-art { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .78; }
 .sl-ladder { fill: none; stroke: #9a6a2f; stroke-width: .8; stroke-linecap: round; opacity: .92; }
-.sl-snake .body { fill: var(--snake, #4e8f3a); stroke: var(--snake-dk, #24421b); stroke-width: .25; stroke-linejoin: round; }
-.sl-snake .blotch > * { fill: var(--snake-spot, #1f3b17); opacity: .55; }
-.sl-snake .blotch .band { fill: none; stroke: var(--snake-spot, #1f3b17); stroke-width: .5; stroke-linecap: round; opacity: .6; }
-.sl-snake .head { fill: var(--snake, #4e8f3a); stroke: var(--snake-dk, #24421b); stroke-width: .3; }
-.sl-snake .eye { fill: #f6f1c4; stroke: #1b1b1b; stroke-width: .15; }
-.sl-snake .pupil { fill: #111; }
-.sl-snake .tongue { fill: none; stroke: #d6334a; stroke-width: .3; stroke-linecap: round; stroke-linejoin: round; }
-.sl-s1 { --snake: #4e8f3a; --snake-dk: #24421b; --snake-spot: #1d3a16; }   /* green */
-.sl-s2 { --snake: #c9a04a; --snake-dk: #6b4c1c; --snake-spot: #6b4a1a; }   /* sand */
-.sl-s3 { --snake: #a4543a; --snake-dk: #5b2a1b; --snake-spot: #4a1f14; }   /* rust */
+.sl-snake { filter: drop-shadow(0 1.2px 1.2px rgba(0, 0, 0, .4)); }
+.sl-snake .body { fill: var(--snake); stroke: var(--snake-dk); stroke-width: .5; stroke-linejoin: round; }
+.sl-snake .sheen { fill: none; stroke: #fff; stroke-width: .4; stroke-linecap: round; opacity: .22; }
+.sl-snake .head { fill: var(--snake); stroke: var(--snake-dk); stroke-width: .5; stroke-linejoin: round; }
+.sl-snake .mouth { fill: none; stroke: #1a0a0a; stroke-width: .3; stroke-linecap: round; }
+.sl-snake .eye { fill: #fffdf4; stroke: #0b0b0b; stroke-width: .3; }
+.sl-snake .pupil { fill: #0b0b0b; }
+.sl-snake .shine { fill: #fff; }
+.sl-snake .brow { fill: none; stroke: #0b0b0b; stroke-width: .75; stroke-linecap: round; }
+.sl-s1 { --snake: #4f7a2a; --snake-dk: #14230c; --snake-hi: #e3ef9a; }   /* green, pale-lime zigzag */
+.sl-s2 { --snake: #c8621b; --snake-dk: #3a1a07; --snake-hi: #ffd98a; }   /* orange, pale-gold zigzag */
+.sl-s3 { --snake: #7d3340; --snake-dk: #2a0d12; --snake-hi: #f6eedc; }   /* maroon, cream zigzag */
 .sl-token { position: absolute; z-index: 3; width: 5%; height: 5%; min-width: 14px; min-height: 14px; border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid #fff; box-shadow: 0 2px 5px #0005; transition: left .42s ease-in-out, top .42s ease-in-out; }
 .sl-token::after { content: ''; position: absolute; inset: 18%; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff9 0 12%, #0000 45%, #0003 100%); pointer-events: none; }
 .sl-token.hop { animation: sl-hop .48s ease-out; }

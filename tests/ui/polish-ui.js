@@ -101,23 +101,24 @@ const profile = { ok: true, profile: { username: 'aarav', displayName: 'Aarav', 
     await ctx.close();
   });
 
-  await test('the striker drag takes the drop shadow off the board, and it returns on release', async () => {
+  await test('the striker drag keeps the flat shade on the board and uses no SVG filter', async () => {
     const g = E.createGame([{ id: 'p0', name: 'Ann' }, { id: 'p1', name: 'Bo' }]);
     const m = tableMessages('carrom', [{ id: 'p0', name: 'Ann' }, { id: 'p1', name: 'Bo' }]);
     m[1].view = E.viewFor(g, 'p0');
     const { page, ctx } = await scriptedPage(browser, { messages: [m[0], m[1]], viewport: { width: 390, height: 844 } });
     await page.goto(url + '/');
     await page.waitForSelector('.cb-svg');
-    const hasShadow = () => page.evaluate(() => document.querySelector('.cb-svg > g[data-shadow]').getAttribute('filter'));
-    assert.equal(await hasShadow(), 'url(#cb-shadow)');
+    const hasShadow = () => page.evaluate(() => document.querySelectorAll('.cb-svg .cb-shade').length > 0);
+    assert.equal(await hasShadow(), true);
     const b = await page.locator('.cb-striker').first().boundingBox();
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     await page.mouse.down();
     await page.mouse.move(b.x + b.width / 2 + 20, b.y + b.height / 2, { steps: 3 });
-    assert.equal(await hasShadow(), null, 'the filter is still on during the drag');
+    assert.equal(await page.evaluate(() => document.querySelector('.cb-svg > g[data-shadow]').hasAttribute('filter')), false, 'no SVG filter is used during the drag');
+    assert.equal(await hasShadow(), true, 'the shade stays on the board during the drag');
     await page.mouse.up();
     await page.waitForTimeout(100);
-    assert.equal(await hasShadow(), 'url(#cb-shadow)', 'the shadow did not come back after the drag');
+    assert.equal(await hasShadow(), true, 'the shade is still drawn after the drop');
     await ctx.close();
   });
 

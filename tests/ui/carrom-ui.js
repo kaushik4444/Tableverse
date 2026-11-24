@@ -113,7 +113,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
-  await test('dragging the striker along the baseline places it without a shot, and a new spot clears the aim', async () => {
+  await test('the striker is set only from the bottom slider: a drag on the board pulls the aim and never moves it, and a new spot clears the aim', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
     const before = Number(await page.getAttribute('.cb-striker', 'cx'));
     const s = await box(page, '.cb-striker');
@@ -122,8 +122,12 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.mouse.down();
     await page.mouse.move(sx + 60, sy, { steps: 6 });
     await page.mouse.up();
-    const after = Number(await page.getAttribute('.cb-striker', 'cx'));
-    assert.ok(after > before, `the striker moved right (${before} → ${after})`);
+    assert.equal(Number(await page.getAttribute('.cb-striker', 'cx')), before, 'a drag on the board must not move the striker');
+    assert.equal((await sent(page)).length, 0, 'a drag that does not release a pull is not a shot');
+    const tr = await box(page, '.cb-track');
+    await page.mouse.click(tr.x + tr.width * 0.75, tr.y + tr.height / 2);
+    const moved = Number(await page.getAttribute('.cb-striker', 'cx'));
+    assert.ok(moved > before, `the slider moved the striker right (${before} → ${moved})`);
     assert.equal((await sent(page)).length, 0, 'placing the striker is not a shot');
     assert.match(await page.textContent('.cb-tip'), /Drag your striker along the baseline/, 'the aim was cleared by the move');
     await ctx.close();
