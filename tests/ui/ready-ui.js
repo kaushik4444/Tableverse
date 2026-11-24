@@ -44,7 +44,9 @@ function atPhase(gameId, n, phase) {
   for (const [gameId, n, phase, selector, label] of cases) {
     await test(`${label}: its button is Ready and sends the ready message`, async () => {
       const { g, extras } = atPhase(gameId, n, phase);
-      const m = tableMessages(gameId, extras);
+      // the server opens the gate at a round boundary: until everybody presses Ready, the summary is waiting for them
+      const ids = extras.map((x, i) => (i === 0 ? 'me' : 'p' + i));
+      const m = tableMessages(gameId, extras, { roomExtra: { status: 'playing', gate: { ready: [], waiting: ids } } });
       m[1].view = g.view('me');
       const { page, ctx } = await scriptedPage(browser, { messages: m, viewport: { width: 393, height: 852 } });
       await page.goto(url + '/');
