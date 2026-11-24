@@ -177,7 +177,7 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 .profile-hint { font-size: 12px; color: var(--muted); }
 .av-picks { display: flex; flex-wrap: wrap; gap: 6px; }
 .av-pick {
-  width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent;
+  width: 44px; height: 44px; border-radius: 50%; border: 2px solid transparent;
   background: rgba(0, 0, 0, .25); font-size: 22px; line-height: 1;
   display: grid; place-items: center; padding: 0;
   transition: transform .1s, border-color .15s;
@@ -559,7 +559,7 @@ html { scroll-behavior: auto; }
 }
 
 /* Friend names are buttons (keyboard and screen-reader reachable) that read as text. */
-button.friend-name { border: 0; background: none; padding: 0; margin: 0; font: inherit; font-weight: 700; text-align: left; }
+button.friend-name { border: 0; background: none; padding: 0; margin: 0; font: inherit; font-weight: 700; text-align: left; min-height: 44px; display: flex; align-items: center; } /* a 44px tap target; the text stays where it was */
 button.fs-chip { border: 0; color: var(--ink); font: inherit; font-size: 13px; min-height: 34px; }
 button.fs-chip:hover { background: rgba(255,255,255,.14); }
 button.friend-name:focus-visible, button.fs-chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 8px; }

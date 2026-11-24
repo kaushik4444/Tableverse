@@ -466,6 +466,7 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }
 .ht-art { display: grid; place-items: center; margin: 6px 0 12px; min-height: 64px; }
+.ht-art svg.ht-svg { width: min(100%, 300px); height: auto; max-height: 190px; border-radius: 14px; }
 .ht-art svg.cb-svg { width: min(100%, 250px); height: auto; border-radius: 14px; }
 .ht-mark { font-size: 64px; line-height: 1; display: inline-block; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .35)); }
 .ht-sheet .rule { text-align: left; margin: 0 0 6px; }
