@@ -1,5 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
 const e = require('../games/hiddenminers/engine');
 const plugin = require('../games/hiddenminers');
 const registry = require('../games');
@@ -292,6 +294,71 @@ test('pacing: a move holds the table for a moment, and a round end holds it long
   e.applyAction(g, pid, { type: 'discard', card: 'dd' });
   const move = pacing.remaining(g);
   assert.ok(move > 1000 && move <= 1600, `a move holds about 1.6s (got ${move})`);
+});
+
+function renderTunnelCards(cards) {
+  let renderer;
+  const CardTable = {
+    esc: String,
+    toolbarSeed: (html) => html,
+    register: (id, value) => { if (id === 'hiddenminers') renderer = value; },
+  };
+  const filename = require.resolve('../public/games/hiddenminers.js');
+  vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
+    window: { CardTable }, CardTable, document: { activeElement: null },
+  }, { filename });
+  assert.ok(renderer, 'Hidden Miners renderer registered');
+  const root = { querySelector: () => null };
+  const view = e.viewFor(fresh(4, {}, 47), 'p0');
+  renderer.render(root, { ...view, board: [], hand: cards }, {});
+  const tiles = root.innerHTML.match(/<svg class="hm-tile\b[^>]*>[\s\S]*?<\/svg>/g) || [];
+  assert.equal(tiles.length, cards.length, 'each card renders one tunnel tile');
+  return tiles;
+}
+
+test('renderer: carved passages meet only the indicated edges, while dead ends stop before the center', () => {
+  const sides = [
+    { bit: 1, edge: [50, 0], stop: [50, 30] },
+    { bit: 2, edge: [100, 50], stop: [70, 50] },
+    { bit: 4, edge: [50, 100], stop: [50, 70] },
+    { bit: 8, edge: [0, 50], stop: [30, 50] },
+  ];
+  const masks = Array.from({ length: 15 }, (_, i) => i + 1);
+  const cards = [false, true].flatMap((cut) => masks.map((mask) => tile(`tile-${cut}-${mask}`, mask, cut)));
+  renderTunnelCards(cards).forEach((svg, i) => {
+    const { mask, cut } = cards[i];
+    const label = `mask ${mask}, dead end ${cut}`;
+    const path = (layer) => svg.match(new RegExp(`<path class="${layer}" d="([^"]*)"`))?.[1];
+    const rim = path('rim');
+    assert.ok(rim, `${label}: passage has a rim`);
+    assert.equal(path('bore'), rim, `${label}: floor follows the rim`);
+    assert.equal(path('deep'), rim, `${label}: highlight follows the rim`);
+    // Undo SVG serialization without duplicating the renderer's curve calculations.
+    const arms = rim.split('M').slice(1).map((arm) => {
+      const [start, curve] = arm.trim().split('Q');
+      assert.ok(curve, `${label}: passage bends`);
+      const startPoint = start.trim().split(/\s+/).map(Number);
+      const [cx, cy, tx, ty] = curve.trim().split(/\s+/).map(Number);
+      assert.ok(startPoint[0] === tx ? cx !== tx : cy !== ty, `${label}: passage is not straight`);
+      return { edge: startPoint, end: [tx, ty] };
+    });
+    assert.deepEqual(arms.sort((a, b) => a.edge[0] - b.edge[0] || a.edge[1] - b.edge[1]),
+      sides.filter(({ bit }) => mask & bit).map(({ edge, stop }) => ({ edge, end: cut ? stop : [50, 50] }))
+        .sort((a, b) => a.edge[0] - b.edge[0] || a.edge[1] - b.edge[1]), label);
+    assert.equal(Boolean(path('plug')), cut, `${label}: only dead ends have a barricade`);
+    for (const layer of ['hub-rim', 'hub-bore']) {
+      assert.equal(svg.includes(`class="${layer}"`), !cut, `${label}: only connected passages have a shared hub`);
+    }
+  });
+});
+
+test('renderer: rock texture shows flecks on every tile and rubble stays consistent across copies', () => {
+  const [first, clear, copy] = renderTunnelCards([tile('first', 3), tile('clear', 1), tile('copy', 3)]);
+  for (const svg of [first, clear, copy]) assert.match(svg, /<circle\b[^>]*class="speck"/);
+  const debris = (svg) => svg.match(/<g class="debris">[\s\S]*?<\/g>/g) || [];
+  assert.ok(debris(first).some((group) => /<ellipse\b/.test(group)), 'the bend has visible rubble');
+  assert.deepEqual(debris(copy), debris(first), 'copies of the same tile have identical rubble');
+  assert.deepEqual(debris(clear), [], 'some passages remain clear');
 });
 
 console.log(`${count} hidden miners tests passed`);
