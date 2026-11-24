@@ -43,19 +43,51 @@
     for (let i = 1; i < rungs; i++) { const t = i / rungs; const x = p.x + dx * t, y = p.y + dy * t; d += `M${x + nx},${y + ny}L${x - nx},${y - ny}`; }
     return `<path class="sl-ladder" d="${d}"/>`;
   }
+  /* A snake: a tapered body from a thin tail up to the head, with a gentle S-bend, dark dorsal blotches, a rounded head with
+     slit eyes and a forked tongue. The head sits on the square where the snake starts (the higher square). */
   function snakeSVG(head, tail, i) {
     const p = centre(head), q = centre(tail);
-    const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len, ny = dx / len;
-    const waves = Math.max(2, Math.round(len / 14)), amp = 3.2;
-    let d = `M${p.x},${p.y}`;
-    for (let k = 1; k <= waves * 2; k++) {
-      const t = k / (waves * 2), tm = (k - 0.5) / (waves * 2);
-      const sign = k % 2 ? 1 : -1;
-      d += `Q${p.x + dx * tm + nx * amp * sign},${p.y + dy * tm + ny * amp * sign} ${p.x + dx * t},${p.y + dy * t}`;
+    const dx = p.x - q.x, dy = p.y - q.y, len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len, nx = -uy, ny = ux; // u: tail to head, n: its normal
+    const waves = Math.max(1.5, len / 24), amp = Math.min(4, 1.2 + len / 16);
+    const at = (t) => { // centreline point, t 0 at the tail, 1 at the head
+      const bend = Math.sin(t * waves * 2 * Math.PI) * amp * (1 - 0.5 * t);
+      return { x: q.x + dx * t + nx * bend, y: q.y + dy * t + ny * bend };
+    };
+    const width = (t) => 0.55 + 1.9 * Math.pow(t, 0.7); // thin tail, fuller body and head end
+    const N = Math.max(20, Math.round(len * 2));
+    const L = [], R = [], S = [];
+    for (let k = 0; k <= N; k++) {
+      const t = k / N, P = at(t), A = at(Math.max(0, t - 0.01)), B = at(Math.min(1, t + 0.01));
+      const tx = B.x - A.x, ty = B.y - A.y, tl = Math.hypot(tx, ty) || 1;
+      const ex = -ty / tl, ey = tx / tl, w = width(t);
+      L.push([P.x + ex * w, P.y + ey * w]); R.push([P.x - ex * w, P.y - ey * w]);
+      S.push({ P, tx: tx / tl, ty: ty / tl, ex, ey, w, t });
     }
+    const f = (pt) => `${pt[0].toFixed(2)},${pt[1].toFixed(2)}`;
+    const tailTip = at(0);
+    let body = `M${tailTip.x.toFixed(2)},${tailTip.y.toFixed(2)}L${L.map(f).join('L')}`;
+    body += `A${width(1).toFixed(2)},${width(1).toFixed(2)} 0 0 1 ${f(R[N])}`;
+    body += `L${R.slice(0, N).reverse().map(f).join('L')}Z`;
+    // dorsal blotches, darker, spaced along the back and thinning toward the tail
+    let spots = '';
+    for (let k = Math.round(N * 0.18); k < N - 4; k += Math.max(3, Math.round(N / (waves * 6 + 4)))) {
+      const s = S[k], ang = Math.atan2(s.ty, s.tx) * 180 / Math.PI;
+      spots += `<ellipse cx="${s.P.x.toFixed(2)}" cy="${s.P.y.toFixed(2)}" rx="${(s.w * 0.85).toFixed(2)}" ry="${(s.w * 0.5).toFixed(2)}" transform="rotate(${ang.toFixed(1)} ${s.P.x.toFixed(2)} ${s.P.y.toFixed(2)})"/>`;
+    }
+    // head: an oval along the last tangent, slit eyes, forked tongue
+    const H = S[N], hx = H.P.x + H.tx * 0.9, hy = H.P.y + H.ty * 0.9, hang = Math.atan2(H.ty, H.tx) * 180 / Math.PI;
+    const ex = (sx, sy) => `${(hx + H.tx * sx + H.ex * sy).toFixed(2)},${(hy + H.ty * sx + H.ey * sy).toFixed(2)}`;
+    const eyes = [1, -1].map((side) => {
+      const c = ex(0.5, side * 1.25);
+      const [cx, cy] = c.split(',').map(Number);
+      return `<circle class="eye" cx="${cx}" cy="${cy}" r="0.8"/><ellipse class="pupil" cx="${cx + H.tx * 0.2}" cy="${cy + H.ty * 0.2}" rx="0.22" ry="0.55" transform="rotate(${hang.toFixed(1)} ${cx} ${cy})"/>`;
+    }).join('');
+    const tongue = `M${ex(2.3, 0)} L${ex(3.4, 0)} L${ex(4.0, 0.5)} M${ex(3.4, 0)} L${ex(4.0, -0.5)}`;
     const hue = ['sl-s1', 'sl-s2', 'sl-s3'][i % 3];
-    return `<g class="sl-snake ${hue}"><path d="${d}"/><circle cx="${p.x}" cy="${p.y}" r="2.3"/><circle class="eye" cx="${p.x - 0.8}" cy="${p.y - 0.7}" r=".5"/><circle class="eye" cx="${p.x + 0.8}" cy="${p.y - 0.7}" r=".5"/></g>`;
+    return `<g class="sl-snake ${hue}"><path class="body" d="${body}"/><g class="blotch">${spots}</g>`
+      + `<ellipse class="head" cx="${hx.toFixed(2)}" cy="${hy.toFixed(2)}" rx="2.5" ry="2.05" transform="rotate(${hang.toFixed(1)} ${hx.toFixed(2)} ${hy.toFixed(2)})"/>`
+      + `${eyes}<path class="tongue" d="${tongue}"/></g>`;
   }
 
   function board(v) {
