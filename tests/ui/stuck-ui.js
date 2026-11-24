@@ -107,6 +107,28 @@ const player = (username, displayName) => ({ ok: true, profile: { username, disp
     await ctx.close();
   });
 
+  await test('the notifications panel says when the friends list could not load, rather than "all caught up"', async () => {
+    const srv = await serve({
+      'GET /api/auth/session': () => sessionOk(),
+      'GET /api/me/profile': () => ({ ok: true, profile: { username: 'aarav', displayName: 'Aarav', avatar: '🧙', email: 'a@b.c', emailVerified: true, joinedAt: '2026-01-01T00:00:00Z' }, stats: { played: 0, wins: 0, losses: 0, winRate: 0, perGame: [], recent: [], favouriteGame: null, streak: { current: 0, best: 0 }, progress: {} }, progress: {} }),
+      'GET /api/me/friends': () => ({ __status: 500, body: { ok: false, error: 'Friends are unavailable.' } }),
+      'GET /api/me/friend-requests?direction=incoming': () => ({ ok: true, requests: [] }),
+      'GET /api/me/friend-requests?direction=outgoing': () => ({ ok: true, requests: [] }),
+      'GET /api/me/table-invitations?direction=incoming': () => ({ ok: true, invitations: [] }),
+      'GET /api/me/table-invitations?direction=outgoing': () => ({ ok: true, invitations: [] }),
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: GAMES })], viewport: { width: 390, height: 844 } });
+    await page.goto(srv.url + '/');
+    await page.waitForSelector('.tb-bell', { timeout: 8000 });
+    await page.click('.tb-bell');
+    await page.waitForSelector('.bell-panel', { timeout: 5000 });
+    await page.waitForFunction(() => /Friends are unavailable/.test(document.querySelector('.bell-panel').textContent), null, { timeout: 5000 });
+    assert.ok(!/caught up/.test(await page.textContent('.bell-panel')), 'the panel claims everything is handled after a failed load');
+    assert.ok(await page.$('.bell-panel [data-act="refreshSocial"]'), 'no way to retry');
+    await ctx.close();
+    srv.server.close();
+  });
+
   await browser.close();
   server.close();
   console.log(`\nstuck ui: ${passed} passed, ${failed} failed`);
