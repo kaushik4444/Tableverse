@@ -109,7 +109,7 @@
     () => felt(card(120, 65, '♥', '#dc2626', { sub: 'K' }) + card(200, 65, '♠', C.gold, { w: 56, bg: C.ink, sub: 'trump' })),
     () => felt(fan([pc('4', 'h'), pc('9', 'c'), pc('Q', 'd')]) + T(160, 22, 'I predict 2', 14, '#fff')),
     () => felt(card(100, 65, '5', C.ink, { sub: '♠' }) + card(160, 65, '9', C.ink, { sub: '♠' }) + card(220, 65, 'W', C.gold) + arrow(235, 100, 250, 40)),
-    () => felt(T(160, 55, '10 + 2 per trick', 18, '#fff') + T(160, 82, 'wrong guess: −10 each', 14, C.mint)),
+    () => felt(T(160, 55, '20 + 10 per trick', 18, '#fff') + T(160, 82, 'wrong guess: −10 each', 14, C.mint)),
   ]);
   A.twentynine = pick([
     () => felt(fan([pc('J', 's'), pc('9', 's'), pc('A', 's'), pc('10', 's')])),
@@ -150,8 +150,8 @@
     () => felt(cc(100, '7', 'r', -6) + cc(160, '2', 'b') + cc(220, '9', 'g', 6)),
     () => felt(cc(120, '5', 'r') + arrow(150, 65, 175, 65) + cc(210, '8', 'r')),
     () => felt(cc(100, '⊘', 'g') + cc(160, '⇄', 'b') + cc(220, '+2', 'y')),
-    () => felt(T(160, 65, '1 card left → say CLASH!', 18, '#fff')),
-    () => felt(T(160, 55, 'cards left = points', 18, '#fff') + T(160, 85, 'lowest total wins', 14, C.mint)),
+    () => felt(T(160, 65, 'One card left — everyone can see it', 16, '#fff')),
+    () => felt(T(160, 55, 'winner scores other hands', 18, '#fff') + T(160, 85, 'highest total wins', 14, C.mint)),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
   A.stagerummy = pick([
@@ -169,7 +169,7 @@
     () => penRows([[12, 15], [31], [48, 50], [77, 80]], [[23, C.ink], [58, C.ink], [64, C.ink]]),
     () => penRows([[12, 15, 19], [31], [48, 50], [77, 80, 83]], [[23, C.ink]], arrow(176, 52, 214, 52)),
     () => felt(card(120, 65, '4', C.ink, { sub: 'low' }) + T(210, 65, '→ take a row', 14, C.gold)),
-    () => felt(T(160, 65, '5th card takes the row', 18, '#fff')),
+    () => felt(T(160, 65, '6th card takes the row', 18, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
   A.hiddenminers = pick([
