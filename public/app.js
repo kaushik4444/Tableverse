@@ -3300,7 +3300,7 @@
     if (!$app.classList.contains('gate-locked')) return;
     const t = e.target;
     if (!(t instanceof Element)) return;
-    if (t.closest('.ready-box, .topbar, .chat, [data-chat], [data-keep-open]')) return;
+    if (t.closest('.ready-box, .topbar, .chat, [data-chat], [data-keep-open], .bell-panel')) return; // the bell's friend requests are app chrome, not game moves
     const act = t.closest('[data-act]');
     if (act && GATE_OPEN_ACTS.has(act.dataset.act)) return;
     e.stopPropagation(); e.preventDefault();
