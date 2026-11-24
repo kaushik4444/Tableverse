@@ -267,43 +267,54 @@ const api = (role) => ({
     await ctx.close(); server.close();
   });
   await test('Right now pauses when hidden or idle and resumes only while Overview is open', async () => {
-    const { server, url, calls } = await serve(api('admin'));
+    let sample = 0;
+    const { server, url } = await serve({
+      ...api('admin'),
+      'GET /api/admin/live': () => ({ ok: true, at: new Date().toISOString(), players: ++sample, tables: 1, sockets: 4 }),
+    });
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
-    const liveCalls = () => calls.filter((c) => c.path === '/api/admin/live').length;
-    const settle = () => page.waitForLoadState('networkidle');
+    // Count at fetch start so a forbidden poll cannot escape an assertion while its request is still on the way to the server.
+    await page.addInitScript(() => {
+      const fetch = window.fetch.bind(window);
+      window.liveRequests = 0;
+      window.fetch = (path, options) => {
+        if (path === '/api/admin/live') window.liveRequests++;
+        return fetch(path, options);
+      };
+    });
+    const liveCalls = () => page.evaluate(() => window.liveRequests);
+    // The next timer is scheduled after rendering the response, so wait for that specific sample before advancing the clock.
+    const waitForSample = (n) => until(async () =>
+      await page.locator('#liveNow .ad-card b').first().textContent() === String(n), `live sample ${n}`);
     const visibility = (value) => page.evaluate((value) => {
       Object.defineProperty(document, 'visibilityState', { configurable: true, value });
       document.dispatchEvent(new Event('visibilitychange'));
     }, value);
     const input = () => page.evaluate(() => window.dispatchEvent(new Event('keydown')));
-    live.fail = false;
     try {
       await page.clock.install();
       await page.goto(url + '/admin.html');
-      await page.waitForSelector('#liveNow .ad-card b:not(:text("…"))');
-      await settle();
-      const before = liveCalls();
+      await waitForSample(1);
+      const before = await liveCalls();
       await visibility('hidden');
       await page.clock.runFor(30000);
       await input();
-      await settle();
-      assert.equal(liveCalls(), before, 'neither a timer nor hidden input polls');
+      assert.equal(await liveCalls(), before, 'neither a timer nor hidden input polls');
 
       await visibility('visible');
       await input();
-      await settle();
-      assert.equal(liveCalls(), before + 1, 'returning starts one immediate refresh');
+      assert.equal(await liveCalls(), before + 1, 'returning starts one immediate refresh');
+      await waitForSample(2);
       await page.clock.fastForward(11 * 60000);
-      await settle();
-      assert.equal(liveCalls(), before + 1, 'the overdue timer does not poll after eleven idle minutes');
+      assert.equal(await liveCalls(), before + 1, 'the overdue timer does not poll after eleven idle minutes');
       await input();
       await input();
-      await settle();
-      assert.equal(liveCalls(), before + 2, 'the first input resumes polling once');
+      assert.equal(await liveCalls(), before + 2, 'the first input resumes polling once');
+      await waitForSample(3);
       await page.clock.runFor(15000);
-      await settle();
-      assert.equal(liveCalls(), before + 3, 'one loop continues after resuming');
+      assert.equal(await liveCalls(), before + 3, 'one loop continues after resuming');
+      await waitForSample(4);
 
       await visibility('hidden');
       await page.clock.runFor(15000);
@@ -311,8 +322,7 @@ const api = (role) => ({
       await page.waitForFunction(() => !document.getElementById('liveNow'));
       await visibility('visible');
       await page.clock.runFor(30000);
-      await settle();
-      assert.equal(liveCalls(), before + 3, 'return cannot revive an Overview that has been left');
+      assert.equal(await liveCalls(), before + 3, 'return cannot revive an Overview that has been left');
     } finally { await ctx.close(); server.close(); }
   });
   await test('signup funnel: the Insights tab shows the three stages and a CSV link for the range', async () => {
