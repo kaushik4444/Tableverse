@@ -35,7 +35,8 @@
   function discHTML(v, d) {
     const [X, Y] = toSvg(v, [d.x, d.y]);
     const cls = d.kind === 'queen' ? 'cb-queen' : d.kind === 'striker' ? `cb-striker ${d.colour === 'w' ? 'w' : 'b'}` : `cb-coin ${d.colour === 'w' ? 'w' : 'b'}`;
-    return `<circle class="${cls}" data-id="${esc(d.id)}" cx="${X}" cy="${Y}" r="${d.r}"/>`;
+    // a flat offset shade under the disc: no SVG filter, which Chromium can paint as black blocks over the board
+    return `<circle class="cb-shade" cx="${(X + 0.004).toFixed(4)}" cy="${(Y + 0.008).toFixed(4)}" r="${d.r}" fill="#2a1608" opacity="0.45"/><circle class="${cls}" data-id="${esc(d.id)}" cx="${X}" cy="${Y}" r="${d.r}"/>`;
   }
 
   function discsFor(frame) {
@@ -185,7 +186,6 @@
         <radialGradient id="cb-coin-b" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#6c625b'], [0.28, '#3a322d'], [0.31, '#0d0a09'], [0.36, '#4a403a'], [0.56, '#2b241f'], [0.6, '#0a0807'], [0.66, '#3c332d'], [0.88, '#1d1815'], [1, '#050404']])}</radialGradient>
         <radialGradient id="cb-queen-g" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#ff8a6a'], [0.28, '#e0442f'], [0.31, '#8f1d12'], [0.36, '#e65a43'], [0.56, '#cc3a26'], [0.6, '#7d170e'], [0.66, '#d9482f'], [0.88, '#b52d1b'], [1, '#5e0f08']])}</radialGradient>
         <radialGradient id="cb-striker-g" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#fff2b8'], [0.16, '#e2b84a'], [0.2, '#3a2a8a'], [0.5, '#5a46b8'], [0.56, '#e2b84a'], [0.62, '#44349a'], [0.86, '#2a1d6e'], [0.9, '#e2b84a'], [1, '#8a6a1c']])}</radialGradient>
-        <filter id="cb-shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0.004" dy="0.008" stdDeviation="0.005" flood-color="#2a1608" flood-opacity="0.5"/></filter>
       </defs>
       <rect class="cb-frame" x="-0.075" y="-0.075" width="1.15" height="1.15" rx="0.045"/>
       <rect class="cb-cushion" x="-0.006" y="-0.006" width="1.012" height="1.012"/>
@@ -196,7 +196,7 @@
       ${COMPASS}
       ${caps}
       ${pockets}
-      <g data-shadow="1" filter="url(#cb-shadow)">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
+      <g data-shadow="1">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
       ${over || ''}
     </svg>`;
   }
@@ -422,12 +422,6 @@
   }
 
   /** Updates the arrow and tip text without rebuilding the board. */
-  /** The drop shadow under the discs is switched off during a drag: moving a filtered group every frame leaves black patches on phones. */
-  function setDragShadow(on) {
-    const g = ui.root && ui.root.querySelector('.cb-svg > g[data-shadow]');
-    if (!g) return;
-    if (on) g.setAttribute('filter', 'url(#cb-shadow)'); else g.removeAttribute('filter');
-  }
 
   /**
    * The slider is the board's own baseline: its track runs from the viewer's baseline end dot (0.2) to the other (0.8), so a
@@ -495,7 +489,6 @@
     ui.dragMoved = false;
     ui.dragKey = boardKeyOf(v, ui.ctx);
     ui.downAt = [e.clientX, e.clientY];
-    setDragShadow(false); // the striker moves in the slider branch too
     if (slider) {
       ui.mode = 'slide';
       if (slider.setPointerCapture) slider.setPointerCapture(e.pointerId);
@@ -541,7 +534,6 @@
     if (!ui.dragging || e.pointerId !== ui.pointerId) return;
     const moved = ui.dragMoved;
     ui.dragging = false;
-    setDragShadow(true);
     if (moved && ui.mode === 'aim') {
       const p = pointerDisplay(e);
       if (p) aimFrom(p);
@@ -561,7 +553,6 @@
   function onPointerCancel(e) {
     if (!ui.dragging || (e && e.pointerId !== ui.pointerId)) return;
     ui.dragging = false; ui.dragMoved = false;
-    setDragShadow(true);
     flushDeferred();
   }
 
