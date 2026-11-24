@@ -20,10 +20,14 @@
     const specks = [[12, 14], [84, 10], [22, 80], [78, 86], [8, 52], [92, 46], [46, 8], [58, 92], [70, 24]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.6" class="speck"/>`).join('');
     const edges = pass.map((r) => rect([r[0] - 2, r[1] - 2, r[2] + 4, r[3] + 4], 'edge')).join('') + (cut ? '' : rect([36, 36, 28, 28], 'edge'));
     const floors = pass.map((r) => rect(r, 'floor')).join('') + (cut ? '' : rect([38, 38, 24, 24], 'floor'));
+    // a lit core down each passage makes it read as a rounded tunnel, with mine rails along its floor
+    const cores = pass.map((r) => rect([r[0] + 3, r[1] + 3, r[2] - 6, r[3] - 6], 'core')).join('');
+    const rails = pass.map(([x, y, w, h]) => `<path class="rail" d="${h > w ? `M${x + w / 2 - 4} ${y}V${y + h}M${x + w / 2 + 4} ${y}V${y + h}` : `M${x} ${y + h / 2 - 4}H${x + w}M${x} ${y + h / 2 + 4}H${x + w}`}"/>`).join('');
+    const strata = '<path class="strata" d="M0 17H100M0 61H100M0 83H100"/>';
     const beams = bits.map((b) => rect(beam[b], 'beam')).join('');
     const lamp = cut || !mask ? '' : '<circle cx="50" cy="50" r="12" class="glow"/><circle cx="50" cy="50" r="5" class="lamp"/>';
     const plug = cut ? '<path class="plug" d="M30 30 L70 70 M70 30 L30 70"/>' : '';
-    return `<svg class="hm-tile ${cls}" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" class="rock"/>${specks}<g class="way">${edges}${floors}${beams}${lamp}</g>${plug}</svg>`;
+    return `<svg class="hm-tile ${cls}" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" class="rock"/>${strata}${specks}<g class="way">${edges}${floors}${cores}${rails}${beams}${lamp}</g>${plug}</svg>`;
   }
 
   const describeTile = (mask, cut) => {
