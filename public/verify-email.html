@@ -6,8 +6,13 @@
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex">
   <title>Verify Email · Tableverse</title>
+  <script>
+    // Appearance: dark is the default; 'light', or 'system' (follow the device), is chosen in the profile's Account tab.
+    (function () { try { var m = localStorage.getItem('tv_theme'); var light = m === 'light' || (m === 'system' && matchMedia('(prefers-color-scheme: light)').matches); if (light) document.documentElement.setAttribute('data-theme', 'light'); } catch (e) { /* no storage: dark */ } })();
+  </script>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/table.css">
+  <link rel="stylesheet" href="/lamplight.css">
   <style>
     .verify-container {
       max-width: 480px;

@@ -133,6 +133,20 @@ const profile = { ok: true, profile: { username: 'aarav', displayName: 'Aarav', 
     await ctx.close();
   });
 
+  await test('Appearance: the password-reset and verify-email pages follow the saved light choice', async () => {
+    const { server: s2, url: u2 } = await serve({});
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await ctx.addInitScript(() => { try { localStorage.setItem('tv_theme', 'light'); } catch { /* storage refused */ } });
+    const page = await ctx.newPage();
+    for (const path of ['/reset-password.html', '/verify-email.html']) {
+      await page.goto(u2 + path);
+      const bg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
+      assert.notEqual(bg, 'rgb(7, 19, 14)', path + ' stayed dark');
+    }
+    await ctx.close();
+    s2.close();
+  });
+
   await browser.close();
   server.close();
   console.log(`\npolish ui: ${passed} passed, ${failed} failed`);

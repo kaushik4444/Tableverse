@@ -59,7 +59,7 @@ Tableverse is open to players, with all twelve games available in this release.
 
 ## What's new — unreleased (on `development`, not yet on `main`)
 
-- **Appearance.** Account tab → Appearance: Dark (the default), Light, or Follow system. The choice is kept on this device. Light changes the app's own screens; game tables keep their look.
+- **Appearance.** Account tab → Appearance: Dark (the default), Light, or Follow system. The choice is kept on this device. Light changes the app's screens and the password-reset and email-verification pages; game tables keep their look, and the admin console and the impressum draft stay as they are.
 - **How-to pictures.** Each game's how-to card shows its own picture (Carrom keeps its board).
 - **Friends and profile.** Actions keep your scroll position, and an unchanged page is not redrawn. Friends show a presence dot; a profile no longer shows the old raw "Highest score".
 - **Game over.** The result card appears sooner and updates in place. If the connection was down when the game ended, the ratings are asked for again once it is back, and the card says so if they stay unavailable.
