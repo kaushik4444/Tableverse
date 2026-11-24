@@ -312,12 +312,13 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
 
   await test('the first time: the how-to-play cards open with the real board, step through, keep focus, and do not open again', async () => {
     const { page, ctx } = await scriptedPage(browser, { messages: msgsFor(fresh()), viewport: { width: 390, height: 844 }, firstTime: true });
+    // Each new card mounts a fresh sheet. Test the controls without the entrance animation moving them.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(url + '/');
     await page.waitForSelector('.ht-overlay', { timeout: 8000 });
     const titles = [];
     const expected = ['The board', 'Take the shot', 'Pocketing', 'The queen', 'The striker', 'Winning'];
     for (let i = 0; i < 6; i++) {
-      // wait for this card to be the one showing (a card that is still animating in or out would be read, or clicked, too early)
       await page.waitForFunction((t) => (document.querySelector('.ht-overlay h2') || {}).textContent === t, expected[i], { timeout: 4000 });
       titles.push(await page.textContent('.ht-overlay h2'));
       assert.ok(await page.locator('.ht-overlay svg.cb-svg .cb-pocket').count() === 4, 'the card shows the real board with four pockets');
