@@ -60,3 +60,16 @@ Not covered: these actions at 360 px and on tablets (not measured yet), and scre
 2. Extend the sheet and modal coverage to the unverified dialogs listed above, and the signed-in admin screens (needs a staff test account in the harness).
 3. Decide whether the desktop Property Rivals card size warning is in scope.
 4. Run this audit on a real iPhone before the friends beta.
+
+## Device and screen matrix (2026-11-24, `feat/howto-game-art`)
+
+One pass over every screen at five sizes: 320×568 (iPhone SE), 360×740 (Android), 390×844 (iPhone 14), 768×1024 (tablet) and 1280×800 (desktop). Covered: home (dark and light), friends, profile overview and account, all 16 game tables (two players for Tic-Tac-Toe, Four in a Row and Chess; four for the rest), and the admin console (overview and players tabs, owner role).
+
+| Check | Result |
+| --- | --- |
+| Page errors and console errors | none (headless `navigator.vibrate` notices only) |
+| Horizontal page overflow | none at any size |
+| Every table rendered | 16 of 16 at every size |
+| Visual review | 320 px and 390 px sheets reviewed. The admin tab row at 320 px scrolls sideways by design; the Carrom instruction line sits below the fold and scrolls into view |
+
+Not covered by this pass: the Edit profile dialog, a 44 px touch-target measurement, and a close look at the Android, tablet and desktop sheets. The matrix was a one-off run and is not a committed command.

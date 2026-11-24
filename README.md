@@ -59,6 +59,12 @@ Tableverse is open to players, with all twelve games available in this release.
 
 ## What's new — unreleased (on `development`, not yet on `main`)
 
+- **Appearance.** Account tab → Appearance: Dark (the default), Light, or Follow system. The choice is kept on this device. Light changes the app's own screens; game tables keep their look.
+- **How-to pictures.** Each game's how-to card shows its own picture (Carrom keeps its board).
+- **Friends and profile.** Actions keep your scroll position, and an unchanged page is not redrawn. Friends show a presence dot; a profile no longer shows the old raw "Highest score".
+- **Game over.** The result card appears sooner and updates in place. If the connection was down when the game ended, the ratings are asked for again once it is back, and the card says so if they stay unavailable.
+- **No loading that never ends.** A home page with no games open, or a game list that failed to load, says so. A profile opened right after another shows the right person even if the first answer arrives late.
+
 - **Chess** (2), in review on `feat/chess-carrom`: the full game with castling, en passant and promotion, draws by stalemate, fifty moves, threefold repetition or insufficient material, and resignation. Tap a piece to see its moves, then tap a square. The board turns for Black, and it fits a phone screen. A bot can fill the second seat.
 - **Carrom** (2–4 players, in teams of partners when there are four), in review on `feat/carrom`: pocket your team's nine coins with the queen before the other team. Drag on the board, back from the striker, to flick; place the striker with the slider. Shots play back on the board. Pocketing the striker is a foul.
 - **Guest play controls.** Guests can read and send table chat and play open games. Private tables, rejoining after leaving on purpose, player profiles and stats, blocking and reports are locked for guests until the owner or an admin opens them in the admin console (**Guests** tab). A locked control shows a lock and opens the account reminder. Friend requests stay account-only. Connecting after a dropped connection always works.
