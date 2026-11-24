@@ -1567,6 +1567,7 @@
         break;
       }
       case 'left':
+        $app.classList.remove('gate-locked', 'ready-wait');
         voice.reset();
         S.card = null; closeModal();
         S.page = 'home';
@@ -2496,7 +2497,8 @@
     const emote = bar.querySelector('[data-act="emotes"]');
     const extras = [...bar.querySelectorAll('button')].filter((b) => b !== leave && b !== chat && b !== emote);
     // How to play lives in the ⋯ menu for every game. A game that already has its own rules entry keeps it.
-    if (S.room && !extras.some((b) => b.dataset.act === 'rules' || /rules|how to play/i.test(b.textContent || ''))) {
+    const isRules = (b) => b.dataset.act === 'rules' || /rules|how to play/i.test(b.textContent || '');
+    if (S.room && !extras.some(isRules)) {
       const rb = document.createElement('button');
       rb.type = 'button'; rb.className = 'btn ghost small'; rb.dataset.act = 'rules'; rb.dataset.game = S.room.gameId;
       rb.setAttribute('aria-label', 'How to play'); rb.textContent = '📖 How to play';
@@ -2512,7 +2514,10 @@
     }
     // One label and one order in every game: a game's own Rules button says How to play, and the items run in the same order
     // (the game's figures, How to play, the log). Game settings is added after these, as the last item.
-    extras.forEach((b) => { if ((b.textContent || '').trim() === 'Rules') { b.textContent = '📖 How to play'; b.setAttribute('aria-label', 'How to play'); } });
+    extras.forEach((b) => {
+      if (isRules(b)) b.dataset.toolbarRules = '';
+      if ((b.textContent || '').trim() === 'Rules') { b.textContent = '📖 How to play'; b.setAttribute('aria-label', 'How to play'); }
+    });
     const menuRank = (b) => (/^(Scores|Stats|Chips)$/i.test((b.textContent || '').trim()) ? 0
       : b.dataset.act === 'rules' || /how to play/i.test(b.textContent || '') ? 1
       : b.dataset.act === 'activityLog' ? 2 : 3);
@@ -3310,14 +3315,23 @@
    */
   /* Until this seat has pressed Ready, the table takes no input: every press, drag and key on the game is stopped before it
      reaches the game. The Ready box, the top bar, chat, and the leave, rules and player-card buttons stay usable. The server refuses moves too. */
-  const GATE_OPEN_ACTS = new Set(['readyUp', 'leave', 'activityLog', 'showRules', 'playerCard']);
+  const GATE_OPEN_ACTS = new Set(['readyUp', 'leave', 'activityLog', 'showRules', 'playerCard', 'toggleTools', 'rules']);
   const gateGuard = (e) => {
     if (!$app.classList.contains('gate-locked')) return;
     const t = e.target;
     if (!(t instanceof Element)) return;
     if (t.closest('.ready-box, .topbar, .chat, [data-chat], [data-keep-open], .bell-panel')) return; // the bell's friend requests are app chrome, not game moves
     const act = t.closest('[data-act]');
-    if (act && GATE_OPEN_ACTS.has(act.dataset.act)) return;
+    if (e.type === 'keydown' && e.key === 'Tab') {
+      e.stopPropagation(); // keep native focus navigation, including Shift+Tab
+      return;
+    }
+    const toolbarRules = t.closest('[data-toolbar-rules]');
+    if (toolbarRules || (act && GATE_OPEN_ACTS.has(act.dataset.act))) {
+      // Let these buttons generate a native click without activating game keyboard shortcuts.
+      if ((toolbarRules || act?.dataset.act === 'toggleTools') && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
+      return;
+    }
     e.stopPropagation(); e.preventDefault();
   };
   ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'touchstart', 'touchmove', 'touchend', 'click', 'dblclick', 'keydown', 'keyup', 'dragstart'].forEach((type) => $app.addEventListener(type, gateGuard, { capture: true, passive: false }));

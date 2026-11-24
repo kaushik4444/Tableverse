@@ -307,13 +307,15 @@ test('account deletion scrubs names only: a player named like a colour keeps the
   assert.equal(players[0].name, 'Someone');
 });
 
-test('a shot holds the next bot turn until it has been played out', () => {
+test('a scoring bot holds its extra shot through the viewer setup, keyframes and playback tail', () => {
   const pacing = require('../games/pacing');
-  const g = two();
-  const a = E.botAction(g, g.turn, mulberry32(7));
-  assert.equal(a.type, 'flick');
-  assert.equal(act(g, 'p' + g.turn, a).ok, true);
-  assert.ok(pacing.remaining(g) > 0, 'a bot waits after a shot, so people can follow it');
+  const g = E.createGame([{ id: 'p0', name: 'Bot', bot: true }, { id: 'p1', name: 'Viewer' }]);
+  g.coins = [coin('w1', 'w', 0.03, 0.03)];
+  assert.equal(act(g, 'p0', flick(0.5, 0.8)).ok, true);
+  assert.equal(g.shot.scored, 1);
+  assert.equal(g.turn, 0, 'the scoring bot keeps its turn');
+  const playbackMs = 1250 + g.shot.keyframes.at(-1).t * 1000 + 250;
+  assert.ok(pacing.remaining(g) >= playbackMs, 'the next shot waits for the previous playback to finish');
 });
 
 

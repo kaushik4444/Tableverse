@@ -153,17 +153,21 @@ const player = (username, displayName) => ({ ok: true, profile: { username, disp
     await page.waitForSelector('#friends-panel');
     await page.waitForTimeout(600); // the pill has settled under Friends
     // Friends -> Games repaints the whole page, which builds a new pill. Sample the animated (computed) position every frame.
-    const samples = await page.evaluate(async () => {
+    const { samples, selectedX } = await page.evaluate(async () => {
       const out = []; const t0 = performance.now();
       const tick = () => { const p = document.querySelector('.topbar .tb-tabs .tb-pill'); if (p) out.push(getComputedStyle(p).transform); if (performance.now() - t0 < 700) requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
       document.querySelector('.topbar .tb-tabs [data-act="goGames"]').click();
       await new Promise((r) => setTimeout(r, 750));
-      return out;
+      const selected = document.querySelector('.topbar .tb-tabs .tb-tab[aria-current="page"]');
+      return { samples: out, selectedX: selected?.offsetLeft };
     });
     // 'none' is the one frame before the pill is put in its place (width 0, so invisible); every other value must be the final one
     const seen = [...new Set(samples.filter((s) => s !== 'none'))];
-    assert.ok(seen.length <= 1, 'the highlight slid to its tab after a repaint: ' + seen.join(' -> '));
+    assert.ok(seen.length > 0, 'no positioned tab highlight was sampled after repaint');
+    assert.equal(seen.length, 1, 'the highlight slid to its tab after a repaint: ' + seen.join(' -> '));
+    assert.equal(typeof selectedX, 'number', 'no selected tab after repaint');
+    assert.equal(seen[0], `matrix(1, 0, 0, 1, ${selectedX}, 0)`, 'the highlight is not under the selected tab');
     await ctx.close();
   });
 

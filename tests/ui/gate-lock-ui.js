@@ -59,6 +59,31 @@ const people = [{ name: 'Aarav' }, { name: 'Bo' }];
         assert.notEqual(anim, 'none', 'the Ready button should blink');
       } finally { await ctx.close(); }
     });
+    await test('keyboard navigation and rules work before Ready, and home actions work after leaving', async () => {
+      const { page, ctx } = await open(waiting('carrom'));
+      try {
+        const tools = page.locator('[data-act="toggleTools"]');
+        await tools.focus();
+        await page.evaluate(() => {
+          window.__tabEvents = 0;
+          document.addEventListener('keydown', (e) => { if (e.key === 'Tab') window.__tabEvents++; });
+        });
+        await page.keyboard.press('Tab');
+        assert.equal(await tools.evaluate((el) => el === document.activeElement), false, 'Tab moves focus off the menu opener');
+        await page.keyboard.press('Shift+Tab');
+        assert.equal(await tools.evaluate((el) => el === document.activeElement), true, 'Shift+Tab returns focus to the opener');
+        assert.equal(await page.evaluate(() => window.__tabEvents), 0, 'game key listeners never receive Tab');
+        await page.keyboard.press('Space');
+        await page.locator('.tb-pop').getByRole('button', { name: 'How to play' }).click({ timeout: 5000 });
+        await page.waitForSelector('.ht-overlay');
+        await page.keyboard.press('Escape');
+        assert.equal(await acts(page), 0, 'menu and rules keys do not send game actions');
+        assert.equal(await page.locator('#app.gate-locked').count(), 1, 'the game is still locked before Ready');
+        await page.evaluate(() => window.__push({ t: 'left' }));
+        await page.locator('[data-act="create"][data-game="carrom"]').click();
+        await page.waitForFunction(() => window.__sent.some((m) => m.t === 'create' && m.gameId === 'carrom'));
+      } finally { await ctx.close(); }
+    });
     await test('Ready itself is sent, and nothing else is', async () => {
       const { page, ctx } = await open(waiting('carrom'));
       try {

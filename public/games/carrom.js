@@ -7,6 +7,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
+  const SHADE_X = 0.004, SHADE_Y = 0.008, SHADE_ALPHA = 0.45;
   const BASE_Y = 0.12;     // a side's baseline in the bottom frame
   const MAX_DRAG = 0.45;   // a drag of this length on the board is a full-power flick
   const ANGLE_MAX = 75;
@@ -36,7 +37,7 @@
     const [X, Y] = toSvg(v, [d.x, d.y]);
     const cls = d.kind === 'queen' ? 'cb-queen' : d.kind === 'striker' ? `cb-striker ${d.colour === 'w' ? 'w' : 'b'}` : `cb-coin ${d.colour === 'w' ? 'w' : 'b'}`;
     // a flat offset shade under the disc: no SVG filter, which Chromium can paint as black blocks over the board
-    return `<circle class="cb-shade" cx="${(X + 0.004).toFixed(4)}" cy="${(Y + 0.008).toFixed(4)}" r="${d.r}" fill="#2a1608" opacity="0.45"/><circle class="${cls}" data-id="${esc(d.id)}" cx="${X}" cy="${Y}" r="${d.r}"/>`;
+    return `<circle class="cb-shade" data-shade-for="${esc(d.id)}" cx="${(X + SHADE_X).toFixed(4)}" cy="${(Y + SHADE_Y).toFixed(4)}" r="${d.r}" fill="#2a1608" opacity="${SHADE_ALPHA}"/><circle class="${cls}" data-id="${esc(d.id)}" cx="${X}" cy="${Y}" r="${d.r}"/>`;
   }
 
   function discsFor(frame) {
@@ -276,7 +277,7 @@
     if (v.me >= 0 && e.seat === v.me) return null;
     const first = e.keyframes[0] && e.keyframes[0].d.find(([id]) => id === 'striker');
     if (!first) return null;
-    return { from: [0.5, BASE_Y], to: [first[1], first[2]], move: 900, ms: 1250 };
+    return { from: rotP([0.5, BASE_Y], v.players[e.seat].side), to: [first[1], first[2]], move: 900, ms: 1250 };
   }
 
   /** The first frame of a shot as it is shown before playback starts: the striker still on its bar. */
@@ -347,13 +348,17 @@
     if (svg) {
       const seen = new Set(pose.map(([id]) => id));
       for (const [id, x, y, alpha] of pose) {
-        const el = svg.querySelector(`[data-id="${CSS.escape(id)}"]`);
-        if (el) {
-          const [X, Y] = toSvg(ui.v, [x, y]);
-          el.setAttribute('cx', X); el.setAttribute('cy', Y); el.style.display = ''; el.style.opacity = String(alpha);
+        const key = CSS.escape(id);
+        const [X, Y] = toSvg(ui.v, [x, y]);
+        for (const el of svg.querySelectorAll(`[data-id="${key}"], [data-shade-for="${key}"]`)) {
+          const shade = el.hasAttribute('data-shade-for');
+          el.setAttribute('cx', X + (shade ? SHADE_X : 0));
+          el.setAttribute('cy', Y + (shade ? SHADE_Y : 0));
+          el.style.display = '';
+          el.style.opacity = String(alpha * (shade ? SHADE_ALPHA : 1));
         }
       }
-      svg.querySelectorAll('[data-id]').forEach((el) => { if (!seen.has(el.dataset.id)) el.style.display = 'none'; });
+      svg.querySelectorAll('[data-id], [data-shade-for]').forEach((el) => { if (!seen.has(el.dataset.shadeFor ?? el.dataset.id)) el.style.display = 'none'; });
     }
     // the app redraws the table (with its turn timer and toolbar) from the current state
     if (!inSetup && (t >= a.end + 0.25 || t > 25)) { ui.anim = null; ui.ctx.rerender(); return; }

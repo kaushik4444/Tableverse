@@ -154,8 +154,19 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
       const covered = tokens.some((t) => t.left < label.right && t.right > label.left && t.top < label.bottom && t.bottom > label.top);
       const nums = [...document.querySelectorAll('.sl-sq i')];
       const smallest = Math.min(...nums.map((n) => parseFloat(getComputedStyle(n).fontSize)));
-      const shown = nums.filter((n) => { const b = rect(n); const hit = document.elementFromPoint(b.left + 2, b.top + 2); return hit === n || n.contains(hit); }).length;
-      return { covered, smallest, shown, total: nums.length };
+      const art = document.querySelector('.sl-art');
+      const pointerEvents = art.style.pointerEvents;
+      try {
+        art.style.pointerEvents = 'auto';
+        const shown = nums.filter((n) => {
+          const b = rect(n);
+          const hit = document.elementFromPoint(b.left + 2, b.top + 2);
+          return hit === n || n.contains(hit);
+        }).length;
+        return { covered, smallest, shown, total: nums.length };
+      } finally {
+        art.style.pointerEvents = pointerEvents;
+      }
     });
     assert.equal(r.covered, false, 'a waiting token covers the Start label');
     assert.ok(r.smallest >= 9, `square numbers are ${r.smallest}px`);
