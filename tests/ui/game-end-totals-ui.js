@@ -86,6 +86,17 @@ const cells = (page) => page.$$eval('.xp-table-rating .xp-tr:not(.xp-th) .xp-c',
       assert.ok((await cells(page)).includes('+5'), 'the stored final ratings survive a failed lookup');
       await ctx.close();
     });
+
+    await test('a failed lookup with no answer yet is not final: the card stays loading and asks again', async () => {
+      const { at, messages } = finishedTable();
+      const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages });
+      await page.goto(srv.url + '/');
+      await page.waitForSelector('.end-xp', { timeout: 12000 });
+      await page.evaluate((id) => window.__push({ t: 'gameTotals', code: 'ENDTOT', id, ratings: {}, pending: false, failed: true }), at);
+      await page.waitForFunction(() => window.__sent.filter((m) => m.t === 'gameTotals').length >= 2, null, { timeout: 9000 });
+      assert.match(await page.textContent('.xp-status'), /Loading ratings/, 'a failed answer is not shown as ready');
+      await ctx.close();
+    });
   } finally {
     await browser.close();
     srv.server.close();
