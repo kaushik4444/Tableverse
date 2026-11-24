@@ -20,8 +20,7 @@ any other non-local host, and they refuse `NODE_ENV=production`. Never copy the 
 Guest play is off unless `GUEST_PLAY_ENABLED=true` is set (see `docs/GUEST_PLAY.md`); to try it locally, set it in `.env.local`. Guest play is in-memory only without a database. Everything that stores an account, a session or a result needs PostgreSQL. The functions involved are in
 `db/auth.js`, `db/account.js`, `db/friends.js`, `db/matches.js`, `db/admin.js` and `db/moderation.js`.
 
-Without a mail service nothing is sent: when no provider is configured the verification e-mail is skipped, and `REQUIRE_EMAIL_VERIFICATION=false`
-(set in `.env.local.example`) lets a new account log in at once. No Resend key is needed locally.
+Without a mail service nothing is sent: when no provider is configured the verification e-mail is skipped, so a new account stays unverified and cannot enter the lobby. Play locally with a seeded account (already verified) or as a guest. No Resend key is needed locally.
 
 ## Prerequisites
 
@@ -81,7 +80,7 @@ commands from `npm run dev:migrate` onward.
 ## Steps in order
 
 1. **Install:** `npm ci` (installs exactly the versions in `package-lock.json`, including the native `@node-rs/argon2` package).
-2. **Configure:** `.env.local` is a copy of `.env.local.example`. It holds the local database URL and `REQUIRE_EMAIL_VERIFICATION=false`.
+2. **Configure:** `.env.local` is a copy of `.env.local.example`. It holds the local database URL.
    It is git-ignored; never commit it.
 3. **Start the database:** the Docker container above, or your own local PostgreSQL.
 4. **Migrate:** `npm run dev:migrate` applies the migrations in `db/migrations` to the local database. Run it again after every
@@ -213,7 +212,7 @@ Windows PowerShell: the same three commands work.
 | `running scripts is disabled on this system` (PowerShell) | Use `npm.cmd`, or run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once. |
 | `npm ci` fails while installing `@node-rs/argon2` | Use Node.js 22 from nodejs.org and a working internet connection. Delete `node_modules` and run `npm ci` again. |
 | "Invalid email or password" right after seeding | The password was shown once. Run the seed command again with `--reset-password`. |
-| "Please verify your email" | `REQUIRE_EMAIL_VERIFICATION` is `true` in your shell or `.env.local`. Set it to `false`. Seeded accounts are already verified. |
+| "Please verify your email" | Registered accounts always verify their email; there is no switch. Use a seeded account (already verified) or play as a guest. |
 | Admin console says "forbidden" | The account is not the owner. Seed with `--owner` (works only while the local database has no owner). |
 | WebSocket connection fails in the browser | Open the app at `http://localhost:3000`, not a file path. Check that `npm run dev` is still running and no firewall blocks port 3000. |
 | `Cannot find module 'ws'` or `'pg'` | Run `npm ci` in the project folder. |

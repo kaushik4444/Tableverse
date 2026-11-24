@@ -598,11 +598,9 @@
     return true;
   }
 
+  // Always the same: a registered account verifies its e-mail first. (Not tied to the flag a guest session changes.)
   function authPolicyHintHTML() {
-    if (S.requireEmailVerification) {
-      return '<p class="auth-policy-hint">Email verification is required before entering the lobby.</p>';
-    }
-    return '<p class="auth-policy-hint optional" role="status">Friend-testing mode: email verification is optional right now. You can play immediately after creating your account.</p>';
+    return '<p class="auth-policy-hint">Email verification is required before entering the lobby.</p>';
   }
 
   /** What a guest is told when the owner has locked an area for guests (server code guest_locked, with the feature name). */
@@ -844,7 +842,7 @@
     beginSignIn();
     if (S.welcomeDue) showWelcome();
     connect();
-    if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
+    if (!S.emailVerified) toast('Email verification pending. Verify your email to enter the lobby.');
   }
 
   /** "Play as a guest": the server makes a temporary account and a session cookie. The page connects as that guest. */
@@ -1731,7 +1729,7 @@
     }
     if (S.welcomeDue) showWelcome();
     connect();
-    if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
+    if (!S.emailVerified) toast('Email verification pending. Verify your email to enter the lobby.');
   })();
 
   // ------------------------------------------------------------ rendering

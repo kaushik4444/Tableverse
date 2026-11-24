@@ -27,17 +27,15 @@ All twelve games are open to every player in this release.
 
 Bots can fill open seats so tables can start quickly.
 
-## Friend-testing status (current)
+## Accounts and verification
 
 Tableverse is open to players, with all twelve games available in this release.
 
 - Playing needs an account, or a guest visit when guest play is switched on (`GUEST_PLAY_ENABLED=true`; see `docs/GUEST_PLAY.md`).
-- **Email verification is currently optional** in this environment.
-- This is controlled by `REQUIRE_EMAIL_VERIFICATION`.
-  - `REQUIRE_EMAIL_VERIFICATION=false` → immediate play allowed after signup/login.
-  - `REQUIRE_EMAIL_VERIFICATION=true` → verified email required before lobby access.
-  - Missing or invalid values default to secure mode (`true`).
-- Optional mode does **not** fake verification: `email_verified_at` remains null until real verification.
+- A registered account must verify its email before it can join a table. There is no switch for this.
+- A guest plays without an account, and is the only unverified player.
+- Verification is never faked: `email_verified_at` stays empty until the verification link is used.
+- Passwords: 8 to 200 characters. Common words such as "password", and a password that contains your username or the first part of your email, are refused. No character mix is required.
 
 ## What exists today
 
@@ -188,7 +186,7 @@ Tableverse uses PostgreSQL (Neon, Supabase, or self-hosted) for accounts, sessio
 - Session is stored only in an HttpOnly `ct_session` cookie (`Secure` in production).
 - JavaScript never receives the session token in production responses.
 - CSRF uses the `ct_csrf` cookie + `X-CSRF-Token` header check on auth POST routes.
-- `REQUIRE_EMAIL_VERIFICATION` controls whether verified email is required for lobby entry.
+- Registered accounts always need a verified email before lobby entry. There is no setting for this.
 - Resend/forgot-password flows are non-enumerating and return the same outward response.
 
 ### Production email requirements
@@ -208,7 +206,7 @@ If provider delivery fails after signup, the account is still created and the re
 
 - `NODE_ENV=production`
 - `TRUST_PROXY=1`
-- `REQUIRE_EMAIL_VERIFICATION=true` (secure default)
+- Verification is always required for registered accounts (the old `REQUIRE_EMAIL_VERIFICATION` switch is ignored).
 
 Set `DATABASE_URL` and email variables in Render env settings before deploying.
 
