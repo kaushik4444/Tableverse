@@ -167,8 +167,8 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 .sheet h2 { font-size: 28px; }
 @keyframes veil { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
-.menu { background: #17231a; border-color: rgba(255, 240, 205, .14); }
-.menu-item:hover, .menu-item:focus-visible { background: rgba(255, 246, 222, .09); }
+.menu { background: var(--menu-bg); border-color: var(--menu-line); }
+.menu-item:hover, .menu-item:focus-visible { background: var(--menu-hover); }
 .chat { background: #141f17; }
 .bidbox, .pk-raise { background: var(--wood-d); border-color: var(--wood-line); border-radius: 16px; }
 .pk-pot, .pk-bet, .standin { background: var(--wood-d); border: 1px solid var(--wood-line); }
