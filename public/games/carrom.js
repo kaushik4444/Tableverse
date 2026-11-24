@@ -357,6 +357,7 @@
       <div class="wz-status ${v.myTurn && !ui.anim ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       <details class="cb-moves" open><summary>Shots</summary>${logHTML(v)}</details>
       ${overlayHTML(v)}</div>`;
+    fitSlider();
     root.onclick = onClick;
     root.onkeydown = onKey;
     root.onpointerdown = onPointerDown;
@@ -401,6 +402,37 @@
     if (on) g.setAttribute('filter', 'url(#cb-shadow)'); else g.removeAttribute('filter');
   }
 
+  /**
+   * The slider is the board's own baseline: its track runs from the viewer's baseline end dot (0.2) to the other (0.8), so a
+   * striker value and the striker on the board are the same spot. Called after each draw and when the page changes size.
+   */
+  function fitSlider() {
+    const root = ui.root;
+    if (!root) return;
+    const slider = root.querySelector('.cb-slider'), track = root.querySelector('.cb-track'), svg = root.querySelector('.cb-svg');
+    if (!slider || !track || !svg) return;
+    const dots = [...svg.querySelectorAll('.cb-base-dot')].map((d) => d.getBoundingClientRect());
+    if (dots.length < 2) return;
+    const lowest = Math.max(...dots.map((r) => r.top)); // the viewer's own baseline is always the bottom one
+    const own = dots.filter((r) => Math.abs(r.top - lowest) < 2).map((r) => r.left + r.width / 2);
+    if (own.length < 2) return;
+    const s = slider.getBoundingClientRect();
+    track.style.left = `${Math.min(...own) - s.left}px`;
+    track.style.right = `${s.right - Math.max(...own)}px`;
+    positionThumb();
+  }
+
+  /** The thumb sits on the track at the striker's value (20 to 80). */
+  function positionThumb() {
+    const root = ui.root;
+    if (!root) return;
+    const slider = root.querySelector('.cb-slider'), track = root.querySelector('.cb-track'), thumb = root.querySelector('.cb-thumb');
+    if (!slider || !track || !thumb) return;
+    const s = slider.getBoundingClientRect(), t = track.getBoundingClientRect();
+    thumb.style.left = `${t.left - s.left + ((ui.aim.x - 20) / 60) * t.width}px`;
+  }
+  window.addEventListener('resize', () => { if (ui.root && ui.root.isConnected) fitSlider(); });
+
   function syncAim() {
     const root = ui.root;
     if (!root) return;
@@ -416,8 +448,8 @@
     if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); striker.setAttribute('aria-valuenow', String(ui.aim.x)); }
     const ring = svg && svg.querySelector('.cb-ring');
     if (ring) { const [rx, ry] = dispToSvg([ui.aim.x / 100, BASE_Y]); ring.setAttribute('cx', rx); ring.setAttribute('cy', ry); ring.classList.toggle('set', ui.aim.power > 0); }
-    const thumb = root.querySelector('.cb-thumb'), slider = root.querySelector('[data-slider]');
-    if (thumb) thumb.style.left = `${((ui.aim.x - 20) / 60) * 100}%`;
+    const slider = root.querySelector('[data-slider]');
+    positionThumb();
     if (slider) slider.setAttribute('aria-valuenow', String(ui.aim.x));
     const tip = root.querySelector('.cb-tip');
     if (tip) tip.textContent = tipText();

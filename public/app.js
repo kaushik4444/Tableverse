@@ -3268,7 +3268,6 @@
     standInWatch.observe($app, { childList: true, subtree: true });
   }
 
-  /** The Ready bar: shown while the table waits for everybody to press Ready (the first round, and each round between). Generic for every game. */
   /** The Ready gate as a game sees it: whether this seat is seated and ready, and who the table still waits for (null when no gate). */
   function gateInfo() {
     const gate = S.room && S.room.status === 'playing' && S.room.gate;
@@ -3288,10 +3287,26 @@
    * (marked data-ready-here); every other game gets it in place of the status line just above the hand. It never covers the table,
    * and while you have not pressed it the bid panels are hidden (the table accepts no moves until everybody is ready).
    */
+  /* Until this seat has pressed Ready, the table takes no input: every press, drag and key on the game is stopped before it
+     reaches the game. The Ready box, the top bar, chat, and the leave, rules and player-card buttons stay usable. The server refuses moves too. */
+  const GATE_OPEN_ACTS = new Set(['readyUp', 'leave', 'activityLog', 'showRules', 'playerCard']);
+  const gateGuard = (e) => {
+    if (!$app.classList.contains('gate-locked')) return;
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    if (t.closest('.ready-box, .topbar, .chat, [data-chat], [data-keep-open]')) return;
+    const act = t.closest('[data-act]');
+    if (act && GATE_OPEN_ACTS.has(act.dataset.act)) return;
+    e.stopPropagation(); e.preventDefault();
+  };
+  ['pointerdown', 'mousedown', 'touchstart', 'click', 'keydown'].forEach((type) => $app.addEventListener(type, gateGuard, { capture: true, passive: false }));
+
+  /** The Ready bar: shown while the table waits for everybody to press Ready (the first round, and each round between). Generic for every game. */
   function placeReady() {
     const room = S.room;
     const gate = gateInfo();
     $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
+    $app.classList.toggle('gate-locked', !!(gate && gate.seated && !gate.youReady)); // this seat must press Ready before anything else
     // the box this function adds is rebuilt on every call, so its "waiting for" list and count never go stale; a game's own box is left alone
     $app.querySelectorAll('[data-ready-placed]').forEach((el) => el.remove());
     if (!gate || room.status !== 'playing') {
