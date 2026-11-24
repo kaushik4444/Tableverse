@@ -145,6 +145,24 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('small phone: the Start label is not covered by a waiting token, square numbers are at least 9px and show over the snakes and ladders', async () => {
+    const { page, ctx } = await open(tableMessages('snakesladders', four), { width: 320, height: 568 });
+    const r = await page.evaluate(() => {
+      const rect = (el) => el.getBoundingClientRect();
+      const label = rect(document.querySelector('.sl-start-label'));
+      const tokens = [...document.querySelectorAll('.sl-token')].map(rect);
+      const covered = tokens.some((t) => t.left < label.right && t.right > label.left && t.top < label.bottom && t.bottom > label.top);
+      const nums = [...document.querySelectorAll('.sl-sq i')];
+      const smallest = Math.min(...nums.map((n) => parseFloat(getComputedStyle(n).fontSize)));
+      const shown = nums.filter((n) => { const b = rect(n); const hit = document.elementFromPoint(b.left + 2, b.top + 2); return hit === n || n.contains(hit); }).length;
+      return { covered, smallest, shown, total: nums.length };
+    });
+    assert.equal(r.covered, false, 'a waiting token covers the Start label');
+    assert.ok(r.smallest >= 9, `square numbers are ${r.smallest}px`);
+    assert.ok(r.shown >= r.total - 2, `only ${r.shown} of ${r.total} square numbers are on top of the board art`);
+    await ctx.close();
+  });
+
   await test('phone width: nothing scrolls sideways and the Roll button is on screen', async () => {
     const { page, ctx } = await open(tableMessages('snakesladders', [{ name: 'Aarav the Magnificent' }, { name: 'Charlotte-Anne' }, { name: 'Dmitri' }, { name: 'Eve' }]), { width: 320, height: 640 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true);
