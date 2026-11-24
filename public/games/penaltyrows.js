@@ -96,7 +96,8 @@
   /** The spotlight for a row being collected: its taker and the points. Other steps need none. */
   function spotFor(v, e, phase) {
     if (phase !== 'collect') return null;
-    return { card: cardHTML({ n: e.n, p: e.p }, { cls: 'tiny' }), caption: `${nameOf(v, e.by)} collected ${rowName(e)} · ${penWord(e.took)}`, tone: 'take', ms: 2300 };
+    // the spotlight sits outside the table, so the card is wrapped in .prt to get its styles; the number shows once (the corner copy is hidden by .spot)
+    return { card: `<div class="prt">${cardHTML({ n: e.n, p: e.p }, { cls: 'spot' })}</div>`, caption: `${nameOf(v, e.by)} collected ${rowName(e)} · ${penWord(e.took)}`, tone: 'take', ms: 2300 };
   }
   /** Shows one replayed step in the feed (and the spotlight, for a row collected). */
   function announce(anim, k) {
@@ -166,7 +167,9 @@
   const starsOf = (n) => (n <= 0 ? '' : '💣'.repeat(Math.min(n, 12)) + (n > 12 ? `×${n}` : ''));
 
   function cardHTML(c, { cls = '', attrs = '', tag = 'div' } = {}) {
-    const dots = `<span class="pr-pips" aria-hidden="true">${starsOf(c.p)}</span>`;
+    // four or more bombs wrap onto a second line at a readable size, so every bomb shows and none is clipped
+    const size = c.p >= 4 ? ' pips-wrap' : '';
+    const dots = `<span class="pr-pips${size}" aria-hidden="true">${starsOf(c.p)}</span>`;
     return `<${tag} class="pr-card pen${Math.min(c.p, 7)} ${cls}" data-cn="${c.n}" aria-label="${esc(`Number ${c.n}, ${penWord(c.p)}`)}" ${attrs}><em class="pr-tl" aria-hidden="true">${c.n}</em><b>${c.n}</b>${dots}</${tag}>`;
   }
   const backHTML = (cls = '') => `<div class="pr-card back tiny ${cls}" aria-hidden="true"></div>`;
@@ -379,9 +382,8 @@
         <div class="wz-round"><b>Take 5</b><span class="label"> · round ${v.round} · turn ${v.turn}/${v.handSize}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-pr="rules">Rules</button>', 'pr')}
       </div>
-      ${tabs}
+      <div class="pr-bar">${tabs}<div class="wz-status ${mine ? 'mine' : ''}"><span>${guidance(v)}</span></div></div>
       ${body}
-      <div class="wz-status ${mine ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${tab === 'table' ? handHTML(v) : ''}
       ${overlayHTML(v)}
     </div>`;
