@@ -62,6 +62,36 @@ async function test(name, fn) { try { await fn(); passed++; console.log('  ok  '
         assert.ok(banners >= 9 && banners <= 11, `banners asked ${banners} times in 10 active minutes`);
       } finally { await ctx.close(); }
     });
+
+    await test('a hidden home tab skips all background requests and refreshes once when visible again', async () => {
+      const { page, ctx } = await scriptedPage(browser, { viewport: { width: 1280, height: 800 }, messages: [welcome({ games: games.list() })] });
+      const paths = [
+        '/api/announcements', '/api/me/friends',
+        '/api/me/friend-requests?direction=incoming', '/api/me/friend-requests?direction=outgoing',
+        '/api/me/table-invitations?direction=incoming', '/api/me/table-invitations?direction=outgoing',
+      ];
+      const counts = () => paths.map((path) => calls.filter((c) => c.path === path).length);
+      const visibility = (value) => page.evaluate((value) => {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value });
+        document.dispatchEvent(new Event('visibilitychange'));
+      }, value);
+      try {
+        await page.clock.install();
+        await page.goto(url + '/');
+        await page.waitForSelector('.game-card');
+        await settle(page);
+        const before = counts();
+        await visibility('hidden');
+        await page.clock.runFor(120000);
+        await page.evaluate(() => window.dispatchEvent(new Event('keydown')));
+        await settle(page);
+        assert.deepEqual(counts(), before, 'ticks and input while hidden do not refresh any endpoint');
+        await visibility('visible');
+        await page.evaluate(() => window.dispatchEvent(new Event('keydown')));
+        await settle(page);
+        assert.deepEqual(counts(), before.map((n) => n + 1), 'return refreshes all endpoints once, even with immediate input');
+      } finally { await ctx.close(); }
+    });
   } finally { await browser.close(); server.close(); }
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
