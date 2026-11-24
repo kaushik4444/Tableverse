@@ -222,6 +222,15 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('small phone: rank chips keep a tap area of about 44px without making the grid taller', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMessages('gofish', four), viewport: { width: 320, height: 568 } });
+    await page.goto(url + '/');
+    await page.waitForSelector('.gf-chip');
+    const chips = await page.evaluate(() => [...document.querySelectorAll('.gf-chip')].slice(0, 4).map((c) => ({ after: getComputedStyle(c, '::after').content, w: c.getBoundingClientRect().width })));
+    for (const c of chips) assert.notEqual(c.after, 'none', 'a chip has no enlarged tap area');
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;
