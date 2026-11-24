@@ -258,7 +258,8 @@
       const c = cards[i], last = i === cards.length - 1;
       const artFn = window.CardTable.howtoArt[gameId];
       const art = (c.art >= 0 && artFn && artFn(c.art, g)) || `<span class="ht-mark">${gameMark(g)}</span>`;
-      el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">
+      // The sheet stays in place between cards (only its contents change), so its size and entrance animation do not repeat per card.
+      const inner = `
         <div class="ht-kicker">How to play ${esc(g.name)} · ${i + 1} of ${cards.length}</div>
         <h2>${esc(c.title)}</h2>
         <div class="ht-art" aria-hidden="true">${art}</div>
@@ -266,7 +267,9 @@
         ${last && note ? `<p class="ht-note">${esc(note)}</p>` : ''}
         <div class="ht-dots" aria-hidden="true">${cards.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
         <div class="row ht-actions">${i > 0 ? '<button class="btn ghost" type="button" data-ht="back">Back</button>' : ''}${last ? '<button class="btn" type="button" data-ht="done" data-close="1">Got it</button>' : '<button class="btn" type="button" data-ht="next">Next</button>'}${last ? '' : '<button class="btn ghost" type="button" data-ht="done" data-close="1">Skip</button>'}</div>
-      </div>`;
+      `;
+      if (el.firstElementChild) el.firstElementChild.innerHTML = inner;
+      else el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">${inner}</div>`;
       const primary = el.querySelector('[data-ht="next"], [data-ht="done"]');
       if (primary) primary.focus();
     };

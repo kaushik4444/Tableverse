@@ -70,6 +70,24 @@ const OWN = /made with our own cards/i;
   });
 
   await closeOpenContexts();
+  for (const size of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    for (const id of ['chess', 'ludo', 'snakesladders']) {
+      await test(`${id} at ${size.width}x${size.height}: the how-to box keeps one size on every card`, async () => {
+        const { page, ctx } = await scriptedPage(browser, { messages: tableMessages(id, [{ name: 'Ann' }, { name: 'Bo' }]), firstTime: true, viewport: size });
+        await page.goto(url + '/');
+        await page.waitForSelector('.ht-sheet', { timeout: 8000 });
+        const box = () => page.locator('.ht-sheet').boundingBox().then((b) => ({ w: Math.round(b.width), h: Math.round(b.height) }));
+        await page.waitForTimeout(600); // let the sheet's entrance animation finish before measuring
+        const first = await box();
+        const total = await page.locator('.ht-dots i').count();
+        for (let n = 1; n < total; n++) await page.click('[data-ht="next"]');
+        const last = await box();
+        assert.deepEqual(last, first, `first card ${JSON.stringify(first)} vs last card ${JSON.stringify(last)}`);
+        await ctx.close();
+      });
+    }
+  }
+
   await browser.close();
   server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
