@@ -79,7 +79,7 @@ button.card { cursor: pointer; }
 .t29 .card.suit-G { --sc: #138a4a; }
 .t29 .card .rk { color: var(--sc); font-weight: 800; }
 .t29 .card .pip { color: var(--sc); opacity: 1; }
-.t29 .card .cpts { color: #fff; }
+.t29 .card .cpts { color: #fff; background: rgba(0, 0, 0, .6); }
 .t29 .card.back { background: repeating-linear-gradient(45deg, #3a2a7a 0 6px, #4b3a96 6px 12px); }
 .tbox { flex: 1; display: grid; gap: 1px; padding: 6px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-line); line-height: 1.15; }
 .tbox b { font-size: 22px; font-family: var(--serif); }
