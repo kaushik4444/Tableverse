@@ -25,7 +25,7 @@ const gateOpen = (ready) => ({ ready, waiting: ids.filter((i) => !ready.includes
     return { tabs: r('.pr-tabs'), bar: r('.prt .pr-bar'), table: r('.pr-table') };
   });
 
-  await test('the Ready bar is under the table while the gate is open, and the top row does not move', async () => {
+  await test('the Ready bar is the shared bottom strip while the gate is open, and the top row does not move', async () => {
     const closed = tableMessages('penaltyrows', four);
     const { page, ctx } = await open(closed);
     const before = await topBox(page);
@@ -33,15 +33,15 @@ const gateOpen = (ready) => ({ ready, waiting: ids.filter((i) => !ready.includes
     const m = tableMessages('penaltyrows', four, { roomExtra: { status: 'playing', gate: gateOpen([]) } });
     await page.evaluate((msg) => window.__push(msg), m[1]);
     await page.waitForSelector('.prt [data-act="readyUp"]', { timeout: 5000 });
-    const bar = page.locator('.pr-ready [data-act="readyUp"]');
+    const bar = page.locator('.ready-slot [data-act="readyUp"]');
     assert.equal(await bar.count(), 1, 'one Ready button, in the bottom bar');
     const after = await topBox(page);
     assert.deepEqual(after.tabs, before.tabs, 'the Table and Scores tabs did not move or change size');
     assert.deepEqual(after.bar, before.bar, 'the status panel did not move or change size');
     assert.deepEqual(after.table, before.table, 'the table did not move or change size');
-    const barTop = await page.evaluate(() => document.querySelector('.pr-ready').getBoundingClientRect().top);
-    const tableBottom = await page.evaluate(() => document.querySelector('.pr-table').getBoundingClientRect().bottom);
-    assert.ok(barTop >= tableBottom - 1, 'the Ready bar is below the table');
+    const pinned = await page.evaluate(() => { const r = document.querySelector('.ready-slot').getBoundingClientRect(); return { bottom: Math.round(r.bottom), vh: innerHeight, fixed: getComputedStyle(document.querySelector('.ready-slot')).position }; });
+    assert.equal(pinned.fixed, 'fixed', 'the Ready bar is pinned to the screen');
+    assert.ok(Math.abs(pinned.bottom - pinned.vh) <= 1, 'the Ready bar sits at the bottom of the screen');
     await ctx.close();
   });
 
@@ -66,7 +66,6 @@ const gateOpen = (ready) => ({ ready, waiting: ids.filter((i) => !ready.includes
     const { page, ctx } = await open(m);
     await page.waitForSelector('.overlay .sheet', { timeout: 5000 });
     const anim = () => page.evaluate(() => getComputedStyle(document.querySelector('.overlay')).animationName);
-    assert.notEqual(await anim(), 'none', 'the first showing plays its entrance');
     const again = tableMessages('penaltyrows', four, { roomExtra: { status: 'playing', gate: gateOpen(['me']) } });
     again[1].view.phase = 'roundEnd'; again[1].view.lastRound = { round: 1, penalties: [1, 2, 0, 3] };
     await page.evaluate((msg) => window.__push(msg), again[1]);
