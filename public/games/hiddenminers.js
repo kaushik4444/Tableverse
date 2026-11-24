@@ -10,12 +10,32 @@
   const roleName = (r) => (r === 'saboteur' ? 'Saboteur' : 'Digger');
 
   /** One tunnel piece, drawn as rock with tunnels cut to the open sides. A dead end has a rock plug in the middle. */
+  // A tile: rock with flecks, and each open side a curved passage cut into it that meets the centre. A dead end stops short
+  // and is closed off. Some passages have a little fallen rock on the floor; which ones is fixed by the tile itself.
   function tileSVG(mask, cut, cls = '') {
-    const arm = { 1: [38, 0, 24, 50], 2: [50, 38, 50, 24], 4: [38, 50, 24, 50], 8: [0, 38, 50, 24] };
-    const stub = { 1: [38, 0, 24, 30], 2: [70, 38, 30, 24], 4: [38, 70, 24, 30], 8: [0, 38, 30, 24] };
-    const parts = [1, 2, 4, 8].filter((b) => mask & b).map((b) => { const [x, y, w, h] = (cut ? stub : arm)[b]; return `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`; }).join('');
-    const hub = cut ? '' : '<rect x="38" y="38" width="24" height="24"/>';
-    return `<svg class="hm-tile ${cls}" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" class="rock"/><g class="way">${parts}${hub}</g>${cut ? '<path class="plug" d="M30 30 L70 70 M70 30 L30 70"/>' : ''}</svg>`;
+    const C = 50;
+    const E = { 1: [50, 0], 2: [100, 50], 4: [50, 100], 8: [0, 50] }; // where each passage meets the tile edge
+    const bits = [1, 2, 4, 8].filter((b) => mask & b);
+    const frac = cut ? 0.4 : 0; // a dead end stops 40% of the way in from the edge
+    const geom = (b) => {
+      const [ex, ey] = E[b];
+      const tx = C + (ex - C) * frac, ty = C + (ey - C) * frac;
+      const len = Math.hypot(tx - ex, ty - ey) || 1;
+      return { ex, ey, tx, ty, mx: (ex + tx) / 2, my: (ey + ty) / 2, nx: -(ty - ey) / len, ny: (tx - ex) / len };
+    };
+    const arms = bits.map((b) => {
+      const g = geom(b), bend = (cut ? 6 : 9) * (b === 1 || b === 4 ? 1 : -1); // alternate the curve so passages wind
+      return `M${g.ex} ${g.ey}Q${(g.mx + g.nx * bend).toFixed(2)} ${(g.my + g.ny * bend).toFixed(2)} ${g.tx.toFixed(2)} ${g.ty.toFixed(2)}`;
+    }).join('');
+    const rubble = bits.map((b) => {
+      if ((mask * 13 + b * 5 + (cut ? 7 : 0)) % 4 !== 0) return ''; // only some passages have fallen rock
+      const g = geom(b), x = g.mx + g.nx * 6, y = g.my + g.ny * 6;
+      return `<g class="debris"><ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="2.6" ry="2"/><ellipse cx="${(x + 3.4).toFixed(1)}" cy="${(y + 1.4).toFixed(1)}" rx="1.5" ry="1.2"/><ellipse cx="${(x - 2.4).toFixed(1)}" cy="${(y + 2).toFixed(1)}" rx="1.2" ry="1"/></g>`;
+    }).join('');
+    const hub = cut ? '' : '<circle class="hub-rim" cx="50" cy="50" r="13.5"/><circle class="hub-bore" cx="50" cy="50" r="11.5"/>';
+    const specks = [[12, 14], [84, 10], [22, 80], [78, 86], [8, 52], [92, 46], [46, 8], [58, 92], [70, 24]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.4" class="speck"/>`).join('');
+        const plug = cut ? '<path class="plug" d="M30 30 L70 70 M70 30 L30 70"/>' : '';
+    return `<svg class="hm-tile ${cls}" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" class="rock"/>${specks}<g class="way"><path class="rim" d="${arms}"/>${hub}<path class="bore" d="${arms}"/>${rubble}<path class="deep" d="${arms}"/></g>${plug}</svg>`;
   }
 
   const describeTile = (mask, cut) => {
