@@ -280,7 +280,7 @@
       ${overlayHTML(v)}
     </div>`;
     const h2 = root.querySelector('.hm-hand');
-    if (h2) h2.scrollLeft = scroll;
+    if (h2) { h2.scrollLeft = scroll; h2.classList.toggle('more', h2.scrollWidth > h2.clientWidth + 2); } // the fade shows only when cards are off screen
     restoreFocus(root, focus);
     // a round or game summary takes the keyboard: its button gets focus, and the game behind it is inert until it is dismissed
     const game = root.querySelector('.hm-game');
