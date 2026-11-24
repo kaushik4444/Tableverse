@@ -64,6 +64,9 @@
 .prt .pr-card.tiny { width: 36px; }
 .prt .pr-card.tiny b { font-size: 13px; margin-top: 22%; }
 .prt .pr-card.tiny em.pr-tl, .prt .pr-card.tiny .pr-pips { display: none; }
+.prt .pr-card.spot em.pr-tl { display: none; } /* the spotlight card shows its number once, with its bombs */
+.prt .pr-card.spot { width: 58px; min-height: 84px; }
+.prt .pr-card.spot b { margin-top: 4%; }
 .prt .pr-card.new { animation: prDrop .7s cubic-bezier(.2, .8, .2, 1) both; }
 
 /* your hand */
