@@ -1023,7 +1023,7 @@
   async function loadSocial({ quiet = false } = {}) {
     if (!S.ready || S.guest) return;
     let before = -1;
-    if (!quiet) { S.socialLoading = true; S.socialError = ''; render(); }
+    if (!quiet) { S.socialLoading = true; S.socialError = ''; }
     try {
       const paths = [
       '/api/me/friends',
@@ -1565,7 +1565,7 @@
         if (S.room && S.room.code === m.code && S.room.outcome && S.room.outcome.id === m.id) {
           // a late pending reply, or a failed lookup, must not replace a final answer already stored for this match
           const haveFinal = S.gameTotals && S.gameTotals.code === m.code && S.gameTotals.id === m.id && !S.gameTotals.pending && !S.gameTotals.failed;
-          if (!((m.pending || m.failed) && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending), failed: Boolean(m.failed) }; render(); }
+          if (!((m.pending || m.failed) && haveFinal)) { S.gameTotals = { code: m.code, id: m.id, ratings: m.ratings || null, pending: Boolean(m.pending), failed: Boolean(m.failed) }; if (!updateEndCard()) render(); }
         }
         break;
       case 'error':
@@ -2300,7 +2300,7 @@
         <div class="tabs" role="tablist">${tabBtn('overview', 'Overview')}${tabBtn('history', `History${P.history && P.history.total ? ` <small>${P.history.total}</small>` : ''}`)}${tabBtn('account', 'Account')}</div>
         <section class="tab-panel" role="tabpanel">${panel}</section>`;
     }
-    $app.innerHTML = `${topbarHTML()}<main class="page profile-page"><a class="back-link" href="/" data-act="goHome">← Back to games</a>${inner}</main>`;
+    paintApp(`${topbarHTML()}<main class="page profile-page"><a class="back-link" href="/" data-act="goHome">← Back to games</a>${inner}</main>`);
   }
 
   /** Only people you are friends with show their status and connection on their page (it comes from your own friends list). */
@@ -2335,7 +2335,7 @@
         <div class="stat-grid"><div class="stat-tile"><span class="stat-v">${d.played}</span><span class="stat-l">Games played</span></div><div class="stat-tile good"><span class="stat-v">${d.wins}</span><span class="stat-l">Wins</span></div><div class="stat-tile"><span class="stat-v">${d.winRate === null ? '–' : d.winRate + '%'}</span><span class="stat-l">Win rate</span></div></div>
         ${!S.guest && S.username && S.username.toLowerCase() !== String(d.username).toLowerCase() ? playerActionsHTML(P, d) : ''}`;
     }
-    $app.innerHTML = `${topbarHTML()}<main class="page profile-page"><a class="back-link" href="/" data-act="goHome">← Back to games</a>${inner}</main>`;
+    paintApp(`${topbarHTML()}<main class="page profile-page"><a class="back-link" href="/" data-act="goHome">← Back to games</a>${inner}</main>`);
   }
 
   // ---- account deletion
@@ -2786,7 +2786,23 @@
   /** Fields whose text must survive a redraw (someone joins, a friend comes online) while the person is typing or choosing. */
   const KEEP_FIELDS = ['name', 'friendSearch', 'tableInviteFriend', 'code'];
   const VALUE_FIELDS = ['friendSearch', 'tableInviteFriend']; // the others are driven by state (S.name, S.draftCode): only focus and cursor come back
+  /** The last HTML written to the app root. A redraw with the same markup does nothing: no DOM churn, no replayed animations. */
+  let lastAppHtml = null;
+  let cardsShownAt = 0; // when the game cards last appeared (their entrance takes about half a second)
+  function paintApp(html) {
+    if (html === lastAppHtml) return;
+    lastAppHtml = html;
+    const hadCards = !!$app.querySelector('.game-card');
+    const now = performance.now();
+    $app.innerHTML = html;
+    if (!hadCards && $app.querySelector('.game-card')) cardsShownAt = now;
+    // the entrance animation of the game cards runs when they first appear, not on every redraw once they have settled
+    $app.classList.toggle('no-anim', hadCards && now - cardsShownAt >= 600);
+  }
+  /** Which screen is showing: a redraw of the same screen keeps the person's scroll position. */
+  function screenKey() { return `${S.page}|${S.room ? S.room.code + ':' + S.room.status : ''}|${S.ready ? 1 : 0}`; }
   function render() {
+    const scrollBefore = window.scrollY, screenBefore = screenKey();
     const ae = document.activeElement;
     const focusedId = ae && KEEP_FIELDS.includes(ae.id) ? ae.id : null;
     // A folded panel the person opened (game options, spectators) stays open when the screen redraws, and a changed option
@@ -2802,10 +2818,10 @@
     }
     if (!S.room || S.room.status !== 'finished') S.endFlow = null;
     if (!S.ready && !S.guest && !S.room) {
-      $app.innerHTML = '<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle class="seat-halo" cx="128" cy="216" r="27" fill="#fbbf24" fill-opacity=".25"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>';
+      paintApp('<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle class="seat-halo" cx="128" cy="216" r="27" fill="#fbbf24" fill-opacity=".25"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>');
     } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
     else if (!S.room && S.page === 'player') renderPlayerPage();
-    else if (!S.room && S.page === 'friends' && !S.guest) $app.innerHTML = topbarHTML() + friendsPageHTML();
+    else if (!S.room && S.page === 'friends' && !S.guest) paintApp(topbarHTML() + friendsPageHTML());
     else if (!S.room) renderHome();
     else if (S.room.status === 'lobby') renderLobby();
     else renderGame();
@@ -2817,6 +2833,7 @@
     if ($chat && S.chatOpen) drawChat();
     showLevelUpDialog();
     for (const id of openFolds) { const d = document.getElementById(id); if (d && d.tagName === 'DETAILS') d.open = true; }
+    if (screenKey() === screenBefore && Math.abs(window.scrollY - scrollBefore) > 1) window.scrollTo(0, scrollBefore);
     if (focusedOpt) { const el = $app.querySelector(`[data-opt="${CSS.escape(focusedOpt)}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
     if (focusedSeat) { const el = $app.querySelector(focusedSeat.vid ? `[data-act="${focusedSeat.act}"][data-vid="${CSS.escape(focusedSeat.vid)}"]` : `[data-act="${focusedSeat.act}"]`); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
     for (const id of KEEP_FIELDS) {
@@ -2825,7 +2842,7 @@
       if (!el || !was) continue;
       if (VALUE_FIELDS.includes(id) && el.value !== was.value && (el.tagName === 'SELECT' ? [...el.options].some((o) => o.value === was.value) : true)) el.value = was.value;
       if (id === focusedId) {
-        el.focus();
+        el.focus({ preventScroll: true });
         try { if (was.start !== null && was.start !== undefined) el.setSelectionRange(was.start, was.end); } catch { /* selects and some input types have no selection */ }
       }
     }
@@ -2878,7 +2895,7 @@
     const name = S.guest ? '' : (S.named ? S.name : '');
     const oldTables = $app.querySelector('.public-tables'); // the open-tables list keeps its place when the home page redraws
     const tablesAt = oldTables ? { x: oldTables.scrollLeft, y: oldTables.scrollTop } : null;
-    $app.innerHTML = `
+    paintApp(`
     ${topbarHTML()}
     <main class="page wide home">
       <section class="home-hero">
@@ -2911,7 +2928,7 @@
       ${comingSoonHTML()}
       ${recentTablesHTML()}
       <footer class="home-foot">${[S.guest ? '' : '<button type="button" class="linklike" data-act="openWhatsNew">What’s new</button>', '<a class="foot-follow" href="https://www.instagram.com/playtableverse/" target="_blank" rel="noopener noreferrer">Follow @playtableverse</a>', S.privacyPublished ? '<a href="/privacy">Privacy notice</a>' : '', S.termsPublished ? '<a href="/terms">Terms</a>' : '', S.impressumPublished ? '<a href="/impressum.html">Impressum</a>' : ''].filter(Boolean).join(' · ')}</footer>
-    </main>`;
+    </main>`);
     const tablesNow = $app.querySelector('.public-tables');
     if (tablesNow && tablesAt) { tablesNow.scrollLeft = tablesAt.x; tablesNow.scrollTop = tablesAt.y; }
   }
@@ -3024,7 +3041,7 @@
         : `<span class="label">${r.seats} players</span>`;
     const seatStatus = `${n} of ${r.seats} seat${r.seats === 1 ? '' : 's'} filled${open > 0 ? `; empty seats become bots when the game starts` : ''}.`;
     const opts = (g.options || []).map((o) => optionHTML(o, r, isHost)).join('');
-    $app.innerHTML = `
+    paintApp(`
     <main class="page">
       <div class="row" style="justify-content:space-between">
         <button class="btn ghost small" data-act="leave">← Leave</button>
@@ -3060,7 +3077,7 @@
           ? `<div class="start-bar"><button class="btn big" data-act="start">Start game${open > 0 ? ` <small>· ${open} bot${open === 1 ? '' : 's'} will join</small>` : ''}</button></div>`
           : `<div class="start-bar wait"><p class="label" style="text-align:center;margin:0">Waiting for the host to start… ${esc(seatStatus)}</p></div>`
       }
-    </main>`;
+    </main>`);
     refreshVoiceUI();
   }
 
@@ -3141,7 +3158,7 @@
         ${tile('Wins', g.wins, 'good')}
         ${tile('Losses', g.losses)}
         ${tile('Win rate', g.winRate + '%')}
-        ${g.best !== null && g.bestLabel ? tile(esc(g.bestLabel), esc(g.bestText), 'wide') : ''}
+        <!-- The raw per-match score ("Highest score") is the legacy scoring and is not shown. The skill rating replaces it once it is live (design/scoring-skill-ratings.md). -->
       </div>
       ${ratingBoardHTML(P, meta)}
       <h3 class="stat-h">Recent ${esc(meta.name)} games</h3>
@@ -3261,9 +3278,10 @@
   }
 
   function renderGame() {
+    lastAppHtml = null; // the game draws the root itself, so the last home or lobby markup is no longer on screen
     const plugin = plugins[S.room.gameId];
     if (!plugin || !S.view) {
-      $app.innerHTML = '<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>';
+      paintApp('<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>');
       return;
     }
     const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
@@ -3407,37 +3425,64 @@
       const gameNudge = guestNudge('gameover');
       if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }
       const xpRows = (r.outcome && r.outcome.xp) || [];
-      // The ratings for this game come from the server once per finished game (the table's own game only)
-      const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
-      // Only a successful final answer stops retries.
-      const gotTotals = cached && !cached.pending && !cached.failed ? cached : null;
-      const waiting = Boolean(cached && cached.pending);
-      // Asked again if the answer did not come (not connected, or the server could not save the game yet): at most three
-      // tries, five seconds apart, so a failed request never leaves the saved players on an ellipsis for good.
-      const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
-      const due = !f.totalsAsked || (Date.now() - f.totalsAsked.at >= 5000);
-      if (xpRows.length && !gotTotals && due && tries < 3 && send({ t: 'gameTotals' })) {
-        f.totalsAsked = { at: Date.now(), tries: tries + 1 };
-        setTimeout(() => render(), 5100); // one re-render later: endFlow asks again only if the answer is still missing
+      const totals = endTotalsState(f);
+      if (xpRows.length && totals.askNow && send({ t: 'gameTotals' })) {
+        f.totalsAsked = { at: Date.now(), tries: totals.tries + 1 };
+        // asked again in place (no full redraw) once the answer is due
+        setTimeout(() => retryEndTotals(f), 5100);
       }
       if (xpRows.length) {
-        // The card is replaced whenever its state changes (loading, updating, ready), so the placeholder never outlives the answer.
         $app.querySelectorAll('.end-xp').forEach((n) => n.remove());
-        // Only once the last try's response window has passed (the re-render at 5.1 s, or later), not while it is in flight
-        const gaveUp = !gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
-        // Out of retries with only a pending answer: say so, rather than "updating" with nothing left to ask for
-        const state = gotTotals ? 'ready' : (gaveUp ? 'unavailable' : (waiting ? 'pending' : 'loading'));
-        const card = endRatingHTML(xpRows, statsGame(r.gameId).name, gotTotals && gotTotals.ratings ? gotTotals.ratings : {}, state);
-        const anchor = $app.querySelector('.end-actions-wrap, .end-bar');
-        // Inside the result sheet whenever there is one, so the card is never behind the fixed action bar.
-        // Inner sheet first: querySelector returns matches in document order, so an outer overlay would win otherwise.
-        const sheet = $app.querySelector('.overlay .sheet') || $app.querySelector('.ludo-end') || $app.querySelector('.overlay');
+        const card = endCardHTML(f);
         const wrap = $app.querySelector('.end-actions-wrap');
+        const sheet = $app.querySelector('.overlay .sheet') || $app.querySelector('.ludo-end') || $app.querySelector('.overlay');
         if (wrap) wrap.insertAdjacentHTML('beforebegin', card);
         else if (sheet) sheet.insertAdjacentHTML('beforeend', card);
         else $app.insertAdjacentHTML('beforeend', card); // no result sheet at all: the bar is the only place
       }
     }
+  }
+
+  /** Where the game-over ratings stand for this table: the answer, or whether another ask is due (at most three, five seconds apart). */
+  function endTotalsState(f) {
+    const r = S.room;
+    const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
+    const gotTotals = cached && !cached.pending && !cached.failed ? cached : null; // only a successful final answer stops retries
+    const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
+    const due = !f.totalsAsked || (Date.now() - f.totalsAsked.at >= 5000);
+    return { cached, gotTotals, waiting: Boolean(cached && cached.pending), tries, askNow: !gotTotals && due && tries < 3 };
+  }
+
+  /** The game-over ratings card for the current answer. */
+  function endCardHTML(f) {
+    const r = S.room;
+    const xpRows = (r.outcome && r.outcome.xp) || [];
+    const t = endTotalsState(f);
+    // out of retries with only a pending answer: say so, rather than "updating" with nothing left to ask for
+    const gaveUp = !t.gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
+    const state = t.gotTotals ? 'ready' : (gaveUp ? 'unavailable' : (t.waiting ? 'pending' : 'loading'));
+    return endRatingHTML(xpRows, statsGame(r.gameId).name, t.gotTotals && t.gotTotals.ratings ? t.gotTotals.ratings : {}, state);
+  }
+
+  /** Asks for the ratings again while the game-over card is still waiting, and swaps only the card when the answer is final. */
+  function retryEndTotals(f) {
+    if (!S.room || S.room.status !== 'finished' || S.endFlow !== f) return;
+    if (!endTotalsState(f).gotTotals && endTotalsState(f).askNow && send({ t: 'gameTotals' })) {
+      f.totalsAsked = { at: Date.now(), tries: endTotalsState(f).tries + 1 };
+      setTimeout(() => retryEndTotals(f), 5100);
+      return;
+    }
+    updateEndCard();
+  }
+
+  /** Replaces only the game-over ratings card (no redraw of the game). Falls back to a full redraw when there is no card yet. */
+  function updateEndCard() {
+    const f = S.endFlow;
+    if (!S.room || S.room.status !== 'finished' || !f) return false;
+    const old = $app.querySelector('.end-xp');
+    if (!old) return false;
+    old.outerHTML = endCardHTML(f);
+    return true;
   }
 
 
