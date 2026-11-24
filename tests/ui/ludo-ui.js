@@ -113,6 +113,24 @@ function messages(patch) {
     await ctx.close();
   });
 
+  await test('at phone width the title, board and player chips keep the 8px side gutter the other tables use', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: messages(() => {}), viewport: { width: 390, height: 844 } });
+    await page.goto(url + '/');
+    await page.waitForSelector('.ludo-board');
+    const edges = await page.evaluate(() => {
+      const vw = document.documentElement.clientWidth;
+      const title = [...document.querySelectorAll('body *')].find((el) => el.childNodes.length && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() === 'Ludo'));
+      const box = (el) => el.getBoundingClientRect();
+      const board = box(document.querySelector('.ludo-board'));
+      const chips = [...document.querySelectorAll('.ludo-player')].map(box);
+      return { vw, titleLeft: title ? box(title).left : -1, boardLeft: board.left, boardRight: board.right, chipLeft: Math.min(...chips.map((c) => c.left)), chipRight: Math.max(...chips.map((c) => c.right)) };
+    });
+    assert.ok(edges.titleLeft >= 8, `title starts at ${edges.titleLeft}px, not 8px or more`);
+    assert.ok(edges.boardLeft >= 8 && edges.boardRight <= edges.vw - 8, `board runs from ${edges.boardLeft}px to ${edges.boardRight}px of ${edges.vw}px`);
+    assert.ok(edges.chipLeft >= 8 && edges.chipRight <= edges.vw - 8, `player chips run from ${edges.chipLeft}px to ${edges.chipRight}px`);
+    await ctx.close();
+  });
+
   await test('on your roll the Roll button is enabled; on someone else’s it is disabled', async () => {
     const mine = await scriptedPage(browser, { messages: messages((v) => Object.assign(v, { phase: 'rolling', turn: 0, canRoll: true, myTurn: true })) });
     await mine.page.goto(url + '/'); await mine.page.waitForSelector('.ludo-roll');

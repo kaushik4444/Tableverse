@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Ludo on a phone: the title, board and player chips keep the same 8px side gutter as the other tables (they touched the screen edge).
 - Friends: an action (refresh, add, accept) keeps the scroll position and does not jump back to the top or the Games tab. The page no longer repaints when nothing changed.
 - Game cards play their entrance animation once; they no longer replay on a redraw, and the home page no longer flickers.
 - Game over: the score card comes up sooner (about 2.5 s), the winner announcement is shown once (no duplicate pop-up beside the result sheet), and the card updates in place.
