@@ -130,7 +130,8 @@
     const g = ctx && ctx.gate;
     const e = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const title = opts.title || 'Ready for the next round?';
-    if (!g) return `<div class="ready-bar ready-box ${opts.cls || ''}" data-ready-here role="status"><span><b>${e(title)}</b></span><button class="btn" data-act="readyUp">Ready</button></div>`;
+    // no gate: everybody has pressed Ready and the next round is starting, so the summary must not offer Ready again
+    if (!g) return `<div class="ready-bar ready-box ${opts.cls || ''}" data-ready-here role="status"><span>Everybody is ready. Starting the next one…</span></div>`;
     const names = g.waiting.map(e).join(', ');
     const cls = `ready-bar ready-box ${opts.cls || ''}`;
     if (g.seated && !g.youReady) return `<div class="${cls}" data-ready-here role="status"><span><b>${e(title)}</b> ${g.ready} of ${g.total} ready${names ? ` · waiting for ${names}` : ''}</span><button class="btn" data-act="readyUp">Ready</button></div>`;

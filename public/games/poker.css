@@ -1,9 +1,9 @@
-/* Poker table. Built on the shared oval table (table.css). 4-colour deck: spades dark, hearts red, diamonds blue, clubs green. */
+/* Poker table. Built on the shared oval table (table.css). Red and black only: spades and clubs black, hearts and diamonds red. */
 .pk { --bw: 46px; --hw: 80px; }
 .pkc { --w: var(--bw, 46px); position: relative; flex: none; width: var(--w); height: calc(var(--w) * 1.4); border-radius: calc(var(--w) * .13); background: linear-gradient(160deg, #ffffff, #e9ecfa); color: var(--sc, #1a1d3a); display: flex; flex-direction: column; box-shadow: 0 3px 8px rgba(0, 0, 0, .45); user-select: none; }
 .pkc .r { align-self: flex-start; margin: calc(var(--w) * .06) 0 0 calc(var(--w) * .1); font: 800 calc(var(--w) * .36) / 1 var(--sans); }
 .pkc .s { margin: auto; padding-bottom: calc(var(--w) * .1); font-size: calc(var(--w) * .6); line-height: 1; }
-.pkc.ps { --sc: #1a1d3a; } .pkc.ph { --sc: #d6303a; } .pkc.pd { --sc: #2563d6; } .pkc.pc { --sc: #138a4a; }
+.pkc.ps { --sc: #14161b; } .pkc.ph { --sc: #d6303a; } .pkc.pd { --sc: #d6303a; } .pkc.pc { --sc: #14161b; }
 .pkc.big { --w: var(--hw); }
 .pkc.mini { --w: 26px; }
 .pkc.back { background: repeating-linear-gradient(45deg, #3a2a7a 0 5px, #4b3a96 5px 10px); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85), 0 3px 8px rgba(0, 0, 0, .45); }

@@ -37,6 +37,7 @@
 .suit-Y { --c: linear-gradient(160deg, #f6d04d, #d9a514); color: #3b2c00; }
 .suit-G { --c: linear-gradient(160deg, #3fae67, #1f7a43); }
 .suit-B { --c: linear-gradient(160deg, #3d8bff, #1f5fd6); }
+.suit-K { --c: linear-gradient(160deg, #3a3f4a, #14161b); color: #fff; } /* black suit: spades and clubs in Twenty-Nine */
 .pill.suit-Y { color: #3b2c00; }
 .card {
   position: relative; flex: none; display: block; padding: 0; width: var(--cw); height: calc(var(--cw) * 1.45);
@@ -74,6 +75,7 @@ button.card { cursor: pointer; }
 /* 29 uses the same white cards as Poker (games/poker.css .pkc): rank in the corner, a large suit in the middle, four suit colours */
 .t29 .card { background: linear-gradient(160deg, #ffffff, #e9ecfa); color: var(--sc, #1a1d3a); border: none; font-family: var(--sans); box-shadow: 0 3px 8px rgba(0, 0, 0, .4); }
 .t29 .card.suit-B { --sc: #1a1d3a; }
+.t29 .card.suit-K { --sc: #14161b; }
 .t29 .card.suit-R { --sc: #d6303a; }
 .t29 .card.suit-Y { --sc: #2563d6; color: var(--sc); }
 .t29 .card.suit-G { --sc: #138a4a; }

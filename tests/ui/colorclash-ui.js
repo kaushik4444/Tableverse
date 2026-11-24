@@ -135,7 +135,9 @@ function scene(n, edit) {
     const result = { round: 1, winner: 2, total: 64, gains: [0, 0, 64, 0], hands: [[], [], [], []] };
     const first = tableMessages('colorclash', people(4));
     const { page, ctx } = await open(first);
-    await page.evaluate((m) => window.__push(m), scene(4, (v) => { v.phase = 'roundEnd'; v.myTurn = false; v.roundResult = result; v.round = 2; v.players = v.players.map((p, i) => ({ ...p, score: i === 2 ? 64 : 0 })); v.event = { seq: 20, type: 'roundEnd', by: 2, round: 1, total: 64 }; })[1]);
+    const roundEnd = scene(4, (v) => { v.phase = 'roundEnd'; v.myTurn = false; v.roundResult = result; v.round = 2; v.players = v.players.map((p, i) => ({ ...p, score: i === 2 ? 64 : 0 })); v.event = { seq: 20, type: 'roundEnd', by: 2, round: 1, total: 64 }; })[1];
+    roundEnd.room.gate = { ready: [], waiting: roundEnd.room.members.map((p) => p.id) };
+    await page.evaluate((m) => window.__push(m), roundEnd);
     await page.waitForSelector('.overlay .sheet');
     assert.match(await page.textContent('.overlay h2'), /Charlotte went out/);
     assert.match(await page.textContent('.cc-final'), /\+64/);

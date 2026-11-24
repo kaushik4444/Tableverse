@@ -8,10 +8,10 @@
   const bidNote = (v) => (v.bidTarget != null && v.bidTarget !== v.highBid ? ` <small>(needs ${v.bidTarget})</small>` : '');
 
   const SUITS = {
-    S: { sym: '♠', name: 'Spades', cls: 'suit-B' },
+    S: { sym: '♠', name: 'Spades', cls: 'suit-K' },
     H: { sym: '♥', name: 'Hearts', cls: 'suit-R' },
-    D: { sym: '♦', name: 'Diamonds', cls: 'suit-Y' },
-    C: { sym: '♣', name: 'Clubs', cls: 'suit-G' },
+    D: { sym: '♦', name: 'Diamonds', cls: 'suit-R' },
+    C: { sym: '♣', name: 'Clubs', cls: 'suit-K' },
   };
   const ui = { selected: null, queuedCard: null, bid: null, scores: false, shownKey: null, timer: null, prevTrick: new Set(), ctx: null, latest: null, hand: 0, prevPhase: null };
   const POINTS = { J: 3, 9: 2, A: 1, 10: 1 };
