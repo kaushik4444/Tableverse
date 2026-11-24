@@ -3332,8 +3332,8 @@
   }
 
   // ------------------------------------------------------------ end of a game
-  const END_BOARD_MS = 3500; // the finished table stays visible
-  const END_WINNER_MS = 2800; // then the "<name> won" pop-up
+  const END_BOARD_MS = 2600; // the finished table stays visible (the last shot plays out on top of this)
+  const END_WINNER_MS = 1400; // then the "<name> won" pop-up, where the game has no result sheet of its own
   /** Board → winner pop-up → result with Leave / Play again (or a vote). Every game's own result sheet stays hidden until the last stage. */
   /**
    * Game over: per person, this match's change, the monthly rating (and this match's change in it), and the all-time rating

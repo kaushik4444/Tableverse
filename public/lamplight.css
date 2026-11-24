@@ -131,3 +131,5 @@ body {
 }
 :root[data-theme="light"] .overlay { background: rgba(60, 44, 20, .32); }
 
+/* primary buttons keep dark ink on the amber fill in the light theme (white on amber is hard to read) */
+:root[data-theme="light"] .btn:not(.ghost) { color: #2a1a05; }
