@@ -3,7 +3,7 @@
 // while the page is visible and the person has done something in the last 5 minutes, and picks up again at once on the next input.
 const assert = require('node:assert/strict');
 const games = require('../../games');
-const { serve, scriptedPage, loadPlaywright, welcome, sessionOk } = require('./harness');
+const { serve, scriptedPage, loadPlaywright, welcome, sessionOk, tableMessages } = require('./harness');
 const { chromium } = loadPlaywright();
 
 let passed = 0; let failed = 0;
@@ -90,6 +90,30 @@ async function test(name, fn) { try { await fn(); passed++; console.log('  ok  '
         await page.evaluate(() => window.dispatchEvent(new Event('keydown')));
         await settle(page);
         assert.deepEqual(counts(), before.map((n) => n + 1), 'return refreshes all endpoints once, even with immediate input');
+      } finally { await ctx.close(); }
+    });
+    await test('banners keep refreshing at a table while social polling waits until the player leaves', async () => {
+      const [hello, state] = tableMessages('wizard', [{ name: 'Aarav' }, { name: 'Mira' }, { name: 'Sam' }]);
+      const { page, ctx } = await scriptedPage(browser, { viewport: { width: 1280, height: 800 }, messages: [hello, state] });
+      const counts = () => [count(/^\/api\/announcements$/), count(/^\/api\/me\/(friends|friend-requests|table-invitations)\b/)];
+      try {
+        await page.clock.install();
+        await page.goto(url + '/');
+        await page.clock.runFor(1000);
+        await page.waitForURL('**/#ABCDEF');
+        await settle(page);
+        const [banners, social] = counts();
+        await page.clock.runFor(60000);
+        await settle(page);
+        assert.deepEqual(counts(), [banners + 1, social], 'only banners refresh during the table');
+
+        await page.evaluate(() => window.__push({ t: 'left' }));
+        await page.waitForSelector('.game-card');
+        await settle(page);
+        const [homeBanners, homeSocial] = counts();
+        await page.clock.runFor(60000);
+        await settle(page);
+        assert.deepEqual(counts(), [homeBanners + 1, homeSocial + 5], 'the home poll refreshes banners and all five social endpoints');
       } finally { await ctx.close(); }
     });
   } finally { await browser.close(); server.close(); }

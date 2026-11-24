@@ -132,5 +132,26 @@ const MIN = 60 * 1000;
     assert.equal(reads, 2);
   });
 
+  await test('connections do not flood a failing read and can retry when it goes stale', async () => {
+    const time = fakeTime();
+    let attempts = 0;
+    const poller = createIdlePoller({
+      run: () => { if (++attempts === 1) throw new Error('database down'); },
+      everyMs: 15 * MIN, staleMs: 5 * MIN, active: () => false, ...time,
+    });
+    poller.markFresh();
+    await time.advance(5 * MIN);
+    await poller.touch(); // the failure must not escape to the connecting caller
+    assert.equal(attempts, 1);
+
+    await time.advance(5 * MIN - 1);
+    await Promise.all([poller.touch(), poller.touch(), poller.touch()]);
+    assert.equal(attempts, 1, 'new connections respect the cooldown after a failure');
+
+    await time.advance(1);
+    await poller.touch();
+    assert.equal(attempts, 2, 'a connection can retry without waiting for a periodic read');
+  });
+
   console.log(`\n${passed} passed`);
 })();
