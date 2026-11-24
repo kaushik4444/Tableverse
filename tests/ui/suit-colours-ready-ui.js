@@ -29,7 +29,7 @@ async function test(name, fn) { try { await fn(); passed++; console.log('  ok  '
   const browser = await chromium.launch();
   try {
     await test('the black suit class renders black, not blue or green, inside Twenty-Nine', async () => {
-      const { page, ctx } = await scriptedPage(browser, { messages: welcome(), viewport: { width: 1280, height: 900 } });
+      const { page, ctx } = await scriptedPage(browser, { messages: [welcome()], viewport: { width: 1280, height: 900 } });
       try {
         await page.goto(url + '/');
         await page.waitForSelector('#app', { timeout: 8000 });
@@ -46,7 +46,7 @@ async function test(name, fn) { try { await fn(); passed++; console.log('  ok  '
     });
 
     await test('the round summary shows no Ready button once the gate has cleared', async () => {
-      const { page, ctx } = await scriptedPage(browser, { messages: welcome(), viewport: { width: 1280, height: 900 } });
+      const { page, ctx } = await scriptedPage(browser, { messages: [welcome()], viewport: { width: 1280, height: 900 } });
       try {
         await page.goto(url + '/');
         await page.waitForSelector('#app', { timeout: 8000 });
