@@ -131,8 +131,13 @@ let rebuildQueue = Promise.resolve(true); // rebuilds run one after another, nev
  * Queues a rebuild after a match has been committed. It never blocks or fails the game: errors are logged. Called only when
  * liveEnabled() is true. ratingsSettled() waits for the queue (used by the game-over answer, so it sees the new ratings).
  */
+// A rebuild that is queued but has not started yet. It reads every committed match when it starts, so a match committed
+// before that moment is covered by it: a second queued rebuild would only repeat the same work.
+let rebuildWaiting = null;
 function scheduleLiveRebuild() {
-  rebuildQueue = rebuildQueue.then(async () => {
+  if (rebuildWaiting) return;
+  const job = rebuildQueue.then(async () => {
+    rebuildWaiting = null; // started: a match committed from now on needs a rebuild of its own
     try {
       await rebuildRatings();
       return true;
@@ -141,6 +146,8 @@ function scheduleLiveRebuild() {
       return false;
     }
   });
+  rebuildWaiting = job;
+  rebuildQueue = job;
 }
 
 /** Resolves true when the latest queued rebuild succeeded, false when it failed (the stored ratings may then be stale). */
@@ -160,14 +167,17 @@ async function ratingsForMatch({ matchKey, gameId, playerIds }) {
   );
   if (!m.rows.length) return null;
   const { id: matchId, rated, unrated_reason: reason, month } = m.rows[0];
-  const ev = await db.query(
-    'SELECT player_id, scope, delta FROM rating_events WHERE match_id = $1 AND game_id = $2 AND player_id = ANY($3::uuid[])',
-    [matchId, gameId, playerIds],
-  );
-  const cur = await db.query(
-    'SELECT player_id, scope, rating FROM player_ratings WHERE game_id = $1 AND player_id = ANY($2::uuid[]) AND scope IN (\'lifetime\', $3)',
-    [gameId, playerIds, month],
-  );
+  // the two lookups do not depend on each other, so they run together (one round trip each, not one after the other)
+  const [ev, cur] = await Promise.all([
+    db.query(
+      'SELECT player_id, scope, delta FROM rating_events WHERE match_id = $1 AND game_id = $2 AND player_id = ANY($3::uuid[])',
+      [matchId, gameId, playerIds],
+    ),
+    db.query(
+      'SELECT player_id, scope, rating FROM player_ratings WHERE game_id = $1 AND player_id = ANY($2::uuid[]) AND scope IN (\'lifetime\', $3)',
+      [gameId, playerIds, month],
+    ),
+  ]);
   const out = {};
   for (const id of playerIds) out[id] = { rated: Boolean(rated), reason: reason || null, matchDelta: null, monthDelta: null, monthRating: null, lifetimeRating: null };
   for (const e of ev.rows) {
