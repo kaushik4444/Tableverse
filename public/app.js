@@ -638,7 +638,17 @@
   }
   // the display name the owner typed when a sign-up was refused: the sheet is rebuilt with it, not with the guest's old name
   let pendingRegisterName = null;
+  // Changes only the message of an open sheet, so what was typed and the focus stay as they are.
+  function setAuthMessage(overlay, msg, isError) {
+    const slot = overlay.querySelector('.auth-msg-slot');
+    if (!slot || !msg) return;
+    slot.innerHTML = `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>`;
+  }
   function openAuthSheet(tab = 'login', msg = '', isError = false) {
+    // Already open on this tab (a reconnect, a refused login, a failed sign-up): keep what was typed and where the focus is.
+    // The sheet is rebuilt only when it opens on another tab or was not open.
+    const open = document.getElementById('auth-overlay');
+    if (open && open.dataset.tab === tab) { S.auth = tab; setAuthMessage(open, msg, isError); return; }
     const draftName = pendingRegisterName;
     pendingRegisterName = null;
     S.auth = tab;
@@ -649,9 +659,10 @@
     const overlay = document.createElement('div');
     overlay.id = 'auth-overlay';
     overlay.className = 'overlay';
+    overlay.dataset.tab = tab;
     overlay.innerHTML = `<div class="sheet auth-sheet" data-stop="1" role="dialog" aria-label="${loginOn ? 'Log in' : 'Create account'}">
       <div class="row" style="justify-content:space-between"><h2>${loginOn ? 'Welcome back' : 'Create your account'}</h2><button class="btn ghost small" data-auth-close aria-label="Close">✕</button></div>
-      ${msg ? `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>` : ''}
+      <div class="auth-msg-slot">${msg ? `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>` : ''}</div>
       <div class="row auth-tabs">
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
@@ -1626,6 +1637,7 @@
         if (again) again.value = email || ''; // keep what was typed
       } finally {
         loginBusy = false;
+        if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Log in'; } // the sheet stays open on a failed login
       }
     }
     if (e.target.id === 'guestForm') {
