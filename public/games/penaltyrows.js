@@ -290,7 +290,17 @@
     })).join('')}</div>`;
   }
 
+  // the sheet on screen, if any: a round summary (one per round) or the final result
+  function overlayKey(v) {
+    if (v.phase === 'roundEnd' && v.lastRound && !ui.anim) return 'round:' + v.lastRound.round;
+    if (v.phase === 'gameOver') return 'over';
+    return null;
+  }
+
+  // every state (a Ready tap, a pick) redraws the table; a sheet that is already up does not play its entrance again
   function overlayHTML(v) {
+    const key = overlayKey(v);
+    const cls = key && key === ui.overlayShown ? ' settled' : '';
     if (v.phase === 'roundEnd' && v.lastRound && !ui.anim) {
       const r = v.lastRound;
       const least = Math.min(...r.penalties);
@@ -298,8 +308,12 @@
         const total = v.countdown ? `${p.left} left` : `${p.total} pts`;
         return `<li class="${r.penalties[i] === least ? 'win' : ''}"><span><b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b></span><span>${r.penalties[i] ? `+${r.penalties[i]} penalty` : 'no penalty'} · ${total}</span></li>`;
       }).join('');
-      return `<div class="overlay"><div class="sheet"><h2>Round ${r.round} complete</h2>
-        ${window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })}<p class="hint" style="text-align:left">${v.countdown ? 'Penalty points come off everyone\'s 66. Whoever reaches 0 first loses.' : 'The fewest penalty points is best.'}</p>
+      // once everybody is ready the gate is gone and the next round is starting: no Ready button comes back
+      const ready = ui.ctx && ui.ctx.gate
+        ? window.CardTable.readyBox(ui.ctx, { title: 'Ready for the next round?', cls: 'in-sheet' })
+        : '<div class="ready-bar in-sheet" role="status"><span>Everybody is ready. Starting the next round…</span></div>';
+      return `<div class="overlay${cls}"><div class="sheet"><h2>Round ${r.round} complete</h2>
+        ${ready}<p class="hint" style="text-align:left">${v.countdown ? 'Penalty points come off everyone\'s 66. Whoever reaches 0 first loses.' : 'The fewest penalty points is best.'}</p>
         <ul class="pr-final">${rows}</ul></div></div>`;
     }
     if (v.phase !== 'gameOver') return '';
@@ -317,7 +331,7 @@
     } else {
       note = v.winners.length > 1 ? 'Equal totals share the win.' : `${esc(v.players[v.winners[0]].name)} took the fewest penalty points.`;
     }
-    return `<div class="overlay"><div class="sheet"><h2>${title}</h2><p class="hint" style="text-align:left">${note}</p>
+    return `<div class="overlay${cls}"><div class="sheet"><h2>${title}</h2><p class="hint" style="text-align:left">${note}</p>
       <ul class="pr-final">${rows}</ul>
       <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-pr="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-pr="leave">Leave table</button></div></div></div>`;
   }
@@ -357,6 +371,12 @@
     }
   }
 
+  // Take 5 keeps its Ready bar at the bottom, under the table, so the tabs and table above it never move
+  function readyBottomHTML(ctx, v) {
+    if (!ctx || !ctx.gate || overlayKey(v)) return '';
+    return `<div class="pr-ready">${window.CardTable.readyBox(ctx, { title: 'Ready to continue?', cls: 'pr-ready-bar' })}</div>`;
+  }
+
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
@@ -385,8 +405,10 @@
       <div class="pr-bar">${tabs}<div class="wz-status ${mine ? 'mine' : ''}"><span>${guidance(v)}</span></div></div>
       ${body}
       ${tab === 'table' ? handHTML(v) : ''}
+      ${readyBottomHTML(ctx, v)}
       ${overlayHTML(v)}
     </div>`;
+    ui.overlayShown = overlayKey(v);
     root.onclick = onClick;
     if (focusedTab) { const el = root.querySelector(`[data-pr="tab"][data-tab="${focusedTab}"]`); if (el) el.focus({ preventScroll: true }); }
     if (focused) { const el = root.querySelector(`.pr-hand [data-n="${focused}"]`); if (el && !el.disabled) el.focus({ preventScroll: true }); }
