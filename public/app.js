@@ -3432,7 +3432,7 @@
       let month = none;
       let life = none;
       if (q) {
-        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : 'unrated';
+        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : (waiting && q.rated ? none : 'unrated');
         month = q.monthRating !== null ? `${num(q.monthRating)}${q.monthDelta !== null ? ` (${signed(q.monthDelta)})` : ''}` : '–';
         life = num(q.lifetimeRating);
       }
@@ -3549,7 +3549,9 @@
     // out of retries with only a pending answer: say so, rather than "updating" with nothing left to ask for
     const gaveUp = !t.gotTotals && !!f.totalsAsked && t.tries >= t.maxTries && t.sinceAsk >= 5000;
     const state = t.gotTotals ? 'ready' : (gaveUp ? 'unavailable' : (t.waiting ? 'pending' : 'loading'));
-    return endRatingHTML(xpRows, statsGame(r.gameId).name, t.gotTotals && t.gotTotals.ratings ? t.gotTotals.ratings : {}, state);
+    // the stored values show as soon as they arrive, also while the settled ones are still pending
+    const shown = t.cached && t.cached.ratings ? t.cached.ratings : {};
+    return endRatingHTML(xpRows, statsGame(r.gameId).name, shown, state);
   }
 
   /** Asks for the ratings again while the game-over card is still waiting, and swaps only the card when the answer is final. */

@@ -167,14 +167,17 @@ async function ratingsForMatch({ matchKey, gameId, playerIds }) {
   );
   if (!m.rows.length) return null;
   const { id: matchId, rated, unrated_reason: reason, month } = m.rows[0];
-  const ev = await db.query(
-    'SELECT player_id, scope, delta FROM rating_events WHERE match_id = $1 AND game_id = $2 AND player_id = ANY($3::uuid[])',
-    [matchId, gameId, playerIds],
-  );
-  const cur = await db.query(
-    'SELECT player_id, scope, rating FROM player_ratings WHERE game_id = $1 AND player_id = ANY($2::uuid[]) AND scope IN (\'lifetime\', $3)',
-    [gameId, playerIds, month],
-  );
+  // the two lookups do not depend on each other, so they run together (one round trip each, not one after the other)
+  const [ev, cur] = await Promise.all([
+    db.query(
+      'SELECT player_id, scope, delta FROM rating_events WHERE match_id = $1 AND game_id = $2 AND player_id = ANY($3::uuid[])',
+      [matchId, gameId, playerIds],
+    ),
+    db.query(
+      'SELECT player_id, scope, rating FROM player_ratings WHERE game_id = $1 AND player_id = ANY($2::uuid[]) AND scope IN (\'lifetime\', $3)',
+      [gameId, playerIds, month],
+    ),
+  ]);
   const out = {};
   for (const id of playerIds) out[id] = { rated: Boolean(rated), reason: reason || null, matchDelta: null, monthDelta: null, monthRating: null, lifetimeRating: null };
   for (const e of ev.rows) {
