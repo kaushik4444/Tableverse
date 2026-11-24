@@ -1833,6 +1833,8 @@ function start(opts = {}) {
       const ids = room.outcome.xp.filter((x) => x.saved && x.id).map((x) => x.id);
       (async () => {
         if (!ids.length) return { ratings: {} };
+        // Ratings are off: there is nothing to wait for, so the card gets its answer straight away (the save is not needed for it).
+        if (!dbRatings.liveEnabled()) return { ratings: {} };
         // This game's own save, waited for at most three seconds. The queue resolves { status: 'failed' } when its retries run
         // out, and a missing promise means nothing was queued: both count as "not saved".
         const saved = await new Promise((resolve) => {

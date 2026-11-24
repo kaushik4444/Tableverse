@@ -60,6 +60,7 @@ async function scriptedPage(browser, { viewport = { width: 390, height: 844 }, m
     let sock = null;
     window.__push = (m) => sock && sock.onmessage && sock.onmessage({ data: JSON.stringify(m) });
     // Simulates the connection dropping (as a network loss would): the client sees a closed socket.
+    window.__sock = () => sock; // tests may mark the socket closed without its close event (see stuck-ui.js)
     window.__drop = () => { if (sock) { sock.readyState = 3; sock.onclose && sock.onclose({ code: 1006 }); } };
     window.WebSocket = class {
       constructor() { sock = this; this.readyState = 0; setTimeout(() => { this.readyState = 1; this.onopen && this.onopen({}); }, 0); }
