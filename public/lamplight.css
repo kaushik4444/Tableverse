@@ -111,6 +111,7 @@ body {
   --gold: #a86a12; --gold-ink: #fffaf0;
   --first: #15803d; --danger: #b91c1c; --good: #15803d;
   --panel: rgba(72, 52, 18, .05); --panel-line: rgba(72, 52, 18, .14);
+  --menu-bg: #fffaf0; --menu-hover: rgba(72, 52, 18, .08); --menu-line: rgba(72, 52, 18, .16);
   --lamp: rgba(245, 158, 11, .16); --mint-soft: rgba(21, 128, 61, .10); --glass-hi: rgba(255, 255, 255, .72);
 }
 :root[data-theme="light"] body {

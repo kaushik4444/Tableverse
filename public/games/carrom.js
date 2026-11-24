@@ -7,6 +7,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
+  const SHADE_X = 0.004, SHADE_Y = 0.008, SHADE_ALPHA = 0.45;
   const BASE_Y = 0.12;     // a side's baseline in the bottom frame
   const MAX_DRAG = 0.45;   // a drag of this length on the board is a full-power flick
   const ANGLE_MAX = 75;
@@ -35,7 +36,8 @@
   function discHTML(v, d) {
     const [X, Y] = toSvg(v, [d.x, d.y]);
     const cls = d.kind === 'queen' ? 'cb-queen' : d.kind === 'striker' ? `cb-striker ${d.colour === 'w' ? 'w' : 'b'}` : `cb-coin ${d.colour === 'w' ? 'w' : 'b'}`;
-    return `<circle class="${cls}" data-id="${esc(d.id)}" cx="${X}" cy="${Y}" r="${d.r}"/>`;
+    // a flat offset shade under the disc: no SVG filter, which Chromium can paint as black blocks over the board
+    return `<circle class="cb-shade" data-shade-for="${esc(d.id)}" cx="${(X + SHADE_X).toFixed(4)}" cy="${(Y + SHADE_Y).toFixed(4)}" r="${d.r}" fill="#2a1608" opacity="${SHADE_ALPHA}"/><circle class="${cls}" data-id="${esc(d.id)}" cx="${X}" cy="${Y}" r="${d.r}"/>`;
   }
 
   function discsFor(frame) {
@@ -185,7 +187,6 @@
         <radialGradient id="cb-coin-b" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#6c625b'], [0.28, '#3a322d'], [0.31, '#0d0a09'], [0.36, '#4a403a'], [0.56, '#2b241f'], [0.6, '#0a0807'], [0.66, '#3c332d'], [0.88, '#1d1815'], [1, '#050404']])}</radialGradient>
         <radialGradient id="cb-queen-g" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#ff8a6a'], [0.28, '#e0442f'], [0.31, '#8f1d12'], [0.36, '#e65a43'], [0.56, '#cc3a26'], [0.6, '#7d170e'], [0.66, '#d9482f'], [0.88, '#b52d1b'], [1, '#5e0f08']])}</radialGradient>
         <radialGradient id="cb-striker-g" cx="0.5" cy="0.5" r="0.5" fx="0.42" fy="0.38">${bands([[0, '#fff2b8'], [0.16, '#e2b84a'], [0.2, '#3a2a8a'], [0.5, '#5a46b8'], [0.56, '#e2b84a'], [0.62, '#44349a'], [0.86, '#2a1d6e'], [0.9, '#e2b84a'], [1, '#8a6a1c']])}</radialGradient>
-        <filter id="cb-shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0.004" dy="0.008" stdDeviation="0.005" flood-color="#2a1608" flood-opacity="0.5"/></filter>
       </defs>
       <rect class="cb-frame" x="-0.075" y="-0.075" width="1.15" height="1.15" rx="0.045"/>
       <rect class="cb-cushion" x="-0.006" y="-0.006" width="1.012" height="1.012"/>
@@ -196,7 +197,7 @@
       ${COMPASS}
       ${caps}
       ${pockets}
-      <g data-shadow="1" filter="url(#cb-shadow)">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
+      <g data-shadow="1">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
       ${over || ''}
     </svg>`;
   }
@@ -256,7 +257,7 @@
     if (!e) { ui.anim = null; ui.seq = 0; return; } // a fresh match (Play again) has no shot yet: drop the old playback
     if (e.seq === ui.seq) return;
     ui.seq = e.seq;
-    ui.anim = { seq: e.seq, frames: e.keyframes, events: Array.isArray(e.events) ? e.events : [], nextEvent: 0, t0: null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0 };
+    ui.anim = { seq: e.seq, frames: e.keyframes, events: Array.isArray(e.events) ? e.events : [], nextEvent: 0, t0: null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0, setup: setupFor(e, v) };
     if (snd) snd.play('place');
     if (v.phase === 'gameOver' && snd) {
       const mine = colourOfMe(v);
@@ -265,6 +266,25 @@
       setTimeout(() => { if (ui.animTable === tableKey && ui.root && ui.root.isConnected) snd.play(sound); }, 900);
     }
     play(ui.anim);
+  }
+
+  /**
+   * Another seat's striker is shown first on its own bar, slid along the bar to the spot it was set on, and held there for a
+   * moment, so it never appears from off the board. A seat's own shot needs no setup: it already aimed from there.
+   * Bottom-frame coordinates; `move` and `ms` are in milliseconds.
+   */
+  function setupFor(e, v) {
+    if (v.me >= 0 && e.seat === v.me) return null;
+    const first = e.keyframes[0] && e.keyframes[0].d.find(([id]) => id === 'striker');
+    if (!first) return null;
+    return { from: rotP([0.5, BASE_Y], v.players[e.seat].side), to: [first[1], first[2]], move: 900, ms: 1250 };
+  }
+
+  /** The first frame of a shot as it is shown before playback starts: the striker still on its bar. */
+  function startFrame(a) {
+    const f0 = a.frames[0];
+    if (!a.setup) return f0;
+    return { t: 0, d: f0.d.map(([id, x, y]) => (id === 'striker' ? [id, a.setup.from[0], a.setup.from[1]] : [id, x, y])) };
   }
 
   /** Plays one shot's keyframes on the board, then redraws from the final view. Stops if a newer state has replaced it. */
@@ -305,11 +325,20 @@
     // the table left the page (the player went elsewhere): stop the shot instead of drawing into a detached tree
     if (!ui.root.isConnected) { ui.anim = null; return; }
     if (a.t0 === null) a.t0 = now;
-    const t = (now - a.t0) / 1000;
-    const pose = poseAt(a.frames, t);
+    const lead = a.setup ? a.setup.ms : 0; // the set-up slide and pause come before the keyframes
+    const elapsed = now - a.t0;
+    const inSetup = elapsed < lead;
+    const t = inSetup ? 0 : (elapsed - lead) / 1000;
+    let pose;
+    if (inSetup) {
+      const k = Math.min(1, elapsed / a.setup.move);
+      const e2 = k < 0.5 ? 2 * k * k : 1 - ((-2 * k + 2) ** 2) / 2; // ease in and out along the bar
+      const sx = a.setup.from[0] + (a.setup.to[0] - a.setup.from[0]) * e2, sy = a.setup.from[1] + (a.setup.to[1] - a.setup.from[1]) * e2;
+      pose = a.frames[0].d.map(([id, x, y]) => (id === 'striker' ? [id, sx, sy, 1] : [id, x, y, 1]));
+    } else pose = poseAt(a.frames, t);
     // a sound for each impact the server reported, when playback reaches its time
     const snd = window.CardTable.sound;
-    while (snd && a.nextEvent < a.events.length && a.events[a.nextEvent][0] <= t) {
+    while (!inSetup && snd && a.nextEvent < a.events.length && a.events[a.nextEvent][0] <= t) {
       const [at, kind, speed] = a.events[a.nextEvent++];
       // a late frame (background tab, slow device) skips impacts it is well past instead of bursting them out at once
       if (t - at > 0.2) continue;
@@ -319,16 +348,20 @@
     if (svg) {
       const seen = new Set(pose.map(([id]) => id));
       for (const [id, x, y, alpha] of pose) {
-        const el = svg.querySelector(`[data-id="${CSS.escape(id)}"]`);
-        if (el) {
-          const [X, Y] = toSvg(ui.v, [x, y]);
-          el.setAttribute('cx', X); el.setAttribute('cy', Y); el.style.display = ''; el.style.opacity = String(alpha);
+        const key = CSS.escape(id);
+        const [X, Y] = toSvg(ui.v, [x, y]);
+        for (const el of svg.querySelectorAll(`[data-id="${key}"], [data-shade-for="${key}"]`)) {
+          const shade = el.hasAttribute('data-shade-for');
+          el.setAttribute('cx', X + (shade ? SHADE_X : 0));
+          el.setAttribute('cy', Y + (shade ? SHADE_Y : 0));
+          el.style.display = '';
+          el.style.opacity = String(alpha * (shade ? SHADE_ALPHA : 1));
         }
       }
-      svg.querySelectorAll('[data-id]').forEach((el) => { if (!seen.has(el.dataset.id)) el.style.display = 'none'; });
+      svg.querySelectorAll('[data-id], [data-shade-for]').forEach((el) => { if (!seen.has(el.dataset.shadeFor ?? el.dataset.id)) el.style.display = 'none'; });
     }
     // the app redraws the table (with its turn timer and toolbar) from the current state
-    if (t >= a.end + 0.25 || t > 25) { ui.anim = null; ui.ctx.rerender(); return; }
+    if (!inSetup && (t >= a.end + 0.25 || t > 25)) { ui.anim = null; ui.ctx.rerender(); return; }
     requestAnimationFrame((next) => { if (ui.anim === a) drawFrame(next, a); });
   }
 
@@ -345,7 +378,7 @@
     const playing = v.phase === 'playing' && v.me >= 0;
     // a resignation confirmation belongs to one match at one table: a new shot, a finished game or another table clears it
     if (ui.resignArmed && ui.armKey !== armKeyOf(v, ctx)) ui.resignArmed = false;
-    const frame = ui.anim ? ui.anim.frames[0] : null;
+    const frame = ui.anim ? startFrame(ui.anim) : null;
     root.innerHTML = `<div class="wz carrom-game" data-game="carrom">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.shots} shots</span></div>
         ${CardTable.toolbarSeed(`<button class="btn ghost small" data-cb="rules">Rules</button>${playing ? `<button class="btn ghost small" data-cb="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'cb')}</div>
@@ -357,6 +390,7 @@
       <div class="wz-status ${v.myTurn && !ui.anim ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       <details class="cb-moves" open><summary>Shots</summary>${logHTML(v)}</details>
       ${overlayHTML(v)}</div>`;
+    fitSlider();
     root.onclick = onClick;
     root.onkeydown = onKey;
     root.onpointerdown = onPointerDown;
@@ -381,7 +415,6 @@
   }
 
   /** The striker is grabbed within this distance of its spot on the board (display units). */
-  const STRIKER_GRAB = 0.06;
 
   /** Sets the aim from a pointer: the flick goes from the pointer towards the striker (pull back, let go). */
   function aimFrom([X, Y]) {
@@ -394,12 +427,37 @@
   }
 
   /** Updates the arrow and tip text without rebuilding the board. */
-  /** The drop shadow under the discs is switched off during a drag: moving a filtered group every frame leaves black patches on phones. */
-  function setDragShadow(on) {
-    const g = ui.root && ui.root.querySelector('.cb-svg > g[data-shadow]');
-    if (!g) return;
-    if (on) g.setAttribute('filter', 'url(#cb-shadow)'); else g.removeAttribute('filter');
+
+  /**
+   * The slider is the board's own baseline: its track runs from the viewer's baseline end dot (0.2) to the other (0.8), so a
+   * striker value and the striker on the board are the same spot. Called after each draw and when the page changes size.
+   */
+  function fitSlider() {
+    const root = ui.root;
+    if (!root) return;
+    const slider = root.querySelector('.cb-slider'), track = root.querySelector('.cb-track'), svg = root.querySelector('.cb-svg');
+    if (!slider || !track || !svg) return;
+    const dots = [...svg.querySelectorAll('.cb-base-dot')].map((d) => d.getBoundingClientRect());
+    if (dots.length < 2) return;
+    const lowest = Math.max(...dots.map((r) => r.top)); // the viewer's own baseline is always the bottom one
+    const own = dots.filter((r) => Math.abs(r.top - lowest) < 2).map((r) => r.left + r.width / 2);
+    if (own.length < 2) return;
+    const s = slider.getBoundingClientRect();
+    track.style.left = `${Math.min(...own) - s.left}px`;
+    track.style.right = `${s.right - Math.max(...own)}px`;
+    positionThumb();
   }
+
+  /** The thumb sits on the track at the striker's value (20 to 80). */
+  function positionThumb() {
+    const root = ui.root;
+    if (!root) return;
+    const slider = root.querySelector('.cb-slider'), track = root.querySelector('.cb-track'), thumb = root.querySelector('.cb-thumb');
+    if (!slider || !track || !thumb) return;
+    const s = slider.getBoundingClientRect(), t = track.getBoundingClientRect();
+    thumb.style.left = `${t.left - s.left + ((ui.aim.x - 20) / 60) * t.width}px`;
+  }
+  window.addEventListener('resize', () => { if (ui.root && ui.root.isConnected) fitSlider(); });
 
   function syncAim() {
     const root = ui.root;
@@ -416,8 +474,8 @@
     if (striker) { const [sx, sy] = dispToSvg([ui.aim.x / 100, BASE_Y]); striker.setAttribute('cx', sx); striker.setAttribute('cy', sy); striker.setAttribute('aria-valuenow', String(ui.aim.x)); }
     const ring = svg && svg.querySelector('.cb-ring');
     if (ring) { const [rx, ry] = dispToSvg([ui.aim.x / 100, BASE_Y]); ring.setAttribute('cx', rx); ring.setAttribute('cy', ry); ring.classList.toggle('set', ui.aim.power > 0); }
-    const thumb = root.querySelector('.cb-thumb'), slider = root.querySelector('[data-slider]');
-    if (thumb) thumb.style.left = `${((ui.aim.x - 20) / 60) * 100}%`;
+    const slider = root.querySelector('[data-slider]');
+    positionThumb();
     if (slider) slider.setAttribute('aria-valuenow', String(ui.aim.x));
     const tip = root.querySelector('.cb-tip');
     if (tip) tip.textContent = tipText();
@@ -436,7 +494,6 @@
     ui.dragMoved = false;
     ui.dragKey = boardKeyOf(v, ui.ctx);
     ui.downAt = [e.clientX, e.clientY];
-    setDragShadow(false); // the striker moves in the slider branch too
     if (slider) {
       ui.mode = 'slide';
       if (slider.setPointerCapture) slider.setPointerCapture(e.pointerId);
@@ -445,9 +502,10 @@
     }
     const svg = e.target.closest('.cb-svg');
     if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
+    // the striker is set only from the slider under the board; a drag on the board pulls the aim back, never moves the striker
+    ui.mode = 'aim';
     const p = pointerDisplay(e);
-    ui.mode = p && onStriker(p) ? 'place' : 'aim';
-    if (ui.mode === 'aim' && p) aimFrom(p);
+    if (p) aimFrom(p);
   }
 
   /** The striker's spot along the baseline (0.2 to 0.8) for a pointer on the slider track under the board. */
@@ -456,11 +514,6 @@
     if (!track) return ui.aim.x / 100;
     const r = track.getBoundingClientRect();
     return 0.2 + 0.6 * Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1)));
-  }
-
-  /** The striker is grabbed when the pointer is on it (display coordinates). */
-  function onStriker([X, Y]) {
-    return Math.hypot(X - ui.aim.x / 100, Y - BASE_Y) <= STRIKER_GRAB;
   }
 
   /** Moves the striker along the baseline. A new spot needs a new aim, so the aim is cleared when it moves. */
@@ -478,7 +531,7 @@
     if (ui.mode === 'slide') { placeAt(sliderX(e)); return; }
     const p = pointerDisplay(e);
     if (!p) return;
-    if (ui.mode === 'place') placeAt(p[0]); else aimFrom(p);
+    aimFrom(p);
   }
 
   /** Releasing an aim drag flicks with the aim it ends on. Placing the striker never flicks. A tap only sets the aim, and a cancelled pointer never flicks. */
@@ -486,7 +539,6 @@
     if (!ui.dragging || e.pointerId !== ui.pointerId) return;
     const moved = ui.dragMoved;
     ui.dragging = false;
-    setDragShadow(true);
     if (moved && ui.mode === 'aim') {
       const p = pointerDisplay(e);
       if (p) aimFrom(p);
@@ -506,7 +558,6 @@
   function onPointerCancel(e) {
     if (!ui.dragging || (e && e.pointerId !== ui.pointerId)) return;
     ui.dragging = false; ui.dragMoved = false;
-    setDragShadow(true);
     flushDeferred();
   }
 

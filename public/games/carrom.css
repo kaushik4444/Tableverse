@@ -64,8 +64,8 @@
 .cb-slider { position: relative; height: 54px; margin: 12px auto 0; width: min(calc(100% - 28px), 460px); touch-action: none; user-select: none; cursor: grab; }
 .cb-slider.off { opacity: .45; cursor: default; pointer-events: none; }
 .cb-track { position: absolute; left: 0; right: 0; top: 8px; bottom: 8px; border-radius: 999px; background: linear-gradient(180deg, #f3d9ab, #e2b982); box-shadow: inset 0 3px 6px rgba(74, 42, 20, .45), 0 0 0 4px #4a2a14, 0 0 0 7px #bd6a35; }
-.cb-end { position: absolute; top: 50%; left: 6%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: #d9684f; box-shadow: 0 0 0 3px #f3d9ab, 0 0 0 4.5px #8a4f2a; }
-.cb-end.r { left: 94%; }
+.cb-end { position: absolute; top: 50%; left: 0; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: #d9684f; box-shadow: 0 0 0 3px #f3d9ab, 0 0 0 4.5px #8a4f2a; }
+.cb-end.r { left: auto; right: 0; margin-right: -13px; }
 .cb-thumb { position: absolute; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, #fff2b8 0 16%, #e2b84a 20%, #3a2a8a 22% 50%, #5a46b8 52%, #e2b84a 56% 62%, #44349a 64% 86%, #e2b84a 90%, #8a6a1c); box-shadow: 0 4px 8px rgba(0, 0, 0, .5), 0 0 0 2px #3a2a0a; pointer-events: none; }
 .cb-slider:focus-visible { outline: 2px solid var(--gold, #fbbf24); outline-offset: 6px; border-radius: 999px; }
 

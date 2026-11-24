@@ -11,7 +11,7 @@
 
   /** Centre of square n (1..100) in percent of the board; 0 is the start area below the bottom-left corner. Rows alternate direction. */
   function centre(n, slot = 0, count = 1) {
-    if (n <= 0) return { x: 8 + slot * 9, y: 106 };
+    if (n <= 0) return { x: 20 + slot * 9, y: 106 }; // the waiting tokens sit right of the 'Start' label
     const r = Math.floor((n - 1) / 10);
     const c0 = (n - 1) % 10;
     const c = r % 2 ? 9 - c0 : c0;
@@ -43,55 +43,60 @@
     for (let i = 1; i < rungs; i++) { const t = i / rungs; const x = p.x + dx * t, y = p.y + dy * t; d += `M${x + nx},${y + ny}L${x - nx},${y - ny}`; }
     return `<path class="sl-ladder" d="${d}"/>`;
   }
-  /* A snake: a tapered body from a thin tail up to the head, with a gentle S-bend, dark dorsal blotches, a rounded head with
-     slit eyes and a forked tongue. The head sits on the square where the snake starts (the higher square). */
+  /* A snake, drawn like the reference art: a thick outlined body with a pale zigzag along its edges, the neck hooked over so
+     the head is seen from the side, facing the middle of the board. The head sits on the square where the snake starts
+     (the higher square). */
   function snakeSVG(head, tail, i) {
     const p = centre(head), q = centre(tail);
     const dx = p.x - q.x, dy = p.y - q.y, len = Math.hypot(dx, dy) || 1;
     const ux = dx / len, uy = dy / len, nx = -uy, ny = ux; // u: tail to head, n: its normal
-    const waves = Math.max(1.5, len / 30) + (i % 2) * 0.5, amp = Math.min(2.6, 0.9 + len / 26); // each snake gets its own wiggle
-    const at = (t) => { // centreline point, t 0 at the tail, 1 at the head
+    const dir = p.x < 50 ? 1 : -1; // the head looks towards the middle of the board, so it never leaves the board
+    const waves = Math.max(1.5, len / 30) + (i % 2) * 0.5, amp = Math.min(2.8, 1 + len / 24); // each snake gets its own coil
+    const at = (t) => { // the body's S-bend, t 0 at the tail
       const bend = Math.sin(t * waves * 2 * Math.PI) * amp * (1 - 0.5 * t);
       return { x: q.x + dx * t + nx * bend, y: q.y + dy * t + ny * bend };
     };
-    const width = (t) => 0.22 + 0.72 * Math.pow(t, 0.8); // slim tail, body and head only a little wider than a line
-    const N = Math.max(20, Math.round(len * 2));
-    const L = [], R = [], S = [];
+    // the body follows the bend up to the neck, then a curve takes it up and over so the head ends level, facing dir
+    const tb = 1 - Math.min(len * 0.5, 7) / len;
+    const P0 = at(tb), A0 = at(tb - 0.01), E = { x: p.x, y: p.y };
+    let t0x = P0.x - A0.x, t0y = P0.y - A0.y;
+    const t0l = Math.hypot(t0x, t0y) || 1; t0x /= t0l; t0y /= t0l;
+    const h = Math.hypot(E.x - P0.x, E.y - P0.y) || 1;
+    const c1 = { x: P0.x + t0x * h * 0.5, y: P0.y + t0y * h * 0.5 }, c2 = { x: E.x - dir * h * 0.55, y: E.y };
+    const N0 = Math.max(14, Math.round(len * tb * 1.6)), M = 22;
+    const C = [];
+    for (let k = 0; k <= N0; k++) C.push(at(tb * k / N0));
+    for (let k = 1; k <= M; k++) {
+      const u = k / M, v = 1 - u;
+      C.push({ x: v * v * v * P0.x + 3 * v * v * u * c1.x + 3 * v * u * u * c2.x + u * u * u * E.x, y: v * v * v * P0.y + 3 * v * v * u * c1.y + 3 * v * u * u * c2.y + u * u * u * E.y });
+    }
+    const N = C.length - 1;
+    const cum = [0];
+    for (let k = 1; k <= N; k++) cum.push(cum[k - 1] + Math.hypot(C[k].x - C[k - 1].x, C[k].y - C[k - 1].y));
+    const L = [], R = [], T = [];
     for (let k = 0; k <= N; k++) {
-      const t = k / N, P = at(t), A = at(Math.max(0, t - 0.01)), B = at(Math.min(1, t + 0.01));
+      const A = C[Math.max(0, k - 1)], B = C[Math.min(N, k + 1)];
       const tx = B.x - A.x, ty = B.y - A.y, tl = Math.hypot(tx, ty) || 1;
-      const ex = -ty / tl, ey = tx / tl, w = width(t);
-      L.push([P.x + ex * w, P.y + ey * w]); R.push([P.x - ex * w, P.y - ey * w]);
-      S.push({ P, tx: tx / tl, ty: ty / tl, ex, ey, w, t });
+      const ex = -ty / tl, ey = tx / tl, w = 0.25 + 1.0 * Math.pow(cum[k] / cum[N], 0.7); // slim tail, a thick neck
+      L.push([C[k].x + ex * w, C[k].y + ey * w]); R.push([C[k].x - ex * w, C[k].y - ey * w]);
+      T.push({ ex, ey, w });
     }
     const f = (pt) => `${pt[0].toFixed(2)},${pt[1].toFixed(2)}`;
-    const tailTip = at(0);
-    let body = `M${tailTip.x.toFixed(2)},${tailTip.y.toFixed(2)}L${L.map(f).join('L')}`;
-    body += `A${width(1).toFixed(2)},${width(1).toFixed(2)} 0 0 1 ${f(R[N])}`;
-    body += `L${R.slice(0, N).reverse().map(f).join('L')}Z`;
-    // dorsal blotches, darker, spaced along the back and thinning toward the tail
-    // three patterns, one per snake: diamond blotches, round spots, or cross-bands
-    const variant = i % 3, step = Math.max(3, Math.round(N / (waves * 5 + 3)));
-    let spots = '';
-    for (let k = Math.round(N * 0.2); k < N - 4; k += step) {
-      const s = S[k], ang = Math.atan2(s.ty, s.tx) * 180 / Math.PI;
-      if (variant === 0) spots += `<ellipse cx="${s.P.x.toFixed(2)}" cy="${s.P.y.toFixed(2)}" rx="${(s.w * 0.9).toFixed(2)}" ry="${(s.w * 0.45).toFixed(2)}" transform="rotate(${ang.toFixed(1)} ${s.P.x.toFixed(2)} ${s.P.y.toFixed(2)})"/>`;
-      else if (variant === 1) spots += `<circle cx="${s.P.x.toFixed(2)}" cy="${s.P.y.toFixed(2)}" r="${(s.w * 0.4).toFixed(2)}"/>`;
-      else spots += `<path class="band" d="M${f(L[k])}L${f(R[k])}"/>`;
-    }
-    // head: an oval along the last tangent, slit eyes, forked tongue
-    const H = S[N], hx = H.P.x + H.tx * 0.9, hy = H.P.y + H.ty * 0.9, hang = Math.atan2(H.ty, H.tx) * 180 / Math.PI;
-    const ex = (sx, sy) => `${(hx + H.tx * sx + H.ex * sy).toFixed(2)},${(hy + H.ty * sx + H.ey * sy).toFixed(2)}`;
-    const eyes = [1, -1].map((side) => {
-      const c = ex(0.45, side * 0.85);
-      const [cx, cy] = c.split(',').map(Number);
-      return `<circle class="eye" cx="${cx}" cy="${cy}" r="0.55"/><ellipse class="pupil" cx="${cx + H.tx * 0.15}" cy="${cy + H.ty * 0.15}" rx="0.16" ry="0.4" transform="rotate(${hang.toFixed(1)} ${cx} ${cy})"/>`;
-    }).join('');
-    const tongue = `M${ex(1.7, 0)} L${ex(2.6, 0)} L${ex(3.1, 0.4)} M${ex(2.6, 0)} L${ex(3.1, -0.4)}`;
+    const body = `M${C[0].x.toFixed(2)},${C[0].y.toFixed(2)}L${L.map(f).join('L')}L${R.slice().reverse().map(f).join('L')}Z`;
+    const kEnd = N - 3;
+    let sheen = '';
+    for (let k = Math.round(N * 0.12); k < kEnd; k++) sheen += `M${(C[k].x - T[k].ex * T[k].w * 0.62).toFixed(2)},${(C[k].y - T[k].ey * T[k].w * 0.62).toFixed(2)}L${(C[k + 1].x - T[k + 1].ex * T[k + 1].w * 0.62).toFixed(2)},${(C[k + 1].y - T[k + 1].ey * T[k + 1].w * 0.62).toFixed(2)}`;
+    // the head in profile, at E, facing dir (fx runs forward, fy up): a slim head with a pointed snout, one big eye, a slanted
+    // brow so it looks a little furious, and a plain mouth line
+    const F = (fx, fy) => `${(E.x + dir * fx).toFixed(2)},${(E.y - fy).toFixed(2)}`;
+    const headPath = `M${F(-0.6, 1.2)}Q${F(0.6, 1.7)} ${F(1.8, 1.2)}Q${F(3.0, 0.8)} ${F(3.7, 0.1)}Q${F(3.9, -0.15)} ${F(3.6, -0.45)}L${F(2.0, -0.8)}Q${F(0.8, -1.25)} ${F(-0.6, -1.1)}Z`;
+    const [ecx, ecy] = F(1.6, 0.4).split(','), [pcx, pcy] = F(1.8, 0.34).split(','), [scx, scy] = F(1.7, 0.55).split(',');
+    const eye = `<circle class="eye" cx="${ecx}" cy="${ecy}" r="0.5"/><circle class="pupil" cx="${pcx}" cy="${pcy}" r="0.26"/><circle class="shine" cx="${scx}" cy="${scy}" r="0.1"/>`;
+    const brow = `<path class="brow" d="M${F(0.9, 1.15)}L${F(2.3, 0.55)}"/>`;
+    const mouth = `<path class="mouth" d="M${F(3.65, -0.12)}Q${F(2.4, -0.45)} ${F(1.0, -0.4)}"/>`;
     const hue = ['sl-s1', 'sl-s2', 'sl-s3'][i % 3];
-    return `<g class="sl-snake ${hue}"><path class="body" d="${body}"/><g class="blotch">${spots}</g>`
-      + `<ellipse class="head" cx="${hx.toFixed(2)}" cy="${hy.toFixed(2)}" rx="1.75" ry="1.45" transform="rotate(${hang.toFixed(1)} ${hx.toFixed(2)} ${hy.toFixed(2)})"/>`
-      + `${eyes}<path class="tongue" d="${tongue}"/></g>`;
+    return `<g class="sl-snake ${hue}"><path class="body" d="${body}"/><path class="sheen" d="${sheen}"/>`
+      + `<path class="head" d="${headPath}"/>${mouth}${eye}${brow}</g>`;
   }
 
   function board(v) {

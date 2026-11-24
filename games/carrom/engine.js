@@ -202,8 +202,9 @@ function applyAction(g, playerId, action) {
   g.nextId = p.next.nextId;
   g.shots += 1;
   g.shot = { ...p.shot, seq: ++g.seq };
-  // the bot waits until this shot has been played out, plus a short pause to read it (people are never held)
-  pacing.holdLatest(g, p.shot.keyframes[p.shot.keyframes.length - 1].t * 1000 + 400);
+  // Match the viewer's setup pause and playback tail in public/games/carrom.js, with a small buffer for delivery and rendering.
+  const playbackMs = 1250 + p.shot.keyframes[p.shot.keyframes.length - 1].t * 1000 + 250;
+  pacing.holdLatest(g, playbackMs + 150);
   const name = g.players[seat].name;
   g.log.push(p.shot.foul ? `${name}: foul, the striker was pocketed`
     : p.shot.scored ? `${name} pocketed ${p.shot.scored} ${p.shot.colour === 'w' ? 'white' : 'black'}`

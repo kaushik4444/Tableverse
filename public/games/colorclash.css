@@ -17,7 +17,7 @@
 .cc-game .card.tiny { --cw: 26px; display: inline-block; vertical-align: middle; }
 
 .cc-game .cc-mid { display: flex; align-items: center; justify-content: center; gap: 14px; }
-.cc-game .cc-stock { display: grid; justify-items: center; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: default; }
+.cc-game .cc-stock { display: grid; justify-items: center; gap: 2px; min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: default; }
 .cc-game .cc-stock .card { --cw: calc(var(--cw0, 62px) * .78); }
 .cc-game .cc-stock.ready { cursor: pointer; }
 .cc-game .cc-stock.ready .card { box-shadow: 0 0 0 3px var(--gold, #f2c14e), 0 4px 12px rgba(0, 0, 0, .5); }

@@ -222,6 +222,22 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('small phone: tapping just outside a rank chip selects it', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMessages('gofish', four), viewport: { width: 320, height: 568 } });
+    await page.goto(url + '/');
+    await page.waitForSelector('.gf-chip');
+    const [first, second] = await page.locator('.gf-chip[data-gf="rank"]').all();
+    const a = await first.boundingBox(), b = await second.boundingBox();
+    const y = a.y + a.height / 2;
+    assert.equal(a.y, b.y, 'the chips share a row');
+    assert.ok(b.x - (a.x + a.width) >= 4, 'there is a gap between the chip borders');
+    for (const [x, chip] of [[a.x + a.width + 1, first], [b.x - 1, second]]) {
+      await page.mouse.click(x, y);
+      assert.equal(await page.getAttribute('.gf-chip.on[data-gf="rank"]', 'data-rank'), await chip.getAttribute('data-rank'));
+    }
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;

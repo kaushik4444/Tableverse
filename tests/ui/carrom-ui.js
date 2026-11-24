@@ -113,7 +113,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
-  await test('dragging the striker along the baseline places it without a shot, and a new spot clears the aim', async () => {
+  await test('the striker is set only from the bottom slider: a drag on the board pulls the aim and never moves it, and a new spot clears the aim', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
     const before = Number(await page.getAttribute('.cb-striker', 'cx'));
     const s = await box(page, '.cb-striker');
@@ -122,8 +122,12 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.mouse.down();
     await page.mouse.move(sx + 60, sy, { steps: 6 });
     await page.mouse.up();
-    const after = Number(await page.getAttribute('.cb-striker', 'cx'));
-    assert.ok(after > before, `the striker moved right (${before} → ${after})`);
+    assert.equal(Number(await page.getAttribute('.cb-striker', 'cx')), before, 'a drag on the board must not move the striker');
+    assert.equal((await sent(page)).length, 0, 'a drag that does not release a pull is not a shot');
+    const tr = await box(page, '.cb-track');
+    await page.mouse.click(tr.x + tr.width * 0.75, tr.y + tr.height / 2);
+    const moved = Number(await page.getAttribute('.cb-striker', 'cx'));
+    assert.ok(moved > before, `the slider moved the striker right (${before} → ${moved})`);
     assert.equal((await sent(page)).length, 0, 'placing the striker is not a shot');
     assert.match(await page.textContent('.cb-tip'), /Drag your striker along the baseline/, 'the aim was cleared by the move');
     await ctx.close();
@@ -177,6 +181,44 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.waitForFunction(() => /is aiming/.test(document.querySelector('.wz-status')?.textContent || ''), null, { timeout: 15000 });
     assert.equal(await page.locator('.cb-coin').count(), 18, 'the board is redrawn after the shot');
     await ctx.close();
+  });
+
+  await test('an opposite seat sets up on its own baseline and playback moves, fades and hides disc shades', async () => {
+    const g = fresh(2);
+    g.turn = 1;
+    const { page, ctx } = await open(msgsFor(g));
+    try {
+      await page.clock.install();
+      assert.equal(E.applyAction(g, 'p1', { seq: g.seq, type: 'flick', x: 0.3, angle: 0, power: 0.05 }).ok, true);
+      const view = E.viewFor(g, 'p0');
+      const striker = view.shot.keyframes[0].d.find(([id]) => id === 'striker');
+      const coin = ['c1', 0.25, 0.25];
+      view.shot.keyframes = [
+        { t: 0, d: [striker, coin] },
+        { t: 0.5, d: [striker, ['c1', 0.5, 0.5]] },
+        { t: 1, d: [striker] },
+      ];
+      view.shot.events = [];
+      await page.evaluate((next) => window.__push(next), { t: 'state', room: msgsFor(g)[1].room, view });
+      const read = (id) => page.evaluate((id) => {
+        const info = (el) => ({ x: +el.getAttribute('cx'), y: +el.getAttribute('cy'), opacity: +getComputedStyle(el).opacity, display: getComputedStyle(el).display });
+        return [info(document.querySelector(`.cb-svg [data-id="${id}"]`)), info(document.querySelector(`.cb-svg [data-shade-for="${id}"]`))];
+      }, id);
+      await page.clock.runFor(100);
+      const [start] = await read('striker');
+      assert.ok(Math.abs(start.x - 0.5) < 0.02 && Math.abs(start.y - 0.12) < 0.001, 'the striker starts near the centre of the opposite baseline');
+      await page.clock.runFor(900);
+      const [set] = await read('striker');
+      assert.ok(Math.abs(set.x - 0.7) < 0.001 && Math.abs(set.y - start.y) < 0.001, 'the striker slides along that baseline');
+      await page.clock.runFor(1000);
+      const [disc, shade] = await read('c1');
+      assert.equal(disc.x, 0.5, 'the coin moved to its second keyframe');
+      assert.ok(disc.opacity > 0 && disc.opacity < 1, 'the pocketed coin is fading');
+      assert.ok(Math.abs(shade.opacity - disc.opacity * 0.45) < 0.001, 'the shade fades from its normal opacity');
+      assert.ok(Math.abs(shade.x - disc.x - 0.004) < 0.0001 && Math.abs(shade.y - disc.y - 0.008) < 0.0001, 'the shade keeps its offset after moving');
+      await page.clock.runFor(330);
+      assert.deepEqual((await read('c1')).map((p) => p.display), ['none', 'none']);
+    } finally { await ctx.close(); }
   });
 
   await test('game over: the winning team sees they won, and the other team sees they lost', async () => {
@@ -270,12 +312,13 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
 
   await test('the first time: the how-to-play cards open with the real board, step through, keep focus, and do not open again', async () => {
     const { page, ctx } = await scriptedPage(browser, { messages: msgsFor(fresh()), viewport: { width: 390, height: 844 }, firstTime: true });
+    // Each new card mounts a fresh sheet. Test the controls without the entrance animation moving them.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(url + '/');
     await page.waitForSelector('.ht-overlay', { timeout: 8000 });
     const titles = [];
     const expected = ['The board', 'Take the shot', 'Pocketing', 'The queen', 'The striker', 'Winning'];
     for (let i = 0; i < 6; i++) {
-      // wait for this card to be the one showing (a card that is still animating in or out would be read, or clicked, too early)
       await page.waitForFunction((t) => (document.querySelector('.ht-overlay h2') || {}).textContent === t, expected[i], { timeout: 4000 });
       titles.push(await page.textContent('.ht-overlay h2'));
       assert.ok(await page.locator('.ht-overlay svg.cb-svg .cb-pocket').count() === 4, 'the card shows the real board with four pockets');

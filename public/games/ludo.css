@@ -1,5 +1,5 @@
 /* Tableverse Ludo: one SVG board, glossy tokens and a single compact turn bar. */
-.ludo { --panel-bg: var(--panel, #11261e); width: min(100%, 1040px); min-width: 0; margin-inline: auto; display: grid; gap: 10px; color: var(--ink, #eef5f0); }
+.ludo { --panel-bg: var(--panel, #11261e); width: min(100%, 1040px); min-width: 0; margin-inline: auto; padding-inline: 8px; display: grid; gap: 10px; color: var(--ink, #eef5f0); }
 .ludo-tools { display: flex; justify-content: flex-end; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ludo-tools .btn { min-width: 44px; min-height: 44px; }
 

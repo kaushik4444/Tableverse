@@ -31,11 +31,17 @@
     if (!to) { pill.style.opacity = '0'; return; }
     const w = `${to.offsetWidth}px`, x = `translateX(${to.offsetLeft}px)`;
     if (pill.style.width !== w || pill.style.transform !== x || pill.style.opacity !== '1') {
+      // A pill that a redraw has just painted is put in its tab without animating. Otherwise the browser would slide it
+      // in from its starting place (Home) on every page change. Its transition is switched off, the position is applied
+      // and read back (forcing a style pass), and only then is the transition restored.
+      const fresh = !pill.dataset.placed;
+      if (fresh) pill.style.transition = 'none';
       pill.style.width = w;
       pill.style.transform = x;
       pill.style.opacity = '1';
+      if (fresh) { void pill.offsetWidth; pill.style.transition = ''; pill.dataset.placed = '1'; }
     }
-    tabs.classList.add('placed'); // the slide animates only once the pill has a place (not on its first paint)
+    tabs.classList.add('placed');
   };
   const current = (tabs) => tabs.querySelector('.tb-tab[aria-current="page"]');
   document.addEventListener('pointerover', (e) => {
