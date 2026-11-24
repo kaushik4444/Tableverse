@@ -3464,10 +3464,13 @@
       if (gameNudge) { const anchor = $app.querySelector('.end-actions-wrap, .end-bar'); (anchor || $app).insertAdjacentHTML(anchor ? 'beforebegin' : 'beforeend', gameNudge); }
       const xpRows = (r.outcome && r.outcome.xp) || [];
       const totals = endTotalsState(f);
-      if (xpRows.length && totals.askNow && send({ t: 'gameTotals' })) {
-        f.totalsAsked = { at: Date.now(), tries: totals.tries + 1 };
-        // asked again in place (no full redraw) once the answer is due
-        setTimeout(() => retryEndTotals(f), 5100);
+      if (xpRows.length && totals.askNow) {
+        if (send({ t: 'gameTotals' })) {
+          f.totalsAsked = { at: Date.now(), tries: totals.tries + 1 };
+          f.sendFails = 0;
+          // asked again in place (no full redraw) once the answer is due
+          setTimeout(() => retryEndTotals(f), 5100);
+        } else setTimeout(() => retryEndTotals(f), 1000); // not connected yet: try again shortly rather than leave the card loading
       }
       if (xpRows.length) {
         $app.querySelectorAll('.end-xp').forEach((n) => n.remove());
@@ -3505,10 +3508,18 @@
   /** Asks for the ratings again while the game-over card is still waiting, and swaps only the card when the answer is final. */
   function retryEndTotals(f) {
     if (!S.room || S.room.status !== 'finished' || S.endFlow !== f) return;
-    if (!endTotalsState(f).gotTotals && endTotalsState(f).askNow && send({ t: 'gameTotals' })) {
-      f.totalsAsked = { at: Date.now(), tries: endTotalsState(f).tries + 1 };
-      setTimeout(() => retryEndTotals(f), 5100);
-      return;
+    const t = endTotalsState(f);
+    if (!t.gotTotals && t.askNow) {
+      if (send({ t: 'gameTotals' })) {
+        f.totalsAsked = { at: Date.now(), tries: t.tries + 1 };
+        f.sendFails = 0;
+        setTimeout(() => retryEndTotals(f), 5100);
+        return;
+      }
+      // no connection: keep trying each second; after about 30 s give up, so the card says the ratings are unavailable
+      f.sendFails = (f.sendFails || 0) + 1;
+      if (f.sendFails < 30) { setTimeout(() => retryEndTotals(f), 1000); return; }
+      f.totalsAsked = { at: Date.now() - 5000, tries: 3 };
     }
     updateEndCard();
   }

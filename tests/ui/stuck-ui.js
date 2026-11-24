@@ -87,6 +87,26 @@ const player = (username, displayName) => ({ ok: true, profile: { username, disp
     await ctx.close();
   });
 
+  await test('a game ends while the connection is down: the ratings are asked for once it is back', async () => {
+    const four = [{ name: 'Aarav' }, { name: 'Bo' }, { name: 'Charlotte' }, { name: 'Dmitri' }].map((x, i) => ({ id: 'p' + i, ...x, saved: true }));
+    const { tableMessages } = require('./harness');
+    const live = tableMessages('gofish', four);
+    const { page, ctx } = await scriptedPage(browser, { messages: live, viewport: { width: 390, height: 844 } });
+    await page.goto(url + '/');
+    await page.waitForSelector('.gf', { timeout: 8000 });
+    // the connection is down as the game ends (no close event: the page does not know yet)
+    await page.evaluate(() => { window.__sock().readyState = 3; });
+    const done = tableMessages('gofish', four)[1];
+    done.view.phase = 'gameOver'; done.view.myTurn = false; done.view.winners = [1];
+    Object.assign(done.room, { status: 'finished', hostId: 'p0', votes: [], outcome: { id: 'g1', winners: [{ id: 'p1', name: 'Bo' }], sinceMs: 0, xp: four.map((x) => ({ id: x.id, name: x.name, saved: true, isBot: false, penalised: false })) } });
+    await page.evaluate((m) => window.__push(m), done);
+    await page.waitForTimeout(4500); // past the game-over stages, which also redraw the card
+    assert.equal((await page.evaluate(() => window.__sent.filter((m) => m.t === 'gameTotals'))).length, 0, 'nothing was sent while down');
+    await page.evaluate(() => { window.__sock().readyState = 1; }); // the connection is back
+    await page.waitForFunction(() => (window.__sent || []).some((m) => m.t === 'gameTotals'), null, { timeout: 4000 });
+    await ctx.close();
+  });
+
   await browser.close();
   server.close();
   console.log(`\nstuck ui: ${passed} passed, ${failed} failed`);
