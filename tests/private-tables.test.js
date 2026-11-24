@@ -65,6 +65,9 @@ function wsClient(port, token) {
     stranger.client.send({ t: 'join', code });
     await stranger.client.wait((c) => c.errors.length > 0, 'unauthorized join rejected');
     assert.equal(stranger.client.room, null);
+    assert.deepEqual(stranger.client.messages.find((m) => m.t === 'error'), {
+      t: 'error', code: 'join_failed', tableCode: code, message: 'This private table requires an accepted invitation.',
+    });
     stranger.client.send({ t: 'join', code, spectate: true });
     await wait(150);
     assert.equal(a.client.room.members.length, 1);

@@ -200,5 +200,20 @@ function oneShot(time) {
     assert.equal(tries, 2);
   });
 
+  await test('a pending attempt that rejects after stop cannot schedule a retry', async () => {
+    const time = fakeTime(); let tries = 0; let reject;
+    const pending = new Promise((resolve, fail) => { reject = fail; });
+    const r = retryWithBackoff(() => { tries++; return pending; }, [1000], oneShot(time));
+    const result = r.run();
+    assert.equal(tries, 1);
+    r.stop();
+    reject(new Error('database down'));
+    assert.equal(await result, false);
+    assert.equal(time.timers(), 0, 'the pending attempt did not restore the retry timer');
+    assert.equal(await r.run(), false);
+    await time.advance(1000);
+    assert.equal(tries, 1, 'stop also blocks new attempts');
+  });
+
   console.log(`\n${passed} passed`);
 })();

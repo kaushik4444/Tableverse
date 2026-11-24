@@ -79,12 +79,28 @@ const player = (username, displayName) => ({ ok: true, profile: { username, disp
     await page.click('[data-modal-act="cardProfile"]');
     await page.click('[data-modal-act="cardProfileConfirm"]');
     await page.waitForFunction(() => (window.__sent || []).some((m) => m && m.t === 'leave'), null, { timeout: 3000 });
-    await page.evaluate(() => window.__push({ t: 'error', message: 'You cannot leave right now.' }));
+    await page.evaluate(() => window.__push({ t: 'error', code: 'leave_failed', message: 'Could not leave the table. Try again.' }));
     await page.waitForTimeout(200);
     await page.evaluate(() => window.__push({ t: 'left' })); // a later, ordinary leave
     await page.waitForTimeout(400);
     assert.ok(!/#u\//.test(await page.evaluate(() => location.hash)), 'the refused leave opened the profile later');
     await ctx.close();
+  });
+
+  await test('only a join failure for the linked table clears its hash', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: GAMES })] });
+    try {
+      await page.goto(url + '/#ABCDEF');
+      await page.click('[data-join-mode="join"]');
+      await page.waitForFunction(() => window.__sent.some((m) => m.t === 'join' && m.code === 'ABCDEF'));
+      await page.evaluate(() => {
+        window.__push({ t: 'error', code: 'leave_failed', message: 'Could not leave the table.' });
+        window.__push({ t: 'error', code: 'join_failed', tableCode: 'ZYXWVU', message: 'No table with code ZYXWVU' });
+      });
+      assert.equal(await page.evaluate(() => location.hash), '#ABCDEF');
+      await page.evaluate(() => window.__push({ t: 'error', code: 'join_failed', tableCode: 'ABCDEF', message: 'No table with code ABCDEF' }));
+      assert.equal(await page.evaluate(() => location.hash), '');
+    } finally { await ctx.close(); }
   });
 
   await test('a game ends while the connection is down: the ratings are asked for once it is back', async () => {

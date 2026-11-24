@@ -259,8 +259,11 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
       await page.waitForSelector('.pcard-head');
       await page.click('[data-modal-act="cardProfile"]');
       await page.waitForSelector('[data-modal-act="cardProfileConfirm"]');
-      await page.evaluate(() => window.__drop());
-      await page.click('[data-modal-act="cardProfileConfirm"]');
+      // Confirm in the same browser task as the drop, before the automatic reconnect can run.
+      await page.evaluate(() => {
+        window.__drop();
+        document.querySelector('[data-modal-act="cardProfileConfirm"]').click();
+      });
       await page.waitForFunction(() => /Connection lost/.test(document.body.textContent || ''));
       const sent = await page.evaluate(() => (window.__sent || []).filter((m) => m.t === 'leave').length);
       assert.equal(sent, 0, 'no leave is sent while disconnected');
