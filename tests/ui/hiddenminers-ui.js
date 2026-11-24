@@ -56,6 +56,56 @@ function scene(n, edit) {
     await ctx.close();
   });
 
+  await test('carved board tiles show distinct rim, floor, highlight and dead end treatments', async () => {
+    const { page, ctx } = await open(scene(4, (v) => {
+      v.board[1] = { ...v.board[1], mask: 3 };
+      v.board.push({ x: 2, y: 2, mask: 8, cut: true });
+    }));
+    try {
+      const board = page.locator('.hm-board');
+      const tunnel = board.getByRole('img', { name: /Tunnel open north, east/ });
+      const paint = async (tile, selector, property) =>
+        tile.locator(selector).first().evaluate((el, prop) => getComputedStyle(el)[prop], property);
+      const widths = await Promise.all(['.rim', '.bore', '.deep'].map(async (layer) =>
+        parseFloat(await paint(tunnel, layer, 'strokeWidth'))));
+      assert.ok(widths[0] > widths[1] && widths[1] > widths[2] && widths[2] > 0, 'each layer leaves the one below it visible');
+      const strokes = await Promise.all(['.rim', '.bore', '.deep'].map((layer) => paint(tunnel, layer, 'stroke')));
+      assert.equal(new Set(strokes).size, 3, 'rim, floor and highlight have distinct colors');
+      assert.ok(strokes.every((stroke) => stroke !== 'none'));
+      for (const [a, b] of [['.speck', '.rock'], ['.hub-rim', '.hub-bore'], ['.debris ellipse', '.bore']]) {
+        assert.notEqual(await paint(tunnel, a, 'fill'), await paint(tunnel, b, b === '.bore' ? 'stroke' : 'fill'));
+      }
+      const deadEnd = board.getByRole('img', { name: /Dead-end tunnel open west/ });
+      assert.equal(await deadEnd.locator('.hub-bore').count(), 0);
+      assert.notEqual(await paint(deadEnd, '.plug', 'stroke'), 'none', 'the barricade has a visible stroke');
+      assert.equal(await paint(deadEnd, '.plug', 'fill'), 'none', 'the barricade does not fill the passage');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  await test('tool and event faces show their textures, and tunnel cards have an inset border', async () => {
+    const { page, ctx } = await open(scene(4));
+    try {
+      const face = (id) => page.locator(`.hm-card[data-id="${id}"] .hm-face`);
+      const style = (locator, property) => locator.evaluate((el, prop) => getComputedStyle(el)[prop], property);
+      const textures = {};
+      for (const [id, pattern] of [['b1', /^radial-gradient/], ['r1', /^repeating-linear-gradient/],
+        ['s1', /^radial-gradient/], ['c1', /^radial-gradient/]]) {
+        textures[id] = await style(face(id), 'backgroundImage');
+        assert.match(textures[id], pattern, `${id}: background uses its material's texture`);
+        assert.match(await style(face(id), 'boxShadow'), /\binset\b/, `${id}: face has an inset border`);
+        assert.notEqual(await style(face(id).locator('b'), 'textShadow'), 'none', `${id}: icon has a shadow`);
+      }
+      assert.equal(textures.c1, textures.b1, 'collapse and break share the sabotage texture');
+      assert.notEqual(textures.s1, textures.b1, 'scouting has a distinct texture');
+      assert.notEqual(await style(face('b1').locator('i'), 'color'), await style(face('r1').locator('i'), 'color'), 'break and repair marks differ in color');
+      assert.match(await style(face('t1'), 'boxShadow'), /\binset\b/, 'the tunnel card has a carved border');
+    } finally {
+      await ctx.close();
+    }
+  });
+
   await test('a tunnel piece: pick it, glowing places appear, tapping one sends the placement; turning it flips the preview', async () => {
     const { page, ctx } = await open(scene(4));
     assert.equal(await page.locator('.hm-cell.spot').count(), 0);
@@ -66,6 +116,11 @@ function scene(n, edit) {
     await ctx.close();
     const f = await open(scene(4, (v) => { v.hand[0] = { id: 't1', k: 'tile', mask: 3, cut: false, ok: true }; v.spots = { t1: [[2, 2, 1]] }; }));
     await f.page.click('.hm-card[data-id="t1"]');
+    const ghost = f.page.locator('.hm-cell.spot svg.hm-tile.ghost');
+    const preview = await ghost.locator('.bore').getAttribute('d');
+    const entries = [...preview.matchAll(/M(\d+) (\d+)/g)].map((m) => m.slice(1).map(Number));
+    assert.deepEqual(entries.sort((a, b) => a[0] - b[0]), [[0, 50], [50, 100]], 'the turned preview opens west and south');
+    assert.equal(await f.page.locator('.hm-card[data-id="t1"] .bore').getAttribute('d'), preview, 'card and board preview agree');
     await f.page.click('.hm-cell.spot');
     assert.equal((await sent(f.page)).at(-1).action.flip, true, 'only the turned piece fits, so it is sent turned');
     await f.ctx.close();
