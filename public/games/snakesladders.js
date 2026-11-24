@@ -11,7 +11,7 @@
 
   /** Centre of square n (1..100) in percent of the board; 0 is the start area below the bottom-left corner. Rows alternate direction. */
   function centre(n, slot = 0, count = 1) {
-    if (n <= 0) return { x: 8 + slot * 9, y: 106 };
+    if (n <= 0) return { x: 20 + slot * 9, y: 106 }; // the waiting tokens sit right of the 'Start' label
     const r = Math.floor((n - 1) / 10);
     const c0 = (n - 1) % 10;
     const c = r % 2 ? 9 - c0 : c0;

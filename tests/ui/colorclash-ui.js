@@ -233,6 +233,15 @@ function scene(n, edit) {
     await ctx.close();
   });
 
+  await test('small phone: the draw pile is a 44px tap target', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMessages('colorclash', people(4)), viewport: { width: 320, height: 568 } });
+    await page.goto(url + '/');
+    await page.waitForSelector('.cc-stock');
+    const box = await page.locator('.cc-stock').first().boundingBox();
+    assert.ok(box.width >= 44 && box.height >= 44, `draw pile is ${Math.round(box.width)}x${Math.round(box.height)}`);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

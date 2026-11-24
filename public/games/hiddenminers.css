@@ -63,6 +63,7 @@
 }
 .hm-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .hm-hand { display: flex; gap: 8px; overflow-x: auto; padding: 14px 6px 6px; justify-content: safe center; -webkit-overflow-scrolling: touch; }
+.hm-hand.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .hm-card { flex: 0 0 auto; display: grid; justify-items: center; gap: 3px; width: clamp(54px, 15vw, 84px); padding: 4px; border-radius: 10px; background: #f3ead8; color: #2c231c; border: 2px solid #fff; font: inherit; transition: transform .15s ease; }
 .hm-card small { font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; }
 .hm-card .hm-face { display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 6px; overflow: hidden; position: relative; background: #e8dcc2; }

@@ -286,6 +286,28 @@ function scene(n, edit) {
     }
   });
 
+  await test('the card hand fades at its right edge only when cards are off screen', async () => {
+    const check = async (vw) => {
+      const { page, ctx } = await scriptedPage(browser, { messages: tableMessages('hiddenminers', people(3)), viewport: { width: vw, height: 844 } });
+      await page.goto(url + '/');
+      await page.waitForSelector('.hm-hand');
+      const r = await page.evaluate(() => { const h = document.querySelector('.hm-hand'); return { more: h.classList.contains('more'), scrollable: h.scrollWidth > h.clientWidth + 2 }; });
+      if (r.scrollable) {
+        // scrolled to the last card: the fade goes away, because no card is left off screen to the right
+        await page.evaluate(() => { const h = document.querySelector('.hm-hand'); h.scrollLeft = h.scrollWidth; h.dispatchEvent(new Event('scroll')); });
+        r.moreAtEnd = await page.evaluate(() => document.querySelector('.hm-hand').classList.contains('more'));
+      }
+      await ctx.close();
+      return r;
+    };
+    const narrow = await check(320);
+    assert.equal(narrow.scrollable, true, 'the hand should be wider than a 320px phone for this test to mean anything');
+    assert.equal(narrow.more, true, 'an overflowing hand shows the fade');
+    assert.equal(narrow.moreAtEnd, false, 'the fade stays on after the hand is scrolled to its last card');
+    const wide = await check(1280);
+    assert.equal(wide.more, wide.scrollable, 'the fade is on exactly when the hand scrolls');
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

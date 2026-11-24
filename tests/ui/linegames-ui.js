@@ -191,6 +191,20 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     }
   });
 
+  await test('four in a row on a small phone: a tap in the gap between two columns still drops a piece', async () => {
+    const { page, ctx } = await open(msgs('fourinarow'), { width: 320, height: 568 });
+    const gap = await page.evaluate(() => {
+      const cols = [...document.querySelectorAll('.lg-col')];
+      const a = cols[2].getBoundingClientRect(); const b = cols[3].getBoundingClientRect();
+      const x = (a.right + b.left) / 2; const y = (a.top + a.bottom) / 2;
+      const hit = document.elementFromPoint(x, y);
+      return { gapPx: b.left - a.right, col: hit && hit.closest('.lg-col') ? hit.closest('.lg-col').dataset.col : null };
+    });
+    assert.ok(gap.gapPx > 0, 'the columns have a gap to test');
+    assert.ok(gap.col === '2' || gap.col === '3', `a tap in the gap hit ${gap.col}, not a column`);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

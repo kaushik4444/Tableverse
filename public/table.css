@@ -297,7 +297,8 @@ button.card { cursor: pointer; }
   bottom: 3%;
   z-index: 3;
   text-align: center;
-  font: 800 calc(var(--cw) * .09) var(--sans);
+  font: 800 max(7px, calc(var(--cw) * .09)) var(--sans); /* never below 7px: smaller is unreadable */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   letter-spacing: .12em;
   text-transform: uppercase;
   color: #fff;

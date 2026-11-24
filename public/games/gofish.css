@@ -46,7 +46,9 @@
 
 /* Very narrow phones (< 380 px): rank chips shrink further so all 13 fit in two rows without overflow. */
 @media (max-width: 379px) {
-  .gf .gf-chip { min-width: 34px; min-height: 44px; padding: 4px 4px; font-size: 16px; gap: 3px; }
+  /* the chip stays 34px wide so all 13 ranks fit in two rows; an invisible 2px margin each side (half the 4px gap, so it never covers a neighbour) makes the tap target 38px */
+  .gf .gf-chip { position: relative; min-width: 34px; min-height: 44px; padding: 4px 4px; font-size: 16px; gap: 3px; }
+  .gf .gf-chip::after { content: ''; position: absolute; inset: 0 -2px; }
   .gf .gf-chip.wide { font-size: 13px; }
   .gf .gf-chips { gap: 4px; }
   .gf .gf-ask .btn.big { font-size: 15px; }
