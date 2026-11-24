@@ -1,4 +1,4 @@
-# Planned games (not built yet)
+# Planned games (ideas, not committed)
 
 Built since this list was started: Chess, Carrom, Color Clash and Hidden Miners (see `games/`). The Ball Pong idea is now Cup Pong below. Bullhead Run was only a working title for Take 5, so it is not planned separately.
 
@@ -17,4 +17,4 @@ Ideas only. Nothing here is committed to a release. Each needs a design note and
 Physics-based games (Carrom, Ball Pong, Pool, Bowling) share needs: an authoritative, deterministic simulation, touch aiming,
 and tolerance for latency on the single-instance server. A shared physics decision should be taken once, not per game.
 
-In progress / built recently: Take 5 (PR #223). Next in the queue: Stage 10.
+Built recently: Take 5 and Stage 10 (both on `development`). No game in this list is in progress.

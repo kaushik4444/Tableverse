@@ -11,10 +11,10 @@ const table = (code) => ({ code, gameId: 'wizard', host: 'Bo', seats: 4, members
 (async () => {
   const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk() });
   const browser = await chromium.launch();
-  const open = async (hash) => {
+  const open = async (hash, ready = '#friendSearch') => {
     const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: [] })] });
     await page.goto(url + '/' + hash);
-    await page.waitForSelector('#friendSearch', { timeout: 8000 });
+    await page.waitForSelector(ready, { timeout: 8000 });
     return { page, ctx };
   };
 
@@ -29,8 +29,9 @@ const table = (code) => ({ code, gameId: 'wizard', host: 'Bo', seats: 4, members
     await ctx.close();
   });
 
+  // the open tables are on the games page (the friends page does not show them, so a change there is correctly not a redraw)
   await test('an identical directory update does not rebuild the screen; a changed one does', async () => {
-    const { page, ctx } = await open('#friends');
+    const { page, ctx } = await open('#', '#app .game-off, #app .game-grid'); // with no games the home page shows its empty-state line
     const push = (tables) => page.evaluate((t) => window.__push({ t: 'tables', tables: t, rejoin: [] }), tables);
     await push([table('AAAAAA')]);
     await page.waitForTimeout(60);
