@@ -26,27 +26,26 @@ function finished(hostId, sinceMs, votes = []) {
     return { page, ctx };
   };
 
-  await test('a game that just ended: table, then the winner pop-up, then the result', async () => {
+  await test('a game that just ended: the table, then the result once (no second "won" pop-up over its own result sheet)', async () => {
     const { page, ctx } = await open(finished('me', 0));
     assert.equal(await page.isVisible('.overlay'), false, 'result is held back while the board is shown');
-    await page.waitForSelector('.end-pop', { timeout: 6000 });
-    assert.match(await page.textContent('.end-pop'), /Bo won/);
-    await page.waitForSelector('.end-actions', { timeout: 6000 });
-    assert.equal(await page.isVisible('.end-pop'), false);
+    await page.waitForSelector('.end-actions', { timeout: 9000 });
     assert.ok(await page.isVisible('.overlay'));
+    assert.equal(await page.$('.end-pop'), null, 'the winner is named once, on the result sheet');
+    assert.equal(await page.locator('.overlay').count(), 1, 'one result sheet');
     await page.click('[data-act="endAgain"]');
     assert.equal((await page.evaluate(() => window.__sent.filter((m) => m.t === 'rematch'))).length, 1);
     await ctx.close();
   });
 
-  await test('the winner pop-up waits until the final move has been played out', async () => {
+  await test('the result waits until the final move has been played out', async () => {
     const messages = finished('me', 0);
     messages[1].room.outcome.playMs = 4000;
     const { page, ctx } = await open(messages);
     await page.waitForTimeout(4500); // past the 3.5 s board, still inside the 4 s playback
-    assert.equal(await page.$('.end-pop'), null, 'no pop-up while the last shot is still playing');
-    await page.waitForSelector('.end-pop', { timeout: 9000 });
-    assert.match(await page.textContent('.end-pop'), /Bo won/);
+    assert.equal(await page.isVisible('.overlay'), false, 'no result while the last shot is still playing');
+    await page.waitForSelector('.end-actions', { timeout: 9000 });
+    assert.equal(await page.$('.end-pop'), null);
     await ctx.close();
   });
 

@@ -71,6 +71,16 @@ button.card { cursor: pointer; }
 
 /* ---- 29 */
 .t29-strip { display: flex; align-items: stretch; gap: 8px; }
+/* 29 uses the same white cards as Poker (games/poker.css .pkc): rank in the corner, a large suit in the middle, four suit colours */
+.t29 .card { background: linear-gradient(160deg, #ffffff, #e9ecfa); color: var(--sc, #1a1d3a); border: none; font-family: var(--sans); box-shadow: 0 3px 8px rgba(0, 0, 0, .4); }
+.t29 .card.suit-B { --sc: #1a1d3a; }
+.t29 .card.suit-R { --sc: #d6303a; }
+.t29 .card.suit-Y { --sc: #2563d6; color: var(--sc); }
+.t29 .card.suit-G { --sc: #138a4a; }
+.t29 .card .rk { color: var(--sc); font-weight: 800; }
+.t29 .card .pip { color: var(--sc); opacity: 1; }
+.t29 .card .cpts { color: #fff; background: rgba(0, 0, 0, .6); }
+.t29 .card.back { background: repeating-linear-gradient(45deg, #3a2a7a 0 6px, #4b3a96 6px 12px); }
 .tbox { flex: 1; display: grid; gap: 1px; padding: 6px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-line); line-height: 1.15; }
 .tbox b { font-size: 22px; font-family: var(--serif); }
 .tbox small { color: var(--muted); font-size: 11px; }
@@ -456,6 +466,7 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }
 .ht-art { display: grid; place-items: center; margin: 6px 0 12px; min-height: 64px; }
+.ht-art svg.ht-svg { width: min(100%, 300px); height: auto; max-height: 190px; border-radius: 14px; }
 .ht-art svg.cb-svg { width: min(100%, 250px); height: auto; border-radius: 14px; }
 .ht-mark { font-size: 64px; line-height: 1; display: inline-block; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .35)); }
 .ht-sheet .rule { text-align: left; margin: 0 0 6px; }

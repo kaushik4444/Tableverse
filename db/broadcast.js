@@ -117,6 +117,24 @@ async function claimNext() {
   return r.rows[0] || null;
 }
 
+/**
+ * Milliseconds until the earliest running lease ends, or null when no broadcast is being sent. Read only after claimNext found nothing,
+ * so a run that waits for a lease that is still held can schedule one retry for the moment it ends (no polling).
+ */
+async function leaseRetryMs() {
+  const r = await db.query(
+    `SELECT EXTRACT(EPOCH FROM (MIN(lease_until) - NOW())) * 1000 AS ms
+       FROM email_broadcasts WHERE status = 'sending' AND lease_until >= NOW()`
+  );
+  return leaseDelayFrom(r.rows[0]);
+}
+
+/** The delay from a row of leaseRetryMs's query. An empty table gives a row whose value is NULL: no lease, so no retry. */
+function leaseDelayFrom(row) {
+  const ms = row && row.ms != null ? Number(row.ms) : NaN;
+  return Number.isFinite(ms) ? Math.max(0, ms) : null;
+}
+
 /** Extends the lease. Returns false when this run (owner) no longer holds the broadcast. */
 async function renewLease(broadcastId, owner) {
   const r = await db.query(
@@ -207,4 +225,4 @@ async function unsubscribe(token) {
   return r.rowCount > 0;
 }
 
-module.exports = { broadcastCount, queueBroadcast, listBroadcasts, claimNext, renewLease, pendingBatch, currentRecipient, markAttempt, markRecipient, finishBroadcast, unsubscribe };
+module.exports = { broadcastCount, queueBroadcast, listBroadcasts, claimNext, leaseRetryMs, leaseDelayFrom, renewLease, pendingBatch, currentRecipient, markAttempt, markRecipient, finishBroadcast, unsubscribe };
