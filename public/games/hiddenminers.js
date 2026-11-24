@@ -249,6 +249,13 @@
     if (el && el.focus) el.focus({ preventScroll: true });
   }
 
+  /** The fade on the hand's right edge shows only while cards are still off screen to the right; it follows scrolling. */
+  function bindHandFade(h) {
+    const fade = () => h.classList.toggle('more', h.scrollLeft + h.clientWidth < h.scrollWidth - 2);
+    if (!h.dataset.fadeBound) { h.dataset.fadeBound = '1'; h.addEventListener('scroll', fade, { passive: true }); }
+    fade();
+  }
+
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
@@ -280,7 +287,7 @@
       ${overlayHTML(v)}
     </div>`;
     const h2 = root.querySelector('.hm-hand');
-    if (h2) h2.scrollLeft = scroll;
+    if (h2) { h2.scrollLeft = scroll; bindHandFade(h2); }
     restoreFocus(root, focus);
     // a round or game summary takes the keyboard: its button gets focus, and the game behind it is inert until it is dismissed
     const game = root.querySelector('.hm-game');

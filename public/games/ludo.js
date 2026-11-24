@@ -61,7 +61,7 @@
   const CROSS_GEO = CROSS;
   const ringKey = (geo, seat, pos) => (pos >= 0 && pos < geo.lap ? 'r' + ((geo.starts[seat] + pos) % geo.track) : null);
 
-  const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map(), seq: null, myTurnWas: false, isHex: false,
+  const ui = { ctx: null, latest: null, root: null, rollSeq: null, positions: new Map(), seq: null, isHex: false,
     key: null, feeds: new Map(), disp: new Map(), plans: new Map(), snaps: new Map(), timer: null, holdUntil: 0, geo: CROSS };
   const STEP_MS = 400; // one square per step, so every square of the walk can be followed (the server waits for this too)
   const SNAP_MS = 800; // a captured token stays visible a moment before it goes back to its yard
@@ -144,7 +144,7 @@
     const snd = window.CardTable.sound;
     if (!snd) return;
     const e = v.event;
-    if (ui.seq === null) { ui.seq = e ? e.seq : 0; ui.myTurnWas = v.myTurn; return; } // first render (page load or reconnect): no replay
+    if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; } // first render (page load or reconnect): no replay
     if (e && e.seq !== ui.seq) {
       ui.seq = e.seq;
       if (v.phase === 'gameOver') snd.play(v.me === v.winner ? 'fanfare' : 'lose');
@@ -156,8 +156,6 @@
         else snd.play('card');
       }
     }
-    if (v.myTurn && !ui.myTurnWas && v.phase !== 'gameOver') setTimeout(() => snd.play('turn'), 150);
-    ui.myTurnWas = v.myTurn;
   }
 
   function crossSVG(seats, turnK = -1) {

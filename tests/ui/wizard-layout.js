@@ -238,6 +238,8 @@ const SIZES = [
       return survived;
     });
     if (!announcerPersists) report.problems.push('game status announcer is recreated or lost when the game root is replaced');
+    const bannerFont = await page.evaluate(() => Math.min(Infinity, ...[...document.querySelectorAll('.wc-banner')].map((el) => parseFloat(getComputedStyle(el).fontSize))));
+    if (Number.isFinite(bannerFont) && bannerFont < 7) report.problems.push(`card banner text is ${bannerFont}px (below 7px)`);
     const ok = report.problems.length === 0;
     if (!ok) failures++;
     console.log(`${ok ? 'ok  ' : 'FAIL'}  ${GAME}/${seats} seed ${seed} ${size.name}: header ${report.headerHeight}px high, ${report.buttons} buttons${ok ? '' : '\n        - ' + report.problems.join('\n        - ')}`);

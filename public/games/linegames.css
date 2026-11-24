@@ -28,6 +28,9 @@
 .lg .lg-gravity { background: #2d5fd0; gap: 3px; padding: 8px; }
 .lg .lg-col { display: grid; grid-template-rows: repeat(var(--rows), minmax(0, 1fr)); transition: background-color .18s ease; gap: 3px; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 10px; min-height: 44px; }
 .lg .lg-col:disabled { cursor: default; opacity: .9; }
+/* the 3px gap between columns is part of the drop target: each column takes half the gap, so a tap there drops in the nearer column */
+.lg .lg-gravity .lg-col { position: relative; }
+.lg .lg-gravity .lg-col::after { content: ''; position: absolute; inset: 0 -1.5px; }
 .lg .lg-col:not(:disabled):hover, .lg .lg-col:not(:disabled):focus-visible { background: rgba(255, 255, 255, .16); outline: none; }
 .lg .lg-gravity .lg-cell { background: #17408f; border-radius: 50%; aspect-ratio: 1; }
 .lg .lg-gravity .lg-piece { width: 100%; height: 100%; }
