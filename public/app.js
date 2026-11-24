@@ -1034,8 +1034,9 @@
     ];
       const results = await Promise.all(paths.map(async (url) => {
         const r = await fetch(url, { credentials: 'same-origin' });
-        const data = await r.json();
-        if (!r.ok || !data.ok) throw new Error(data.error || 'Could not load friends.');
+        // a proxy or server error page is not JSON: say the friends list could not load, not show a parse error
+        const data = await r.json().catch(() => ({ ok: false }));
+        if (!r.ok || !data.ok) throw new Error(data.error || 'Could not load friends. Try again.');
         return data;
       }));
       before = (S.friendRequests.incoming || []).length + (S.invitations.incoming || []).length;
@@ -2188,11 +2189,18 @@
     render();
   }
   async function loadPlayer(username) {
-    S.player = { username, loading: true, error: '', data: null };
+    const req = { username, loading: true, error: '', data: null };
+    S.player = req;
     render();
-    try { S.player.data = (await getJson(`/api/players/${encodeURIComponent(username)}`)).profile; S.player.confirmedBlockedByMe = S.player.data.blockedByMe; }
-    catch (e) { S.player.error = e.status === 404 ? 'There is no player with that username.' : (e.message || 'Could not load this profile.'); }
-    S.player.loading = false;
+    try {
+      const profile = (await getJson(`/api/players/${encodeURIComponent(username)}`)).profile;
+      if (S.player !== req) return; // the person has opened another profile since: that answer is the one on screen
+      req.data = profile; req.confirmedBlockedByMe = profile.blockedByMe;
+    } catch (e) {
+      if (S.player !== req) return;
+      req.error = e.status === 404 ? 'There is no player with that username.' : (e.message || 'Could not load this profile.');
+    }
+    req.loading = false;
     render();
   }
   // The profile page shows a block or unblock at once, before the server has answered. When the server answers (the new list,
