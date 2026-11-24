@@ -13,9 +13,17 @@
   function tileSVG(mask, cut, cls = '') {
     const arm = { 1: [38, 0, 24, 50], 2: [50, 38, 50, 24], 4: [38, 50, 24, 50], 8: [0, 38, 50, 24] };
     const stub = { 1: [38, 0, 24, 30], 2: [70, 38, 30, 24], 4: [38, 70, 24, 30], 8: [0, 38, 30, 24] };
-    const parts = [1, 2, 4, 8].filter((b) => mask & b).map((b) => { const [x, y, w, h] = (cut ? stub : arm)[b]; return `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`; }).join('');
-    const hub = cut ? '' : '<rect x="38" y="38" width="24" height="24"/>';
-    return `<svg class="hm-tile ${cls}" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" class="rock"/><g class="way">${parts}${hub}</g>${cut ? '<path class="plug" d="M30 30 L70 70 M70 30 L30 70"/>' : ''}</svg>`;
+    const beam = { 1: [34, 11, 32, 6], 2: [77, 34, 6, 32], 4: [34, 83, 32, 6], 8: [11, 34, 6, 32] };
+    const bits = [1, 2, 4, 8].filter((b) => mask & b);
+    const pass = bits.map((b) => (cut ? stub : arm)[b]);
+    const rect = ([x, y, w, h], c) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" class="${c}"/>`;
+    const specks = [[12, 14], [84, 10], [22, 80], [78, 86], [8, 52], [92, 46], [46, 8], [58, 92], [70, 24]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.6" class="speck"/>`).join('');
+    const edges = pass.map((r) => rect([r[0] - 2, r[1] - 2, r[2] + 4, r[3] + 4], 'edge')).join('') + (cut ? '' : rect([36, 36, 28, 28], 'edge'));
+    const floors = pass.map((r) => rect(r, 'floor')).join('') + (cut ? '' : rect([38, 38, 24, 24], 'floor'));
+    const beams = bits.map((b) => rect(beam[b], 'beam')).join('');
+    const lamp = cut || !mask ? '' : '<circle cx="50" cy="50" r="12" class="glow"/><circle cx="50" cy="50" r="5" class="lamp"/>';
+    const plug = cut ? '<path class="plug" d="M30 30 L70 70 M70 30 L30 70"/>' : '';
+    return `<svg class="hm-tile ${cls}" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" class="rock"/>${specks}<g class="way">${edges}${floors}${beams}${lamp}</g>${plug}</svg>`;
   }
 
   const describeTile = (mask, cut) => {

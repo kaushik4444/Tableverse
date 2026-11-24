@@ -23,9 +23,15 @@
 .hm-board { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px; width: min(100%, 880px); padding: 4px; border-radius: 10px; background: #1b1511; }
 .hm-cell { position: relative; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: rgba(255, 255, 255, .035); overflow: hidden; color: inherit; font: inherit; }
 .hm-cell .hm-tile { width: 100%; height: 100%; display: block; }
+/* rock wall with flecks, carved passages with a dark cut edge, a dirt floor, timber props and a lantern at the junction */
 .hm-tile .rock { fill: var(--rock); }
-.hm-tile .way { fill: var(--way); }
-.hm-tile .plug { stroke: #8a2c20; stroke-width: 10; stroke-linecap: round; fill: none; }
+.hm-tile .speck { fill: var(--rock-d); opacity: .8; }
+.hm-tile .edge { fill: #1d140d; }
+.hm-tile .floor { fill: var(--way); }
+.hm-tile .beam { fill: #7a4e26; stroke: #3a2212; stroke-width: 1.2; }
+.hm-tile .glow { fill: #ffd27a; opacity: .35; }
+.hm-tile .lamp { fill: #ffe9a8; stroke: #5a3a14; stroke-width: 1.5; }
+.hm-tile .plug { stroke: #8a5a2b; stroke-width: 7; stroke-linecap: round; fill: none; }
 .hm-tile.ghost { opacity: .55; }
 .hm-cell.start { outline: 2px solid var(--gold, #f2c14e); outline-offset: -2px; }
 .hm-flag { position: absolute; font-size: clamp(10px, 3vw, 22px); line-height: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .7)); }
@@ -59,8 +65,13 @@
 .hm-card .hm-face { display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 6px; overflow: hidden; position: relative; background: #e8dcc2; }
 .hm-card .hm-face b { font-size: clamp(20px, 6vw, 32px); line-height: 1; font-weight: 400; }
 .hm-card .hm-face i { position: absolute; right: 2px; bottom: 0; font-size: 13px; font-style: normal; }
-.hm-face.hm-bad { background: #f2c9c1; }
-.hm-face.hm-good { background: #c9ecd6; }
+/* tool and event cards: stone for sabotage, timber for repairs, lamplit rock for scouting, each with a carved border */
+.hm-card .hm-face.hm-bad { background: radial-gradient(circle at 30% 25%, #6b5443, #3c2e25 70%); box-shadow: inset 0 0 0 2px #1d140d, inset 0 0 12px #0008; }
+.hm-card .hm-face.hm-good { background: repeating-linear-gradient(90deg, #8a5a2b 0 9px, #7a4e26 9px 10px), #8a5a2b; box-shadow: inset 0 0 0 2px #3a2212; }
+.hm-card .hm-face.hm-util { background: radial-gradient(circle at 50% 40%, #ffd27a55, transparent 60%), #4a3b30; box-shadow: inset 0 0 0 2px #1d140d; }
+.hm-card .hm-face b { text-shadow: 0 1px 2px #0008; }
+.hm-card .hm-face.hm-bad i { color: #ffb4a6; }
+.hm-card .hm-face.hm-good i { color: #fff3c4; }
 .hm-card.playable { box-shadow: 0 0 0 2px rgba(242, 193, 78, .85), 0 6px 14px rgba(0, 0, 0, .45); }
 .hm-card.dim { filter: brightness(.6) saturate(.7); }
 .hm-card.sel { transform: translateY(-12px); box-shadow: 0 0 0 3px var(--gold, #f2c14e), 0 12px 20px rgba(0, 0, 0, .5); filter: none; }
