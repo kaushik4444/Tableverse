@@ -23,17 +23,17 @@
 .hm-board { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px; width: min(100%, 880px); padding: 4px; border-radius: 10px; background: #1b1511; }
 .hm-cell { position: relative; aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: rgba(255, 255, 255, .035); overflow: hidden; color: inherit; font: inherit; }
 .hm-cell .hm-tile { width: 100%; height: 100%; display: block; }
-/* rock wall with flecks, carved passages with a dark cut edge, a dirt floor, timber props and a lantern at the junction */
+/* rock wall with flecks; curved carved passages (dark rim, earth floor, a lit core); a little rubble; a lantern at the junction */
 .hm-tile .rock { fill: var(--rock); }
 .hm-tile .speck { fill: var(--rock-d); opacity: .8; }
-.hm-tile .edge { fill: #1d140d; }
-.hm-tile .floor { fill: #b8854f; }
-.hm-tile .core { fill: #f2d28f; opacity: .7; }
-.hm-tile .rail { fill: none; stroke: #4a3a2a; stroke-width: 1.2; stroke-linecap: round; }
-.hm-tile .strata { fill: none; stroke: #1d140d; stroke-width: .7; opacity: .35; }
-.hm-tile .beam { fill: #7a4e26; stroke: #3a2212; stroke-width: 1.2; }
-.hm-tile .glow { fill: #ffd27a; opacity: .35; }
-.hm-tile .lamp { fill: #ffe9a8; stroke: #5a3a14; stroke-width: 1.5; }
+.hm-tile .rim { fill: none; stroke: #1d140d; stroke-width: 27; stroke-linecap: round; stroke-linejoin: round; }
+.hm-tile .hub-rim { fill: #1d140d; }
+.hm-tile .bore { fill: none; stroke: #b8854f; stroke-width: 23; stroke-linecap: round; stroke-linejoin: round; }
+.hm-tile .hub-bore { fill: #b8854f; }
+.hm-tile .deep { fill: none; stroke: #e0b06e; stroke-width: 8; stroke-linecap: round; opacity: .5; }
+.hm-tile .debris ellipse { fill: #6e5a46; stroke: #2a1f16; stroke-width: .5; }
+.hm-tile .glow { fill: #ffd27a; opacity: .3; }
+.hm-tile .lamp { fill: #ffe9a8; stroke: #5a3a14; stroke-width: 1.2; }
 .hm-tile .plug { stroke: #8a5a2b; stroke-width: 7; stroke-linecap: round; fill: none; }
 .hm-tile.ghost { opacity: .55; }
 .hm-cell.start { outline: 2px solid var(--gold, #f2c14e); outline-offset: -2px; }
