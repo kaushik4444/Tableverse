@@ -2286,6 +2286,7 @@
       const panel = tab === 'history' ? historyHTML(P.history)
         : tab === 'account' ? `<div class="account-list">
             ${blockedHTML()}
+            <div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
             <div class="setting-row"><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
             <div class="setting-row"><div><b>Sessions</b><small>Sign out of this device, or of every device you are logged in on.</small></div><span class="row" style="gap:6px"><button type="button" class="btn ghost small" data-act="logout">Log out</button><button type="button" class="btn ghost small" data-act="logoutAll">Everywhere</button></span></div>
@@ -2788,6 +2789,15 @@
   const VALUE_FIELDS = ['friendSearch', 'tableInviteFriend']; // the others are driven by state (S.name, S.draftCode): only focus and cursor come back
   /** The last HTML written to the app root. A redraw with the same markup does nothing: no DOM churn, no replayed animations. */
   let lastAppHtml = null;
+  /** Appearance: 'dark' (the default), 'light', or 'system'. Kept on this device; the page's first script applies it before paint. */
+  function themeMode() {
+    try { const m = localStorage.getItem('tv_theme'); return m === 'light' || m === 'system' ? m : 'dark'; } catch { return 'dark'; }
+  }
+  function applyTheme() {
+    const m = themeMode();
+    const light = m === 'light' || (m === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
+    if (light) document.documentElement.setAttribute('data-theme', 'light'); else document.documentElement.removeAttribute('data-theme');
+  }
   let cardsShownAt = 0; // when the game cards last appeared (their entrance takes about half a second)
   function paintApp(html) {
     if (html === lastAppHtml) return;
@@ -3379,7 +3389,8 @@
     const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
     $app.classList.toggle('endhold', stage !== 'result');
     if (stage !== 'result') f.timer = setTimeout(() => { if (S.room && S.room.code === f.code && S.room.status === 'finished') render(); }, (stage === 'board' ? END_BOARD_MS : END_BOARD_MS + END_WINNER_MS) - t + 30);
-    if (stage === 'winner') {
+    // A game that draws its own result sheet already names the winner there: a second "won!" pop-up would announce it twice.
+    if (stage === 'winner' && !$app.querySelector('.overlay, .ludo-end')) {
       const w = (r.outcome && r.outcome.winners) || [];
       const names = w.map((x) => (x.id === S.id ? 'You' : x.name));
       const text = !names.length ? 'Game over' : names.length === 1 ? (w[0].id === S.id ? 'You won! 🎉' : `${esc(names[0])} won!`) : `${esc(names.join(' & '))} won!`;
@@ -3516,6 +3527,7 @@
       // the redraw replaces the period button, so give keyboard focus back to the same period
       document.querySelector(`[data-act="ratingScope"][data-scope="${P.ratingScope}"]`)?.focus({ preventScroll: true });
     },
+    setTheme: (el) => { try { localStorage.setItem('tv_theme', el.dataset.theme); } catch { /* the choice lasts this visit only */ } applyTheme(); render(); },
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {

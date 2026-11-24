@@ -121,6 +121,18 @@ const profile = { ok: true, profile: { username: 'aarav', displayName: 'Aarav', 
     await ctx.close();
   });
 
+  await test('Appearance: light turns the chrome light, dark is the default, and the choice is kept', async () => {
+    const { page, ctx } = await open();
+    assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), null, 'dark by default');
+    await page.evaluate(() => { localStorage.setItem('tv_theme', 'light'); });
+    await page.reload(); await page.waitForSelector('.game-grid .game-card');
+    assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light', 'the saved choice is applied before the page shows');
+    const bg = await page.evaluate(() => getComputedStyle(document.querySelector('.game-card')).backgroundColor);
+    assert.notEqual(bg, 'rgb(12, 31, 23)', 'the cards still have the dark background');
+    await page.evaluate(() => { localStorage.removeItem('tv_theme'); });
+    await ctx.close();
+  });
+
   await browser.close();
   server.close();
   console.log(`\npolish ui: ${passed} passed, ${failed} failed`);

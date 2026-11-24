@@ -102,3 +102,32 @@ body {
 
 /* a redraw of cards that are already on screen does not replay their entrance (see paintApp in app.js) */
 .no-anim .game-card { animation: none; }
+
+/* ---- light appearance (profile > Account > Appearance). The game tables keep their felt; the rest of the app turns light. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --felt-1: #f6efdf; --felt-2: #ebe1c9;
+  --ink: #1d2b22; --muted: #536458;
+  --gold: #a86a12; --gold-ink: #fffaf0;
+  --first: #15803d; --danger: #b91c1c; --good: #15803d;
+  --panel: rgba(72, 52, 18, .05); --panel-line: rgba(72, 52, 18, .14);
+  --lamp: rgba(245, 158, 11, .16); --mint-soft: rgba(21, 128, 61, .10); --glass-hi: rgba(255, 255, 255, .72);
+}
+:root[data-theme="light"] body {
+  background: radial-gradient(760px 440px at 50% -70px, rgba(245, 158, 11, .18), transparent 70%), linear-gradient(180deg, #f8f2e4, #ebe1c9 85%) fixed;
+  color: var(--ink);
+}
+:root[data-theme="light"] .topbar { background: rgba(255, 252, 244, .82); border-bottom-color: rgba(72, 52, 18, .12); }
+:root[data-theme="light"] .bn { background: #fffaf0; border-color: rgba(72, 52, 18, .14); box-shadow: 0 16px 30px -14px rgba(72, 52, 18, .35); }
+:root[data-theme="light"] .game-card, :root[data-theme="light"] .panel, :root[data-theme="light"] .join-form, :root[data-theme="light"] .friends-strip, :root[data-theme="light"] .opt-card, :root[data-theme="light"] .setting-row {
+  background: #fffdf7; border-color: rgba(72, 52, 18, .12);
+}
+:root[data-theme="light"] .btn.ghost { color: var(--ink); border-color: rgba(72, 52, 18, .22); }
+:root[data-theme="light"] input, :root[data-theme="light"] select, :root[data-theme="light"] textarea {
+  background: #fffdf7; color: var(--ink); border-color: rgba(72, 52, 18, .22);
+}
+:root[data-theme="light"] .overlay, :root[data-theme="light"] .sheet, :root[data-theme="light"] .modal, :root[data-theme="light"] #modal-overlay .sheet {
+  background: #fffaf0; color: var(--ink);
+}
+:root[data-theme="light"] .overlay { background: rgba(60, 44, 20, .32); }
+
