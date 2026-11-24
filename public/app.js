@@ -2423,11 +2423,6 @@
   const WHATS_NEW = RELEASES.length ? RELEASES[0].items.slice(0, 3) : [];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
-  /** "Friday evening": the day and the part of it, from the player's own clock. */
-  function dayPart(d = new Date()) {
-    const h = d.getHours(), part = h < 5 ? 'night' : h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
-    return `${d.toLocaleDateString(undefined, { weekday: 'long' })} ${part}`;
-  }
   /** Friend requests + table invitations waiting for an answer (drives the menu badge and the home strip). */
   const pendingSocial = () => S.friendRequests.incoming.length + S.invitations.incoming.length;
   const hasNewNews = () => S.wnSeen !== WHATS_NEW_VERSION;
@@ -2935,7 +2930,6 @@
       <section class="home-hero">
         <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
         <div class="home-intro">
-          ${name && !S.guest ? `<small class="eyebrow">${dayPart()}</small>` : ''}
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
           <p>${name ? 'Pick a game to host a table, or join one with a code.' : 'Play card and board games with friends in your browser. Bots can fill any empty seat.'}</p>
           ${S.guest ? `<div class="row" style="gap:8px"><button type="button" class="btn" data-act="showRegister">Create account</button><button type="button" class="btn ghost" data-act="showLogin">Log in</button>${S.guestPlay ? '<button type="button" class="btn ghost" data-act="playAsGuest">Play as a guest</button>' : ''}</div>` : ''}
