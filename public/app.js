@@ -1201,8 +1201,21 @@
     try { await postJson('/api/announcements/dismiss', { id, revision: dismissed ? dismissed.revision : undefined }); } catch { /* it comes back on the next refresh if the server did not record it */ }
   }
   // the schedule is decided on the server, so a banner can appear, expire or be ended while the page is open: look again now and then
-  setInterval(() => { if (document.visibilityState === 'visible') loadBanners(); }, 60 * 1000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadBanners(); });
+  // Background refreshes follow use: they run only while the page is visible and the person has done something in the last
+  // 5 minutes. A tab left open all day would otherwise ask the server (and so the database) every minute, which keeps the
+  // database awake for nobody. Coming back, or the first input after a pause, refreshes at once.
+  const POLL_IDLE_MS = 5 * 60 * 1000;
+  let lastInputAt = Date.now();
+  let polling = true; // false once the pause has begun
+  const pollWanted = () => document.visibilityState === 'visible' && Date.now() - lastInputAt < POLL_IDLE_MS;
+  const refreshBackground = () => { loadBanners(); if (S.ready && !S.room) loadSocial({ quiet: true }); };
+  const noteInput = () => {
+    lastInputAt = Date.now();
+    if (!polling && document.visibilityState === 'visible') { polling = true; refreshBackground(); }
+  };
+  for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel', 'mousemove']) window.addEventListener(ev, noteInput, { passive: true, capture: true });
+  setInterval(() => { if (pollWanted()) refreshBackground(); else polling = false; }, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { lastInputAt = Date.now(); polling = true; refreshBackground(); } });
 
   function openFeedbackModal() {
     openModal('Send feedback', `<form id="fbForm" class="fb-form">
@@ -1581,11 +1594,13 @@
         break;
       case 'error':
         S.seatChange = null; // a rejected seat change must not keep the seat controls blocked
+        // Leave a newer link alone if the rejected join was for a different table.
+        if (!S.room && m.tableCode && (m.code === 'join_failed' || m.code === 'guest_locked') && m.tableCode === hashCode()) setHash('');
         if (m.code === 'guest_locked') { openAuthSheet('register', (m.feature && GUEST_LOCK_TEXT[m.feature]) || m.message || 'Create a free account to play this game.'); break; }
         toast(m.message);
-        // a refused leave means the profile this tap asked for must not open later, on some other leave
-        S.pendingPage = null;
-        if (!S.room && hashCode()) setHash('');
+        // a refused leave means the profile this tap asked for must not open later, on some other leave. Only the server's
+        // leave_failed says so: an unrelated error (a totals lookup, say) arriving before 'left' must not cancel the profile.
+        if (m.code === 'leave_failed') S.pendingPage = null;
         if (S.page === 'player') resyncPlayerBlock(true, m.message); // a refused block or unblock must not stay on the page
         break;
     }
@@ -3849,6 +3864,6 @@
     }
   });
 
-  setInterval(() => { if (S.ready && !S.room) loadSocial({ quiet: true }); }, 60000);
+  // friends, requests and invitations are refreshed by the same visibility/idle-aware timer as the banners (see POLL_IDLE_MS)
 
 })();

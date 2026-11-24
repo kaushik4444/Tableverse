@@ -49,6 +49,7 @@ const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
 const { debugTokensEnabled, assertSafeDebugConfig } = require('./lib/debugTokens');
 const { createReadinessCheck } = require('./lib/health');
+const { createIdlePoller, retryWithBackoff } = require('./lib/idlePoller'); // background database reads that only run while somebody is connected
 const { createAnalytics, lengthBucket } = require('./lib/analytics');
 const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
@@ -105,7 +106,18 @@ function start(opts = {}) {
   const kickTurns = opts.idleKickTurns ?? idlePolicy.IDLE_KICK_TURNS; // bot turns in a row before a person is removed (a test can raise it)
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
-  const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket's session is re-checked this often
+  const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket that is in use has its session re-checked this often
+  // A socket nobody is using is checked far less often: every check is a Neon query, and Neon cannot autosuspend while sockets
+  // poll it. Revocations made in this process (sign-out, password change, account deletion, a role change) close sockets at once and
+  // do not wait for a check; this is the backstop. The first message after a quiet spell is checked before it is acted on.
+  const idleSessionCheckMs = opts.idleSessionCheckMs ?? 30 * 60 * 1000;
+  const backgroundReadMs = opts.backgroundReadMs ?? 15 * 60 * 1000; // switches and queued broadcasts: re-read this often while somebody is connected
+  // Somebody is "using" the site when a socket connected or sent a message in the last backgroundActiveMs. A tab left open with
+  // nobody at it stops counting after that, so it does not keep the database awake; the next connection or message wakes it again.
+  const backgroundActiveMs = opts.backgroundActiveMs ?? 30 * 60 * 1000;
+  let lastActivityAt = Date.now();
+  const siteInUse = () => wss.clients.size > 0 && Date.now() - lastActivityAt < backgroundActiveMs;
+  const backgroundStaleMs = opts.backgroundStaleMs ?? 5 * 60 * 1000; // ... and when somebody connects after the last read is older than this
   const maxMsgsPerSec = opts.maxMsgsPerSec ?? 30; // per socket; humans send a handful of messages per minute
   const maxQueuedMessages = opts.maxQueuedMessages ?? 100; // bound async work queued behind slow database operations
   const maxPendingHellos = opts.maxPendingHellos ?? 250; // bound the global serial authentication queue during connection floods
@@ -210,11 +222,12 @@ function start(opts = {}) {
   }
   let purgeTimer = null;
   let spoolTimer = null;
-  let flagTimer = null; // reads the owner's game switches (lib/gameFlags.js)
+  let flagRetry = null; // retries a failed first read of the switches (bounded)
+  let flagPoller = null; // re-reads the owner's switches while somebody is connected (lib/gameFlags.js, lib/idlePoller.js)
   let flagsStopped = false;
   let flagsReady = Promise.resolve(); // resolves after the first switch read, so no game starts before the switches are known
   let unsubscribeGames = () => {};
-  let broadcastTimer = null;
+  let broadcastPoller = null;
   let shuttingDown = false; // set when the process is asked to stop: readiness fails, no new tables, players are told
   // Readiness: the database must answer within 3 s; an outage is logged once when it starts and once when it ends (lib/health.js).
   const readiness = createReadinessCheck({
@@ -294,9 +307,24 @@ function start(opts = {}) {
       headers: m.unsubscribeUrl ? { 'List-Unsubscribe': `<${m.unsubscribeUrl}>` } : {},
     }),
   }) : null;
-  const kickBroadcasts = () => {
-    if (broadcastWorker) broadcastWorker.runOnce().catch((e) => (opts.log || console).error('[broadcast] sending failed: ' + e.message));
-  };
+  // One retry, at the moment a held lease ends, when a run found a broadcast another run still holds. Not a poll: it is scheduled only
+  // when a lease exists, and a lease exists only while a broadcast is being sent (at most a few minutes, then it is claimed or done).
+  let leaseRetry = null;
+  // A failed run (the database did not answer) is retried a few times with a growing delay, then left to the periodic poller.
+  const kickFailures = retryWithBackoff(() => {
+    if (!broadcastWorker) return true;
+    return broadcastWorker.runOnce().then((r) => {
+      if (r && r.retryInMs != null && !leaseRetry) {
+        leaseRetry = setTimeout(() => { leaseRetry = null; kickBroadcasts(); }, r.retryInMs + 2000);
+        if (leaseRetry.unref) leaseRetry.unref();
+      }
+      return true;
+    }, (e) => {
+      (opts.log || console).error('[broadcast] sending failed: ' + e.message);
+      return false;
+    });
+  }, [60 * 1000, 2 * 60 * 1000, 5 * 60 * 1000]);
+  const kickBroadcasts = () => { void kickFailures.run(); };
   // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
   // Used by the auth routes and by the admin console's sign-out.
@@ -611,6 +639,8 @@ function start(opts = {}) {
   // ------------------------------------------------------------ helpers
   const send = (ws, obj) => sendBounded(ws, obj, maxBufferedBytes);
   const sendError = (p, message) => send(p.ws, { t: 'error', message });
+  const joinCode = (msg) => typeof msg.code === 'string' ? msg.code.trim().toUpperCase() : '';
+  const sendJoinError = (p, tableCode, message) => send(p.ws, { t: 'error', code: 'join_failed', tableCode, message });
   // Guest play policy (lib/guestPolicy.js): a guest who taps a locked game gets a code the page turns into an account dialog.
   /** The role that decides which games this player may use (public/game-access.js): owner, admin, user or guest. */
   const roleOf = (p) => gameAccess.roleOf({ isGuest: Boolean(p.isAnonymous), role: p.role });
@@ -619,7 +649,7 @@ function start(opts = {}) {
    * Without a viewer (the public /api/games call) `enabled` means open to everybody.
    */
   const gameListFor = (list, p) => gameFlags.withFlags(list, p ? roleOf(p) : undefined);
-  const sendGuestLocked = (p, gameId) => send(p.ws, { t: 'error', code: 'guest_locked', gameId, message: 'Create a free account to play this game.' });
+  const sendGuestLocked = (p, gameId, tableCode) => send(p.ws, { t: 'error', code: 'guest_locked', gameId, tableCode, message: 'Create a free account to play this game.' });
   /** Account-only for guests, always (not a switch): reporting. Sends the account prompt; true when refused. */
   const guestBarred = (p, feature) => {
     if (roleOf(p) !== 'guest') return false;
@@ -627,19 +657,20 @@ function start(opts = {}) {
     return true;
   };
   /** A guest asks for something the owner has locked for guests (lib/guestFeatures.js). Sends the account prompt; true when refused. */
-  const guestLocked = (p, feature) => {
+  const guestLocked = (p, feature, tableCode) => {
     if (roleOf(p) !== 'guest' || guestFeatures.allowed(feature)) return false;
-    send(p.ws, { t: 'error', code: 'guest_locked', feature, message: 'Create a free account to use this.' });
+    send(p.ws, { t: 'error', code: 'guest_locked', feature, tableCode, message: 'Create a free account to use this.' });
     return true;
   };
   /**
    * Refuse a game for this player when the owner's access mode excludes their role. A guest who could play the game as a
    * registered player gets the account prompt (guest_locked); anyone else gets the plain refusal. Returns true when refused.
    */
-  const refuseGame = (p, gameId) => {
+  const refuseGame = (p, gameId, tableCode) => {
     const role = roleOf(p);
     if (gameFlags.isEnabled(gameId, role)) return false;
-    if (role === 'guest' && gameFlags.isEnabled(gameId, 'user')) sendGuestLocked(p, gameId);
+    if (role === 'guest' && gameFlags.isEnabled(gameId, 'user')) sendGuestLocked(p, gameId, tableCode);
+    else if (tableCode !== undefined) sendJoinError(p, tableCode, 'That game is not available right now.');
     else sendError(p, 'That game is not available right now.');
     return true;
   };
@@ -1681,23 +1712,23 @@ function start(opts = {}) {
     },
 
     async join(p, msg) {
-      const code = typeof msg.code === 'string' ? msg.code.trim().toUpperCase() : '';
+      const code = joinCode(msg);
       const room = rooms.get(code);
       applyProfile(p, msg);
-      if (!room) return sendError(p, `No table with code ${code || '?'}`);
-      if (refuseGame(p, room.gameId)) return;
-      if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin')) return;
-      if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
+      if (!room) return sendJoinError(p, code, `No table with code ${code || '?'}`);
+      if (refuseGame(p, room.gameId, code)) return;
+      if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin', code)) return;
+      if (room.removed && room.removed.has(p.id)) return sendJoinError(p, code, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
-      if (!await canEnterRoom(p, room, { present: here })) return sendError(p, 'This private table requires an accepted invitation.');
+      if (!await canEnterRoom(p, room, { present: here })) return sendJoinError(p, code, 'This private table requires an accepted invitation.');
       // The socket may have closed while we waited: an offline person must not take a seat or start a play-time clock.
       if (!p.connected) return;
       // The owner may restrict the game while the admission check was waiting: refuse again before any seat changes
-      if (refuseGame(p, room.gameId)) return;
+      if (refuseGame(p, room.gameId, code)) return;
       // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
-      if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
-      if (rooms.get(code) !== room) return sendError(p, 'That table is no longer available.');
-      if (room.removed && room.removed.has(p.id)) return sendError(p, 'The host removed you from this table.');
+      if (shuttingDown) return sendJoinError(p, code, 'The server is restarting. Please try again in a minute.');
+      if (rooms.get(code) !== room) return sendJoinError(p, code, 'That table is no longer available.');
+      if (room.removed && room.removed.has(p.id)) return sendJoinError(p, code, 'The host removed you from this table.');
       const seat = room.members.find((m) => m.id === p.id);
       // Already at this table (seated, or watching): nothing to add. This is decided BEFORE any capacity check, so a full
       // table or a full spectator list never turns away someone who is already in it, and no second "joined/watching"
@@ -1736,7 +1767,7 @@ function start(opts = {}) {
       if (room.status !== 'lobby') {
         // the game is already running: the newcomer watches
         if (seatDecision && seatDecision.reason === 'expired') send(p.ws, { t: 'notice', text: 'Your time to take your seat back has passed, so the bot keeps it to the end. You can watch as a spectator.' });
-        if (room.spectators.length >= MAX_SPECTATORS) return sendError(p, 'Too many spectators at that table');
+        if (room.spectators.length >= MAX_SPECTATORS) return sendJoinError(p, code, 'Too many spectators at that table');
         if (p.room && p.room !== room.code) leaveByChoice(p);
         addSpectator(room, p);
         sys(room, `👁 ${p.name} is watching`);
@@ -1746,7 +1777,7 @@ function start(opts = {}) {
         return;
       }
       if (wantsSpectate) {
-        if (room.spectators.length >= MAX_SPECTATORS) return sendError(p, 'Too many spectators at that table');
+        if (room.spectators.length >= MAX_SPECTATORS) return sendJoinError(p, code, 'Too many spectators at that table');
         if (p.room && p.room !== room.code) leaveByChoice(p);
         addSpectator(room, p);
         sys(room, `👁 ${p.name} is watching`);
@@ -1755,7 +1786,7 @@ function start(opts = {}) {
         sendChatLog(p, room);
         return;
       }
-      if (room.members.length >= room.seats) return sendError(p, 'That table is full');
+      if (room.members.length >= room.seats) return sendJoinError(p, code, 'That table is full');
       if (p.room) leaveByChoice(p);
       addMember(room, p);
       sys(room, `🙋 ${p.name} joined the table`);
@@ -2210,6 +2241,9 @@ function start(opts = {}) {
 
     // Blocks are stored per account and applied on every table; load them once per account on this server.
     if (!p.blocked) p.blocked = dbPool.hasDatabase() ? await dbModeration.loadBlockedIds(p.id) : new Set();
+    // The first person after a quiet spell gets switches no older than backgroundStaleMs: wait for that read (nothing extra when
+    // the snapshot is fresh). It is before the ownership checks below, which are re-evaluated after this await.
+    if (flagPoller) await flagPoller.touch();
 
     // The socket may have closed while the database answered above. A closed socket must not take over the account:
     // it must not replace the open socket, and there would be nothing left to clean it up.
@@ -2317,24 +2351,33 @@ function start(opts = {}) {
    */
   async function checkSocketSession(ws) {
     const p = ws.player;
-    if (!p || ws.revoked || ws.readyState !== 1 || ws.checkingSession) return;
-    ws.checkingSession = true;
+    if (!p || ws.revoked || ws.readyState !== 1) return;
+    // a check already running is waited for, not skipped: a caller (the first message after a quiet spell) must get the real answer
+    if (ws.sessionCheck) return ws.sessionCheck;
+    ws.sessionCheck = runSocketSessionCheck(ws, p).finally(() => { ws.sessionCheck = null; });
+    return ws.sessionCheck;
+  }
+  async function runSocketSessionCheck(ws, p) {
     try {
       const current = await dbPlayers.authenticateToken(ws.authToken);
+      ws.sessionCheckedAt = Date.now();
       if (ws.revoked || ws.player !== p) return; // ended while the check was running
       if (!current || current.id !== p.id) {
         send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session has ended. Please log in again.' });
         revokeSocket(ws, 4001, 'session ended');
       }
     } catch (err) {
+      // a database fault does not prove the session ended: keep the socket (and admit its messages, as before). A failed check still
+      // counts as the last attempt, so during a fault the next check comes one interval later, not one per message.
+      ws.sessionCheckedAt = Date.now();
       // a database fault does not prove the session ended: keep the socket and check again on the next interval
       wsLog.warn('session.check_failed', { connId: ws.connId, err });
-    } finally {
-      ws.checkingSession = false;
     }
   }
 
   wss.on('connection', (ws, req) => {
+    lastActivityAt = Date.now();
+    if (flagPoller) void flagPoller.touch(); // starts the read early; the hello waits for it (onHello)
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
     const openedAt = Date.now();
     ws.once('close', (code) => {
@@ -2356,7 +2399,14 @@ function start(opts = {}) {
       else socketsByIp.set(ws.ip, n);
     });
     if (open > maxSocketsPerIp) return ws.close(1013, 'too many connections');
-    const sessionTimer = setInterval(() => { void checkSocketSession(ws); }, sessionCheckMs);
+    ws.sessionCheckedAt = Date.now();
+    ws.lastMsgAt = 0;
+    // The timer itself costs nothing: it asks the database only when the socket was used since its last check (or, for a socket
+    // nobody is using, when the long backstop is due).
+    const sessionTimer = setInterval(() => {
+      const since = Date.now() - ws.sessionCheckedAt;
+      if (ws.lastMsgAt > ws.sessionCheckedAt || (since >= idleSessionCheckMs && siteInUse())) void checkSocketSession(ws);
+    }, sessionCheckMs);
     sessionTimer.unref();
     ws.once('close', () => clearInterval(sessionTimer));
     ws.isAlive = true;
@@ -2388,6 +2438,7 @@ function start(opts = {}) {
       // flood guard; counters are reset every second. Voice setup messages come in bursts (several ICE candidates per
       // person at the table), so they have their own, larger allowance and do not use up the normal one.
       if (msg.t === 'rtc') { if (++ws.rtcMsgs > maxRtcPerSec) return ws.close(1008, 'slow down'); } else if (++ws.msgs > maxMsgsPerSec) return ws.close(1008, 'slow down');
+      lastActivityAt = Date.now();
       if (msg.t === 'hello') {
         // onHello is async (database lookup): a failure must close this socket, not crash the process with an unhandled rejection
         onHello(ws, msg).catch((e) => {
@@ -2398,9 +2449,16 @@ function start(opts = {}) {
       }
       const p = ws.player;
       if (!p || !Object.hasOwn(handlers, msg.t)) return;
+      ws.lastMsgAt = Date.now();
+      lastActivityAt = ws.lastMsgAt;
       const run = async () => {
         // queued behind an earlier message: the session may have ended while it waited
         if (ws.revoked || ws.readyState !== 1 || ws.player !== p) return;
+        // the first message after a quiet spell is checked before it is acted on (a revoked session is closed instead of served)
+        if (Date.now() - ws.sessionCheckedAt >= sessionCheckMs) {
+          await checkSocketSession(ws);
+          if (ws.revoked || ws.readyState !== 1 || ws.player !== p) return;
+        }
         markActive(p, ws); // at most one analytics mark per account per day
         try {
           const before = p.room;
@@ -2416,7 +2474,9 @@ function start(opts = {}) {
           wsLog.error('game.handler_failed', { connId: ws.connId, type: msg.t, room: p.room || null, err: e });
           // A block or unblock that fails before its write (a name lookup, a list fetch) gets its own failure message, so the
           // profile page releases its "Saving…" lock and checks the server again, as it does for a failed write.
-          sendError(p, msg.t === 'block' ? BLOCK_SAVE_FAILED : msg.t === 'unblock' ? UNBLOCK_SAVE_FAILED : 'Something went wrong');
+          if (msg.t === 'leave') send(p.ws, { t: 'error', code: 'leave_failed', message: 'Could not leave the table. Try again.' });
+          else if (msg.t === 'join') sendJoinError(p, joinCode(msg), 'Something went wrong');
+          else sendError(p, msg.t === 'block' ? BLOCK_SAVE_FAILED : msg.t === 'unblock' ? UNBLOCK_SAVE_FAILED : 'Something went wrong');
         }
       };
       // one message at a time per socket: a join that waits for the database must finish before the next message
@@ -2525,10 +2585,12 @@ function start(opts = {}) {
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
-    clearInterval(flagTimer);
+    if (flagPoller) flagPoller.stop();
+    if (flagRetry) flagRetry.stop();
+    kickFailures.stop();
     flagsStopped = true; // a read still in flight must not publish after shutdown
     unsubscribeGames();
-    clearInterval(broadcastTimer);
+    if (broadcastPoller) broadcastPoller.stop();
     // Running games stop here: no timer may move them on (schedule and act refuse once shuttingDown is set), so the snapshot
     // below is the final state of each table.
     for (const room of rooms.values()) clearTimeout(room.timer);
@@ -2570,18 +2632,27 @@ function start(opts = {}) {
         // a new server lifecycle in this process starts with no snapshot: a failed first read must not leave the last one in force
         gameFlags.reset();
         guestFeatures.reset();
+        // resolves true when the read worked; a failure is logged and reported as false (never thrown)
         const refreshFlags = () => {
-          if (flagsStopped) return Promise.resolve();
+          if (flagsStopped) return Promise.resolve(true);
           const token = gameFlags.begin(); // reads are applied in the order they started
           const gToken = guestFeatures.begin();
           const guestRead = dbAdmin.listGuestFeatures ? dbAdmin.listGuestFeatures().then((rows) => { if (!flagsStopped) guestFeatures.apply(rows, gToken); }) : Promise.resolve();
           return Promise.all([dbAdmin.listGameFlags().then((rows) => { if (!flagsStopped) gameFlags.apply(rows, token); }), guestRead])
-            .catch((e) => (opts.log || console).error('[games] switches not loaded (games stay unavailable until they are): ' + e.message));
+            .then(() => true, (e) => {
+              (opts.log || console).error('[games] switches not loaded (games stay unavailable until they are): ' + e.message);
+              return false;
+            });
         };
+        // a failed first read is retried on a short schedule; the snapshot is only marked fresh once a read has worked
+        flagRetry = retryWithBackoff(refreshFlags, [30 * 1000, 60 * 1000, 2 * 60 * 1000, 4 * 60 * 1000, 5 * 60 * 1000]);
         unsubscribeGames = gameFlags.onChange(broadcastGames); // connected players get the new list at once
-        flagsReady = refreshFlags();
-        flagTimer = setInterval(refreshFlags, gameFlags.REFRESH_MS);
-        flagTimer.unref();
+        // Not a plain interval: with nobody connected this process must not query Neon (it could never autosuspend). While sockets
+        // are open it reads every backgroundReadMs, and the first connection after a quiet spell reads at once when the snapshot is
+        // older than backgroundStaleMs. A change made in this process is applied immediately and does not wait for any of this.
+        flagPoller = createIdlePoller({ run: refreshFlags, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: siteInUse });
+        flagPoller.start();
+        flagsReady = flagRetry.run().then((ok) => { if (ok && flagPoller) flagPoller.markFresh(); });
       }
       // old rate-limit rows, expired sessions and used tokens: once now, then every 6 hours (best effort)
       const purge = () => dbAuth.purgeExpired().catch((e) => (opts.log || console).error('[auth] housekeeping failed: ' + e.message));
@@ -2594,8 +2665,11 @@ function start(opts = {}) {
       purgeTimer.unref();
       // queued owner broadcasts: checked once a minute, sent in batches (a restart resumes the one that was half sent)
       if (broadcastWorker) {
-        broadcastTimer = setInterval(kickBroadcasts, 60 * 1000);
-        broadcastTimer.unref();
+        // Queued sends start at once (onBroadcastQueued) and a restart resumes the one that was half sent (the kick above); this
+        // timer is only a backstop for a lease that ran out, so it runs while somebody is connected and not once a minute.
+        broadcastPoller = createIdlePoller({ run: kickBroadcasts, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: siteInUse });
+        broadcastPoller.start();
+        kickBroadcasts(); // a broadcast that was queued or half sent when the process stopped resumes now, without waiting for a connection
       }
     }
     // no database (memory mode): there are no switches, so every game is on; with a database the switches were read above

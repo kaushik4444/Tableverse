@@ -43,7 +43,7 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
 
 (async () => {
   if (db.hasDatabase()) { console.log('socket session (memory) checks skipped: DATABASE_URL is set'); return; }
-  const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 40 };
+  const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchLog: quiet(), sessionCheckMs: 40, idleSessionCheckMs: 40 };
   const srv = await start({ ...fast, env: { ...process.env, RL_LOGOUT_IP_LIMIT: '1000', VOICE_ENABLED: 'true' } });
   // test-only: registered-player behaviour in memory mode (see helpers/openGuestFeatures.js)
   require('./helpers/openGuestFeatures')();
@@ -185,9 +185,174 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
       assert.equal(s.closed, null, 'still open');
       assert.equal(s.ws.readyState, WebSocket.OPEN);
     });
+
+    await test('a command waits for an in-flight timer check that discovers a revoked session', async () => {
+      const { rawToken } = await newPlayer('Checking');
+      const s = socketFor(srv.port, rawToken); open.push(s);
+      await until(() => s.welcomed(), 'welcome');
+      const authenticate = dbPlayers.authenticateToken;
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      let checks = 0;
+      dbPlayers.authenticateToken = async (token) => {
+        if (token === rawToken) { checks++; await gate; }
+        return authenticate(token);
+      };
+      try {
+        await until(() => checks === 1, 'the background check has started');
+        assert.equal(await dbAuth.revokeSession(rawToken), true);
+        s.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+        // WebSocket frames are ordered: pong confirms the server received the preceding command while auth was held.
+        const pong = new Promise((resolve) => s.ws.once('pong', resolve));
+        s.ws.ping();
+        await Promise.race([pong, sleep(1000).then(() => { throw new Error('no pong after create'); })]);
+        assert.equal(checks, 1, 'the command shares the pending lookup');
+        release();
+        await until(() => s.closed !== null, 'the pending check closes the revoked socket');
+        assert.equal(s.closed, 4001);
+        assert.equal(s.room, null, 'the table was never created');
+      } finally {
+        release();
+        dbPlayers.authenticateToken = authenticate;
+      }
+    });
   } finally {
     for (const s of open) { try { s.ws.terminate(); } catch { /* closed */ } }
     await srv.close();
   }
+
+  // Neon cannot autosuspend while open sockets ask it a question every minute. A socket nobody is using is checked only by a long
+  // backstop; a socket in use is still checked, and the first message after a quiet spell is checked before it is acted on.
+  const slow = await start({ ...fast, sessionCheckMs: 40, idleSessionCheckMs: 600000, env: { ...process.env, RL_LOGOUT_IP_LIMIT: '1000', VOICE_ENABLED: 'true' } });
+  const open2 = [];
+  const realAuth = dbPlayers.authenticateToken;
+  let lookups = 0;
+  dbPlayers.authenticateToken = (...args) => { lookups++; return realAuth.apply(dbPlayers, args); };
+  try {
+    await test('an idle socket does not ask the database about its session, however many check intervals pass', async () => {
+      const { rawToken } = await newPlayer('Quiet');
+      const s = socketFor(slow.port, rawToken); open2.push(s);
+      await until(() => s.welcomed(), 'welcome');
+      await sleep(100); // let the hello's own lookup finish
+      const before = lookups;
+      await sleep(400); // about ten check intervals
+      assert.equal(lookups, before, 'no session lookups while the socket is idle');
+      assert.equal(s.closed, null, 'and it stays open');
+    });
+
+    await test('the first message after a quiet spell checks the session before acting: a healthy one goes through, a revoked one is closed', async () => {
+      const ok = await newPlayer('Back');
+      const s = socketFor(slow.port, ok.rawToken); open2.push(s);
+      await until(() => s.welcomed(), 'welcome');
+      await sleep(120);
+      const before = lookups;
+      s.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+      await until(() => s.room && s.room.code, 'the table is created');
+      assert.ok(lookups > before, 'the session was checked before the message was served');
+
+      const gone = await newPlayer('Gone2');
+      const r = socketFor(slow.port, gone.rawToken); open2.push(r);
+      await until(() => r.welcomed(), 'welcome');
+      assert.equal(await dbAuth.revokeSession(gone.rawToken), true);
+      await sleep(120); // longer than sessionCheckMs, shorter than the idle backstop: nothing has noticed yet
+      assert.equal(r.closed, null);
+      r.send({ t: 'create', gameId: 'wizard', visibility: 'public' });
+      await until(() => r.closed !== null, 'the revoked socket is closed by its next message', 2000);
+      assert.equal(r.closed, 4001);
+      assert.equal(r.room, null, 'and the message was not acted on');
+    });
+  } finally {
+    dbPlayers.authenticateToken = realAuth;
+    for (const s of open2) { try { s.ws.terminate(); } catch { /* closed */ } }
+    await slow.close();
+  }
+
+  await test('the idle session backstop waits for another player to use the site', async () => {
+    const server = await start({
+      ...fast, backgroundActiveMs: 600, idleSessionCheckMs: 900, log: quiet(),
+    });
+    let idle; let visitor;
+    try {
+      const { rawToken } = await newPlayer('IdleBackstop');
+      idle = socketFor(server.port, rawToken);
+      await until(() => idle.welcomed(), 'idle player welcome');
+      assert.equal(await dbAuth.revokeSession(rawToken), true);
+      await sleep(1100); // beyond both the activity window and the idle backstop
+      assert.equal(idle.ws.readyState, WebSocket.OPEN, 'an unused tab alone does not trigger the backstop');
+
+      const active = await newPlayer('BackstopVisitor');
+      visitor = socketFor(server.port, active.rawToken);
+      await until(() => visitor.welcomed(), 'visitor welcome');
+      await until(() => idle.closed !== null, 'the backstop rechecks the unused socket');
+      assert.equal(idle.closed, 4001);
+      assert.ok(idle.msgs.some((m) => m.t === 'authRequired'));
+      assert.equal(visitor.ws.readyState, WebSocket.OPEN, 'the healthy visitor remains connected');
+    } finally {
+      if (idle) idle.ws.terminate();
+      if (visitor) visitor.ws.terminate();
+      await server.close();
+    }
+  });
+
+  await test('the broadcast backstop follows site activity and a stale welcome waits for both switch reads', async () => {
+    const adminStore = require('../db/admin');
+    const broadcastStore = require('../db/broadcast');
+    let games = 0; let features = 0; let claims = 0;
+    let release;
+    const pendingFeatures = new Promise((resolve) => { release = resolve; });
+    const stubs = [
+      [adminStore, 'listGameFlags', async () => ++games === 1 ? [] : [{ game_id: 'wizard', access: 'owner' }]],
+      [adminStore, 'listGuestFeatures', async () => ++features === 1 ? [] : pendingFeatures],
+      [adminStore, 'bootstrapOwner', async () => ({ claimed: false })],
+      [adminStore, 'purge', async () => {}],
+      [dbAuth, 'purgeExpired', async () => {}],
+      [broadcastStore, 'claimNext', async () => { claims++; return null; }],
+    ];
+    const restore = stubs.map(([store, key, fake]) => {
+      const original = store[key];
+      store[key] = fake;
+      return () => { store[key] = original; };
+    });
+    const hasDatabase = db.hasDatabase;
+    let server; let s;
+    try {
+      // Enable database-backed workers at startup with fake stores; socket authentication below stays in memory.
+      db.hasDatabase = () => true;
+      server = await start({
+        ...fast, database: { prepare: async () => ({ mode: 'postgres' }) }, matchSpoolDir: null,
+        env: { ...process.env, ANALYTICS_ENABLED: '0' }, log: quiet(), emailSender: { enabled: true },
+        backgroundReadMs: 40, backgroundStaleMs: 80, backgroundActiveMs: 1000, idleSessionCheckMs: 600000,
+      });
+      db.hasDatabase = hasDatabase;
+      assert.deepEqual([games, features, claims], [1, 1, 1], 'startup reads switches and claims queued mail once');
+      await sleep(120);
+      assert.deepEqual([games, features, claims], [1, 1, 1], 'no recurring work without a connection');
+
+      const { rawToken } = await newPlayer('SwitchReader');
+      s = socketFor(server.port, rawToken);
+      await until(() => features === 2 && claims > 1, 'stale reads and the active broadcast backstop');
+      await sleep(80); // allow both the hello and another background tick to reach the held read
+      assert.deepEqual([games, features], [2, 2], 'hello and timer share the refresh already started on connect');
+      assert.equal(s.welcomed(), false, 'welcome waits even when only the guest switches are still loading');
+      release([{ feature: 'rejoin', enabled: true }]);
+      await until(() => s.welcomed(), 'welcome with fresh switches');
+      const welcome = s.msgs.find((m) => m.t === 'welcome');
+      assert.equal(welcome.games.find((g) => g.id === 'wizard').enabled, false);
+      assert.equal(welcome.guestLocked.includes('rejoin'), false);
+
+      await sleep(1100);
+      assert.equal(s.ws.readyState, WebSocket.OPEN, 'the connection remains open without activity');
+      const idle = [games, features, claims];
+      await sleep(120);
+      assert.deepEqual([games, features, claims], idle, 'an unused open socket does not keep either worker active');
+      s.send({ t: 'leave' });
+      await until(() => games > idle[0] && features > idle[1] && claims > idle[2], 'a message resumes both workers');
+    } finally {
+      release([]);
+      if (s) s.ws.terminate();
+      db.hasDatabase = hasDatabase;
+      try { if (server) await server.close(); } finally { restore.forEach((fn) => fn()); }
+    }
+  });
   console.log(`${passed} socket session checks passed`);
 })().catch((e) => { console.error(e); process.exit(1); });
