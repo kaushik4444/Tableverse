@@ -292,23 +292,19 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
       assert.equal(info.authenticated, true);
       assert.equal(info.emailVerified, false, 'an unverified account has a session but is not allowed into the lobby');
     });
-    await test('email verification requirement toggle defaults to secure mode and only false/0 disables it', async () => {
+    await test('e-mail verification is always required: the old switch is ignored whatever it says', async () => {
       const prev = process.env.REQUIRE_EMAIL_VERIFICATION;
       try {
-        delete process.env.REQUIRE_EMAIL_VERIFICATION;
-        assert.equal(dbAuth.isEmailVerificationRequired(), true);
-        process.env.REQUIRE_EMAIL_VERIFICATION = 'maybe';
-        assert.equal(dbAuth.isEmailVerificationRequired(), true);
-        process.env.REQUIRE_EMAIL_VERIFICATION = 'false';
-        assert.equal(dbAuth.isEmailVerificationRequired(), false);
-        process.env.REQUIRE_EMAIL_VERIFICATION = '0';
-        assert.equal(dbAuth.isEmailVerificationRequired(), false);
+        for (const v of [undefined, 'maybe', 'true', 'false', '0']) {
+          if (v === undefined) delete process.env.REQUIRE_EMAIL_VERIFICATION; else process.env.REQUIRE_EMAIL_VERIFICATION = v;
+          assert.equal(dbAuth.isEmailVerificationRequired(), true, `value ${v} still requires verification`);
+        }
       } finally {
         if (prev === undefined) delete process.env.REQUIRE_EMAIL_VERIFICATION;
         else process.env.REQUIRE_EMAIL_VERIFICATION = prev;
       }
     });
-    await test('when verification is optional, session access is allowed but identity remains unverified in the database', async () => {
+    await test('a new account is unverified in the database even when the old switch says false', async () => {
       const prev = process.env.REQUIRE_EMAIL_VERIFICATION;
       process.env.REQUIRE_EMAIL_VERIFICATION = 'false';
       try {
@@ -316,7 +312,7 @@ const matchOf = (over = {}) => ({ matchKey: uuid(), roomCode: 'ABCDEF', gameId: 
         const reg = await dbAuth.registerEmail({ adultConfirmed: true, email, username: `opt${String(Date.now()).slice(-6)}`, password: 'TestPass123!', displayName: 'Optional' });
         const info = await dbAuth.sessionInfo((await loginToken(reg.email)));
         assert.equal(info.authenticated, true);
-        assert.equal(info.emailVerified, false, 'optional mode does not mark an identity as verified');
+        assert.equal(info.emailVerified, false, 'nothing marks an identity as verified without the link');
         const row = (await x.query('SELECT email_verified_at FROM auth_identities WHERE provider = $1 AND provider_user_id = $2 LIMIT 1', ['email', email])).rows[0];
         assert.equal(row.email_verified_at, null, 'identity remains unverified in storage');
       } finally {
