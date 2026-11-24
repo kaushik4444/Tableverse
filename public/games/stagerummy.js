@@ -87,8 +87,6 @@
     st.matchId = v.matchId;
     const prev = newMatch ? 0 : st.lastSeq;
     window.GameFeed.add(key, v.log.filter((e) => e.seq > prev).map((e) => logItem(v, e, `${st.epoch}-${e.seq}`)).filter(Boolean));
-    // a card sound for each render that brings new card moves; a first load (no lastSeq yet) returned above, so it stays silent
-    if (window.CardTable && window.CardTable.sound && v.log.some((e) => e.seq > prev && ['draw', 'discard', 'hit', 'skip'].includes(e.type))) window.CardTable.sound.play('card');
     if (v.event && v.event.seq > prev) { const sp = spotFor(v, v.event); if (sp) window.GameFeed.spotlight(sp); }
     st.lastSeq = last;
   }
