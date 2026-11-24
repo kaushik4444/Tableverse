@@ -1,6 +1,7 @@
 'use strict';
 // The round summaries of Wizard, Twenty-Nine and Poker: their button is Ready, and it sends the ready message (the server
-// starts the next round once everybody has pressed it). The state is real: the engine is driven by its bots to the summary.
+// starts the next round once everybody has pressed it). The state is real: the engine is driven by its bots to the summary, and
+// the gate is open (nobody has pressed Ready yet), as the server leaves it at a round boundary.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, tableMessages, sessionOk, closeOpenContexts } = require('./harness');
 const { chromium } = loadPlaywright();
@@ -44,7 +45,9 @@ function atPhase(gameId, n, phase) {
   for (const [gameId, n, phase, selector, label] of cases) {
     await test(`${label}: its button is Ready and sends the ready message`, async () => {
       const { g, extras } = atPhase(gameId, n, phase);
-      const m = tableMessages(gameId, extras);
+      // the server opens the gate at a round boundary: until everybody presses Ready, the summary is waiting for them
+      const ids = extras.map((x, i) => (i === 0 ? 'me' : 'p' + i));
+      const m = tableMessages(gameId, extras, { roomExtra: { status: 'playing', gate: { ready: [], waiting: ids } } });
       m[1].view = g.view('me');
       const { page, ctx } = await scriptedPage(browser, { messages: m, viewport: { width: 393, height: 852 } });
       await page.goto(url + '/');
