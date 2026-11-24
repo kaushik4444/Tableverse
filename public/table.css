@@ -175,7 +175,8 @@ button.card { cursor: pointer; }
 @media (max-width: 520px) and (max-height: 700px) { .wz { --av: 38px; } .pt { --pt-min: 250px; } }
 @media (max-width: 520px) and (max-height: 600px) { .pt { --pt-min: 215px; } }
 /* on those short screens the 4-seat corner label is just the card, so it clears the right-hand seat */
-@media (max-width: 520px) and (max-height: 700px) { .pt:not(:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"])) .pt-corner .cap { display: none; } }
+/* short phones: the caption stays (it is the only place the trump suit shows) but goes on one line, to save height */
+@media (max-width: 520px) and (max-height: 700px) { .pt:not(:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"])) .pt-corner .cap br { display: none; } }
 @media (min-width: 900px) { .wz { --av: 66px; } .pt-seat { width: 130px; } .plate b { font-size: 14px; } .plate span { font-size: 12px; } }
 
 /* =====================================================================

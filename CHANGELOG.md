@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Wizard on short phones: the trump suit caption stays visible (on one line) when a Wizard is turned up; it was hidden on 4-player tables under 700px high, so the suit name did not show.
 - Sounds: Ludo no longer plays its "your turn" chime twice; a test checks every game gives one "your turn" chime and Stage 10 plays its card sounds.
 - Phone layouts (Priority 2 audit): Snakes and Ladders waiting tokens no longer cover the Start label, and square numbers are at least 9px and show above the snakes and ladders; Hidden Miners shows a fade at the card hand's edge when cards are off screen; card-art banner text is at least 7px in Wizard and similar games; the Colour Clash draw pile is a 44px target; Go Fish rank chips keep a tap area of about 44px on the smallest phones; Four in a Row columns take taps in the gap between them.
 - Ludo on a phone: the title, board and player chips keep the same 8px side gutter as the other tables (they touched the screen edge).
