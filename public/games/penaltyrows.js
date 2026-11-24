@@ -382,9 +382,8 @@
         <div class="wz-round"><b>Take 5</b><span class="label"> · round ${v.round} · turn ${v.turn}/${v.handSize}</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-pr="rules">Rules</button>', 'pr')}
       </div>
-      ${tabs}
+      <div class="pr-bar">${tabs}<div class="wz-status ${mine ? 'mine' : ''}"><span>${guidance(v)}</span></div></div>
       ${body}
-      <div class="wz-status ${mine ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${tab === 'table' ? handHTML(v) : ''}
       ${overlayHTML(v)}
     </div>`;

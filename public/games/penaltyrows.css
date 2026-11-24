@@ -3,6 +3,10 @@
  * whole table fits a desktop window without zooming (see the 900px and short-screen rules at the end). */
 .prt { max-width: 980px; margin: 0 auto; }
 .prt .pr-tabs { display: flex; justify-content: center; gap: 6px; margin: 6px 0 8px; }
+/* the view tabs and the what-to-do line share one row under the top bar, so the table gets the height back */
+.prt .pr-bar { display: flex; align-items: stretch; gap: 8px; margin: 6px 0 8px; }
+.prt .pr-bar .pr-tabs { margin: 0; flex: none; }
+.prt .pr-bar .wz-status { flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; }
 .prt .pr-tabs [aria-selected="true"] { background: var(--gold, #f2c14e); color: var(--gold-ink, #1a1400); border-color: transparent; }
 
 /* the table: a wooden board with a light grain */
