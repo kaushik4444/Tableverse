@@ -181,7 +181,7 @@
       button: () => `<button class="btn ghost small chat-btn" data-act="chat" aria-label="Open chat">💬<span class="cb" ${S.unread ? '' : 'hidden'}>${S.unread}</span></button>`,
     },
     // Shared toolbar seed: sound, chat, reactions, game-specific controls, then leave.
-    toolbarSeed: (midHTML, leaveKey, cls) => `<div class="${cls || 'row'}"${cls ? '' : ' style="gap:6px"'}>${window.CardTable.sound.button()}${window.CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button>${midHTML}<button class="btn ghost small" data-${leaveKey}="leave" aria-label="Leave table">✕</button></div>`,
+    toolbarSeed: (midHTML, leaveKey, cls) => `<div class="${cls || 'row'}" data-table-tools${cls ? '' : ' style="gap:6px"'}>${window.CardTable.sound.button()}${window.CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button>${midHTML}<button class="btn ghost small" data-${leaveKey}="leave" aria-label="Leave table">✕</button></div>`,
   });
 
   const gameMeta = (id) => S.games.find((g) => g.id === id);
@@ -3326,6 +3326,8 @@
   /* Until this seat has pressed Ready, the table takes no input: every press, drag and key on the game is stopped before it
      reaches the game. The Ready box, the top bar, chat, and the leave, rules and player-card buttons stay usable. The server refuses moves too. */
   const GATE_OPEN_ACTS = new Set(['readyUp', 'leave', 'activityLog', 'showRules', 'playerCard', 'toggleTools', 'rules']);
+  // the table's top bar (data-table-tools): leaving, rules, reactions and sound stay open; a game's own buttons in it (Resign) do not
+  const TOOLBAR_OPEN = new Set(['leave', 'rules', 'emotes', 'sound', 'chat', 'toggleTools', 'showRules', 'activityLog']);
   const gateGuard = (e) => {
     if (!$app.classList.contains('gate-locked')) return;
     const t = e.target;
@@ -3337,9 +3339,12 @@
       return;
     }
     const toolbarRules = t.closest('[data-toolbar-rules]');
-    if (toolbarRules || (act && GATE_OPEN_ACTS.has(act.dataset.act))) {
+    const ctl = t.closest('button, a, [role="button"]');
+    const inTools = !!t.closest('[data-table-tools]');
+    const toolOpen = inTools && ctl && Object.values(ctl.dataset).some((v) => TOOLBAR_OPEN.has(v));
+    if (toolbarRules || toolOpen || (act && GATE_OPEN_ACTS.has(act.dataset.act))) {
       // Let these buttons generate a native click without activating game keyboard shortcuts.
-      if ((toolbarRules || act?.dataset.act === 'toggleTools') && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
+      if ((toolbarRules || toolOpen || act?.dataset.act === 'toggleTools') && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
       return;
     }
     e.stopPropagation(); e.preventDefault();
@@ -3361,11 +3366,10 @@
       return;
     }
     if ($app.querySelector('[data-ready-here]')) return;
+    // at the bottom of the game, under the hand; the status line above stays where it is, so nothing above the table moves
     const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
-    const status = $app.querySelector('.wz-status');
-    if (status) { status.insertAdjacentHTML('beforebegin', box); status.hidden = true; return; }
-    const top = $app.querySelector('.wz-top');
-    if (top) top.insertAdjacentHTML('afterend', box); else $app.insertAdjacentHTML('afterbegin', box);
+    const root = $app.querySelector('.wz') || $app;
+    root.insertAdjacentHTML('beforeend', box);
   }
 
   function renderGame() {
