@@ -267,6 +267,33 @@ const newPlayer = (name) => dbPlayers.createAnonymousPlayer({ displayName: name,
     await slow.close();
   }
 
+  await test('the idle session backstop waits for another player to use the site', async () => {
+    const server = await start({
+      ...fast, backgroundActiveMs: 600, idleSessionCheckMs: 900, log: quiet(),
+    });
+    let idle; let visitor;
+    try {
+      const { rawToken } = await newPlayer('IdleBackstop');
+      idle = socketFor(server.port, rawToken);
+      await until(() => idle.welcomed(), 'idle player welcome');
+      assert.equal(await dbAuth.revokeSession(rawToken), true);
+      await sleep(1100); // beyond both the activity window and the idle backstop
+      assert.equal(idle.ws.readyState, WebSocket.OPEN, 'an unused tab alone does not trigger the backstop');
+
+      const active = await newPlayer('BackstopVisitor');
+      visitor = socketFor(server.port, active.rawToken);
+      await until(() => visitor.welcomed(), 'visitor welcome');
+      await until(() => idle.closed !== null, 'the backstop rechecks the unused socket');
+      assert.equal(idle.closed, 4001);
+      assert.ok(idle.msgs.some((m) => m.t === 'authRequired'));
+      assert.equal(visitor.ws.readyState, WebSocket.OPEN, 'the healthy visitor remains connected');
+    } finally {
+      if (idle) idle.ws.terminate();
+      if (visitor) visitor.ws.terminate();
+      await server.close();
+    }
+  });
+
   await test('the broadcast backstop follows site activity and a stale welcome waits for both switch reads', async () => {
     const adminStore = require('../db/admin');
     const broadcastStore = require('../db/broadcast');
