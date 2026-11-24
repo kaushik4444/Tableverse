@@ -436,6 +436,7 @@
     ui.dragMoved = false;
     ui.dragKey = boardKeyOf(v, ui.ctx);
     ui.downAt = [e.clientX, e.clientY];
+    setDragShadow(false); // the striker moves in the slider branch too
     if (slider) {
       ui.mode = 'slide';
       if (slider.setPointerCapture) slider.setPointerCapture(e.pointerId);
@@ -444,7 +445,6 @@
     }
     const svg = e.target.closest('.cb-svg');
     if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
-    setDragShadow(false);
     const p = pointerDisplay(e);
     ui.mode = p && onStriker(p) ? 'place' : 'aim';
     if (ui.mode === 'aim' && p) aimFrom(p);

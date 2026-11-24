@@ -189,7 +189,12 @@
   const gameMark = (g) => (window.GameMarks ? window.GameMarks.html(g.id, g.icon || '🎴') : esc(g.icon || '🎴'));
   /** The account reminder for a guest on this page (lib/guest.js decides whether it may show now); '' for everybody else. */
   const guestNudge = (ctx) => (S.isGuest && window.TvGuest ? window.TvGuest.nudgeHTML(ctx, { guest: true, hours: S.guestHours }) : '');
-  const addNudge = (ctx) => { const host = $app.querySelector('main, .page'); const n = guestNudge(ctx); if (host && n) host.insertAdjacentHTML('afterbegin', n); };
+  const addNudge = (ctx) => {
+    const host = $app.querySelector('main, .page');
+    if (!host || host.querySelector(`.guest-nudge[data-guest-ctx="${ctx}"]`)) return; // a reminder already on screen is not repeated
+    const n = guestNudge(ctx);
+    if (n) host.insertAdjacentHTML('afterbegin', n);
+  };
   /** May this viewer play the game now: the owner's access mode (public/game-access.js) for this viewer's role. Before the
    *  viewer is known (the public page), only a game open to everybody counts. The server is the authority. */
   const gameOpenFor = (g) => {
@@ -2805,7 +2810,9 @@
   /** The last HTML written to the app root. A redraw with the same markup does nothing: no DOM churn, no replayed animations. */
   let lastAppHtml = null;
   /** Appearance: 'dark' (the default), 'light', or 'system'. Kept on this device; the page's first script applies it before paint. */
+  let themeChoice = null; // the choice made in this visit, kept even if storage refuses to save it
   function themeMode() {
+    if (themeChoice) return themeChoice;
     try { const m = localStorage.getItem('tv_theme'); return m === 'light' || m === 'system' ? m : 'dark'; } catch { return 'dark'; }
   }
   function applyTheme() {
@@ -2813,6 +2820,8 @@
     const light = m === 'light' || (m === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
     if (light) document.documentElement.setAttribute('data-theme', 'light'); else document.documentElement.removeAttribute('data-theme');
   }
+  // System mode follows the device appearance while the page stays open
+  if (window.matchMedia) matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themeMode() === 'system') applyTheme(); });
   let cardsShownAt = 0; // when the game cards last appeared (their entrance takes about half a second)
   function paintApp(html) {
     if (html === lastAppHtml) return;
@@ -3545,7 +3554,7 @@
       // the redraw replaces the period button, so give keyboard focus back to the same period
       document.querySelector(`[data-act="ratingScope"][data-scope="${P.ratingScope}"]`)?.focus({ preventScroll: true });
     },
-    setTheme: (el) => { try { localStorage.setItem('tv_theme', el.dataset.theme); } catch { /* the choice lasts this visit only */ } applyTheme(); render(); },
+    setTheme: (el) => { themeChoice = el.dataset.theme; try { localStorage.setItem('tv_theme', themeChoice); } catch { /* not kept after this visit, but applied now */ } applyTheme(); render(); },
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
