@@ -61,6 +61,28 @@ Tables, games in progress, chat and presence live in memory and are **lost** on 
 - **Render settings needed:** `RENDER_API_KEY` (an API key with permission to deploy this service) and `RENDER_SERVICE_ID`. `RENDER_OWNER_ID` is used by the log view only. If the key lacks deploy rights, the page shows "Render answered with HTTP <status>. Check that the API key can deploy this service." and the fix is to create a key with deploy rights in Render's account settings and set it in the service's environment. Do not paste the key anywhere else.
 - Whether these variables are set in production is not checked by the code or the tests. Check the Render dashboard before relying on the button.
 
+## Neon compute and idle behaviour
+
+Neon's free plan allows 100 compute-hours a month, and the compute autosuspends after 5 minutes without a query. A recurring query keeps it awake, so what matters is which background work asks the database while nobody is playing.
+
+**Expected behaviour when nobody is connected:** the server runs no recurring database query. The only periodic work is in-memory (socket keep-alives, table clean-up, a stats log line), the 6-hourly clean-up of expired sessions and old rows (a few short queries; it wakes Neon briefly four times a day), a file check for unsaved match results every 10 minutes (it queries only when a file is waiting), and analytics, which write only when a counter changed. Neon should suspend 5 minutes after the last real request and stay suspended until the next one. `/healthz` does not touch the database; `/readyz` does (one `SELECT 1`), so do not point an uptime monitor at `/readyz` every few minutes.
+
+**While the site is in use** (a socket connected or sent a message in the last 30 minutes; a tab left open with nobody at it stops counting after that), the background work runs as below (all values are constants in `server.js`, overridable in tests):
+
+| Work | Before | Now |
+| --- | --- | --- |
+| Game switches and guest features (2 queries) | every 15 s, always | every 15 min while the site is in use, and on a connection when the last read is older than 5 min (`lib/idlePoller.js`). A change made in the console applies in-process at once |
+| Queued e-mail broadcasts (claim query) | every 60 s, always | at start, when the owner queues one, and every 15 min while the site is in use |
+| Session check per open socket | every 60 s per socket | every 60 s only for a socket that was used since its last check; an unused socket every 30 min while the site is in use by others, never when nobody is; the first message after a quiet spell is checked before it is acted on |
+| Browser: banners, friends, requests, invitations (5-6 requests) | every 60 s per tab, hidden or not | every 60 s only while the tab is visible and the person did something in the last 5 min; refresh on return |
+| Admin console "Right now" | every 15 s, hidden tab included | every 15 s only while the tab is visible and used in the last 10 min |
+
+What the changes do not alter: sign-out, password change, account deletion and role changes close or update sockets in-process immediately (they never waited for the check); a table in play keeps its sockets, timers and match saving exactly as before.
+
+**Limits to know about:** these deadlines apply only while the site is in use; with nobody using it nothing is read, by design. A change made outside this process (a second instance, or a direct database edit) reaches a running server (a) on the next connection when the snapshot is older than 5 minutes (the hello waits for that read before the welcome is sent), or (b) within 15 minutes while the site is in use; with no connection and no activity it waits for the next one. A session revoked outside this process is noticed (a) at the socket's next message, which is checked before it is acted on, or (b) within 30 minutes for an unused socket while others use the site. This service runs a single instance. In-process changes and revocations are immediate. A broadcast that was queued or half sent resumes once at every start.
+
+**Check it in production (not done from the repository):** in the Neon console, Monitoring, compare compute active time over a quiet night with the previous week; and the Render log's `[stats] sockets=` line against it. If Neon is still active with no sockets, look for an uptime monitor, a Render health check pointed at `/readyz`, or a script calling the API.
+
 ## Deploy
 1. CI must be green on the PR (build, unit, PostgreSQL, browser, Docker, audit).
 2. Merge to `main`; Render redeploys from the blueprint (`npm ci`, `npm start`).

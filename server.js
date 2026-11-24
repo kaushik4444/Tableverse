@@ -49,6 +49,7 @@ const voiceRelay = require('./lib/voiceRelay');
 const { clientAddress, parseTrustProxy } = require('./lib/clientIp');
 const { debugTokensEnabled, assertSafeDebugConfig } = require('./lib/debugTokens');
 const { createReadinessCheck } = require('./lib/health');
+const { createIdlePoller } = require('./lib/idlePoller'); // background database reads that only run while somebody is connected
 const { createAnalytics, lengthBucket } = require('./lib/analytics');
 const meteredTurn = require('./lib/meteredTurn');
 const { createAdminRoutes } = require('./lib/adminRoutes');
@@ -105,7 +106,18 @@ function start(opts = {}) {
   const kickTurns = opts.idleKickTurns ?? idlePolicy.IDLE_KICK_TURNS; // bot turns in a row before a person is removed (a test can raise it)
   const absentMs = opts.absentMs ?? 15000; // a disconnected human's turn is played by a bot after this
   const maxRtcPerSec = opts.maxRtcPerSec ?? 200; // table voice setup messages
-  const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket's session is re-checked this often
+  const sessionCheckMs = opts.sessionCheckMs ?? 60000; // an open socket that is in use has its session re-checked this often
+  // A socket nobody is using is checked far less often: every check is a Neon query, and Neon cannot autosuspend while sockets
+  // poll it. Revocations made in this process (sign-out, password change, account deletion, a role change) close sockets at once and
+  // do not wait for a check; this is the backstop. The first message after a quiet spell is checked before it is acted on.
+  const idleSessionCheckMs = opts.idleSessionCheckMs ?? 30 * 60 * 1000;
+  const backgroundReadMs = opts.backgroundReadMs ?? 15 * 60 * 1000; // switches and queued broadcasts: re-read this often while somebody is connected
+  // Somebody is "using" the site when a socket connected or sent a message in the last backgroundActiveMs. A tab left open with
+  // nobody at it stops counting after that, so it does not keep the database awake; the next connection or message wakes it again.
+  const backgroundActiveMs = opts.backgroundActiveMs ?? 30 * 60 * 1000;
+  let lastActivityAt = Date.now();
+  const siteInUse = () => wss.clients.size > 0 && Date.now() - lastActivityAt < backgroundActiveMs;
+  const backgroundStaleMs = opts.backgroundStaleMs ?? 5 * 60 * 1000; // ... and when somebody connects after the last read is older than this
   const maxMsgsPerSec = opts.maxMsgsPerSec ?? 30; // per socket; humans send a handful of messages per minute
   const maxQueuedMessages = opts.maxQueuedMessages ?? 100; // bound async work queued behind slow database operations
   const maxPendingHellos = opts.maxPendingHellos ?? 250; // bound the global serial authentication queue during connection floods
@@ -210,11 +222,11 @@ function start(opts = {}) {
   }
   let purgeTimer = null;
   let spoolTimer = null;
-  let flagTimer = null; // reads the owner's game switches (lib/gameFlags.js)
+  let flagPoller = null; // re-reads the owner's switches while somebody is connected (lib/gameFlags.js, lib/idlePoller.js)
   let flagsStopped = false;
   let flagsReady = Promise.resolve(); // resolves after the first switch read, so no game starts before the switches are known
   let unsubscribeGames = () => {};
-  let broadcastTimer = null;
+  let broadcastPoller = null;
   let shuttingDown = false; // set when the process is asked to stop: readiness fails, no new tables, players are told
   // Readiness: the database must answer within 3 s; an outage is logged once when it starts and once when it ends (lib/health.js).
   const readiness = createReadinessCheck({
@@ -294,8 +306,16 @@ function start(opts = {}) {
       headers: m.unsubscribeUrl ? { 'List-Unsubscribe': `<${m.unsubscribeUrl}>` } : {},
     }),
   }) : null;
+  // One retry, at the moment a held lease ends, when a run found a broadcast another run still holds. Not a poll: it is scheduled only
+  // when a lease exists, and a lease exists only while a broadcast is being sent (at most a few minutes, then it is claimed or done).
+  let leaseRetry = null;
   const kickBroadcasts = () => {
-    if (broadcastWorker) broadcastWorker.runOnce().catch((e) => (opts.log || console).error('[broadcast] sending failed: ' + e.message));
+    if (!broadcastWorker) return;
+    broadcastWorker.runOnce().then((r) => {
+      if (!r || r.retryInMs == null || leaseRetry) return;
+      leaseRetry = setTimeout(() => { leaseRetry = null; kickBroadcasts(); }, r.retryInMs + 2000);
+      if (leaseRetry.unref) leaseRetry.unref();
+    }).catch((e) => (opts.log || console).error('[broadcast] sending failed: ' + e.message));
   };
   // Close this player's sockets that were opened with a session that no longer exists. `token` limits it to one
   // session (logout); `exceptToken` spares the session that was just created (a new login retires the old ones, 4002).
@@ -2210,6 +2230,9 @@ function start(opts = {}) {
 
     // Blocks are stored per account and applied on every table; load them once per account on this server.
     if (!p.blocked) p.blocked = dbPool.hasDatabase() ? await dbModeration.loadBlockedIds(p.id) : new Set();
+    // The first person after a quiet spell gets switches no older than backgroundStaleMs: wait for that read (nothing extra when
+    // the snapshot is fresh). It is before the ownership checks below, which are re-evaluated after this await.
+    if (flagPoller) await flagPoller.touch();
 
     // The socket may have closed while the database answered above. A closed socket must not take over the account:
     // it must not replace the open socket, and there would be nothing left to clean it up.
@@ -2317,24 +2340,33 @@ function start(opts = {}) {
    */
   async function checkSocketSession(ws) {
     const p = ws.player;
-    if (!p || ws.revoked || ws.readyState !== 1 || ws.checkingSession) return;
-    ws.checkingSession = true;
+    if (!p || ws.revoked || ws.readyState !== 1) return;
+    // a check already running is waited for, not skipped: a caller (the first message after a quiet spell) must get the real answer
+    if (ws.sessionCheck) return ws.sessionCheck;
+    ws.sessionCheck = runSocketSessionCheck(ws, p).finally(() => { ws.sessionCheck = null; });
+    return ws.sessionCheck;
+  }
+  async function runSocketSessionCheck(ws, p) {
     try {
       const current = await dbPlayers.authenticateToken(ws.authToken);
+      ws.sessionCheckedAt = Date.now();
       if (ws.revoked || ws.player !== p) return; // ended while the check was running
       if (!current || current.id !== p.id) {
         send(ws, { t: 'authRequired', ...legalFlags, message: 'Your session has ended. Please log in again.' });
         revokeSocket(ws, 4001, 'session ended');
       }
     } catch (err) {
+      // a database fault does not prove the session ended: keep the socket (and admit its messages, as before). A failed check still
+      // counts as the last attempt, so during a fault the next check comes one interval later, not one per message.
+      ws.sessionCheckedAt = Date.now();
       // a database fault does not prove the session ended: keep the socket and check again on the next interval
       wsLog.warn('session.check_failed', { connId: ws.connId, err });
-    } finally {
-      ws.checkingSession = false;
     }
   }
 
   wss.on('connection', (ws, req) => {
+    lastActivityAt = Date.now();
+    if (flagPoller) void flagPoller.touch(); // starts the read early; the hello waits for it (onHello)
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
     const openedAt = Date.now();
     ws.once('close', (code) => {
@@ -2356,7 +2388,14 @@ function start(opts = {}) {
       else socketsByIp.set(ws.ip, n);
     });
     if (open > maxSocketsPerIp) return ws.close(1013, 'too many connections');
-    const sessionTimer = setInterval(() => { void checkSocketSession(ws); }, sessionCheckMs);
+    ws.sessionCheckedAt = Date.now();
+    ws.lastMsgAt = 0;
+    // The timer itself costs nothing: it asks the database only when the socket was used since its last check (or, for a socket
+    // nobody is using, when the long backstop is due).
+    const sessionTimer = setInterval(() => {
+      const since = Date.now() - ws.sessionCheckedAt;
+      if (ws.lastMsgAt > ws.sessionCheckedAt || (since >= idleSessionCheckMs && siteInUse())) void checkSocketSession(ws);
+    }, sessionCheckMs);
     sessionTimer.unref();
     ws.once('close', () => clearInterval(sessionTimer));
     ws.isAlive = true;
@@ -2388,6 +2427,7 @@ function start(opts = {}) {
       // flood guard; counters are reset every second. Voice setup messages come in bursts (several ICE candidates per
       // person at the table), so they have their own, larger allowance and do not use up the normal one.
       if (msg.t === 'rtc') { if (++ws.rtcMsgs > maxRtcPerSec) return ws.close(1008, 'slow down'); } else if (++ws.msgs > maxMsgsPerSec) return ws.close(1008, 'slow down');
+      lastActivityAt = Date.now();
       if (msg.t === 'hello') {
         // onHello is async (database lookup): a failure must close this socket, not crash the process with an unhandled rejection
         onHello(ws, msg).catch((e) => {
@@ -2398,9 +2438,16 @@ function start(opts = {}) {
       }
       const p = ws.player;
       if (!p || !Object.hasOwn(handlers, msg.t)) return;
+      ws.lastMsgAt = Date.now();
+      lastActivityAt = ws.lastMsgAt;
       const run = async () => {
         // queued behind an earlier message: the session may have ended while it waited
         if (ws.revoked || ws.readyState !== 1 || ws.player !== p) return;
+        // the first message after a quiet spell is checked before it is acted on (a revoked session is closed instead of served)
+        if (Date.now() - ws.sessionCheckedAt >= sessionCheckMs) {
+          await checkSocketSession(ws);
+          if (ws.revoked || ws.readyState !== 1 || ws.player !== p) return;
+        }
         markActive(p, ws); // at most one analytics mark per account per day
         try {
           const before = p.room;
@@ -2525,10 +2572,10 @@ function start(opts = {}) {
     clearInterval(gc);
     clearInterval(purgeTimer);
     clearInterval(spoolTimer);
-    clearInterval(flagTimer);
+    if (flagPoller) flagPoller.stop();
     flagsStopped = true; // a read still in flight must not publish after shutdown
     unsubscribeGames();
-    clearInterval(broadcastTimer);
+    if (broadcastPoller) broadcastPoller.stop();
     // Running games stop here: no timer may move them on (schedule and act refuse once shuttingDown is set), so the snapshot
     // below is the final state of each table.
     for (const room of rooms.values()) clearTimeout(room.timer);
@@ -2580,8 +2627,12 @@ function start(opts = {}) {
         };
         unsubscribeGames = gameFlags.onChange(broadcastGames); // connected players get the new list at once
         flagsReady = refreshFlags();
-        flagTimer = setInterval(refreshFlags, gameFlags.REFRESH_MS);
-        flagTimer.unref();
+        // Not a plain interval: with nobody connected this process must not query Neon (it could never autosuspend). While sockets
+        // are open it reads every backgroundReadMs, and the first connection after a quiet spell reads at once when the snapshot is
+        // older than backgroundStaleMs. A change made in this process is applied immediately and does not wait for any of this.
+        flagPoller = createIdlePoller({ run: refreshFlags, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: siteInUse });
+        flagPoller.markFresh();
+        flagPoller.start();
       }
       // old rate-limit rows, expired sessions and used tokens: once now, then every 6 hours (best effort)
       const purge = () => dbAuth.purgeExpired().catch((e) => (opts.log || console).error('[auth] housekeeping failed: ' + e.message));
@@ -2594,8 +2645,11 @@ function start(opts = {}) {
       purgeTimer.unref();
       // queued owner broadcasts: checked once a minute, sent in batches (a restart resumes the one that was half sent)
       if (broadcastWorker) {
-        broadcastTimer = setInterval(kickBroadcasts, 60 * 1000);
-        broadcastTimer.unref();
+        // Queued sends start at once (onBroadcastQueued) and a restart resumes the one that was half sent (the kick above); this
+        // timer is only a backstop for a lease that ran out, so it runs while somebody is connected and not once a minute.
+        broadcastPoller = createIdlePoller({ run: kickBroadcasts, everyMs: backgroundReadMs, staleMs: backgroundStaleMs, active: siteInUse });
+        broadcastPoller.start();
+        kickBroadcasts(); // a broadcast that was queued or half sent when the process stopped resumes now, without waiting for a connection
       }
     }
     // no database (memory mode): there are no switches, so every game is on; with a database the switches were read above
