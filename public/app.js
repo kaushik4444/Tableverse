@@ -3110,11 +3110,11 @@
       <section class="panel code-card">
         <div class="label">Table code</div>
         <div class="code">${esc(r.code)}</div>
-        ${r.visibility === 'public' ? `<div class="row" style="justify-content:center">
+        <div class="row" style="justify-content:center">
           <button class="btn small" data-act="copyLink">Copy invite link</button>
           <button class="btn small wa" data-act="whatsapp">WhatsApp</button>
           ${navigator.share ? '<button class="btn ghost small" data-act="share">Share…</button>' : ''}
-        </div>` : ''}
+        </div>
         ${isHost ? `<div class="visibility-control">${guestLockedHere('private_tables') ? '<p class="guest-lock-note" role="note">🔒 Private tables need a free account. Tap Private to create one.</p>' : ''}<span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
         ${inviteFriendsHTML()}
       </section>
