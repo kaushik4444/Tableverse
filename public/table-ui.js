@@ -135,7 +135,7 @@
     const names = g.waiting.map(e).join(', ');
     const cls = `ready-bar ready-box ${opts.cls || ''}`;
     if (g.seated && !g.youReady) return `<div class="${cls}" data-ready-here role="status"><span><b>${e(title)}</b> ${g.ready} of ${g.total} ready${names ? ` · waiting for ${names}` : ''}</span><button class="btn" data-act="readyUp">Ready</button></div>`;
-    return `<div class="${cls}" data-ready-here role="status"><span>${g.seated ? 'You are ready. ' : ''}${names ? `Waiting for ${names}` : 'Everybody is ready'}</span></div>`;
+    return `<div class="${cls}" data-ready-here role="status"><span>${g.seated ? 'You are ready. ' : ''}${names ? `Waiting for ${names}` : 'Everybody is ready. The next round starts shortly.'}</span></div>`;
   }
   function readyBox(ctx, opts = {}) {
   const html = readyBoxCore(ctx, opts);
