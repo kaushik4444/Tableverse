@@ -38,6 +38,7 @@ function home({ old = null, tables = true, guest = false, games = [] } = {}) {
   };
   const context = {
     $app: app, S: { games, guest, named: false }, window: {},
+    paintApp: (html) => { app.innerHTML = html; }, // the app's memo (skip an unchanged redraw) is covered by tests/ui/polish-ui.js
     esc: (value) => String(value == null ? '' : value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
     gameMark: (g) => String(g.icon || '🎴').replaceAll('<', '&lt;'), // the real mark helper is covered by tests/game-marks.test.js
     gameOpenFor: () => true, guestLockedFor: () => false, range: () => '2–4',

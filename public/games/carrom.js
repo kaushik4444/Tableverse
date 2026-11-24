@@ -196,7 +196,7 @@
       ${COMPASS}
       ${caps}
       ${pockets}
-      <g filter="url(#cb-shadow)">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
+      <g data-shadow="1" filter="url(#cb-shadow)">${discs.map((d) => discHTML(v, d)).join('')}${striker}</g>
       ${over || ''}
     </svg>`;
   }
@@ -394,6 +394,13 @@
   }
 
   /** Updates the arrow and tip text without rebuilding the board. */
+  /** The drop shadow under the discs is switched off during a drag: moving a filtered group every frame leaves black patches on phones. */
+  function setDragShadow(on) {
+    const g = ui.root && ui.root.querySelector('.cb-svg > g[data-shadow]');
+    if (!g) return;
+    if (on) g.setAttribute('filter', 'url(#cb-shadow)'); else g.removeAttribute('filter');
+  }
+
   function syncAim() {
     const root = ui.root;
     if (!root) return;
@@ -429,6 +436,7 @@
     ui.dragMoved = false;
     ui.dragKey = boardKeyOf(v, ui.ctx);
     ui.downAt = [e.clientX, e.clientY];
+    setDragShadow(false); // the striker moves in the slider branch too
     if (slider) {
       ui.mode = 'slide';
       if (slider.setPointerCapture) slider.setPointerCapture(e.pointerId);
@@ -478,6 +486,7 @@
     if (!ui.dragging || e.pointerId !== ui.pointerId) return;
     const moved = ui.dragMoved;
     ui.dragging = false;
+    setDragShadow(true);
     if (moved && ui.mode === 'aim') {
       const p = pointerDisplay(e);
       if (p) aimFrom(p);
@@ -497,6 +506,7 @@
   function onPointerCancel(e) {
     if (!ui.dragging || (e && e.pointerId !== ui.pointerId)) return;
     ui.dragging = false; ui.dragMoved = false;
+    setDragShadow(true);
     flushDeferred();
   }
 

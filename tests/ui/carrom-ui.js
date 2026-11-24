@@ -183,9 +183,11 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     const g = fresh();
     E.applyAction(g, 'p0', { type: 'resign' });
     const { page, ctx } = await open(msgsFor(g, 'p1'));
+    await page.waitForSelector('.overlay', { timeout: 9000 }); // the result is held back for the board and the last shot
     assert.match(await page.textContent('.overlay'), /You won/);
     await ctx.close();
     const l = await open(msgsFor(g, 'p0'));
+    await l.page.waitForSelector('.overlay', { timeout: 9000 });
     assert.match(await l.page.textContent('.overlay'), /Bo & Di won/);
     await l.ctx.close();
   });
