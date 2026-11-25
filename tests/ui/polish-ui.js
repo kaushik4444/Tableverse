@@ -134,6 +134,19 @@ const profile = { ok: true, profile: { username: 'aarav', displayName: 'Aarav', 
     await ctx.close();
   });
 
+  await test('Appearance lives in Settings: the choice applies at once and is kept, and the profile Account tab no longer has it', async () => {
+    const { page, ctx } = await open();
+    await page.click('.tb-avatar-btn');
+    await page.click('[data-act="openSettings"]');
+    await page.waitForSelector('#modal-overlay [data-theme="light"]');
+    await page.click('#modal-overlay [data-theme="light"]');
+    assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light', 'applied at once');
+    assert.equal(await page.evaluate(() => localStorage.getItem('tv_theme')), 'light', 'kept on this device');
+    assert.equal(await page.$eval('#modal-overlay [data-theme="light"]', (b) => b.getAttribute('aria-pressed')), 'true', 'the chosen button is marked');
+    await page.evaluate(() => { localStorage.removeItem('tv_theme'); });
+    await ctx.close();
+  });
+
   await test('Appearance: the password-reset and verify-email pages follow the saved light choice', async () => {
     const { server: s2, url: u2 } = await serve({});
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });

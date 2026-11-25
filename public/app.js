@@ -2342,7 +2342,6 @@
       const panel = tab === 'history' ? historyHTML(P.history)
         : tab === 'account' ? `<div class="account-list">
             ${blockedHTML()}
-            <div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
             <div class="setting-row"><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
             <div class="setting-row"><div><b>Sessions</b><small>Sign out of this device, or of every device you are logged in on.</small></div><span class="row" style="gap:6px"><button type="button" class="btn ghost small" data-act="logout">Log out</button><button type="button" class="btn ghost small" data-act="logoutAll">Everywhere</button></span></div>
@@ -2791,17 +2790,19 @@
     });
   }
 
+  /** Settings: the choices a player makes for this device, and the list of recent tables. Account security and deletion stay on the profile's Account tab. */
   function openSettingsDialog() {
-    const body = () => `<div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
-      <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} saved on your account.` : 'Nothing saved yet.'}</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>
-      <div class="setting-row"><div><b>Account</b><small>Profile, history and account deletion are on your profile page.</small></div><button type="button" class="btn ghost small" data-modal-act="openProfileFromSettings">Open</button></div>`;
+    const appearance = () => `<div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-modal-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>`;
+    const body = () => `${appearance()}
+      <div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
+      <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} you sat at or watched, shown on your home screen.` : 'Tables you sit at or watch will show here.'} Clearing removes them; tables you join later are added again.</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>`;
     openModal('Settings', body(), (o) => {
       const redraw = () => { o.querySelector('.modal-body').innerHTML = body(); };
+      modalActions.setTheme = (el) => { chooseTheme(el.dataset.theme); redraw(); };
       modalActions.toggleSound = () => { CardTable.sound.toggle(); redraw(); };
       modalActions.clearRecent = async () => {
         try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
       };
-      modalActions.openProfileFromSettings = () => { closeModal(); openPage('profile'); };
     });
   }
 
@@ -2875,6 +2876,8 @@
     if (themeChoice) return themeChoice;
     try { const m = localStorage.getItem('tv_theme'); return m === 'light' || m === 'system' ? m : 'dark'; } catch { return 'dark'; }
   }
+  /** Saves the Appearance choice on this device and applies it at once. */
+  function chooseTheme(m) { themeChoice = m; try { localStorage.setItem('tv_theme', m); } catch { /* not kept after this visit, but applied now */ } applyTheme(); render(); }
   function applyTheme() {
     const m = themeMode();
     const light = m === 'light' || (m === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
@@ -3668,7 +3671,6 @@
       // the redraw replaces the period button, so give keyboard focus back to the same period
       document.querySelector(`[data-act="ratingScope"][data-scope="${P.ratingScope}"]`)?.focus({ preventScroll: true });
     },
-    setTheme: (el) => { themeChoice = el.dataset.theme; try { localStorage.setItem('tv_theme', themeChoice); } catch { /* not kept after this visit, but applied now */ } applyTheme(); render(); },
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
