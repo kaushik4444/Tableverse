@@ -60,6 +60,37 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await ctx.close();
   });
 
+  await test('pressing Enter in the password field submits the sign-in form, and a refused login is shown', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+    await page.goto(url + '/');
+    await page.waitForSelector('#loginForm', { timeout: 8000 });
+    await page.fill('#loginEmail', 'someone@example.com');
+    await page.fill('#loginPassword', 'wrong-password');
+    await page.press('#loginPassword', 'Enter');
+    await page.waitForSelector('#auth-overlay .auth-msg[role="alert"]', { timeout: 8000 });
+    assert.match(await page.textContent('#auth-overlay .auth-msg'), /do not match/);
+    assert.equal(await page.inputValue('#loginEmail'), 'someone@example.com', 'the email is kept after Enter');
+    await ctx.close();
+  });
+
+  await test('pressing Enter in the sign-up form keeps the typed values and the 18+ box stays on the form', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+    await page.goto(url + '/');
+    await page.waitForSelector('#loginForm', { timeout: 8000 });
+    await page.click('#auth-overlay [data-act="showRegister"]');
+    await page.waitForSelector('#registerForm', { timeout: 8000 });
+    await page.fill('#registerName', 'Aarav');
+    await page.fill('#registerUsername', 'aarav');
+    await page.fill('#registerEmail', 'someone@example.com');
+    await page.fill('#registerPassword', 'TestPass123!');
+    await page.press('#registerPassword', 'Enter');
+    await page.waitForTimeout(400);
+    assert.equal(await page.inputValue('#registerPassword'), 'TestPass123!', 'the password is kept');
+    assert.equal(await page.inputValue('#registerEmail'), 'someone@example.com', 'the email is kept');
+    assert.equal(await page.isVisible('#registerAdult'), true, 'the 18+ box is still on the form');
+    await ctx.close();
+  });
+
   await server.close();
   await browser.close();
   if (failed) { console.error(`${failed} auth form test(s) failed`); process.exit(1); }

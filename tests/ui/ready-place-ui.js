@@ -86,10 +86,12 @@ function atPhase(gameId, n, phase) {
       assert.equal(await page.locator('.ready-box').count(), 1);
       // the status line keeps its place above the hand, so the layout above the table does not move
       assert.equal(await page.locator('.wz-status:visible').count(), 1, 'the status line is still there');
-      // the Ready bar is the last thing in the game, under the hand
-      const last = await page.evaluate(() => { const b = document.querySelector('.ready-box'); return b.parentElement.lastElementChild === b; });
-      assert.equal(last, true, 'the Ready bar is at the bottom of the game');
-      const overlap = await page.evaluate(() => { const b = document.querySelector('.ready-box').getBoundingClientRect(); const t = document.querySelector('.pr-row, .pr-rows, .sr-table, .cc-tablewrap, .pt-center, .pt-board'); if (!t) return false; const r = t.getBoundingClientRect(); return !(b.bottom <= r.top || b.top >= r.bottom || b.right <= r.left || b.left >= r.right); });
+      assert.equal(await page.locator('.wz > .ready-slot > .ready-box').count(), 1, 'the game uses the shared Ready strip');
+      const overlap = await page.evaluate(() => {
+        const b = document.querySelector('.ready-box').getBoundingClientRect();
+        const r = document.querySelector('.pr-table, .sr-table, .cc-tablewrap').getBoundingClientRect();
+        return !(b.bottom <= r.top || b.top >= r.bottom || b.right <= r.left || b.left >= r.right);
+      });
       assert.equal(overlap, false, 'the Ready box does not sit on the table');
       await page.click('.ready-box [data-act="readyUp"]');
       assert.equal(await page.evaluate(() => window.__sent.filter((x) => x.t === 'ready').length), 1);
