@@ -494,10 +494,10 @@
       ${o.games.length ? `<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Finished</th><th>Last 7 days</th><th>Signed-in players</th><th>Player-games</th><th>Avg minutes each</th><th>Penalised leaves</th><th>Penalised leave rate</th><th>Left, no penalty</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="ad-muted">No finished games in this range.</p>'}
       <p class="ad-muted">Counts and averages only; no player is named. A penalised leave is leaving while others were still playing. Guests count as player-games but not as signed-in players.</p>`;
     main.querySelectorAll('[data-gd]').forEach((b) => { b.onclick = () => { state.gen += 1; renderView('games', () => gamesTab(Number(b.dataset.gd))); }; });
-    main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Tables hosted</h3>
+    main.insertAdjacentHTML('beforeend', `<div id="tablesSection"><h3 style="margin-top:24px">Tables hosted</h3>
       <p class="ad-muted">Every table that has finished, newest first, across all time. Players are not named.</p>
       <div id="tablesList"></div>
-      <p><button class="ad-btn" id="tablesMore" hidden>Load older tables</button></p>`);
+      <p><button class="ad-btn" id="tablesMore" hidden>Load older tables</button></p></div>`);
     loadTables(gen, null).catch(() => {}); // not awaited: owner game switches must not wait for the table history
     if (gen !== state.gen) return;
     if (state.me.isOwner) await gameSwitches();
@@ -548,10 +548,13 @@
     const pill = (g) => (g.access === 'on' ? '<span class="ad-pill">on</span>' : `<span class="ad-pill warn">${esc(label(g.access))}</span>`);
     const last = o.games.length - 1;
     const rows = o.games.map((g, i) => `<tr><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || orderBusy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || orderBusy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${gameFlagPending.has(g.id) ? ' disabled aria-disabled="true"' : ''}>${opts(gameFlagPending.has(g.id) ? gameFlagPending.get(g.id) : g.access)}</select></td></tr>`).join('');
-    main.insertAdjacentHTML('beforeend', `<h3 style="margin-top:24px">Game switches</h3>
+    const switchesHTML = `<h3 style="margin-top:24px">Game switches</h3>
       <p class="ad-muted">Home order: move a game up or down to change where it appears in the home menu. Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players play and refuses guests. "Disabled for all" keeps the game for the owner only. A game that is switched off stays listed, and new tables, starts and rematches are refused for the roles it excludes. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
       <p id="gMsg" class="ad-msg" role="status"></p>
-      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    // placed above Tables hosted: the order on screen is last 30 days, game switches, then tables hosted
+    const anchor = main.querySelector('#tablesSection');
+    if (anchor) anchor.insertAdjacentHTML('beforebegin', switchesHTML); else main.insertAdjacentHTML('beforeend', switchesHTML);
     // a redraw shows only its newest request's result: an older redraw that fails must not replace the current view
     const redrawGames = () => { state.gen += 1; return renderView('games', () => gamesTab(state.gamesDays || 30)); };
     if (gameFlagError && gameFlagError.visit === generation) say('gMsg', gameFlagError.text, 'err');

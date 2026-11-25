@@ -391,6 +391,13 @@ select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .wn-list li { display: flex; gap: 12px; align-items: flex-start; }
 .wn-list .wn-ico { font-size: 22px; line-height: 1.2; }
 .wn-list p { margin: 3px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.wn-release { margin: 16px 0 4px; }
+.wn-date { margin: 0 0 8px; }
+.wn-minor { margin: 12px 0 0; border-top: 1px solid var(--line, rgba(255,255,255,.12)); padding-top: 10px; }
+.wn-minor > summary { cursor: pointer; color: var(--gold); font-weight: 700; font-size: 14px; padding: 6px 0; list-style-position: inside; }
+.wn-minor > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+.wn-minor[open] > summary .wn-closed, .wn-minor:not([open]) > summary .wn-open { display: none; }
+.wn-minor .wn-list { margin-top: 10px; }
 html { scroll-behavior: auto; }
 .topbar + .page { padding-top: 16px; }
 
