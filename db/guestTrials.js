@@ -28,7 +28,7 @@ async function trialKeysFor(playerIds) {
   // only UUIDs can be player ids: bot seats have other ids and are never guests
   const ids = [...new Set(playerIds.filter((id) => typeof id === 'string' && UUID.test(id)))];
   if (!ids.length) return new Map();
-  const r = await db.query('SELECT id, guest_trial_key FROM players WHERE id = ANY($1::uuid[]) AND guest_trial_key IS NOT NULL', [ids]);
+  const r = await db.query('SELECT id, guest_trial_key FROM players WHERE id = ANY($1::uuid[]) AND is_anonymous = TRUE AND guest_trial_key IS NOT NULL', [ids]);
   return new Map(r.rows.map((row) => [row.id, row.guest_trial_key]));
 }
 
