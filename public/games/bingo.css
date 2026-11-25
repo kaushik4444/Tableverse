@@ -20,6 +20,11 @@
 .bg .bg-mini { display: grid; grid-template-columns: repeat(5, 8px); gap: 2px; justify-content: center; margin: 4px auto 0; }
 .bg .bg-mini i { display: block; width: 8px; height: 8px; border-radius: 2px; border: 1px solid rgba(255, 255, 255, .28); background: transparent; }
 .bg .bg-mini i.on { background: #050a08; border-color: #050a08; }
+.bg .bg-mini i.free { display: grid; place-items: center; }
+.bg .bg-mini i.free::after { content: ''; width: 40%; height: 40%; border-radius: 50%; background: var(--gold, #fbbf24); }
+.bg .bg-mini i.near { border: 1px dashed var(--gold, #fbbf24); }
+.bg .bg-mini i.full { background: #050a08; border: 1px solid var(--gold, #fbbf24); box-shadow: 0 0 5px rgba(251, 191, 36, .75); }
+.bg .bg-mini.has-line i.on:not(.full) { opacity: .55; }
 .bg .bg-ask { display: grid; gap: 10px; margin-top: 8px; }
 .bg .bg-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .bg .bg-head, .bg .bg-card { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; width: min(100%, 340px); margin: 0 auto; }

@@ -142,6 +142,18 @@ const awaiting = () => [];
 const autoAction = (g) => (g.phase === 'playing' ? { type: 'call' } : null);
 const autoDelayMs = (g) => SPEEDS[g.options.speed];
 
+/** Positions only: `full` = squares in a completed line, `near` = the open square of each line with four marked. */
+function lineState(squares) {
+  const full = new Set();
+  const near = new Set();
+  for (const line of LINES) {
+    const open = line.filter((k) => !squares[k]);
+    if (open.length === 0) line.forEach((k) => full.add(k));
+    else if (open.length === 1) near.add(open[0]);
+  }
+  return { full: [...full].sort((a, b) => a - b), near: [...near].filter((k) => !full.has(k)).sort((a, b) => a - b) };
+}
+
 function viewFor(g, playerId) {
   const me = g.players.findIndex((p) => p.id === playerId);
   const over = g.phase === 'gameOver';
@@ -153,10 +165,10 @@ function viewFor(g, playerId) {
     options: { ...g.options },
     myTurn: false, // nobody takes turns
     // every player's progress is public: which squares are marked (a 5x5 matrix of booleans, free square included), never the numbers
-    players: g.players.map((p, i) => ({
-      id: p.id, name: p.name, bot: p.bot, marked: g.marks[i].size,
-      squares: g.cards[i].map((_, k) => isMarked(g, i, k)),
-    })),
+    players: g.players.map((p, i) => {
+      const squares = g.cards[i].map((_, k) => isMarked(g, i, k));
+      return { id: p.id, name: p.name, bot: p.bot, marked: g.marks[i].size, squares, ...lineState(squares) };
+    }),
     // your own card only: other people's numbers are not shown
     card: me >= 0 ? g.cards[me].map((n, k) => ({ n, free: k === FREE, marked: isMarked(g, me, k) })) : [],
     called: g.called.slice(),

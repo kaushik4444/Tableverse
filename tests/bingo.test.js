@@ -194,10 +194,23 @@ test('another player\'s matrix shows positions only, never their numbers', () =>
     assert.equal(p.squares.length, 25);
     assert.ok(p.squares.every((x) => typeof x === 'boolean'), 'squares are booleans');
   }
-  const allowed = new Set(['id', 'name', 'bot', 'marked', 'squares']);
+  const allowed = new Set(['id', 'name', 'bot', 'marked', 'squares', 'full', 'near']);
   for (const p of v.players) for (const k of Object.keys(p)) assert.ok(allowed.has(k), 'unexpected field ' + k + ' in another player\'s view');
   // the matrix also lights the free centre square, which the mark count does not include
   assert.equal(v.players[1].squares.filter(Boolean).length, v.players[1].marked + 1);
+});
+
+test('the matrix shows completed lines and lines one square from done (positions only)', () => {
+  const g = E.createGame(people(2), {}, mulberry32(33));
+  rigCard(g, 0, Array.from({ length: 25 }, (_, k) => k + 1));
+  g.marks[0] = new Set([1, 2, 3, 4]); // the card holds 1..25 in order, so row 0 is 1..5
+  const v = E.viewFor(g, 'p0').players[0];
+  assert.deepEqual(v.full, []);
+  assert.deepEqual(v.near, [4]);
+  g.marks[0].add(5);
+  const w = E.viewFor(g, 'p0').players[0];
+  assert.deepEqual(w.full, [0, 1, 2, 3, 4]);
+  assert.deepEqual(w.near, []);
 });
 
 console.log(`\n${passed} bingo tests passed`);

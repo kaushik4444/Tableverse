@@ -67,8 +67,16 @@
 
   /** Each player's matrix: 25 squares, blank until marked, then filled. Positions only: no numbers are shown to anyone but the card's owner. */
   function miniHTML(p) {
-    const cells = p.squares.map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('');
-    return `<div class="bg-mini" aria-label="${p.marked} squares marked">${cells}</div>`;
+    // positions only: marked squares go black, the free centre gets a gold dot, squares of a finished line glow gold,
+    // and the open square of a line with four marks is outlined dashed (so others feel the tension without any number)
+    const full = new Set(p.full || []);
+    const near = new Set(p.near || []);
+    const cells = p.squares.map((on, k) => {
+      const cls = [on ? 'on' : '', k === 12 ? 'free' : '', full.has(k) ? 'full' : '', near.has(k) ? 'near' : ''].filter(Boolean).join(' ');
+      return `<i class="${cls}"></i>`;
+    }).join('');
+    const label = full.size ? `${p.marked} squares marked, a line is complete` : `${p.marked} squares marked`;
+    return `<div class="bg-mini${full.size ? ' has-line' : ''}" aria-label="${label}">${cells}</div>`;
   }
 
   function seatsHTML(v, ctx) {
