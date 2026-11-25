@@ -43,12 +43,16 @@ const measure = (page) => page.evaluate(() => {
     try {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.goto(url + '/');
-      await page.waitForSelector('#app > .wz', { timeout: 8000 });
+      // the real game must render: a fallback page (".page") is not a game and must not pass as one
+      await page.waitForSelector('#app .wz', { timeout: 8000 });
+      const rendered = await page.evaluate(() => { const r = document.querySelector('#app .wz'); return !!r && r.getBoundingClientRect().height > 0; });
+      assert.equal(rendered, true, `${gameId} did not render its table`);
       await page.waitForTimeout(400);
       const before = await measure(page);
       assert.ok(before.length > 0, 'the table must have measurable boxes before Ready appears');
       await page.evaluate((m) => window.__push(m), gated[1]);
-      await page.waitForSelector('.ready-box', { timeout: 5000 });
+      // the Ready control must appear once the gate opens; without it there is nothing to compare
+      await page.waitForSelector('.ready-box [data-act="readyUp"]', { timeout: 5000 });
       await page.waitForTimeout(400);
       const after = await measure(page);
       const moved = [];

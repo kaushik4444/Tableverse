@@ -3357,15 +3357,15 @@
     const gate = gateInfo();
     $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels keep their place and stop taking input
     $app.classList.toggle('gate-locked', !!(gate && gate.seated && !gate.youReady)); // this seat must press Ready before anything else
-    // The Ready strip is fixed to the viewport, so the table never changes size when it comes or goes.
-    // Use the app root as a fallback for a shared gate on a game without a .wz wrapper.
-    const root = $app.querySelector('.wz') || (gate ? $app : null);
+    // A game keeps a fixed slot under the hand, always the same height: the Ready bar goes into it while the table waits, so the
+    // table above never changes size when the bar comes or goes. The bar is rebuilt on each call, so its list never goes stale.
+    const root = $app.querySelector('.wz');
     if (root && !$app.querySelector('.ready-slot')) root.insertAdjacentHTML('beforeend', '<div class="ready-slot" aria-live="polite"></div>');
     const slot = $app.querySelector('.ready-slot');
     if (!slot) return;
     slot.innerHTML = '';
     if (!gate || room.status !== 'playing') return;
-    if ($app.querySelector('[data-ready-here]')) return; // keep a game's own Ready box, such as a round summary
+    if ($app.querySelector('[data-ready-here]')) return; // a game with its own Ready box (a round summary, Take 5's bar) shows that one
     slot.innerHTML = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
   }
 
