@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Ready button: while a seat has not pressed Ready, its button is orange (was amber) and the blink glow is orange too.
 - How-to cards: the box keeps one size for every card of a game (it used to change height from card to card). Long text scrolls inside it, and moving between cards no longer replays the box's entrance animation.
 - Round end: the score card and Ready box no longer flicker on each Ready tap (the overlay's fade no longer replays on every redraw); once everybody is ready the box says the next round is starting.
 - Lobby code card: Copy invite link, WhatsApp and Share sit above the visibility line for public and private tables. The host's Make private / Make public button swaps its label, and a private table also shows the friend invitation form.

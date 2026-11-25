@@ -65,12 +65,14 @@ const gateOpen = (ready) => ({ ready, waiting: ids.filter((i) => !ready.includes
     m[1].view.phase = 'roundEnd'; m[1].view.lastRound = { round: 1, penalties: [1, 2, 0, 3] };
     const { page, ctx } = await open(m);
     await page.waitForSelector('.overlay .sheet', { timeout: 5000 });
-    const anim = () => page.evaluate(() => getComputedStyle(document.querySelector('.overlay')).animationName);
-    assert.notEqual(await anim(), 'none', 'the first showing plays its entrance');
+    const anim = (selector) => page.locator(selector).evaluate((el) => getComputedStyle(el).animationName);
+    assert.equal(await anim('.overlay'), 'none', 'the backdrop does not fade in');
+    assert.equal(await anim('.overlay .sheet'), 'rise', 'the score sheet plays its entrance on first showing');
     const again = tableMessages('penaltyrows', four, { roomExtra: { status: 'playing', gate: gateOpen(['me']) } });
     again[1].view.phase = 'roundEnd'; again[1].view.lastRound = { round: 1, penalties: [1, 2, 0, 3] };
     await page.evaluate((msg) => window.__push(msg), again[1]);
-    assert.equal(await anim(), 'none', 'a redraw does not play the entrance again');
+    assert.equal(await anim('.overlay'), 'none', 'the backdrop does not fade on a Ready redraw');
+    assert.equal(await anim('.overlay .sheet'), 'none', 'a Ready redraw does not replay the sheet entrance');
     await ctx.close();
   });
 
