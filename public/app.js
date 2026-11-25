@@ -1783,6 +1783,13 @@
     if ([...now].some((id) => !was.has(id))) snd.play('join');
     else if ([...was].some((id) => !now.has(id))) snd.play('leave');
   }
+  // a soft tap on the app's own buttons (menus, tabs, dialogs, the table's controls); the game board has its own sounds
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('button, .menu-item') : null;
+    if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true' || b.closest('[data-no-tap]')) return;
+    if (b.matches('[data-act="sound"], [data-modal-act="toggleSound"]')) return; // these already play their own sound
+    if (CardTable.sound) CardTable.sound.play('tap');
+  }, true);
   function soundsFor(a, b) {
     const snd = CardTable.sound;
     if (!b || !snd) return;
@@ -2808,10 +2815,12 @@
   }
 
   function openSettingsDialog() {
-    const body = () => `<div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
+    const body = () => `<div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts, taps and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
+      <div class="setting-row"><div><b>Volume</b><small>How loud the sound effects are. Saved on this device.</small></div><input type="range" min="0" max="100" step="5" value="${CardTable.sound.volume()}" data-volume aria-label="Sound effects volume" style="width:150px"></div>
       <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} saved on your account.` : 'Nothing saved yet.'}</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>
       <div class="setting-row"><div><b>Account</b><small>Profile, history and account deletion are on your profile page.</small></div><button type="button" class="btn ghost small" data-modal-act="openProfileFromSettings">Open</button></div>`;
     openModal('Settings', body(), (o) => {
+      o.addEventListener('input', (e) => { if (e.target.matches && e.target.matches('[data-volume]')) CardTable.sound.setVolume(e.target.value); });
       const redraw = () => { o.querySelector('.modal-body').innerHTML = body(); };
       modalActions.toggleSound = () => { CardTable.sound.toggle(); redraw(); };
       modalActions.clearRecent = async () => {
