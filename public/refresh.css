@@ -184,23 +184,37 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 .pseat.turn .av { animation-duration: 1.6s; }
 @media (prefers-reduced-motion: reduce) { .overlay, .sheet { animation: none !important; } }
 
-/* ---------- a fanned hand of cards in the home hero (wide screens only; it is decoration) */
+/* ---------- two dice in the home hero (wide screens only; decoration). They are the Snakes and Ladders dice: they tumble in on load and again on hover. */
 .home-hero { position: relative; }
-.hero-fan { display: none; }
+.hero-dice { display: none; }
 @media (min-width: 980px) {
-  .hero-fan { display: block; position: absolute; left: 53%; top: 2px; width: 180px; height: 112px; pointer-events: auto; transform: translateX(-50%); }
-  .hero-fan .hc {
-    position: absolute; left: 50%; bottom: 0; width: 62px; height: 88px; margin-left: -31px; border-radius: 8px; background: #f7f1e1; color: #1d2a22;
-    font-style: normal; font-size: 24px; line-height: 1; padding: 6px 0 0 8px; box-shadow: 0 10px 18px -6px rgba(0, 0, 0, .7), inset 0 0 0 1px rgba(0, 0, 0, .08);
-    transform-origin: 50% 160%; transition: transform .45s var(--ease);
+  .hero-dice { display: block; position: absolute; left: 53%; top: 2px; width: 180px; height: 112px; transform: translateX(-50%); }
+  .hero-dice .hd {
+    position: absolute; top: 14px; width: 70px; height: 70px; box-sizing: border-box; padding: 9px; border-radius: 16px;
+    display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); gap: 4px;
+    background: #fffdf6; border: 2px solid #d9d2bd; box-shadow: 0 12px 20px -8px rgba(0, 0, 0, .7);
+    transform: rotate(var(--r)); animation: hd-tumble .8s ease-out both;
   }
-  .hero-fan .hc b { display: block; font-size: 18px; font-family: var(--serif); }
-  .hero-fan .hc.red { color: #b3342b; }
-  .hero-fan .c1 { transform: rotate(-21deg); } .hero-fan .c2 { transform: rotate(-7deg); } .hero-fan .c3 { transform: rotate(7deg); } .hero-fan .c4 { transform: rotate(21deg); }
-  .hero-fan:hover .c1 { transform: rotate(-30deg) translateY(-4px); } .hero-fan:hover .c2 { transform: rotate(-10deg) translateY(-8px); }
-  .hero-fan:hover .c3 { transform: rotate(10deg) translateY(-8px); } .hero-fan:hover .c4 { transform: rotate(30deg) translateY(-4px); }
+  .hero-dice .d1 { left: 14px; }
+  .hero-dice .d2 { left: 96px; top: 2px; }
+  .hero-dice .hd i { width: 100%; height: 100%; border-radius: 50%; background: #2a2a2a; }
+  .hero-dice:hover .hd { animation-name: hd-reroll; }
 }
-@media (prefers-reduced-motion: reduce) { .hero-fan .hc { transition: none !important; } }
+@keyframes hd-tumble { 0% { transform: rotate(calc(var(--r) - 200deg)) scale(.7); } 70% { transform: rotate(calc(var(--r) + 12deg)) scale(1.06); } 100% { transform: rotate(var(--r)); } }
+@keyframes hd-reroll { 0% { transform: rotate(var(--r)); } 70% { transform: rotate(calc(var(--r) + 180deg)) scale(1.06); } 100% { transform: rotate(calc(var(--r) + 360deg)); } }
+
+/* ---------- the spinning die shown while a game's script loads */
+.load-die { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.hd-mini {
+  width: 46px; height: 46px; box-sizing: border-box; padding: 7px; border-radius: 11px;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); gap: 3px;
+  background: #fffdf6; border: 2px solid #d9d2bd; animation: hd-spin 1.2s linear infinite;
+}
+.hd-mini i { width: 100%; height: 100%; border-radius: 50%; background: #2a2a2a; }
+@keyframes hd-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .hero-dice .hd, .hd-mini { animation: none; }
+}
 
 /* the sticky Start bar fades into the felt, not into the old indigo */
 .start-bar { background: linear-gradient(to top, #0a1a11 60%, rgba(10, 26, 17, 0)); }
