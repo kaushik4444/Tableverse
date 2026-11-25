@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- New game: Bingo (2–8 players). Each player has a 5×5 card; numbers are called one at a time and the first valid Bingo wins. Options: any line or the full card, pace, and Mark for me. Bots mark and call Bingo on their own. A table's seat list now marks bots (`bot: true`) so a game can tell them from people; other games ignore the flag.
 - Faster first load: each game's script and stylesheet load when its table opens, not on every page. The home page downloads about 519 KB instead of 930 KB, and main-thread blocking at startup is about 40% lower (measured on a throttled phone profile).
 - Older iPhones: full-height screens and the table sheets use plain vh values before their dvh values, and the dvh values for custom properties sit behind a feature query, so they still size correctly on iOS before 15.4.
 - Wizard on short phones: the trump corner is hidden on 4-player tables (it covered a seat at 320x568); the trump shows in the header there instead.

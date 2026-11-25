@@ -40,6 +40,10 @@ Color Clash is Tableverse's own colour-and-number shedding game. Its cards, colo
 
 Hidden Miners is Tableverse's own hidden-role tunnel game. The rules, card set (tunnel pieces, Lamp / Pick / Cart breaks and repairs, Scout, Collapse), scoring, grid and artwork are written for Tableverse, and the player-facing role names are Digger and Saboteur as plain words. The name avoids the titles of existing commercial games, and the "Saboteur" game title stays on the never-use list as a *title*. The in-app rules end with the non-affiliation line. Re-check before any marketing use.
 
+## Bingo
+
+Bingo is Tableverse's own number-calling card game. "Bingo" is a generic word for the game, so the name is kept as is. The 5×5 card layout (B–I–N–G–O columns, free middle square), call order, win patterns and rules text are written for Tableverse, and the card art is drawn in code. Do not use hall, brand or licensed-game names, or any publisher's card or call sheets.
+
 ## Never use
 
 Phase 10, Saboteur (as a game title), 6 nimmt!, Category 5, The Mind (as a title), Connect Four, Chutes and Ladders, Monopoly, Uno, Parcheesi, Scrabble, Catan, Cluedo,
