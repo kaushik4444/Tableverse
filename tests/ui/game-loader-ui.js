@@ -55,15 +55,13 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     let release;
     const gate = new Promise((resolve) => { release = resolve; });
     await page.route('**/games/chess.js', async (route) => { await gate; await route.continue(); });
-    await page.goto(url + '/');
+    await page.goto(url + '/', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => /Loading the game/.test(document.body.innerText), null, { timeout: 8000 });
     await page.evaluate((m) => window.__push(m), lobbyState());
     await page.waitForFunction(() => !/Loading the game/.test(document.body.innerText), null, { timeout: 8000 });
-    const scriptDone = page.waitForResponse((r) => /\/games\/chess\.js$/.test(r.url()), { timeout: 8000 });
     release();
-    await scriptDone;
-    // the load's callbacks run after the script response; give them a turn before checking the screen
-    await page.waitForTimeout(400);
+    // the in-flight load promise is the one renderGame's callbacks are attached to, so once this await resolves they have run
+    await page.evaluate(() => window.TvGames.ensure('chess'));
     assert.doesNotMatch(await page.evaluate(() => document.body.innerText), UNAVAILABLE, 'the lobby was replaced by the unavailable message');
     await ctx.close();
   });
@@ -73,7 +71,7 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     let release;
     const gate = new Promise((resolve) => { release = resolve; });
     await page.route('**/games/chess.js', async (route) => { await gate; await route.continue(); });
-    await page.goto(url + '/');
+    await page.goto(url + '/', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => /Loading the game/.test(document.body.innerText), null, { timeout: 8000 });
     release();
     await page.waitForSelector('.ch-board, .ch-square, [data-ch-sq]', { timeout: 8000 });
