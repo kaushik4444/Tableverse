@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
-- Older iPhones and browsers: colour mixes (color-mix) and dynamic viewport heights (dvh) now have plain fallbacks before them, so borders, tints and full-height screens still work on iOS before 16.2 and 15.4.
+- Older iPhones: full-height screens and the table sheets use plain vh values before their dvh values, and the dvh values for custom properties sit behind a feature query, so they still size correctly on iOS before 15.4.
 - Wizard on short phones: the trump corner is hidden on 4-player tables (it covered a seat at 320x568); the trump shows in the header there instead.
 - Wizard on short phones: the trump suit caption stays visible (on one line) when a Wizard is turned up; it was hidden on 4-player tables under 700px high, so the suit name did not show.
 
