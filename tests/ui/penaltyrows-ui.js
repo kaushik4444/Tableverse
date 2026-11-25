@@ -81,6 +81,16 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a played card keeps its name on a short phone (393x700, Safari with its bars): the name is not hidden', async () => {
+    // Safari leaves an iPhone 15 (393x852) under 700px tall, so the short-phone rule applies there; the names must still show
+    const msgs = tableMessages('penaltyrows', four);
+    const v = msgs[1].view; v.myPick = v.hand[2].n; v.players[0].picked = true;
+    const { page, ctx } = await open(msgs, { width: 393, height: 700 });
+    const shown = await page.$eval('.pr-played.mine small', (el) => getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0);
+    assert.equal(shown, true, 'the name under the picked card is visible');
+    await ctx.close();
+  });
+
   await test('your card fits no row: the rows become buttons and tapping one takes it', async () => {
     const msgs = tableMessages('penaltyrows', four);
     const v = msgs[1].view; v.phase = 'takeRow'; v.pending = { by: 0, n: 3, p: 1 }; v.myTurn = true;
