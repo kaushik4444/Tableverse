@@ -183,4 +183,21 @@ test('plugin: definition, options and the server interface', () => {
   assert.equal(res.length, 2);
 });
 
+test('another player\'s matrix shows positions only, never their numbers', () => {
+  const g = E.createGame(people(3), {}, mulberry32(21));
+  E.applyAction(g, null, { type: 'call' });
+  const n = g.called[0];
+  const i = g.cards[1].indexOf(n);
+  if (i >= 0) must(g, 'p1', { type: 'mark', n });
+  const v = E.viewFor(g, 'p0');
+  for (const p of v.players) {
+    assert.equal(p.squares.length, 25);
+    assert.ok(p.squares.every((x) => typeof x === 'boolean'), 'squares are booleans');
+  }
+  const allowed = new Set(['id', 'name', 'bot', 'marked', 'squares']);
+  for (const p of v.players) for (const k of Object.keys(p)) assert.ok(allowed.has(k), 'unexpected field ' + k + ' in another player\'s view');
+  // the matrix also lights the free centre square, which the mark count does not include
+  assert.equal(v.players[1].squares.filter(Boolean).length, v.players[1].marked + 1);
+});
+
 console.log(`\n${passed} bingo tests passed`);
