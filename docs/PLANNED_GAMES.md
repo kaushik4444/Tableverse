@@ -17,4 +17,4 @@ Ideas only. Nothing here is committed to a release. Each needs a design note and
 Physics-based games (Carrom, Ball Pong, Pool, Bowling) share needs: an authoritative, deterministic simulation, touch aiming,
 and tolerance for latency on the single-instance server. A shared physics decision should be taken once, not per game.
 
-Built recently: Take 5 and Stage 10 (both on `development`). No game in this list is in progress.
+Built recently: Take 5, Stage 10, Chess, Hidden Miners and Color Clash are open to players, and Carrom is in admin testing. No game in this list is in progress.

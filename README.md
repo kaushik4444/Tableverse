@@ -8,7 +8,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 
 ## Current games
 
-All twelve games are open to every player in this release.
+Fifteen games are open to every player. Carrom is in admin testing and is not open to players yet.
 
 - **Wizard** (3–6): plus/minus one, hidden/secret prediction, foresight, short game.
 - **29** (4): team-based trick play with secret trump and 3/6/9 match length options.
@@ -21,6 +21,7 @@ All twelve games are open to every player in this release.
 - **Property Rivals** (2–6): an original world-tour board game: buy cities, ports and utilities, collect rent, build houses and hotels, trade, auction and bankrupt your rivals. Tap a city in your holdings for its card: mortgage value, rent now and the full rent table, and house and hotel costs. Options: game length, starting cash, auctions, Rest Stop jackpot.
 - **Tic-Tac-Toe** (2): a 3×3 line game. Line up three to win; a full board with no line is a draw.
 - **Four in a Row** (2): drop discs into a 7×6 grid and connect four. Choose *Line length* five for a bigger 9×8 grid (Five in a Row). Choose who starts; a bot fills the second seat.
+- **Chess** (2): the full game with castling, en passant and promotion, and draws by stalemate, fifty moves, threefold repetition or insufficient material.
 - **Hidden Miners** (3–8): secretly a Digger or a Saboteur, build a tunnel toward the gold, break and repair tools, scout chambers and collapse pieces. Scored over 1, 3 or 5 rounds.
 - **Color Clash** (2–8): match the colour or number, use Stop, Flip, Take 2 and Wild cards, and be first to empty your hand. Round points add up to a target.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
@@ -29,7 +30,7 @@ Bots can fill open seats so tables can start quickly.
 
 ## Accounts and verification
 
-Tableverse is open to players, with all twelve games available in this release.
+Tableverse is open to players, with all fifteen games available.
 
 - Playing needs an account, or a guest visit when guest play is switched on (`GUEST_PLAY_ENABLED=true`; see `docs/GUEST_PLAY.md`).
 - A registered account must verify its email before it can join a table. There is no switch for this.
@@ -55,20 +56,21 @@ Tableverse is open to players, with all twelve games available in this release.
 - **Blocking**: a block hides the other player's table chat and voice, and stops invitations between you. A block never removes anyone from a table, so you can still share one.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
-## What's new — unreleased (on `development`, not yet on `main`)
+## Released 2026-11-25 (on `main`)
+
+Players see these notes in the app under **What's new** and **Version history**, grouped by date with major updates first and minor updates folded under "Show minor updates". The data is `public/whats-new-data.js`.
 
 - **Appearance.** Account tab → Appearance: Dark (the default), Light, or Follow system. The choice is kept on this device. Light changes the app's screens and the password-reset and email-verification pages; game tables keep their look, and the admin console and the impressum draft stay as they are.
-- **How-to pictures.** Each game's how-to card shows its own picture (Carrom keeps its board).
+- **How-to pictures.** Each game's how-to card shows its own picture.
 - **Friends and profile.** Actions keep your scroll position, and an unchanged page is not redrawn. Friends show a presence dot; a profile no longer shows the old raw "Highest score".
 - **Game over.** The result card appears sooner and updates in place. If the connection was down when the game ended, the ratings are asked for again once it is back, and the card says so if they stay unavailable.
 - **No loading that never ends.** A home page with no games open, or a game list that failed to load, says so. A profile opened right after another shows the right person even if the first answer arrives late.
 
-- **Chess** (2), in review on `feat/chess-carrom`: the full game with castling, en passant and promotion, draws by stalemate, fifty moves, threefold repetition or insufficient material, and resignation. Tap a piece to see its moves, then tap a square. The board turns for Black, and it fits a phone screen. A bot can fill the second seat.
-- **Carrom** (2–4 players, in teams of partners when there are four), in review on `feat/carrom`: pocket your team's nine coins with the queen before the other team. Drag on the board, back from the striker, to flick; place the striker with the slider. Shots play back on the board. Pocketing the striker is a foul.
+- **Carrom** is in admin testing (2–4 players, in teams of partners when there are four). It is not open to players yet.
 - **Guest play controls.** Guests can read and send table chat and play open games. Private tables, rejoining after leaving on purpose, player profiles and stats, blocking and reports are locked for guests until the owner or an admin opens them in the admin console (**Guests** tab). A locked control shows a lock and opens the account reminder. Friend requests stay account-only. Connecting after a dropped connection always works.
 - **Owner redeploy.** The owner can ask Render to redeploy the app from the admin console's Logs tab, after typing `REDEPLOY`. It needs `RENDER_API_KEY` with deploy rights and `RENDER_SERVICE_ID`, and has a five-minute cooldown.
 - **Guest play (off by default).** With `GUEST_PLAY_ENABLED=true` a visitor can play without registering. A guest is a temporary account that lasts `GUEST_SESSION_TTL_HOURS` (default 72) and can later become a full account in place, keeping its games. The owner chooses per game who may play (enabled, disabled for non-admins, disabled for guests only, or disabled for all). See [docs/GUEST_PLAY.md](docs/GUEST_PLAY.md).
-- **Level-up notice and next-level minutes** on the profile, and the **Instagram footer link**, are described in What's new (version `2026-11-15-level-and-follow`).
+- **Level-up notice and next-level minutes** on the profile, and the **Instagram footer link**, are described in What's new (date `2026-11-15`).
 - **Accounts.** Sign in with Google (off until the owner sets `GOOGLE_CLIENT_ID`). Google-only accounts can delete themselves with a fresh Google sign-in. "Keep me signed in" is on the Google button and in the sign-up step; use it only on a device you own.
 - **Owner clean-up.** The owner can permanently delete a stale ordinary account from the Users tab (type the username to confirm). A filter shows accounts not seen for 30 to 180 days.
 - **Leaving a game.** Each leave counts: a first or second leave can be undone by taking your seat back in time, while the third leave in a game is final. Leaving a game that other people are still playing asks first. A bot takes the seat, and the others keep playing. If the game then finishes, the leaver's result is a loss. If a second player also leaves, the game is abandoned: no first or second leave is penalised, and the people who stayed get no result for it (not played, a draw or a loss). A third leave is still a final penalty, even when it is the one that abandons the game. Leaving a game played only against bots does not count. A game closed before it finished still records the losses of the people who left, unless it was abandoned. This applies to every game. You can take your own seat back within two minutes of your first departure (`REJOIN_GRACE_SECONDS`, default 120): the penalty for a first or second leave then goes. A third leave's penalty stays, even if you rejoin. After that the bot keeps the seat and you can only watch. A lost connection is different: it does not start that window. See `docs/LEAVING_AND_REJOINING.md`.
@@ -80,7 +82,7 @@ Tableverse is open to players, with all twelve games available in this release.
 - **⋯ menu.** The same labels in the same order in every game.
 - **Progress and levels.** Your profile (and other players' profiles) shows one overall level from time played (1 XP per full minute of active play), skill ratings per game (tap a game for its details and its rankings, all time or this month) and the number of penalised early leaves (a leave that was not penalised is not counted); the admin overview counts penalised leaves. Time counts only while you are seated and connected: a leaver earns for the time up to leaving, a dropped connection pauses the time and a reconnect resumes it, and spectators earn nothing. The overall level also shows beside your avatar on the home page. Game XP per game: win +20, loss -10, draw 0, placing games +20 for first and -10 for last, and -30 for leaving while others play. The game-over screen is one table: each person's skill-rating change in that game, and their rating in that game this month and all time (no progress cards, no Game XP). Rules: `docs/PROGRESS_LEVELS.md`. One additive migration (`025_match_progress.sql`) stores `place` and `seconds_played`; past games are backfilled for the people who stayed.
 - **Ludo, six players.** The outer yard of the seat to play blinks, not the inner home.
-- **Version history.** What's new on the home page shows the newest release's three highlights. The account menu's **Version history** lists every release, newest first. The release notes are in `public/whats-new-data.js`; add a release there when a change ships.
+- **Version history.** What's new on the home page shows the newest date's major updates (up to three). The account menu's **Version history** lists every date, newest first, with its major updates and a "Show minor updates" disclosure. Release notes are written for players and are in `public/whats-new-data.js`; add a new date at the top when a change ships.
 
 ## Released 2026-11-14 (release PR #165): blocking and reports, the ⋯ menu, 29 rules, seat shuffle
 
