@@ -79,6 +79,42 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await ctx.close();
   });
 
+  for (const outcome of ['resolve', 'reject']) {
+    await test(`a ${outcome === 'resolve' ? 'resolved' : 'rejected'} load for an old table does not redraw a newer table of the same game`, async () => {
+      const [hello, tableA] = tableMessages('chess', [{ name: 'Aarav' }, { name: 'Bo' }]);
+      const tableB = { ...tableA, room: { ...tableA.room, code: 'GHIJKL' } };
+      const { page, ctx } = await scriptedPage(browser);
+      await page.goto(url + '/');
+      await page.waitForFunction(() => window.__sent.some((m) => m.t === 'hello'), null, { timeout: 8000 });
+      await page.evaluate(() => {
+        window.__originalEnsure = window.TvGames.ensure;
+        window.__loads = [];
+        window.TvGames.ensure = () => new Promise((resolve, reject) => window.__loads.push({ resolve, reject }));
+      });
+      // Keep the switch, settlement and observation in one browser task, before unrelated timers can redraw the table.
+      const observed = await page.evaluate(async ({ welcome, first, second, result }) => {
+        window.__push(welcome);
+        window.__push(first);
+        const oldLoadCount = window.__loads.length;
+        window.__push(second);
+        const loadCount = window.__loads.length;
+        window.__loads.slice(0, oldLoadCount).forEach((load) => load[result](new Error('old table load failed')));
+        await Promise.resolve();
+        return { oldLoadCount, loadCount, after: window.__loads.length, text: document.body.innerText };
+      }, { welcome: hello, first: tableA, second: tableB, result: outcome });
+      assert.ok(observed.oldLoadCount > 0 && observed.loadCount > observed.oldLoadCount, 'both tables must start loading');
+      assert.equal(observed.after, observed.loadCount, 'the old table triggered another load');
+      assert.match(observed.text, /Loading the game/, 'the newer table was replaced');
+      await page.evaluate(async (count) => {
+        window.TvGames.ensure = window.__originalEnsure;
+        await window.TvGames.ensure('chess');
+        window.__loads.slice(count).forEach((load) => load.resolve());
+      }, observed.oldLoadCount);
+      await page.waitForSelector('.ch-board, .ch-square, [data-ch-sq]', { timeout: 8000 });
+      await ctx.close();
+    });
+  }
+
   await browser.close(); server.close();
   console.log(failed ? `${failed} failed` : 'game loader UI: all passed');
   process.exit(failed ? 1 : 0);

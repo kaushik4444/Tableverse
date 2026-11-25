@@ -3406,8 +3406,9 @@
     // games load the first time their table opens (public/game-loader.js); draw the table again once the script is in
     if (window.TvGames && window.TvGames.knows(gameId) && !window.TvGames.isLoaded(gameId)) {
       paintApp('<div class="page load-die"><div class="hd-mini" aria-hidden="true"><i style="grid-area:1/1"></i><i style="grid-area:2/2"></i><i style="grid-area:3/3"></i></div><p class="hint">Loading the game…</p></div>');
-      // a callback only draws if this table is still on screen with its view; a lobby or a newer table has no view to draw
-      const stillHere = () => S.room && S.room.gameId === gameId && S.view;
+      // a callback only draws if this table is still on screen with its view
+      const tableCode = S.room.code;
+      const stillHere = () => S.room && S.room.code === tableCode && S.room.gameId === gameId && S.view;
       window.TvGames.ensure(gameId).then(
         () => { if (stillHere()) renderGame(); },
         () => { if (stillHere()) paintApp(unavailable); },
