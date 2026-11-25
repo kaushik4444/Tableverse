@@ -46,7 +46,7 @@ Do **not** include your password, your e-mail address, a verification or reset l
 
 Report it privately, to the support address above. Do not post it in chat, in a public issue or in a feedback message, and do not test it on other people's accounts.
 
-- **Suspected compromise of your account:** change your password, then use **Log out everywhere** in the account menu (or **Sessions** in Settings) to sign out of every device. Then write to the support address.
+- **Suspected compromise of your account:** change your password, then use **Log out everywhere** in the account menu (or **Sessions** on your profile's Account tab) to sign out of every device. Then write to the support address.
 - **Someone's personal information visible in the app:** report the message with the chat report button, and write to the support address.
 - **A possible vulnerability:** write to the support address with what you found and how to reproduce it, without accessing data that is not yours.
 
