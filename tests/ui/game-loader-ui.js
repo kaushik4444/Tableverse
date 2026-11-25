@@ -43,6 +43,44 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await ctx.close();
   });
 
+  // a lobby of the same game has no view, so a table's screen cannot be drawn from it
+  const lobbyState = () => ({ t: 'state', view: null, room: {
+    code: 'ABCDEF', gameId: 'chess', hostId: 'me', status: 'lobby', options: {}, visibility: 'public', seats: 1, min: 2, max: 2,
+    seatLabels: null, deadline: null, now: Date.now(), spectators: [],
+    members: [{ id: 'me', name: 'Aarav', bot: false, avatar: '🧙', connected: true, ping: null, username: null }] } });
+  const UNAVAILABLE = /This game is not available/;
+
+  await test('a load that finishes after the player moved to a lobby of the same game leaves the lobby alone', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMessages('chess', [{ name: 'Aarav' }, { name: 'Bo' }]), viewport: { width: 390, height: 844 } });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    await page.route('**/games/chess.js', async (route) => { await gate; await route.continue(); });
+    await page.goto(url + '/');
+    await page.waitForFunction(() => /Loading the game/.test(document.body.innerText), null, { timeout: 8000 });
+    await page.evaluate((m) => window.__push(m), lobbyState());
+    await page.waitForFunction(() => !/Loading the game/.test(document.body.innerText), null, { timeout: 8000 });
+    const scriptDone = page.waitForResponse((r) => /\/games\/chess\.js$/.test(r.url()), { timeout: 8000 });
+    release();
+    await scriptDone;
+    // the load's callbacks run after the script response; give them a turn before checking the screen
+    await page.waitForTimeout(400);
+    assert.doesNotMatch(await page.evaluate(() => document.body.innerText), UNAVAILABLE, 'the lobby was replaced by the unavailable message');
+    await ctx.close();
+  });
+
+  await test('a table still on screen is drawn once its game script has loaded', async () => {
+    const { page, ctx } = await scriptedPage(browser, { messages: tableMessages('chess', [{ name: 'Aarav' }, { name: 'Bo' }]), viewport: { width: 390, height: 844 } });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    await page.route('**/games/chess.js', async (route) => { await gate; await route.continue(); });
+    await page.goto(url + '/');
+    await page.waitForFunction(() => /Loading the game/.test(document.body.innerText), null, { timeout: 8000 });
+    release();
+    await page.waitForSelector('.ch-board, .ch-square, [data-ch-sq]', { timeout: 8000 });
+    assert.doesNotMatch(await page.evaluate(() => document.body.innerText), UNAVAILABLE);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(failed ? `${failed} failed` : 'game loader UI: all passed');
   process.exit(failed ? 1 : 0);
