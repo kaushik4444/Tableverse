@@ -1,5 +1,5 @@
 'use strict';
-// Version history: focus moves into the dialog (onto Close), Tab stays inside it, and closing returns focus to the account button.
+// Version history: focus moves into the dialog (onto Close), Tab cycles through its controls (the minor-update disclosures) and stays inside, and closing returns focus to the account button.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, sessionOk, welcome } = require('./harness');
 const games = require('../../games');
@@ -18,12 +18,18 @@ const { chromium } = loadPlaywright();
     assert.ok(await page.$('#modal-overlay .wn-release h3.wn-date'), 'each date is shown in its heading');
     assert.ok(await page.$('#modal-overlay .wn-minor > summary'), 'minor updates are behind a Show minor updates disclosure');
     const onClose = () => page.evaluate(() => document.activeElement && document.activeElement.hasAttribute('data-modal-close'));
+    const inDialog = () => page.evaluate(() => { const a = document.activeElement; return !!a && !!a.closest('#modal-overlay [role="dialog"]'); });
+    const onSummary = () => page.evaluate(() => !!document.activeElement && document.activeElement.tagName === 'SUMMARY');
     assert.ok(await onClose(), 'focus starts on Close');
     await page.keyboard.press('Tab');
-    assert.ok(await onClose(), 'Tab keeps focus on Close');
+    assert.ok(await onSummary(), 'Tab reaches a Show minor updates disclosure, so keyboard users can open minor updates');
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press('Tab');
+      assert.ok(await inDialog(), 'Tab cycles inside the dialog and never reaches the page behind');
+    }
     await page.keyboard.press('Shift+Tab');
-    assert.ok(await onClose(), 'Shift+Tab keeps focus on Close');
-    await page.keyboard.press('Enter');
+    assert.ok(await inDialog(), 'Shift+Tab stays inside the dialog');
+    await page.click('#modal-overlay [data-modal-close]');
     await page.waitForSelector('#modal-overlay', { state: 'detached', timeout: 5000 });
     assert.ok(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('tb-avatar-btn')), 'focus returns to the account button');
     console.log('  ok  Version history focus: Close, Tab trap, return focus');

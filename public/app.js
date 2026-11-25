@@ -2843,11 +2843,22 @@
   function openVersionHistoryDialog() {
     const body = RELEASES.map(releaseSectionHTML).join('');
     openModal('Version history', body || '<p class="hint">No releases yet.</p>', (o) => {
-      // the dialog's only control is its close button: focus it, and keep Tab on it, so focus never reaches the page behind
+      // focus starts on the close button; Tab and Shift+Tab move through the dialog's controls (the minor-update disclosures
+      // included) and wrap at the ends, so focus never reaches the page behind
       const close = o.querySelector('[data-modal-close]');
       if (!close) return;
       close.focus();
-      o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
+      o.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab') return;
+        const items = [...o.querySelectorAll('button:not([disabled]), summary, a[href], [tabindex]:not([tabindex="-1"])')]
+          .filter((el) => el === close || el.offsetParent !== null);
+        if (!items.length) { e.preventDefault(); close.focus(); return; }
+        const at = items.indexOf(document.activeElement);
+        const last = items.length - 1;
+        const next = e.shiftKey ? (at <= 0 ? last : at - 1) : (at === -1 || at === last ? 0 : at + 1);
+        e.preventDefault();
+        items[next].focus();
+      });
       // both entry points remove the trigger on open, so focus goes back to the account button when it closes
       modalOnClose = () => { const b = document.querySelector('.tb-avatar-btn'); if (b) b.focus(); };
     });
