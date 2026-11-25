@@ -454,7 +454,8 @@ function start(opts = {}) {
       validateRoomInvite: async (inviterId, gameId, roomCode) => {
         const room = rooms.get(roomCode);
         const player = players.get(inviterId);
-        return Boolean(room && player && room.visibility === 'private' && room.status === 'lobby' && room.gameId === gameId && player.room === roomCode
+        // public and private tables both take invitations: a public table is open to everyone anyway, so an invitation there is a direct link to it
+        return Boolean(room && player && room.status === 'lobby' && room.gameId === gameId && player.room === roomCode
           && (room.hostId === inviterId || room.members.some((m) => m.id === inviterId && !m.bot)) // any seated player can invite, not only the host
           && ((room.hosts || (room.hosts = new Set())).add(inviterId), true)); // their accepted invitations stay valid like a host's
       },

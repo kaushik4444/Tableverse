@@ -133,7 +133,9 @@
 @media (max-height: 700px) {
   .prt .pr-tabs { margin: 2px 0 2px; }
   .prt .pr-strip { min-height: 42px; padding: 3px; margin-bottom: 3px; gap: 4px; }
-  .prt .pr-played small { display: none; }
+  /* the name stays under the played card: on a short phone it is smaller, not hidden (Safari leaves a 393x852 phone under 700px tall) */
+  .prt .pr-played { font-size: 10px; }
+  .prt .pr-played small { max-width: 56px; }
   .prt .pr-table { padding: 4px; }
   .prt .pr-rows { gap: 3px; }
   .prt .pr-row { padding: 2px 5px; }

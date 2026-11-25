@@ -81,6 +81,62 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('a played card keeps its name on a short phone (393x700, Safari with its bars): the name is not hidden', async () => {
+    // Safari leaves an iPhone 15 (393x852) under 700px tall, so the short-phone rule applies there; the names must still show
+    const msgs = tableMessages('penaltyrows', four);
+    const v = msgs[1].view; v.myPick = v.hand[2].n; v.players[0].picked = true;
+    const { page, ctx } = await open(msgs, { width: 393, height: 700 });
+    const shown = await page.$eval('.pr-played.mine small', (el) => getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0);
+    assert.equal(shown, true, 'the name under the picked card is visible');
+    await ctx.close();
+  });
+
+  await test('a long name under an opponent’s face-down pick gets narrower and smaller at 700 px', async () => {
+    const name = 'Maximilian Montgomery';
+    const msgs = tableMessages('penaltyrows', [four[0], { name }, ...four.slice(2)]);
+    msgs[1].view.players[1].picked = true;
+    const { page, ctx } = await open(msgs, { width: 393, height: 701 });
+    try {
+      const label = page.locator('.pr-strip .pr-played:has(.pr-card.back) small');
+      const measure = () => label.evaluate((el) => ({
+        width: el.getBoundingClientRect().width,
+        height: el.getBoundingClientRect().height,
+        textWidth: el.scrollWidth,
+        fontSize: parseFloat(getComputedStyle(el).fontSize),
+        textOverflow: getComputedStyle(el).textOverflow,
+      }));
+      assert.equal(await label.textContent(), name);
+      const tall = await measure();
+      assert.ok(tall.width > 56, 'the roomier label still applies above the cutoff');
+      await page.setViewportSize({ width: 393, height: 700 });
+      const short = await measure();
+      assert.ok(short.height > 0 && short.width > 0, 'the opponent name still renders at the cutoff');
+      assert.ok(short.fontSize < tall.fontSize, 'the name uses smaller text');
+      assert.ok(short.width <= 56, 'the long name fits the compact width');
+      assert.ok(short.textWidth > short.width, 'the fixture is long enough to exercise truncation');
+      assert.equal(short.textOverflow, 'ellipsis');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  await test('the waiting card still shows its owner below it on a 320 × 640 phone', async () => {
+    const msgs = tableMessages('penaltyrows', four);
+    const v = msgs[1].view; v.phase = 'takeRow'; v.pending = { by: 1, n: 3, p: 1 }; v.myTurn = false;
+    const { page, ctx } = await open(msgs, { width: 320, height: 640 });
+    try {
+      const waiting = page.locator('.pr-strip .pr-played.waiting');
+      const label = waiting.locator('small');
+      assert.equal(await label.textContent(), 'Bo');
+      const nameBox = await label.boundingBox();
+      const cardBox = await waiting.locator('.pr-card').boundingBox();
+      assert.ok(nameBox && nameBox.height > 0 && nameBox.width > 0, 'the waiting card owner is visible');
+      assert.ok(cardBox && nameBox.y >= cardBox.y + cardBox.height, 'the owner appears below the card');
+    } finally {
+      await ctx.close();
+    }
+  });
+
   await test('your card fits no row: the rows become buttons and tapping one takes it', async () => {
     const msgs = tableMessages('penaltyrows', four);
     const v = msgs[1].view; v.phase = 'takeRow'; v.pending = { by: 0, n: 3, p: 1 }; v.myTurn = true;
