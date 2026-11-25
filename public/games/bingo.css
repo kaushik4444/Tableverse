@@ -1,0 +1,30 @@
+/* Bingo table: the called number, the board of called numbers, your card. Only the Bingo table uses these classes. */
+.bg { display: grid; gap: 12px; justify-items: center; padding: 8px 0 16px; width: 100%; max-width: 520px; margin: 0 auto; }
+.bg-call { text-align: center; }
+.bg-ball { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-width: 150px; padding: 8px 22px; border-radius: 999px;
+  background: var(--panel, rgba(255, 255, 255, .04)); border: 2px solid #be185d; color: var(--ink, #f0fdf4);
+  font-size: clamp(28px, 8vw, 40px); font-weight: 800; font-variant-numeric: tabular-nums; }
+.bg-l { font-size: .55em; color: #f9a8d4; letter-spacing: .08em; }
+.bg-meta { margin: 6px 0 0; font-size: 13px; opacity: .8; }
+.bg-result { text-align: center; padding: 10px 14px; border-radius: 14px; background: rgba(190, 24, 93, .14); border: 1px solid #be185d; width: 100%; box-sizing: border-box; }
+.bg-result p { margin: 0 0 8px; font-size: 16px; }
+.bg-mine { display: grid; gap: 10px; justify-items: center; width: 100%; }
+.bg-head, .bg-card { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; width: min(100%, 360px); }
+.bg-h { text-align: center; font-weight: 800; color: #f9a8d4; font-size: 14px; }
+.bg-sq { display: grid; place-items: center; aspect-ratio: 1; min-height: 44px; border-radius: 12px; font: 700 clamp(15px, 4.4vw, 21px) system-ui, sans-serif;
+  color: var(--ink, #f0fdf4); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .16); box-sizing: border-box; padding: 0; }
+button.bg-sq { cursor: pointer; }
+.bg-sq.called:not(.on) { border-color: #f472b6; background: rgba(244, 114, 182, .18); }
+.bg-sq.on { background: linear-gradient(#fb7185, #e11d48); color: #fff; border-color: transparent; }
+.bg-sq.free { background: #fde68a; color: #78350f; border-color: transparent; }
+.bg-claim { min-width: 180px; min-height: 52px; font-size: 20px; font-weight: 800; }
+.bg-board { display: grid; gap: 4px; width: 100%; }
+.bg-row { display: grid; grid-template-columns: 16px repeat(15, minmax(0, 1fr)); gap: 2px; align-items: center; }
+.bg-row > b { font-size: 11px; color: #f9a8d4; }
+.bg-n { font-size: 9px; line-height: 16px; text-align: center; border-radius: 4px; color: rgba(255, 255, 255, .42); background: rgba(255, 255, 255, .05); font-variant-numeric: tabular-nums; }
+.bg-n.on { background: #be185d; color: #fff; }
+.bg-n.last { outline: 2px solid #fde68a; outline-offset: 0; }
+.bg-players { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.bg-chip { padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, .08); font-size: 13px; }
+.bg-chip.me { background: rgba(190, 24, 93, .3); }
+
