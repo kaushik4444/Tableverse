@@ -469,10 +469,22 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 @keyframes readyBlink { 0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .7); } 50% { box-shadow: 0 0 0 9px rgba(245, 158, 11, 0); } }
 @media (prefers-reduced-motion: reduce) { .gate-locked .ready-box .btn { animation: none; outline: 3px solid var(--gold); } }
 .ready-box.in-sheet { margin: 14px 0 0; }
-.ready-wait .bidbox:not(.ready-box) { display: none; }
+/* the game's Ready bar sits at the bottom of the game and stays in view while the content scrolls */
+/* The Ready bar is a strip pinned to the bottom of the screen while the table waits. It takes no room in the layout, so the table
+   and everything above it never change size; while it shows it covers the bottom of the hand, which cannot be played until Ready. */
+.ready-slot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; }
+.ready-slot:empty { display: none; }
+.ready-slot:not(:empty) { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--menu-bg, #1b2a22); box-shadow: 0 -6px 18px rgba(0, 0, 0, .28); }
+.ready-box[data-ready-placed] { margin: 0; height: 60px; box-sizing: border-box; overflow: hidden; }
+.ready-box[data-ready-placed] > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ready-box[data-ready-placed] > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* while the table waits, the bid panel keeps its place (hidden, not removed), so the table above it never changes size */
+.ready-wait .bidbox:not(.ready-box) { visibility: hidden; pointer-events: none; }
 
 /* how-to-play cards (shared by every game) */
-.ht-sheet { text-align: center; max-width: 380px; }
+/* One fixed box for every card of a game, so it does not change size between pages; long text scrolls inside it. */
+.ht-sheet { --ht-h: min(540px, 86dvh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+.ht-sheet > .row.ht-actions { margin-top: auto; padding-top: 12px; }
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }
 .ht-art { display: grid; place-items: center; margin: 6px 0 12px; min-height: 64px; }

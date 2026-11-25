@@ -216,7 +216,8 @@ function scene(n, edit) {
     const { page, ctx } = await open(withGate([], ['me', 'p1', 'p2', 'p3']));
     assert.equal(await page.locator('.ready-bar').count(), 1, 'the bar shows while the table waits');
     assert.match(await page.textContent('.ready-bar'), /Ready to continue\? 0 of 4 ready/);
-    assert.equal(await page.locator('.wz-status').first().isHidden(), true, 'the Ready box takes the place of the status line');
+    assert.equal(await page.locator('.wz-status').first().isVisible(), true, 'the status line stays where it is');
+    assert.equal(await page.evaluate(() => { const b = document.querySelector('.ready-bar'); return b.parentElement.lastElementChild === b; }), true, 'the Ready bar is at the bottom of the game');
     await page.click('.ready-bar [data-act="readyUp"]');
     const sentReady = await page.evaluate(() => window.__sent.filter((m) => m.t === 'ready').length);
     assert.equal(sentReady, 1, 'the Ready button sends one ready message');
