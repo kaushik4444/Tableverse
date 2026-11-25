@@ -10,6 +10,7 @@ module.exports = {
   themind: ['The cards', 'No talking', 'Mistakes', 'Throwing star', 'Levels and lives', 'Winning', 'About Mind'],
   ludo: ['The board', 'Getting out', 'Moving', 'Capturing', 'Winning'],
   gofish: ['The deal', 'Asking', 'Go Fish', 'Books', 'Sitting out', 'Winning'],
+  bingo: ['The card', 'Calling', 'Marking', 'Bingo', 'Bots'],
   snakesladders: ['Rolling', 'Ladders and snakes', 'Bonus rolls', 'Finishing', 'Winning'],
   propertyrivals: ['The world tour', 'Buying and rent', 'Building', 'Cards and taxes', 'Mortgages', 'Going broke'],
   penaltyrows: ['Goal', 'Setup', 'Placing a card', 'Below every row', 'Scoring a round', 'Winning', 'Table options', 'About Take 5'],
