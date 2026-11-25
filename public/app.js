@@ -258,17 +258,26 @@
       const c = cards[i], last = i === cards.length - 1;
       const artFn = window.CardTable.howtoArt[gameId];
       const art = (c.art >= 0 && artFn && artFn(c.art, g)) || `<span class="ht-mark">${gameMark(g)}</span>`;
-      el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">
+      // The sheet stays in place between cards (only its contents change), so its size and entrance animation do not repeat per card.
+      const inner = `
         <div class="ht-kicker">How to play ${esc(g.name)} · ${i + 1} of ${cards.length}</div>
-        <h2>${esc(c.title)}</h2>
+        <h2 tabindex="-1">${esc(c.title)}</h2>
         <div class="ht-art" aria-hidden="true">${art}</div>
         ${c.html || `<p class="rule">${esc(c.text)}</p>`}
         ${last && note ? `<p class="ht-note">${esc(note)}</p>` : ''}
         <div class="ht-dots" aria-hidden="true">${cards.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
         <div class="row ht-actions">${i > 0 ? '<button class="btn ghost" type="button" data-ht="back">Back</button>' : ''}${last ? '<button class="btn" type="button" data-ht="done" data-close="1">Got it</button>' : '<button class="btn" type="button" data-ht="next">Next</button>'}${last ? '' : '<button class="btn ghost" type="button" data-ht="done" data-close="1">Skip</button>'}</div>
-      </div>`;
-      const primary = el.querySelector('[data-ht="next"], [data-ht="done"]');
-      if (primary) primary.focus();
+      `;
+      if (el.firstElementChild) el.firstElementChild.innerHTML = inner;
+      else el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">${inner}</div>`;
+      const sheet = el.firstElementChild;
+      sheet.scrollTop = 0;
+      const primary = sheet.querySelector('[data-ht="next"], [data-ht="done"]');
+      const buttonBounds = primary.getBoundingClientRect();
+      const sheetBounds = sheet.getBoundingClientRect();
+      // When the action is clipped, start keyboard focus at the card's heading.
+      const target = buttonBounds.bottom <= sheetBounds.bottom - sheet.clientTop ? primary : sheet.querySelector('h2');
+      target.focus({ preventScroll: true });
     };
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-ht]');
@@ -286,7 +295,7 @@
         const f = [...el.querySelectorAll('button')];
         if (!f.length) return;
         const first = f[0], lastB = f[f.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastB.focus(); }
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === el.querySelector('h2'))) { e.preventDefault(); lastB.focus(); }
         else if (!e.shiftKey && document.activeElement === lastB) { e.preventDefault(); first.focus(); }
         else if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
       }
@@ -3355,21 +3364,18 @@
   function placeReady() {
     const room = S.room;
     const gate = gateInfo();
-    $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
+    $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels keep their place and stop taking input
     $app.classList.toggle('gate-locked', !!(gate && gate.seated && !gate.youReady)); // this seat must press Ready before anything else
-    // the box this function adds is rebuilt on every call, so its "waiting for" list and count never go stale; a game's own box is left alone
-    $app.querySelectorAll('[data-ready-placed]').forEach((el) => el.remove());
-    if (!gate || room.status !== 'playing') {
-      // the table has stopped waiting: the Ready button goes, and the status line comes back
-      const status = $app.querySelector('.wz-status');
-      if (status) status.hidden = false;
-      return;
-    }
-    if ($app.querySelector('[data-ready-here]')) return;
-    // at the bottom of the game, under the hand; the status line above stays where it is, so nothing above the table moves
-    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
-    const root = $app.querySelector('.wz') || $app;
-    root.insertAdjacentHTML('beforeend', box);
+    // A game keeps a fixed slot under the hand, always the same height: the Ready bar goes into it while the table waits, so the
+    // table above never changes size when the bar comes or goes. The bar is rebuilt on each call, so its list never goes stale.
+    const root = $app.querySelector('.wz');
+    if (root && !$app.querySelector('.ready-slot')) root.insertAdjacentHTML('beforeend', '<div class="ready-slot" aria-live="polite"></div>');
+    const slot = $app.querySelector('.ready-slot');
+    if (!slot) return;
+    slot.innerHTML = '';
+    if (!gate || room.status !== 'playing') return;
+    if ($app.querySelector('[data-ready-here]')) return; // a game with its own Ready box (a round summary, Take 5's bar) shows that one
+    slot.innerHTML = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
   }
 
   function renderGame() {
