@@ -116,7 +116,7 @@
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
     if (!snd) return;
-    if (e.type === 'move') snd.play('place');
+    if (e.type === 'move') snd.play(e.check ? 'check' : e.capture ? 'pocket' : 'place'); // a capture is a thud, a check a short double tap
     if (v.phase === 'gameOver') {
       const sound = v.draw ? 'round' : v.winner === v.me ? 'win' : v.me < 0 ? 'round' : 'lose';
       setTimeout(() => snd.play(sound), 320);

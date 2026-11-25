@@ -10,6 +10,23 @@
 (function () {
   window.TV_RELEASES = [
   {
+    date: '2026-11-26',
+    items: [
+      {
+        level: 'major',
+        ico: '🔊',
+        title: 'Sounds for more moments',
+        text: 'Dice rolls, captures and checks, a game starting, someone sitting down or leaving your table, and new friend requests and invitations now have their own sounds. Turn them off in Settings.'
+      },
+      {
+        level: 'minor',
+        ico: '🎉',
+        title: 'A fanfare when you reach a new level',
+        text: 'The level-up note now plays a short fanfare when it appears.'
+      }
+    ]
+  },
+  {
     date: '2026-11-25',
     items: [
       {

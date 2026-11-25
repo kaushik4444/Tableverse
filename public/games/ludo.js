@@ -152,7 +152,7 @@
         const last = (v.log || []).slice(-1)[0];
         if (last && last.kind === 'capture') snd.play('fold'); // a sharp swish: someone is sent home
         else if (last && last.kind === 'home') snd.play('collect'); // a token reaches the centre
-        else if (last && last.kind === 'roll') snd.play('tick');
+        else if (last && last.kind === 'roll') snd.play('dice');
         else snd.play('card');
       }
     }

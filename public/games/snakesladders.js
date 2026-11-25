@@ -192,6 +192,7 @@
       if (snd && step.ms === STEP_MS) snd.play('card');
       ui.timer = setTimeout(next, step.ms + (path.length ? 0 : 500)); // a beat after the last square before the turn moves on
     };
+    if (snd) snd.play('dice');
     ui.timer = setTimeout(next, 450); // let the die tumble first
   }
 

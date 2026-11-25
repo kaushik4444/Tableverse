@@ -1074,6 +1074,7 @@
     } finally {
       S.socialLoading = false;
       const after = (S.friendRequests.incoming || []).length + (S.invitations.incoming || []).length;
+      if (before >= 0 && after > before && CardTable.sound) CardTable.sound.play('notify'); // a new friend request or invitation
       if (!S.room || S.room.status === 'lobby' || after !== before) render(); // in a running game only redraw when the bell count changed
     }
   }
@@ -1567,6 +1568,7 @@
         const stateKey = JSON.stringify([stable, m.view]);
         const same = stateKey === S.stateKey && S.room;
         S.stateKey = stateKey;
+        prevRoom = S.room;
         S.room = m.room;
         S.view = m.view;
         // a seat change is confirmed when the table shows a new order; an error or the fallback timeout also ends the wait
@@ -1574,6 +1576,7 @@
         S.skew = (m.room.now || Date.now()) - Date.now();
         if (same) break; // identical to what is on screen (a presence or ping tick): keep the DOM, the focus and any animation
         setHash(m.room.code);
+        roomSoundsFor(prevRoom, m.room);
         soundsFor(prevView, m.view);
         prevView = m.view;
         const mine = !!(m.view && m.view.myTurn);
@@ -1765,10 +1768,21 @@
   const avatar = (m, cls = '') => `<span class="avatar${cls ? ' ' + cls : ''}" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span>`;
 
   let prevView = null;
+  let prevRoom = null; // the room as it was before the last state message
   const bidSig = (v) => JSON.stringify(v.bids || (v.players || []).map((p) => (p.bid !== undefined && p.bid !== null ? p.bid : p.hasBid ? 1 : null)));
   /** Play a sound for whatever changed between two game views. Only the trick-taking games (Wizard, 29) have the
    *  `trick`/`lastTrick`/`bids` fields this looks at; every other game plays its own sounds, including its final
    *  result (a plain "gameOver" check here could not tell a winner from a loser without knowing each game's shape). */
+  /** Room-level cues: the game starts, a person sits down at the table or leaves it. Bots are not announced. */
+  function roomSoundsFor(a, b) {
+    const snd = CardTable.sound;
+    if (!snd || !a || !b || a.code !== b.code) return;
+    if (a.status === 'lobby' && b.status === 'playing') snd.play('start');
+    const humans = (r) => new Set((r.members || []).filter((x) => !x.bot).map((x) => x.id));
+    const was = humans(a); const now = humans(b);
+    if ([...now].some((id) => !was.has(id))) snd.play('join');
+    else if ([...was].some((id) => !now.has(id))) snd.play('leave');
+  }
   function soundsFor(a, b) {
     const snd = CardTable.sound;
     if (!b || !snd) return;
@@ -2144,7 +2158,9 @@
     const k = 'ct_level_seen_' + S.username;
     const seen = store.get(k);
     if (seen === null) { S.levelUp = null; store.set(k, String(S.account.level)); return; }
+    const hadLevelUp = !!S.levelUp;
     S.levelUp = S.account.level > Number(seen) ? { username: S.username, from: Number(seen), to: S.account.level } : null;
+    if (S.levelUp && !hadLevelUp && CardTable.sound) CardTable.sound.play('fanfare'); // once, when the note first appears
   }
   /**
    * The level-up dialog: shown once, on the next menu (home) visit after a new level. The level is remembered on this
