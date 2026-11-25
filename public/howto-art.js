@@ -136,6 +136,26 @@
     () => felt(T(160, 50, 'Level 3', 22, '#fff') + T(160, 86, '❤️ ❤️ ❤️', 22, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
+  // ---------------------------------------------------------------- bingo
+  const bingoCard = (x0, y0, cell, marked, lineRow) => {
+    const nums = [[4, 19, 33, 52, 70], [9, 22, 38, 47, 64], [2, 30, 0, 59, 61], [13, 26, 41, 58, 75], [1, 18, 35, 55, 68]];
+    let g = '';
+    nums.forEach((row, r) => row.forEach((n, c) => {
+      const x = x0 + c * cell, y = y0 + r * cell;
+      const on = n === 0 || marked.includes(n);
+      g += `<rect x="${x + 2}" y="${y + 2}" width="${cell - 4}" height="${cell - 4}" rx="5" fill="${on ? C.green : 'rgba(255,255,255,.14)'}"/>`
+        + T(x + cell / 2, y + cell / 2, n === 0 ? '★' : n, 13, on ? C.ink : C.paper);
+    }));
+    if (lineRow !== undefined) g += `<rect x="${x0}" y="${y0 + lineRow * cell}" width="${cell * 5}" height="${cell}" rx="6" fill="none" stroke="${C.gold}" stroke-width="3"/>`;
+    return g;
+  };
+  A.bingo = pick([
+    () => felt(bingoCard(60, 14, 24, [4, 19, 33, 52, 70], 0) + T(160, 138, 'A full line wins', 15, '#fff'), 150),
+    () => felt(`<circle cx="160" cy="62" r="34" fill="${C.paper}"/>` + T(160, 56, 'B 4', 24, C.ink) + T(160, 84, 'called!', 12, C.ink)
+      + arrow(200, 62, 236, 62) + bingoCard(244, 36, 13, [4], undefined) + T(160, 128, 'Mark it once it is called', 14, '#fff'), 140),
+    () => felt(T(160, 60, 'BINGO!', 38, C.gold) + T(160, 98, 'Shout it when your line is full', 15, '#fff'), 130),
+  ]);
+
   A.gofish = pick([
     () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('3', 'c'), pc('J', 'd'), pc('9', 's')], 66, 44)),
     () => felt(T(160, 55, '“Got any 7s?”', 20, '#fff') + arrow(110, 90, 210, 90)),

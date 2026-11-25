@@ -10,8 +10,10 @@ module.exports = {
   accent: '#be185d',
   tagline: 'Numbers are called one at a time. Mark your card and shout Bingo first.',
   seats: { min: 2, max: 8, default: 4 },
-  stats: { kind: 'none', bestLabel: null, bestOf: null },
+  // fewest numbers called before a Bingo, among the games this player won (lower is better)
+  stats: { kind: 'solo', bestLabel: 'Fewest numbers to Bingo', bestOf: (row) => (row.isWinner ? -row.score : null), formatBest: (v) => String(-v) },
   options: [
+    // no TIME_LIMIT_OPTION: Bingo has no turns. Pace sets how often the next number is called.
     { key: 'pattern', type: 'select', label: 'Winning pattern', default: 'line', choices: [
       { value: 'line', label: 'Any line', desc: 'A full row, column or diagonal.' },
       { value: 'full', label: 'Full card', desc: 'Every square on your card.' },

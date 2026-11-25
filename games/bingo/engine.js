@@ -68,7 +68,8 @@ function createGame(players, options, rng = Math.random) {
     called: [], // in call order
     phase: 'playing', // playing | gameOver
     winners: [],
-    event: null, // { type: 'call' | 'over', ... } for the feed
+    event: null, // the latest event: { type: 'call', n, seq } or { type: 'over', winners, by, calls, seq }
+    seq: 0, // event counter (the feed and the sounds use it to skip what they already showed)
     version: 0,
   };
   return g;
@@ -82,10 +83,11 @@ function hasBingo(g, i) {
   return LINES.some((line) => line.every((k) => isMarked(g, i, k)));
 }
 
-function finish(g, winners) {
+function finish(g, winners, by = null) {
   g.phase = 'gameOver';
   g.winners = winners;
-  g.event = { type: 'over', winners: winners.slice() };
+  g.seq++;
+  g.event = { type: 'over', winners: winners.slice(), by, calls: g.called.length, seq: g.seq };
 }
 
 /** Call the next number. Bots mark it and call Bingo the moment they can. */
@@ -93,12 +95,13 @@ function callNext(g) {
   if (g.phase !== 'playing') return { ok: false, error: 'The game is over' };
   const n = g.deck.pop();
   g.called.push(n);
-  g.event = { type: 'call', n, seq: g.called.length };
+  g.seq++;
+  g.event = { type: 'call', n, seq: g.seq };
   g.players.forEach((p, i) => {
     if ((p.bot || g.options.autoMark) && g.cards[i].includes(n)) g.marks[i].add(n);
   });
   const bots = g.players.map((_, i) => i).filter((i) => g.players[i].bot && hasBingo(g, i));
-  if (bots.length) finish(g, bots);
+  if (bots.length) finish(g, bots, bots[0]);
   else if (!g.deck.length) finish(g, []); // every number is out and nobody called Bingo
   return { ok: true };
 }
@@ -128,7 +131,7 @@ function applyAction(g, playerId, action) {
   }
   if (action.type === 'claim') {
     if (!hasBingo(g, who)) return { ok: false, error: 'That is not a Bingo yet' };
-    finish(g, [who]);
+    finish(g, [who], who);
     return { ok: true };
   }
   return { ok: false, error: 'Unknown action' };
@@ -149,7 +152,11 @@ function viewFor(g, playerId) {
     phase: g.phase,
     options: { ...g.options },
     myTurn: false, // nobody takes turns
-    players: g.players.map((p) => ({ id: p.id, name: p.name, bot: p.bot })),
+    // every player's progress is public: which squares are marked (a 5x5 matrix of booleans, free square included), never the numbers
+    players: g.players.map((p, i) => ({
+      id: p.id, name: p.name, bot: p.bot, marked: g.marks[i].size,
+      squares: g.cards[i].map((_, k) => isMarked(g, i, k)),
+    })),
     // your own card only: other people's numbers are not shown
     card: me >= 0 ? g.cards[me].map((n, k) => ({ n, free: k === FREE, marked: isMarked(g, me, k) })) : [],
     called: g.called.slice(),
@@ -162,8 +169,9 @@ function viewFor(g, playerId) {
   };
 }
 
+/** Score for the stats: the numbers that were called when a player won (fewer is better), 0 for everyone else. */
 function results(g) {
-  return g.players.map((_, i) => ({ score: g.winners.includes(i) ? 1 : 0, winner: g.winners.includes(i) }));
+  return g.players.map((_, i) => ({ score: g.winners.includes(i) ? g.called.length : 0, winner: g.winners.includes(i) }));
 }
 
 module.exports = {
