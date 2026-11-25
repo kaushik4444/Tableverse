@@ -166,7 +166,7 @@ Take 5, Stage 10 and Mind are Tableverse's own games with their own cards, wordi
 
 ## Roadmap (planned, not shipped yet)
 
-- Animal placement game (working title; rules still to be defined, see `docs/PLANNED_GAMES.md`)
+- Place Animal Thing (rules still to be defined, see `docs/PLANNED_GAMES.md`)
 
 Hidden Miners (the Saboteur game) and Color Clash (the UNO-style game) are shipped. Ludo shipped in v0.8 and is playable now (2–4 players).
 
