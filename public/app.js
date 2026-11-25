@@ -181,7 +181,7 @@
       button: () => `<button class="btn ghost small chat-btn" data-act="chat" aria-label="Open chat">💬<span class="cb" ${S.unread ? '' : 'hidden'}>${S.unread}</span></button>`,
     },
     // Shared toolbar seed: sound, chat, reactions, game-specific controls, then leave.
-    toolbarSeed: (midHTML, leaveKey, cls) => `<div class="${cls || 'row'}"${cls ? '' : ' style="gap:6px"'}>${window.CardTable.sound.button()}${window.CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button>${midHTML}<button class="btn ghost small" data-${leaveKey}="leave" aria-label="Leave table">✕</button></div>`,
+    toolbarSeed: (midHTML, leaveKey, cls) => `<div class="${cls || 'row'}" data-table-tools${cls ? '' : ' style="gap:6px"'}>${window.CardTable.sound.button()}${window.CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button>${midHTML}<button class="btn ghost small" data-${leaveKey}="leave" aria-label="Leave table">✕</button></div>`,
   });
 
   const gameMeta = (id) => S.games.find((g) => g.id === id);
@@ -258,17 +258,26 @@
       const c = cards[i], last = i === cards.length - 1;
       const artFn = window.CardTable.howtoArt[gameId];
       const art = (c.art >= 0 && artFn && artFn(c.art, g)) || `<span class="ht-mark">${gameMark(g)}</span>`;
-      el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">
+      // The sheet stays in place between cards (only its contents change), so its size and entrance animation do not repeat per card.
+      const inner = `
         <div class="ht-kicker">How to play ${esc(g.name)} · ${i + 1} of ${cards.length}</div>
-        <h2>${esc(c.title)}</h2>
+        <h2 tabindex="-1">${esc(c.title)}</h2>
         <div class="ht-art" aria-hidden="true">${art}</div>
         ${c.html || `<p class="rule">${esc(c.text)}</p>`}
         ${last && note ? `<p class="ht-note">${esc(note)}</p>` : ''}
         <div class="ht-dots" aria-hidden="true">${cards.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
         <div class="row ht-actions">${i > 0 ? '<button class="btn ghost" type="button" data-ht="back">Back</button>' : ''}${last ? '<button class="btn" type="button" data-ht="done" data-close="1">Got it</button>' : '<button class="btn" type="button" data-ht="next">Next</button>'}${last ? '' : '<button class="btn ghost" type="button" data-ht="done" data-close="1">Skip</button>'}</div>
-      </div>`;
-      const primary = el.querySelector('[data-ht="next"], [data-ht="done"]');
-      if (primary) primary.focus();
+      `;
+      if (el.firstElementChild) el.firstElementChild.innerHTML = inner;
+      else el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">${inner}</div>`;
+      const sheet = el.firstElementChild;
+      sheet.scrollTop = 0;
+      const primary = sheet.querySelector('[data-ht="next"], [data-ht="done"]');
+      const buttonBounds = primary.getBoundingClientRect();
+      const sheetBounds = sheet.getBoundingClientRect();
+      // When the action is clipped, start keyboard focus at the card's heading.
+      const target = buttonBounds.bottom <= sheetBounds.bottom - sheet.clientTop ? primary : sheet.querySelector('h2');
+      target.focus({ preventScroll: true });
     };
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-ht]');
@@ -286,7 +295,7 @@
         const f = [...el.querySelectorAll('button')];
         if (!f.length) return;
         const first = f[0], lastB = f[f.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastB.focus(); }
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === el.querySelector('h2'))) { e.preventDefault(); lastB.focus(); }
         else if (!e.shiftKey && document.activeElement === lastB) { e.preventDefault(); first.focus(); }
         else if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
       }
@@ -3326,6 +3335,8 @@
   /* Until this seat has pressed Ready, the table takes no input: every press, drag and key on the game is stopped before it
      reaches the game. The Ready box, the top bar, chat, and the leave, rules and player-card buttons stay usable. The server refuses moves too. */
   const GATE_OPEN_ACTS = new Set(['readyUp', 'leave', 'activityLog', 'showRules', 'playerCard', 'toggleTools', 'rules']);
+  // the table's top bar (data-table-tools): leaving, rules, reactions and sound stay open; a game's own buttons in it (Resign) do not
+  const TOOLBAR_OPEN = new Set(['leave', 'rules', 'emotes', 'sound', 'chat', 'toggleTools', 'showRules', 'activityLog']);
   const gateGuard = (e) => {
     if (!$app.classList.contains('gate-locked')) return;
     const t = e.target;
@@ -3337,9 +3348,12 @@
       return;
     }
     const toolbarRules = t.closest('[data-toolbar-rules]');
-    if (toolbarRules || (act && GATE_OPEN_ACTS.has(act.dataset.act))) {
+    const ctl = t.closest('button, a, [role="button"]');
+    const inTools = !!t.closest('[data-table-tools]');
+    const toolOpen = inTools && ctl && Object.values(ctl.dataset).some((v) => TOOLBAR_OPEN.has(v));
+    if (toolbarRules || toolOpen || (act && GATE_OPEN_ACTS.has(act.dataset.act))) {
       // Let these buttons generate a native click without activating game keyboard shortcuts.
-      if ((toolbarRules || act?.dataset.act === 'toggleTools') && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
+      if ((toolbarRules || toolOpen || act?.dataset.act === 'toggleTools') && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
       return;
     }
     e.stopPropagation(); e.preventDefault();
@@ -3350,22 +3364,18 @@
   function placeReady() {
     const room = S.room;
     const gate = gateInfo();
-    $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
+    $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels keep their place and stop taking input
     $app.classList.toggle('gate-locked', !!(gate && gate.seated && !gate.youReady)); // this seat must press Ready before anything else
-    // the box this function adds is rebuilt on every call, so its "waiting for" list and count never go stale; a game's own box is left alone
-    $app.querySelectorAll('[data-ready-placed]').forEach((el) => el.remove());
-    if (!gate || room.status !== 'playing') {
-      // the table has stopped waiting: the Ready button goes, and the status line comes back
-      const status = $app.querySelector('.wz-status');
-      if (status) status.hidden = false;
-      return;
-    }
-    if ($app.querySelector('[data-ready-here]')) return;
-    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
-    const status = $app.querySelector('.wz-status');
-    if (status) { status.insertAdjacentHTML('beforebegin', box); status.hidden = true; return; }
-    const top = $app.querySelector('.wz-top');
-    if (top) top.insertAdjacentHTML('afterend', box); else $app.insertAdjacentHTML('afterbegin', box);
+    // A game keeps a fixed slot under the hand, always the same height: the Ready bar goes into it while the table waits, so the
+    // table above never changes size when the bar comes or goes. The bar is rebuilt on each call, so its list never goes stale.
+    const root = $app.querySelector('.wz');
+    if (root && !$app.querySelector('.ready-slot')) root.insertAdjacentHTML('beforeend', '<div class="ready-slot" aria-live="polite"></div>');
+    const slot = $app.querySelector('.ready-slot');
+    if (!slot) return;
+    slot.innerHTML = '';
+    if (!gate || room.status !== 'playing') return;
+    if ($app.querySelector('[data-ready-here]')) return; // a game with its own Ready box (a round summary, Take 5's bar) shows that one
+    slot.innerHTML = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
   }
 
   function renderGame() {

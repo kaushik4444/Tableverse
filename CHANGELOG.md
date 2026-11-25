@@ -3,6 +3,7 @@
 ## Unreleased (on `development`, not yet on `main`)
 - Wizard on short phones: the trump corner is hidden on 4-player tables (it covered a seat at 320x568); the trump shows in the header there instead.
 - Wizard on short phones: the trump suit caption stays visible (on one line) when a Wizard is turned up; it was hidden on 4-player tables under 700px high, so the suit name did not show.
+- How-to cards: the box keeps one size for every card of a game (it used to change height from card to card). Long text scrolls inside it, and moving between cards no longer replays the box's entrance animation.
 - Round end: the score card and Ready box no longer flicker on each Ready tap (the overlay's fade no longer replays on every redraw); once everybody is ready the box says the next round is starting.
 - Lobby code card: Copy invite link, WhatsApp and Share sit above the visibility line for public and private tables. The host's Make private / Make public button swaps its label, and a private table also shows the friend invitation form.
 - Sounds: Ludo no longer plays its "your turn" chime twice; a test checks every game gives one "your turn" chime and Stage 10 plays its card sounds.
