@@ -24,8 +24,12 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await page.fill('#registerUsername', 'aarav');
     await page.fill('#registerEmail', 'someone@example.com');
     await page.evaluate(() => { document.getElementById('registerForm').dataset.marker = 'same-node'; });
+    const helloBefore = await page.evaluate(() => window.__sent.filter((m) => m.t === 'hello').length);
     await page.evaluate(() => window.__drop());
-    await page.waitForTimeout(1500); // reconnect delay, new socket, hello, and the authRequired answer
+    await page.waitForFunction((before) => window.__sent.filter((m) => m.t === 'hello').length > before, helloBefore, { timeout: 8000 });
+    // the reconnect's authRequired is handled last: wait for its text, so the form is checked only after that answer
+    await page.evaluate(() => window.__push({ t: 'authRequired', message: 'Reconnected. Create your account.' }));
+    await page.waitForFunction(() => /Reconnected/.test(document.querySelector('#auth-overlay .auth-msg')?.textContent || ''), null, { timeout: 8000 });
     assert.equal(await page.getAttribute('#registerForm', 'data-marker'), 'same-node', 'the sign-up form was rebuilt after the reconnect');
     assert.equal(await page.inputValue('#registerName'), 'Aarav', 'the display name was lost');
     assert.equal(await page.inputValue('#registerUsername'), 'aarav', 'the username was lost');
