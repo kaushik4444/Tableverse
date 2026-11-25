@@ -465,7 +465,8 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 .gate-locked .cb-slider, .gate-locked .cb-board-wrap, .gate-locked .wz-hand, .gate-locked .controls { pointer-events: none; }
 /* until this seat presses Ready, its Ready button blinks so it is not missed */
 .gate-locked .ready-box .btn { animation: readyBlink 1.1s ease-in-out infinite; }
-@keyframes readyBlink { 0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .7); } 50% { box-shadow: 0 0 0 9px rgba(245, 158, 11, 0); } }
+.gate-locked .ready-box .btn { background: linear-gradient(#fb923c, #f97316); color: #2a0f00; }
+@keyframes readyBlink { 0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, .7); } 50% { box-shadow: 0 0 0 9px rgba(249, 115, 22, 0); } }
 @media (prefers-reduced-motion: reduce) { .gate-locked .ready-box .btn { animation: none; outline: 3px solid var(--gold); } }
 .ready-box.in-sheet { margin: 14px 0 0; }
 /* The Ready bar is a strip pinned to the bottom of the screen while the table waits. It takes no room in the layout, so the table
@@ -479,7 +480,9 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 .ready-wait .bidbox:not(.ready-box) { visibility: hidden; pointer-events: none; }
 
 /* how-to-play cards (shared by every game) */
-.ht-sheet { text-align: center; max-width: 380px; }
+/* One fixed box for every card of a game, so it does not change size between pages; long text scrolls inside it. */
+.ht-sheet { --ht-h: min(540px, 86dvh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+.ht-sheet > .row.ht-actions { margin-top: auto; padding-top: 12px; }
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }
 .ht-art { display: grid; place-items: center; margin: 6px 0 12px; min-height: 64px; }
