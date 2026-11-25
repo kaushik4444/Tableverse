@@ -96,7 +96,8 @@
   .ludo-player .pips { grid-column: 1 / -1; }
   .ludo-player b { font-size: 12px; }
   .ludo-player b small { display: none; }
-  .ludo-board { max-width: min(100%, calc(100dvh - 270px)); box-shadow: 0 6px 22px rgba(0, 0, 0, .4), 0 0 0 3px rgba(255, 255, 255, .92); }
+  .ludo-board { max-width: min(100%, calc(100vh - 270px));
+ max-width: min(100%, calc(100dvh - 270px)); box-shadow: 0 6px 22px rgba(0, 0, 0, .4), 0 0 0 3px rgba(255, 255, 255, .92); }
 }
 @media (prefers-reduced-motion: reduce) {
   .ludo-token, .ludo-die.rolling, .ludo-turn-home { animation: none; transition: none; }

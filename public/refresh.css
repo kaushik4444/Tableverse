@@ -23,6 +23,7 @@ body {
     linear-gradient(180deg, #0f2a1c, var(--felt-2) 80%);
   background-attachment: fixed;
   min-height: 100vh;
+  min-height: 100vh;
   min-height: 100dvh;
 }
 h1, h2, h3 { font-family: var(--serif); font-weight: 700; letter-spacing: -.01em; }

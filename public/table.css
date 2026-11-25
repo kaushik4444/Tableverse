@@ -1,5 +1,6 @@
 /* Wizard table. Card size comes from --cw (set by wizard.js). */
-.wz { --cw: 78px; min-height: 100dvh; max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px); }
+.wz { --cw: 78px; min-height: 100vh;
+ min-height: 100dvh; max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px); }
 .wz-top { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 /* the Ready bar keeps its height whatever it says, so the table below never moves */
 .ready-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; box-sizing: border-box; margin: 8px 0; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--panel-line, rgba(255, 255, 255, .2)); background: var(--panel, rgba(255, 255, 255, .06)); font-size: 14px; }
@@ -375,7 +376,8 @@ button.card { cursor: pointer; }
 .chat-btn { position: relative; }
 .cb { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #2a0600; font: 800 11px/18px var(--sans); text-align: center; }
 .cb[hidden] { display: none; }
-.chat { position: fixed; z-index: 55; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); width: min(380px, calc(100vw - 20px)); height: min(55dvh, 420px); display: flex; flex-direction: column; background: linear-gradient(160deg, #1d1c55, #11123a); border: 1px solid var(--panel-line); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6); overflow: hidden; }
+.chat { position: fixed; z-index: 55; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); width: min(380px, calc(100vw - 20px)); height: min(55vh, 420px);
+ height: min(55dvh, 420px); display: flex; flex-direction: column; background: linear-gradient(160deg, #1d1c55, #11123a); border: 1px solid var(--panel-line); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6); overflow: hidden; }
 .chat[hidden] { display: none; }
 .chat-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-line); }
 .chat-watch { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -489,7 +491,8 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 
 /* how-to-play cards (shared by every game) */
 /* One fixed box for every card of a game, so it does not change size between pages; long text scrolls inside it. */
-.ht-sheet { --ht-h: min(540px, 86dvh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+.ht-sheet { --ht-h: min(540px, 86vh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+@supports (height: 1dvh) { .ht-sheet { --ht-h: min(540px, 86dvh); } } /* custom properties do not fall back, so the dvh value sits in a feature query */
 .ht-sheet > .row.ht-actions { margin-top: auto; padding-top: 12px; }
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }

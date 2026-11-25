@@ -10,7 +10,8 @@
   };
   // files that have a stylesheet of their own (wizard and twentynine style themselves inside table.css)
   const HAS_CSS = new Set(['poker', 'themind', 'ludo', 'gofish', 'colorclash', 'hiddenminers', 'propertyrivals', 'penaltyrows', 'stagerummy', 'linegames', 'chess', 'carrom', 'snakesladders']);
-  const loading = {};
+  const loading = {};   // file -> promise while its script and stylesheet load (cleared on failure, so it can retry)
+  const loaded = {};    // file -> true once both the script and the stylesheet have loaded
 
   const loadFile = (file) => {
     const parts = [];
@@ -39,12 +40,17 @@
   const TvGames = {
     /** Is this game id one that loads on demand? */
     knows: (gameId) => Object.prototype.hasOwnProperty.call(FILES, gameId),
+    /** True only when the game's script AND stylesheet have both loaded (registering the game alone is not enough). */
+    isLoaded: (gameId) => TvGames.knows(gameId) && !!loaded[FILES[gameId]],
     /** Resolves once the game's script and stylesheet are in the page. A failed load can be retried later. */
     ensure(gameId) {
       if (!TvGames.knows(gameId)) return Promise.resolve();
       const file = FILES[gameId];
       if (!loading[file]) {
-        loading[file] = loadFile(file).catch((err) => { delete loading[file]; throw err; });
+        loading[file] = loadFile(file).then(
+          () => { loaded[file] = true; },
+          (err) => { delete loading[file]; throw err; },
+        );
       }
       return loading[file];
     },
