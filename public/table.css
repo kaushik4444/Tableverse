@@ -468,6 +468,8 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 @keyframes readyBlink { 0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .7); } 50% { box-shadow: 0 0 0 9px rgba(245, 158, 11, 0); } }
 @media (prefers-reduced-motion: reduce) { .gate-locked .ready-box .btn { animation: none; outline: 3px solid var(--gold); } }
 .ready-box.in-sheet { margin: 14px 0 0; }
+/* the game's Ready bar sits at the bottom of the game and stays in view while the content scrolls */
+.ready-box[data-ready-placed] { position: sticky; bottom: 0; z-index: 4; margin: 10px 0 0; background: var(--menu-bg, #1b2a22); }
 .ready-wait .bidbox:not(.ready-box) { display: none; }
 
 /* how-to-play cards (shared by every game) */
