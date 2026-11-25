@@ -2393,9 +2393,10 @@ function start(opts = {}) {
     // kept; any other text is logged as 'other', so no free text reaches the log.
     const closeFromServer = ws.close.bind(ws);
     ws.close = (code, reason) => {
-      // The ws library answers a close the peer started by calling close with the peer's reason as a Buffer: that is not a
-      // server reason. The first server reason is kept, so a later library call cannot replace it.
-      if (typeof reason === 'string' && ws.serverCloseReason === undefined) {
+      // Only the close that moves an OPEN socket out of OPEN (readyState 1) is the server's. The ws library answers a close the
+      // peer started by calling close with the peer's reason as a Buffer, and a close after the peer's frame arrives is not the
+      // server's either. The first server reason is kept, so a later call cannot replace it.
+      if (ws.readyState === 1 && typeof reason === 'string' && ws.serverCloseReason === undefined) {
         ws.serverCloseReason = SERVER_CLOSE_REASONS.has(reason) ? reason : 'other';
       }
       return closeFromServer(code, reason);
