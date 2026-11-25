@@ -2381,6 +2381,7 @@ function start(opts = {}) {
   const SERVER_CLOSE_REASONS = new Set([
     'server busy', 'auth required', 'role changed while signing in; reconnect', 'invalid session',
     'email verification required', 'replaced', 'too many connections', 'slow down', 'server error', 'server restarting',
+    'signed out', 'signed in elsewhere', 'account deleted', 'session ended',
   ]);
 
   wss.on('connection', (ws, req) => {
@@ -2392,7 +2393,11 @@ function start(opts = {}) {
     // kept; any other text is logged as 'other', so no free text reaches the log.
     const closeFromServer = ws.close.bind(ws);
     ws.close = (code, reason) => {
-      ws.serverCloseReason = SERVER_CLOSE_REASONS.has(reason) ? reason : 'other';
+      // The ws library answers a close the peer started by calling close with the peer's reason as a Buffer: that is not a
+      // server reason. The first server reason is kept, so a later library call cannot replace it.
+      if (typeof reason === 'string' && ws.serverCloseReason === undefined) {
+        ws.serverCloseReason = SERVER_CLOSE_REASONS.has(reason) ? reason : 'other';
+      }
       return closeFromServer(code, reason);
     };
     ws.once('close', (code) => {
