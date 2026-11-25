@@ -143,6 +143,7 @@ const profile = { ok: true, profile: { username: 'aarav', displayName: 'Aarav', 
     assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light', 'applied at once');
     assert.equal(await page.evaluate(() => localStorage.getItem('tv_theme')), 'light', 'kept on this device');
     assert.equal(await page.$eval('#modal-overlay [data-theme="light"]', (b) => b.getAttribute('aria-pressed')), 'true', 'the chosen button is marked');
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.theme), 'light', 'focus stays on the chosen button after the redraw');
     await page.evaluate(() => { localStorage.removeItem('tv_theme'); });
     await ctx.close();
   });

@@ -2794,13 +2794,20 @@
     const appearance = () => `<div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-modal-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>`;
     const body = () => `${appearance()}
       <div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
-      <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} still open, that you sat at or watched.` : 'Tables you sit at or watch show here while they stay open. A table closes when everyone leaves.'} Clearing removes them from this list.</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>`;
+      <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} still open, that you sat at or watched.` : 'Tables you sit at or watch show here while they stay open. A table closes when everyone leaves.'} Clearing removes them from this list; a table you sit at again is added back.</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>`;
     openModal('Settings', body(), (o) => {
-      const redraw = () => { o.querySelector('.modal-body').innerHTML = body(); };
-      modalActions.setTheme = (el) => { chooseTheme(el.dataset.theme); redraw(); };
-      modalActions.toggleSound = () => { CardTable.sound.toggle(); redraw(); };
-      modalActions.clearRecent = async () => {
-        try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
+      // a redraw replaces the buttons; keep focus on the replacement of the button the player used (keyboard users keep their place)
+      const redraw = (used) => {
+        const key = (b) => `${b.dataset.modalAct}:${b.dataset.theme || ''}`;
+        const k = used && used.dataset ? key(used) : '';
+        o.querySelector('.modal-body').innerHTML = body();
+        const again = k && [...o.querySelectorAll('[data-modal-act]')].find((b) => key(b) === k && !b.disabled);
+        if (again) again.focus();
+      };
+      modalActions.setTheme = (el) => { chooseTheme(el.dataset.theme); redraw(el); };
+      modalActions.toggleSound = (el) => { CardTable.sound.toggle(); redraw(el); };
+      modalActions.clearRecent = async (el) => {
+        try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(el); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
       };
     });
   }
