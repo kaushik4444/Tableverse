@@ -54,13 +54,20 @@ function messagesFor(g) {
         const corner = document.querySelector('.pt-corner .cap');
         const header = document.querySelector('.wz-top .wz-trump');
         const el = visible(corner) ? corner : (visible(header) ? header : null);
-        if (!el) return { display: 'none', text: '', overflow: false };
-        return { display: getComputedStyle(el).display, text: el.textContent.trim(), overflow: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1 };
+        if (!el) return { display: 'none', text: '', overflow: false, inViewport: false };
+        const rect = el.getBoundingClientRect();
+        return {
+          display: getComputedStyle(el).display,
+          text: el.textContent.trim(),
+          overflow: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1,
+          inViewport: rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth,
+        };
       });
       await ctx.close();
       assert.notEqual(cap.display, 'none', 'the trump is hidden');
       assert.match(cap.text, /Trump/, 'the trump text does not say Trump');
       assert.equal(cap.overflow, false, 'the trump text is cut off');
+      assert.equal(cap.inViewport, true, 'the trump indicator extends outside the viewport');
       console.log(`  ok  ${name}: "${cap.text}"`);
     } catch (e) { failed++; console.log(`FAIL  ${name}: ${e.message.split('\n')[0]}`); }
   }
