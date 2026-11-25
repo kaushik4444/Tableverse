@@ -26,6 +26,16 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     assert.match(await page.textContent('#tableInviteFriend option[value="host"]'), /At this table/);
     await ctx.close();
   });
+  await test('a public table lobby sends an invitation too: submitting the form posts it', async () => {
+    const publicRoom = { ...room([host, me]), visibility: 'public' };
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ games: games.list() }), { t: 'state', view: null, room: publicRoom }] });
+    await page.goto(url + '/'); await page.waitForSelector('#tableInviteForm', { timeout: 8000 });
+    const posted = page.waitForRequest((r) => r.url().includes('/api/me/table-invitations') && r.method() === 'POST', { timeout: 5000 });
+    await page.selectOption('#tableInviteFriend', 'zoe');
+    await page.evaluate(() => document.getElementById('tableInviteForm').requestSubmit());
+    await posted;
+    await ctx.close();
+  });
   await browser.close(); server.close();
   console.log(failed ? `${failed} failed` : 'invite UI: all passed');
   process.exit(failed ? 1 : 0);
