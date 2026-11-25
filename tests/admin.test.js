@@ -18,6 +18,7 @@ const ADMIN_POSTS = [
   ['/api/admin/announcements', { message: 'x', durationHours: 1 }],
   ['/api/admin/announcements/update', { id: 'p_00000000-0000-4000-8000-000000000001', message: 'y' }],
   ['/api/admin/announcements/end', { id: 'p_00000000-0000-4000-8000-000000000001' }],
+  ['/api/admin/game-trials', { gameId: 'chess', limit: 3 }],
 ];
 
 (async () => {
@@ -233,6 +234,20 @@ const ADMIN_POSTS = [
       assert.equal(r.json.games[0].access, 'admins');
       assert.equal(r.json.games[1].access, 'owner');
       assert.equal(r.json.games[2].access, 'on');
+    });
+
+    await test('the owner limits guest plays per game (1 to 9, or none); other staff are refused and bad values are not saved', async () => {
+      const saved = [];
+      const old = s.store.setGameTrialLimit;
+      s.store.setGameTrialLimit = async (input) => { saved.push(input); };
+      try {
+        assert.equal((await owner.b.post('/api/admin/game-trials', { gameId: gameIds[0], limit: 3 })).status, 200);
+        assert.equal((await owner.b.post('/api/admin/game-trials', { gameId: gameIds[0], limit: null })).status, 200);
+        for (const limit of [0, 10, 2.5, '3']) assert.equal((await owner.b.post('/api/admin/game-trials', { gameId: gameIds[0], limit })).status, 400, String(limit));
+        assert.equal((await owner.b.post('/api/admin/game-trials', { gameId: 'ghost', limit: 3 })).status, 400);
+        assert.equal((await admin.b.post('/api/admin/game-trials', { gameId: gameIds[0], limit: 3 })).status, 403);
+        assert.deepEqual(saved.map((x) => x.limit), [3, null]);
+      } finally { s.store.setGameTrialLimit = old; }
     });
 
     console.log('anonymous and signed-in non-admin callers');

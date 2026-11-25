@@ -58,6 +58,26 @@ async function test(name, fn) {
       assert.equal(found.has(registered), false);
       assert.equal(found.size, 1);
     });
+    await test('a guest who registers is no longer counted by device', async () => {
+      const upgraded = await guest('Upgraded', deviceB);
+      await q('UPDATE players SET is_anonymous = FALSE WHERE id = $1', [upgraded]);
+      assert.equal((await trials.trialKeysFor([upgraded])).has(upgraded), false);
+    });
+    await test('the owner sets a per-game guest limit: a repeat is not audited, and the limit can be removed', async () => {
+      const admin = require('../db/admin');
+      const owner = (await q(`INSERT INTO players (username, display_name) VALUES ('trialowner', 'Owner') RETURNING id`))[0].id;
+      const row = async () => (await q('SELECT guest_trial_limit, access FROM game_flags WHERE game_id = $1', ['ludo']))[0];
+      const audits = async () => (await q("SELECT count(*)::int AS n FROM admin_audit_log WHERE action = 'game.trial_limit'"))[0].n;
+      await admin.setGameTrialLimit({ actorId: owner, gameId: 'ludo', limit: 3 });
+      assert.equal((await row()).guest_trial_limit, 3);
+      assert.equal((await row()).access, 'on', 'a new row keeps the game open to everybody');
+      const before = await audits();
+      await admin.setGameTrialLimit({ actorId: owner, gameId: 'ludo', limit: 3 });
+      assert.equal(await audits(), before, 'a repeat changes nothing and is not audited');
+      await admin.setGameTrialLimit({ actorId: owner, gameId: 'ludo', limit: null });
+      assert.equal((await row()).guest_trial_limit, null);
+      assert.equal(await audits(), before + 1, 'the change is audited once');
+    });
   } finally {
     await t.drop();
   }

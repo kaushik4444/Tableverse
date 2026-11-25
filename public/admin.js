@@ -482,6 +482,7 @@
   const gameFlagPending = new Map();
   let gameFlagError = null; // { visit, text }: a save error that belongs to one visit of the Games tab, shown on each redraw of it
   const gameFlagQueue = new Map();
+  const gameTrialPending = new Map(); // gameId -> the guest play limit being saved (null = no limit), shown until it is saved
   let orderBusy = false; // one home-order move is saved at a time
   async function gamesTab(days = 30) {
     state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
@@ -545,13 +546,22 @@
     const labels = o.labels || {};
     const label = (m) => labels[m] || m;
     const opts = (cur) => o.modes.map((m) => `<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(label(m))}</option>`).join('');
+    // Guest plays: a checkbox limits guests in this game; the dropdown picks 1 to 9 plays (3 when first switched on).
+    const trialControls = (g) => {
+      const busy = gameTrialPending.has(g.id);
+      const shown = busy ? gameTrialPending.get(g.id) : (g.trialLimit == null ? null : g.trialLimit);
+      const on = shown !== null;
+      const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<option value="${n}"${n === (on ? shown : 3) ? ' selected' : ''}>${n}</option>`).join('');
+      return `<label><input type="checkbox" data-gtrial-on="${esc(g.id)}"${on ? ' checked' : ''}${busy ? ' disabled' : ''}> Limit guests</label> `
+        + `<select data-gtrial-n="${esc(g.id)}" aria-label="Plays per guest for ${esc(g.name)}"${on && !busy ? '' : ' disabled'}>${nums}</select>`;
+    };
     const pill = (g) => (g.access === 'on' ? '<span class="ad-pill">on</span>' : `<span class="ad-pill warn">${esc(label(g.access))}</span>`);
     const last = o.games.length - 1;
-    const rows = o.games.map((g, i) => `<tr><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || orderBusy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || orderBusy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${gameFlagPending.has(g.id) ? ' disabled aria-disabled="true"' : ''}>${opts(gameFlagPending.has(g.id) ? gameFlagPending.get(g.id) : g.access)}</select></td></tr>`).join('');
+    const rows = o.games.map((g, i) => `<tr><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || orderBusy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || orderBusy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}</td><td data-l="Changed">${g.updatedAt ? esc(when(g.updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${gameFlagPending.has(g.id) ? ' disabled aria-disabled="true"' : ''}>${opts(gameFlagPending.has(g.id) ? gameFlagPending.get(g.id) : g.access)}</select></td><td data-l="Guest plays">${trialControls(g)}</td></tr>`).join('');
     const switchesHTML = `<h3 style="margin-top:24px">Game switches</h3>
       <p class="ad-muted">Home order: move a game up or down to change where it appears in the home menu. Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players play and refuses guests. "Disabled for all" keeps the game for the owner only. A game that is switched off stays listed, and new tables, starts and rematches are refused for the roles it excludes. Games already in progress finish. Changes apply within about 15 seconds and are recorded in the audit log.</p>
       <p id="gMsg" class="ad-msg" role="status"></p>
-      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      <div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th><th>Guest plays</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     // placed above Tables hosted: the order on screen is last 30 days, game switches, then tables hosted
     const anchor = main.querySelector('#tablesSection');
     if (anchor) anchor.insertAdjacentHTML('beforebegin', switchesHTML); else main.insertAdjacentHTML('beforeend', switchesHTML);
@@ -593,6 +603,24 @@
         if (gameFlagPending.get(id) === value) gameFlagPending.delete(id);
         if (state.tab !== 'games') return; // the owner has moved to another view: leave it alone
         // the current view is redrawn so the selector unlocks; an error from an earlier visit is not shown in this one
+        if (visit !== generation || e.name === 'AbortError') { redrawGames(); return; }
+        gameFlagError = { visit, text: e.message };
+        redrawGames();
+      });
+    }; });
+  main.querySelectorAll('[data-gtrial-on],[data-gtrial-n]').forEach((el) => { el.onchange = () => {
+      const id = el.dataset.gtrialOn || el.dataset.gtrialN;
+      const box = main.querySelector(`[data-gtrial-on="${id}"]`);
+      const sel = main.querySelector(`[data-gtrial-n="${id}"]`);
+      const limit = box && box.checked && sel ? Number(sel.value) : null;
+      const visit = generation; gameFlagError = null;
+      gameTrialPending.set(id, limit); redrawGames(); // the choice stays shown and locked until it is saved
+      api('/api/admin/game-trials', { gameId: id, limit }, false, true).then(() => {
+        gameTrialPending.delete(id);
+        if (state.tab === 'games') redrawGames();
+      }, (e) => {
+        gameTrialPending.delete(id);
+        if (state.tab !== 'games') return;
         if (visit !== generation || e.name === 'AbortError') { redrawGames(); return; }
         gameFlagError = { visit, text: e.message };
         redrawGames();
