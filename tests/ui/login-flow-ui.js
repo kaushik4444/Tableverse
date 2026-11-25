@@ -3,7 +3,7 @@
 // told so with the email kept, a failed connection to the server is explained and the button works again, and a dropped
 // connection while the login tab is open does not clear the typed email.
 const assert = require('node:assert/strict');
-const { serve, scriptedPage, loadPlaywright, sessionOk } = require('./harness');
+const { serve, scriptedPage, loadPlaywright, sessionOk, welcome } = require('./harness');
 const { chromium } = loadPlaywright();
 let failed = 0;
 const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + (e.stack || e)); } };
@@ -21,8 +21,11 @@ const baseRoutes = (login) => ({
 
   await test('a good password login closes the sheet and connects to the lobby', async () => {
     const { server, url } = await serve(baseRoutes(() => ({ ok: true, csrfToken: 'c2', player: player(true), requiresVerification: false })));
-    const { page, ctx } = await scriptedPage(browser, { messages: [{ t: 'authRequired', message: 'Log in to play.' }] });
+    // no scripted replies on connect: the sign-in sheet is opened by a pushed authRequired, and the post-login connection gets only the welcome pushed below
+    const { page, ctx } = await scriptedPage(browser, { messages: [] });
     await page.goto(url + '/');
+    await page.waitForFunction(() => window.__sent.some((m) => m.t === 'hello'), null, { timeout: 8000 });
+    await page.evaluate(() => window.__push({ t: 'authRequired', message: 'Log in to play.' }));
     await page.waitForSelector('#loginForm', { timeout: 8000 });
     await page.fill('#loginEmail', 'a@b.c');
     await page.fill('#loginPassword', 'TestPass123!');
@@ -31,6 +34,10 @@ const baseRoutes = (login) => ({
     await page.waitForFunction(() => !document.getElementById('auth-overlay'), null, { timeout: 8000 });
     // a hello from before the login does not count: the login must open a new connection to the lobby
     await page.waitForFunction((before) => window.__sent.filter((m) => m.t === 'hello').length > before, helloBefore, { timeout: 8000 });
+    // the new connection is welcomed: the signed-in home menu appears and the sign-in sheet stays closed
+    await page.evaluate((w) => window.__push(w), welcome({ games: [] }));
+    await page.waitForSelector('[data-act="toggleMenu"]', { timeout: 8000 });
+    assert.equal(await page.isVisible('#auth-overlay'), false, 'the sign-in sheet is open after the welcome');
     await ctx.close(); server.close();
   });
 
@@ -75,8 +82,12 @@ const baseRoutes = (login) => ({
     await page.fill('#loginEmail', 'a@b.c');
     await page.fill('#loginPassword', 'TestPass123!');
     await page.evaluate(() => { document.getElementById('loginForm').dataset.marker = 'same-node'; });
+    const helloBefore = await page.evaluate(() => window.__sent.filter((m) => m.t === 'hello').length);
     await page.evaluate(() => window.__drop());
-    await page.waitForTimeout(1500);
+    // wait for the reconnect's own hello, then for a marker reply sent after it, so the form is checked only once the reconnect is handled
+    await page.waitForFunction((before) => window.__sent.filter((m) => m.t === 'hello').length > before, helloBefore, { timeout: 8000 });
+    await page.evaluate(() => window.__push({ t: 'authRequired', message: 'Reconnected. Log in to continue.' }));
+    await page.waitForFunction(() => /Reconnected/.test(document.querySelector('#auth-overlay .auth-msg')?.textContent || ''), null, { timeout: 8000 });
     assert.equal(await page.getAttribute('#loginForm', 'data-marker'), 'same-node', 'the login form was rebuilt after the reconnect');
     assert.equal(await page.inputValue('#loginEmail'), 'a@b.c', 'the email was lost');
     assert.equal(await page.inputValue('#loginPassword'), 'TestPass123!', 'the password was lost');
