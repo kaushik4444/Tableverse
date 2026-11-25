@@ -257,7 +257,7 @@ For each provider: purpose, reason, what breaks without it, verified plan, where
 - **Does:** verification and password-reset e-mails (`lib/email.js`, `EMAIL_PROVIDER=resend`). Broadcast e-mail is owner-only (`lib/broadcast.js`).
 - **Why:** simple API, low cost at friends-beta volume.
 - **If unavailable:** registration and reset e-mails fail. In production the server refuses to start without the e-mail settings (`render.yaml`).
-- **Temporary switch:** `REQUIRE_EMAIL_VERIFICATION` defaults to `true` (secure mode). Setting it to `false` is a conscious, temporary decision.
+- **Verification is fixed:** every registered account must verify its email before lobby access. The old `REQUIRE_EMAIL_VERIFICATION` switch was removed, and a value left in an environment is ignored. Guests are the only unverified players.
 - **Plan and cost:** **unverified**. Record it on Resend's dashboard.
 - **Alternatives:** any transactional e-mail API. Migration trigger: sending limits or deliverability problems.
 
@@ -304,7 +304,7 @@ Render dashboard or GitHub settings.
 | `RESEND_API_KEY` | Resend API key | Yes in production | Render (secret) | `lib/email.js` | Rotate in Resend, update Render | Redeploy |
 | `EMAIL_FROM` | Sender address | Yes in production | Render | `lib/email.js` | Edit in Render | Redeploy |
 | `PUBLIC_APP_URL` | Base URL in e-mail links, no trailing slash | Yes in production | Render | `lib/email.js`, `lib/authRoutes.js` | Edit in Render | Redeploy |
-| `REQUIRE_EMAIL_VERIFICATION` | `true` by default; `false` skips verification (temporary) | Optional | `render.yaml` | `db/auth.js` | Edit with owner approval | Redeploy |
+| `REQUIRE_EMAIL_VERIFICATION` | Removed: ignored; registered accounts always verify | — | — | `db/auth.js` | — | — |
 | `AUTH_SESSION_TTL_DAYS` | Session lifetime | Optional | Render or local | `db/players.js` | Edit | Restart |
 | `AUTH_VERIFY_TTL_MIN` | Verification link lifetime | Optional | Render or local | `db/auth.js` | Edit | Restart |
 | `AUTH_RESET_TTL_MIN` | Password reset link lifetime | Optional | Render or local | `db/auth.js` | Edit | Restart |

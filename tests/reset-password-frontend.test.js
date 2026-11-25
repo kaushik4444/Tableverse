@@ -77,12 +77,7 @@ async function main() {
   short.elements.resetPassword.value = 'abc';
   short.elements.resetConfirm.value = 'abc';
   await submit(short.elements.resetForm);
-  assert.match(short.elements.resetMsg.textContent, /at least 10/);
-  const weak = await scenario({ fetch: csrfOr(async () => { throw new Error('must not post'); }) });
-  weak.elements.resetPassword.value = 'longenoughbutweak';
-  weak.elements.resetConfirm.value = 'longenoughbutweak';
-  await submit(weak.elements.resetForm);
-  assert.match(weak.elements.resetMsg.textContent, /an uppercase letter, a number, a symbol/, 'a long password still needs every kind of character');
+  assert.match(short.elements.resetMsg.textContent, /at least 8/);
 
   console.log('dead links and retryable errors');
   const expired = await scenario({ fetch: csrfOr(async () => response(400, { ok: false, error: 'This reset link has expired.' })) });

@@ -155,7 +155,8 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
 
 /* ---------- in-game surfaces: the old indigo panels become warm, dark walnut so nothing on screen belongs to another palette */
 :root { --wood-d: rgba(24, 15, 8, .72); --wood-line: rgba(230, 171, 74, .22); }
-.overlay { background: rgba(6, 12, 8, .66); backdrop-filter: blur(4px); animation: veil .22s ease-out backwards; }
+/* no entrance animation: the table redraws on every state change (each Ready tap), and a replayed fade read as a flicker */
+.overlay { background: rgba(6, 12, 8, .66); backdrop-filter: blur(4px); }
 .sheet {
   background:
     radial-gradient(520px 260px at 50% -10%, rgba(230, 171, 74, .14), transparent 70%),
@@ -165,7 +166,6 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
   animation: rise .34s var(--ease) backwards;
 }
 .sheet h2 { font-size: 28px; }
-@keyframes veil { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
 .menu { background: var(--menu-bg); border-color: var(--menu-line); }
 .menu-item:hover, .menu-item:focus-visible { background: var(--menu-hover); }

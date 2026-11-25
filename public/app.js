@@ -598,11 +598,9 @@
     return true;
   }
 
+  // Always the same: a registered account verifies its e-mail first. (Not tied to the flag a guest session changes.)
   function authPolicyHintHTML() {
-    if (S.requireEmailVerification) {
-      return '<p class="auth-policy-hint">Email verification is required before entering the lobby.</p>';
-    }
-    return '<p class="auth-policy-hint optional" role="status">Friend-testing mode: email verification is optional right now. You can play immediately after creating your account.</p>';
+    return '<p class="auth-policy-hint">Email verification is required before entering the lobby.</p>';
   }
 
   /** What a guest is told when the owner has locked an area for guests (server code guest_locked, with the feature name). */
@@ -638,7 +636,17 @@
   }
   // the display name the owner typed when a sign-up was refused: the sheet is rebuilt with it, not with the guest's old name
   let pendingRegisterName = null;
+  // Changes only the message of an open sheet, so what was typed and the focus stay as they are.
+  function setAuthMessage(overlay, msg, isError) {
+    const slot = overlay.querySelector('.auth-msg-slot');
+    if (!slot || !msg) return;
+    slot.innerHTML = `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>`;
+  }
   function openAuthSheet(tab = 'login', msg = '', isError = false) {
+    // Already open on this tab (a reconnect, a refused login, a failed sign-up): keep what was typed and where the focus is.
+    // The sheet is rebuilt only when it opens on another tab or was not open.
+    const open = document.getElementById('auth-overlay');
+    if (open && open.dataset.tab === tab) { S.auth = tab; setAuthMessage(open, msg, isError); return; }
     const draftName = pendingRegisterName;
     pendingRegisterName = null;
     S.auth = tab;
@@ -649,9 +657,10 @@
     const overlay = document.createElement('div');
     overlay.id = 'auth-overlay';
     overlay.className = 'overlay';
+    overlay.dataset.tab = tab;
     overlay.innerHTML = `<div class="sheet auth-sheet" data-stop="1" role="dialog" aria-label="${loginOn ? 'Log in' : 'Create account'}">
       <div class="row" style="justify-content:space-between"><h2>${loginOn ? 'Welcome back' : 'Create your account'}</h2><button class="btn ghost small" data-auth-close aria-label="Close">✕</button></div>
-      ${msg ? `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>` : ''}
+      <div class="auth-msg-slot">${msg ? `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>` : ''}</div>
       <div class="row auth-tabs">
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
@@ -673,8 +682,8 @@
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
           ${authPolicyHintHTML()}
-          <input id="registerPassword" type="password" required minlength="10" placeholder="Password (10+ characters)" autocomplete="new-password" aria-describedby="registerPwHint">
-          <small id="registerPwHint" class="hint" aria-live="polite">Use an uppercase letter, a lowercase letter, a number and a symbol.</small>
+          <input id="registerPassword" type="password" required minlength="8" placeholder="Password (8+ characters)" autocomplete="new-password" aria-describedby="registerPwHint">
+          <small id="registerPwHint" class="hint" aria-live="polite">Use at least 8 characters. Avoid obvious words such as "password".</small>
           <label class="auth-check"><input id="registerAdult" type="checkbox" required> I am 18 or older.</label>
           <button class="btn big" type="submit">Create account</button>
         </form>
@@ -844,7 +853,7 @@
     beginSignIn();
     if (S.welcomeDue) showWelcome();
     connect();
-    if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
+    if (!S.emailVerified) toast('Email verification pending. Verify your email to enter the lobby.');
   }
 
   /** "Play as a guest": the server makes a temporary account and a session cookie. The page connects as that guest. */
@@ -1626,6 +1635,7 @@
         if (again) again.value = email || ''; // keep what was typed
       } finally {
         loginBusy = false;
+        if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Log in'; } // the sheet stays open on a failed login
       }
     }
     if (e.target.id === 'guestForm') {
@@ -1693,7 +1703,7 @@
   if (location.pathname.endsWith('/reset-password.html') && verifyToken) {
     // a real form (hidden password field, confirmation) instead of window.prompt, which shows the password in plain text
     loadSnapshot();
-    openModal('Choose a new password', `<form id="resetForm" class="auth-form"><input id="resetPw" type="password" minlength="10" required placeholder="New password (10+ characters)" autocomplete="new-password"><input id="resetPw2" type="password" minlength="8" required placeholder="Repeat the password" autocomplete="new-password"><p id="resetMsg" class="auth-msg" role="status" hidden></p><button class="btn big" type="submit">Update password</button></form>`, (o) => {
+    openModal('Choose a new password', `<form id="resetForm" class="auth-form"><input id="resetPw" type="password" minlength="8" required placeholder="New password (8+ characters)" autocomplete="new-password"><input id="resetPw2" type="password" minlength="8" required placeholder="Repeat the password" autocomplete="new-password"><p id="resetMsg" class="auth-msg" role="status" hidden></p><button class="btn big" type="submit">Update password</button></form>`, (o) => {
       o.querySelector('#resetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = o.querySelector('#resetMsg');
@@ -1731,7 +1741,7 @@
     }
     if (S.welcomeDue) showWelcome();
     connect();
-    if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
+    if (!S.emailVerified) toast('Email verification pending. Verify your email to enter the lobby.');
   })();
 
   // ------------------------------------------------------------ rendering
@@ -3110,11 +3120,11 @@
       <section class="panel code-card">
         <div class="label">Table code</div>
         <div class="code">${esc(r.code)}</div>
-        ${r.visibility === 'public' ? `<div class="row" style="justify-content:center">
+        <div class="row" style="justify-content:center">
           <button class="btn small" data-act="copyLink">Copy invite link</button>
           <button class="btn small wa" data-act="whatsapp">WhatsApp</button>
           ${navigator.share ? '<button class="btn ghost small" data-act="share">Share…</button>' : ''}
-        </div>` : ''}
+        </div>
         ${isHost ? `<div class="visibility-control">${guestLockedHere('private_tables') ? '<p class="guest-lock-note" role="note">🔒 Private tables need a free account. Tap Private to create one.</p>' : ''}<span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
         ${inviteFriendsHTML()}
       </section>
@@ -3432,7 +3442,7 @@
       let month = none;
       let life = none;
       if (q) {
-        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : 'unrated';
+        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : (waiting && q.rated ? none : 'unrated');
         month = q.monthRating !== null ? `${num(q.monthRating)}${q.monthDelta !== null ? ` (${signed(q.monthDelta)})` : ''}` : '–';
         life = num(q.lifetimeRating);
       }
@@ -3534,8 +3544,11 @@
     const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
     const gotTotals = cached && !cached.pending && !cached.failed ? cached : null; // only a successful final answer stops retries
     const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
-    const due = !f.totalsAsked || (Date.now() - f.totalsAsked.at >= 5000);
-    return { cached, gotTotals, waiting: Boolean(cached && cached.pending), tries, askNow: !gotTotals && due && tries < 3 };
+    const sinceAsk = f.totalsAsked ? Date.now() - f.totalsAsked.at : Infinity;
+    const waiting = Boolean(cached && cached.pending);
+    // A pending answer may take longer (the rebuild queue), so it gets more asks; the server answers each one on the socket.
+    const maxTries = waiting ? 6 : 3;
+    return { cached, gotTotals, waiting, sinceAsk, tries, maxTries, askNow: !gotTotals && sinceAsk >= 5000 && tries < maxTries };
   }
 
   /** The game-over ratings card for the current answer. */
@@ -3544,9 +3557,11 @@
     const xpRows = (r.outcome && r.outcome.xp) || [];
     const t = endTotalsState(f);
     // out of retries with only a pending answer: say so, rather than "updating" with nothing left to ask for
-    const gaveUp = !t.gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
+    const gaveUp = !t.gotTotals && !!f.totalsAsked && t.tries >= t.maxTries && t.sinceAsk >= 5000;
     const state = t.gotTotals ? 'ready' : (gaveUp ? 'unavailable' : (t.waiting ? 'pending' : 'loading'));
-    return endRatingHTML(xpRows, statsGame(r.gameId).name, t.gotTotals && t.gotTotals.ratings ? t.gotTotals.ratings : {}, state);
+    // the stored values show as soon as they arrive, also while the settled ones are still pending
+    const shown = t.cached && t.cached.ratings ? t.cached.ratings : {};
+    return endRatingHTML(xpRows, statsGame(r.gameId).name, shown, state);
   }
 
   /** Asks for the ratings again while the game-over card is still waiting, and swaps only the card when the answer is final. */

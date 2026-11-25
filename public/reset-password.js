@@ -75,7 +75,7 @@
     event.preventDefault();
     resetMsg.hidden = false;
     const password = resetPassword.value;
-    const weak = globalThis.TvPassword ? globalThis.TvPassword.check(password) : (password.length < 10 ? 'Use at least 10 characters.' : null);
+    const weak = globalThis.TvPassword ? globalThis.TvPassword.check(password) : (password.length < 8 ? 'Use at least 8 characters.' : null);
     if (weak) { resetMsg.textContent = weak; return; }
     if (password !== resetConfirm.value) { resetMsg.textContent = 'The two passwords do not match.'; return; }
     resetSubmit.disabled = true;

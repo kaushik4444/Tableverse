@@ -1865,13 +1865,15 @@ function start(opts = {}) {
         // for this game; a failed rebuild leaves the stored ratings stale, so they are not shown as current.
         // The rebuild queue can be long (every finished game queues one), so the reply waits at most 3 seconds; after that the
         // answer goes out now as pending and the final ratings follow when the rebuild has settled.
+        // The stored ratings are read at once: the card never waits for the rebuild. If the rebuild has not finished, the answer
+        // is marked pending and the settled ratings follow as a second message.
         let ratings = {};
         let settling = null; // the one settlement this answer waits for; the late path reuses it, so a later rebuild cannot stand in
         if (dbRatings.liveEnabled()) {
           settling = dbRatings.ratingsSettled();
-          const settled = await Promise.race([settling, new Promise((resolve) => setTimeout(() => resolve('late'), 3000))]);
-          if (settled === 'late') return { ratings: {}, pending: true, settling };
-          ratings = settled ? (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {} : {};
+          const settled = await Promise.race([settling.then(() => 'settled'), new Promise((resolve) => setImmediate(() => resolve('late')))]);
+          ratings = (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {};
+          if (settled === 'late') return { ratings, pending: true, settling };
         }
         return { ratings };
       })().then(

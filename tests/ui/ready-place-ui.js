@@ -84,7 +84,12 @@ function atPhase(gameId, n, phase) {
       void g; void phase;
       const { page, ctx } = await open(gameId, n, g0(gameId), waiting, { width: 360, height: 640 });
       assert.equal(await page.locator('.ready-box').count(), 1);
-      assert.equal(await page.locator('.wz-status:visible').count(), 0, 'one line, not two');
+      if (gameId === 'penaltyrows') {
+        // Take 5 keeps its status panel beside the tabs (so the top row never moves) and puts its Ready bar under the table
+        assert.equal(await page.locator('.wz-status:visible').count(), 1, 'the status panel stays');
+        const below = await page.evaluate(() => document.querySelector('.pr-ready').getBoundingClientRect().top >= document.querySelector('.pr-table').getBoundingClientRect().bottom - 1);
+        assert.equal(below, true, 'the Ready bar sits under the table');
+      } else assert.equal(await page.locator('.wz-status:visible').count(), 0, 'one line, not two');
       const overlap = await page.evaluate(() => { const b = document.querySelector('.ready-box').getBoundingClientRect(); const t = document.querySelector('.pr-row, .pr-rows, .sr-table, .cc-tablewrap, .pt-center, .pt-board'); if (!t) return false; const r = t.getBoundingClientRect(); return b.top < r.bottom - 2 && b.bottom > r.top + 2; });
       assert.equal(overlap, false, 'the Ready box does not sit on the table');
       await page.click('.ready-box [data-act="readyUp"]');

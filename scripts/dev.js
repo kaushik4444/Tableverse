@@ -28,7 +28,7 @@ try {
   if (url) console.log(`[dev] database: ${url.hostname}:${url.port || 5432}${url.pathname} (local)`);
   else console.log('[dev] no DATABASE_URL: guest play works, but e-mail accounts need a local PostgreSQL. See docs/LOCAL_DEVELOPMENT.md.');
 } catch (e) { console.error('[dev] ' + e.message); process.exit(1); }
-console.log(`[dev] e-mail verification required: ${env.REQUIRE_EMAIL_VERIFICATION}   http://localhost:${env.PORT || 3000}`);
+console.log(`[dev] e-mail verification: always required for registered accounts   http://localhost:${env.PORT || 3000}`);
 
 const child = spawn(process.execPath, [path.join(root, 'server.js')], { stdio: 'inherit', env });
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));

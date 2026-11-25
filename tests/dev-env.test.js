@@ -40,9 +40,8 @@ test('generated passwords always satisfy the password rule and are not repeated'
   for (let i = 0; i < 300; i += 1) { const pw = generatePassword(); assert.equal(policy.check(pw), null, pw); assert.equal(pw.length, 20); seen.add(pw); }
   assert.equal(seen.size, 300);
 });
-test('e-mail verification is optional locally unless set, and an explicit value wins', () => {
-  assert.deepEqual(devDefaults({}), { REQUIRE_EMAIL_VERIFICATION: 'false' });
-  assert.deepEqual(devDefaults({ REQUIRE_EMAIL_VERIFICATION: 'true' }), { REQUIRE_EMAIL_VERIFICATION: 'true' });
+test('local dev sets no verification switch: registered accounts always verify', () => {
+  assert.deepEqual(devDefaults({}), {});
 });
 test('a host or hostaddr query parameter is refused: it would override the host the check sees', () => {
   refused({ DATABASE_URL: 'postgres://u:p@localhost/db?host=ep-x.eu-central-1.aws.neon.tech' }, /host or hostaddr/);
