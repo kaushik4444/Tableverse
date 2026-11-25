@@ -79,6 +79,38 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     await ctx.close();
   });
 
+  for (const outcome of ['resolve', 'reject']) {
+    await test(`a ${outcome === 'resolve' ? 'resolved' : 'rejected'} load for an old table does not redraw a newer table of the same game`, async () => {
+      const [hello, tableA] = tableMessages('chess', [{ name: 'Aarav' }, { name: 'Bo' }]);
+      const tableB = { ...tableA, room: { ...tableA.room, code: 'GHIJKL' } };
+      const { page, ctx } = await scriptedPage(browser, { messages: [hello] });
+      await page.goto(url + '/');
+      await page.evaluate(() => {
+        window.__originalEnsure = window.TvGames.ensure;
+        window.__loads = [];
+        window.TvGames.ensure = () => new Promise((resolve, reject) => window.__loads.push({ resolve, reject }));
+      });
+      await page.evaluate((state) => window.__push(state), tableA);
+      const oldLoadCount = await page.evaluate(() => window.__loads.length);
+      await page.evaluate((state) => window.__push(state), tableB);
+      const loadCount = await page.evaluate(() => window.__loads.length);
+      assert.ok(oldLoadCount > 0 && loadCount > oldLoadCount, 'both tables must start loading');
+      await page.evaluate(async ({ result, count }) => {
+        window.__loads.slice(0, count).forEach((load) => load[result](new Error('old table load failed')));
+        await Promise.resolve();
+      }, { result: outcome, count: oldLoadCount });
+      assert.equal(await page.evaluate(() => window.__loads.length), loadCount, 'the old table triggered another load');
+      assert.match(await page.evaluate(() => document.body.innerText), /Loading the game/, 'the newer table was replaced');
+      await page.evaluate(async (count) => {
+        window.TvGames.ensure = window.__originalEnsure;
+        await window.TvGames.ensure('chess');
+        window.__loads.slice(count).forEach((load) => load.resolve());
+      }, oldLoadCount);
+      await page.waitForSelector('.ch-board, .ch-square, [data-ch-sq]', { timeout: 8000 });
+      await ctx.close();
+    });
+  }
+
   await browser.close(); server.close();
   console.log(failed ? `${failed} failed` : 'game loader UI: all passed');
   process.exit(failed ? 1 : 0);
