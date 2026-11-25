@@ -198,8 +198,10 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 .game-art {
   display: grid; place-items: center; font-size: 52px;
   background: linear-gradient(160deg, var(--accent), var(--accent));
-  background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #000));
   text-shadow: 0 4px 12px rgba(0, 0, 0, .55);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  .game-art { background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #000)); }
 }
 .game-body { padding: 18px; display: grid; gap: 10px; align-content: start; }
 .game-body p { margin: 0; color: var(--muted); line-height: 1.45; font-size: 14px; }

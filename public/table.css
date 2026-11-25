@@ -130,8 +130,11 @@ button.card { cursor: pointer; }
 .pseat { display: grid; justify-items: center; gap: 3px; position: relative; }
 .av {
   position: relative; width: var(--av); height: var(--av); border-radius: 50%; display: grid; place-items: center;
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--avbg) 70%, #fff), var(--avbg));
+  background: radial-gradient(circle at 35% 30%, var(--avbg), var(--avbg));
   border: 3px solid rgba(255, 255, 255, .88); box-shadow: 0 4px 10px rgba(0, 0, 0, .5);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  .av { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--avbg) 70%, #fff), var(--avbg)); }
 }
 .av .face { font-size: calc(var(--av) * .56); line-height: 1; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .4)); font-weight: 700; }
 .pseat.me .av { border-color: var(--gold); }
