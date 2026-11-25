@@ -23,15 +23,27 @@ async function test(name, fn) { try { await fn(); passed++; console.log('  ok  '
     try {
       await page.goto(url + '/');
       await page.waitForSelector('.cb-svg', { timeout: 8000 });
-      const x = () => page.evaluate(() => { const s = document.querySelector('.cb-svg [data-id="striker"]'); return s ? [Number(s.getAttribute('cx')), Number(s.getAttribute('cy'))] : null; });
-      await page.waitForTimeout(300); // in flight: the striker has left its bar
-      const mid = await x();
-      assert.ok(mid !== null, 'the striker should be on the board during the shot');
-      // the push and the read happen in one step, so no animation frame runs between them
-      const redrawn = await page.evaluate((msg) => { window.__push(msg); const s = document.querySelector('.cb-svg [data-id="striker"]'); return s ? [Number(s.getAttribute('cx')), Number(s.getAttribute('cy'))] : null; }, { t: 'state', room: { ...room, visibility: 'private', now: Date.now() }, view: after });
-      assert.ok(redrawn !== null, 'the striker should still be on the board after a redraw');
-      // the striker's start on its bar, in the board's own units (the viewer is the bottom seat, so no rotation)
+      // The striker's start on its bar, in SVG coordinates (the viewer is the bottom seat).
       const start = [0.4, 1 - 0.12];
+      const { mid, redrawn } = await page.evaluate(({ start, msg }) => new Promise((resolve, reject) => {
+        // The aiming striker is a slider; the playback striker only exists while the shot animates.
+        const position = () => {
+          const s = document.querySelector('.cb-svg [data-id="striker"]:not([role="slider"])');
+          return s && s.style.display !== 'none' ? [Number(s.getAttribute('cx')), Number(s.getAttribute('cy'))] : null;
+        };
+        const deadline = performance.now() + 4000;
+        function poll() {
+          const mid = position();
+          if (mid && Math.hypot(mid[0] - start[0], mid[1] - start[1]) > 0.02) {
+            // One synchronous sample, push and sample: no animation frame can run between them.
+            window.__push(msg);
+            resolve({ mid, redrawn: position() });
+          } else if (performance.now() >= deadline) reject(new Error('the striker did not move during playback'));
+          else setTimeout(poll, 16);
+        }
+        poll();
+      }), { start, msg: { t: 'state', room: { ...room, visibility: 'private', now: Date.now() }, view: after } });
+      assert.ok(redrawn !== null, 'the striker should still be on the board after a redraw');
       const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
       assert.ok(d(redrawn, mid) < 0.1, `the striker moved from ${mid} to ${redrawn} on a redraw mid-shot`);
       assert.ok(d(redrawn, start) > d(redrawn, mid), `the striker jumped back to its start ${start} on a redraw mid-shot (now at ${redrawn})`);
