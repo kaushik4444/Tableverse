@@ -6,6 +6,7 @@
 // rebuild. Pure, no database.
 const assert = require('node:assert/strict');
 const { replay, seedForWindow, seedDayTotals, pairHistory } = require('../lib/ratingReplay');
+const { DAILY_CAP } = require('../lib/ratings');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const part = (playerId, extra = {}) => ({ playerId, isBot: false, leftEarly: false, forfeit: false, isWinner: false, isDraw: false, place: null, score: 0, ...extra });
@@ -70,8 +71,8 @@ function windowFor(st, all, newIds, finishedById) {
   const counts = new Map();
   for (const e of mine) if (e.finishedMs < since) counts.set(keyOf(e.playerId, e.gameId, e.scope), (counts.get(keyOf(e.playerId, e.gameId, e.scope)) || 0) + 1);
   const priorCounts = [...counts].map(([k, count]) => { const [playerId, gameId, scope] = k.split('|'); return { playerId, gameId, scope, count }; });
-  const dayStartMs = dayStart.getTime();
-  const dayEvents = mine.filter((e) => e.finishedMs >= dayStartMs && e.finishedMs < since);
+  const sinceDay = new Date(since); sinceDay.setUTCHours(0, 0, 0, 0);
+  const dayEvents = mine.filter((e) => e.finishedMs >= sinceDay.getTime() && e.finishedMs < since);
   const priorMatches = all
     .filter((m) => m.finishedMs >= since - DAY_MS && m.finishedMs < since && st.processed.has(m.id))
     .map((m) => ({ ...m, rated: st.processed.get(m.id).rated, reason: st.processed.get(m.id).reason }));
@@ -139,4 +140,21 @@ for (const seed of [1, 2, 3, 42, 99]) {
   }
 }
 console.log('  ok  incremental batches give exactly the full replay (ratings, games, ledger rows and rated flags), for several histories and batch sizes');
+{
+  // The window starts at 08:00 UTC on day one. Three earlier wins use most of the daily allowance;
+  // replaying the already processed fourth win must reach the same cap without falling back to a full rebuild.
+  const all = [1, 2, 3, 10, 32].map((hour, i) => match('cap-' + i, 'chess', Date.UTC(2026, 10, 1, hour),
+    [part('winner', { isWinner: true }), part('opponent-' + i)]));
+  const finishedById = new Map(all.map((m) => [m.id, m.finishedMs]));
+  const st = emptyStore();
+  const initial = replay(all.slice(0, 4));
+  store(initial.results, finishedById, st);
+  storeRatings(initial.ratings, st);
+  const dayDeltas = st.events.filter((e) => e.playerId === 'winner' && e.scope === 'lifetime');
+  assert.equal(dayDeltas.reduce((sum, e) => sum + e.delta, 0), DAILY_CAP);
+  assert.ok(dayDeltas[3].delta > 0 && dayDeltas[3].delta < dayDeltas[2].delta, 'the fourth win is clipped by the daily cap');
+  assert.ok(incrementalBatch(st, all, [all[4].id], finishedById), 'the stored capped match replays with the seeded totals');
+  const full = replay(all);
+  assert.equal(sig(st.events.filter((e) => e.matchId === all[4].id)), sig(full.results[4].events));
+}
 console.log('incremental ratings: all passed');
