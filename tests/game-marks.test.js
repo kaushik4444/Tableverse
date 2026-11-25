@@ -193,6 +193,7 @@ async function adminMarks() {
       main: {
         insertAdjacentHTML: (_position, markup) => { output += markup; },
         querySelectorAll: () => [],
+        querySelector: () => null, // no tables section yet: the switches are appended
       },
     };
     vm.createContext(context);
