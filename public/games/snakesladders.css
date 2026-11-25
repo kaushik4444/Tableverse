@@ -69,8 +69,8 @@
   .sl .sl-feedback { margin: 4px 0 6px; padding: 5px 10px; font-size: 13px; }
   .sl .sl-feedback.start { display: none; }
   .sl .sl-layout { gap: 6px; }
-  .sl .sl-board-wrap { max-width: min(100%, calc(100vh - 300px));
- max-width: min(100%, calc(100dvh - 300px)); margin-inline: auto; padding: 6px; }
+  .sl .sl-board-wrap { max-width: min(100%, max(300px, calc(100vh - 300px)));
+    max-width: min(100%, max(300px, calc(100dvh - 300px))); margin-inline: auto; padding: 6px; }
   .sl .sl-panel { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; }
   .sl .sl-panel .sl-die { width: 40px; height: 40px; }
   .sl .sl-panel-copy small { display: none; }
