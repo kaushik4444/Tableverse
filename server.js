@@ -2377,19 +2377,34 @@ function start(opts = {}) {
     }
   }
 
+  // The reasons the server sends with its own closes, as logged. Anything else is logged as 'other'.
+  const SERVER_CLOSE_REASONS = new Set([
+    'server busy', 'auth required', 'role changed while signing in; reconnect', 'invalid session',
+    'email verification required', 'replaced', 'too many connections', 'slow down', 'server error', 'server restarting',
+  ]);
+
   wss.on('connection', (ws, req) => {
     lastActivityAt = Date.now();
     if (flagPoller) void flagPoller.touch(); // starts the read early; the hello waits for it (onHello)
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
     const openedAt = Date.now();
+    // Every close the server starts goes through ws.close: keep its reason on the socket. Only the fixed reasons below are
+    // kept; any other text is logged as 'other', so no free text reaches the log.
+    const closeFromServer = ws.close.bind(ws);
+    ws.close = (code, reason) => {
+      ws.serverCloseReason = SERVER_CLOSE_REASONS.has(reason) ? reason : 'other';
+      return closeFromServer(code, reason);
+    };
     ws.once('close', (code) => {
       socketCloses.record(code);
-      // One line per closed socket: its close code, how long it lasted, and whether someone was signed in. No address, email or token.
+      // One line per closed socket: its close code, how long it lasted, whether someone was signed in, and the reason the
+      // server closed it (null when the peer closed it). No address, email or token.
       wsLog.info('ws.closed', {
         connId: ws.connId || null,
         code,
         ageSec: Math.round((Date.now() - openedAt) / 1000),
         signedIn: ws.wasSignedIn === true,
+        serverReason: ws.serverCloseReason || null,
       });
       const bucket = lengthBucket((Date.now() - openedAt) / 1000); // null for health checks and flapping reconnects
       if (bucket) {
