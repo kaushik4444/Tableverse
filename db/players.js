@@ -44,7 +44,7 @@ class MemoryPlayerStore {
     return player ? { ...player } : null;
   }
 
-  async createAnonymousPlayer({ displayName, avatar, ttlHours }) {
+  async createAnonymousPlayer({ displayName, avatar, ttlHours, trialKey }) {
     const id = 'p_' + crypto.randomUUID();
     const rawToken = generateToken();
     const hash = hashToken(rawToken);
@@ -146,7 +146,7 @@ function recordVisit(playerId) {
 /**
  * Create a new anonymous player account with a secure session bearer token.
  */
-async function createAnonymousPlayer({ displayName, avatar, ttlHours }) {
+async function createAnonymousPlayer({ displayName, avatar, ttlHours, trialKey }) {
   if (!db.hasDatabase()) {
     return memoryStore.createAnonymousPlayer({ displayName, avatar, ttlHours });
   }
@@ -158,10 +158,10 @@ async function createAnonymousPlayer({ displayName, avatar, ttlHours }) {
 
   return db.withTransaction(async (client) => {
     const playerRes = await client.query(
-      `INSERT INTO players (display_name, avatar, is_anonymous)
-       VALUES ($1, $2, TRUE)
+      `INSERT INTO players (display_name, avatar, is_anonymous, guest_trial_key)
+       VALUES ($1, $2, TRUE, $3)
        RETURNING id, username, display_name, avatar, is_anonymous, created_at, last_seen_at`,
-      [String(displayName || 'Guest').slice(0, 32), avatar || '🧙']
+      [String(displayName || 'Guest').slice(0, 32), avatar || '🧙', trialKey || null]
     );
 
     const player = playerRes.rows[0];
