@@ -82,10 +82,17 @@ const baseRoutes = (login) => ({
     await page.fill('#loginEmail', 'a@b.c');
     await page.fill('#loginPassword', 'TestPass123!');
     await page.evaluate(() => { document.getElementById('loginForm').dataset.marker = 'same-node'; });
+    // count the messages the harness pushes from now on, so the test can wait for the reply to the reconnect's hello
+    await page.evaluate(() => {
+      const push = window.__push;
+      window.__pushed = 0;
+      window.__push = (m) => { push(m); window.__pushed += 1; };
+    });
     const helloBefore = await page.evaluate(() => window.__sent.filter((m) => m.t === 'hello').length);
     await page.evaluate(() => window.__drop());
-    // wait for the reconnect's own hello, then for a marker reply sent after it, so the form is checked only once the reconnect is handled
     await page.waitForFunction((before) => window.__sent.filter((m) => m.t === 'hello').length > before, helloBefore, { timeout: 8000 });
+    // the harness's own authRequired answers that hello; wait for it, then send a marker that is handled last
+    await page.waitForFunction(() => window.__pushed >= 1, null, { timeout: 8000 });
     await page.evaluate(() => window.__push({ t: 'authRequired', message: 'Reconnected. Log in to continue.' }));
     await page.waitForFunction(() => /Reconnected/.test(document.querySelector('#auth-overlay .auth-msg')?.textContent || ''), null, { timeout: 8000 });
     assert.equal(await page.getAttribute('#loginForm', 'data-marker'), 'same-node', 'the login form was rebuilt after the reconnect');
