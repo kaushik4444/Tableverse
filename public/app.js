@@ -2996,7 +2996,7 @@
     ${topbarHTML()}
     <main class="page wide home">
       <section class="home-hero">
-        <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
+        <div class="hero-dice" aria-hidden="true"><div class="hd d1" style="--r:-12deg"><i style="grid-area:1/1"></i><i style="grid-area:1/3"></i><i style="grid-area:2/2"></i><i style="grid-area:3/1"></i><i style="grid-area:3/3"></i></div><div class="hd d2" style="--r:10deg"><i style="grid-area:1/1"></i><i style="grid-area:2/2"></i><i style="grid-area:3/3"></i></div></div>
         <div class="home-intro">
           ${name && !S.guest ? `<small class="eyebrow">${dayPart()}</small>` : ''}
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
@@ -3408,9 +3408,10 @@
     const unavailable = '<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>';
     // games load the first time their table opens (public/game-loader.js); draw the table again once the script is in
     if (window.TvGames && window.TvGames.knows(gameId) && !window.TvGames.isLoaded(gameId)) {
-      paintApp('<div class="page"><p class="hint">Loading the game…</p></div>');
-      // a callback only draws if this table is still on screen with its view; a lobby or a newer table has no view to draw
-      const stillHere = () => S.room && S.room.gameId === gameId && S.view;
+      paintApp('<div class="page load-die"><div class="hd-mini" aria-hidden="true"><i style="grid-area:1/1"></i><i style="grid-area:2/2"></i><i style="grid-area:3/3"></i></div><p class="hint">Loading the game…</p></div>');
+      // a callback only draws if this table is still on screen with its view
+      const tableCode = S.room.code;
+      const stillHere = () => S.room && S.room.code === tableCode && S.room.gameId === gameId && S.view;
       window.TvGames.ensure(gameId).then(
         () => { if (stillHere()) renderGame(); },
         () => { if (stillHere()) paintApp(unavailable); },
