@@ -2344,7 +2344,6 @@
             ${blockedHTML()}
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
             <div class="setting-row"><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
-            <div class="setting-row"><div><b>Sessions</b><small>Sign out of this device, or of every device you are logged in on.</small></div><span class="row" style="gap:6px"><button type="button" class="btn ghost small" data-act="logout">Log out</button><button type="button" class="btn ghost small" data-act="logoutAll">Everywhere</button></span></div>
             <div class="danger-zone"><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
           </div>`
         : P.game ? gameDetailHTML(P) : statsHTML(P.data.stats);

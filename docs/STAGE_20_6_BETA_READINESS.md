@@ -140,7 +140,7 @@ Run on the live domain with two test accounts that are not testers. Record times
 | S-4 | Open the verification link; reuse it | Verified; second use refused |
 | S-5 | Log in, log out, forgot password, new password, old session ends | As described |
 | S-6 | Public table, two accounts, one short game | Result in both histories |
-| S-7 | Keep me signed in: sign in with the box ticked. In the browser's developer tools, delete **only** the `ct_session` cookie (keep `ct_device`), then reload | Signed in again, restored from the device cookie. Profile > Account > Sessions > sign out of every device ends it, and the device cookie stops working |
+| S-7 | Keep me signed in: sign in with the box ticked. In the browser's developer tools, delete **only** the `ct_session` cookie (keep `ct_device`), then reload | Signed in again, restored from the device cookie. Account menu > Log out everywhere ends it, and the device cookie stops working |
 | S-8 | Chat: send, report, block | Report stored (checked with the read-only query); block hides chat and refuses invites |
 | S-9 | Feedback form, then the Feedback tab | Item listed as new |
 | S-10 | Owner console: Overview, Users lookup, Broadcasts preview (no send) | Loads for the owner; a second account gets 403 on `GET /api/admin/overview` (`GET /api/admin/me` is not a test point: it returns 200 with `isAdmin: false` for any signed-in account, by design) |
