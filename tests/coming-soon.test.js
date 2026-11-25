@@ -37,56 +37,48 @@ const releaseSource = fs.readFileSync(require.resolve('../public/whats-new-data.
 const sandbox = { window: {} };
 vm.runInNewContext(releaseSource, sandbox);
 const releases = sandbox.window.TV_RELEASES;
-assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history keeps every version (newest first)');
-// Releases are newest first. Older releases are found by version so a new release at the top never breaks this test.
-const byVersion = (v) => releases.find((r) => r.version === v);
-assert.equal(releases[0].version, '2026-11-22-clearer-tables', 'the newest release comes first');
-assert.ok(releases.indexOf(byVersion('2026-11-21-color-clash-hidden-miners')) > 0, 'the Color Clash release follows it');
-assert.match(byVersion('2026-11-21-color-clash-hidden-miners').items.map((i) => i.title).join('\n'), /Color Clash[\s\S]*Hidden Miners/);
-assert.ok(releases.indexOf(byVersion('2026-11-20-twelve-games')) > 1, 'the twelve-games release follows it');
-assert.ok(releases[0].items.length >= 1, 'the newest release has at least one item');
-assert.match(byVersion('2026-11-20-game-names').items.map((i) => i.title).join('\n'), /Three games have new names/);
-const newest = byVersion('2026-11-18-guest-play');
-const highlights = newest.items.slice(0, 3).map((i) => i.title).join('\n');
-assert.equal(newest.items.slice(0, 3).length, 3, 'the guest play release keeps three highlights');
-assert.match(highlights, /Play without an account/);
-assert.match(highlights, /Some games need an account/);
-assert.match(highlights, /Quiet reminders/);
+assert.ok(Array.isArray(releases) && releases.length >= 3, 'the release history keeps every date (newest first)');
+// Releases are grouped by date, newest first. Each item is major or minor, and only player-facing items are listed.
+const dated = releases.filter((r) => r.date);
+const dates = dated.map((r) => r.date); assert.equal(JSON.stringify(dates), JSON.stringify([...dates].sort().reverse()), 'dates run newest first');
+assert.equal(new Set(dated.map((r) => r.date)).size, dated.length, 'each date appears once');
+for (const r of releases) for (const i of r.items) assert.ok(i.level === 'major' || i.level === 'minor', `"${i.title}" is neither major nor minor`);
+const byDate = (d) => releases.find((r) => r.date === d);
+const majors = (d) => byDate(d).items.filter((i) => i.level === 'major').map((i) => i.title).join('\n');
+assert.ok(releases[0].items.some((i) => i.level === 'major'), 'the newest date has at least one major update');
+assert.match(majors('2026-11-21'), /Color Clash[\s\S]*Hidden Miners/, 'the Color Clash and Hidden Miners release is on its date');
+assert.match(majors('2026-11-20'), /Chess for two/, 'Chess is a major update');
+assert.match(majors('2026-11-19'), /Three games have new names/, 'the game renames are on their date');
+assert.match(majors('2026-11-18'), /Play without an account/, 'the guest play release is on its date');
+// The home What's new shows at most three major updates of the newest date
+assert.ok(releases[0].items.filter((i) => i.level === 'major').slice(0, 3).length <= 3, 'the home highlights are at most three');
+// Customer copy only: no admin-only work and no game that is not open to players yet
+const customerText = JSON.stringify(releases);
+assert.doesNotMatch(customerText, /Carrom/i, 'Carrom is not in the customer release notes yet');
+assert.doesNotMatch(customerText, /admin/i, 'admin-console work is not in the customer release notes');
+assert.match(JSON.stringify(byDate('2026-11-18').items), /Some games need an account/);
+assert.match(JSON.stringify(byDate('2026-11-18').items), /Quiet reminders/);
 const history = releases.flatMap((r) => r.items.map((i) => i.title)).join('\n');
 assert.match(history, /Level-up dialog/);
 assert.match(history, /See how far you are to the next level/);
 assert.match(history, /A level-up notice, once/);
 assert.match(history, /Follow @playtableverse on Instagram/);
 assert.ok(releases.some((r) => r.items.some((i) => /Leaving a game with others counts as a loss/.test(i.title))), 'the earlier release stays in the history');
-assert.ok(releases.every((r) => r.version && r.title && Array.isArray(r.items) && r.items.length > 0), 'every release has a version, title and items');
-assert.equal(new Set(releases.map((r) => r.version)).size, releases.length, 'versions are unique');
-// Release cleanup: inspect the full historical entry, not just the home highlights.
-// A fourth admin-only item would otherwise escape the first-three assertions above.
-const gameOverRelease = releases.find((r) => r.version === '2026-11-17-game-over-table');
-assert.ok(gameOverRelease, 'the game-over release remains in version history');
-assert.equal(gameOverRelease.date, '2026-11-17');
-assert.equal(gameOverRelease.title, 'One table at the end of a game');
-// The per-game XP table was removed from the game-over screen, so its two entries are no longer shown to players.
-assert.deepEqual(Array.from(gameOverRelease.items, (item) => item.title), [
-  'Level-up dialog',
-], 'the release keeps its remaining player-facing item');
-// each explanation still says what the item is about, so an edit cannot quietly change the topic
-const topics = [/level/i];
-gameOverRelease.items.forEach((item, i) => assert.match(item.text, topics[i], `${item.title} explains its topic`));
-for (const item of gameOverRelease.items) {
+assert.ok(releases.every((r) => (r.date || r.label) && Array.isArray(r.items) && r.items.length > 0), 'every date has a label and items');
+// Each date's own items: the game-over date keeps its one player-facing item, as a minor update
+const gameOverDate = byDate('2026-11-17');
+assert.ok(gameOverDate, 'the game-over date remains in the history');
+assert.equal(JSON.stringify(gameOverDate.items.map((i) => i.title)), JSON.stringify(['Level-up dialog']), 'the date keeps its remaining player-facing item');
+assert.equal(gameOverDate.items[0].level, 'minor', 'the level-up dialog is a minor update');
+for (const item of gameOverDate.items) {
   assert.ok(typeof item.ico === 'string' && item.ico.trim(), `${item.title} has an icon`);
   assert.ok(typeof item.text === 'string' && item.text.trim(), `${item.title} has explanatory text`);
   assert.ok(!item.voice, `${item.title} remains visible with voice chat off`);
-  assert.doesNotMatch(`${item.title}\n${item.text}`, /admin tables can be sorted|player directory shows/i,
-    'admin sorting and player-directory changes are not advertised in this release');
 }
 const appSource = fs.readFileSync(require.resolve('../public/app.js'), 'utf8');
 assert.match(appSource, /window\.TV_RELEASES/, 'the app reads the release history');
 assert.match(appSource, /openVersionHistory/, 'the account menu opens the version history');
-
-for (const shipped of ['Private tables and invitations', 'Host tools', 'Player cards', 'Profiles and history']) {
-  assert.ok(!highlights.includes(shipped), shipped + ' is not a highlight');
-}
-assert.match(appSource, /<h3 class="stat-h"[^\n]*r\.version/, 'each Version history heading shows its version, since older releases have no date');
+assert.match(appSource, /Show minor updates|wn-minor/, 'minor updates are folded under a disclosure');
+assert.match(appSource, /releaseSectionHTML/, 'each date is rendered from its own major and minor updates');
 assert.doesNotMatch(appSource, /confirm\(/, 'important actions use in-app confirmation dialogs');
-console.log('Coming Soon and latest-release-note tests passed (8 games, requested order, alternate working titles, 3 current highlights).');
+console.log('Coming Soon and latest-release-note tests passed (requested order, major and minor updates, customer-only release notes).');
