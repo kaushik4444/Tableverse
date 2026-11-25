@@ -181,7 +181,7 @@
       button: () => `<button class="btn ghost small chat-btn" data-act="chat" aria-label="Open chat">💬<span class="cb" ${S.unread ? '' : 'hidden'}>${S.unread}</span></button>`,
     },
     // Shared toolbar seed: sound, chat, reactions, game-specific controls, then leave.
-    toolbarSeed: (midHTML, leaveKey, cls) => `<div class="${cls || 'row'}"${cls ? '' : ' style="gap:6px"'}>${window.CardTable.sound.button()}${window.CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button>${midHTML}<button class="btn ghost small" data-${leaveKey}="leave" aria-label="Leave table">✕</button></div>`,
+    toolbarSeed: (midHTML, leaveKey, cls) => `<div class="${cls || 'row'}" data-table-tools${cls ? '' : ' style="gap:6px"'}>${window.CardTable.sound.button()}${window.CardTable.chat.button()}<button class="btn ghost small" data-act="emotes" aria-label="Send a reaction">😀</button>${midHTML}<button class="btn ghost small" data-${leaveKey}="leave" aria-label="Leave table">✕</button></div>`,
   });
 
   const gameMeta = (id) => S.games.find((g) => g.id === id);
@@ -258,17 +258,26 @@
       const c = cards[i], last = i === cards.length - 1;
       const artFn = window.CardTable.howtoArt[gameId];
       const art = (c.art >= 0 && artFn && artFn(c.art, g)) || `<span class="ht-mark">${gameMark(g)}</span>`;
-      el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">
+      // The sheet stays in place between cards (only its contents change), so its size and entrance animation do not repeat per card.
+      const inner = `
         <div class="ht-kicker">How to play ${esc(g.name)} · ${i + 1} of ${cards.length}</div>
-        <h2>${esc(c.title)}</h2>
+        <h2 tabindex="-1">${esc(c.title)}</h2>
         <div class="ht-art" aria-hidden="true">${art}</div>
         ${c.html || `<p class="rule">${esc(c.text)}</p>`}
         ${last && note ? `<p class="ht-note">${esc(note)}</p>` : ''}
         <div class="ht-dots" aria-hidden="true">${cards.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
         <div class="row ht-actions">${i > 0 ? '<button class="btn ghost" type="button" data-ht="back">Back</button>' : ''}${last ? '<button class="btn" type="button" data-ht="done" data-close="1">Got it</button>' : '<button class="btn" type="button" data-ht="next">Next</button>'}${last ? '' : '<button class="btn ghost" type="button" data-ht="done" data-close="1">Skip</button>'}</div>
-      </div>`;
-      const primary = el.querySelector('[data-ht="next"], [data-ht="done"]');
-      if (primary) primary.focus();
+      `;
+      if (el.firstElementChild) el.firstElementChild.innerHTML = inner;
+      else el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">${inner}</div>`;
+      const sheet = el.firstElementChild;
+      sheet.scrollTop = 0;
+      const primary = sheet.querySelector('[data-ht="next"], [data-ht="done"]');
+      const buttonBounds = primary.getBoundingClientRect();
+      const sheetBounds = sheet.getBoundingClientRect();
+      // When the action is clipped, start keyboard focus at the card's heading.
+      const target = buttonBounds.bottom <= sheetBounds.bottom - sheet.clientTop ? primary : sheet.querySelector('h2');
+      target.focus({ preventScroll: true });
     };
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-ht]');
@@ -286,7 +295,7 @@
         const f = [...el.querySelectorAll('button')];
         if (!f.length) return;
         const first = f[0], lastB = f[f.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastB.focus(); }
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === el.querySelector('h2'))) { e.preventDefault(); lastB.focus(); }
         else if (!e.shiftKey && document.activeElement === lastB) { e.preventDefault(); first.focus(); }
         else if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
       }
@@ -598,11 +607,9 @@
     return true;
   }
 
+  // Always the same: a registered account verifies its e-mail first. (Not tied to the flag a guest session changes.)
   function authPolicyHintHTML() {
-    if (S.requireEmailVerification) {
-      return '<p class="auth-policy-hint">Email verification is required before entering the lobby.</p>';
-    }
-    return '<p class="auth-policy-hint optional" role="status">Friend-testing mode: email verification is optional right now. You can play immediately after creating your account.</p>';
+    return '<p class="auth-policy-hint">Email verification is required before entering the lobby.</p>';
   }
 
   /** What a guest is told when the owner has locked an area for guests (server code guest_locked, with the feature name). */
@@ -638,7 +645,17 @@
   }
   // the display name the owner typed when a sign-up was refused: the sheet is rebuilt with it, not with the guest's old name
   let pendingRegisterName = null;
+  // Changes only the message of an open sheet, so what was typed and the focus stay as they are.
+  function setAuthMessage(overlay, msg, isError) {
+    const slot = overlay.querySelector('.auth-msg-slot');
+    if (!slot || !msg) return;
+    slot.innerHTML = `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>`;
+  }
   function openAuthSheet(tab = 'login', msg = '', isError = false) {
+    // Already open on this tab (a reconnect, a refused login, a failed sign-up): keep what was typed and where the focus is.
+    // The sheet is rebuilt only when it opens on another tab or was not open.
+    const open = document.getElementById('auth-overlay');
+    if (open && open.dataset.tab === tab) { S.auth = tab; setAuthMessage(open, msg, isError); return; }
     const draftName = pendingRegisterName;
     pendingRegisterName = null;
     S.auth = tab;
@@ -649,9 +666,10 @@
     const overlay = document.createElement('div');
     overlay.id = 'auth-overlay';
     overlay.className = 'overlay';
+    overlay.dataset.tab = tab;
     overlay.innerHTML = `<div class="sheet auth-sheet" data-stop="1" role="dialog" aria-label="${loginOn ? 'Log in' : 'Create account'}">
       <div class="row" style="justify-content:space-between"><h2>${loginOn ? 'Welcome back' : 'Create your account'}</h2><button class="btn ghost small" data-auth-close aria-label="Close">✕</button></div>
-      ${msg ? `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>` : ''}
+      <div class="auth-msg-slot">${msg ? `<p class="auth-msg" role="${isError ? 'alert' : 'status'}">${esc(msg)}</p>` : ''}</div>
       <div class="row auth-tabs">
         <button class="btn ${loginOn ? '' : 'ghost'} small" data-act="showLogin">Log in</button>
         <button class="btn ${loginOn ? 'ghost' : ''} small" data-act="showRegister">Create account</button>
@@ -673,8 +691,8 @@
           <small id="registerUsernameHint" class="hint"></small>
           <input id="registerEmail" type="email" required placeholder="Email" autocomplete="email">
           ${authPolicyHintHTML()}
-          <input id="registerPassword" type="password" required minlength="10" placeholder="Password (10+ characters)" autocomplete="new-password" aria-describedby="registerPwHint">
-          <small id="registerPwHint" class="hint" aria-live="polite">Use an uppercase letter, a lowercase letter, a number and a symbol.</small>
+          <input id="registerPassword" type="password" required minlength="8" placeholder="Password (8+ characters)" autocomplete="new-password" aria-describedby="registerPwHint">
+          <small id="registerPwHint" class="hint" aria-live="polite">Use at least 8 characters. Avoid obvious words such as "password".</small>
           <label class="auth-check"><input id="registerAdult" type="checkbox" required> I am 18 or older.</label>
           <button class="btn big" type="submit">Create account</button>
         </form>
@@ -844,7 +862,7 @@
     beginSignIn();
     if (S.welcomeDue) showWelcome();
     connect();
-    if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
+    if (!S.emailVerified) toast('Email verification pending. Verify your email to enter the lobby.');
   }
 
   /** "Play as a guest": the server makes a temporary account and a session cookie. The page connects as that guest. */
@@ -1626,6 +1644,7 @@
         if (again) again.value = email || ''; // keep what was typed
       } finally {
         loginBusy = false;
+        if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Log in'; } // the sheet stays open on a failed login
       }
     }
     if (e.target.id === 'guestForm') {
@@ -1693,7 +1712,7 @@
   if (location.pathname.endsWith('/reset-password.html') && verifyToken) {
     // a real form (hidden password field, confirmation) instead of window.prompt, which shows the password in plain text
     loadSnapshot();
-    openModal('Choose a new password', `<form id="resetForm" class="auth-form"><input id="resetPw" type="password" minlength="10" required placeholder="New password (10+ characters)" autocomplete="new-password"><input id="resetPw2" type="password" minlength="8" required placeholder="Repeat the password" autocomplete="new-password"><p id="resetMsg" class="auth-msg" role="status" hidden></p><button class="btn big" type="submit">Update password</button></form>`, (o) => {
+    openModal('Choose a new password', `<form id="resetForm" class="auth-form"><input id="resetPw" type="password" minlength="8" required placeholder="New password (8+ characters)" autocomplete="new-password"><input id="resetPw2" type="password" minlength="8" required placeholder="Repeat the password" autocomplete="new-password"><p id="resetMsg" class="auth-msg" role="status" hidden></p><button class="btn big" type="submit">Update password</button></form>`, (o) => {
       o.querySelector('#resetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = o.querySelector('#resetMsg');
@@ -1731,7 +1750,7 @@
     }
     if (S.welcomeDue) showWelcome();
     connect();
-    if (!S.emailVerified) toast('Email verification pending. Friend-testing mode lets you play while unverified.');
+    if (!S.emailVerified) toast('Email verification pending. Verify your email to enter the lobby.');
   })();
 
   // ------------------------------------------------------------ rendering
@@ -3110,11 +3129,11 @@
       <section class="panel code-card">
         <div class="label">Table code</div>
         <div class="code">${esc(r.code)}</div>
-        ${r.visibility === 'public' ? `<div class="row" style="justify-content:center">
+        <div class="row" style="justify-content:center">
           <button class="btn small" data-act="copyLink">Copy invite link</button>
           <button class="btn small wa" data-act="whatsapp">WhatsApp</button>
           ${navigator.share ? '<button class="btn ghost small" data-act="share">Share…</button>' : ''}
-        </div>` : ''}
+        </div>
         ${isHost ? `<div class="visibility-control">${guestLockedHere('private_tables') ? '<p class="guest-lock-note" role="note">🔒 Private tables need a free account. Tap Private to create one.</p>' : ''}<span class="visibility-status ${r.visibility === 'public' ? 'public' : 'private'}" title="${r.visibility === 'public' ? 'Anyone can find this table in Open tables.' : 'Only friends with an accepted invitation can join.'}">${r.visibility === 'public' ? '🌐 Public table' : '🔒 Private table'}</span><button class="btn ghost small" data-act="toggleVisibility">${r.visibility === 'public' ? 'Make private' : 'Make public'}</button></div>` : ''}
         ${inviteFriendsHTML()}
       </section>
@@ -3316,6 +3335,8 @@
   /* Until this seat has pressed Ready, the table takes no input: every press, drag and key on the game is stopped before it
      reaches the game. The Ready box, the top bar, chat, and the leave, rules and player-card buttons stay usable. The server refuses moves too. */
   const GATE_OPEN_ACTS = new Set(['readyUp', 'leave', 'activityLog', 'showRules', 'playerCard', 'toggleTools', 'rules']);
+  // the table's top bar (data-table-tools): leaving, rules, reactions and sound stay open; a game's own buttons in it (Resign) do not
+  const TOOLBAR_OPEN = new Set(['leave', 'rules', 'emotes', 'sound', 'chat', 'toggleTools', 'showRules', 'activityLog']);
   const gateGuard = (e) => {
     if (!$app.classList.contains('gate-locked')) return;
     const t = e.target;
@@ -3327,9 +3348,12 @@
       return;
     }
     const toolbarRules = t.closest('[data-toolbar-rules]');
-    if (toolbarRules || (act && GATE_OPEN_ACTS.has(act.dataset.act))) {
+    const ctl = t.closest('button, a, [role="button"]');
+    const inTools = !!t.closest('[data-table-tools]');
+    const toolOpen = inTools && ctl && Object.values(ctl.dataset).some((v) => TOOLBAR_OPEN.has(v));
+    if (toolbarRules || toolOpen || (act && GATE_OPEN_ACTS.has(act.dataset.act))) {
       // Let these buttons generate a native click without activating game keyboard shortcuts.
-      if ((toolbarRules || act?.dataset.act === 'toggleTools') && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
+      if ((toolbarRules || toolOpen || act?.dataset.act === 'toggleTools') && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
       return;
     }
     e.stopPropagation(); e.preventDefault();
@@ -3340,22 +3364,18 @@
   function placeReady() {
     const room = S.room;
     const gate = gateInfo();
-    $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels give way to the Ready box
+    $app.classList.toggle('ready-wait', !!gate); // while the table waits, the bid panels keep their place and stop taking input
     $app.classList.toggle('gate-locked', !!(gate && gate.seated && !gate.youReady)); // this seat must press Ready before anything else
-    // the box this function adds is rebuilt on every call, so its "waiting for" list and count never go stale; a game's own box is left alone
-    $app.querySelectorAll('[data-ready-placed]').forEach((el) => el.remove());
-    if (!gate || room.status !== 'playing') {
-      // the table has stopped waiting: the Ready button goes, and the status line comes back
-      const status = $app.querySelector('.wz-status');
-      if (status) status.hidden = false;
-      return;
-    }
-    if ($app.querySelector('[data-ready-here]')) return;
-    const box = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
-    const status = $app.querySelector('.wz-status');
-    if (status) { status.insertAdjacentHTML('beforebegin', box); status.hidden = true; return; }
-    const top = $app.querySelector('.wz-top');
-    if (top) top.insertAdjacentHTML('afterend', box); else $app.insertAdjacentHTML('afterbegin', box);
+    // The Ready strip is fixed to the viewport, so the table never changes size when it comes or goes.
+    // Use the app root as a fallback for a shared gate on a game without a .wz wrapper.
+    const root = $app.querySelector('.wz') || (gate ? $app : null);
+    if (root && !$app.querySelector('.ready-slot')) root.insertAdjacentHTML('beforeend', '<div class="ready-slot" aria-live="polite"></div>');
+    const slot = $app.querySelector('.ready-slot');
+    if (!slot) return;
+    slot.innerHTML = '';
+    if (!gate || room.status !== 'playing') return;
+    if ($app.querySelector('[data-ready-here]')) return; // keep a game's own Ready box, such as a round summary
+    slot.innerHTML = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
   }
 
   function renderGame() {
@@ -3432,7 +3452,7 @@
       let month = none;
       let life = none;
       if (q) {
-        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : 'unrated';
+        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : (waiting && q.reason === null ? none : 'unrated');
         month = q.monthRating !== null ? `${num(q.monthRating)}${q.monthDelta !== null ? ` (${signed(q.monthDelta)})` : ''}` : '–';
         life = num(q.lifetimeRating);
       }
@@ -3534,8 +3554,11 @@
     const cached = S.gameTotals && S.gameTotals.code === r.code && r.outcome && S.gameTotals.id === r.outcome.id ? S.gameTotals : null;
     const gotTotals = cached && !cached.pending && !cached.failed ? cached : null; // only a successful final answer stops retries
     const tries = f.totalsAsked ? f.totalsAsked.tries : 0;
-    const due = !f.totalsAsked || (Date.now() - f.totalsAsked.at >= 5000);
-    return { cached, gotTotals, waiting: Boolean(cached && cached.pending), tries, askNow: !gotTotals && due && tries < 3 };
+    const sinceAsk = f.totalsAsked ? Date.now() - f.totalsAsked.at : Infinity;
+    const waiting = Boolean(cached && cached.pending);
+    // A pending answer may take longer (the rebuild queue), so it gets more asks; the server answers each one on the socket.
+    const maxTries = waiting ? 6 : 3;
+    return { cached, gotTotals, waiting, sinceAsk, tries, maxTries, askNow: !gotTotals && sinceAsk >= 5000 && tries < maxTries };
   }
 
   /** The game-over ratings card for the current answer. */
@@ -3544,9 +3567,11 @@
     const xpRows = (r.outcome && r.outcome.xp) || [];
     const t = endTotalsState(f);
     // out of retries with only a pending answer: say so, rather than "updating" with nothing left to ask for
-    const gaveUp = !t.gotTotals && !!f.totalsAsked && f.totalsAsked.tries >= 3 && Date.now() - f.totalsAsked.at >= 5000;
+    const gaveUp = !t.gotTotals && !!f.totalsAsked && t.tries >= t.maxTries && t.sinceAsk >= 5000;
     const state = t.gotTotals ? 'ready' : (gaveUp ? 'unavailable' : (t.waiting ? 'pending' : 'loading'));
-    return endRatingHTML(xpRows, statsGame(r.gameId).name, t.gotTotals && t.gotTotals.ratings ? t.gotTotals.ratings : {}, state);
+    // the stored values show as soon as they arrive, also while the settled ones are still pending
+    const shown = t.cached && t.cached.ratings ? t.cached.ratings : {};
+    return endRatingHTML(xpRows, statsGame(r.gameId).name, shown, state);
   }
 
   /** Asks for the ratings again while the game-over card is still waiting, and swaps only the card when the answer is final. */
@@ -3563,7 +3588,7 @@
       // no connection: keep trying each second; after about 30 s give up, so the card says the ratings are unavailable
       f.sendFails = (f.sendFails || 0) + 1;
       if (f.sendFails < 30) { setTimeout(() => retryEndTotals(f), 1000); return; }
-      f.totalsAsked = { at: Date.now() - 5000, tries: 3 };
+      f.totalsAsked = { at: Date.now() - 5000, tries: t.maxTries };
     }
     updateEndCard();
   }

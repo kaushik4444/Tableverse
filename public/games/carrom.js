@@ -344,6 +344,7 @@
       if (t - at > 0.2) continue;
       snd.play(kind === 2 ? 'pocket' : kind === 1 ? 'rail' : 'clack', speed);
     }
+    a.lastFrame = { t, d: pose.map(([id, x, y]) => [id, x, y]) };
     const svg = ui.root.querySelector('.cb-svg');
     if (svg) {
       const seen = new Set(pose.map(([id]) => id));
@@ -378,7 +379,9 @@
     const playing = v.phase === 'playing' && v.me >= 0;
     // a resignation confirmation belongs to one match at one table: a new shot, a finished game or another table clears it
     if (ui.resignArmed && ui.armKey !== armKeyOf(v, ctx)) ui.resignArmed = false;
-    const frame = ui.anim ? startFrame(ui.anim) : null;
+    // a redraw during a shot (another player's state, a timer) continues from the last pose drawn, not from the shot's first frame,
+    // so the discs do not jump back to their starting places and forward again
+    const frame = ui.anim ? (ui.anim.lastFrame || startFrame(ui.anim)) : null;
     root.innerHTML = `<div class="wz carrom-game" data-game="carrom">
       <div class="wz-top"><div class="wz-round"><b>${esc(v.name)}</b><span class="label"> · ${v.shots} shots</span></div>
         ${CardTable.toolbarSeed(`<button class="btn ghost small" data-cb="rules">Rules</button>${playing ? `<button class="btn ghost small" data-cb="resign">${ui.resignArmed ? 'Tap again to resign' : 'Resign'}</button>` : ''}`, 'cb')}</div>

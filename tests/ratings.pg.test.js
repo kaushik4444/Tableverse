@@ -87,6 +87,45 @@ async function test(name, fn) {
       assert.equal(typeof out[A].matchDelta, 'number');
     });
 
+    const snapshot = async () => ({
+      ratings: await q('SELECT player_id, game_id, scope, rating::text AS rating, rated_games FROM player_ratings ORDER BY 1, 2, 3'),
+      events: await q('SELECT match_id, player_id, scope, delta::text AS delta, rating_before::text AS before, rating_after::text AS after FROM rating_events ORDER BY 1, 2, 3'),
+      matches: await q('SELECT id, rated, unrated_reason FROM matches ORDER BY id'),
+    });
+
+    await test('an incremental rebuild after a new match gives exactly the full rebuild (ratings and ledger)', async () => {
+      // the stored state after a full rebuild, then one new match, then incremental: compare with a full rebuild of the same data
+      await ratings.rebuildRatings();
+      const [later] = await q(
+        `INSERT INTO matches (room_code, game_id, seats, match_key, started_at, finished_at, completed)
+         VALUES ('LATE1', 'chess', 2, gen_random_uuid(), NOW() + INTERVAL '2 hours', NOW() + INTERVAL '2 hours', TRUE) RETURNING id`,
+      );
+      await q(`INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner) VALUES ($1, $2, 'Ann', 0, TRUE), ($1, $3, 'Bo', 1, FALSE)`, [later.id, A, B]);
+      const done = await ratings.rebuildRatingsIncremental();
+      assert.equal(done.mode, 'incremental', 'the new match is replayed on its own');
+      assert.equal(done.matches, 1);
+      const incremental = await snapshot();
+      await ratings.rebuildRatings();
+      const full = await snapshot();
+      assert.deepEqual(incremental, full, 'the stored ratings, ledger rows and rated flags are identical');
+    });
+
+    await test('deleting an account invalidates ratings from matches older than the incremental window', async () => {
+      const removed = await db.withTransaction((client) => require('../db/account').removePlayerTx(client, B));
+      assert.equal(removed.matchesKept, 8);
+      const [fresh] = await q(
+        `INSERT INTO matches (room_code, game_id, seats, match_key, started_at, finished_at, completed)
+         VALUES ('LATE2', 'chess', 2, gen_random_uuid(), NOW() + INTERVAL '2 days', NOW() + INTERVAL '2 days', TRUE) RETURNING id`,
+      );
+      await q(`INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner) VALUES ($1, $2, 'Ann', 0, TRUE), ($1, $3, 'Cy', 1, FALSE)`, [fresh.id, A, C]);
+      assert.equal((await ratings.rebuildRatingsIncremental()).mode, 'full');
+      assert.equal((await ratings.ratingOwn({ playerId: A, gameId: 'chess', scope: 'lifetime' })).ratedGames, 1);
+      const repaired = await snapshot();
+      await ratings.rebuildRatings();
+      assert.deepEqual(await snapshot(), repaired, 'the old ledger entries and their effects are removed');
+      assert.equal((await ratings.rebuildRatingsIncremental()).mode, 'incremental', 'anonymized matches no longer force full rebuilds');
+    });
+
     console.log(`\n${passed} rating PostgreSQL tests passed`);
   } finally {
     if (db && db.close) await db.close().catch(() => {});

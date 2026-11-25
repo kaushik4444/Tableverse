@@ -79,13 +79,19 @@ function atPhase(gameId, n, phase) {
   });
 
   for (const [gameId, n, phase] of [['stagerummy', 4, 'play'], ['penaltyrows', 4, 'choose'], ['colorclash', 4, 'playing']]) {
-    await test(`${gameId}: at the start Ready replaces the status line above the hand and nothing covers the table`, async () => {
+    await test(`${gameId}: at the start Ready sits at the bottom of the game, the status line stays put, and nothing covers the table`, async () => {
       const { g } = atPhase(gameId, n, g0(gameId));
       void g; void phase;
       const { page, ctx } = await open(gameId, n, g0(gameId), waiting, { width: 360, height: 640 });
       assert.equal(await page.locator('.ready-box').count(), 1);
-      assert.equal(await page.locator('.wz-status:visible').count(), 0, 'one line, not two');
-      const overlap = await page.evaluate(() => { const b = document.querySelector('.ready-box').getBoundingClientRect(); const t = document.querySelector('.pr-row, .pr-rows, .sr-table, .cc-tablewrap, .pt-center, .pt-board'); if (!t) return false; const r = t.getBoundingClientRect(); return b.top < r.bottom - 2 && b.bottom > r.top + 2; });
+      // the status line keeps its place above the hand, so the layout above the table does not move
+      assert.equal(await page.locator('.wz-status:visible').count(), 1, 'the status line is still there');
+      assert.equal(await page.locator('.wz > .ready-slot > .ready-box').count(), 1, 'the game uses the shared Ready strip');
+      const overlap = await page.evaluate(() => {
+        const b = document.querySelector('.ready-box').getBoundingClientRect();
+        const r = document.querySelector('.pr-table, .sr-table, .cc-tablewrap').getBoundingClientRect();
+        return !(b.bottom <= r.top || b.top >= r.bottom || b.right <= r.left || b.left >= r.right);
+      });
       assert.equal(overlap, false, 'the Ready box does not sit on the table');
       await page.click('.ready-box [data-act="readyUp"]');
       assert.equal(await page.evaluate(() => window.__sent.filter((x) => x.t === 'ready').length), 1);

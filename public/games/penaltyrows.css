@@ -202,3 +202,7 @@
 }
 /* in every layout the bombs stay inside their badge, so the page never scrolls sideways */
 .prt .pr-pile { overflow: hidden; }
+
+/* a sheet that is already up keeps still when the table redraws (no entrance replay on each Ready tap) */
+.prt .overlay.settled, .prt .overlay.settled .sheet { animation: none; }
+/* the Ready bar sits under the table, full width, so the top of the screen never changes size */

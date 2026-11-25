@@ -29,10 +29,6 @@ services:
         sync: false # e.g. https://tableverse.onrender.com (used in email links, no trailing slash)
       - key: RESEND_API_KEY
         sync: false
-      # Temporary testing switch: set to "false" only when inviting friends before domain-based email delivery is ready.
-      # Missing or invalid values default to secure mode ("true").
-      - key: REQUIRE_EMAIL_VERIFICATION
-        value: "true"
       # Optional: turns on "Sign in with Google" when set (a public web client ID, not a secret). See docs/GOOGLE_SIGNIN.md.
       # - key: GOOGLE_CLIENT_ID
       #   sync: false
