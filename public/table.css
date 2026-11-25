@@ -130,7 +130,6 @@ button.card { cursor: pointer; }
 .pseat { display: grid; justify-items: center; gap: 3px; position: relative; }
 .av {
   position: relative; width: var(--av); height: var(--av); border-radius: 50%; display: grid; place-items: center;
-  background: radial-gradient(circle at 35% 30%, var(--avbg), var(--avbg));
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--avbg) 70%, #fff), var(--avbg));
   border: 3px solid rgba(255, 255, 255, .88); box-shadow: 0 4px 10px rgba(0, 0, 0, .5);
 }
@@ -492,8 +491,8 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 
 /* how-to-play cards (shared by every game) */
 /* One fixed box for every card of a game, so it does not change size between pages; long text scrolls inside it. */
-.ht-sheet { --ht-h: min(540px, 86vh);
- --ht-h: min(540px, 86dvh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+.ht-sheet { --ht-h: min(540px, 86vh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+@supports (height: 1dvh) { .ht-sheet { --ht-h: min(540px, 86dvh); } } /* custom properties do not fall back, so the dvh value sits in a feature query */
 .ht-sheet > .row.ht-actions { margin-top: auto; padding-top: 12px; }
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }

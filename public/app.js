@@ -3401,9 +3401,22 @@
 
   function renderGame() {
     lastAppHtml = null; // the game draws the root itself, so the last home or lobby markup is no longer on screen
-    const plugin = plugins[S.room.gameId];
+    const gameId = S.room.gameId;
+    const unavailable = '<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>';
+    // games load the first time their table opens (public/game-loader.js); draw the table again once the script is in
+    if (window.TvGames && window.TvGames.knows(gameId) && !window.TvGames.isLoaded(gameId)) {
+      paintApp('<div class="page"><p class="hint">Loading the game…</p></div>');
+      // a callback only draws if this table is still on screen with its view; a lobby or a newer table has no view to draw
+      const stillHere = () => S.room && S.room.gameId === gameId && S.view;
+      window.TvGames.ensure(gameId).then(
+        () => { if (stillHere()) renderGame(); },
+        () => { if (stillHere()) paintApp(unavailable); },
+      );
+      return;
+    }
+    const plugin = plugins[gameId];
     if (!plugin || !S.view) {
-      paintApp('<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>');
+      paintApp(unavailable);
       return;
     }
     const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
