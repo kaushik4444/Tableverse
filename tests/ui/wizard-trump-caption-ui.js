@@ -47,16 +47,20 @@ function messagesFor(g) {
     try {
       const { page, ctx } = await scriptedPage(browser, { messages: messagesFor(g), viewport });
       await page.goto(url + '/');
-      await page.waitForSelector('.pt-corner .cap', { timeout: 8000 });
+      await page.waitForSelector('.wz-top', { timeout: 8000 });
+      // On short phones the corner is hidden on 4-player tables (it would cover a seat), so the header shows the trump there.
       const cap = await page.evaluate(() => {
-        const el = document.querySelector('.pt-corner .cap');
-        const cs = getComputedStyle(el);
-        return { display: cs.display, text: el.textContent.trim(), overflow: el.scrollHeight > el.clientHeight + 1 };
+        const visible = (el) => el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0;
+        const corner = document.querySelector('.pt-corner .cap');
+        const header = document.querySelector('.wz-top .wz-trump');
+        const el = visible(corner) ? corner : (visible(header) ? header : null);
+        if (!el) return { display: 'none', text: '', overflow: false };
+        return { display: getComputedStyle(el).display, text: el.textContent.trim(), overflow: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1 };
       });
       await ctx.close();
-      assert.notEqual(cap.display, 'none', 'the trump caption is hidden');
-      assert.match(cap.text, /Trump/, 'the caption does not say Trump');
-      assert.equal(cap.overflow, false, 'the caption text is cut off');
+      assert.notEqual(cap.display, 'none', 'the trump is hidden');
+      assert.match(cap.text, /Trump/, 'the trump text does not say Trump');
+      assert.equal(cap.overflow, false, 'the trump text is cut off');
       console.log(`  ok  ${name}: "${cap.text}"`);
     } catch (e) { failed++; console.log(`FAIL  ${name}: ${e.message.split('\n')[0]}`); }
   }
