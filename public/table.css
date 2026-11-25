@@ -175,7 +175,8 @@ button.card { cursor: pointer; }
 @media (max-width: 520px) and (max-height: 700px) { .wz { --av: 38px; } .pt { --pt-min: 250px; } }
 @media (max-width: 520px) and (max-height: 600px) { .pt { --pt-min: 215px; } }
 /* on those short screens the 4-seat corner label is just the card, so it clears the right-hand seat */
-@media (max-width: 520px) and (max-height: 700px) { .pt:not(:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"])) .pt-corner .cap { display: none; } }
+/* short phones: the caption stays (it is the only place the trump suit shows) but goes on one line, to save height */
+@media (max-width: 520px) and (max-height: 700px) { .pt:not(:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"])) .pt-corner .cap br { display: none; } }
 @media (min-width: 900px) { .wz { --av: 66px; } .pt-seat { width: 130px; } .plate b { font-size: 14px; } .plate span { font-size: 12px; } }
 
 /* =====================================================================
@@ -405,6 +406,13 @@ button.card { cursor: pointer; }
   /* Wizard shows its trump card in the table corner on phones, so its header copy is hidden. 29 has no corner: on phones its
      trump moves into the score strip (.t29-mini-trump), which has the same height, so the hand keeps its place above the fold. */
   .wz:not(.t29) .wz-trump, .t29 .wz-trump { display: none; }
+  /* Short phones: the corner would cover a seat on 2- and 4-player Wizard tables, so there the corner is hidden and the header shows the trump. */
+}
+@media (max-width: 520px) and (max-height: 700px) {
+  .wz:not(.t29) .wz-trump { display: flex; flex: 1 1 auto; max-width: none; overflow: visible; flex-wrap: wrap; justify-content: center; }
+  .wz:not(.t29) .pt:not(:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"])) .pt-corner { display: none; }
+}
+@media (max-width: 520px) {
   /* never squeezed: beside the Show trump or Play button the strip text wraps instead, so the trump stays whole */
   .t29-mini-trump { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; flex: 0 0 auto; }
   .wz-status > span:not(.t29-mini-trump) { flex: 1 1 auto; min-width: 0; }
