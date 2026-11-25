@@ -2,6 +2,7 @@
 
 ## Unreleased (on `development`, not yet on `main`)
 - Faster first load: each game's script and stylesheet load when its table opens, not on every page. The home page downloads about 519 KB instead of 930 KB, and main-thread blocking at startup is about 40% lower (measured on a throttled phone profile).
+- Older iPhones: full-height screens and the table sheets use plain vh values before their dvh values, and the dvh values for custom properties sit behind a feature query, so they still size correctly on iOS before 15.4.
 - Wizard on short phones: the trump corner is hidden on 4-player tables (it covered a seat at 320x568); the trump shows in the header there instead.
 - Wizard on short phones: the trump suit caption stays visible (on one line) when a Wizard is turned up; it was hidden on 4-player tables under 700px high, so the suit name did not show.
 

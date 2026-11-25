@@ -197,6 +197,7 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 @media (min-width: 700px) { .game-grid { grid-template-columns: 1fr 1fr; } }
 .game-art {
   display: grid; place-items: center; font-size: 52px;
+  background: linear-gradient(160deg, var(--accent), var(--accent));
   background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #000));
   text-shadow: 0 4px 12px rgba(0, 0, 0, .55);
 }
