@@ -1496,7 +1496,8 @@
         clearClientSession();
         S.ready = false;
         loadSnapshot();
-        openAuthSheet('login', m.message || 'Log in to play.');
+        // A reconnect of a visitor lands here too. Keep the sheet that is already open (sign-up included), so what was typed stays.
+        openAuthSheet(document.getElementById('auth-overlay')?.dataset.tab || 'login', m.message || 'Log in to play.');
         break;
       case 'blocks':
         S.blocked = Array.isArray(m.blocks) ? m.blocks : [];
