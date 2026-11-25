@@ -174,9 +174,11 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     const g = fresh();
     const first = msgsFor(g, 'p0');
     assert.equal(E.applyAction(g, 'p0', { seq: g.seq, type: 'flick', x: 0.5, angle: 0, power: 0.05 }).ok, true);
-    const { page, ctx } = await scriptedPage(browser, { messages: [first[0], first[1], { t: 'state', room: first[1].room, view: E.viewFor(g, 'p0') }], viewport: { width: 390, height: 844 } });
+    const { page, ctx } = await scriptedPage(browser, { messages: [first[0], first[1]], viewport: { width: 390, height: 844 } });
     await page.goto(url + '/');
     await page.waitForSelector('.cb-svg', { timeout: 8000 });
+    // the shot arrives once the table is on screen (the game script loads on first use, so it must not race the first state)
+    await page.evaluate((m) => window.__push(m), { t: 'state', room: first[1].room, view: E.viewFor(g, 'p0') });
     await page.waitForFunction(() => /Shot in play/.test(document.querySelector('.wz-status')?.textContent || ''), null, { timeout: 4000 });
     await page.waitForFunction(() => /is aiming/.test(document.querySelector('.wz-status')?.textContent || ''), null, { timeout: 15000 });
     assert.equal(await page.locator('.cb-coin').count(), 18, 'the board is redrawn after the shot');
@@ -246,9 +248,10 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
 
   await test('game over: the result sheet waits for the final shot to finish playing, then appears', async () => {
     const { first, table, end } = winningShot();
-    const { page, ctx } = await scriptedPage(browser, { messages: [first, table, end], viewport: { width: 390, height: 844 } });
+    const { page, ctx } = await scriptedPage(browser, { messages: [first, table], viewport: { width: 390, height: 844 } });
     await page.goto(url + '/');
     await page.waitForSelector('.cb-svg', { timeout: 8000 });
+    await page.evaluate((m) => window.__push(m), end); // the last shot arrives once the table is on screen
     // the status already names the result, but the final shot is still moving: the sheet must not cover it yet
     await page.waitForFunction(() => /all nine/.test(document.querySelector('.wz-status')?.textContent || ''), null, { timeout: 4000 });
     assert.equal(await page.locator('.overlay').count(), 0, 'no overlay over the board while the last shot is in play');

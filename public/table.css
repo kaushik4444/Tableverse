@@ -1,5 +1,6 @@
 /* Wizard table. Card size comes from --cw (set by wizard.js). */
-.wz { --cw: 78px; min-height: 100dvh; max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px); }
+.wz { --cw: 78px; min-height: 100vh; max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px); }
+@supports (height: 100dvh) { .wz { min-height: 100dvh; } }
 .wz-top { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 /* the Ready bar keeps its height whatever it says, so the table below never moves */
 .ready-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; box-sizing: border-box; margin: 8px 0; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--panel-line, rgba(255, 255, 255, .2)); background: var(--panel, rgba(255, 255, 255, .06)); font-size: 14px; }
@@ -129,9 +130,10 @@ button.card { cursor: pointer; }
 .pseat { display: grid; justify-items: center; gap: 3px; position: relative; }
 .av {
   position: relative; width: var(--av); height: var(--av); border-radius: 50%; display: grid; place-items: center;
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--avbg) 70%, #fff), var(--avbg));
+  background: radial-gradient(circle at 35% 30%, var(--avbg), var(--avbg));
   border: 3px solid rgba(255, 255, 255, .88); box-shadow: 0 4px 10px rgba(0, 0, 0, .5);
 }
+@supports (color: color-mix(in srgb, red 50%, blue)) { .av { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--avbg) 70%, #fff), var(--avbg)); } }
 .av .face { font-size: calc(var(--av) * .56); line-height: 1; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .4)); font-weight: 700; }
 .pseat.me .av { border-color: var(--gold); }
 .pseat.turn .av { box-shadow: 0 0 0 4px var(--gold), 0 0 20px 8px rgba(242, 193, 78, .55); animation: ring 1.3s ease-in-out infinite; }
@@ -175,7 +177,8 @@ button.card { cursor: pointer; }
 @media (max-width: 520px) and (max-height: 700px) { .wz { --av: 38px; } .pt { --pt-min: 250px; } }
 @media (max-width: 520px) and (max-height: 600px) { .pt { --pt-min: 215px; } }
 /* on those short screens the 4-seat corner label is just the card, so it clears the right-hand seat */
-@media (max-width: 520px) and (max-height: 700px) { .pt:not(:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"])) .pt-corner .cap { display: none; } }
+/* short phones: the caption stays (it is the only place the trump suit shows) but goes on one line, to save height */
+@media (max-width: 520px) and (max-height: 700px) { .pt:not(:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"])) .pt-corner .cap br { display: none; } }
 @media (min-width: 900px) { .wz { --av: 66px; } .pt-seat { width: 130px; } .plate b { font-size: 14px; } .plate span { font-size: 12px; } }
 
 /* =====================================================================
@@ -374,7 +377,8 @@ button.card { cursor: pointer; }
 .chat-btn { position: relative; }
 .cb { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #2a0600; font: 800 11px/18px var(--sans); text-align: center; }
 .cb[hidden] { display: none; }
-.chat { position: fixed; z-index: 55; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); width: min(380px, calc(100vw - 20px)); height: min(55dvh, 420px); display: flex; flex-direction: column; background: linear-gradient(160deg, #1d1c55, #11123a); border: 1px solid var(--panel-line); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6); overflow: hidden; }
+.chat { position: fixed; z-index: 55; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); width: min(380px, calc(100vw - 20px)); height: min(55vh, 420px); display: flex; flex-direction: column; background: linear-gradient(160deg, #1d1c55, #11123a); border: 1px solid var(--panel-line); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6); overflow: hidden; }
+@supports (height: 100dvh) { .chat { height: min(55dvh, 420px); } }
 .chat[hidden] { display: none; }
 .chat-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-line); }
 .chat-watch { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -405,6 +409,13 @@ button.card { cursor: pointer; }
   /* Wizard shows its trump card in the table corner on phones, so its header copy is hidden. 29 has no corner: on phones its
      trump moves into the score strip (.t29-mini-trump), which has the same height, so the hand keeps its place above the fold. */
   .wz:not(.t29) .wz-trump, .t29 .wz-trump { display: none; }
+  /* Short phones: the corner would cover a seat on 2- and 4-player Wizard tables, so there the corner is hidden and the header shows the trump. */
+}
+@media (max-width: 520px) and (max-height: 700px) {
+  .wz:not(.t29) .wz-trump { display: flex; flex: 1 1 auto; max-width: none; overflow: visible; flex-wrap: wrap; justify-content: center; }
+  .wz:not(.t29) .pt:not(:is([data-n="3"], [data-n="5"], [data-n="6"], [data-n="7"], [data-n="8"])) .pt-corner { display: none; }
+}
+@media (max-width: 520px) {
   /* never squeezed: beside the Show trump or Play button the strip text wraps instead, so the trump stays whole */
   .t29-mini-trump { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; flex: 0 0 auto; }
   .wz-status > span:not(.t29-mini-trump) { flex: 1 1 auto; min-width: 0; }
@@ -469,7 +480,6 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 @keyframes readyBlink { 0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, .7); } 50% { box-shadow: 0 0 0 9px rgba(249, 115, 22, 0); } }
 @media (prefers-reduced-motion: reduce) { .gate-locked .ready-box .btn { animation: none; outline: 3px solid var(--gold); } }
 .ready-box.in-sheet { margin: 14px 0 0; }
-/* the game's Ready bar sits at the bottom of the game and stays in view while the content scrolls */
 /* The Ready bar is a strip pinned to the bottom of the screen while the table waits. It takes no room in the layout, so the table
    and everything above it never change size; while it shows it covers the bottom of the hand, which cannot be played until Ready. */
 .ready-slot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; }
@@ -477,13 +487,13 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 .ready-slot:not(:empty) { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--menu-bg, #1b2a22); box-shadow: 0 -6px 18px rgba(0, 0, 0, .28); }
 .ready-box[data-ready-placed] { margin: 0; height: 60px; box-sizing: border-box; overflow: hidden; }
 .ready-box[data-ready-placed] > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ready-box[data-ready-placed] > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 /* while the table waits, the bid panel keeps its place (hidden, not removed), so the table above it never changes size */
 .ready-wait .bidbox:not(.ready-box) { visibility: hidden; pointer-events: none; }
 
 /* how-to-play cards (shared by every game) */
 /* One fixed box for every card of a game, so it does not change size between pages; long text scrolls inside it. */
-.ht-sheet { --ht-h: min(540px, 86dvh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+.ht-sheet { --ht-h: min(540px, 86vh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+@supports (height: 1dvh) { .ht-sheet { --ht-h: min(540px, 86dvh); } } /* custom properties do not fall back, so the dvh value sits in a feature query */
 .ht-sheet > .row.ht-actions { margin-top: auto; padding-top: 12px; }
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }

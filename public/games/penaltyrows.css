@@ -208,5 +208,3 @@
 /* a sheet that is already up keeps still when the table redraws (no entrance replay on each Ready tap) */
 .prt .overlay.settled, .prt .overlay.settled .sheet { animation: none; }
 /* the Ready bar sits under the table, full width, so the top of the screen never changes size */
-.prt .pr-ready { margin-top: 10px; }
-.prt .pr-ready-bar { width: 100%; box-sizing: border-box; }

@@ -1863,15 +1863,14 @@ function start(opts = {}) {
         if (!saved || saved.status === 'failed') throw new Error('this game is not saved yet');
         // Wait for the rebuild that follows this game's save, then send this game's ratings. {} when they are not available
         // for this game; a failed rebuild leaves the stored ratings stale, so they are not shown as current.
-        // The rebuild queue can be long (every finished game queues one), so the reply waits at most 3 seconds; after that the
-        // answer goes out now as pending and the final ratings follow when the rebuild has settled.
         // The stored ratings are read at once: the card never waits for the rebuild. If the rebuild has not finished, the answer
         // is marked pending and the settled ratings follow as a second message.
         let ratings = {};
         let settling = null; // the one settlement this answer waits for; the late path reuses it, so a later rebuild cannot stand in
         if (dbRatings.liveEnabled()) {
           settling = dbRatings.ratingsSettled();
-          const settled = await Promise.race([settling.then(() => 'settled'), new Promise((resolve) => setImmediate(() => resolve('late')))]);
+          const settled = await Promise.race([settling, new Promise((resolve) => setImmediate(() => resolve('late')))]);
+          if (settled === false) throw new Error('ratings rebuild failed');
           ratings = (await dbRatings.ratingsForMatch({ matchKey, gameId, playerIds: ids })) || {};
           if (settled === 'late') return { ratings, pending: true, settling };
         }
@@ -2270,6 +2269,7 @@ function start(opts = {}) {
     p.connected = true;
     p.pingMs = null; // measured again on this connection
     ws.player = p;
+    ws.wasSignedIn = true; // kept after the player is cleared (replace, revoke), so the close log still says who was on the socket
     // Still the open socket that owns the player? A socket that closed or was replaced while an await was pending has
     // already been handled by its close handler (or by the newer socket), so this hello stops here: no welcome, no
     // cancelled drop timer, no seat, no room change.
@@ -2377,13 +2377,41 @@ function start(opts = {}) {
     }
   }
 
+  // The reasons the server sends with its own closes, as logged. Anything else is logged as 'other'.
+  const SERVER_CLOSE_REASONS = new Set([
+    'server busy', 'auth required', 'role changed while signing in; reconnect', 'invalid session',
+    'email verification required', 'replaced', 'too many connections', 'slow down', 'server error', 'server restarting',
+    'signed out', 'signed in elsewhere', 'account deleted', 'session ended',
+  ]);
+
   wss.on('connection', (ws, req) => {
     lastActivityAt = Date.now();
     if (flagPoller) void flagPoller.touch(); // starts the read early; the hello waits for it (onHello)
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
     const openedAt = Date.now();
+    // Every close the server starts goes through ws.close: keep its reason on the socket. Only the fixed reasons below are
+    // kept; any other text is logged as 'other', so no free text reaches the log.
+    const closeFromServer = ws.close.bind(ws);
+    ws.close = (code, reason) => {
+      // Only the close that moves an OPEN socket out of OPEN (readyState 1) is the server's. The ws library answers a close the
+      // peer started by calling close with the peer's reason as a Buffer, and a close after the peer's frame arrives is not the
+      // server's either. The first server reason is kept, so a later call cannot replace it.
+      if (ws.readyState === 1 && typeof reason === 'string' && ws.serverCloseReason === undefined) {
+        ws.serverCloseReason = SERVER_CLOSE_REASONS.has(reason) ? reason : 'other';
+      }
+      return closeFromServer(code, reason);
+    };
     ws.once('close', (code) => {
       socketCloses.record(code);
+      // One line per closed socket: its close code, how long it lasted, whether someone was signed in, and the reason the
+      // server closed it (null when the peer closed it). No address, email or token.
+      wsLog.info('ws.closed', {
+        connId: ws.connId || null,
+        code,
+        ageSec: Math.round((Date.now() - openedAt) / 1000),
+        signedIn: ws.wasSignedIn === true,
+        serverReason: ws.serverCloseReason || null,
+      });
       const bucket = lengthBucket((Date.now() - openedAt) / 1000); // null for health checks and flapping reconnects
       if (bucket) {
         analytics.track('session_len', bucket);

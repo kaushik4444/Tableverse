@@ -197,9 +197,10 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 @media (min-width: 700px) { .game-grid { grid-template-columns: 1fr 1fr; } }
 .game-art {
   display: grid; place-items: center; font-size: 52px;
-  background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #000));
+  background: linear-gradient(160deg, var(--accent), var(--accent));
   text-shadow: 0 4px 12px rgba(0, 0, 0, .55);
 }
+@supports (color: color-mix(in srgb, red 50%, blue)) { .game-art { background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #000)); } }
 .game-body { padding: 18px; display: grid; gap: 10px; align-content: start; }
 .game-body p { margin: 0; color: var(--muted); line-height: 1.45; font-size: 14px; }
 .game-actions { margin-top: 4px; }
@@ -230,7 +231,8 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 
 /* ---------- overlays */
 .overlay { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.6); backdrop-filter: blur(3px); }
-.sheet { width: 100%; max-width: 560px; max-height: 88dvh; overflow: auto; background: linear-gradient(160deg, #1d1c55, #11123a); border: 1px solid var(--panel-line); border-radius: 22px; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.sheet { width: 100%; max-width: 560px; max-height: 88vh; overflow: auto; background: linear-gradient(160deg, #1d1c55, #11123a); border: 1px solid var(--panel-line); border-radius: 22px; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+@supports (height: 100dvh) { .sheet { max-height: 88dvh; } }
 .sheet h2 { font-size: 26px; margin-bottom: 12px; }
 
 /* the sign-in dialog: small, plain, and built from the same pieces as every other panel */
@@ -243,7 +245,7 @@ input[type=text]:focus-visible, input[type=email]:focus-visible, input[type=pass
 .auth-links .btn { font-size: 12.5px; }
 .auth-policy-hint { margin: -1px 0 2px; padding: 8px 10px; border-radius: 10px; border: 1px dashed rgba(255, 255, 255, .2); color: var(--muted); font-size: 12px; line-height: 1.4; }
 .auth-policy-hint.optional { border-color: rgba(127, 240, 218, .45); color: #aef7ea; background: rgba(127, 240, 218, .08); }
-.auth-msg-slot { height: 72px; overflow: hidden; } /* reserved, so the sheet does not jump when a message appears */
+.auth-msg-slot { display: flow-root; min-height: 72px; } /* reserve room for short messages and let longer messages wrap */
 .auth-msg-slot .auth-msg { margin: 12px 0 0; }
 .auth-msg { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: rgba(255, 201, 77, .1); border: 1px solid rgba(255, 201, 77, .35); color: var(--gold); font-size: 13.5px; line-height: 1.45; }
 table.score { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
@@ -389,6 +391,13 @@ select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .wn-list li { display: flex; gap: 12px; align-items: flex-start; }
 .wn-list .wn-ico { font-size: 22px; line-height: 1.2; }
 .wn-list p { margin: 3px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.wn-release { margin: 16px 0 4px; }
+.wn-date { margin: 0 0 8px; }
+.wn-minor { margin: 12px 0 0; border-top: 1px solid var(--line, rgba(255,255,255,.12)); padding-top: 10px; }
+.wn-minor > summary { cursor: pointer; color: var(--gold); font-weight: 700; font-size: 14px; padding: 6px 0; list-style-position: inside; }
+.wn-minor > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+.wn-minor[open] > summary .wn-closed, .wn-minor:not([open]) > summary .wn-open { display: none; }
+.wn-minor .wn-list { margin-top: 10px; }
 html { scroll-behavior: auto; }
 .topbar + .page { padding-top: 16px; }
 
