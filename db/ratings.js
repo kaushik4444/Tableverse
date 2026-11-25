@@ -10,7 +10,7 @@
  * it cannot be sure. Both give the same numbers (tests/ratings-incremental.test.js).
  */
 const db = require('./pool');
-const { replay, report, seedForWindow, seedDayTotals, pairHistory } = require('../lib/ratingReplay');
+const { replay, report, seedForWindow, seedDayTotals, pairHistory, REASON } = require('../lib/ratingReplay');
 const { createLogger } = require('../lib/log');
 const { rankRows, MIN_RATED_GAMES, BOARD_LIMIT } = require('../lib/ratingBoard');
 
@@ -115,6 +115,17 @@ async function rebuildRatings() {
  * processed one, or a processed match in the window would not replay to what is stored. Nothing is written before those checks.
  */
 async function incrementalInTx(client) {
+  // Deletion clears the participant ID and cascades that player's rating rows. Other players' rows may still
+  // include the old match, even outside the replay window. Pair-limited matches also contribute to pair history.
+  const invalidated = await client.query(
+    `SELECT 1 FROM match_participants mp JOIN matches m ON m.id = mp.match_id
+      WHERE mp.player_id IS NULL AND NOT mp.is_bot AND m.rating_processed
+        AND (m.rated OR m.unrated_reason = $1)
+      LIMIT 1`,
+    [REASON.PAIR_LIMIT],
+  );
+  if (invalidated.rows.length) return null;
+
   const mark = await client.query('SELECT MAX(finished_at) AS at FROM matches WHERE rating_processed');
   if (!mark.rows[0].at) return null;
   const watermark = new Date(mark.rows[0].at).getTime();

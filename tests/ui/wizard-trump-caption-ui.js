@@ -49,7 +49,7 @@ function messagesFor(g) {
       await page.goto(url + '/');
       await page.waitForSelector('.wz-top', { timeout: 8000 });
       // On short phones the corner is hidden on 4-player tables (it would cover a seat), so the header shows the trump there.
-      const cap = await page.evaluate(() => {
+      const cap = await page.evaluate((suit) => {
         const visible = (el) => el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0;
         const corner = document.querySelector('.pt-corner .cap');
         const header = document.querySelector('.wz-top .wz-trump');
@@ -59,13 +59,15 @@ function messagesFor(g) {
         return {
           display: getComputedStyle(el).display,
           text: el.textContent.trim(),
+          suitName: window.WizardCards.SUITS[suit].name,
           overflow: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1,
           inViewport: rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth,
         };
-      });
+      }, g.view('me').trumpSuit);
       await ctx.close();
       assert.notEqual(cap.display, 'none', 'the trump is hidden');
       assert.match(cap.text, /Trump/, 'the trump text does not say Trump');
+      assert.ok(cap.text.includes(cap.suitName), `the trump caption does not show ${cap.suitName}: "${cap.text}"`);
       assert.equal(cap.overflow, false, 'the trump text is cut off');
       assert.equal(cap.inViewport, true, 'the trump indicator extends outside the viewport');
       console.log(`  ok  ${name}: "${cap.text}"`);

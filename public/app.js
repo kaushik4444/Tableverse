@@ -3452,7 +3452,7 @@
       let month = none;
       let life = none;
       if (q) {
-        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : (waiting && q.rated ? none : 'unrated');
+        thisMatch = q.rated && q.matchDelta !== null ? signed(q.matchDelta) : (waiting && q.reason === null ? none : 'unrated');
         month = q.monthRating !== null ? `${num(q.monthRating)}${q.monthDelta !== null ? ` (${signed(q.monthDelta)})` : ''}` : '–';
         life = num(q.lifetimeRating);
       }
@@ -3588,7 +3588,7 @@
       // no connection: keep trying each second; after about 30 s give up, so the card says the ratings are unavailable
       f.sendFails = (f.sendFails || 0) + 1;
       if (f.sendFails < 30) { setTimeout(() => retryEndTotals(f), 1000); return; }
-      f.totalsAsked = { at: Date.now() - 5000, tries: 3 };
+      f.totalsAsked = { at: Date.now() - 5000, tries: t.maxTries };
     }
     updateEndCard();
   }
