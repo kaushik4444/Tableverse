@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased (on `development`, not yet on `main`)
+- Wizard on short phones: the trump corner is hidden on 4-player tables (it covered a seat at 320x568); the trump shows in the header there instead.
+- Wizard on short phones: the trump suit caption stays visible (on one line) when a Wizard is turned up; it was hidden on 4-player tables under 700px high, so the suit name did not show.
+
 ## 2026-11-25 (on `main`)
 - Ready button: while a seat has not pressed Ready, its button is orange (was amber) and the blink glow is orange too.
 - How-to cards: the box keeps one size for every card of a game (it used to change height from card to card). Long text scrolls inside it, and moving between cards no longer replays the box's entrance animation.

@@ -371,12 +371,6 @@
     }
   }
 
-  // Take 5 keeps its Ready bar at the bottom, under the table, so the tabs and table above it never move
-  function readyBottomHTML(ctx, v) {
-    if (!ctx || !ctx.gate || overlayKey(v)) return '';
-    return `<div class="pr-ready">${window.CardTable.readyBox(ctx, { title: 'Ready to continue?', cls: 'pr-ready-bar' })}</div>`;
-  }
-
   function render(root, v, ctx) {
     ui.ctx = ctx;
     ui.latest = v;
@@ -405,7 +399,6 @@
       <div class="pr-bar">${tabs}<div class="wz-status ${mine ? 'mine' : ''}"><span>${guidance(v)}</span></div></div>
       ${body}
       ${tab === 'table' ? handHTML(v) : ''}
-      ${readyBottomHTML(ctx, v)}
       ${overlayHTML(v)}
     </div>`;
     ui.overlayShown = overlayKey(v);

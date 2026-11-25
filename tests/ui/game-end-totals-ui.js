@@ -79,13 +79,31 @@ const cells = (page) => page.$$eval('.xp-table-rating .xp-tr:not(.xp-th) .xp-c',
       const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages });
       await page.goto(srv.url + '/');
       await page.waitForSelector('.end-xp', { timeout: 12000 });
-      const stored = { me: { rated: true, matchDelta: null, monthRating: 1200, monthDelta: null, lifetimeRating: 1100 }, p1: { rated: true, matchDelta: null, monthRating: 1100, monthDelta: null, lifetimeRating: 1000 } };
+      const stored = { me: { rated: false, reason: null, matchDelta: null, monthRating: 1200, monthDelta: null, lifetimeRating: 1100 }, p1: { rated: false, reason: 'guest', matchDelta: null, monthRating: 1100, monthDelta: null, lifetimeRating: 1000 } };
       await page.evaluate((m) => window.__push(m), { t: 'gameTotals', code: 'ENDTOT', id: at, ratings: stored, pending: true });
       await page.waitForFunction(() => /Updating ratings/.test((document.querySelector('.xp-status') || {}).textContent || ''), null, { timeout: 5000 });
       const text = await page.evaluate(() => document.querySelector('.end-xp').textContent);
       assert.ok(/1200/.test(text) && /1100/.test(text), 'the stored monthly and lifetime ratings are shown while pending');
-      assert.ok(!/unrated/.test(text), 'this match is shown as waiting, not as unrated');
+      const markers = await page.locator('.xp-tr:not(.xp-th) .xp-c:nth-child(2)').allTextContents();
+      assert.deepEqual(markers, ['…', 'unrated'], 'only the row with an unrated reason is shown as unrated');
       await ctx.close();
+    });
+
+    await test('a cached pending answer becomes unavailable after disconnected retries are exhausted', async () => {
+      const { at, messages } = finishedTable();
+      const { page, ctx } = await scriptedPage(browser, { viewport: { width: 390, height: 844 }, messages });
+      try {
+        await page.clock.install();
+        await page.goto(srv.url + '/');
+        await page.waitForFunction(() => window.__sent.some((m) => m.t === 'gameTotals'));
+        await page.evaluate((id) => {
+          window.__push({ t: 'gameTotals', code: 'ENDTOT', id, ratings: {}, pending: true });
+          window.__sock().readyState = 3;
+        }, at);
+        assert.match(await page.textContent('.xp-status'), /Updating ratings/);
+        await page.clock.runFor(36000);
+        assert.match(await page.textContent('.xp-status'), /Ratings are not available/);
+      } finally { await ctx.close(); }
     });
 
     await test('a failed follow-up lookup does not replace final ratings already shown', async () => {
