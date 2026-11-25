@@ -285,3 +285,23 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
   .ludo-board:not(.hex) .ludo-token.stacked { width: 3.4%; }
   .ludo-board:not(.hex) .ludo-token.done { width: 3%; }
 }
+
+/* ---------- small motion on screens that were still, all of it off with reduced motion */
+.home-hero h1 { animation: rise .6s var(--ease) backwards; }
+.empty-ico { display: inline-block; animation: float-bob 3.2s ease-in-out infinite; }
+@keyframes float-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.stat-grid > .stat-tile { animation: rise .5s var(--ease) backwards; }
+.stat-grid > .stat-tile:nth-child(2) { animation-delay: .06s; }
+.stat-grid > .stat-tile:nth-child(3) { animation-delay: .12s; }
+.stat-grid > .stat-tile:nth-child(4) { animation-delay: .18s; }
+.stat-grid > .stat-tile:nth-child(5) { animation-delay: .24s; }
+.stat-grid > .stat-tile:nth-child(6) { animation-delay: .3s; }
+.stat-bar i { transform-origin: left center; animation: bar-grow .9s var(--ease) backwards; }
+@keyframes bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.levelup-note { animation: endPop .5s var(--ease) backwards; }
+.bell-count { animation: endPop .4s var(--ease) backwards; }
+.tb-bell:has(.bell-count) { transform-origin: 50% 10%; animation: bell-ring 4s ease-in-out infinite; }
+@keyframes bell-ring { 0%, 58%, 100% { transform: rotate(0); } 62% { transform: rotate(14deg); } 67% { transform: rotate(-12deg); } 72% { transform: rotate(8deg); } 77% { transform: rotate(-5deg); } 82% { transform: rotate(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .home-hero h1, .empty-ico, .stat-grid > .stat-tile, .stat-bar i, .levelup-note, .bell-count, .tb-bell:has(.bell-count) { animation: none !important; }
+}
