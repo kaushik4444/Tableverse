@@ -29,7 +29,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   }
 
   function inviteFriendsHTML() {
-    if (!S.room || S.room.visibility !== 'private' || S.room.status !== 'lobby' || S.guest || !S.room.members.some((m) => m.id === S.id)) return ''; // any seated player can invite
+    if (!S.room || S.room.status !== 'lobby' || S.guest || !S.room.members.some((m) => m.id === S.id)) return ''; // any seated player can invite
     const outgoing = S.invitations.outgoing || [];
     const alreadyInvited = new Set(outgoing.filter((i) => i.room_code === S.room.code && (i.status === 'pending' || i.status === 'accepted')).map((i) => i.username));
     const rows = S.friends.map((f) => {
@@ -39,7 +39,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
       return `<option value="${esc(f.username)}" ${invited || seated ? 'disabled' : ''}>${esc(f.display_name || f.username)} (@${esc(f.username)}) · ${status}</option>`;
     }).join('');
     if (!rows) return '';
-    return `<form id="tableInviteForm" class="social-search"><label class="sr-only" for="tableInviteFriend">Invite a friend to this private table</label><select id="tableInviteFriend" required>${rows || '<option value="" disabled>No friends to invite</option>'}</select><button class="btn small" type="submit" ${rows ? '' : 'disabled'}>Send invitation</button></form>`;
+    return `<form id="tableInviteForm" class="social-search"><label class="sr-only" for="tableInviteFriend">Invite a friend to this table</label><select id="tableInviteFriend" required>${rows || '<option value="" disabled>No friends to invite</option>'}</select><button class="btn small" type="submit" ${rows ? '' : 'disabled'}>Send invitation</button></form>`;
   }
 
 

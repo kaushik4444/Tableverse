@@ -43,9 +43,9 @@ const test = async (name, fn) => { try { await fn(); console.log('  ok  ' + name
     assert.equal((await measure('public')).label, 'Make private');
     assert.equal((await measure('private')).label, 'Make public');
   });
-  await test('a private table shows the invitation form; a public table does not', async () => {
+  await test('the invitation form shows on private and public tables alike', async () => {
     assert.equal((await measure('private')).picker, true);
-    assert.equal((await measure('public')).picker, false);
+    assert.equal((await measure('public')).picker, true);
   });
   await browser.close(); server.close();
   console.log(failed ? `${failed} failed` : 'lobby code card UI: all passed');
