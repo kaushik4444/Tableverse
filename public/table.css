@@ -481,7 +481,9 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 .ready-wait .bidbox:not(.ready-box) { visibility: hidden; pointer-events: none; }
 
 /* how-to-play cards (shared by every game) */
-.ht-sheet { text-align: center; max-width: 380px; }
+/* One fixed box for every card of a game, so it does not change size between pages; long text scrolls inside it. */
+.ht-sheet { --ht-h: min(540px, 86dvh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+.ht-sheet > .row.ht-actions { margin-top: auto; padding-top: 12px; }
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }
 .ht-art { display: grid; place-items: center; margin: 6px 0 12px; min-height: 64px; }
