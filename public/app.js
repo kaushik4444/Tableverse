@@ -3921,7 +3921,7 @@
     } else if (e.target.id === 'tableInviteForm') {
       e.preventDefault();
       const username = document.getElementById('tableInviteFriend')?.value;
-      if (!username || !S.room || S.room.visibility !== 'private') return;
+      if (!username || !S.room) return;
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       try {
         await withBusy('Sending invitation…', async () => {
