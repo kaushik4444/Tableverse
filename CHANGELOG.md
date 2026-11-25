@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Faster first load: each game's script and stylesheet load when its table opens, not on every page. The home page downloads about 519 KB instead of 930 KB, and main-thread blocking at startup is about 40% lower (measured on a throttled phone profile).
 - Wizard on short phones: the trump corner is hidden on 4-player tables (it covered a seat at 320x568); the trump shows in the header there instead.
 - Wizard on short phones: the trump suit caption stays visible (on one line) when a Wizard is turned up; it was hidden on 4-player tables under 700px high, so the suit name did not show.
 - Ready button: while a seat has not pressed Ready, its button is orange (was amber) and the blink glow is orange too.
