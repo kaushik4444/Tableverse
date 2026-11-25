@@ -43,11 +43,12 @@ const measure = (page) => page.evaluate(() => {
     try {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.goto(url + '/');
-      await page.waitForSelector('#app [data-game], #app .wz, #app .page', { timeout: 8000 }).catch(() => {});
+      await page.waitForSelector('#app > .wz', { timeout: 8000 });
       await page.waitForTimeout(400);
       const before = await measure(page);
+      assert.ok(before.length > 0, 'the table must have measurable boxes before Ready appears');
       await page.evaluate((m) => window.__push(m), gated[1]);
-      await page.waitForSelector('.ready-box', { timeout: 5000 }).catch(() => {});
+      await page.waitForSelector('.ready-box', { timeout: 5000 });
       await page.waitForTimeout(400);
       const after = await measure(page);
       const moved = [];
