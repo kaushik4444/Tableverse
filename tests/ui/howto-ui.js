@@ -49,6 +49,42 @@ const OWN = /made with our own cards/i;
     await ctx.close();
   });
 
+  await test('overflowing how-to cards start at the heading and keep keyboard navigation in the sheet', async () => {
+    const messages = tableMessages('chess', [{ name: 'Ann' }, { name: 'Bo' }]);
+    const chess = messages[0].games.find((g) => g.id === 'chess');
+    const longRule = 'Read this rule before going to the next card. '.repeat(80);
+    Object.assign(chess, {
+      rules: ['A short rule.', longRule, longRule, 'Another short rule.'],
+      ruleTitles: ['Start', 'Long rule one', 'Long rule two', 'Finish'],
+      options: [],
+    });
+    const { page, ctx } = await scriptedPage(browser, { messages, firstTime: true, viewport: { width: 320, height: 568 } });
+    await page.goto(url + '/');
+    const sheet = page.locator('.ht-sheet');
+    await sheet.waitFor();
+    assert.equal(await sheet.locator('[data-ht="next"]:focus').count(), 1, 'focus starts on Next when it fits');
+
+    const checkHeading = async (title) => {
+      assert.equal(await sheet.locator('h2:focus').textContent({ timeout: 1000 }), title);
+      assert.equal(await sheet.evaluate((el) => el.scrollTop), 0, 'the card starts at the top');
+    };
+    await page.keyboard.press('ArrowRight');
+    await checkHeading('Long rule one');
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await sheet.locator('[data-ht="done"]:focus').count(), 1, 'reverse tab wraps to Skip');
+    assert.ok(await sheet.evaluate((el) => el.scrollTop > 0), 'reaching Skip scrolls down');
+    await sheet.locator('[data-ht="next"]').click();
+    await checkHeading('Long rule two');
+    await page.keyboard.press('Tab');
+    assert.equal(await sheet.locator('[data-ht="back"]:focus').count(), 1, 'forward tab reaches Back');
+    await page.keyboard.press('Enter');
+    await checkHeading('Long rule one');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await sheet.locator('[data-ht="done"]:focus').textContent({ timeout: 1000 }), 'Got it');
+    await ctx.close();
+  });
+
   await test('top bar: the tabs show on a wide screen with a pill under the hovered tab, and not on a phone', async () => {
     const wide = await scriptedPage(browser, { messages: [welcome({ id: 'me', name: 'Ann', games: games.list() })], viewport: { width: 1100, height: 800 } });
     await wide.page.goto(url + '/');

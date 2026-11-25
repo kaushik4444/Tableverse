@@ -261,7 +261,7 @@
       // The sheet stays in place between cards (only its contents change), so its size and entrance animation do not repeat per card.
       const inner = `
         <div class="ht-kicker">How to play ${esc(g.name)} · ${i + 1} of ${cards.length}</div>
-        <h2>${esc(c.title)}</h2>
+        <h2 tabindex="-1">${esc(c.title)}</h2>
         <div class="ht-art" aria-hidden="true">${art}</div>
         ${c.html || `<p class="rule">${esc(c.text)}</p>`}
         ${last && note ? `<p class="ht-note">${esc(note)}</p>` : ''}
@@ -270,8 +270,14 @@
       `;
       if (el.firstElementChild) el.firstElementChild.innerHTML = inner;
       else el.innerHTML = `<div class="sheet ht-sheet" role="dialog" aria-modal="true" aria-label="How to play ${esc(g.name)}">${inner}</div>`;
-      const primary = el.querySelector('[data-ht="next"], [data-ht="done"]');
-      if (primary) primary.focus();
+      const sheet = el.firstElementChild;
+      sheet.scrollTop = 0;
+      const primary = sheet.querySelector('[data-ht="next"], [data-ht="done"]');
+      const buttonBounds = primary.getBoundingClientRect();
+      const sheetBounds = sheet.getBoundingClientRect();
+      // When the action is clipped, start keyboard focus at the card's heading.
+      const target = buttonBounds.bottom <= sheetBounds.bottom - sheet.clientTop ? primary : sheet.querySelector('h2');
+      target.focus({ preventScroll: true });
     };
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-ht]');
@@ -289,7 +295,7 @@
         const f = [...el.querySelectorAll('button')];
         if (!f.length) return;
         const first = f[0], lastB = f[f.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastB.focus(); }
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === el.querySelector('h2'))) { e.preventDefault(); lastB.focus(); }
         else if (!e.shiftKey && document.activeElement === lastB) { e.preventDefault(); first.focus(); }
         else if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
       }
