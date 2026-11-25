@@ -26,9 +26,11 @@ const baseRoutes = (login) => ({
     await page.waitForSelector('#loginForm', { timeout: 8000 });
     await page.fill('#loginEmail', 'a@b.c');
     await page.fill('#loginPassword', 'TestPass123!');
+    const helloBefore = await page.evaluate(() => window.__sent.filter((m) => m.t === 'hello').length);
     await page.click('#loginForm [type="submit"]');
     await page.waitForFunction(() => !document.getElementById('auth-overlay'), null, { timeout: 8000 });
-    await page.waitForFunction(() => window.__sent.some((m) => m.t === 'hello'), null, { timeout: 8000 });
+    // a hello from before the login does not count: the login must open a new connection to the lobby
+    await page.waitForFunction((before) => window.__sent.filter((m) => m.t === 'hello').length > before, helloBefore, { timeout: 8000 });
     await ctx.close(); server.close();
   });
 
@@ -40,7 +42,8 @@ const baseRoutes = (login) => ({
     await page.fill('#loginEmail', 'a@b.c');
     await page.fill('#loginPassword', 'TestPass123!');
     await page.click('#loginForm [type="submit"]');
-    await page.waitForSelector('#auth-overlay .auth-msg', { timeout: 8000 });
+    // the sheet keeps the seeded "Log in to play." until the server answers, so wait for the verification text itself
+    await page.waitForFunction(() => { const m = document.querySelector('#auth-overlay .auth-msg'); return !!m && /verify your email/i.test(m.textContent); }, null, { timeout: 8000 });
     assert.match(await page.textContent('#auth-overlay .auth-msg'), /verify your email/i);
     assert.equal(await page.inputValue('#loginEmail'), 'a@b.c', 'the email was cleared');
     await ctx.close(); server.close();
