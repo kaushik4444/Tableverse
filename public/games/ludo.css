@@ -9,7 +9,9 @@
 
 /* turn bar: die, status, one action */
 .ludo-dice-panel { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--panel-line, rgba(255, 255, 255, .14)); border-left: 5px solid var(--turn, #888); border-radius: 14px; background: var(--panel-bg); line-height: 1.35; }
-.ludo-dice-panel.mine { box-shadow: 0 0 0 2px color-mix(in srgb, var(--turn, #f5b301) 40%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--turn, #f5b301) 16%, var(--panel-bg)), var(--panel-bg) 70%); }
+.ludo-dice-panel.mine { box-shadow: 0 0 0 2px var(--turn, #f5b301);
+ box-shadow: 0 0 0 2px color-mix(in srgb, var(--turn, #f5b301) 40%, transparent); background: linear-gradient(90deg, var(--turn, #f5b301), var(--panel-bg) 70%);
+ background: linear-gradient(90deg, color-mix(in srgb, var(--turn, #f5b301) 16%, var(--panel-bg)), var(--panel-bg) 70%); }
 .ludo-dice-copy { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .ludo-dice-copy b { font-size: 15px; }
 .ludo-dice-copy small { font-size: 12px; color: var(--muted, #9db3a7); }
