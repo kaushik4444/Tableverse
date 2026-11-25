@@ -2382,8 +2382,16 @@ function start(opts = {}) {
     if (flagPoller) void flagPoller.touch(); // starts the read early; the hello waits for it (onHello)
     // counted before admission, so a socket the per-IP limit turns away is still in the close counts
     const openedAt = Date.now();
-    ws.once('close', (code) => {
+    ws.once('close', (code, reason) => {
       socketCloses.record(code);
+      // One line per closed socket: why it closed, how long it lasted, and whether someone was signed in. No address, email or token.
+      wsLog.info('ws.closed', {
+        connId: ws.connId || null,
+        code,
+        reason: String(reason || '').slice(0, 40),
+        ageSec: Math.round((Date.now() - openedAt) / 1000),
+        signedIn: !!ws.player,
+      });
       const bucket = lengthBucket((Date.now() - openedAt) / 1000); // null for health checks and flapping reconnects
       if (bucket) {
         analytics.track('session_len', bucket);
