@@ -53,11 +53,14 @@ body {
 
 /* game cards: a glow in the game's own colour that follows the pointer */
 .game-card { position: relative; overflow: hidden; isolation: isolate; background: var(--panel); border: 1px solid var(--panel-line); border-radius: var(--radius); box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 18px 40px -28px rgba(0, 0, 0, .9); transition: transform .35s var(--ease), border-color .3s, box-shadow .35s var(--ease), background .3s; }
-.game-card::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .3s; background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%); }
-.game-card::after { content: ""; position: absolute; width: 150px; height: 150px; right: -44px; top: -56px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 32%, transparent), transparent 70%); transition: transform .5s var(--ease); }
+.game-card::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .3s; background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 0%), var(--accent), transparent 70%); }
+@supports (color: color-mix(in srgb, red 50%, blue)) { .game-card::before { background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%); } }
+.game-card::after { content: ""; position: absolute; width: 150px; height: 150px; right: -44px; top: -56px; z-index: -1; border-radius: 50%; background: radial-gradient(circle, var(--accent), transparent 70%); transition: transform .5s var(--ease); }
+@supports (color: color-mix(in srgb, red 50%, blue)) { .game-card::after { background: radial-gradient(circle, color-mix(in srgb, var(--accent) 32%, transparent), transparent 70%); } }
 .game-card .game-art { transition: transform .35s var(--ease); }
 @media (hover: hover) {
-  .game-card:not(.is-locked):hover, .game-card:not(.is-locked):focus-within { transform: translateY(-4px); background: var(--panel); border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 26px 44px -26px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .game-card:not(.is-locked):hover, .game-card:not(.is-locked):focus-within { transform: translateY(-4px); background: var(--panel); border-color: var(--accent); box-shadow: 0 26px 44px -26px var(--accent); }
+@supports (color: color-mix(in srgb, red 50%, blue)) { .game-card:not(.is-locked):hover, .game-card:not(.is-locked):focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 26px 44px -26px color-mix(in srgb, var(--accent) 55%, transparent); } }
   .game-card:not(.is-locked):hover::before, .game-card:not(.is-locked):focus-within::before { opacity: 1; }
   .game-card:not(.is-locked):hover::after { transform: scale(1.5) translate(-10px, 10px); }
   .game-card:not(.is-locked):hover .game-art { transform: rotate(-6deg) scale(1.08); }
@@ -75,7 +78,8 @@ body {
 /* tap highlight on a game card: a glow blooms from the touch point in the game's colour, and the card presses in */
 .game-card { -webkit-tap-highlight-color: transparent; }
 .game-card.is-tapped::before { animation: ll-bloom .6s var(--ease); }
-.game-card:active:not(.is-locked) { transform: scale(.985); border-color: color-mix(in srgb, var(--accent) 65%, transparent); }
+.game-card:active:not(.is-locked) { transform: scale(.985); border-color: var(--accent); }
+@supports (color: color-mix(in srgb, red 50%, blue)) { .game-card:active:not(.is-locked) { border-color: color-mix(in srgb, var(--accent) 65%, transparent); } }
 @keyframes ll-bloom { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: .15; } }
 .btn:active, .tb-tab:active, .fs-chip:active, .public-table:active { filter: brightness(1.08); }
 

@@ -1496,7 +1496,8 @@
         clearClientSession();
         S.ready = false;
         loadSnapshot();
-        openAuthSheet('login', m.message || 'Log in to play.');
+        // A reconnect of a visitor lands here too. Keep the sheet that is already open (sign-up included), so what was typed stays.
+        openAuthSheet(document.getElementById('auth-overlay')?.dataset.tab || 'login', m.message || 'Log in to play.');
         break;
       case 'blocks':
         S.blocked = Array.isArray(m.blocks) ? m.blocks : [];
@@ -2454,8 +2455,8 @@
   // ------------------------------------------------------------ top bar, account menu and its dialogs
   // Release history lives in public/whats-new-data.js. The home page shows the newest release's first three items.
   const RELEASES = Array.isArray(window.TV_RELEASES) ? window.TV_RELEASES : [];
-  const WHATS_NEW_VERSION = RELEASES.length ? RELEASES[0].version : '';
-  const WHATS_NEW = RELEASES.length ? RELEASES[0].items.slice(0, 3) : [];
+  const WHATS_NEW_VERSION = RELEASES.length ? RELEASES[0].date : '';
+  const WHATS_NEW = RELEASES.length ? RELEASES[0].items.filter((w) => w.level === 'major').slice(0, 3) : [];
   const HU = window.TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial: () => pendingSocial() });
   const { socialHTML, inviteFriendsHTML, friendsStripHTML, friendsPageHTML, bellHTML, comingSoonHTML } = HU;
   /** "Friday evening": the day and the part of it, from the player's own clock. */
@@ -2804,13 +2805,25 @@
     });
   }
 
+  /** One item of a release: its icon, title and text. */
+  const releaseItemHTML = (w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`;
+  /** A date's release: its major updates in full, and its minor updates folded under a disclosure the player can open. */
+  function releaseSectionHTML(r) {
+    const shown = (w) => S.voiceEnabled || !w.voice;
+    const majors = r.items.filter((w) => w.level === 'major' && shown(w));
+    const minors = r.items.filter((w) => w.level !== 'major' && shown(w));
+    const when = r.date ? new Date(r.date + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : (r.label || '');
+    const majorBlock = majors.length ? `<ul class="wn-list">${majors.map(releaseItemHTML).join('')}</ul>` : '';
+    const minorBlock = minors.length ? `<details class="wn-minor"><summary><span class="wn-closed">Show</span><span class="wn-open">Hide</span> minor updates (${minors.length})</summary><ul class="wn-list">${minors.map(releaseItemHTML).join('')}</ul></details>` : '';
+    return `<section class="wn-release" aria-label="${esc(when)}"><h3 class="stat-h wn-date">${esc(when)}</h3>${majorBlock}${minorBlock}</section>`;
+  }
+
   function openWhatsNewDialog() {
     S.wnSeen = WHATS_NEW_VERSION;
     store.set('ct_wn_seen', S.wnSeen);
     render();
-    const newest = RELEASES[0] || { title: '', items: [] };
-    const list = WHATS_NEW.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
-    openModal('What’s new', `<p class="hint" style="text-align:left">${esc(newest.title)}</p><ul class="wn-list">${list}</ul><div class="row" style="margin-top:12px"><button type="button" class="btn ghost small" data-modal-act="versionHistory">All versions</button></div>`);
+    const newest = RELEASES[0] || { items: [] };
+    openModal('What’s new', `${releaseSectionHTML(newest)}<div class="row" style="margin-top:12px"><button type="button" class="btn ghost small" data-modal-act="versionHistory">All versions</button></div>`);
   }
 
   /**
@@ -2820,24 +2833,32 @@
   function showWelcome() {
     S.welcomeDue = false;
     const newest = RELEASES[0] || { items: [] };
-    const list = (newest.items || []).filter((w) => S.voiceEnabled || !w.voice).slice(0, 3)
-      .map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
+    const list = (newest.items || []).filter((w) => w.level === 'major' && (S.voiceEnabled || !w.voice)).slice(0, 3)
+      .map(releaseItemHTML).join('');
     openModal('Welcome to Tableverse', `<p class="hint" style="text-align:left">Tableverse is a place to play classic card and board games online, with friends and other players. Find a table, sit down and play. Your games and progress are kept on your profile, so you can see how you are getting on.</p>${list ? `<h3>What’s new</h3><ul class="wn-list">${list}</ul>` : ''}<div class="row" style="margin-top:12px"><button type="button" class="btn primary" data-modal-act="welcomeStart">Start playing</button></div>`);
     postJson('/api/me/welcome-seen', {}, false, { quiet: true }).catch(() => {}); // shown: remember it on the account (a failed save only means it may show once more)
   }
 
-  /** Every release, newest first, with its items (voice items only when voice chat is on). */
+  /** Every date, newest first. Major updates are shown; minor updates are behind "Show minor updates" (voice items only when voice chat is on). */
   function openVersionHistoryDialog() {
-    const body = RELEASES.map((r) => {
-      const items = r.items.filter((w) => S.voiceEnabled || !w.voice).map((w) => `<li><span class="wn-ico" aria-hidden="true">${w.ico}</span><div><b>${esc(w.title)}</b><p>${esc(w.text)}</p></div></li>`).join('');
-      return `<section class="wn-release" aria-label="${esc(r.title)}"><h3 class="stat-h" style="margin:14px 0 6px">${esc(r.title)}${r.version || r.date ? ` <small>${esc([r.version, r.date].filter(Boolean).join(' · '))}</small>` : ''}</h3><ul class="wn-list">${items}</ul></section>`;
-    }).join('');
+    const body = RELEASES.map(releaseSectionHTML).join('');
     openModal('Version history', body || '<p class="hint">No releases yet.</p>', (o) => {
-      // the dialog's only control is its close button: focus it, and keep Tab on it, so focus never reaches the page behind
+      // focus starts on the close button; Tab and Shift+Tab move through the dialog's controls (the minor-update disclosures
+      // included) and wrap at the ends, so focus never reaches the page behind
       const close = o.querySelector('[data-modal-close]');
       if (!close) return;
       close.focus();
-      o.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); close.focus(); } });
+      o.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab') return;
+        const items = [...o.querySelectorAll('button:not([disabled]), summary, a[href], [tabindex]:not([tabindex="-1"])')]
+          .filter((el) => el === close || el.offsetParent !== null);
+        if (!items.length) { e.preventDefault(); close.focus(); return; }
+        const at = items.indexOf(document.activeElement);
+        const last = items.length - 1;
+        const next = e.shiftKey ? (at <= 0 ? last : at - 1) : (at === -1 || at === last ? 0 : at + 1);
+        e.preventDefault();
+        items[next].focus();
+      });
       // both entry points remove the trigger on open, so focus goes back to the account button when it closes
       modalOnClose = () => { const b = document.querySelector('.tb-avatar-btn'); if (b) b.focus(); };
     });
@@ -3380,9 +3401,23 @@
 
   function renderGame() {
     lastAppHtml = null; // the game draws the root itself, so the last home or lobby markup is no longer on screen
-    const plugin = plugins[S.room.gameId];
+    const gameId = S.room.gameId;
+    const unavailable = '<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>';
+    // games load the first time their table opens (public/game-loader.js); draw the table again once the script is in
+    if (window.TvGames && window.TvGames.knows(gameId) && !window.TvGames.isLoaded(gameId)) {
+      paintApp('<div class="page"><p class="hint">Loading the game…</p></div>');
+      // a callback only draws if this table is still on screen with its view
+      const tableCode = S.room.code;
+      const stillHere = () => S.room && S.room.code === tableCode && S.room.gameId === gameId && S.view;
+      window.TvGames.ensure(gameId).then(
+        () => { if (stillHere()) renderGame(); },
+        () => { if (stillHere()) paintApp(unavailable); },
+      );
+      return;
+    }
+    const plugin = plugins[gameId];
     if (!plugin || !S.view) {
-      paintApp('<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>');
+      paintApp(unavailable);
       return;
     }
     const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
@@ -3887,7 +3922,7 @@
     } else if (e.target.id === 'tableInviteForm') {
       e.preventDefault();
       const username = document.getElementById('tableInviteFriend')?.value;
-      if (!username || !S.room || S.room.visibility !== 'private') return;
+      if (!username || !S.room) return;
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       try {
         await withBusy('Sending invitation…', async () => {
