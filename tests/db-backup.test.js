@@ -128,6 +128,12 @@ process.on('exit', () => fs.rmSync(scratch, { recursive: true, force: true }));
     }
   });
 
+  // These need a POSIX shell stand-in for pg_dump and POSIX file modes. Windows cannot run the stand-in and does not keep
+  // modes, so they are skipped there (named as skipped); Linux CI runs them.
+  const posixOnly = (name, fn) => {
+    if (process.platform !== 'win32') return test(name, fn);
+    console.log('  skipped  ' + name + ' (needs a POSIX shell stand-in and file modes)');
+  };
   // ---- reservation, concurrency and cleanup, with stand-in pg_dump / pg_restore (no database needed).
   // The database name in the URL selects the stand-in's behaviour: ok, slow (sleeps), fail (writes, then exits 4).
   const fakeDir = path.join(scratch, 'fake-tools');
@@ -155,7 +161,7 @@ echo "2; 1259 2 TABLE public players tv"
   const fake = (db) => ({ url: fakeUrl(db), pgDump: fakeDump, pgRestore: fakeRestore });
   const leftovers = (out) => [out + '.partial', out + '.sha256.partial'].filter((f) => fs.existsSync(f));
 
-  await test('the working file is private from creation, even under a permissive umask', async () => {
+  await posixOnly('the working file is private from creation, even under a permissive umask', async () => {
     const out = path.join(scratch, 'umask.dump');
     const before = process.umask(0o000);
     try { await backup({ ...fake('ok'), out }); } finally { process.umask(before); }
@@ -164,7 +170,7 @@ echo "2; 1259 2 TABLE public players tv"
     assert.deepEqual(leftovers(out), []);
   });
 
-  await test('a run that cannot reserve its partial file leaves another run\'s file untouched', async () => {
+  await posixOnly('a run that cannot reserve its partial file leaves another run\'s file untouched', async () => {
     const out = path.join(scratch, 'foreign.dump');
     fs.writeFileSync(out + '.partial', 'the other run is still writing', { mode: 0o600 });
     await assert.rejects(backup({ ...fake('ok'), out }), /another backup is writing/);
@@ -172,7 +178,7 @@ echo "2; 1259 2 TABLE public players tv"
     assert.ok(!fs.existsSync(out));
   });
 
-  await test('a run that reserved its partial file but cannot stage its checksum leaves a foreign checksum file untouched', async () => {
+  await posixOnly('a run that reserved its partial file but cannot stage its checksum leaves a foreign checksum file untouched', async () => {
     const out = path.join(scratch, 'foreign-sum.dump');
     fs.writeFileSync(out + '.sha256.partial', 'foreign checksum', { mode: 0o600 });
     await assert.rejects(backup({ ...fake('ok'), out }), /another backup is writing/);
@@ -180,13 +186,13 @@ echo "2; 1259 2 TABLE public players tv"
     assert.ok(!fs.existsSync(out) && !fs.existsSync(out + '.partial'));
   });
 
-  await test('a failed dump removes its own files and publishes nothing', async () => {
+  await posixOnly('a failed dump removes its own files and publishes nothing', async () => {
     const out = path.join(scratch, 'failing.dump');
     await assert.rejects(backup({ ...fake('fail'), out }), /pg_dump failed/);
     for (const f of [out, out + '.sha256', out + '.sha256.partial', out + '.partial']) assert.ok(!fs.existsSync(f), f);
   });
 
-  await test('two runs aimed at the same destination: one publishes, the other is refused and removes nothing', async () => {
+  await posixOnly('two runs aimed at the same destination: one publishes, the other is refused and removes nothing', async () => {
     const out = path.join(scratch, 'shared.dump');
     const results = await Promise.allSettled([backup({ ...fake('slow'), out }), backup({ ...fake('slow'), out })]);
     const won = results.filter((r) => r.status === 'fulfilled');
@@ -200,7 +206,7 @@ echo "2; 1259 2 TABLE public players tv"
     assert.deepEqual(leftovers(out), []);
   });
 
-  await test('inspection (--verify) may read a dump without a checksum, but a malformed checksum file is always refused', async () => {
+  await posixOnly('inspection (--verify) may read a dump without a checksum, but a malformed checksum file is always refused', async () => {
     const out = path.join(scratch, 'inspect.dump');
     await backup({ ...fake('ok'), out });
     fs.rmSync(out + '.sha256');

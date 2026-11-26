@@ -65,7 +65,7 @@ module.exports = {
     'There are four betting rounds: before the flop, on the flop, on the turn and on the river. On your turn you can fold (give up the hand), check (bet nothing, if nobody has bet), call (match the bet) or raise (bet more; a raise must be at least as large as the previous bet or raise). You can also go all-in with every chip you have.',
     'If you are all-in for less than the others bet, you can only win the part of the pot you covered: the extra chips go into a side pot that only the other players can win.',
     'If everyone else folds, the last player wins the pot without showing cards. Otherwise the best hand wins at the showdown, and equal hands split the pot.',
-    'Hand ranking, best to worst: straight flush, four of a kind, full house, flush, straight, three of a kind, two pair, one pair, high card. The 4-colour deck has spades in blue-black, hearts in red, diamonds in blue and clubs in green so the suits are easy to tell apart.',
+    'Hand ranking, best to worst: straight flush, four of a kind, full house, flush, straight, three of a kind, two pair, one pair, high card. The deck is red and black: spades and clubs are black, hearts and diamonds are red.',
     'Players with no chips left are out. The game ends when one player has all the chips, or after the number of hands the host chose, when the biggest stack wins.',
   ],
 
