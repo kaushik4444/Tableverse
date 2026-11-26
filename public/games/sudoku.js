@@ -90,7 +90,7 @@
         if (mine !== soloLoad) return;
         ui.solo = j;
         // signed out: check again after 10 seconds, even if nothing redraws the table, so signing in shows the rating
-        if (j && j.signedOut) setTimeout(() => { if (ui.latest && ui.solo && ui.solo.signedOut) loadSolo(); }, 10000);
+        if (j && j.signedOut) setTimeout(() => { if (showing() && ui.solo && ui.solo.signedOut) loadSolo(); }, 10000);
       })
       .catch(() => { if (mine === soloLoad) ui.solo = { enabled: false }; })
       .finally(() => { if (mine === soloLoad) { ui.soloState = 'done'; draw(); } });
@@ -160,8 +160,10 @@
     ui.prev = now;
   }
 
+  // the table is on screen only while its own screen is in the page; after the player leaves, nothing may draw it again
+  const showing = () => Boolean(ui.root && ui.root.querySelector('.wz.su'));
   function draw() {
-    if (ui.root && ui.latest && ui.ctx) render(ui.root, ui.latest, ui.ctx);
+    if (showing() && ui.latest && ui.ctx) render(ui.root, ui.latest, ui.ctx);
   }
 
   function render(root, v, ctx) {
