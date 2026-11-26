@@ -58,7 +58,7 @@ const POST_ACCOUNT = [
       // a real visitor with a valid CSRF cookie and header, so the request reaches the JSON parser
       const b = new Browser(srv.port);
       await b.get('/api/auth/csrf');
-      const res = await fetch(`http://127.0.0.1:${srv.port}/api/me/friend-requests`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: b.cookieHeader, 'x-csrf-token': b.cookies.get('ct_csrf') }, body: '{not json' });
+      const res = await fetch(`http://127.0.0.1:${srv.port}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: b.cookieHeader, 'x-csrf-token': b.cookies.get('ct_csrf') }, body: '{not json' });
       assert.ok(res.status >= 400 && res.status < 500, `expected a client error, got ${res.status}`);
     });
     await test('an unknown account route is 404, not a crash', async () => {

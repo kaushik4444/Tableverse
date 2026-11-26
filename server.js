@@ -699,8 +699,16 @@ function start(opts = {}) {
     for (const m of guests) { const k = keys.get(m.id); if (k) byKey.set(k, m); }
     if (!byKey.size) return { refused: null, charged: [], guestIds };
     const charged = [...byKey.keys()];
+    // the limit may have changed while the keys were looked up: the reservation must use the limit as it is now
+    if (gameFlags.trialLimitOf(room.gameId) !== limit) return { refused: null, charged: [], guestIds, stale: true };
     const r = await dbGuestTrials.reservePlays({ gameId: room.gameId, limit, trialKeys: charged });
-    return r.ok ? { refused: null, charged, guestIds } : { refused: byKey.get(r.trialKey) || null, charged: [], guestIds };
+    if (!r.ok) return { refused: byKey.get(r.trialKey) || null, charged: [], guestIds };
+    // the limit may also change while the plays are reserved: give them back and ask for the start again
+    if (gameFlags.trialLimitOf(room.gameId) !== limit) {
+      await dbGuestTrials.releasePlays({ gameId: room.gameId, trialKeys: charged }).catch((e) => console.error('[games] could not give back guest plays: ' + e.message));
+      return { refused: null, charged: [], guestIds, stale: true };
+    }
+    return { refused: null, charged, guestIds };
   };
   /**
    * A guest whose device has used every play of the game is told when they create or join a table, not only at the start.
@@ -1601,7 +1609,9 @@ function start(opts = {}) {
       p.lastEmote = now;
       // Every reaction says who sent it: a player's name, or a spectator's name with the 👁 mark (a spectator has no seat).
       const spectator = isSpec(room, p.id);
-      const who = String(p.name || (spectator ? 'Spectator' : 'Player')).slice(0, 32);
+      // the name the table shows for this person: the seat's name during a game (a rename mid-game does not change it), else the current name
+      const shown = spectator ? room.spectators.find((s) => s.id === p.id) : room.members.find((m) => m.id === p.id && !m.bot);
+      const who = String((shown && shown.name) || p.name || (spectator ? 'Spectator' : 'Player')).slice(0, 32);
       for (const m of viewers(room)) {
         if (m.id !== p.id && pairBlocked(p.id, m.id)) continue; // a blocked pair does not see each other's reactions
         const q = players.get(m.id);
@@ -1789,6 +1799,8 @@ function start(opts = {}) {
       if (!await canEnterRoom(p, room, { present: here })) return sendJoinError(p, code, 'This private table requires an accepted invitation.');
       // The socket may have closed while we waited: an offline person must not take a seat or start a play-time clock.
       if (!p.connected) return;
+      // the reclaim exemption only holds while its window is open: if the window closed during the admission check, the trial check applies again
+      if (reclaiming && !alreadyHere && !rejoinDecision(room, p.id, Date.now()).seat && await trialBlockedAtEntry(p, room.gameId, code)) return;
       // The owner may restrict the game while the admission check was waiting: refuse again before any seat changes
       if (refuseGame(p, room.gameId, code)) return;
       // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
@@ -2078,17 +2090,20 @@ function start(opts = {}) {
       if (room.starting) return; // a start is already being checked
       room.starting = true;
       let gate;
+      const hostSocket = p.ws; // the host's connection when the start was asked for
       try { gate = await trialGate(room); } catch (e) {
         room.starting = false;
         console.error('[games] guest play limit check failed: ' + e.message);
         return sendError(p, 'The game could not start right now. Try again.');
       }
       room.starting = false;
+      if (gate.stale) return sendError(p, 'The guest play limit changed while the game was starting. Start again.');
       // a start that is cancelled from here gives back the plays it reserved
       const giveBack = () => dbGuestTrials.releasePlays({ gameId: room.gameId, trialKeys: gate.charged }).catch((e) => console.error('[games] could not give back guest plays: ' + e.message));
       // the table may have changed while the plays were checked: look again before anything starts
       if (shuttingDown) { await giveBack(); return sendError(p, 'The server is restarting. Please try again in a minute.'); }
       if (rooms.get(room.code) !== room || room.status !== 'lobby' || room.hostId !== p.id) { await giveBack(); return; }
+      if (!p.connected || p.ws !== hostSocket) { await giveBack(); return; } // the host's connection ended while the plays were checked
       if (refuseGame(p, room.gameId)) { await giveBack(); return; }
       if (ineligibleHumans(room).length) { await giveBack(); return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.'); }
       // only the guests whose plays were reserved may be seated: a guest who joined or left meanwhile means the check is stale
