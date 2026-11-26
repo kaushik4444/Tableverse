@@ -32,6 +32,13 @@ async function trialKeysFor(playerIds) {
   return new Map(r.rows.map((row) => [row.id, row.guest_trial_key]));
 }
 
+/** Gives back one play of `gameId` to each device in `trialKeys`: used when a start is cancelled after its plays were reserved. */
+async function releasePlays({ gameId, trialKeys }) {
+  const keys = [...new Set(trialKeys)];
+  if (!keys.length) return;
+  await db.query('UPDATE guest_game_trials SET plays = plays - 1, updated_at = NOW() WHERE game_id = $1 AND trial_key = ANY($2::text[]) AND plays > 0', [gameId, keys]);
+}
+
 /** How many plays of `gameId` a device has used (0 for a device with none). Read only: nothing is counted. */
 async function playsOf(trialKey, gameId) {
   const r = await db.query('SELECT plays FROM guest_game_trials WHERE trial_key = $1 AND game_id = $2', [trialKey, gameId]);
@@ -69,4 +76,4 @@ async function reservePlays({ gameId, limit, trialKeys }) {
   }
 }
 
-module.exports = { hashTrialKey, trialKeysFor, reservePlays, TrialLimitReached, playsOf };
+module.exports = { hashTrialKey, trialKeysFor, reservePlays, TrialLimitReached, playsOf, releasePlays };

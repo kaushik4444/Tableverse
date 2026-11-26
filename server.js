@@ -679,20 +679,23 @@ function start(opts = {}) {
   const trialRefused = (p, gameId, tableCode) => send(p.ws, { t: 'error', code: 'guest_locked', feature: 'trial', gameId, tableCode, message: 'Create a free account to keep playing.' });
   /**
    * Guest game limits (Games tab): when a game starts (or rematches) every guest at the table uses one play of it, all or
-   * nothing. Returns null when the start may go on, or the guest whose device is at its limit. Registered players and games
+   * nothing. Returns { refused, charged }: refused is the guest whose device is at its limit (or null), charged the device
+   * keys whose play was reserved (given back if the start is cancelled). Registered players and games
    * with no limit are not counted. A guest with no device key (made before keys existed) is not counted either.
    */
   const trialGate = async (room) => {
+    const none = { refused: null, charged: [] };
     const limit = gameFlags.trialLimitOf(room.gameId);
-    if (limit === null) return null;
+    if (limit === null) return none;
     const guests = room.members.filter((m) => { if (m.bot) return false; const mp = players.get(m.id); return Boolean(mp) && roleOf(mp) === 'guest'; });
-    if (!guests.length) return null;
+    if (!guests.length) return none;
     const keys = await dbGuestTrials.trialKeysFor(guests.map((m) => m.id));
     const byKey = new Map();
     for (const m of guests) { const k = keys.get(m.id); if (k) byKey.set(k, m); }
-    if (!byKey.size) return null;
-    const r = await dbGuestTrials.reservePlays({ gameId: room.gameId, limit, trialKeys: [...byKey.keys()] });
-    return r.ok ? null : (byKey.get(r.trialKey) || null);
+    if (!byKey.size) return none;
+    const charged = [...byKey.keys()];
+    const r = await dbGuestTrials.reservePlays({ gameId: room.gameId, limit, trialKeys: charged });
+    return r.ok ? { refused: null, charged } : { refused: byKey.get(r.trialKey) || null, charged: [] };
   };
   /**
    * A guest whose device has used every play of the game is told when they create or join a table, not only at the start.
@@ -1752,7 +1755,8 @@ function start(opts = {}) {
       if (!room) return sendJoinError(p, code, `No table with code ${code || '?'}`);
       if (refuseGame(p, room.gameId, code)) return;
       const alreadyHere = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
-      if (!alreadyHere && await trialBlockedAtEntry(p, room.gameId, code)) return;
+      const reclaiming = Boolean(room.guestLeavers && room.guestLeavers.has(p.id)); // their own seat again: already paid for
+      if (!alreadyHere && !reclaiming && await trialBlockedAtEntry(p, room.gameId, code)) return;
       if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin', code)) return;
       if (room.removed && room.removed.has(p.id)) return sendJoinError(p, code, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
@@ -2046,19 +2050,21 @@ function start(opts = {}) {
       if (ineligibleHumans(room).length) return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.');
       if (room.starting) return; // a start is already being checked
       room.starting = true;
-      let limited;
-      try { limited = await trialGate(room); } catch (e) {
+      let gate;
+      try { gate = await trialGate(room); } catch (e) {
         room.starting = false;
         console.error('[games] guest play limit check failed: ' + e.message);
         return sendError(p, 'The game could not start right now. Try again.');
       }
       room.starting = false;
+      // a start that is cancelled from here gives back the plays it reserved
+      const giveBack = () => dbGuestTrials.releasePlays({ gameId: room.gameId, trialKeys: gate.charged }).catch((e) => console.error('[games] could not give back guest plays: ' + e.message));
       // the table may have changed while the plays were checked: look again before anything starts
-      if (rooms.get(room.code) !== room || room.status !== 'lobby' || room.hostId !== p.id) return;
-      if (refuseGame(p, room.gameId)) return;
-      if (ineligibleHumans(room).length) return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.');
-      if (limited) {
-        const mp = players.get(limited.id);
+      if (rooms.get(room.code) !== room || room.status !== 'lobby' || room.hostId !== p.id) { await giveBack(); return; }
+      if (refuseGame(p, room.gameId)) { await giveBack(); return; }
+      if (ineligibleHumans(room).length) { await giveBack(); return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.'); }
+      if (gate.refused) {
+        const mp = players.get(gate.refused.id);
         if (mp) trialRefused(mp, room.gameId, room.code);
         return sendError(p, 'A guest at this table has used their free plays of this game.');
       }
@@ -2141,20 +2147,6 @@ function start(opts = {}) {
       await enforceAccess(room);
       if (refuseGame(p, room.gameId)) return; // it may have been switched off while the access check ran
       if (ineligibleHumans(room).length) return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then rematch.');
-      if (room.starting) return; // a start is already being checked
-      room.starting = true;
-      let limited;
-      try { limited = await trialGate(room); } catch (e) {
-        room.starting = false;
-        console.error('[games] guest play limit check failed: ' + e.message);
-        return sendError(p, 'The game could not start right now. Try again.');
-      }
-      room.starting = false;
-      if (limited) {
-        const mp = players.get(limited.id);
-        if (mp) trialRefused(mp, room.gameId, room.code);
-        return sendError(p, 'A guest at this table has used their free plays of this game.');
-      }
       if (rooms.get(room.code) !== room || room.status !== 'finished' || room.hostId !== p.id) return; // the table changed while we checked
       clearTimeout(room.timer);
       room.game = null;

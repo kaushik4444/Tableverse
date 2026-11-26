@@ -50,6 +50,13 @@ async function test(name, fn) {
       assert.equal(await trials.playsOf(deviceA, 'chess'), 3, 'reading changes nothing');
       assert.equal(await trials.playsOf(deviceB, 'nothing-yet'), 0, 'a device with no plays has 0');
     });
+    await test('a play given back is counted again, and a cancelled start can be undone', async () => {
+      const before = await trials.playsOf(deviceA, 'chess');
+      await trials.releasePlays({ gameId: 'chess', trialKeys: [deviceA] });
+      assert.equal(await trials.playsOf(deviceA, 'chess'), before - 1);
+      assert.deepEqual(await trials.reservePlays({ gameId: 'chess', limit: 3, trialKeys: [deviceA] }), { ok: true }, 'the play can be used again');
+      assert.equal(await trials.playsOf(deviceA, 'chess'), before);
+    });
     await test('a limit must be a whole number from 1 to 9', async () => {
       await assert.rejects(() => trials.reservePlays({ gameId: 'chess', limit: 0, trialKeys: [deviceB] }));
       await assert.rejects(() => trials.reservePlays({ gameId: 'chess', limit: 10, trialKeys: [deviceB] }));

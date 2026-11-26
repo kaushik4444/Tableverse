@@ -1446,6 +1446,12 @@
         if (m.username) { S.username = m.username; store.set('ct_username', S.username); }
         if (!S.isGuest) toast('Your account is confirmed. Your games and history are yours.');
         render();
+        // a page that was locked for this guest loads its data now (nothing was fetched while locked)
+        if (!S.isGuest && !S.room) {
+          if (S.page === 'profile') loadProfile();
+          else if (S.page === 'friends') loadSocial({ quiet: true });
+          else if (S.page === 'player') { const r = routeFromHash(); if (r.page === 'player') loadPlayer(r.username); }
+        }
         break;
       }
       case 'welcome': {
@@ -3799,9 +3805,11 @@
     voiceSpeaker: () => voice.toggleSpeaker(),
     sound: () => { CardTable.sound.toggle(); render(); },
     create: (el) => {
-      if (!authed()) return gateLogin(() => actions.create(el));
       const game = el.dataset.game;
       const meta = gameMeta(game);
+      // an admin-only game says why first, before any login prompt
+      if (meta && meta.access === 'admins' && !gameOpenFor(meta)) return toast(DEV_OFF_TEXT);
+      if (!authed()) return gateLogin(() => actions.create(el));
       if (meta && !gameOpenFor(meta)) {
         if (guestLockedFor(meta)) return openAuthSheet('register', `Create a free account to play ${meta.name}.`);
         if (meta.access === 'admins') return toast(DEV_OFF_TEXT);
