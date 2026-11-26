@@ -19,7 +19,7 @@ function client() {
     hashCode: () => '', policyRequiresVerification: () => false,
     CardTable: { sound: { play: () => {} } }, // sound.js loads before app.js in the page; the level-up dialog plays the fanfare
   });
-  for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
+  for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'loadLockedPageData', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
   for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'applyWelcome', 'refreshLevel', 'loadProfile', 'applyLegal', 'onMessage']) {
     const match = source.match(new RegExp('^  (?:async )?function ' + name + '\\([^]*?^  }', 'm'));
     assert.ok(match, name);

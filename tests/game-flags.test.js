@@ -337,4 +337,22 @@ test('setOrder before readiness stays fail closed and fences in-flight reads', (
   flags.reset();
 });
 
+test('a guest play limit comes from the rows, is null for games without one, and can be set or removed at once', () => {
+  const id = ids[0];
+  flags.apply([{ game_id: id, access: 'on', guest_trial_limit: 4 }]);
+  assert.equal(flags.trialLimitOf(id), 4);
+  assert.equal(flags.trialLimitOf(ids[1]), null, 'no row, no limit');
+  flags.setTrialLimit(id, 7);
+  assert.equal(flags.trialLimitOf(id), 7, 'this process applies a change at once');
+  flags.setTrialLimit(id, null);
+  assert.equal(flags.trialLimitOf(id), null);
+  flags.reset();
+  assert.equal(flags.trialLimitOf(id), null, 'a reset forgets the limits');
+});
+
+test('no limit is reported before the first complete read', () => {
+  flags.reset();
+  assert.equal(flags.trialLimitOf(ids[0]), null);
+});
+
 console.log(`\n${passed} passed`);
