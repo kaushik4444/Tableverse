@@ -15,11 +15,11 @@ const rng = () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul
 const clock = { t: 1000, now: () => clock.t };
 
 /** A real game with three people (the first is you), and the messages a browser would receive for it. */
-function table(setup = () => {}, { viewer = 'me' } = {}) {
-  const players = names.map((n, i) => ({ id: i === 0 ? 'me' : 'p' + i, name: n, bot: i === 2 }));
+function table(setup = () => {}, { viewer = 'me', count = 3 } = {}) {
+  const players = names.slice(0, count).map((n, i) => ({ id: i === 0 ? 'me' : 'p' + i, name: n, bot: i === 2 }));
   const g = E.createGame(players, { difficulty: 'easy', pace: 'slow' }, rng, clock.now);
   setup(g);
-  const room = { code: 'ABCDEF', gameId: 'sudoku', hostId: 'me', status: 'playing', options: {}, visibility: 'public', seats: 3, min: 2, max: 8, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
+  const room = { code: 'ABCDEF', gameId: 'sudoku', hostId: 'me', status: 'playing', options: {}, visibility: 'public', seats: players.length, min: players.length === 1 ? 1 : 2, max: 8, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
     members: players.map((p) => ({ id: p.id, name: p.name, bot: !!p.bot, avatar: '🧙', connected: true, ping: null, username: null })) };
   return [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room, view: E.viewFor(g, viewer) }];
 }
@@ -113,6 +113,52 @@ const firstEmpty = (view) => view.puzzle.findIndex((v) => !v);
     assert.ok(await page.locator('.su-c.su-answer').count() > 0, 'your empty squares show the answer');
     assert.equal(await page.locator('[data-su="again"]').count(), 1, 'the host can play again');
     assert.match(await page.locator('.su-final').innerText(), /Bo/);
+    await ctx.close();
+  });
+
+  await test('you start with three hearts and three undos; undo is off until you have made a move', async () => {
+    const msgs = table();
+    const { page, ctx } = await open(msgs);
+    assert.match(await page.locator('.su-hearts').innerText(), /♥♥♥/);
+    assert.equal(await page.isDisabled('[data-su="undo"]'), true);
+    assert.match(await page.locator('[data-su="undo"]').innerText(), /\(3\)/);
+    await ctx.close();
+  });
+
+  await test('undo takes back your last move and sends the undo action', async () => {
+    const msgs = table((g) => {
+      const k = g.puzzle.findIndex((v) => !v);
+      E.applyAction(g, 'me', { type: 'place', r: Math.floor(k / 9), c: k % 9, v: g.solution[k] });
+    });
+    const { page, ctx } = await open(msgs);
+    assert.equal(await page.isDisabled('[data-su="undo"]'), false, 'undo is on after a move');
+    await page.click('[data-su="undo"]');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'undo' });
+    await ctx.close();
+  });
+
+  await test('out of lives: no more squares or numbers to tap, the status says so, and the lost hearts are empty', async () => {
+    const msgs = table((g) => {
+      const empties = g.puzzle.map((v, k) => (v ? -1 : k)).filter((k) => k >= 0).slice(0, 3);
+      for (const k of empties) E.applyAction(g, 'me', { type: 'place', r: Math.floor(k / 9), c: k % 9, v: g.solution[k] === 9 ? 8 : g.solution[k] + 1 });
+    });
+    const { page, ctx } = await open(msgs);
+    assert.match(await page.locator('.wz-status').innerText(), /out of lives/);
+    assert.equal(await page.locator('button.su-c').count(), 0, 'no square can be tapped');
+    assert.equal(await page.locator('.su-pad button:not([disabled])').count(), 0, 'the pad is off');
+    assert.match(await page.locator('.su-hearts').innerText(), /♡♡♡/);
+    assert.match(await page.locator('.su-prog li.me').innerText(), /out/);
+    await ctx.close();
+  });
+
+  await test('solo: the third mistake ends the game at once with the game-over sheet', async () => {
+    const msgs = table((g) => {
+      const empties = g.puzzle.map((v, k) => (v ? -1 : k)).filter((k) => k >= 0).slice(0, 3);
+      for (const k of empties) E.applyAction(g, 'me', { type: 'place', r: Math.floor(k / 9), c: k % 9, v: g.solution[k] === 9 ? 8 : g.solution[k] + 1 });
+    }, { count: 1 });
+    const { page, ctx } = await open(msgs);
+    assert.match(await page.locator('.overlay .sheet h2').innerText(), /Out of lives: game over/);
+    assert.ok(await page.locator('.su-c.su-answer').count() > 0, 'the answer is shown');
     await ctx.close();
   });
 

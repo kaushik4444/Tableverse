@@ -40,3 +40,19 @@ button.su-c:focus-visible { outline: 3px solid var(--gold); outline-offset: -3px
   .su .su-pad { margin-top: 6px; gap: 4px; }
   .su .su-n { min-height: 34px; font-size: 16px; }
 }
+/* lives (hearts) and undo, above the pad */
+.su .su-lives { margin-left: 6px; color: #f87171; letter-spacing: 1px; font-size: 12px; }
+.su .su-prog li.out { opacity: .6; }
+.su .su-prog li.out .su-bar i { background: #64748b; }
+.su .su-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: min(100%, 360px); margin: 10px auto 0; }
+.su .su-hearts { color: #f87171; font-size: 20px; letter-spacing: 3px; line-height: 1; }
+.su .su-undo { min-height: 36px; }
+.su .su-undo:disabled { opacity: .45; }
+/* short phones: the lives and undo row and a slightly smaller grid keep the whole table on one screen */
+@media (max-height: 700px) {
+  .su .su-board { width: min(100%, 296px); }
+  .su .su-tools { margin-top: 4px; width: min(100%, 296px); }
+  .su .su-undo { min-height: 30px; }
+  .su .su-hearts { font-size: 17px; }
+  .su .su-pad { width: min(100%, 296px); margin-top: 4px; }
+}
