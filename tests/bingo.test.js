@@ -300,3 +300,27 @@ test('after a reclaim the person marks by hand again and the seat does not claim
 });
 
 console.log(`\n${passed} bingo tests passed`);
+
+test('a manual table: the last number can still be marked and claimed before the game ends', () => {
+  const g = E.createGame(people(2, [1]), { pattern: 'full', autoMark: false }, mulberry32(15));
+  const card = [1, 2, 3, 4, 5, 16, 17, 18, 19, 20, 31, 32, 0, 34, 35, 46, 47, 48, 49, 50, 61, 62, 63, 64, 65];
+  rigCard(g, 0, card);
+  g.called = card.filter((n) => n !== 0 && n !== 65);
+  g.marks[0] = new Set(g.called);
+  g.deck = [65];
+  assert.ok(E.applyAction(g, null, { type: 'call' }).ok, 'the last number is called');
+  assert.equal(g.phase, 'playing', 'the game does not end on the last call of a manual table');
+  assert.ok(E.applyAction(g, 'p0', { type: 'mark', n: 65 }).ok, 'the player can still mark the final number');
+  assert.ok(E.applyAction(g, 'p0', { type: 'claim' }).ok, 'and claim Bingo');
+  assert.equal(g.phase, 'gameOver');
+  assert.deepEqual(g.winners, [0]);
+});
+
+test('a manual table with nobody completing ends on the next call after the last number', () => {
+  const g = E.createGame(people(2), { pattern: 'full', autoMark: false }, mulberry32(16));
+  g.deck = [];
+  g.called = [];
+  assert.ok(E.applyAction(g, null, { type: 'call' }).ok);
+  assert.equal(g.phase, 'gameOver');
+  assert.deepEqual(g.winners, []);
+});

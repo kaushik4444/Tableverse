@@ -42,7 +42,7 @@ function lose(g) {
 function createGame(players, options, rng, now = Date.now) {
   if (players.length < 1 || players.length > 8) throw new Error('Sudoku needs 1 to 8 players');
   const difficulty = DIFFICULTIES.includes(options.difficulty) ? options.difficulty : 'medium';
-  const pace = PACE_MS[options.pace] ? options.pace : 'normal';
+  const pace = Object.hasOwn(PACE_MS, options.pace) ? options.pace : 'normal'; // an own key only: 'toString' would give NaN bot timings
   const { puzzle, solution } = makePuzzle(rng, difficulty);
   const startedAt = now();
   const g = {
