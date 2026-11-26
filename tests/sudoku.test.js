@@ -138,6 +138,33 @@ test('bots fill squares with the right numbers, and a bot can win', () => {
   assert.equal(E.botAction(g, 'b'), null);
 });
 
+test('a person who leaves mid-game is paced as a bot, so they cannot fill the grid at once and win', () => {
+  const c = clock(1000);
+  const g = E.createGame(people(2), { difficulty: 'easy', pace: 'normal' }, mulberry32(17), c.now);
+  assert.equal(E.botDelayMs(g, 'p1'), 0, 'a person has no bot pacing');
+  E.syncBots(g, ['p1']); // p1 leaves: the server now treats the seat as a bot
+  assert.equal(E.viewFor(g, 'p0').players[1].bot, true, 'the others see it as a bot');
+  const wait = E.botDelayMs(g, 'p1');
+  assert.ok(wait > 0, 'paced from the moment it becomes a bot');
+  // the clock stands still: the bot's next square is still not due, however many times the server asks
+  must(g, 'p1', E.botAction(g, 'p1'));
+  assert.ok(E.botDelayMs(g, 'p1') > 0, 'the next square waits its turn after a move');
+  // a bot that fills its grid as fast as it can would need a clock tick for each square
+  let moves = 0;
+  while (E.botDelayMs(g, 'p1') === 0 && moves < 81 && g.phase === 'playing') {
+    const a = E.botAction(g, 'p1');
+    if (!a) break;
+    must(g, 'p1', a);
+    moves++;
+  }
+  assert.equal(moves, 0, 'at the same instant, no further square is due');
+  c.t += wait * 2;
+  assert.equal(E.botDelayMs(g, 'p1'), 0, 'once the time has passed, the bot is due again');
+  E.syncBots(g, []); // the person came back to the seat
+  assert.equal(E.botDelayMs(g, 'p1'), 0);
+  assert.equal(E.viewFor(g, 'p0').players[1].bot, false);
+});
+
 test('plugin: two to eight seats, the options, the fastest-grid stat, and a game that the server can run', () => {
   assert.equal(plugin.id, 'sudoku');
   assert.equal(plugin.seats.min, 1);

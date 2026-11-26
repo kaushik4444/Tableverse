@@ -47,6 +47,8 @@ module.exports = {
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId),
       botDelayMs: (playerId) => engine.botDelayMs(g, playerId),
+      // the server calls this with the seats that are bots now (a person who left, or a bot that was removed)
+      syncBots: (botIds) => engine.syncBots(g, botIds),
       autoAction: () => null,
       autoDelayMs: () => 0,
       isOver: () => g.phase === 'gameOver',

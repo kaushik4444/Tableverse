@@ -118,6 +118,22 @@ function awaiting(g) {
   return g.players.filter((_, i) => !g.out[i] && rightOf(g, i) < empties).map((p) => p.id);
 }
 
+/**
+ * The room's bot seats, as the server knows them now. A person who leaves mid-game becomes a bot seat (and a bot who is a person
+ * again stops being one), so the engine is told rather than trusting the flag it copied at creation. A seat that becomes a bot
+ * is paced from now on, so it fills squares at the bot pace and cannot play its whole grid at once.
+ */
+function syncBots(g, botIds) {
+  const bots = new Set(botIds);
+  const at = g.now();
+  g.players.forEach((p, i) => {
+    const bot = bots.has(p.id);
+    if (bot === p.bot) return;
+    p.bot = bot;
+    g.due[i] = bot ? at + botGap(g, i) : 0;
+  });
+}
+
 function botDelayMs(g, playerId) {
   const i = g.players.findIndex((p) => p.id === playerId);
   return i < 0 ? 0 : Math.max(0, g.due[i] - g.now());
@@ -171,4 +187,4 @@ function results(g) {
   return g.players.map((_, i) => ({ score: g.winner === i && g.event ? g.event.seconds : 0, winner: g.winner === i }));
 }
 
-module.exports = { PACE_MS, DIFFICULTIES, LIVES, UNDOS, createGame, applyAction, awaiting, botDelayMs, botAction, viewFor, results, rightOf };
+module.exports = { PACE_MS, DIFFICULTIES, LIVES, UNDOS, createGame, applyAction, awaiting, syncBots, botDelayMs, botAction, viewFor, results, rightOf };
