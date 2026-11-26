@@ -3488,6 +3488,19 @@
     slot.innerHTML = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
   }
 
+  // Games redraw the whole table on every state change. A sheet that was already up (same title) is marked settled, so it does
+  // not replay its entrance: the shared fix for every game, instead of a per-game rule.
+  let shownOverlayTitles = new Set();
+  function markSettledOverlays(root) {
+    const titles = new Set();
+    root.querySelectorAll('.overlay').forEach((ov) => {
+      const title = ((ov.querySelector('h2') || ov).textContent || '').trim().slice(0, 120);
+      titles.add(title);
+      if (shownOverlayTitles.has(title)) ov.classList.add('settled');
+    });
+    shownOverlayTitles = titles;
+  }
+
   function renderGame() {
     lastAppHtml = null; // the game draws the root itself, so the last home or lobby markup is no longer on screen
     const gameId = S.room.gameId;
@@ -3527,6 +3540,7 @@
       rerender: render,
       toast,
     });
+    markSettledOverlays($app);
     placeReady();
     markStandIns($app);
     watchStandIns();

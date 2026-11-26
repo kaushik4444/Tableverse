@@ -170,6 +170,8 @@ input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { bo
   animation: rise .34s var(--ease) backwards;
 }
 .sheet h2 { font-size: 28px; }
+/* a sheet that is already on screen keeps still when the table redraws (games redraw on every state, e.g. each Ready tap) */
+.overlay.settled, .overlay.settled .sheet { animation: none; }
 @keyframes rise { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
 .menu { background: var(--menu-bg); border-color: var(--menu-line); }
 .menu-item:hover, .menu-item:focus-visible { background: var(--menu-hover); }
