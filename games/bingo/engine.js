@@ -114,6 +114,18 @@ function callNext(g) {
 }
 
 /**
+ * A seat changes hands: a bot takes over when a person leaves a running game, and the seat goes back to the person when
+ * they reclaim it. The engine plays the seat (automatic marks and Bingo claims) and shows it according to this flag.
+ * Returns false when no seat has that id.
+ */
+function setSeatBot(g, playerId, bot) {
+  const i = g.players.findIndex((p) => p.id === playerId);
+  if (i < 0) return false;
+  g.players[i].bot = bot === true;
+  return true;
+}
+
+/**
  * action: { type: 'mark', n } | { type: 'claim' }. The server calls with playerId null and { type: 'call' } on its timer.
  */
 function applyAction(g, playerId, action) {
@@ -196,5 +208,5 @@ function results(g) {
 }
 
 module.exports = {
-  LETTERS, FREE, LINES, SPEEDS, letterOf, makeCard, dealCards, createGame, applyAction, awaiting, autoAction, autoDelayMs, keepsAutoClock, hasBingo, viewFor, results,
+  LETTERS, FREE, LINES, SPEEDS, letterOf, makeCard, dealCards, createGame, applyAction, setSeatBot, awaiting, autoAction, autoDelayMs, keepsAutoClock, hasBingo, viewFor, results,
 };

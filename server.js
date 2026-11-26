@@ -1119,6 +1119,11 @@ function start(opts = {}) {
     schedule(room);
   }
 
+  /** A running game keeps its own copy of each seat's bot flag (Bingo plays bot seats itself): pass a seat change on to it. */
+  function syncSeatBot(room, m) {
+    if (room.game && typeof room.game.setSeatBot === 'function') room.game.setSeatBot(m.id, m.bot === true);
+  }
+
   /** A bot has played this person's turn (they are away, or ran out of the table's time). After three in a row they are removed. */
   function noteBotTurnFor(room, m) {
     if (!m || m.bot || !room.members.includes(m)) return;
@@ -1132,6 +1137,7 @@ function start(opts = {}) {
       return;
     }
     const out = idlePolicy.kickIdle(room, m, Date.now());
+    syncSeatBot(room, m);
     if (room.hostId === m.id) ensureHost(room, { leaving: m.id }); // the removed person was the host: someone else takes it, so the table keeps its host controls
     if (q) {
       q.room = null;
@@ -1363,6 +1369,7 @@ function start(opts = {}) {
       // The window starts at the first departure only: later leaves keep its deadline, so the refresh is scheduled once.
       const firstLeave = !(room.leaveDeadlines && room.leaveDeadlines.has(room.members[i].id));
       voluntaryLeave(room, room.members[i], Date.now(), rejoinWindowMs); // a bot takes over the seat; the player can take it back in time
+      syncSeatBot(room, room.members[i]);
       if (firstLeave) scheduleRejoinExpiryRefresh(); // when the window closes, the home screens drop the "take your seat back" offer
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
     } else {
@@ -1804,6 +1811,7 @@ function start(opts = {}) {
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
         reclaimSeat(room, seat, now); // back in time: the bot gives the seat back, no loss, play resumes
+        syncSeatBot(room, seat);
         seat.avatar = p.avatar;
         p.room = room.code;
         sys(room, `🔄 ${p.name} is back and took the seat from the bot`);

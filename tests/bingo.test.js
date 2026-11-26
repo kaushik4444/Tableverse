@@ -254,5 +254,38 @@ test('on the last call, a human and a bot who complete their cards together both
   assert.deepEqual(g.winners, [0, 1], 'the human card completed on the final call wins alongside the bot');
 });
 
+test('a bot takeover makes the engine play that seat as a bot; a reclaim gives it back to the person', () => {
+  const g = E.createGame(people(2), { pattern: 'line', autoMark: false }, mulberry32(13));
+  assert.equal(g.players[0].bot, false);
+  assert.equal(E.setSeatBot(g, 'p0', true), true, 'the seat is found');
+  assert.equal(g.players[0].bot, true);
+  assert.equal(E.viewFor(g, 'p1').players[0].bot, true, 'the public progress view shows the bot');
+  assert.equal(E.setSeatBot(g, 'nobody', true), false, 'an unknown player is not changed');
+  E.setSeatBot(g, 'p0', false);
+  assert.equal(g.players[0].bot, false);
+  assert.equal(E.viewFor(g, 'p1').players[0].bot, false);
+});
+
+test('a taken-over seat is marked and claims Bingo automatically', () => {
+  const g = E.createGame(people(2), { pattern: 'line', autoMark: false }, mulberry32(14));
+  rigCard(g, 0, [1, 2, 3, 4, 5, 16, 17, 18, 19, 20, 31, 32, 0, 34, 35, 46, 47, 48, 49, 50, 61, 62, 63, 64, 65]);
+  E.setSeatBot(g, 'p0', true); // p0 left: a bot plays the seat now
+  g.deck = g.deck.filter((n) => ![1, 2, 3, 4, 5].includes(n)).concat([1, 2, 3, 4, 5]);
+  for (let k = 0; k < 5 && g.phase === 'playing'; k++) E.applyAction(g, null, { type: 'call' });
+  assert.equal(g.phase, 'gameOver', 'the taken-over seat claims its top row on its own');
+  assert.deepEqual(g.winners, [0]);
+});
+
+test('after a reclaim the person marks by hand again and the seat does not claim on its own', () => {
+  const g = E.createGame(people(2), { pattern: 'line', autoMark: false }, mulberry32(15));
+  rigCard(g, 0, [1, 2, 3, 4, 5, 16, 17, 18, 19, 20, 31, 32, 0, 34, 35, 46, 47, 48, 49, 50, 61, 62, 63, 64, 65]);
+  E.setSeatBot(g, 'p0', true);
+  E.setSeatBot(g, 'p0', false); // the person took the seat back
+  g.deck = g.deck.filter((n) => ![1, 2, 3, 4, 5].includes(n)).concat([1, 2, 3, 4, 5]);
+  for (let k = 0; k < 5; k++) E.applyAction(g, null, { type: 'call' });
+  assert.equal(g.phase, 'playing', 'no automatic Bingo for a human seat');
+  assert.equal(g.marks[0].size, 0, 'no automatic marks for a human seat');
+  assert.ok(E.applyAction(g, 'p0', { type: 'mark', n: 1 }).ok, 'the person can still mark by hand');
+});
 
 console.log(`\n${passed} bingo tests passed`);

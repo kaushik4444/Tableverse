@@ -42,6 +42,8 @@ module.exports = {
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },
+      // the room's seat changed hands (a person left, or took the seat back): the engine follows the room's bot flag
+      setSeatBot: (playerId, bot) => engine.setSeatBot(g, playerId, bot),
       awaiting: () => engine.awaiting(g),
       botAction: () => null, // bots act through the timer call below
       autoAction: () => engine.autoAction(g),
