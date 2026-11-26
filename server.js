@@ -1164,6 +1164,8 @@ function start(opts = {}) {
     if (shuttingDown) return; // no bot or auto-play moves while the server stops
     const g = room.game;
     if (!g || room.status !== 'playing' || g.isOver()) return;
+    // a game that paces its bots by seat (Sudoku) learns which seats are bots now, so a seat that a person left is paced too
+    if (typeof g.syncBots === 'function') g.syncBots(room.members.filter((m) => m.bot).map((m) => m.id));
     if (!humans(room).some(isConnected)) return; // nobody watching: pause
     // Ready-up: the first round, and each round boundary (the game waits only for its "continue"), wait until everybody has pressed Ready.
     const boundaryAuto = typeof g.autoAction === 'function' ? g.autoAction() : null;
