@@ -43,36 +43,42 @@ function table(setup = () => {}, { viewer = 'me', size = '4' } = {}) {
   await test('on your turn an undrawn line can be tapped, and the tap sends that line', async () => {
     const { page, ctx } = await open(table());
     assert.match(await page.locator('.wz-status').innerText(), /Your move/);
-    await page.locator('button.db-line').first().click();
-    const act = (await sent(page)).at(-1).action;
-    assert.equal(act.type, 'line');
-    assert.equal(Number.isInteger(act.index), true);
+    for (const [kind, dx, dy] of [['h', 12, 1], ['v', 1, 12]]) {
+      const line = page.locator(`button.db-line.db-${kind}`).first();
+      await line.scrollIntoViewIfNeeded();
+      const box = await line.boundingBox();
+      // Both points are in the two tap bands at the top left dot, but are closer to different lines.
+      await page.touchscreen.tap(box.x + (kind === 'v' ? box.width / 2 : 0) + dx,
+        box.y + (kind === 'h' ? box.height / 2 : 0) + dy);
+      assert.deepEqual((await sent(page)).at(-1).action, { type: 'line', index: Number(await line.getAttribute('data-line')) });
+    }
     await ctx.close();
   });
 
-  await test('drawing a box-closing line focuses the nearest available line', async () => {
-    const { page, ctx } = await open(table((g) => {
-      for (const index of [0, 4, 20]) E.applyAction(g, g.players[g.turn].id, { type: 'line', index });
-    }));
-    const line = page.locator('[data-line="21"]');
-    await line.focus();
-    await page.keyboard.press('Enter');
-    assert.deepEqual((await sent(page)).at(-1).action, { type: 'line', index: 21 });
-    const [, state] = table((g) => {
-      for (const index of [0, 4, 20, 21]) E.applyAction(g, g.players[g.turn].id, { type: 'line', index });
+  await test('keyboard focus survives updates and moves to a playable line after closing a box', async () => {
+    const sides = [['h', 0, 0], ['h', 1, 0], ['v', 0, 0], ['v', 0, 1]];
+    const build = (count) => table((g) => {
+      for (const [kind, r, c] of sides.slice(0, count)) {
+        const index = g.lines.findIndex((l) => l.kind === kind && l.r === r && l.c === c);
+        E.applyAction(g, g.players[g.turn].id, { type: 'line', index });
+      }
     });
-    await page.evaluate((m) => window.__push(m), state);
-    await page.waitForSelector('[data-line="1"]:focus');
-    await ctx.close();
-  });
-
-  await test('drawing a line that passes the turn focuses the board', async () => {
-    const { page, ctx } = await open(table());
-    await page.locator('[data-line="0"]').focus();
+    const before = build(3);
+    const { page, ctx } = await open(before);
+    const line = page.getByRole('button', { name: 'Vertical line, row 1, column 2, not drawn' });
+    const index = Number(await line.getAttribute('data-line'));
+    await line.focus();
+    const focus = () => page.evaluate(() => document.activeElement.dataset.line);
+    const redraw = (msg) => page.evaluate((m) => window.__push(m), msg);
+    await redraw(before[1]);
+    assert.equal(await focus(), String(index));
     await page.keyboard.press('Enter');
-    const [, state] = table((g) => E.applyAction(g, 'me', { type: 'line', index: 0 }));
-    await page.evaluate((m) => window.__push(m), state);
-    await page.waitForSelector('.db-board:focus');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'line', index });
+    await redraw(build(4)[1]);
+    await page.waitForSelector('.db-box');
+    assert.notEqual(await focus(), undefined);
+    assert.notEqual(await focus(), String(index));
+    assert.equal(await page.locator('button.db-line:enabled:focus').count(), 1);
     await ctx.close();
   });
 

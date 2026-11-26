@@ -33,11 +33,12 @@
     if (v.shot) ui.known.set('striker', { kind: 'striker', colour: v.shot.colour, r: 0.026 });
   }
 
-  function discHTML(v, d) {
+  function discHTML(v, d, alpha = 1) {
     const [X, Y] = toSvg(v, [d.x, d.y]);
     const cls = d.kind === 'queen' ? 'cb-queen' : d.kind === 'striker' ? `cb-striker ${d.colour === 'w' ? 'w' : 'b'}` : `cb-coin ${d.colour === 'w' ? 'w' : 'b'}`;
+    const fade = alpha < 1 ? ` opacity="${Math.max(0, alpha).toFixed(3)}"` : ''; // a disc leaving the board fades out
     // a flat offset shade under the disc: no SVG filter, which Chromium can paint as black blocks over the board
-    return `<circle class="cb-shade" data-shade-for="${esc(d.id)}" cx="${(X + SHADE_X).toFixed(4)}" cy="${(Y + SHADE_Y).toFixed(4)}" r="${d.r}" fill="#2a1608" opacity="${SHADE_ALPHA}"/><circle class="${cls}" data-id="${esc(d.id)}" cx="${X}" cy="${Y}" r="${d.r}"/>`;
+    return `<circle class="cb-shade" data-shade-for="${esc(d.id)}" cx="${(X + SHADE_X).toFixed(4)}" cy="${(Y + SHADE_Y).toFixed(4)}" r="${d.r}" fill="#2a1608" opacity="${(SHADE_ALPHA * Math.max(0, alpha)).toFixed(3)}"/><circle class="${cls}" data-id="${esc(d.id)}" cx="${X}" cy="${Y}" r="${d.r}"${fade}/>`;
   }
 
   function discsFor(frame) {
@@ -222,7 +223,6 @@
     const tip = on ? tipText() : 'Wait for your turn. Aim and flick when the striker is yours.';
     return `<div class="cb-controls">`
       + `<p class="hint cb-tip" aria-live="polite">${tip}</p>`
-      + `<button type="button" class="btn big cb-fire" data-cb="fire" ${on ? '' : 'tabindex="-1"'} aria-disabled="${on && ui.aim.power > 0 ? 'false' : 'true'}">Fire striker</button>`
       + `</div>`;
   }
 
@@ -231,11 +231,6 @@
     const { angle, power } = ui.aim;
     if (power <= 0) return 'Drag your striker along the baseline, then drag back from the board to aim and set power. Let go to flick.';
     return `Aim ${angle}° · power ${power}%. Let go to flick, or press Enter on the striker.`;
-  }
-
-  function logHTML(v) {
-    if (!v.log.length) return '<p class="hint">No shots yet.</p>';
-    return `<ol class="cb-log">${v.log.map((l) => `<li>${esc(l)}</li>`).join('')}</ol>`;
   }
 
   function overlayHTML(v) {
@@ -345,21 +340,14 @@
       snd.play(kind === 2 ? 'pocket' : kind === 1 ? 'rail' : 'clack', speed);
     }
     a.lastFrame = { t, d: pose.map(([id, x, y]) => [id, x, y]) };
+    // Each frame rebuilds the disc group from the pose, rather than moving every element in place.
     const svg = ui.root.querySelector('.cb-svg');
-    if (svg) {
-      const seen = new Set(pose.map(([id]) => id));
-      for (const [id, x, y, alpha] of pose) {
-        const key = CSS.escape(id);
-        const [X, Y] = toSvg(ui.v, [x, y]);
-        for (const el of svg.querySelectorAll(`[data-id="${key}"], [data-shade-for="${key}"]`)) {
-          const shade = el.hasAttribute('data-shade-for');
-          el.setAttribute('cx', X + (shade ? SHADE_X : 0));
-          el.setAttribute('cy', Y + (shade ? SHADE_Y : 0));
-          el.style.display = '';
-          el.style.opacity = String(alpha * (shade ? SHADE_ALPHA : 1));
-        }
-      }
-      svg.querySelectorAll('[data-id], [data-shade-for]').forEach((el) => { if (!seen.has(el.dataset.shadeFor ?? el.dataset.id)) el.style.display = 'none'; });
+    const group = svg && svg.querySelector('[data-shadow]');
+    if (group) {
+      group.innerHTML = pose.filter(([, , , alpha]) => alpha > 0).map(([id, x, y, alpha]) => {
+        const k = ui.known.get(id) || { kind: 'coin', colour: 'w', r: 0.022 };
+        return discHTML(ui.v, { id, kind: k.kind, colour: k.colour, x, y, r: k.r }, alpha);
+      }).join('');
     }
     // the app redraws the table (with its turn timer and toolbar) from the current state
     if (!inSetup && (t >= a.end + 0.25 || t > 25)) { ui.anim = null; ui.ctx.rerender(); return; }
@@ -391,7 +379,6 @@
       ${sliderHTML(v)}
       ${controlsHTML(v)}
       <div class="wz-status ${v.myTurn && !ui.anim ? 'mine' : ''}"><span>${guidance(v)}</span></div>
-      <details class="cb-moves" open><summary>Shots</summary>${logHTML(v)}</details>
       ${overlayHTML(v)}</div>`;
     fitSlider();
     root.onclick = onClick;
@@ -482,8 +469,6 @@
     if (slider) slider.setAttribute('aria-valuenow', String(ui.aim.x));
     const tip = root.querySelector('.cb-tip');
     if (tip) tip.textContent = tipText();
-    const fireBtn = root.querySelector('[data-cb="fire"]');
-    if (fireBtn) fireBtn.setAttribute('aria-disabled', ui.aim.power > 0 ? 'false' : 'true');
   }
 
   function onPointerDown(e) {
@@ -594,7 +579,6 @@
     if (!el || !v || !ctx) return;
     switch (el.dataset.cb) {
       case 'rules': ctx.showRules(); break;
-      case 'fire': fire(); break;
       case 'again': ctx.rematch(); break;
       case 'leave': ui.resignArmed = false; ctx.leave(); break;
       case 'resign':
