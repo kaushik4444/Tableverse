@@ -610,10 +610,14 @@
     }; });
   main.querySelectorAll('[data-gtrial-on],[data-gtrial-n]').forEach((el) => { el.onchange = () => {
       const id = el.dataset.gtrialOn || el.dataset.gtrialN;
+      if (gameTrialPending.has(id)) return; // one save per game at a time: a change while one is pending is ignored
       const box = main.querySelector(`[data-gtrial-on="${id}"]`);
       const sel = main.querySelector(`[data-gtrial-n="${id}"]`);
       const limit = box && box.checked && sel ? Number(sel.value) : null;
       const visit = generation; gameFlagError = null;
+      // lock both controls at once, before the request starts; the redraw below shows the choice as saving
+      if (box) box.disabled = true;
+      if (sel) sel.disabled = true;
       gameTrialPending.set(id, limit); redrawGames(); // the choice stays shown and locked until it is saved
       api('/api/admin/game-trials', { gameId: id, limit }, false, true).then(() => {
         gameTrialPending.delete(id);
