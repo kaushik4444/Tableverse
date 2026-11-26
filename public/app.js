@@ -1047,9 +1047,12 @@
     } catch { /* offline: the list simply stays as it was */ }
   }
 
+  // the incoming requests and invitations seen at the last load, by id: a new id is a new item even if another left
+  let socialKeys = null;
   async function loadSocial({ quiet = false } = {}) {
     if (!S.ready || S.guest) return;
     let before = -1;
+    let latestKeys = null;
     if (!quiet) { S.socialLoading = true; S.socialError = ''; }
     try {
       const paths = [
@@ -1071,11 +1074,17 @@
       S.friendRequests = { incoming: results[1].requests || [], outgoing: results[2].requests || [] };
       S.invitations = { incoming: results[3].invitations || [], outgoing: results[4].invitations || [] };
       S.socialError = '';
+      latestKeys = [...(results[1].requests || []).map((r) => 'f:' + (r.id ?? r.username ?? JSON.stringify(r))), ...(results[3].invitations || []).map((r) => 'i:' + (r.id ?? r.code ?? JSON.stringify(r)))];
     } catch (error) {
       S.socialError = error.message || 'Could not load friends.';
     } finally {
       S.socialLoading = false;
       const after = (S.friendRequests.incoming || []).length + (S.invitations.incoming || []).length;
+      if (latestKeys) {
+        const fresh = socialKeys && latestKeys.some((k) => !socialKeys.includes(k));
+        if (fresh && CardTable.sound) CardTable.sound.play('notify'); // a new friend request or invitation
+        socialKeys = latestKeys;
+      }
       if (!S.room || S.room.status === 'lobby' || after !== before) render(); // in a running game only redraw when the bell count changed
     }
   }
@@ -1571,6 +1580,7 @@
         const stateKey = JSON.stringify([stable, m.view]);
         const same = stateKey === S.stateKey && S.room;
         S.stateKey = stateKey;
+        prevRoom = S.room;
         S.room = m.room;
         S.view = m.view;
         // a seat change is confirmed when the table shows a new order; an error or the fallback timeout also ends the wait
@@ -1578,6 +1588,7 @@
         S.skew = (m.room.now || Date.now()) - Date.now();
         if (same) break; // identical to what is on screen (a presence or ping tick): keep the DOM, the focus and any animation
         setHash(m.room.code);
+        roomSoundsFor(prevRoom, m.room);
         soundsFor(prevView, m.view);
         prevView = m.view;
         const mine = !!(m.view && m.view.myTurn);
@@ -1769,10 +1780,28 @@
   const avatar = (m, cls = '') => `<span class="avatar${cls ? ' ' + cls : ''}" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span>`;
 
   let prevView = null;
+  let prevRoom = null; // the room as it was before the last state message
   const bidSig = (v) => JSON.stringify(v.bids || (v.players || []).map((p) => (p.bid !== undefined && p.bid !== null ? p.bid : p.hasBid ? 1 : null)));
   /** Play a sound for whatever changed between two game views. Only the trick-taking games (Wizard, 29) have the
    *  `trick`/`lastTrick`/`bids` fields this looks at; every other game plays its own sounds, including its final
    *  result (a plain "gameOver" check here could not tell a winner from a loser without knowing each game's shape). */
+  /** Room-level cues: the game starts, a person sits down at the table or leaves it. Bots are not announced. */
+  function roomSoundsFor(a, b) {
+    const snd = CardTable.sound;
+    if (!snd || !a || !b || a.code !== b.code) return;
+    if (a.status === 'lobby' && b.status === 'playing') snd.play('start');
+    const humans = (r) => new Set((r.members || []).filter((x) => !x.bot).map((x) => x.id));
+    const was = humans(a); const now = humans(b);
+    if ([...now].some((id) => !was.has(id))) snd.play('join');
+    else if ([...was].some((id) => !now.has(id))) snd.play('leave');
+  }
+  // a soft tap on the app's own buttons (menus, tabs, dialogs, the table's controls); the game board has its own sounds
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('button, .menu-item') : null;
+    if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true' || b.closest('[data-no-tap]')) return;
+    if (b.matches('[data-act="sound"], [data-modal-act="toggleSound"]')) return; // these already play their own sound
+    if (CardTable.sound) CardTable.sound.play('tap');
+  }, true);
   function soundsFor(a, b) {
     const snd = CardTable.sound;
     if (!b || !snd) return;
@@ -2182,6 +2211,7 @@
     store.set('ct_level_seen_' + n.username, String(n.to));
     S.levelUp = null;
     const left = S.account ? Math.max(0, Number(S.account.need) - Number(S.account.into)) : null;
+    if (CardTable.sound) CardTable.sound.play('fanfare'); // when the dialog shows, not while a table holds it back
     openModal('Level up', `<p>Congratulations on reaching level ${Number(n.to)}!</p>${left !== null ? `<p class="hint">Next level in ${left} min of play.</p>` : ''}<div class="row" style="margin-top:12px"><button class="btn" type="button" data-modal-close="1">OK</button></div>`);
   }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
@@ -2818,9 +2848,11 @@
   function openSettingsDialog() {
     const appearance = () => `<div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-modal-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>`;
     const body = () => `${appearance()}
-      <div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
+      <div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts, taps and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
+      <div class="setting-row"><div><b>Volume</b><small>How loud the sound effects are. Saved on this device.</small></div><input type="range" min="0" max="100" step="5" value="${CardTable.sound.volume()}" data-volume aria-label="Sound effects volume" style="width:150px"></div>
       <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} still open, that you sat at or watched.` : 'Tables you sit at or watch show here while they stay open. A table closes when everyone leaves.'} Clearing removes them from this list; a table you sit at again is added back.</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>`;
     openModal('Settings', body(), (o) => {
+      o.addEventListener('input', (e) => { if (e.target.matches && e.target.matches('[data-volume]')) CardTable.sound.setVolume(e.target.value); });
       // a redraw replaces the buttons; keep focus on the replacement of the button the player used (keyboard users keep their place)
       const redraw = (used) => {
         const key = (b) => `${b.dataset.modalAct}:${b.dataset.theme || ''}`;

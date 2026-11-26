@@ -228,7 +228,7 @@
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
     if (!snd) return;
-    if (e.type === 'roll') snd.play('card');
+    if (e.type === 'roll') snd.play('dice');
     else if (e.type === 'rent' || e.type === 'debt' || e.type === 'bankrupt') snd.play('lose');
     else if (e.type === 'over') snd.play(v.winner === v.me ? 'win' : 'lose');
     else if (e.type === 'traded' || e.type === 'bought' || e.type === 'sold') snd.play('collect');
