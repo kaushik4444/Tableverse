@@ -680,7 +680,8 @@ function start(opts = {}) {
   const guestIdsAt = (room) => room.members
     .filter((m) => { if (m.bot) return false; const mp = players.get(m.id); return Boolean(mp) && roleOf(mp) === 'guest'; })
     .map((m) => m.id).sort();
-  const trialRefused = (p, gameId, tableCode) => send(p.ws, { t: 'error', code: 'guest_locked', feature: 'trial', gameId, tableCode, message: 'Create a free account to keep playing.' });
+  const trialRefusedTo = (ws, gameId, tableCode) => { if (ws) send(ws, { t: 'error', code: 'guest_locked', feature: 'trial', gameId, tableCode, message: 'Create a free account to keep playing.' }); };
+  const trialRefused = (p, gameId, tableCode) => trialRefusedTo(p.ws, gameId, tableCode);
   /**
    * Guest game limits (Games tab): when a game starts (or rematches) every guest at the table uses one play of it, all or
    * nothing. Returns { refused, charged }: refused is the guest whose device is at its limit (or null), charged the device
@@ -708,10 +709,11 @@ function start(opts = {}) {
   const trialBlockedAtEntry = async (p, gameId, tableCode) => {
     const limit = gameFlags.trialLimitOf(gameId);
     if (limit === null || roleOf(p) !== 'guest') return false;
+    const asked = p.ws; // the socket that asked: the answer goes there, even if the connection is replaced during the checks
     const key = (await dbGuestTrials.trialKeysFor([p.id])).get(p.id);
     if (!key) return false;
     if ((await dbGuestTrials.playsOf(key, gameId)) < limit) return false;
-    trialRefused(p, gameId, tableCode);
+    trialRefusedTo(asked, gameId, tableCode);
     return true;
   };
   /**
@@ -1119,6 +1121,11 @@ function start(opts = {}) {
     schedule(room);
   }
 
+  /** A running game keeps its own copy of each seat's bot flag (Bingo plays bot seats itself): pass a seat change on to it. */
+  function syncSeatBot(room, m) {
+    if (room.game && typeof room.game.setSeatBot === 'function') room.game.setSeatBot(m.id, m.bot === true);
+  }
+
   /** A bot has played this person's turn (they are away, or ran out of the table's time). After three in a row they are removed. */
   function noteBotTurnFor(room, m) {
     if (!m || m.bot || !room.members.includes(m)) return;
@@ -1132,6 +1139,7 @@ function start(opts = {}) {
       return;
     }
     const out = idlePolicy.kickIdle(room, m, Date.now());
+    syncSeatBot(room, m);
     if (room.hostId === m.id) ensureHost(room, { leaving: m.id }); // the removed person was the host: someone else takes it, so the table keeps its host controls
     if (q) {
       q.room = null;
@@ -1157,6 +1165,8 @@ function start(opts = {}) {
 
   /** Decide whether the server must act soon (bot turn, absent human, forced play, timeout, between rounds) and set one timer for it. */
   function schedule(room) {
+    // a game whose timed call runs on its own clock (Bingo) keeps its pending call: a player's move does not push it back
+    if (room.timer && room.game && typeof room.game.keepsAutoClock === 'function' && room.game.keepsAutoClock() && humans(room).some(isConnected)) return;
     clearTimeout(room.timer);
     room.timer = null;
     if (shuttingDown) return; // no bot or auto-play moves while the server stops
@@ -1363,6 +1373,7 @@ function start(opts = {}) {
       // The window starts at the first departure only: later leaves keep its deadline, so the refresh is scheduled once.
       const firstLeave = !(room.leaveDeadlines && room.leaveDeadlines.has(room.members[i].id));
       voluntaryLeave(room, room.members[i], Date.now(), rejoinWindowMs); // a bot takes over the seat; the player can take it back in time
+      syncSeatBot(room, room.members[i]);
       if (firstLeave) scheduleRejoinExpiryRefresh(); // when the window closes, the home screens drop the "take your seat back" offer
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
     } else {
@@ -1765,7 +1776,10 @@ function start(opts = {}) {
       if (refuseGame(p, room.gameId, code)) return;
       const alreadyHere = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       const socketAtStart = p.ws;
-      const reclaiming = Boolean(room.guestLeavers && room.guestLeavers.has(p.id)); // their own seat again: already paid for
+      // their own seat again in the game being played, which was already paid for (not a lobby or spectator departure),
+      // and only while the reclaim window is still open: after it closes they are checked like any other guest
+      const reclaiming = room.status === 'playing' && Boolean(room.paidGuests && room.paidGuests.has(p.id) && room.guestLeavers && room.guestLeavers.has(p.id))
+        && rejoinDecision(room, p.id, Date.now()).seat;
       if (!alreadyHere && !reclaiming && await trialBlockedAtEntry(p, room.gameId, code)) return;
       if (!p.ws || p.ws !== socketAtStart) return; // the connection ended or was replaced during the check: do not seat it
       if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin', code)) return;
@@ -1804,6 +1818,7 @@ function start(opts = {}) {
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
         reclaimSeat(room, seat, now); // back in time: the bot gives the seat back, no loss, play resumes
+        syncSeatBot(room, seat);
         seat.avatar = p.avatar;
         p.room = room.code;
         sys(room, `🔄 ${p.name} is back and took the seat from the bot`);
@@ -2082,6 +2097,7 @@ function start(opts = {}) {
         if (mp) trialRefused(mp, room.gameId, room.code);
         return sendError(p, 'A guest at this table has used their free plays of this game.');
       }
+      room.paidGuests = new Set(gate.charged.length ? gate.guestIds : []); // the guests this game was paid for
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
