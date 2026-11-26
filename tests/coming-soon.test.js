@@ -13,9 +13,10 @@ const ui = window.TVHomeUI({
   pendingSocial: () => 0,
 });
 const html = ui.comingSoonHTML();
-const buildOrder = ['Bingo', 'Cup Pong', 'Sudoku', 'Falling Blocks', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
+const buildOrder = ['Bingo', 'Cup Pong', 'Falling Blocks', 'Sea Battle', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
 const additional = ['Secret Clues'];
-assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 8);
+assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 7);
+assert.ok(!html.includes('Sudoku'), 'Sudoku is playable now and must not show as coming soon');
 let previous = -1;
 for (const name of [...buildOrder, ...additional]) {
   const index = html.indexOf(name);
