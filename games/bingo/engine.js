@@ -100,13 +100,16 @@ function callNext(g) {
   g.players.forEach((p, i) => {
     if ((p.bot || g.options.autoMark) && g.cards[i].includes(n)) g.marks[i].add(n);
   });
-  const bots = g.players.map((_, i) => i).filter((i) => g.players[i].bot && hasBingo(g, i));
-  if (bots.length) finish(g, bots, bots[0]);
-  else if (!g.deck.length) {
-    // every number is out: whoever has a full card now wins (an automatic table gets no later chance to claim); nobody is a draw
+  if (!g.deck.length) {
+    // every number is out: whoever has a full card now wins, bots and people alike (an automatic table gets no later
+    // chance to claim); nobody is a draw
     const winners = g.players.map((_, i) => i).filter((i) => hasBingo(g, i));
     finish(g, winners, winners[0] ?? null);
+    return { ok: true };
   }
+  // before the last call, a bot that completes its card claims at once
+  const bots = g.players.map((_, i) => i).filter((i) => g.players[i].bot && hasBingo(g, i));
+  if (bots.length) finish(g, bots, bots[0]);
   return { ok: true };
 }
 

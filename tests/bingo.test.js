@@ -237,4 +237,22 @@ test('a player mark does not restart the call clock', () => {
   assert.equal(E.keepsAutoClock(g), false, 'it stops when the game is over');
 });
 
+test('on the last call, a human and a bot who complete their cards together both win (full card, mark for me)', () => {
+  const g = E.createGame(people(2, [1]), { pattern: 'full', autoMark: true }, mulberry32(12));
+  // both cards hold 65, the last number in the deck; everything else on each card has already been called and marked
+  const human = [1, 2, 3, 4, 5, 16, 17, 18, 19, 20, 31, 32, 0, 34, 35, 46, 47, 48, 49, 50, 61, 62, 63, 64, 65];
+  const bot = [6, 7, 8, 9, 10, 21, 22, 23, 24, 25, 36, 37, 0, 39, 40, 51, 52, 53, 54, 55, 66, 67, 68, 69, 65];
+  rigCard(g, 0, human);
+  rigCard(g, 1, bot);
+  g.called = [...human, ...bot].filter((n) => n !== 0 && n !== 65);
+  g.marks[0] = new Set(g.called);
+  g.marks[1] = new Set(g.called);
+  g.deck = [65];
+  const r = E.applyAction(g, null, { type: 'call' });
+  assert.ok(r.ok);
+  assert.equal(g.phase, 'gameOver');
+  assert.deepEqual(g.winners, [0, 1], 'the human card completed on the final call wins alongside the bot');
+});
+
+
 console.log(`\n${passed} bingo tests passed`);
