@@ -1,0 +1,28 @@
+/* Memory Match. Builds on table.css and the wz frame. Seat colours come from --c; the grid has one column count per board. */
+.mm { --mm-0: #74b9ff; --mm-1: #ff7675; --mm-2: #55efc4; --mm-3: #f2c14e; }
+.mm .s0 { --c: var(--mm-0); } .mm .s1 { --c: var(--mm-1); } .mm .s2 { --c: var(--mm-2); } .mm .s3 { --c: var(--mm-3); }
+.mm .mm-seats { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.mm .mm-seat { flex: 1 1 calc(50% - 8px); display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 2px solid transparent; min-width: 0; transition: border-color .25s ease, background-color .25s ease; }
+.mm .mm-seat.turn { border-color: var(--gold, #f2c14e); }
+.mm .mm-seat.won { background: rgba(242, 193, 78, .2); }
+.mm .mm-swatch { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; background: var(--c); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .25); }
+.mm .mm-who { display: grid; min-width: 0; }
+.mm .mm-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm .mm-who small { opacity: .75; }
+.mm .mm-board { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 6px; width: min(100%, 400px); margin: 12px auto 0; }
+.mm .mm-card { display: grid; place-items: center; aspect-ratio: 1; min-width: 0; min-height: 44px; border-radius: 10px; font-size: clamp(18px, 5.2vw, 26px); line-height: 1; border: 2px solid rgba(255, 255, 255, .14); box-sizing: border-box; }
+.mm button.mm-card.down { background: linear-gradient(145deg, #3d4a6b, #242c44); color: rgba(255, 255, 255, .55); cursor: pointer; padding: 0; transition: transform .12s ease, border-color .15s ease; }
+.mm button.mm-card.down:not(:disabled):hover, .mm button.mm-card.down:not(:disabled):focus-visible { border-color: var(--gold, #f2c14e); transform: translateY(-1px); }
+.mm button.mm-card.down:disabled { cursor: default; opacity: .8; }
+.mm button.mm-card.down:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; }
+.mm .mm-back { font-size: 0.8em; }
+.mm .mm-card.up { background: #f8fafc; color: #111827; animation: mmFlip .28s ease both; }
+.mm .mm-card.up.last { box-shadow: 0 0 0 3px rgba(255, 255, 255, .5); }
+.mm .mm-card.matched { background: color-mix(in srgb, var(--c) 35%, #111827); border-color: var(--c); animation: mmPop .35s ease both; }
+@keyframes mmFlip { from { transform: rotateY(90deg); } to { transform: rotateY(0); } }
+@keyframes mmPop { 0% { transform: scale(.85); } 70% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .mm .mm-card.up, .mm .mm-card.matched { animation: none; } }
+@media (max-height: 700px) {
+  .mm .mm-seat { padding: 6px 8px; }
+  .mm .mm-board { width: min(100%, 340px); margin-top: 6px; gap: 4px; }
+}

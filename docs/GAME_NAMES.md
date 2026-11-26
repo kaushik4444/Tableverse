@@ -64,3 +64,7 @@ Tetris, Bullhead Run (the removed working title for what is now Take 5), Beer Po
 ## Dots and Boxes
 
 - Dots and Boxes is a classic paper game with no publisher-owned name in common use, so the game keeps it. The rules, board, art and icon are Tableverse's own (`games/dotsboxes/`).
+
+## Memory Match
+
+- Memory Match is a generic name for a card-pair game, so the game keeps it. The cards use generic fruit, plant and creature symbols drawn from standard emoji, and the card back and layout are Tableverse's own (`games/memorymatch/`).
