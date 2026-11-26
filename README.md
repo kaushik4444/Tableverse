@@ -25,6 +25,7 @@ Fifteen games are open to every player. Carrom is in admin testing and is not op
 - **Hidden Miners** (3–8): secretly a Digger or a Saboteur, build a tunnel toward the gold, break and repair tools, scout chambers and collapse pieces. Scored over 1, 3 or 5 rounds.
 - **Color Clash** (2–8): match the colour or number, use Stop, Flip, Take 2 and Wild cards, and be first to empty your hand. Round points add up to a target.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
+- **Bingo** (2–8): every player has a 5×5 card and numbers are called one at a time. Mark your called numbers and shout Bingo first. Choose *Winning pattern* (any line or the full card), *Pace*, and *Mark for me*. Bots mark and call Bingo themselves.
 - **Sudoku** (1–8): everybody gets the same puzzle on their own grid; the first grid filled in correctly wins. Each player has 3 lives: a wrong number shows red at once and costs one, and the third takes you out of the race (alone, it is game over). Each player has 3 undos, and each one takes back only the last move. Easy, medium or hard, bots fill at a chosen speed, and you see only how many squares each player has right and their lives.
 
 Bots can fill open seats so tables can start quickly.
