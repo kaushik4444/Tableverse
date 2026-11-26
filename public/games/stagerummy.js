@@ -134,8 +134,11 @@
     const sub = `Stage ${stage}/${v.stageCount}`; // short, so it fits a phone seat; the card count is under the seat
     const count = `<div class="sr-nolay">${p.cards} cards · ${p.score} pts</div>`; // points stay on the seat: fewer is better
     const under = p.laid ? `<div class="sr-laid">${p.laid.map((grp, k) => groupHTML(v, i, k, grp)).join('')}</div>${count}` : (v.phase === 'gameOver' ? '' : `<div class="sr-laid sr-nolay"><span class="sr-wide">Not down · </span>${p.cards} cards · ${p.score} pts</div>`);
+    // the same order the results use: a higher stage first, then fewer points. No crown while everyone is tied or after the game
+    const lead = v.phase !== 'gameOver' && window.CardTable.pt.leaderOf(v.players.length, (k) => (v.players[k].stage - 1) * 100000 - v.players[k].score, -Infinity) === i;
     return window.CardTable.pt.seatHTML({
       pid: p.id,
+      badges: lead ? '<span class="bdg l" title="Leading: fewest points">👑 Lead</span>' : '',
       name: p.name + (i === v.me ? ' (you)' : ''),
       avatar: window.CardTable.pt.avatarOf(ctx.room, p.id),
       turn: i === v.turn && v.phase !== 'gameOver',

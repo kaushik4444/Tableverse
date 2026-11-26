@@ -255,10 +255,13 @@
    * the target (race), so there is a reference without going to the Scores tab. */
   function chipsHTML(v) {
     const what = v.countdown ? 'points left' : 'penalty points';
+    // the leader is who would win now: most points left (countdown) or fewest penalty points (race); no crown while tied or after the game
+    const lead = v.phase !== 'gameOver' ? window.CardTable.pt.leaderOf(v.players.length, (k) => (v.countdown ? v.players[k].left : -v.players[k].total), -Infinity) : -1;
     return `<ul class="pr-chips" aria-label="Scores, ${what} out of ${v.target}">${v.players.map((p, i) => {
       const num = v.countdown ? p.left : p.total;
       const out = v.losers && v.losers.includes(i) ? ' out' : '';
-      return `<li class="${i === v.me ? 'me' : ''}${out}" data-pid="${esc(p.id)}"><span class="pr-chip-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><b class="pr-chip-n" title="${what}">${num}<small>/${v.target}</small></b></li>`;
+      const crown = i === lead ? '<span class="pr-lead" title="Leading" aria-label="Leading">👑</span>' : '';
+      return `<li class="${i === v.me ? 'me' : ''}${out}${i === lead ? ' lead' : ''}" data-pid="${esc(p.id)}">${crown}<span class="pr-chip-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><b class="pr-chip-n" title="${what}">${num}<small>/${v.target}</small></b></li>`;
     }).join('')}</ul>`;
   }
 

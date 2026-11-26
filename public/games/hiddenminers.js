@@ -137,6 +137,8 @@
     const c = selected(v);
     const hit = c && c.k === 'break' ? new Set((v.targets[c.id] || []).map((s) => s)) : new Set();
     const fix = c && c.k === 'repair' ? v.targets[c.id] || [] : [];
+    // the most points leads; no crown while everyone is level (the start) or after the game
+    const lead = v.phase !== 'gameOver' ? window.CardTable.pt.leaderOf(v.players.length, (k) => v.players[k].score, -Infinity) : -1;
     return `<ul class="hm-players">${v.players.map((p, i) => {
       const tools = Object.keys(TOOLS).map((t) => {
         const broken = p.broken.includes(t);
@@ -151,7 +153,7 @@
       const t = (v.tally && v.tally[i]) || { tunnels: 0, deadEnds: 0, breaks: 0, repairs: 0 };
       const tallyTip = `This round: ${t.tunnels} tunnel${t.tunnels === 1 ? '' : 's'} dug, ${t.deadEnds} dead end${t.deadEnds === 1 ? '' : 's'}, ${t.breaks} tool${t.breaks === 1 ? '' : 's'} broken, ${t.repairs} repaired`;
       const tally = `<span class="hm-tally" title="${tallyTip}" aria-label="${tallyTip}">⛏️${t.tunnels} 🕳️${t.deadEnds} ✖${t.breaks} 🔧${t.repairs}</span>`;
-      return `<li><${tag} ${attack ? `type="button" data-hm="hit" data-seat="${i}"` : ''} class="hm-p ${i === v.turn && v.phase === 'playing' ? 'turn' : ''} ${i === v.me ? 'me' : ''} ${attack ? 'target' : ''}" ${attack ? `aria-label="Break a tool of ${esc(p.name)}"` : ''}><span class="hm-nm">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><span class="hm-meta">${p.cards} card${p.cards === 1 ? '' : 's'} · ${p.score} pts</span>${tally}</${tag}><span class="hm-tools">${tools}</span></li>`;
+      return `<li><${tag} ${attack ? `type="button" data-hm="hit" data-seat="${i}"` : ''} class="hm-p ${i === v.turn && v.phase === 'playing' ? 'turn' : ''} ${i === v.me ? 'me' : ''} ${attack ? 'target' : ''}" ${attack ? `aria-label="Break a tool of ${esc(p.name)}"` : ''}><span class="hm-nm">${i === lead ? '<span class="bdg l" title="Leading: most points">👑 Lead</span> ' : ''}${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><span class="hm-meta">${p.cards} card${p.cards === 1 ? '' : 's'} · ${p.score} pts</span>${tally}</${tag}><span class="hm-tools">${tools}</span></li>`;
     }).join('')}</ul><p class="hm-legend">This round: ⛏️ tunnels dug · 🕳️ dead ends · ✖ tools broken · 🔧 tools repaired</p>`;
   }
 
