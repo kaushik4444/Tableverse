@@ -18,6 +18,18 @@
         title: 'Sudoku: race to fill the grid',
         text: 'Play alone like a puzzle book, or race friends on the same puzzle. You get 3 lives and 3 undos: the third wrong number takes you out, and the first full grid wins.'
       },
+      {
+        level: 'major',
+        ico: '🔊',
+        title: 'Sounds for more moments',
+        text: 'Dice rolls, captures and checks, a game starting, someone sitting down or leaving your table, and new friend requests and invitations now have their own sounds. Turn them off in Settings.'
+      },
+      {
+        level: 'minor',
+        ico: '🎉',
+        title: 'A fanfare when you reach a new level',
+        text: 'The level-up note now plays a short fanfare when it appears.'
+      }
     ]
   },
   {
