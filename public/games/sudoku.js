@@ -66,8 +66,9 @@
       const mine = v.board ? v.board[k] : 0;
       const isWrong = wrong.has(k);
       const right = !clue && mine && !isWrong;
-      const answer = v.solution && !clue && !mine ? v.solution[k] : 0;
-      const value = clue ? v.puzzle[k] : mine || answer;
+      // the answer is only there once the game is over, and only where the square is not right (empty, or a wrong number)
+      const answer = v.solution && !clue && !right ? v.solution[k] : 0;
+      const value = clue ? v.puzzle[k] : answer || mine;
       const cls = ['su-c', clue ? 'su-clue' : '', right ? 'su-ok' : '', isWrong ? 'su-bad' : '', answer ? 'su-answer' : '', k === ui.sel ? 'su-sel' : '',
         r === 2 || r === 5 ? 'su-rb' : '', c === 2 || c === 5 ? 'su-cb' : ''].filter(Boolean).join(' ');
       const label = `Row ${r + 1}, column ${c + 1}${clue ? `, given ${value}` : value ? `, ${value}${isWrong ? ', wrong' : ''}` : ', empty'}`;

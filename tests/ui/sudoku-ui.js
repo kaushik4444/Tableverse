@@ -162,6 +162,22 @@ const firstEmpty = (view) => view.puzzle.findIndex((v) => !v);
     await ctx.close();
   });
 
+  await test('when the game is over, a wrong number gives way to the answer in gold', async () => {
+    let k = -1; let solution = null;
+    const msgs = table((g) => {
+      k = g.puzzle.findIndex((v) => !v);
+      solution = g.solution;
+      E.applyAction(g, 'me', { type: 'place', r: Math.floor(k / 9), c: k % 9, v: g.solution[k] === 9 ? 8 : g.solution[k] + 1 });
+      clock.t += 61000;
+      for (const x of g.puzzle.map((v, y) => (v ? -1 : y)).filter((y) => y >= 0)) E.applyAction(g, 'p1', { type: 'place', r: Math.floor(x / 9), c: x % 9, v: g.solution[x] });
+    });
+    const { page, ctx } = await open(msgs);
+    const cell = page.locator('.su-board .su-c').nth(k);
+    assert.equal(await cell.innerText(), String(solution[k]), 'the right number is shown, not the wrong one');
+    assert.match(await cell.getAttribute('class'), /su-answer/);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\nsudoku UI: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
