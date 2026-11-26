@@ -166,7 +166,9 @@
     // screen-reader players hear each new number once (the ball is only read on navigation)
     // deferred: the app writes its own status right after this render returns, and this call must be the last word
     if (v.called.length > ui.called && v.lastCall && window.CardTable.announceStatus) {
-      const said = `${letterOf(v.lastCall)} ${v.lastCall} called`;
+      // a claim or the end of the game is said too, so the prompt is not overwritten; ordinary calls stay number-only
+      const urgent = Boolean(v.canClaim && !over) || over;
+      const said = `${letterOf(v.lastCall)} ${v.lastCall} called${urgent ? `. ${guidance(v)}` : ''}`;
       setTimeout(() => window.CardTable.announceStatus(said), 0);
     }
     ui.called = v.called.length;
