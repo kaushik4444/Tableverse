@@ -29,9 +29,9 @@ for (const protectedBrand of ['Monopoly', 'Saboteur', 'Tetris', 'Bullhead', '6 n
 assert.match(html, /Development order/);
 assert.equal((html.match(/>In development</g) || []).length, 0, 'no game is in development right now');
 assert.ok(!html.includes('Hidden Miners'), 'Hidden Miners is playable, so it is no longer listed');
-assert.equal((html.match(/>Planned</g) || []).length, 8, 'all are are planned');
+assert.equal((html.match(/>Planned</g) || []).length, 7, 'all are are planned');
 assert.match(html, /Also on the list/);
-assert.match(html, /8 planned/);
+assert.match(html, /7 planned/);
 assert.match(html, /original artwork and presentation/);
 // What's new: the release history is public/whats-new-data.js; the home page shows the newest release's first three items.
 const releaseSource = fs.readFileSync(require.resolve('../public/whats-new-data.js'), 'utf8');
