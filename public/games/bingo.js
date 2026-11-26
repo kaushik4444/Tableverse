@@ -7,7 +7,7 @@
   const { esc, pt } = window.CardTable;
   const LETTERS = ['B', 'I', 'N', 'G', 'O'];
   const PATTERN = { line: 'a full line across, down or diagonal', full: 'every square of the card' };
-  const ui = { ctx: null, latest: null, seq: null, feeds: new Map(), called: null, over: false };
+  const ui = { ctx: null, latest: null, seq: null, feeds: new Map(), called: null, over: false, prevSq: new Map() };
 
   const letterOf = (n) => LETTERS[Math.floor((n - 1) / 15)];
   const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
@@ -67,12 +67,16 @@
 
   /** Each player's matrix: 25 squares, blank until marked, then filled. Positions only: no numbers are shown to anyone but the card's owner. */
   function miniHTML(p) {
+    // squares marked since the last render flash once; the first render is silent
+    const prev = ui.prevSq.get(p.id);
+    const fresh = (k) => !!prev && !prev[k] && !!p.squares[k];
+    ui.prevSq.set(p.id, p.squares.slice());
     // positions only: marked squares go black, the free centre gets a gold dot, squares of a finished line glow gold,
     // and the open square of a line with four marks is outlined dashed (so others feel the tension without any number)
     const full = new Set(p.full || []);
     const near = new Set(p.near || []);
     const cells = p.squares.map((on, k) => {
-      const cls = [on ? 'on' : '', k === 12 ? 'free' : '', full.has(k) ? 'full' : '', near.has(k) ? 'near' : ''].filter(Boolean).join(' ');
+      const cls = [on ? 'on' : '', k === 12 ? 'free' : '', full.has(k) ? 'full' : '', near.has(k) ? 'near' : '', fresh(k) ? 'fresh' : ''].filter(Boolean).join(' ');
       return `<i class="${cls}"></i>`;
     }).join('');
     const label = full.size ? `${p.marked} squares marked, a line is complete` : `${p.marked} squares marked`;
@@ -89,11 +93,15 @@
   function cardHTML(v) {
     const manual = !v.options.autoMark;
     const head = LETTERS.map((l) => `<span class="bg-h" aria-hidden="true">${l}</span>`).join('');
-    const squares = v.card.map((c) => {
-      if (c.free) return '<span class="bg-sq free on" aria-label="Free square">★</span>';
+    // your own card knows its numbers, so it can show a line that is complete or one square away (positions only)
+    const me = v.players && v.players[v.me];
+    const full = new Set(me ? me.full || [] : []);
+    const near = new Set(me ? me.near || [] : []);
+    const squares = v.card.map((c, k) => {
+      if (c.free) return `<span class="bg-sq free on${full.has(k) ? ' line' : ''}" aria-label="Free square">★</span>`;
       const called = v.called.includes(c.n);
       const tappable = manual && called && !c.marked && v.phase === 'playing';
-      const cls = `bg-sq${called ? ' called' : ''}${c.marked ? ' on' : ''}`;
+      const cls = `bg-sq${called ? ' called' : ''}${c.marked ? ' on' : ''}${full.has(k) ? ' line' : ''}${near.has(k) && !c.marked ? ' near' : ''}${tappable ? ' ready' : ''}`;
       if (tappable) return `<button type="button" class="${cls}" data-bg="mark" data-n="${c.n}" aria-label="${c.n}, tap to mark">${c.n}</button>`;
       return `<span class="${cls}" aria-label="${c.n}${c.marked ? ', marked' : ''}">${c.n}</span>`;
     }).join('');
