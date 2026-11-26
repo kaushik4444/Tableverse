@@ -12,7 +12,11 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
-const TIMEOUT_MS = Number(process.env.TEST_TIMEOUT_MS || 300000);
+const TIMEOUT_MS = Number(process.env.TEST_TIMEOUT_MS ?? 300000);
+if (!Number.isInteger(TIMEOUT_MS) || TIMEOUT_MS < 1 || TIMEOUT_MS > 2147483647) {
+  console.error('run-tests: configuration error: TEST_TIMEOUT_MS must be an integer from 1 through 2147483647');
+  process.exit(2);
+}
 const script = process.argv[2] || JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).scripts.test;
 
 const steps = script.split(' && ').map((s) => s.trim()).filter(Boolean);
