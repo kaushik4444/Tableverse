@@ -1765,8 +1765,10 @@ function start(opts = {}) {
       if (refuseGame(p, room.gameId, code)) return;
       const alreadyHere = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       const socketAtStart = p.ws;
-      // their own seat again in the game being played, which was already paid for (not a lobby or spectator departure)
-      const reclaiming = room.status === 'playing' && Boolean(room.paidGuests && room.paidGuests.has(p.id) && room.guestLeavers && room.guestLeavers.has(p.id));
+      // their own seat again in the game being played, which was already paid for (not a lobby or spectator departure),
+      // and only while the reclaim window is still open: after it closes they are checked like any other guest
+      const reclaiming = room.status === 'playing' && Boolean(room.paidGuests && room.paidGuests.has(p.id) && room.guestLeavers && room.guestLeavers.has(p.id))
+        && rejoinDecision(room, p.id, Date.now()).seat;
       if (!alreadyHere && !reclaiming && await trialBlockedAtEntry(p, room.gameId, code)) return;
       if (!p.ws || p.ws !== socketAtStart) return; // the connection ended or was replaced during the check: do not seat it
       if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin', code)) return;
