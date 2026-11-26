@@ -45,6 +45,17 @@
     return same && steps.length > 1 ? { steps, marks, durs, firstStep } : null;
   }
 
+  /** One sound per replayed step: a card landing or restarting a row, and a row taken (a penalty for you is the lower sound). */
+  function playStep(anim, mark) {
+    const snd = window.CardTable.sound;
+    if (!snd || !mark) return;
+    if (mark.phase === 'place' || mark.phase === 'add' || mark.phase === 'restart') snd.play('card');
+    else if (mark.phase === 'collect') {
+      const e = anim.events && anim.events[mark.j];
+      snd.play(e && e.by === anim.me && e.took ? 'lose' : 'collect');
+    }
+  }
+
   /** The table this renderer is showing (the room code), so playback for one table never plays on another. */
   const tableOf = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
 
@@ -62,6 +73,7 @@
         glide(from);
         const mark = anim.marks[anim.i];
         if (mark && mark.phase === 'collect') stashRow(anim, mark, paceK);
+        playStep(anim, mark);
         scheduleStep(anim, paceK);
         return;
       }
@@ -343,11 +355,12 @@
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
     const steps = replaySteps(v);
-    ui.anim = steps ? { seq: v.seq, ...steps, i: 0, table: tableOf(), events: v.lastTurn } : null;
+    ui.anim = steps ? { seq: v.seq, ...steps, i: 0, table: tableOf(), events: v.lastTurn, me: v.me } : null;
     if (ui.anim) scheduleStep(ui.anim, v.paceK);
     else if (window.GameFeed) window.GameFeed.add(tableOf(), v.lastTurn.map((e, idx) => feedItem(v, e, fid(`t${v.seq}-${idx}`)))); // no replay: the feed still gets the turn
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
+    else if (ui.anim) return; // the replay plays a sound for each card and row as it lands
     else if (v.lastTurn.some((e) => e.by === v.me && e.took)) snd.play('lose');
     else snd.play('card');
   }

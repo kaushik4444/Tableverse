@@ -4,6 +4,14 @@
   let ctx = null;
   let muted = false;
   try { muted = localStorage.getItem('ct_mute') === '1'; } catch { /* ignore */ }
+  // the volume (0 to 100, kept on this device): every sound goes through one gain node, so one setting sets them all
+  let volume = 100;
+  try { const v = Number(localStorage.getItem('ct_volume')); if (Number.isFinite(v) && localStorage.getItem('ct_volume') !== null) volume = Math.min(100, Math.max(0, v)); } catch { /* ignore */ }
+  let master = null;
+  function out(a) {
+    if (!master) { master = a.createGain(); master.gain.value = volume / 100; master.connect(a.destination); }
+    return master;
+  }
 
   function ac() {
     if (!ctx) {
@@ -27,7 +35,7 @@
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(a.destination);
+    o.connect(g).connect(out(a));
     o.start(t);
     o.stop(t + dur + 0.02);
   }
@@ -45,7 +53,7 @@
     f.frequency.value = hp;
     g.gain.value = vol;
     s.buffer = buf;
-    s.connect(f).connect(g).connect(a.destination);
+    s.connect(f).connect(g).connect(out(a));
     s.start(a.currentTime + t0);
   }
 
@@ -71,7 +79,7 @@
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.012, dur / 3));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(f).connect(g).connect(a.destination);
+    s.connect(f).connect(g).connect(out(a));
     s.start(t, Math.random() * 0.5);
     s.stop(t + dur + 0.03);
   }
@@ -120,6 +128,25 @@
       tone(1046.5, 0.5, 0.6, { type: 'sine', vol: 0.18, slide: 1.05 });
     },
     emote: () => tone(783.99, 0, 0.1, { type: 'sine', vol: 0.12, slide: 1.3 }),
+    // a game starts: a rising, open chord (softer than the turn cue)
+    start: () => { tone(392, 0, 0.14, { type: 'sine', vol: 0.14 }); tone(523.25, 0.1, 0.14, { type: 'sine', vol: 0.14 }); tone(659.25, 0.2, 0.26, { type: 'sine', vol: 0.16 }); },
+    // someone sits down at your table, or leaves it
+    join: () => { tone(659.25, 0, 0.1, { type: 'sine', vol: 0.12 }); tone(880, 0.07, 0.16, { type: 'sine', vol: 0.12 }); },
+    leave: () => tone(440, 0, 0.14, { type: 'sine', vol: 0.1, slide: 0.7 }),
+    // a friend request or table invitation arrives
+    notify: () => { tone(987.77, 0, 0.09, { type: 'sine', vol: 0.12 }); tone(1318.5, 0.09, 0.18, { type: 'sine', vol: 0.1 }); },
+    // a soft tap on one of the app's own buttons
+    tap: () => { swish(0, 0.03, { vol: 0.07, f0: 4200, f1: 2200, q: 1.1 }); tone(1500, 0, 0.02, { type: 'triangle', vol: 0.03 }); },
+    // a check in chess: two short, high taps
+    check: () => { tone(830.61, 0, 0.09, { type: 'triangle', vol: 0.14 }); tone(830.61, 0.12, 0.09, { type: 'triangle', vol: 0.14 }); },
+    // dice thrown: a quick rattle of clicks, then the die lands
+    dice: () => {
+      for (let i = 0; i < 6; i++) {
+        swish(i * 0.045, 0.04, { vol: 0.16 + (i % 2) * 0.05, f0: 5200 - i * 300, f1: 2600, q: 1.2 });
+        tone(900 + (i % 3) * 140, i * 0.045, 0.03, { type: 'triangle', vol: 0.04 });
+      }
+      tone(140, 0.28, 0.1, { type: 'sine', vol: 0.16, slide: 0.6 });
+    },
     // poker chips: a few soft clinks
     chip: () => { [0, 0.05, 0.1].forEach((t, i) => { tone(2000 + i * 220, t, 0.05, { type: 'triangle', vol: 0.06 }); swish(t, 0.03, { vol: 0.1, f0: 6000, f1: 3800, q: 1.5 }); }); },
     allin: () => { for (let i = 0; i < 7; i++) { const t = i * 0.05; tone(1800 + (i % 3) * 260, t, 0.05, { type: 'triangle', vol: 0.05 }); swish(t, 0.03, { vol: 0.09, f0: 6000, f1: 3800, q: 1.5 }); } tone(140, 0.3, 0.3, { type: 'sine', vol: 0.15, slide: 0.6 }); },
@@ -152,6 +179,12 @@
       return muted;
     },
     isMuted: () => muted,
+    volume: () => volume,
+    setVolume(v) {
+      volume = Math.min(100, Math.max(0, Math.round(Number(v) || 0)));
+      try { localStorage.setItem('ct_volume', String(volume)); } catch { /* ignore */ }
+      if (master && ctx) master.gain.setValueAtTime(volume / 100, ctx.currentTime);
+    },
     button: () => `<button class="btn ghost small sound-btn" data-act="sound" aria-label="${muted ? 'Turn sound on' : 'Turn sound off'}">${muted ? '🔇' : '🔊'}</button>`,
   };
 

@@ -78,7 +78,7 @@
         const canTap = v.myTurn && (mine || targets.has(i) || !!ui.promo);
         if (targets.has(i)) cls.push(p ? 'capture' : 'dot');
         const label = `${squareName(i)}${p ? `, ${PIECE_NAMES[p.toUpperCase()]} (${isWhite(p) ? 'white' : 'black'})` : ''}`;
-        cells.push(`<button type="button" class="${cls.join(' ')}" data-sq="${i}" aria-label="${esc(label)}" ${canTap ? '' : 'disabled'}>${pieceHTML(p)}</button>`);
+        cells.push(`<button type="button" data-no-tap class="${cls.join(' ')}" data-sq="${i}" aria-label="${esc(label)}" ${canTap ? '' : 'disabled'}>${pieceHTML(p)}</button>`);
       }
     }
     return `<div class="ch-board ${flip ? 'flip' : ''}" role="group" aria-label="Chess board">${cells.join('')}</div>`;
@@ -116,7 +116,7 @@
     if (!e || e.seq === ui.seq) return;
     ui.seq = e.seq;
     if (!snd) return;
-    if (e.type === 'move') snd.play('place');
+    if (e.type === 'move') snd.play(e.check ? 'check' : e.capture ? 'pocket' : 'place'); // a capture is a thud, a check a short double tap
     if (v.phase === 'gameOver') {
       const sound = v.draw ? 'round' : v.winner === v.me ? 'win' : v.me < 0 ? 'round' : 'lose';
       setTimeout(() => snd.play(sound), 320);
