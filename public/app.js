@@ -2828,6 +2828,7 @@
         o.querySelector('.modal-body').innerHTML = body();
         const again = k && [...o.querySelectorAll('[data-modal-act]')].find((b) => key(b) === k && !b.disabled);
         if (again) again.focus();
+        else { const close = o.querySelector('[data-modal-close]'); if (close) close.focus(); } // e.g. Clear disables itself once the list is empty
       };
       modalActions.setTheme = (el) => { chooseTheme(el.dataset.theme); redraw(el); };
       modalActions.toggleSound = (el) => { CardTable.sound.toggle(); redraw(el); };
