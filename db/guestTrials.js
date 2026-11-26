@@ -32,6 +32,12 @@ async function trialKeysFor(playerIds) {
   return new Map(r.rows.map((row) => [row.id, row.guest_trial_key]));
 }
 
+/** How many plays of `gameId` a device has used (0 for a device with none). Read only: nothing is counted. */
+async function playsOf(trialKey, gameId) {
+  const r = await db.query('SELECT plays FROM guest_game_trials WHERE trial_key = $1 AND game_id = $2', [trialKey, gameId]);
+  return r.rows.length ? r.rows[0].plays : 0;
+}
+
 /**
  * Reserves one play of `gameId` for each device in `trialKeys` (hashes), if none of them is at `limit`.
  * Returns { ok: true } when every device got its play, or { ok: false, trialKey } naming the first device at its limit
@@ -63,4 +69,4 @@ async function reservePlays({ gameId, limit, trialKeys }) {
   }
 }
 
-module.exports = { hashTrialKey, trialKeysFor, reservePlays, TrialLimitReached };
+module.exports = { hashTrialKey, trialKeysFor, reservePlays, TrialLimitReached, playsOf };

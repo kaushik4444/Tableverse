@@ -695,6 +695,19 @@ function start(opts = {}) {
     return r.ok ? null : (byKey.get(r.trialKey) || null);
   };
   /**
+   * A guest whose device has used every play of the game is told when they create or join a table, not only at the start.
+   * Read only: nothing is counted here (the start check is the exact one). True when refused.
+   */
+  const trialBlockedAtEntry = async (p, gameId, tableCode) => {
+    const limit = gameFlags.trialLimitOf(gameId);
+    if (limit === null || roleOf(p) !== 'guest') return false;
+    const key = (await dbGuestTrials.trialKeysFor([p.id])).get(p.id);
+    if (!key) return false;
+    if ((await dbGuestTrials.playsOf(key, gameId)) < limit) return false;
+    trialRefused(p, gameId, tableCode);
+    return true;
+  };
+  /**
    * Human seats at a table whose current role may not play its game. Each person is judged by their live role (a demoted
    * admin or a guest who upgraded is judged as they are now). A person with no live record is treated as not allowed.
    */
@@ -1691,11 +1704,12 @@ function start(opts = {}) {
       }, ({ id }) => writeUnblock(p, id));
     },
 
-    create(p, msg) {
+    async create(p, msg) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
       if (refuseGame(p, msg.gameId)) return;
       if (msg.visibility === 'private' && guestLocked(p, 'private_tables')) return;
+      if (await trialBlockedAtEntry(p, msg.gameId)) return;
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
@@ -1737,6 +1751,8 @@ function start(opts = {}) {
       applyProfile(p, msg);
       if (!room) return sendJoinError(p, code, `No table with code ${code || '?'}`);
       if (refuseGame(p, room.gameId, code)) return;
+      const alreadyHere = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
+      if (!alreadyHere && await trialBlockedAtEntry(p, room.gameId, code)) return;
       if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin', code)) return;
       if (room.removed && room.removed.has(p.id)) return sendJoinError(p, code, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);

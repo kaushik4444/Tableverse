@@ -45,6 +45,11 @@ async function test(name, fn) {
       assert.deepEqual(await trials.reservePlays({ gameId: 'ludo', limit: 3, trialKeys: [deviceA] }), { ok: true });
       assert.equal(await count(deviceA, 'ludo'), 1);
     });
+    await test('plays can be read without counting them', async () => {
+      assert.equal(await trials.playsOf(deviceA, 'chess'), 3);
+      assert.equal(await trials.playsOf(deviceA, 'chess'), 3, 'reading changes nothing');
+      assert.equal(await trials.playsOf(deviceB, 'nothing-yet'), 0, 'a device with no plays has 0');
+    });
     await test('a limit must be a whole number from 1 to 9', async () => {
       await assert.rejects(() => trials.reservePlays({ gameId: 'chess', limit: 0, trialKeys: [deviceB] }));
       await assert.rejects(() => trials.reservePlays({ gameId: 'chess', limit: 10, trialKeys: [deviceB] }));
