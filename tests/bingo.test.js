@@ -114,9 +114,11 @@ test('bots mark and call Bingo on their own as soon as their line is complete', 
   assert.deepEqual(g.winners, [1]);
 });
 
-test('a call when nothing is left is a draw: no winners', () => {
+test('a call when nothing is left is a draw: no winners (a manual table ends on the call after the last number)', () => {
   const g = E.createGame(people(2), {}, mulberry32(11));
   g.deck = [7];
+  E.applyAction(g, null, { type: 'call' });
+  assert.equal(g.phase, 'playing', 'the last number is called; people can still mark it');
   E.applyAction(g, null, { type: 'call' });
   assert.equal(g.phase, 'gameOver');
   assert.deepEqual(g.winners, []);
