@@ -1,6 +1,6 @@
 # Planned games (ideas, not committed)
 
-Built since this list was started: Sudoku, Chess, Carrom, Color Clash, Hidden Miners and Bingo (see `games/`). The Ball Pong idea is now Cup Pong below. Bullhead Run was only a working title for Take 5, so it is not planned separately.
+Built since this list was started: Sudoku, Chess, Carrom, Color Clash, Hidden Miners, Bingo and Dots and Boxes (see `games/`). The Ball Pong idea is now Cup Pong below. Bullhead Run was only a working title for Take 5, so it is not planned separately.
 
 Ideas only. Nothing here is committed to a release. Each needs a design note and a name check
 (`docs/GAME_NAMES.md`) before work starts. Order is not a promise.

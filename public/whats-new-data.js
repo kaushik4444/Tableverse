@@ -19,6 +19,12 @@
         text: 'Play alone like a puzzle book, or race friends on the same puzzle. You get 3 lives and 3 undos: the third wrong number takes you out, and the first full grid wins.'
       },
       {
+        level: 'minor',
+        ico: '🔲',
+        title: 'Dots and Boxes for 2 to 4 players',
+        text: 'Draw lines between the dots and close boxes to claim them. Close a box and you move again. Pick a 3×3, 4×4 or 5×5 board.'
+      },
+      {
         level: 'major',
         ico: '🔊',
         title: 'Sounds for more moments',

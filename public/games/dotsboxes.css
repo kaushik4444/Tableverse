@@ -1,0 +1,30 @@
+/* Dots and Boxes. Builds on table.css and the wz frame. Seat colours come from --c; the board is a square of percentages. */
+.db { --db-0: #74b9ff; --db-1: #ff7675; --db-2: #55efc4; --db-3: #f2c14e; --ink-dot: rgba(255, 255, 255, .85); }
+.db .s0 { --c: var(--db-0); } .db .s1 { --c: var(--db-1); } .db .s2 { --c: var(--db-2); } .db .s3 { --c: var(--db-3); }
+.db .db-seats { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.db .db-seat { flex: 1 1 calc(50% - 8px); display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 2px solid transparent; min-width: 0; transition: border-color .25s ease, background-color .25s ease; }
+.db .db-seat.turn { border-color: var(--gold, #f2c14e); }
+.db .db-seat.won { background: rgba(242, 193, 78, .2); }
+.db .db-swatch { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; background: var(--c); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .25); }
+.db .db-who { display: grid; min-width: 0; }
+.db .db-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db .db-who small { opacity: .75; }
+.db .db-board { position: relative; width: min(calc(100% - 48px), 340px); aspect-ratio: 1; margin: 12px auto 0; }
+@media (min-width: 700px) { .db .db-board { width: min(calc(100% - 48px), 440px); } }
+.db .db-dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--ink-dot); pointer-events: none; }
+.db .db-box { position: absolute; display: grid; place-items: center; box-sizing: border-box; background: color-mix(in srgb, var(--c) 35%, transparent); color: var(--c); font: 800 clamp(12px, 3.6vw, 16px) system-ui, sans-serif; border-radius: 4px; pointer-events: none; }
+.db .db-line { position: absolute; border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer; }
+.db .db-line:disabled { cursor: default; }
+/* a 44px tap band across the line, centred on it */
+.db .db-line.db-h { height: 44px; transform: translateY(-50%); }
+.db .db-line.db-v { width: 44px; transform: translateX(-50%); }
+.db .db-line::after { content: ''; position: absolute; background: var(--c, rgba(255, 255, 255, .3)); border-radius: 3px; transition: background-color .15s ease; }
+.db .db-line.db-h::after { left: 0; right: 0; top: 50%; height: 6px; transform: translateY(-50%); }
+.db .db-line.db-v::after { top: 0; bottom: 0; left: 50%; width: 6px; transform: translateX(-50%); }
+.db .db-line:not(:disabled):not(.on):hover::after, .db .db-line:not(:disabled):not(.on):focus-visible::after { background: rgba(255, 255, 255, .45); }
+.db .db-line:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; border-radius: 6px; }
+.db .db-line.on.last::after { box-shadow: 0 0 0 3px rgba(255, 255, 255, .5); }
+@media (max-height: 700px) {
+  .db .db-seat { padding: 6px 8px; }
+  .db .db-board { width: min(calc(100% - 48px), 300px); margin-top: 6px; }
+}
