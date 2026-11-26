@@ -61,7 +61,7 @@ Tableverse is open to players, with all fifteen games available.
 
 This is the release record for the day. It is wider than what players see: the in-app **What's new** and **Version history** are a separate, player-facing selection in `public/whats-new-data.js`, grouped by date with major updates first and minor updates folded under "Show minor updates". Items such as Carrom (admin testing), owner tools, database migrations and environment flags appear here only.
 
-- **Appearance.** Account tab → Appearance: Dark (the default), Light, or Follow system. The choice is kept on this device. Light changes the app's screens and the password-reset and email-verification pages; game tables keep their look, and the admin console and the impressum draft stay as they are.
+- **Appearance.** Settings → Appearance: Dark (the default), Light, or Follow system. The choice is kept on this device. Light changes the app's screens and the password-reset and email-verification pages; game tables keep their look, and the admin console and the impressum draft stay as they are.
 - **How-to pictures.** Each game's how-to card shows its own picture.
 - **Friends and profile.** Actions keep your scroll position, and an unchanged page is not redrawn. Friends show a presence dot; a profile no longer shows the old raw "Highest score".
 - **Game over.** The result card appears sooner and updates in place. If the connection was down when the game ended, the ratings are asked for again once it is back, and the card says so if they stay unavailable.

@@ -619,7 +619,9 @@
     profiles: 'Create a free account to see player profiles and stats.',
     blocking: 'Create a free account to block players.',
     reports: 'Create a free account to report players or messages.',
+    trial: 'You have used your free plays of this game. Create a free account to keep playing.',
   };
+  const DEV_OFF_TEXT = 'In development and testing: currently disabled.';
   const guestLockedHere = (feature) => !!S.isGuest && Array.isArray(S.guestLocked) && S.guestLocked.includes(feature);
   /** Marks a control as locked for this guest (styled by [data-guest-lock]). Empty when the area is open. */
   const lockAttr = (feature) => guestLockedHere(feature) ? ` data-guest-lock="${feature}" aria-disabled="true"` : '';
@@ -1444,6 +1446,7 @@
         if (m.username) { S.username = m.username; store.set('ct_username', S.username); }
         if (!S.isGuest) toast('Your account is confirmed. Your games and history are yours.');
         render();
+        loadLockedPageData();
         break;
       }
       case 'welcome': {
@@ -1476,6 +1479,7 @@
         render();
         loadRecent();
         loadSocial({ quiet: true });
+        loadLockedPageData(); // a guest who confirmed their account while disconnected reconnects as registered
         if (!S.routed) { S.routed = true; applyRoute(); } // open #profile or #u/<name> if that is where the person came in
         const queue = S.pending;
         S.pending = [];
@@ -2122,12 +2126,33 @@
     S.page = 'home';
     render();
   }
+  /** A page that was locked for a guest loads its data once the person is registered (nothing was fetched while locked). */
+  function loadLockedPageData() {
+    if (S.isGuest || S.room || !S.guestLockedView) return; // only a page that was actually shown locked
+    S.guestLockedView = false;
+    if (S.page === 'profile') loadProfile();
+    else if (S.page === 'friends') loadSocial({ quiet: true });
+    else if (S.page === 'player') { const r = routeFromHash(); if (r.page === 'player') loadPlayer(r.username); }
+  }
+  /** A page a guest cannot use yet: shown blurred, with one button that opens the account dialog. The server still refuses it. */
+  function lockedPageHTML(feature, what) {
+    S.guestLockedView = true; // remembered, so the page loads its data once the person is registered
+    return `<div class="page locked-page">
+      <div class="locked-preview" aria-hidden="true"><div class="locked-blur"><h2>Player profile</h2><p>Games played · Wins · Rating</p><div class="locked-rows"><span></span><span></span><span></span></div></div></div>
+      <div class="locked-cta" role="region" aria-label="Create an account">
+        <h2>Create a free account</h2>
+        <p>${esc(GUEST_LOCK_TEXT[feature] || what)}</p>
+        <button type="button" class="btn" data-act="showRegister">Create account</button>
+      </div>
+    </div>`;
+  }
   function openPage(page, arg, fromHash) {
     S.menuOpen = false; S.bellOpen = false;
     S.page = page;
     if (!fromHash) { try { history.pushState(null, '', page === 'profile' ? '#profile' : page === 'friends' ? '#friends' : page === 'player' ? '#u/' + arg : location.pathname + location.search); } catch { /* ignore */ } }
     window.scrollTo(0, 0);
-    if (page === 'profile') loadProfile(); else if (page === 'player') loadPlayer(arg); else if (page === 'friends') { render(); loadSocial({ quiet: true }); } else render();
+    // a guest sees these pages locked (lockedPageHTML): nothing is fetched for them
+    if (page === 'profile') { if (S.isGuest) render(); else loadProfile(); } else if (page === 'player') { if (S.isGuest) render(); else loadPlayer(arg); } else if (page === 'friends') { render(); if (!S.isGuest) loadSocial({ quiet: true }); } else render();
   }
 
   /** Overall level (time played) shown beside the avatar. Null when the progress is missing. */
@@ -2342,10 +2367,8 @@
       const panel = tab === 'history' ? historyHTML(P.history)
         : tab === 'account' ? `<div class="account-list">
             ${blockedHTML()}
-            <div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
             <div class="setting-row"><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
-            <div class="setting-row"><div><b>Sessions</b><small>Sign out of this device, or of every device you are logged in on.</small></div><span class="row" style="gap:6px"><button type="button" class="btn ghost small" data-act="logout">Log out</button><button type="button" class="btn ghost small" data-act="logoutAll">Everywhere</button></span></div>
             <div class="danger-zone"><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
           </div>`
         : P.game ? gameDetailHTML(P) : statsHTML(P.data.stats);
@@ -2791,17 +2814,26 @@
     });
   }
 
+  /** Settings: the choices a player makes for this device, and the list of recent tables. Account security and deletion stay on the profile's Account tab. */
   function openSettingsDialog() {
-    const body = () => `<div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
-      <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} saved on your account.` : 'Nothing saved yet.'}</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>
-      <div class="setting-row"><div><b>Account</b><small>Profile, history and account deletion are on your profile page.</small></div><button type="button" class="btn ghost small" data-modal-act="openProfileFromSettings">Open</button></div>`;
+    const appearance = () => `<div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-modal-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>`;
+    const body = () => `${appearance()}
+      <div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
+      <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} still open, that you sat at or watched.` : 'Tables you sit at or watch show here while they stay open. A table closes when everyone leaves.'} Clearing removes them from this list; a table you sit at again is added back.</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>`;
     openModal('Settings', body(), (o) => {
-      const redraw = () => { o.querySelector('.modal-body').innerHTML = body(); };
-      modalActions.toggleSound = () => { CardTable.sound.toggle(); redraw(); };
-      modalActions.clearRecent = async () => {
-        try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
+      // a redraw replaces the buttons; keep focus on the replacement of the button the player used (keyboard users keep their place)
+      const redraw = (used) => {
+        const key = (b) => `${b.dataset.modalAct}:${b.dataset.theme || ''}`;
+        const k = used && used.dataset ? key(used) : '';
+        o.querySelector('.modal-body').innerHTML = body();
+        const again = k && [...o.querySelectorAll('[data-modal-act]')].find((b) => key(b) === k && !b.disabled);
+        if (again) again.focus();
       };
-      modalActions.openProfileFromSettings = () => { closeModal(); openPage('profile'); };
+      modalActions.setTheme = (el) => { chooseTheme(el.dataset.theme); redraw(el); };
+      modalActions.toggleSound = (el) => { CardTable.sound.toggle(); redraw(el); };
+      modalActions.clearRecent = async (el) => {
+        try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(el); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
+      };
     });
   }
 
@@ -2875,6 +2907,8 @@
     if (themeChoice) return themeChoice;
     try { const m = localStorage.getItem('tv_theme'); return m === 'light' || m === 'system' ? m : 'dark'; } catch { return 'dark'; }
   }
+  /** Saves the Appearance choice on this device and applies it at once. */
+  function chooseTheme(m) { themeChoice = m; try { localStorage.setItem('tv_theme', m); } catch { /* not kept after this visit, but applied now */ } applyTheme(); render(); }
   function applyTheme() {
     const m = themeMode();
     const light = m === 'light' || (m === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
@@ -2913,7 +2947,10 @@
     if (!S.room || S.room.status !== 'finished') S.endFlow = null;
     if (!S.ready && !S.guest && !S.room) {
       paintApp('<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle class="seat-halo" cx="128" cy="216" r="27" fill="#fbbf24" fill-opacity=".25"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>');
-    } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
+    } else if (!S.room && S.page === 'profile' && S.isGuest) paintApp(topbarHTML() + lockedPageHTML('profiles', 'See player profiles and stats.'));
+    else if (!S.room && S.page === 'player' && S.isGuest) paintApp(topbarHTML() + lockedPageHTML('profiles', 'See player profiles and stats.'));
+    else if (!S.room && S.page === 'friends' && S.isGuest) paintApp(topbarHTML() + lockedPageHTML('friends', 'Use friends and table invitations.'));
+    else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
     else if (!S.room && S.page === 'player') renderPlayerPage();
     else if (!S.room && S.page === 'friends' && !S.guest) paintApp(topbarHTML() + friendsPageHTML());
     else if (!S.room) renderHome();
@@ -2968,10 +3005,12 @@
 
   function renderHome() {
     loadWelcome();
-    const tiles = S.games.map((g) => {
+    // A game only the owner may play is not shown to anybody else (the server still refuses it).
+    const tiles = S.games.filter((g) => !(g.access === 'owner' && S.role !== 'owner')).map((g) => {
       const open = gameOpenFor(g);
       const guestLocked = guestLockedFor(g); // a tap opens the account prompt (the button stays enabled)
-      const note = open ? '' : guestLocked && window.TvGuest ? window.TvGuest.lockedLabel(g.name) : '<p class="game-off" role="status">Unavailable right now.</p>';
+      const devOff = !open && !guestLocked && g.access === 'admins'; // hover or tap says it is in development and testing
+      const note = open ? '' : guestLocked && window.TvGuest ? window.TvGuest.lockedLabel(g.name) : devOff ? `<p class="game-off" role="status">${DEV_OFF_TEXT}</p>` : '<p class="game-off" role="status">Unavailable right now.</p>';
       return `
       <article class="game-card${open ? '' : ' is-locked'}" style="--accent:${esc(g.accent || '#7b4bd0')}">
         <div class="game-art" aria-hidden="true">${gameMark(g)}</div>
@@ -2979,7 +3018,7 @@
           <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
           <p>${esc(g.tagline)}</p>${note}
           <div class="row game-actions">
-            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}" ${open || guestLocked ? '' : 'disabled aria-disabled="true"'}>Create table</button>
+            <button class="btn small${devOff ? ' is-off' : ''}" type="button" data-act="create" data-game="${esc(g.id)}"${open || guestLocked ? '' : ' aria-disabled="true"'}${devOff ? ` title="${DEV_OFF_TEXT}"` : ''}>Create table</button>
             <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
           </div>
           ${g.id === 'wizard' ? `<p class="game-extra">${S.guest ? '<button type="button" class="linklike" data-act="showLogin">Log in for the offline scorecard</button>' : '<a href="/scorecard.html?game=wizard">Offline scorecard</a>'}</p>` : ''}
@@ -2993,7 +3032,7 @@
     ${topbarHTML()}
     <main class="page wide home">
       <section class="home-hero">
-        <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
+        <div class="hero-dice" aria-hidden="true"><div class="hd d1" style="--r:-12deg"><i style="grid-area:1/1"></i><i style="grid-area:1/3"></i><i style="grid-area:2/2"></i><i style="grid-area:3/1"></i><i style="grid-area:3/3"></i></div><div class="hd d2" style="--r:10deg"><i style="grid-area:1/1"></i><i style="grid-area:2/2"></i><i style="grid-area:3/3"></i></div></div>
         <div class="home-intro">
           ${name && !S.guest ? `<small class="eyebrow">${dayPart()}</small>` : ''}
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
@@ -3405,7 +3444,7 @@
     const unavailable = '<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>';
     // games load the first time their table opens (public/game-loader.js); draw the table again once the script is in
     if (window.TvGames && window.TvGames.knows(gameId) && !window.TvGames.isLoaded(gameId)) {
-      paintApp('<div class="page"><p class="hint">Loading the game…</p></div>');
+      paintApp('<div class="page load-die"><div class="hd-mini" aria-hidden="true"><i style="grid-area:1/1"></i><i style="grid-area:2/2"></i><i style="grid-area:3/3"></i></div><p class="hint">Loading the game…</p></div>');
       // a callback only draws if this table is still on screen with its view
       const tableCode = S.room.code;
       const stillHere = () => S.room && S.room.code === tableCode && S.room.gameId === gameId && S.view;
@@ -3669,7 +3708,6 @@
       // the redraw replaces the period button, so give keyboard focus back to the same period
       document.querySelector(`[data-act="ratingScope"][data-scope="${P.ratingScope}"]`)?.focus({ preventScroll: true });
     },
-    setTheme: (el) => { themeChoice = el.dataset.theme; try { localStorage.setItem('tv_theme', themeChoice); } catch { /* not kept after this visit, but applied now */ } applyTheme(); render(); },
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
@@ -3772,11 +3810,14 @@
     voiceSpeaker: () => voice.toggleSpeaker(),
     sound: () => { CardTable.sound.toggle(); render(); },
     create: (el) => {
-      if (!authed()) return gateLogin(() => actions.create(el));
       const game = el.dataset.game;
       const meta = gameMeta(game);
+      // an admin-only game says why first, before any login prompt
+      if (meta && meta.access === 'admins' && !gameOpenFor(meta)) return toast(DEV_OFF_TEXT);
+      if (!authed()) return gateLogin(() => actions.create(el));
       if (meta && !gameOpenFor(meta)) {
         if (guestLockedFor(meta)) return openAuthSheet('register', `Create a free account to play ${meta.name}.`);
+        if (meta.access === 'admins') return toast(DEV_OFF_TEXT);
         return toast('That game is unavailable right now.');
       }
       // New tables are public by default. The host can make the table private from the table screen (Make private).

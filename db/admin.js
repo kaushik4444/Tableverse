@@ -557,7 +557,7 @@ async function purge() {
 // ---------------------------------------------------------------- game switches (owner)
 /** Every explicit switch: { game_id, access, enabled, updated_at }. A game without a row is on for everyone (lib/gameFlags.js). */
 async function listGameFlags() {
-  return (await db.query('SELECT game_id, access, enabled, updated_at, sort_order FROM game_flags')).rows;
+  return (await db.query('SELECT game_id, access, enabled, updated_at, sort_order, guest_trial_limit FROM game_flags')).rows;
 }
 
 /**
@@ -606,6 +606,23 @@ async function setGameFlag({ actorId, gameId, access }) {
  * Sets the order of the games in the home menu. `order` is the full list of game ids, first to last; it must name every game
  * exactly once (the route checks this). Only positions that change are written, and one audit entry records the whole order.
  */
+/**
+ * Sets how many games a guest device may start in one game (1 to 9), or removes the limit (null). Only a real change is
+ * written and audited. A game with no row gets one that keeps it on and open to everybody, as setGameOrder does.
+ */
+async function setGameTrialLimit({ actorId, gameId, limit }) {
+  await db.withTransaction(async (c) => {
+    const r = await c.query(
+      `INSERT INTO game_flags (game_id, enabled, access, guest_trial_limit, updated_at, updated_by) VALUES ($1, TRUE, 'on', $2, NOW(), $3)
+       ON CONFLICT (game_id) DO UPDATE SET guest_trial_limit = EXCLUDED.guest_trial_limit, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+       WHERE game_flags.guest_trial_limit IS DISTINCT FROM EXCLUDED.guest_trial_limit
+       RETURNING game_id`,
+      [gameId, limit, actorId]
+    );
+    if (r.rows.length) await audit(c, { actorId, action: 'game.trial_limit', targetType: 'game', targetId: gameId, detail: { limit } });
+  });
+}
+
 async function setGameOrder({ actorId, order }) {
   await db.withTransaction(async (c) => {
     await lockStaff(c, actorId);
@@ -631,7 +648,7 @@ async function setGameOrder({ actorId, order }) {
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health, gameStats, matchHistory, listGameFlags, setGameFlag, setGameOrder, listGuestFeatures, setGuestFeature, recordAudit,
+  addCounters, addActive, forgetActor, overview, health, gameStats, matchHistory, listGameFlags, setGameFlag, setGameOrder, setGameTrialLimit, listGuestFeatures, setGuestFeature, recordAudit,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)
