@@ -22,7 +22,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Finished matches with their participants, in replay order. `since` (inclusive) and `before` (exclusive) limit the window. */
 async function loadMatches(client = db, { since = null, before = null } = {}) {
   const { rows } = await client.query(
-    `SELECT m.id, m.game_id, m.match_key, m.finished_at, m.completed, m.rated, m.unrated_reason,
+    `SELECT m.id, m.game_id, m.match_key, m.finished_at, m.completed, m.rated, m.unrated_reason, m.options,
             mp.player_id, mp.seat, mp.is_bot, mp.left_early, mp.forfeit, mp.is_winner, mp.is_draw, mp.place, mp.score
        FROM matches m
        JOIN match_participants mp ON mp.match_id = m.id
@@ -36,7 +36,7 @@ async function loadMatches(client = db, { since = null, before = null } = {}) {
     if (!byId.has(r.id)) {
       byId.set(r.id, {
         id: r.id, gameId: r.game_id, matchKey: r.match_key, finishedAt: r.finished_at, completed: r.completed,
-        rated: r.rated, reason: r.unrated_reason, participants: [],
+        rated: r.rated, reason: r.unrated_reason, options: r.options || {}, participants: [],
       });
     }
     byId.get(r.id).participants.push({
