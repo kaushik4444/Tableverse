@@ -4,7 +4,13 @@ class Browser {
   constructor(port) { this.port = port; this.cookies = new Map(); this.lastSetCookie = []; }
 
   absorb(res) {
-    this.lastSetCookie = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
+    // Older Node builds lack getSetCookie(); a joined header is split on commas that start a new name=value pair
+    // (commas inside an Expires date are followed by a space and a day, not by "name=").
+    if (typeof res.headers.getSetCookie === 'function') this.lastSetCookie = res.headers.getSetCookie();
+    else {
+      const joined = res.headers.get('set-cookie');
+      this.lastSetCookie = joined ? joined.split(/,\s*(?=[^\s;,=]+=)/) : [];
+    }
     for (const line of this.lastSetCookie) {
       const [pair] = line.split(';');
       const i = pair.indexOf('=');

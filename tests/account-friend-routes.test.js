@@ -47,7 +47,10 @@ const POST_ACCOUNT = [
         assert.equal(r.status, 401, `expected 401, got ${r.status}`);
       });
       await test(`POST ${path} without the CSRF header is refused`, async () => {
-        const r = await new Browser(srv.port).post(path, body, { csrf: false });
+        // the CSRF cookie is present, so only the missing header can cause the 403
+        const b = new Browser(srv.port);
+        await b.get('/api/auth/csrf');
+        const r = await b.post(path, body, { csrf: false });
         assert.equal(r.status, 403, `expected the CSRF refusal (403), got ${r.status}`);
       });
     }
