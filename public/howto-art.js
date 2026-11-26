@@ -250,4 +250,11 @@
     () => felt(T(160, 65, 'mortgage for cash', 20, '#fff')),
     () => felt(T(160, 65, '💸 → 💀', 26, '#fff')),
   ]);
+  // Real-footage pictures (public/howto/<game>/<card>.jpg, listed in howto/index.js) replace the drawn picture wherever one exists.
+  const photoOf = (game, i) => (((window.CardTable.howtoImages || {})[game] || []).includes(i)
+    ? `<img class="ht-photo" src="/howto/${game}/${i}.jpg" alt="" width="390" height="693" loading="lazy" decoding="async">` : '');
+  for (const game of Object.keys(window.CardTable.howtoImages || {})) {
+    const drawn = A[game];
+    A[game] = (i, g) => photoOf(game, i) || (drawn ? drawn(i, g) : '');
+  }
 })();
