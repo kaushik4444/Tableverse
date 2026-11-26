@@ -25,10 +25,10 @@ async function test(name, fn) {
 
     // players: A and B are on the boards, C is on the boards but plays too little, D is off the boards
     const [A, B, C, D] = await Promise.all([
-      q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('ann','Ann',TRUE) RETURNING id"),
-      q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('bob','Bo',FALSE) RETURNING id"),
-      q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('cyn','Cy',TRUE) RETURNING id"),
-      q("INSERT INTO players (username, display_name, leaderboard_opt_in) VALUES ('dia','Di',FALSE) RETURNING id"),
+      q("INSERT INTO players (username, display_name, leaderboard_opt_in, is_anonymous) VALUES ('ann','Ann',TRUE,FALSE) RETURNING id"),
+      q("INSERT INTO players (username, display_name, leaderboard_opt_in, is_anonymous) VALUES ('bob','Bo',FALSE,FALSE) RETURNING id"),
+      q("INSERT INTO players (username, display_name, leaderboard_opt_in, is_anonymous) VALUES ('cyn','Cy',TRUE,FALSE) RETURNING id"),
+      q("INSERT INTO players (username, display_name, leaderboard_opt_in, is_anonymous) VALUES ('dia','Di',FALSE,FALSE) RETURNING id"),
     ]).then((rows) => rows.map((r) => r[0].id));
 
     // seven chess matches between A and B, one hour apart (A wins four, B wins three)
