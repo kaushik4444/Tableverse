@@ -5,7 +5,11 @@ const { serve, scriptedPage, loadPlaywright, sessionOk, welcome } = require('./h
 const games = require('../../games');
 const { chromium } = loadPlaywright();
 
+<<<<<<< HEAD
 const CASES = [['sudoku', 4], ['bingo', 4], ['dotsboxes', 4], ['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4], ['penaltyrows', 4], ['stagerummy', 4], ['colorclash', 4], ['hiddenminers', 4], ['tictactoe', 2], ['fourinarow', 2]];
+=======
+const CASES = [['sudoku', 4], ['dotsboxes', 4], ['memorymatch', 4], ['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4], ['penaltyrows', 4], ['stagerummy', 4], ['colorclash', 4], ['hiddenminers', 4], ['tictactoe', 2], ['fourinarow', 2]];
+>>>>>>> 32f1bae (New game: Memory Match (2 to 4 players))
 const NAMES = ['Aarav', 'Bo', 'Cy', 'Di', 'Eve', 'Fay'];
 function build(gameId, n, untilMine = false) {
   const def = games.get(gameId);

@@ -25,6 +25,12 @@
         text: 'Draw lines between the dots and close boxes to claim them. Close a box and you move again. Pick a 3×3, 4×4 or 5×5 board.'
       },
       {
+        level: 'minor',
+        ico: '🃏',
+        title: 'Memory Match for 2 to 4 players',
+        text: 'Turn two cards over to find the pairs. A match keeps your turn, and the most pairs wins. Pick 4×4, 4×6 or 6×6 cards.'
+      },
+      {
         level: 'major',
         ico: '🔊',
         title: 'Sounds for more moments',
