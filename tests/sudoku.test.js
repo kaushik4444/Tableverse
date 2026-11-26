@@ -113,7 +113,7 @@ test('a running game keeps the answer and other grids to itself; the finished ga
 
 test('bots fill squares with the right numbers, and a bot can win', () => {
   const g = E.createGame([{ id: 'h', name: 'Human' }, { id: 'b', name: 'Bot', bot: true }], { difficulty: 'easy', pace: 'quick' }, mulberry32(8), clock().now);
-  assert.deepEqual(E.awaiting(g), ['b']);
+  assert.deepEqual(E.awaiting(g), ['h', 'b'], 'everybody still filling in is awaited');
   assert.ok(E.botDelayMs(g, 'b') >= 0);
   let steps = 0;
   while (g.phase === 'playing' && steps < 200) {
@@ -135,7 +135,7 @@ test('plugin: two to eight seats, the options, the fastest-grid stat, and a game
   assert.equal(plugin.stats.bestOf({ isWinner: true, score: 90 }), -90);
   assert.equal(plugin.stats.bestOf({ isWinner: false, score: 0 }), null);
   const game = plugin.create(people(2, [1]), {}, mulberry32(9));
-  assert.deepEqual(game.awaiting(), ['p1']);
+  assert.deepEqual(game.awaiting(), ['p0', 'p1']);
   assert.equal(game.isOver(), false);
   assert.equal(game.results().length, 2);
 });

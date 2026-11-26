@@ -80,9 +80,14 @@ function applyAction(g, playerId, action) {
   return { ok: true };
 }
 
-/** The bots still filling in, while the game runs. People are never waited for: they play when they like. */
+/**
+ * Everybody still filling in, while the game runs. The server only sets a timer for bots (and for a seat whose person has
+ * left), so a connected person is never played for; they fill squares when they like.
+ */
 function awaiting(g) {
-  return g.phase === 'playing' ? g.players.filter((p) => p.bot).map((p) => p.id) : [];
+  if (g.phase !== 'playing') return [];
+  const empties = emptyCount(g);
+  return g.players.filter((_, i) => rightOf(g, i) < empties).map((p) => p.id);
 }
 
 function botDelayMs(g, playerId) {
