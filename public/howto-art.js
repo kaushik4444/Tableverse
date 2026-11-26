@@ -136,6 +136,36 @@
     () => felt(T(160, 50, 'Level 3', 22, '#fff') + T(160, 86, '❤️ ❤️ ❤️', 22, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
+  // Sudoku: a 9x9 grid with thicker lines between the boxes; the picture shows givens, the player's right and wrong numbers
+  const PUZZLE = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
+  const ANSWER = '534678912672195348198342567859761423426853791713924856961537284287419635345286179';
+  function sudokuGrid(cells, x0, y0, cell) {
+    let out = '';
+    for (let k = 0; k < 81; k++) {
+      const r = Math.floor(k / 9), c = k % 9;
+      const x = x0 + c * cell, y = y0 + r * cell;
+      const given = cells[k] && cells[k].given;
+      out += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${cells[k] && cells[k].wrong ? 'rgba(239,68,68,.45)' : 'transparent'}" stroke="rgba(255,255,255,.25)" stroke-width="0.6"/>`;
+      if (cells[k]) out += `<text x="${x + cell / 2}" y="${y + cell * 0.72}" text-anchor="middle" font-size="${cell * 0.8}" font-weight="${given ? 800 : 600}" fill="${given ? '#fff' : C.gold}">${cells[k].n}</text>`;
+    }
+    for (let b = 0; b <= 9; b += 3) {
+      out += `<line x1="${x0 + b * cell}" y1="${y0}" x2="${x0 + b * cell}" y2="${y0 + 9 * cell}" stroke="#fff" stroke-width="1.6"/>`;
+      out += `<line x1="${x0}" y1="${y0 + b * cell}" x2="${x0 + 9 * cell}" y2="${y0 + b * cell}" stroke="#fff" stroke-width="1.6"/>`;
+    }
+    return out;
+  }
+  const givensOnly = () => Array.from({ length: 81 }, (_, k) => (PUZZLE[k] !== '0' ? { n: PUZZLE[k], given: true } : null));
+  A.sudoku = pick([
+    () => felt(sudokuGrid(givensOnly(), 115, 10, 10)),
+    () => felt(sudokuGrid(Array.from({ length: 81 }, (_, k) => {
+      if (PUZZLE[k] !== '0') return { n: PUZZLE[k], given: true };
+      if (k === 2) return { n: 7, wrong: true };
+      if (k === 3) return { n: ANSWER[k] };
+      return null;
+    }), 115, 10, 10) + T(160, 102, 'Red is wrong, gold is yours', 9, '#fff')),
+    () => felt(sudokuGrid(Array.from({ length: 81 }, (_, k) => ({ n: ANSWER[k], given: PUZZLE[k] !== '0' })), 115, 10, 10) + T(160, 102, '🏆', 16, '#fff')),
+  ]);
+
   A.gofish = pick([
     () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('3', 'c'), pc('J', 'd'), pc('9', 's')], 66, 44)),
     () => felt(T(160, 55, '“Got any 7s?”', 20, '#fff') + arrow(110, 90, 210, 90)),
