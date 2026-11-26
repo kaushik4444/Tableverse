@@ -164,8 +164,10 @@
       if (over && !ui.over) snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
     }
     // screen-reader players hear each new number once (the ball is only read on navigation)
+    // deferred: the app writes its own status right after this render returns, and this call must be the last word
     if (v.called.length > ui.called && v.lastCall && window.CardTable.announceStatus) {
-      window.CardTable.announceStatus(`${letterOf(v.lastCall)} ${v.lastCall} called`);
+      const said = `${letterOf(v.lastCall)} ${v.lastCall} called`;
+      setTimeout(() => window.CardTable.announceStatus(said), 0);
     }
     ui.called = v.called.length;
     ui.over = over;
