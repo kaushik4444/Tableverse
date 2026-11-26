@@ -80,13 +80,15 @@
 
   /** Lives and undo, above the number pad. */
   /** Your own solo rating for this table's difficulty, from the server. Loaded when a solo game is shown and again when it ends. */
+  let soloLoad = 0; // each load has a number; only the latest one may write the rating, so an older answer cannot win
   function loadSolo() {
+    const mine = ++soloLoad;
     ui.soloState = 'loading';
     fetch('/api/ratings/solo', { credentials: 'same-origin' })
       .then((r) => (r.ok ? r.json() : { ok: false, signedOut: r.status === 401 }))
-      .then((j) => { ui.solo = j; })
-      .catch(() => { ui.solo = { enabled: false }; })
-      .finally(() => { ui.soloState = 'done'; draw(); });
+      .then((j) => { if (mine === soloLoad) ui.solo = j; })
+      .catch(() => { if (mine === soloLoad) ui.solo = { enabled: false }; })
+      .finally(() => { if (mine === soloLoad) { ui.soloState = 'done'; draw(); } });
   }
   function soloText(v) {
     if (!ui.solo) return '';
