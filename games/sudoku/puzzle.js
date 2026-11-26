@@ -80,20 +80,29 @@ function fullGrid(rng) {
   return g;
 }
 
-/** A puzzle for the difficulty, with its solution. Removing clues stops early if the puzzle would lose its single solution. */
+const MAX_ATTEMPTS = 100; // a pass reaches the target in about 96% of hard grids, so this is never close to running out
+
+/**
+ * A puzzle for the difficulty, with its solution, that has exactly CLUES[difficulty] givens. A removal that would lose the
+ * single solution is kept, so one pass can stop above the target. Removing more clues never brings a removed one back, so a
+ * short pass cannot be finished on the same grid: it is started again with a new grid and new randomness.
+ */
 function makePuzzle(rng, difficulty = 'medium') {
   const target = CLUES[difficulty] || CLUES.medium;
-  const solution = fullGrid(rng);
-  const puzzle = solution.slice();
-  let clues = 81;
-  for (const i of shuffle([...Array(81).keys()], rng)) {
-    if (clues <= target) break;
-    const keep = puzzle[i];
-    puzzle[i] = 0;
-    if (countSolutions(puzzle, 2) === 1) clues--;
-    else puzzle[i] = keep;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const solution = fullGrid(rng);
+    const puzzle = solution.slice();
+    let clues = 81;
+    for (const i of shuffle([...Array(81).keys()], rng)) {
+      if (clues <= target) break;
+      const keep = puzzle[i];
+      puzzle[i] = 0;
+      if (countSolutions(puzzle, 2) === 1) clues--;
+      else puzzle[i] = keep;
+    }
+    if (clues === target) return { puzzle, solution, clues };
   }
-  return { puzzle, solution, clues };
+  throw new Error(`Could not make a ${difficulty} Sudoku puzzle`);
 }
 
 module.exports = { CLUES, candidates, countSolutions, fullGrid, makePuzzle };

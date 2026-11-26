@@ -40,9 +40,19 @@ test('every difficulty makes a valid grid with exactly one solution, and the clu
       const { puzzle, solution } = P.makePuzzle(mulberry32(seed), difficulty);
       assert.ok(validGrid(solution), 'solution is a valid grid');
       assert.equal(P.countSolutions(puzzle, 2), 1, 'exactly one solution');
-      assert.ok(puzzle.filter((v) => v).length >= clues, 'at least the target clues');
+      assert.equal(puzzle.filter((v) => v).length, clues, 'the returned count is the number of givens');
+      assert.equal(clues, P.CLUES[difficulty], 'exactly the target clues, never more');
       for (let k = 0; k < 81; k++) if (puzzle[k]) assert.equal(puzzle[k], solution[k], 'a clue matches the solution');
     }
+  }
+});
+
+test('hard puzzles have exactly 26 givens for every seed, not just the first few', () => {
+  // a single removal pass ends at 27 for some grids: the generator must keep going until it reaches 26
+  for (let seed = 1; seed <= 60; seed++) {
+    const { puzzle, clues } = P.makePuzzle(mulberry32(seed), 'hard');
+    assert.equal(puzzle.filter((v) => v).length, 26, 'seed ' + seed);
+    assert.equal(clues, 26, 'seed ' + seed);
   }
 });
 
