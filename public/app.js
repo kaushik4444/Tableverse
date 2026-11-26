@@ -3495,6 +3495,7 @@
     const titles = new Set();
     root.querySelectorAll('.overlay').forEach((ov) => {
       const title = ((ov.querySelector('h2') || ov).textContent || '').trim().slice(0, 120);
+      if (!ov.getClientRects().length) return; // hidden (not on screen yet): its first showing still animates
       titles.add(title);
       if (shownOverlayTitles.has(title)) ov.classList.add('settled');
     });
