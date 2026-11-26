@@ -6,10 +6,11 @@
   const FILES = {
     wizard: 'wizard', twentynine: 'twentynine', poker: 'poker', themind: 'themind', ludo: 'ludo', gofish: 'gofish',
     colorclash: 'colorclash', hiddenminers: 'hiddenminers', propertyrivals: 'propertyrivals', penaltyrows: 'penaltyrows',
-    stagerummy: 'stagerummy', tictactoe: 'linegames', fourinarow: 'linegames', chess: 'chess', carrom: 'carrom', snakesladders: 'snakesladders', sudoku: 'sudoku',
+    stagerummy: 'stagerummy', tictactoe: 'linegames', fourinarow: 'linegames', chess: 'chess', carrom: 'carrom', snakesladders: 'snakesladders',
+    bingo: 'bingo', sudoku: 'sudoku',
   };
   // files that have a stylesheet of their own (wizard and twentynine style themselves inside table.css)
-  const HAS_CSS = new Set(['poker', 'themind', 'ludo', 'gofish', 'colorclash', 'hiddenminers', 'propertyrivals', 'penaltyrows', 'stagerummy', 'linegames', 'chess', 'carrom', 'snakesladders', 'sudoku']);
+  const HAS_CSS = new Set(['poker', 'themind', 'ludo', 'gofish', 'colorclash', 'hiddenminers', 'propertyrivals', 'penaltyrows', 'stagerummy', 'linegames', 'chess', 'carrom', 'snakesladders', 'bingo', 'sudoku']);
   const loading = {};   // file -> promise while its script and stylesheet load (cleared on failure, so it can retry)
   const loaded = {};    // file -> true once both the script and the stylesheet have loaded
 
