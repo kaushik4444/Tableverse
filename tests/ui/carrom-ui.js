@@ -363,6 +363,23 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
+  await test('short viewports can scroll to the striker track, guidance and status without clipping', async () => {
+    for (const width of [320, 650]) {
+      const { page, ctx } = await open(msgsFor(fresh()), { width, height: 250 });
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 24, bottom: 20 } });
+      await page.mouse.wheel(0, 1000);
+      await page.waitForFunction(() => window.scrollY > 0, null, { timeout: 1500 });
+      for (const sel of ['.cb-slider', '.cb-tip', '.wz-status > span']) {
+        const b = await box(page, sel);
+        assert.ok(b.y >= 24 && b.y + b.height <= 230, `${sel} is fully visible at ${width}px after scrolling`);
+      }
+      const board = await box(page, '.cb-svg');
+      assert.ok(board.height > 0, 'the board retains playable space');
+      await ctx.close();
+    }
+  });
+
   await test('no Flick button and no sliders: Enter on the striker flicks once power is set, and sends nothing before', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
     assert.equal(await page.locator('[data-aim]').count(), 0, 'no range sliders');
