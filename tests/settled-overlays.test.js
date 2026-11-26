@@ -23,7 +23,7 @@ function renderer() {
         getClientRects: () => visible ? [{}] : [],
       };
     });
-    markSettledOverlays({ querySelectorAll: (selector) => selector === '.overlay' ? nodes : [] });
+    markSettledOverlays({ querySelectorAll: (selector) => selector === '.overlay' ? nodes : [] }, true);
     return nodes.map((node) => node.classList.has('settled'));
   };
 }
