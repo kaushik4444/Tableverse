@@ -10,6 +10,17 @@
 (function () {
   window.TV_RELEASES = [
   {
+    date: '2026-11-26',
+    items: [
+      {
+        level: 'major',
+        ico: '🔢',
+        title: 'Sudoku: race to fill the grid',
+        text: 'Everybody gets the same puzzle on their own grid. The first grid filled in with every number right wins. Pick easy, medium or hard, and watch the other players\' progress without seeing their numbers.'
+      },
+    ]
+  },
+  {
     date: '2026-11-25',
     items: [
       {
