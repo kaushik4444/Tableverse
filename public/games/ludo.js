@@ -272,7 +272,7 @@
       const label = `${esc(p.name)}: ${what}, ${at}`;
       const moved = ui.plans.has(`${i}-${t}`);
       const pid = `${i}-${t}`;
-      out.push(`<button type="button" class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / G.S) * 100}%;top:${(y / G.S) * 100}%"><i></i></button>`);
+      out.push(`<button type="button" data-no-tap class="ludo-token ${SEAT[seat].name} ${legal ? 'legal' : ''} ${stack > 1 ? 'stacked' : ''} ${home ? 'done' : ''} ${moved ? 'moved' : ''}" data-pid="${pid}" ${legal ? `data-lt="tok:${t}" aria-label="${label}"` : `disabled tabindex="-1" aria-label="${esc(p.name)} token ${t + 1}"`} style="left:${(x / G.S) * 100}%;top:${(y / G.S) * 100}%"><i></i></button>`);
     }));
     if (ui.isHex) {
       v.players.forEach((p, i) => {
