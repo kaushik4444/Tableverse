@@ -53,6 +53,14 @@ Guests can always **read and send table chat**, and play the games their access 
 
 Code: `lib/guestFeatures.js` (the snapshot the server reads), `lib/adminRoutes.js` (`GET` and `POST /api/admin/guest-features`), `server.js` (`guestLocked`), `lib/accountRoutes.js`, `lib/friendRoutes.js`, `public/app.js`.
 
+## Plays per game (guest trials)
+
+In the admin console's Games tab (owner only), tick "Limit guests" to limit how many games a guest device may start in one
+game, then pick 1 to 9 plays (3 when first ticked). Untick it to remove the limit. Each change is audited as `game.trial_limit`.
+The limit is saved now and shown in the console; it is enforced when the next release adds the start check (see the trials
+PRs). A limit counts only guest seats; registered players are never counted. A device's count is kept by a hash of its
+trial cookie, so clearing cookies starts a new count: the limit is a deterrent, not a lock.
+
 ## Making a guest
 
 `POST /api/auth/guest` with a CSRF token. The display name is optional. It is trimmed, cleaned of control characters, and capped at 20 characters; an empty name becomes "Guest". If the name is already used by someone active in the last 7 days, a random 4-digit number is added (a longer one after several tries). The response sets an HttpOnly session cookie that lasts `GUEST_SESSION_TTL_HOURS`.

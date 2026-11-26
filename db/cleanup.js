@@ -51,6 +51,7 @@ const PLAN = [
   { table: 'guest_upgrades', stores: 'Pending guest-to-account requests: the chosen e-mail and username, the password hash and a hash of the one-time link (removed when the link is used or ends)', references: ['players'] },
   { table: 'player_recent_tables', stores: 'Recently visited table codes per account', references: ['players'] },
   { table: 'auth_rate_limits', stores: 'Hashed per-address / per-email rate-limit counters', references: [] },
+  { table: 'guest_game_trials', stores: 'Guest game trials: a hash of the guest device cookie, the game and how many plays that device has used (no account, no name)', references: [] },
   { table: 'player_ratings', stores: 'Current skill ratings per player, per game and per scope (lifetime or a UTC month)', references: ['players'] },
   { table: 'players', stores: 'Accounts: registered players and legacy anonymous players (username, display name, avatar, timestamps)', references: [] },
 ];
