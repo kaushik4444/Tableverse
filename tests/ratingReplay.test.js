@@ -35,7 +35,7 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
 // 3. unrated reasons: bots, guests, unfinished, teams, Mind, unverified placings
 {
   const reasonOf = (m) => replay([m]).results[0].reason;
-  assert.equal(reasonOf(match('bot', 'chess', T(9), [part('A', { isWinner: true }), part(null, { isBot: true })])), 'bot');
+  assert.equal(reasonOf(match('bot', 'chess', T(9), [part('A', { isWinner: true }), part(null, { isBot: true })])), 'too-few-players');
   assert.equal(reasonOf(match('guest', 'chess', T(9), [part('A', { isWinner: true }), part(null)])), 'guest');
   assert.equal(reasonOf(match('open', 'chess', T(9), [part('A'), part('B')], { completed: false })), 'unfinished');
   assert.equal(reasonOf(match('team', 'twentynine', T(9), [part('A1'), part('A2'), part('B1'), part('B2')])), REASON.TEAM);
@@ -137,3 +137,12 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
 }
 
 console.log('rating replay: all tests passed');
+
+// 4. a match with bots is rated among its humans; the bot seat gets no rating event
+{
+  const r = replay([match('m1', 'chess', T(9), [part('A', { isWinner: true }), part('B'), part('C'), part(null, { isBot: true })])]).results[0];
+  assert.equal(r.rated, true, 'three humans and a bot are rated');
+  assert.ok(!r.events.some((e) => e.playerId === 'guest:' || e.playerId === 'null' || e.playerId === null), 'no event for the bot');
+  assert.deepEqual([...new Set(r.events.map((e) => e.playerId))].sort(), ['A', 'B', 'C'], 'the humans get the events');
+  assert.ok(Math.abs(sumScope(r.events, 'lifetime')) < 1e-9, 'still zero-sum among the humans');
+}
