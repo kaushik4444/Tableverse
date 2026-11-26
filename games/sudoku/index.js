@@ -8,8 +8,9 @@ module.exports = {
   name: 'Sudoku',
   icon: '🔢',
   accent: '#0284c7',
-  tagline: 'Everybody gets the same puzzle. Fill your grid so every row, column and box holds 1 to 9. First complete grid wins.',
-  seats: { min: 2, max: 8, default: 3 },
+  tagline: 'Fill your grid so every row, column and box holds 1 to 9. Alone against the clock, or race friends on the same puzzle.',
+  // one seat is allowed: Sudoku is the only game you can play alone
+  seats: { min: 1, max: 8, default: 3 },
   // fastest complete grid, in seconds, among the games this player won (lower is better)
   stats: { kind: 'solo', bestLabel: 'Fastest grid', bestOf: (row) => (row.isWinner ? -row.score : null), formatBest: (v) => `${-v} s` },
   options: [
@@ -26,10 +27,11 @@ module.exports = {
     ] },
   ],
   rules: [
-    'Two to eight players, each with a 9×9 grid. Everybody starts with the same puzzle. Some squares are given; tap an empty square and choose a number from 1 to 9.',
+    'One to eight players, each with a 9×9 grid. Everybody starts with the same puzzle. Some squares are given; tap an empty square and choose a number from 1 to 9.',
     'Every row, every column and every 3×3 box must hold each number from 1 to 9 once. Numbers that are given cannot be changed.',
-    'A wrong number is shown in red and counted as a mistake. Change it or erase it; it does not end anything.',
-    'The first grid completed with every number right wins and ends the game. Nobody has to take turns, so there is no time limit.',
+    'A wrong number shows red at once and costs one of your three lives. The third mistake takes you out: in a race you watch the others finish, and playing alone it is game over.',
+    'Undo takes back your last move only, and you have three undos in a game. Undo does not give a life back.',
+    'The first grid completed with every number right wins and ends the game. Playing alone, your time is your score. Nobody has to take turns, so there is no time limit.',
     'Bots fill their grids one square at a time. Bot speed sets how quick they are. Their grids are not shown; only how many squares each has right.',
   ],
 
