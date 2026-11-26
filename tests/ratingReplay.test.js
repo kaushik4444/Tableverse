@@ -169,3 +169,17 @@ console.log('rating replay: all tests passed');
   assert.equal(r.ratings.filter((x) => x.scope === 'solo-easy' && x.playerId === 'S').length, 1, 'one solo rating row');
   assert.ok(!r.ratings.some((x) => x.scope === 'lifetime' && x.gameId === 'sudoku'), 'no lifetime race rating from solo play');
 }
+
+// A match processed before humans rated each other in bot matches stays unrated, and the others replay as before.
+{
+  const old = match('old', 'chess', T(9), [part('A', { isWinner: true }), part('B'), part('bot', { isBot: true })], { frozen: true });
+  const later = match('later', 'chess', T(10), [part('A'), part('B', { isWinner: true })]);
+  const r = replay([old, later]);
+  const oldRes = r.results.find((x) => x.id === 'old');
+  assert.equal(oldRes.rated, false, 'a frozen match is not rated again');
+  assert.equal(oldRes.reason, 'bot', 'and keeps its stored reason');
+  assert.deepEqual(oldRes.events, [], 'and writes no rating events');
+  const laterRes = r.results.find((x) => x.id === 'later');
+  assert.equal(laterRes.rated, true, 'a later match between the same humans is rated normally');
+  assert.equal(r.ratings.filter((x) => x.playerId === 'A' && x.scope === 'lifetime').length, 1, 'the frozen match does not change ratings');
+}
