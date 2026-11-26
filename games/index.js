@@ -15,6 +15,7 @@ const registry = {
   chess: require('./chess'),
   carrom: require('./carrom'),
   colorclash: require('./colorclash'),
+  bingo: require('./bingo'),
   sudoku: require('./sudoku'),
   dotsboxes: require('./dotsboxes'),
   memorymatch: require('./memorymatch'),

@@ -119,9 +119,10 @@
   /* expanded laid groups scroll inside the seat region, so the hand always stays on the screen */
 }
 
-/* laptops (1280x800 and similar): the event line takes its phone size so the play area ends inside the window */
+/* laptops (1280x800 and similar): keep the event line and spacing compact so the play area fits */
 @media (min-width: 521px) and (max-height: 900px) {
-  .sr .sr-event { min-height: 24px; margin-top: 4px; }
+  .sr .sr-event { min-height: 24px; margin-top: 0; }
+  .sr .sr-table { gap: 8px; }
 }
 
 /* phones: compact seats that always show every player (no hidden seats), a larger hand, and one-line counts */

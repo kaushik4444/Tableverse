@@ -136,6 +136,25 @@
     () => felt(T(160, 50, 'Level 3', 22, '#fff') + T(160, 86, '❤️ ❤️ ❤️', 22, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
+  // ---------------------------------------------------------------- bingo
+  const bingoCard = (x0, y0, cell, marked, lineRow) => {
+    const nums = [[4, 19, 33, 52, 70], [9, 22, 38, 47, 64], [2, 30, 0, 59, 61], [13, 26, 41, 58, 75], [1, 18, 35, 55, 68]];
+    let g = '';
+    nums.forEach((row, r) => row.forEach((n, c) => {
+      const x = x0 + c * cell, y = y0 + r * cell;
+      const on = n === 0 || marked.includes(n);
+      g += `<rect x="${x + 2}" y="${y + 2}" width="${cell - 4}" height="${cell - 4}" rx="5" fill="${on ? C.green : 'rgba(255,255,255,.14)'}"/>`
+        + T(x + cell / 2, y + cell / 2, n === 0 ? '★' : n, 13, on ? C.ink : C.paper);
+    }));
+    if (lineRow !== undefined) g += `<rect x="${x0}" y="${y0 + lineRow * cell}" width="${cell * 5}" height="${cell}" rx="6" fill="none" stroke="${C.gold}" stroke-width="3"/>`;
+    return g;
+  };
+  A.bingo = pick([
+    () => felt(bingoCard(60, 14, 24, [4, 19, 33, 52, 70], 0) + T(160, 138, 'A full line wins', 15, '#fff'), 150),
+    () => felt(`<circle cx="160" cy="62" r="34" fill="${C.paper}"/>` + T(160, 56, 'B 4', 24, C.ink) + T(160, 84, 'called!', 12, C.ink)
+      + arrow(200, 62, 236, 62) + bingoCard(244, 36, 13, [4], undefined) + T(160, 128, 'Mark it once it is called', 14, '#fff'), 140),
+    () => felt(T(160, 60, 'BINGO!', 38, C.gold) + T(160, 98, 'Shout it when your line is full', 15, '#fff'), 130),
+  ]);
   // Sudoku: a 9x9 grid with thicker lines between the boxes; the picture shows givens, the player's right and wrong numbers
   const PUZZLE = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
   const ANSWER = '534678912672195348198342567859761423426853791713924856961537284287419635345286179';
@@ -179,12 +198,13 @@
   ]);
 
   // Memory Match: face-down cards; two turned over, a matched pair in a seat colour, and the most pairs at the end
-  const MM = { w: 44, h: 52, gap: 10 };
+  const MM = { w: 38, h: 42, gap: 8, cols: 4 };
   const mmCard = (c, r, face, fill = '#f8fafc', ink = '#111827', opacity = 1) => {
-    const x = 118 + c * (MM.w + MM.gap), y = 14 + r * (MM.h + MM.gap);
+    const width = MM.cols * MM.w + (MM.cols - 1) * MM.gap;
+    const x = (320 - width) / 2 + c * (MM.w + MM.gap), y = 10 + r * (MM.h + MM.gap);
     return `<rect x="${x}" y="${y}" width="${MM.w}" height="${MM.h}" rx="7" fill="${fill}" opacity="${opacity}"/>` + (face ? T(x + MM.w / 2, y + MM.h / 2, face, 20, ink) : T(x + MM.w / 2, y + MM.h / 2, '✦', 14, 'rgba(255,255,255,.5)'));
   };
-  const mmGrid = (cells) => cells.map((cell, i) => (cell ? mmCard(i % 4, Math.floor(i / 4), cell.face, cell.fill, cell.ink, cell.opacity) : '')).join('');
+  const mmGrid = (cells) => cells.map((cell, i) => (cell ? mmCard(i % MM.cols, Math.floor(i / MM.cols), cell.face, cell.fill, cell.ink, cell.opacity) : '')).join('');
   const facedown = () => Array.from({ length: 8 }, () => ({ face: null }));
   A.memorymatch = pick([
     () => felt(mmGrid(facedown().map((c, i) => (i === 1 || i === 6 ? { face: '⭐', fill: '#f8fafc' } : c))) + T(160, 122, 'Turn two cards over to find a pair', 10, '#fff')),

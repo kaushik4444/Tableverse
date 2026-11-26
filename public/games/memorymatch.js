@@ -8,14 +8,17 @@
   const nameOf = (v, i) => (i === v.me ? 'You' : esc(v.players[i].name));
 
   function guidance(v) {
+    const ownFlip = v.me >= 0 && v.event?.by === v.me;
+    const symbol = ownFlip && v.last !== null ? v.board[v.last].symbol : null;
+    const flipped = symbol ? `You turned over ${esc(symbol)}. ` : '';
     if (v.phase === 'gameOver') {
-      if (v.draw) return 'A draw';
-      return v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won!' : `${esc(v.players[v.winner].name)} won`;
+      if (v.draw) return flipped + 'A draw';
+      return flipped + (v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won!' : `${esc(v.players[v.winner].name)} won`);
     }
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} to move`;
-    if (!v.myTurn) return `${esc(v.players[v.turn].name)} is thinking…`;
-    if (v.pending !== null) return 'Now turn over a second card';
-    if (v.event && v.event.type === 'match' && v.event.by === v.me) return 'A pair! Play again';
+    if (!v.myTurn) return `${flipped}${esc(v.players[v.turn].name)} is thinking…`;
+    if (v.pending !== null) return `You turned over ${esc(v.board[v.pending].symbol)}. Now turn over a second card`;
+    if (ownFlip && v.event.type === 'match') return flipped + 'A pair! Play again';
     return 'Your move: turn over a card';
   }
 
@@ -28,11 +31,14 @@
     const cards = v.board.map((c, k) => {
       const r = Math.floor(k / v.cols) + 1, col = (k % v.cols) + 1;
       if (c.owner !== null) return `<span class="mm-card matched s${c.owner}" aria-label="Row ${r}, column ${col}, ${esc(c.symbol)}, pair of ${esc(v.players[c.owner].name)}">${esc(c.symbol)}</span>`;
+      const can = v.myTurn && v.pending !== k;
       if (c.symbol !== null) {
         const cls = ['mm-card', 'up', v.last === k ? 'last' : ''].filter(Boolean).join(' ');
-        return `<span class="${cls}" aria-label="Row ${r}, column ${col}, ${esc(c.symbol)}, face up">${esc(c.symbol)}</span>`;
+        const label = `Row ${r}, column ${col}, ${esc(c.symbol)}, face up`;
+        return can
+          ? `<button type="button" class="${cls}" data-card="${k}" aria-label="${label}">${esc(c.symbol)}</button>`
+          : `<span class="${cls}" aria-label="${label}">${esc(c.symbol)}</span>`;
       }
-      const can = v.myTurn && v.pending !== k;
       return `<button type="button" class="mm-card down" data-card="${k}" aria-label="Row ${r}, column ${col}, face down" ${can ? '' : 'disabled'}><span class="mm-back" aria-hidden="true">✦</span></button>`;
     }).join('');
     return `<div class="mm-board" style="--cols:${v.cols}" role="group" aria-label="Memory Match cards">${cards}</div>`;

@@ -32,4 +32,22 @@ for (const [id, n] of cases) {
   if (game.isOver()) assert.ok(!JSON.stringify(game.results()).includes('Secret Sam'), id + ': results');
   console.log('ok  ' + id + ' scrub');
 }
+for (const id of ['dotsboxes', 'memorymatch']) {
+  const players = [{ id: 'a', name: 'playing' }, { id: 'b', name: 'gameOver' }];
+  const game = games.get(id).create(players, {}, () => 0.5);
+  game.scrub(['playing'], 'Deleted player');
+  assert.equal(game.view('a').phase, 'playing', id);
+  assert.equal(game.view('a').players[0].name, 'Deleted player', id);
+  assert.equal(game.view('a').myTurn, true, id);
+  for (let i = 0; i < 400 && !game.isOver(); i++) {
+    const [seat] = game.awaiting();
+    assert.equal(game.act(seat, game.botAction(seat)).ok, true, id);
+  }
+  assert.equal(game.isOver(), true, id);
+  game.scrub(['gameOver'], 'Another deleted player');
+  assert.equal(game.view('a').phase, 'gameOver', id);
+  assert.equal(game.view('a').players[1].name, 'Another deleted player', id);
+  assert.deepEqual(game.awaiting(), [], id);
+  console.log('ok  ' + id + ' scrub preserves phase');
+}
 console.log('\nscrub tests passed');

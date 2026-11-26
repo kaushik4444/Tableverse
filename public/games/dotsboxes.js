@@ -45,7 +45,7 @@
       const can = v.myTurn;
       return `<button type="button" class="db-line db-${l.kind}" style="${style}" data-line="${i}" aria-label="${where}, not drawn" ${can ? '' : 'disabled'}></button>`;
     }).join('');
-    return `<div class="db-board" style="--n:${n}" role="group" aria-label="Dots and boxes board">${boxes.join('')}${lines}${dots.join('')}</div>`;
+    return `<div class="db-board" style="--n:${n}" role="group" tabindex="-1" aria-label="Dots and boxes board">${boxes.join('')}${lines}${dots.join('')}</div>`;
   }
 
   function overlayHTML(v) {
@@ -72,8 +72,23 @@
     snd.play('place');
   }
 
+  function nearestLine(board, lines, index) {
+    const center = (l) => [l.c + (l.kind === 'h' ? 0.5 : 0), l.r + (l.kind === 'v' ? 0.5 : 0)];
+    const [x, y] = center(lines[index]);
+    let nearest = null, distance = Infinity;
+    for (const button of board.querySelectorAll('button[data-line]:enabled')) {
+      const [cx, cy] = center(lines[Number(button.dataset.line)]);
+      const d = (cx - x) ** 2 + (cy - y) ** 2;
+      if (d < distance) { nearest = button; distance = d; }
+    }
+    return nearest || board;
+  }
+
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.v = v; react(v);
+    const active = document.activeElement;
+    const previousBoard = root.querySelector('.db-board');
+    const line = previousBoard?.contains(active) ? active.dataset.line : undefined;
     root.innerHTML = `<div class="wz db" data-game="dotsboxes">
       <div class="wz-top"><div class="wz-round"><b>Dots and Boxes</b><span class="label"> · ${v.n} × ${v.n} · ${v.remaining} lines left</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-db="rules">Rules</button>', 'db')}</div>
@@ -81,6 +96,11 @@
       ${boardHTML(v)}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
+    if (line !== undefined || (previousBoard && active === previousBoard)) {
+      const board = root.querySelector('.db-board');
+      const target = line !== undefined && v.lines[Number(line)] ? nearestLine(board, v.lines, Number(line)) : board;
+      target.focus({ preventScroll: true });
+    }
     root.onclick = onClick;
   }
 

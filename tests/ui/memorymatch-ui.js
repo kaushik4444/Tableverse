@@ -51,6 +51,7 @@ function table(setup = () => {}, { viewer = 'me', size = '4x4', seed = 21 } = {}
     const msgs = table((g) => { E.applyAction(g, 'me', { type: 'flip', index: 0 }); });
     const { page, ctx } = await open(msgs);
     assert.match(await page.locator('.wz-status').innerText(), /second card/);
+    assert.ok((await page.locator('.wz-status').innerText()).includes(msgs[1].view.board[0].symbol));
     assert.equal(await page.locator('button.mm-card.down:not([disabled])').count(), 15, 'the face-up card is not a button');
     await ctx.close();
   });
@@ -73,6 +74,30 @@ function table(setup = () => {}, { viewer = 'me', size = '4x4', seed = 21 } = {}
     const { page, ctx } = await open(msgs);
     assert.equal(await page.locator('.mm-card.matched.s0').count(), 2, 'two matched cards in the first seat colour');
     assert.match(await page.locator('.mm-seat.s0 .mm-count').innerText(), /1/);
+    await ctx.close();
+  });
+
+  await test('a miss names the second symbol and both missed cards are selectable by the next seat', async () => {
+    let b;
+    const miss = (g) => {
+      b = g.cards.findIndex((s) => s !== g.cards[0]);
+      E.applyAction(g, g.players[g.turn].id, { type: 'flip', index: 0 });
+      E.applyAction(g, g.players[g.turn].id, { type: 'flip', index: b });
+    };
+    const missed = table(miss);
+    const previous = await open(missed);
+    assert.ok((await previous.page.locator('.wz-status').innerText()).includes(missed[1].view.board[b].symbol));
+    assert.equal(await previous.page.locator('button.mm-card.up').count(), 0);
+    await previous.ctx.close();
+
+    const afterPass = table((g) => {
+      // Pass through all three seats so that the last miss returns the turn to the viewer.
+      for (let i = 0; i < g.players.length; i++) miss(g);
+    });
+    const { page, ctx } = await open(afterPass);
+    assert.equal(await page.locator('button.mm-card.up:enabled').count(), 2);
+    await page.locator(`button[data-card="${b}"]`).click();
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'flip', index: b });
     await ctx.close();
   });
 

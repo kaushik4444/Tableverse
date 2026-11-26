@@ -14,9 +14,11 @@
 .mm button.mm-card.down { background: linear-gradient(145deg, #3d4a6b, #242c44); color: rgba(255, 255, 255, .55); cursor: pointer; padding: 0; transition: transform .12s ease, border-color .15s ease; }
 .mm button.mm-card.down:not(:disabled):hover, .mm button.mm-card.down:not(:disabled):focus-visible { border-color: var(--gold, #f2c14e); transform: translateY(-1px); }
 .mm button.mm-card.down:disabled { cursor: default; opacity: .8; }
-.mm button.mm-card.down:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; }
+.mm button.mm-card:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 2px; }
 .mm .mm-back { font-size: 0.8em; }
 .mm .mm-card.up { background: #f8fafc; color: #111827; animation: mmFlip .28s ease both; }
+.mm button.mm-card.up { cursor: pointer; padding: 0; }
+.mm button.mm-card.up:hover { border-color: var(--gold, #f2c14e); }
 .mm .mm-card.up.last { box-shadow: 0 0 0 3px rgba(255, 255, 255, .5); }
 .mm .mm-card.matched { background: color-mix(in srgb, var(--c) 35%, #111827); border-color: var(--c); animation: mmPop .35s ease both; }
 @keyframes mmFlip { from { transform: rotateY(90deg); } to { transform: rotateY(0); } }
