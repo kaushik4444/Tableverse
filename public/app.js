@@ -1818,13 +1818,14 @@
   }
 
   function showEmote(id, e, who) {
-    const seat = document.querySelector(`[data-pid="${CSS.escape(id)}"] .av`);
+    // a seat has an avatar; a Take 5 chip or a spectator has none, so fall back to the element that carries the player's id
+    const seat = document.querySelector(`[data-pid="${CSS.escape(id)}"] .av`) || document.querySelector(`[data-pid="${CSS.escape(id)}"]`);
     const r = seat ? seat.getBoundingClientRect() : { left: innerWidth / 2, top: 80, width: 0, height: 0 };
     const el = document.createElement('div');
     el.className = 'emote-pop';
     el.textContent = e;
-    // A spectator has no seat: the reaction names them, so the table knows it came from someone watching.
-    if (who && who.spectator) { const tag = document.createElement('div'); tag.className = 'emote-tag'; tag.textContent = '👁 ' + (who.name || 'Spectator'); el.appendChild(tag); }
+    // Every reaction names who sent it. A spectator has no seat, so their name gets the 👁 mark.
+    if (who && who.name) { const tag = document.createElement('div'); tag.className = 'emote-tag'; tag.textContent = (who.spectator ? '👁 ' : '') + who.name; el.appendChild(tag); }
     el.style.left = r.left + r.width / 2 + 'px';
     el.style.top = r.top + r.height / 2 + 'px';
     document.body.appendChild(el);
