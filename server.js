@@ -676,6 +676,10 @@ function start(opts = {}) {
     else sendError(p, 'That game is not available right now.');
     return true;
   };
+  /** The ids of the guests (not bots, not registered players) at a table, sorted. */
+  const guestIdsAt = (room) => room.members
+    .filter((m) => { if (m.bot) return false; const mp = players.get(m.id); return Boolean(mp) && roleOf(mp) === 'guest'; })
+    .map((m) => m.id).sort();
   const trialRefused = (p, gameId, tableCode) => send(p.ws, { t: 'error', code: 'guest_locked', feature: 'trial', gameId, tableCode, message: 'Create a free account to keep playing.' });
   /**
    * Guest game limits (Games tab): when a game starts (or rematches) every guest at the table uses one play of it, all or
@@ -684,18 +688,18 @@ function start(opts = {}) {
    * with no limit are not counted. A guest with no device key (made before keys existed) is not counted either.
    */
   const trialGate = async (room) => {
-    const none = { refused: null, charged: [] };
     const limit = gameFlags.trialLimitOf(room.gameId);
-    if (limit === null) return none;
-    const guests = room.members.filter((m) => { if (m.bot) return false; const mp = players.get(m.id); return Boolean(mp) && roleOf(mp) === 'guest'; });
-    if (!guests.length) return none;
-    const keys = await dbGuestTrials.trialKeysFor(guests.map((m) => m.id));
+    if (limit === null) return { refused: null, charged: [], guestIds: null }; // no limit: nothing to check or count
+    const guests = guestIdsAt(room).map((id) => room.members.find((m) => m.id === id));
+    if (!guests.length) return { refused: null, charged: [], guestIds: [] };
+    const guestIds = guests.map((m) => m.id);
+    const keys = await dbGuestTrials.trialKeysFor(guestIds);
     const byKey = new Map();
     for (const m of guests) { const k = keys.get(m.id); if (k) byKey.set(k, m); }
-    if (!byKey.size) return none;
+    if (!byKey.size) return { refused: null, charged: [], guestIds };
     const charged = [...byKey.keys()];
     const r = await dbGuestTrials.reservePlays({ gameId: room.gameId, limit, trialKeys: charged });
-    return r.ok ? { refused: null, charged } : { refused: byKey.get(r.trialKey) || null, charged: [] };
+    return r.ok ? { refused: null, charged, guestIds } : { refused: byKey.get(r.trialKey) || null, charged: [], guestIds };
   };
   /**
    * A guest whose device has used every play of the game is told when they create or join a table, not only at the start.
@@ -2060,9 +2064,12 @@ function start(opts = {}) {
       // a start that is cancelled from here gives back the plays it reserved
       const giveBack = () => dbGuestTrials.releasePlays({ gameId: room.gameId, trialKeys: gate.charged }).catch((e) => console.error('[games] could not give back guest plays: ' + e.message));
       // the table may have changed while the plays were checked: look again before anything starts
+      if (shuttingDown) { await giveBack(); return sendError(p, 'The server is restarting. Please try again in a minute.'); }
       if (rooms.get(room.code) !== room || room.status !== 'lobby' || room.hostId !== p.id) { await giveBack(); return; }
       if (refuseGame(p, room.gameId)) { await giveBack(); return; }
       if (ineligibleHumans(room).length) { await giveBack(); return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.'); }
+      // only the guests whose plays were reserved may be seated: a guest who joined or left meanwhile means the check is stale
+      if (gate.guestIds !== null && gate.guestIds.join() !== guestIdsAt(room).join()) { await giveBack(); return sendError(p, 'The table changed while the game was starting. Start again.'); }
       if (gate.refused) {
         const mp = players.get(gate.refused.id);
         if (mp) trialRefused(mp, room.gameId, room.code);
