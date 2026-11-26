@@ -210,7 +210,7 @@ async function check(browser, url, label, messages, viewport = { width: 390, hei
   const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk() });
   const browser = await chromium.launch();
   await check(browser, url, 'home', [welcome({ games: games.list() })]);
-  for (const [id, n] of [['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4], ['penaltyrows', 4], ['stagerummy', 4], ['colorclash', 4], ['hiddenminers', 4]]) await check(browser, url, `${id} table`, build(id, n));
+  for (const [id, n] of [['sudoku', 4], ['wizard', 4], ['twentynine', 4], ['poker', 4], ['themind', 3], ['ludo', 4], ['gofish', 4], ['snakesladders', 4], ['propertyrivals', 4], ['penaltyrows', 4], ['stagerummy', 4], ['colorclash', 4], ['hiddenminers', 4]]) await check(browser, url, `${id} table`, build(id, n));
   // the same scan on the smallest phone and on a desktop, so text and focus are checked at both extremes
   await check(browser, url, 'home 320px', [welcome({ games: games.list() })], { width: 320, height: 568 });
   await check(browser, url, 'home 1280px', [welcome({ games: games.list() })], { width: 1280, height: 800 });

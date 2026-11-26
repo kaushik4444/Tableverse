@@ -142,9 +142,9 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     assert.equal(await page.$('#friends-panel'), null, 'no full friends panel on home');
     assert.match(await page.textContent('.friends-strip'), /friends online|none online|Add friends/);
     const soon = await page.textContent('.coming-roadmap');
-    for (const n of ['Bingo', 'Cup Pong', 'Sudoku', 'Falling Blocks', 'Sea Battle', 'Resource Isles', 'Secret Clues']) assert.ok(soon.includes(n), `missing roadmap game: ${n}`);
+    for (const n of ['Bingo', 'Cup Pong', 'Falling Blocks', 'Sea Battle', 'Resource Isles', 'Secret Clues']) assert.ok(soon.includes(n), `missing roadmap game: ${n}`);
     assert.equal(await page.$('.soon-card button'), null, 'coming-soon cards are not playable');
-    assert.equal(await page.locator('.soon-card').count(), 8, 'only the eight remaining planned games are listed (Color Clash, Go Fish, Snakes and Ladders, Property Rivals and the line games are playable now)');
+    assert.equal(await page.locator('.soon-card').count(), 7, 'only the seven remaining planned games are listed (Sudoku is playable now) (Color Clash, Go Fish, Snakes and Ladders, Property Rivals and the line games are playable now)');
     await page.click('.friends-strip [data-act="openFriendsPage"]');
     await page.waitForSelector('#friends-panel');
     assert.equal(new URL(page.url()).hash, '#friends');
