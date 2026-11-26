@@ -102,7 +102,11 @@ function callNext(g) {
   });
   const bots = g.players.map((_, i) => i).filter((i) => g.players[i].bot && hasBingo(g, i));
   if (bots.length) finish(g, bots, bots[0]);
-  else if (!g.deck.length) finish(g, []); // every number is out and nobody called Bingo
+  else if (!g.deck.length) {
+    // every number is out: whoever has a full card now wins (an automatic table gets no later chance to claim); nobody is a draw
+    const winners = g.players.map((_, i) => i).filter((i) => hasBingo(g, i));
+    finish(g, winners, winners[0] ?? null);
+  }
   return { ok: true };
 }
 
@@ -141,6 +145,8 @@ function applyAction(g, playerId, action) {
 const awaiting = () => [];
 const autoAction = (g) => (g.phase === 'playing' ? { type: 'call' } : null);
 const autoDelayMs = (g) => SPEEDS[g.options.speed];
+/** The call clock runs on its own: a player's mark does not restart it (the server keeps a pending call while this is true). */
+const keepsAutoClock = (g) => g.phase === 'playing';
 
 /** Positions only: `full` = squares in a completed line, `near` = the open square of each line with four marked. */
 function lineState(squares) {
@@ -187,5 +193,5 @@ function results(g) {
 }
 
 module.exports = {
-  LETTERS, FREE, LINES, SPEEDS, letterOf, makeCard, dealCards, createGame, applyAction, awaiting, autoAction, autoDelayMs, hasBingo, viewFor, results,
+  LETTERS, FREE, LINES, SPEEDS, letterOf, makeCard, dealCards, createGame, applyAction, awaiting, autoAction, autoDelayMs, keepsAutoClock, hasBingo, viewFor, results,
 };

@@ -213,4 +213,28 @@ test('the matrix shows completed lines and lines one square from done (positions
   assert.deepEqual(w.near, []);
 });
 
+test('when the last number is called, a person with a full card wins (an automatic table cannot claim later)', () => {
+  const g = E.createGame(people(2), { pattern: 'full', autoMark: true }, mulberry32(9));
+  const cells = E.makeCard(mulberry32(5));
+  const nums = cells.filter((n) => n !== 0); // the card's 24 numbers; the centre is free
+  const last = nums[nums.length - 1];
+  g.cards[0] = cells;
+  g.marks[0] = new Set(nums.slice(0, -1)); // everything but the last number is already marked
+  g.called = nums.slice(0, -1);
+  g.deck = [last];
+  g.cards[1] = E.makeCard(mulberry32(6));
+  g.marks[1] = new Set();
+  const r = E.applyAction(g, null, { type: 'call' });
+  assert.ok(r.ok);
+  assert.equal(g.phase, 'gameOver');
+  assert.ok(g.winners.includes(0), 'the person whose card completed wins');
+});
+
+test('a player mark does not restart the call clock', () => {
+  const g = E.createGame(people(2), { pattern: 'line', autoMark: false }, mulberry32(4));
+  assert.equal(E.keepsAutoClock(g), true, 'the clock runs while the game is playing');
+  g.phase = 'gameOver';
+  assert.equal(E.keepsAutoClock(g), false, 'it stops when the game is over');
+});
+
 console.log(`\n${passed} bingo tests passed`);

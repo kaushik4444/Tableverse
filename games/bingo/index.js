@@ -46,6 +46,7 @@ module.exports = {
       botAction: () => null, // bots act through the timer call below
       autoAction: () => engine.autoAction(g),
       autoDelayMs: () => engine.autoDelayMs(g),
+      keepsAutoClock: () => engine.keepsAutoClock(g),
       isOver: () => g.phase === 'gameOver',
       results: () => engine.results(g),
     };

@@ -1157,6 +1157,8 @@ function start(opts = {}) {
 
   /** Decide whether the server must act soon (bot turn, absent human, forced play, timeout, between rounds) and set one timer for it. */
   function schedule(room) {
+    // a game whose timed call runs on its own clock (Bingo) keeps its pending call: a player's move does not push it back
+    if (room.timer && room.game && typeof room.game.keepsAutoClock === 'function' && room.game.keepsAutoClock() && humans(room).some(isConnected)) return;
     clearTimeout(room.timer);
     room.timer = null;
     if (shuttingDown) return; // no bot or auto-play moves while the server stops

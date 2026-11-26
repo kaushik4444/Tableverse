@@ -173,6 +173,9 @@
     feedSync(v);
     react(v);
     const pattern = v.options.pattern === 'full' ? 'Full card' : 'Any line';
+    // the page is rebuilt on every update: keep the control the person was using, so keyboard focus is not lost
+    const had = root.contains(document.activeElement) ? document.activeElement : null;
+    const focusKey = had ? (had.getAttribute('data-n') ? `n:${had.getAttribute('data-n')}` : had.getAttribute('data-bg') ? `bg:${had.getAttribute('data-bg')}` : null) : null;
     root.innerHTML = `
     <div class="wz bg">
       <div class="wz-top">
@@ -187,6 +190,10 @@
       ${boardHTML(v)}
       ${overlayHTML(v)}
     </div>`;
+    if (focusKey) { // the same control again, if it is still there and can take focus
+      const again = root.querySelector(focusKey.startsWith('n:') ? `[data-n="${focusKey.slice(2)}"]` : `[data-bg="${focusKey.slice(3)}"]`);
+      if (again && !again.disabled) again.focus({ preventScroll: true });
+    }
     root.onclick = onClick;
   }
 
