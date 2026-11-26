@@ -48,12 +48,14 @@ const POST_ACCOUNT = [
       });
       await test(`POST ${path} without the CSRF header is refused`, async () => {
         const r = await new Browser(srv.port).post(path, body, { csrf: false });
-        assert.ok(r.status === 403 || r.status === 401, `expected a refusal, got ${r.status}`);
-        assert.notEqual(r.status, 200);
+        assert.equal(r.status, 403, `expected the CSRF refusal (403), got ${r.status}`);
       });
     }
     await test('a bad JSON body on a POST is refused, not a server error', async () => {
-      const res = await fetch(`http://127.0.0.1:${srv.port}/api/me/friend-requests`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{not json' });
+      // a real visitor with a valid CSRF cookie and header, so the request reaches the JSON parser
+      const b = new Browser(srv.port);
+      await b.get('/api/auth/csrf');
+      const res = await fetch(`http://127.0.0.1:${srv.port}/api/me/friend-requests`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: b.cookieHeader, 'x-csrf-token': b.cookies.get('ct_csrf') }, body: '{not json' });
       assert.ok(res.status >= 400 && res.status < 500, `expected a client error, got ${res.status}`);
     });
     await test('an unknown account route is 404, not a crash', async () => {
