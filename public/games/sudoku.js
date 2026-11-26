@@ -86,7 +86,7 @@
     ui.soloState = 'loading';
     fetch('/api/ratings/solo', { credentials: 'same-origin' })
       .then((r) => (r.ok ? r.json() : { ok: false, signedOut: r.status === 401 }))
-      .then((j) => { if (mine === soloLoad) ui.solo = j; })
+      .then((j) => { if (mine === soloLoad) { ui.solo = j; ui.soloRetryAt = j && j.signedOut ? Date.now() + 10000 : 0; } })
       .catch(() => { if (mine === soloLoad) ui.solo = { enabled: false }; })
       .finally(() => { if (mine === soloLoad) { ui.soloState = 'done'; draw(); } });
   }
@@ -135,6 +135,7 @@
     const again = ui.ctx.isHost ? '<button class="btn" data-su="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>';
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
       <p class="hint" style="text-align:left">${hint}</p>
+      ${v.solo && soloText(v) ? `<p class="su-solo-result">${esc(soloText(v))}</p>` : ''}
       <ul class="su-final">${rows}</ul>
       <div class="row" style="margin-top:12px">${again}<button class="btn ghost" data-su="leave">Leave table</button></div></div></div>`;
   }
@@ -166,7 +167,9 @@
     react(v);
     // a solo game loads its rating when it is first shown, and again when the phase changes (the game ends)
     if (ui.soloPhase !== v.phase) { ui.soloPhase = v.phase; ui.soloState = 'idle'; }
-    if (v.solo && v.me >= 0 && ui.soloState === 'idle') loadSolo();
+    // a signed-out answer is checked again after 10 seconds, so signing in during the game shows the rating
+    const signedOutRetry = ui.solo && ui.solo.signedOut && ui.soloState === 'done' && Date.now() >= (ui.soloRetryAt || 0);
+    if (v.solo && v.me >= 0 && (ui.soloState === 'idle' || signedOutRetry)) loadSolo();
     // the redraw replaces the grid, so note whether a grid square had the keyboard before it goes (another control keeps its own)
     const active = document.activeElement;
     const gridFocus = !!active && root.contains(active) && active.matches('.su-c');
