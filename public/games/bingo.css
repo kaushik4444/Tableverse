@@ -1,0 +1,83 @@
+/* Bingo table. Uses the shared tokens and the Stage 10 seat grid (see table.css, style.css and stagerummy.css); only the Bingo pieces here. */
+.bg .bg-call { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.bg .bg-pile { display: grid; place-items: center; }
+.bg .bg-ball { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%;
+  background: var(--paper, #f8f5ec); color: #0c1f17; font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; box-shadow: 0 3px 8px rgba(0, 0, 0, .35); }
+.bg .bg-ball small { font-size: 11px; letter-spacing: .08em; line-height: 1; color: #9a3412; }
+.bg .bg-ball.slot { background: transparent; border: 2px dashed rgba(255, 255, 255, .35); box-shadow: none; }
+.bg .bg-count { display: grid; justify-items: start; }
+.bg .bg-count b { font-size: 20px; line-height: 1; }
+.bg .bg-count small { color: var(--muted, #86efac); font-size: 12px; }
+.bg .bg-event { margin: 0; text-align: center; line-height: 1.3; color: var(--ink, #f0fdf4); font-size: 15px; font-weight: 650; }
+.bg-spot-ico { font-size: 44px; line-height: 1; }
+/* seats: the same grid as Stage 10 (two across, three when there are more than four) */
+.bg .bg-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.bg .bg-seats.many { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bg .bg-seats .pseat { box-sizing: border-box; min-height: 132px; }
+.bg .bg-seats.many .pseat { min-height: 110px; }
+.bg .bg-seats.many .av { width: 30px; height: 30px; }
+/* each player's matrix: blank until marked, then filled black. Positions only, never the numbers */
+.bg .bg-mini { display: grid; grid-template-columns: repeat(5, 8px); gap: 2px; justify-content: center; margin: 4px auto 0; }
+.bg .bg-mini i { display: block; width: 8px; height: 8px; border-radius: 2px; border: 1px solid rgba(255, 255, 255, .28); background: transparent; }
+.bg .bg-mini i.on { background: #050a08; border-color: #050a08; }
+.bg .bg-mini i.free { display: grid; place-items: center; }
+.bg .bg-mini i.free::after { content: ''; width: 40%; height: 40%; border-radius: 50%; background: var(--gold, #fbbf24); }
+.bg .bg-mini i.near { border: 1px dashed var(--gold, #fbbf24); }
+.bg .bg-mini i.full { background: #050a08; border: 1px solid var(--gold, #fbbf24); box-shadow: 0 0 5px rgba(251, 191, 36, .75); }
+.bg .bg-mini.has-line i.on:not(.full) { opacity: .55; }
+.bg .bg-ask { display: grid; gap: 10px; margin-top: 8px; }
+.bg .bg-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.bg .bg-head, .bg .bg-card { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; width: min(100%, 340px); margin: 0 auto; }
+.bg .bg-h { text-align: center; font-weight: 800; color: var(--gold, #fbbf24); font-size: 14px; }
+.bg .bg-sq { display: grid; place-items: center; aspect-ratio: 1; min-height: 44px; border-radius: 12px; padding: 0; box-sizing: border-box;
+  font: 700 clamp(15px, 4.4vw, 21px) system-ui, sans-serif; color: var(--ink, #f0fdf4); background: var(--panel, rgba(255, 255, 255, .04)); border: 2px solid var(--panel-line, rgba(255, 255, 255, .09)); }
+button.bg-sq { cursor: pointer; }
+button.bg-sq:focus-visible { outline: 3px solid var(--gold, #fbbf24); outline-offset: 2px; }
+.bg .bg-sq.called:not(.on) { border-color: var(--gold, #fbbf24); background: rgba(251, 191, 36, .16); }
+.bg .bg-sq.on { background: linear-gradient(#34d399, #059669); color: #052e1b; border-color: transparent; }
+.bg .bg-sq.free { background: var(--gold, #fbbf24); color: var(--gold-ink, #1e1100); border-color: transparent; }
+.bg .btn.big:disabled { opacity: .45; }
+.bg .bg-board { margin-top: 8px; display: grid; gap: 6px; }
+.bg .bg-line { display: grid; grid-template-columns: 16px repeat(15, minmax(0, 1fr)); gap: 2px; align-items: center; }
+.bg .bg-line > b { font-size: 11px; color: var(--gold, #fbbf24); }
+.bg .bg-n { font-size: 9px; line-height: 16px; text-align: center; border-radius: 4px; color: var(--muted, #86efac); opacity: .55; background: rgba(255, 255, 255, .04); font-variant-numeric: tabular-nums; }
+.bg .bg-n.on { background: var(--gold, #fbbf24); color: var(--gold-ink, #1e1100); opacity: 1; }
+.bg .bg-n.last { outline: 2px solid var(--ink, #f0fdf4); outline-offset: 0; }
+.bg .bg-final { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.bg .bg-final li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .06); }
+.bg .bg-final li.win { background: rgba(251, 191, 36, .2); }
+@media (max-width: 520px) {
+  .bg .bg-row .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .bg .bg-line { grid-template-columns: 14px repeat(15, minmax(0, 1fr)); gap: 1px; }
+  .bg .bg-n { font-size: 8px; line-height: 14px; }
+}
+/* Short phones (360 x 640 and smaller): the seats, your card and the call fit on one screen, as in the other card games.
+   The called-numbers board is hidden here; the ball and the "N called" count still show every call. */
+@media (max-height: 700px) {
+  .bg .bg-call { gap: 8px; }
+  .bg .bg-ball { width: 44px; height: 44px; font-size: 18px; }
+  .bg .bg-ball small { font-size: 8px; }
+  .bg .bg-count b { font-size: 16px; }
+  .bg .bg-seats, .bg .bg-seats.many { gap: 4px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .bg .bg-seats .pseat { min-height: 0; padding: 6px 4px; }
+  .bg .bg-seats .av { width: 26px; height: 26px; }
+  .bg .bg-mini { grid-template-columns: repeat(5, 6px); gap: 2px; margin-top: 2px; }
+  .bg .bg-mini i { width: 6px; height: 6px; }
+  .bg .bg-ask { gap: 6px; margin-top: 4px; padding: 6px 10px; }
+  .bg .bg-row .hint { display: none; }
+  .bg .bg-head, .bg .bg-card { gap: 4px; width: 100%; }
+  .bg .bg-h { font-size: 12px; }
+  .bg .bg-sq { aspect-ratio: auto; height: 38px; min-height: 38px; font-size: clamp(13px, 4vw, 16px); border-radius: 9px; }
+  .bg .btn.big { min-height: 42px; padding: 8px 12px; }
+  .bg .bg-board { display: none; }
+}
+
+/* your card: a completed line glows, a line one square away is outlined dashed, and a called square you can tap pulses */
+.bg .bg-sq.line { box-shadow: 0 0 0 2px var(--gold, #fbbf24), 0 0 10px rgba(251, 191, 36, .7); }
+.bg .bg-sq.near:not(.on) { border: 2px dashed var(--gold, #fbbf24); }
+.bg .bg-sq.ready { animation: bgReady 1.6s ease-in-out infinite; }
+@keyframes bgReady { 0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, .6); } 50% { box-shadow: 0 0 0 5px rgba(251, 191, 36, 0); } }
+/* opponents' matrices: a square just marked flashes, so progress is noticed without any number */
+.bg .bg-mini i.fresh { animation: bgFresh .9s ease-out 2; }
+@keyframes bgFresh { 0% { transform: scale(1.7); box-shadow: 0 0 8px 3px rgba(251, 191, 36, .9); } 100% { transform: scale(1); box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .bg .bg-sq.ready, .bg .bg-mini i.fresh { animation: none; } }
