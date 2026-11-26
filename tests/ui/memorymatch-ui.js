@@ -47,6 +47,32 @@ function table(setup = () => {}, { viewer = 'me', size = '4x4', seed = 21 } = {}
     await ctx.close();
   });
 
+  await test('keyboard focus follows selectable cards across redraws', async () => {
+    const msgs = table();
+    const { page, ctx } = await open(msgs);
+    const card = page.locator('button[data-card="0"]');
+    await card.focus();
+    await page.evaluate((m) => window.__push(m), msgs[1]);
+    assert.equal(await card.evaluate((el) => el === document.activeElement), true);
+
+    await page.keyboard.press('Enter');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'flip', index: 0 });
+    const [, flipped] = table((g) => E.applyAction(g, 'me', { type: 'flip', index: 0 }));
+    await page.evaluate((m) => window.__push(m), flipped);
+    assert.equal(await page.locator('button[data-card="1"]:focus').count(), 1);
+
+    const [, missed] = table((g) => {
+      const b = g.cards.findIndex((symbol) => symbol !== g.cards[0]);
+      E.applyAction(g, 'me', { type: 'flip', index: 0 });
+      E.applyAction(g, 'me', { type: 'flip', index: b });
+    });
+    await page.evaluate((m) => window.__push(m), missed);
+    assert.equal(await page.locator('.mm-board :focus').count(), 0, 'no card can take focus after the turn passes');
+    await page.evaluate((m) => window.__push(m), msgs[1]);
+    assert.equal(await page.locator('.mm-board :focus').count(), 0, 'a redraw does not move focus into the board');
+    await ctx.close();
+  });
+
   await test('after the first card the status asks for a second one; the first card cannot be tapped again', async () => {
     const msgs = table((g) => { E.applyAction(g, 'me', { type: 'flip', index: 0 }); });
     const { page, ctx } = await open(msgs);

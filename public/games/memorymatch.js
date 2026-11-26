@@ -71,6 +71,8 @@
 
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.v = v; react(v);
+    const active = root.ownerDocument.activeElement;
+    const focusedCard = root.contains(active) && active.matches('.mm-board button[data-card]') ? active.dataset.card : null;
     root.innerHTML = `<div class="wz mm" data-game="memorymatch">
       <div class="wz-top"><div class="wz-round"><b>Memory Match</b><span class="label"> · ${v.rows} × ${v.cols} · ${v.left} cards left</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-mm="rules">Rules</button>', 'mm')}</div>
@@ -79,6 +81,11 @@
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
+    if (focusedCard !== null) {
+      const next = root.querySelector(`button[data-card="${CSS.escape(focusedCard)}"]:enabled`)
+        || root.querySelector('button.mm-card.down:enabled');
+      next?.focus({ preventScroll: true });
+    }
   }
 
   function onClick(e) {

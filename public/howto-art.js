@@ -206,10 +206,14 @@
   };
   const mmGrid = (cells) => cells.map((cell, i) => (cell ? mmCard(i % MM.cols, Math.floor(i / MM.cols), cell.face, cell.fill, cell.ink, cell.opacity) : '')).join('');
   const facedown = () => Array.from({ length: 8 }, () => ({ face: null }));
+  const mmPairs = [
+    { face: '⭐', fill: '#74b9ff' }, { face: '🍎', fill: '#ff7675' },
+    { face: '🌙', fill: '#74b9ff' }, { face: '🍀', fill: '#ff7675' },
+  ].map((pair) => ({ ...pair, opacity: 0.8 }));
   A.memorymatch = pick([
     () => felt(mmGrid(facedown().map((c, i) => (i === 1 || i === 6 ? { face: '⭐', fill: '#f8fafc' } : c))) + T(160, 122, 'Turn two cards over to find a pair', 10, '#fff')),
     () => felt(mmGrid(facedown().map((c, i) => (i === 1 || i === 6 ? { face: '⭐', fill: '#74b9ff' } : i === 0 ? { face: '🍎', fill: '#ff7675' } : c))) + T(160, 122, 'A pair is yours: play again', 10, '#fff')),
-    () => felt(mmGrid(Array.from({ length: 8 }, (_, i) => ({ face: ['⭐', '🍎', '🌙', '🍀'][i % 4], fill: i < 4 ? '#74b9ff' : '#ff7675', opacity: 0.8 }))) + T(160, 122, '🏆 The most pairs wins', 10, '#fff')),
+    () => felt(mmGrid([...mmPairs, ...mmPairs]) + T(160, 122, '🏆 The most pairs wins', 10, '#fff')),
   ]);
 
   A.gofish = pick([
