@@ -73,6 +73,8 @@
   }
 
   function render(root, v, ctx) {
+    const active = root.ownerDocument.activeElement;
+    const focusedLine = root.contains(active) && active.matches('.db-line[data-line]') ? active.dataset.line : null;
     ui.ctx = ctx; ui.v = v; react(v);
     root.innerHTML = `<div class="wz db" data-game="dotsboxes">
       <div class="wz-top"><div class="wz-round"><b>Dots and Boxes</b><span class="label"> · ${v.n} × ${v.n} · ${v.remaining} lines left</span></div>
@@ -81,13 +83,39 @@
       ${boardHTML(v)}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
+    if (focusedLine !== null) {
+      const next = root.querySelector(`.db-line[data-line="${focusedLine}"]:enabled`)
+        || root.querySelector('.db-line:enabled');
+      next?.focus({ preventScroll: true });
+    }
     root.onclick = onClick;
   }
 
+  // Tap bands overlap near dots. Pick the closest visible line within its band instead of using paint order.
+  function nearestLine(board, x, y) {
+    let nearest = null, best = Infinity;
+    for (const line of board.querySelectorAll('.db-line')) {
+      const { left, right, top, bottom } = line.getBoundingClientRect();
+      if (x < left || x > right || y < top || y > bottom) continue;
+      const distance = line.classList.contains('db-h') ? Math.abs(y - (top + bottom) / 2) : Math.abs(x - (left + right) / 2);
+      if (distance < best) { nearest = line; best = distance; }
+    }
+    return nearest;
+  }
+
   function onClick(e) {
-    const el = e.target.closest('[data-line],[data-db]'); const v = ui.v, ctx = ui.ctx;
-    if (!el || !v || !ctx || el.disabled) return;
-    if (el.dataset.line !== undefined) { if (v.myTurn) ctx.act({ type: 'line', index: Number(el.dataset.line) }); return; }
+    const line = e.target.closest('.db-line');
+    if (line) {
+      if (!ui.v?.myTurn) return;
+      // Keyboard and assistive technology clicks use the activated button directly.
+      const pick = e.detail ? nearestLine(line.closest('.db-board'), e.clientX, e.clientY) : line;
+      if (pick?.dataset.line === undefined || pick.disabled) return;
+      if (pick !== line && line === line.ownerDocument.activeElement) pick.focus({ preventScroll: true });
+      ui.ctx.act({ type: 'line', index: Number(pick.dataset.line) });
+      return;
+    }
+    const el = e.target.closest('[data-db]'); const ctx = ui.ctx;
+    if (!el || !ctx || el.disabled) return;
     switch (el.dataset.db) {
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;

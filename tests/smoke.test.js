@@ -217,7 +217,10 @@ function client(port, name, token) {
   gf.send({ t: 'start' });
   await gf.until(() => gf.view && gf.view.game === 'gofish', 'go fish started');
   assert.equal(gf.view.myTurn, true, 'the first seat starts');
-  assert.ok(gf.view.hand.length >= 5 && gf.view.targets.length >= 1);
+  // A complete book in the opening deal is laid down immediately.
+  const openingDeal = gf.view.players.length === 2 ? 7 : 5;
+  assert.equal(gf.view.hand.length + 4 * gf.view.players[gf.view.me].bookCount, openingDeal);
+  assert.ok(gf.view.targets.length >= 1);
   assert.ok(gf.view.players.every((p) => !('hand' in p) && typeof p.cards === 'number'), 'other players show card counts only');
   gf.send({ t: 'act', action: { type: 'ask', target: gf.view.targets[0], rank: gf.view.askRanks[0] } });
   await gf.until(() => gf.view && gf.view.event && ['take', 'fish'].includes(gf.view.event.type), 'go fish ask answered');

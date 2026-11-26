@@ -1,6 +1,6 @@
 # Planned games (ideas, not committed)
 
-Built since this list was started: Sudoku, Chess, Carrom, Color Clash, Hidden Miners and Dots and Boxes (see `games/`). The Ball Pong idea is now Cup Pong below. Bullhead Run was only a working title for Take 5, so it is not planned separately.
+Built since this list was started: Sudoku, Chess, Carrom, Color Clash, Hidden Miners, Bingo and Dots and Boxes (see `games/`). The Ball Pong idea is now Cup Pong below. Bullhead Run was only a working title for Take 5, so it is not planned separately.
 
 Ideas only. Nothing here is committed to a release. Each needs a design note and a name check
 (`docs/GAME_NAMES.md`) before work starts. Order is not a promise.
@@ -8,7 +8,6 @@ Ideas only. Nothing here is committed to a release. Each needs a design note and
 | Game | Players | Name / trademark notes | Design questions |
 |---|---|---|---|
 | Place Animal Thing | TBD | Generic. Own animal art; no commercial brand or character names. | Rules not yet defined. Placement rules, turn order and win condition to be decided by the owner. |
-| Bingo | 2–8 | Generic. Own card art; no commercial brand or hall names. | Number-call pace, auto-marking vs manual marking, one card or several, win patterns. |
 | Cup Pong (formerly the Ball Pong idea) | 2–4 | Use "Cup Pong" and a non-alcohol theme (cups, balls); never "Beer Pong". "Pong" alone is a trademarked arcade title, so keep the full name and own art. | Same physics needs as Ball Pong. |
 | Falling Blocks (working title for the falling-shapes line game) | 1–4 | "Tetris" is a registered trademark and the game's look is protected: never use the name or its piece set styling; keep a neutral working title and own art. Owner decision needed on the final title. | Real-time input over a network (versus mode with garbage lines), a seeded shared piece sequence, a single-instance server limit. |
 | Pool | 2 | Generic. Do not use league or brand logos (e.g. "8-Ball Pool" as an app brand). | Physics fidelity, shot aiming on mobile, rules variant (8-ball first). |

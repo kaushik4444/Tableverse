@@ -2844,6 +2844,9 @@
     });
   }
 
+  /** What a control is, for finding its replacement after a redraw: tag, action, label and text. */
+  const focusSignature = (el) => `${el.tagName}|${el.getAttribute('data-act') || ''}|${el.getAttribute('aria-label') || ''}|${(el.textContent || '').trim().slice(0, 40)}`;
+
   /** Settings: the choices a player makes for this device, and the list of recent tables. Account security and deletion stay on the profile's Account tab. */
   function openSettingsDialog() {
     const appearance = () => `<div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-modal-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>`;
@@ -2857,14 +2860,29 @@
       const redraw = (used) => {
         const key = (b) => `${b.dataset.modalAct}:${b.dataset.theme || ''}`;
         const k = used && used.dataset ? key(used) : '';
+        // move focus only if the player is still in this dialog (or nowhere): a busy wait can end after they moved elsewhere
+        const active = document.activeElement;
+        const keepFocus = !active || active === document.body || o.contains(active);
+        const onVolume = Boolean(active && active.matches && active.matches('[data-volume]'));
         o.querySelector('.modal-body').innerHTML = body();
+        if (!keepFocus) return;
+        if (onVolume) { const slider = o.querySelector('[data-volume]'); if (slider) { slider.focus(); return; } }
         const again = k && [...o.querySelectorAll('[data-modal-act]')].find((b) => key(b) === k && !b.disabled);
         if (again) again.focus();
+        else { const close = o.querySelector('[data-modal-close]'); if (close) close.focus(); } // e.g. Clear disables itself once the list is empty
       };
       modalActions.setTheme = (el) => { chooseTheme(el.dataset.theme); redraw(el); };
       modalActions.toggleSound = (el) => { CardTable.sound.toggle(); redraw(el); };
       modalActions.clearRecent = async (el) => {
-        try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(el); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
+        try {
+          await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {}));
+          S.recentTables = []; redraw(el);
+          // the player may have moved to a control outside Settings while this waited: the home redraw must not drop their place
+          const outside = document.activeElement;
+          const sig = outside && outside !== document.body && !o.contains(outside) ? focusSignature(outside) : '';
+          render();
+          if (sig) { const again = [...document.querySelectorAll(outside.tagName)].find((b) => focusSignature(b) === sig && !b.disabled); if (again) again.focus({ preventScroll: true }); }
+        } catch (err) { toast(err.message || 'Could not clear recent tables'); }
       };
     });
   }

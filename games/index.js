@@ -15,6 +15,7 @@ const registry = {
   chess: require('./chess'),
   carrom: require('./carrom'),
   colorclash: require('./colorclash'),
+  bingo: require('./bingo'),
   sudoku: require('./sudoku'),
   dotsboxes: require('./dotsboxes'),
   // Tic-Tac-Toe and Four in a Row (four or five) share one engine
