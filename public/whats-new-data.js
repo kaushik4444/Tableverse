@@ -16,7 +16,7 @@
         level: 'major',
         ico: '🔢',
         title: 'Sudoku: race to fill the grid',
-        text: 'Everybody gets the same puzzle on their own grid. The first grid filled in with every number right wins. Pick easy, medium or hard, and watch the other players\' progress without seeing their numbers.'
+        text: 'Play alone like a puzzle book, or race friends on the same puzzle. You get 3 lives and 3 undos: the third wrong number takes you out, and the first full grid wins.'
       },
     ]
   },
