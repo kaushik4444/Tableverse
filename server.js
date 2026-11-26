@@ -1599,12 +1599,13 @@ function start(opts = {}) {
       const now = Date.now();
       if (now - (p.lastEmote || 0) < 700) return;
       p.lastEmote = now;
-      // A spectator has no seat, so the reaction says who sent it: everyone sees the name and the 👁 mark.
+      // Every reaction says who sent it: a player's name, or a spectator's name with the 👁 mark (a spectator has no seat).
       const spectator = isSpec(room, p.id);
+      const who = String(p.name || (spectator ? 'Spectator' : 'Player')).slice(0, 32);
       for (const m of viewers(room)) {
         if (m.id !== p.id && pairBlocked(p.id, m.id)) continue; // a blocked pair does not see each other's reactions
         const q = players.get(m.id);
-        if (q && q.connected) send(q.ws, { t: 'emote', id: p.id, e: msg.e, spectator, name: spectator ? String(p.name || 'Spectator').slice(0, 32) : undefined });
+        if (q && q.connected) send(q.ws, { t: 'emote', id: p.id, e: msg.e, spectator, name: who });
       }
     },
 
