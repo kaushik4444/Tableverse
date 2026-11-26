@@ -66,8 +66,10 @@ jobs:
 
       # DATABASE_URL and TEST_DATABASE_URL are deliberately not set here: these tests run on the in-memory store and
       # the PostgreSQL files print SKIPPED. The PostgreSQL tests run in the next step, where they may not skip.
+      # The same list as "npm test", one file at a time: each file is named before it starts and stopped after
+      # TEST_TIMEOUT_MS, so a stall shows which file it was.
       - name: Unit and server tests (in-memory)
-        run: npm test
+        run: node scripts/run-tests.js
 
       - name: Wait for PostgreSQL
         run: |

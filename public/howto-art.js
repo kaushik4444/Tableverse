@@ -117,7 +117,7 @@
     () => felt(T(160, 40, 'Bid 16', 26, '#fff') + T(160, 82, '4 cards, then 4 more', 14, C.mint)),
     () => felt(card(160, 65, '♠', C.ink, { sub: 'trump', w: 52, h: 70, bg: C.gold })),
     () => felt(fan([pc('A', 'c'), pc('10', 'c'), pc('K', 'c')]) + arrow(160, 118, 160, 100)),
-    () => felt(card(120, 65, 'K', '#dc2626', { sub: '♥' }) + card(200, 65, 'Q', '#dc2626', { sub: '♥' }) + T(160, 24, 'Marriage', 14, C.gold)),
+    () => felt(card(120, 65, 'K', '#dc2626', { sub: '♥' }) + card(200, 65, 'Q', '#dc2626', { sub: '♥' }) + T(160, 24, 'Declare K–Q (+4)', 14, C.gold)),
   ]);
   A.poker = pick([
     () => felt(fan([pc('A', 's'), pc('K', 's')], 66, 56) + T(160, 20, 'your hand', 12, C.mint)),
@@ -151,7 +151,7 @@
   };
   A.bingo = pick([
     () => felt(bingoCard(60, 14, 24, [4, 19, 33, 52, 70], 0) + T(160, 138, 'A full line wins', 15, '#fff'), 150),
-    () => felt(`<circle cx="160" cy="62" r="34" fill="${C.paper}"/>` + T(160, 56, 'B 4', 24, C.ink) + T(160, 84, 'called!', 12, C.ink)
+    () => felt(`<circle cx="160" cy="62" r="34" fill="${C.paper}"/>` + T(160, 52, 'B', 11, '#9a3412') + T(160, 74, '4', 24, C.ink)
       + arrow(200, 62, 236, 62) + bingoCard(244, 36, 13, [4], undefined) + T(160, 128, 'Mark it once it is called', 14, '#fff'), 140),
     () => felt(T(160, 60, 'BINGO!', 38, C.gold) + T(160, 98, 'Shout it when your line is full', 15, '#fff'), 130),
   ]);
@@ -194,7 +194,7 @@
   A.dotsboxes = pick([
     () => felt(dbDots() + dbH(0, 0) + T(160, 116, 'Draw a line between two dots', 10, '#fff')),
     () => felt(dbDots() + dbH(0, 0) + dbV(0, 0) + dbH(1, 0) + dbV(0, 1) + dbBox(0, 0, '#74b9ff', 'B') + dbH(1, 1, '#ff7675') + dbV(1, 2, '#ff7675') + T(160, 116, 'A closed box is yours: move again', 10, '#fff')),
-    () => felt(dbDots() + dbBox(0, 0, '#74b9ff', 'B') + dbBox(0, 1, '#ff7675', 'R') + dbBox(1, 0, '#74b9ff', 'B') + T(160, 116, '🏆 The most boxes wins', 10, '#fff')),
+    () => felt(dbDots() + dbBox(0, 0, '#74b9ff', 'B') + dbBox(0, 1, '#ff7675', 'R') + dbBox(1, 0, '#74b9ff', 'B') + T(160, 116, 'The most boxes wins', 10, '#fff')),
   ]);
 
   // Memory Match: face-down cards; two turned over, a matched pair in a seat colour, and the most pairs at the end
@@ -213,9 +213,9 @@
 
   A.gofish = pick([
     () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('3', 'c'), pc('J', 'd'), pc('9', 's')], 66, 44)),
-    () => felt(T(160, 55, '“Got any 7s?”', 20, '#fff') + arrow(110, 90, 210, 90)),
-    () => felt(T(160, 65, '🎣', 48, '#fff')),
-    () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('7', 'd'), pc('7', 'c')], 66, 44) + T(160, 20, 'a book', 12, C.gold)),
+    () => felt(T(160, 55, 'Ask for 7s', 20, '#fff') + arrow(110, 90, 210, 90)),
+    () => felt(T(160, 65, '🐟', 48, '#fff')),
+    () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('7', 'd'), pc('7', 'c')], 66, 44) + T(160, 20, '📚 7s complete!', 12, C.gold)),
     () => felt(T(160, 65, 'sit out', 22, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
@@ -225,13 +225,13 @@
     () => felt(cc(100, '7', 'r', -6) + cc(160, '2', 'b') + cc(220, '9', 'g', 6)),
     () => felt(cc(120, '5', 'r') + arrow(150, 65, 175, 65) + cc(210, '8', 'r')),
     () => felt(cc(100, '⊘', 'g') + cc(160, '⇄', 'b') + cc(220, '+2', 'y')),
-    () => felt(T(160, 65, 'One card left — everyone can see it', 16, '#fff')),
+    () => felt(T(160, 65, 'One card left!', 16, '#fff')),
     () => felt(T(160, 55, 'winner scores other hands', 18, '#fff') + T(160, 85, 'highest total wins', 14, C.mint)),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
   A.stagerummy = pick([
     () => felt(T(160, 65, 'Stage 1 → 10', 26, '#fff')),
-    () => felt(card(60, 65, '8', '#dc2626', { sub: '♥', w: 34, h: 48 }) + card(98, 65, '8', C.ink, { sub: '♠', w: 34, h: 48 }) + card(136, 65, '8', C.ink, { sub: '♣', w: 34, h: 48 }) + [4, 5, 6, 7].map((n, k) => card(190 + k * 34, 65, n, '#fff', { bg: C.blue, w: 34, h: 48 })).join('') + T(98, 108, 'set', 12, C.mint) + T(253, 108, 'run', 12, C.mint), 130),
+    () => felt(card(60, 65, '8', '#dc2626', { sub: '●', w: 34, h: 48 }) + card(98, 65, '8', C.ink, { sub: '■', w: 34, h: 48 }) + card(136, 65, '8', C.ink, { sub: '▲', w: 34, h: 48 }) + [4, 5, 6, 7].map((n, k) => card(190 + k * 34, 65, n, '#fff', { bg: C.blue, w: 34, h: 48 })).join('') + T(98, 108, 'set', 12, C.mint) + T(253, 108, 'run', 12, C.mint), 130),
     () => felt(T(160, 50, 'draw one', 18, '#fff') + T(160, 82, 'discard one', 18, C.gold)),
     () => felt(card(160, 65, '⊘', '#fff', { bg: C.red, w: 48, h: 66 })),
     () => felt(T(160, 65, 'out of cards = out!', 20, '#fff')),
@@ -240,28 +240,35 @@
   ]);
   const penRows = (rows, hand, extra = '') => felt(rows.map((row, r) => row.map((n, c) => card(46 + c * 34, 22 + r * 26, n, C.ink, { w: 30, h: 22 })).join('')).join('') + hand.map((h, k) => card(230 + (k % 2) * 40, 40 + Math.floor(k / 2) * 52, h[0], h[1], { w: 34, h: 46 })).join('') + extra, 130);
   A.penaltyrows = pick([
-    () => felt(T(160, 65, 'fewest 🐮 wins', 22, '#fff')),
+    () => felt(T(160, 65, 'fewest 💣 wins', 22, '#fff')),
     () => penRows([[12, 15], [31], [48, 50], [77, 80]], [[23, C.ink], [58, C.ink], [64, C.ink]]),
     () => penRows([[12, 15, 19], [31], [48, 50], [77, 80, 83]], [[23, C.ink]], arrow(176, 52, 214, 52)),
-    () => felt(card(120, 65, '4', C.ink, { sub: 'low' }) + T(210, 65, '→ take a row', 14, C.gold)),
+    () => felt(card(120, 65, '4', C.ink) + T(210, 65, 'fits no row: take one', 12, C.gold)),
     () => felt(T(160, 65, '6th card takes the row', 18, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
   A.hiddenminers = pick([
-    () => felt(T(160, 65, '⛏️  🕵️', 38, '#fff')),
-    () => svg(320, 130, `<rect x="6" y="6" width="308" height="118" rx="20" fill="#3b2a1d"/>${[0, 1, 2, 3, 4].map((c) => `<rect x="${44 + c * 46}" y="42" width="40" height="46" rx="6" fill="${c === 4 ? C.gold : '#7c5a3a'}"/>`).join('')}${T(266, 65, '💎', 26, '#fff')}`),
-    () => felt(fan([['⛏', C.ink], ['🗺', C.ink], ['💥', C.red]], 66, 56)),
-    () => felt(T(160, 65, '🔨 → 🪓 broken', 22, '#fff')),
+    () => felt(T(160, 65, '⛏️  🕳️', 38, '#fff')),
+    () => svg(320, 130, `<rect x="6" y="6" width="308" height="118" rx="20" fill="#3b2a1d"/>${[0, 1, 2, 3, 4].map((c) => `<rect x="${44 + c * 46}" y="42" width="40" height="46" rx="6" fill="${c === 4 ? C.gold : '#7c5a3a'}"/>`).join('')}${T(266, 65, '🪙', 26, '#fff')}`),
+    () => felt(fan([['⛏️', C.ink], ['🔭', C.ink], ['💥', C.red]], 66, 56)),
+    () => felt(T(160, 65, '⛏️ ✖ broken', 22, '#fff')),
     () => felt(T(160, 65, '3 rounds', 26, '#fff')),
     () => felt(T(160, 65, 'move log', 24, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
   A.propertyrivals = pick([
-    () => svg(320, 150, `<rect x="30" y="8" width="260" height="134" rx="14" fill="${C.felt}"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<rect x="${42 + i * 30}" y="16" width="26" height="26" rx="4" fill="${[C.red, C.blue, C.green, C.yellow][i % 4]}"/><rect x="${42 + i * 30}" y="108" width="26" height="26" rx="4" fill="${[C.blue, C.yellow, C.red, C.green][i % 4]}"/>`).join('')}${T(160, 75, '🌍', 36, '#fff')}`),
+    () => svg(320, 150, `<rect x="30" y="8" width="260" height="134" rx="14" fill="${C.felt}"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<rect x="${42 + i * 30}" y="16" width="26" height="26" rx="4" fill="${[C.red, C.blue, C.green, C.yellow][i % 4]}"/><rect x="${42 + i * 30}" y="108" width="26" height="26" rx="4" fill="${[C.blue, C.yellow, C.red, C.green][i % 4]}"/>`).join('')}${T(160, 75, '🎲', 36, '#fff')}`),
     () => felt(T(160, 50, 'Buy it', 22, '#fff') + T(160, 86, 'others pay you rent', 14, C.mint)),
     () => felt(T(160, 65, '🏠 → 🏨', 32, '#fff')),
-    () => felt(card(110, 65, '?', C.ink, { bg: C.gold }) + card(210, 65, '$', C.ink, { bg: C.paper })),
+    () => felt(card(110, 65, '❓', C.ink, { bg: C.gold }) + card(210, 65, '💰', C.ink, { bg: C.paper })),
     () => felt(T(160, 65, 'mortgage for cash', 20, '#fff')),
-    () => felt(T(160, 65, '💸 → out', 26, '#fff')),
+    () => felt(T(160, 65, '💸 → 💀', 26, '#fff')),
   ]);
+  // Real-footage pictures (public/howto/<game>/<card>.jpg, listed in howto/index.js) replace the drawn picture wherever one exists.
+  const photoOf = (game, i) => (((window.CardTable.howtoImages || {})[game] || []).includes(i)
+    ? `<img class="ht-photo" src="/howto/${game}/${i}.jpg" alt="" width="390" height="693" loading="lazy" decoding="async">` : '');
+  for (const game of Object.keys(window.CardTable.howtoImages || {})) {
+    const drawn = A[game];
+    A[game] = (i, g) => photoOf(game, i) || (drawn ? drawn(i, g) : '');
+  }
 })();

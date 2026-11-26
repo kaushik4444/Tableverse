@@ -1818,13 +1818,14 @@
   }
 
   function showEmote(id, e, who) {
-    const seat = document.querySelector(`[data-pid="${CSS.escape(id)}"] .av`);
+    // a seat has an avatar; a Take 5 chip or a spectator has none, so fall back to the element that carries the player's id
+    const seat = document.querySelector(`[data-pid="${CSS.escape(id)}"] .av`) || document.querySelector(`[data-pid="${CSS.escape(id)}"]`);
     const r = seat ? seat.getBoundingClientRect() : { left: innerWidth / 2, top: 80, width: 0, height: 0 };
     const el = document.createElement('div');
     el.className = 'emote-pop';
     el.textContent = e;
-    // A spectator has no seat: the reaction names them, so the table knows it came from someone watching.
-    if (who && who.spectator) { const tag = document.createElement('div'); tag.className = 'emote-tag'; tag.textContent = '👁 ' + (who.name || 'Spectator'); el.appendChild(tag); }
+    // Every reaction names who sent it. A spectator has no seat, so their name gets the 👁 mark.
+    if (who && who.name) { const tag = document.createElement('div'); tag.className = 'emote-tag'; tag.textContent = (who.spectator ? '👁 ' : '') + who.name; el.appendChild(tag); }
     el.style.left = r.left + r.width / 2 + 'px';
     el.style.top = r.top + r.height / 2 + 'px';
     document.body.appendChild(el);
@@ -3488,6 +3489,24 @@
     slot.innerHTML = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
   }
 
+  // Games redraw the whole table on every state change. A sheet that was already up (same title) is marked settled, so it does
+  // not replay its entrance: the shared fix for every game, instead of a per-game rule.
+  let shownOverlayTitles = new Set();
+  function markSettledOverlays(root, resultVisible) {
+    if (!resultVisible) {
+      shownOverlayTitles.clear();
+      return;
+    }
+    const titles = new Set();
+    root.querySelectorAll('.overlay').forEach((ov) => {
+      const title = ((ov.querySelector('h2') || ov).textContent || '').trim().slice(0, 120);
+      if (!ov.getClientRects().length) return; // hidden (not on screen yet): its first showing still animates
+      titles.add(title);
+      if (shownOverlayTitles.has(title)) ov.classList.add('settled');
+    });
+    shownOverlayTitles = titles;
+  }
+
   function renderGame() {
     lastAppHtml = null; // the game draws the root itself, so the last home or lobby markup is no longer on screen
     const gameId = S.room.gameId;
@@ -3512,8 +3531,9 @@
     const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
     const r = S.room;
     if (r.status === 'finished' && (!S.endFlow || S.endFlow.code !== r.code)) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0) + Math.max(0, (r.outcome && r.outcome.playMs) || 0), timer: null };
+    const resultVisible = r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS;
     plugin.render($app, S.view, {
-      resultVisible: r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS,
+      resultVisible,
       room: S.room,
       gate: gateInfo(),
       game: gameMeta(S.room.gameId),
@@ -3535,7 +3555,8 @@
     unifyToolbar();
     addSettingsChip();
     refreshVoiceUI();
-    endFlow(focusedResultAction);
+    endFlow(focusedResultAction, resultVisible);
+    markSettledOverlays($app, resultVisible); // endFlow has updated .endhold, so layout reflects what will be shown
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const bar = $app.querySelector('.wz-status');
     if (bar) {
@@ -3589,7 +3610,7 @@
     return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${statusLine}${table}</section>`;
   }
 
-  function endFlow(focusedResultAction) {
+  function endFlow(focusedResultAction, resultVisible) {
     const r = S.room;
     if (!r || r.status !== 'finished') { $app.classList.remove('endhold'); return; }
     const f = S.endFlow;
@@ -3601,7 +3622,7 @@
       scheduleLevelRefresh();
     }
     const t = Date.now() - f.start;
-    const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
+    const stage = resultVisible ? 'result' : t < END_BOARD_MS ? 'board' : 'winner';
     $app.classList.toggle('endhold', stage !== 'result');
     if (stage !== 'result') f.timer = setTimeout(() => { if (S.room && S.room.code === f.code && S.room.status === 'finished') render(); }, (stage === 'board' ? END_BOARD_MS : END_BOARD_MS + END_WINNER_MS) - t + 30);
     // A game that draws its own result sheet already names the winner there: a second "won!" pop-up would announce it twice.
