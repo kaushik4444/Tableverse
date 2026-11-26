@@ -419,6 +419,19 @@ html { scroll-behavior: auto; }
 .game-card:hover { background: rgba(255, 255, 255, .07); }
 .game-card.is-locked { opacity: .55; filter: grayscale(.85); }
 .game-card .game-off { margin: 0; font-size: 14px; font-weight: 600; }
+/* A page a guest may not use yet: blurred behind one account prompt (lockedPageHTML in app.js) */
+.locked-page { position: relative; min-height: 60vh; }
+.locked-preview { filter: blur(6px); pointer-events: none; user-select: none; padding: 16px; }
+.locked-blur h2 { margin: 0 0 6px; }
+.locked-rows span { display: block; height: 14px; margin: 12px 0; border-radius: 6px; background: currentColor; opacity: .15; }
+.locked-cta { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center; padding: 24px; }
+.locked-cta > * { max-width: 100%; }
+/* the prompt sits on an opaque theme surface, so its text reads in light and dark */
+.locked-cta::before { content: ''; position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(92%, 380px); height: 100%; max-height: 260px; border-radius: var(--radius); background: var(--menu-bg, #11261e); box-shadow: 0 10px 30px rgba(0, 0, 0, .25); z-index: -1; }
+.locked-cta { isolation: isolate; color: var(--ink, #f0fdf4); }
+.locked-cta p { margin: 0 0 8px; max-width: 34ch; }
+/* a control that is off for this viewer but explains itself on hover or tap (aria-disabled, not disabled) */
+.btn[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 .game-card .game-art { font-size: 34px; line-height: 1; width: 48px; flex: none; text-align: center; padding-top: 2px; }
 .game-card .game-body { display: grid; gap: 6px; min-width: 0; flex: 1; }
 .game-card h3 { font-size: 19px; }
