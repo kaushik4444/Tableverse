@@ -1718,6 +1718,7 @@ function start(opts = {}) {
       if (msg.visibility === 'private' && guestLocked(p, 'private_tables')) return;
       if (await trialBlockedAtEntry(p, msg.gameId)) return;
       if (!p.ws) return; // the connection ended during the check: do not seat or create for a socket that is gone
+      if (refuseGame(p, msg.gameId)) return; // the game may have been restricted while the check ran
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);

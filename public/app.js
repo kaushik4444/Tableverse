@@ -2128,12 +2128,14 @@
   }
   /** A page that was locked for a guest loads its data once the person is registered (nothing was fetched while locked). */
   function loadLockedPageData() {
-    if (S.isGuest || S.room) return;
+    if (S.isGuest || S.room || !S.guestLockedView) return; // only a page that was actually shown locked
+    S.guestLockedView = false;
     if (S.page === 'profile') loadProfile();
     else if (S.page === 'player') { const r = routeFromHash(); if (r.page === 'player') loadPlayer(r.username); }
   }
   /** A page a guest cannot use yet: shown blurred, with one button that opens the account dialog. The server still refuses it. */
   function lockedPageHTML(feature, what) {
+    S.guestLockedView = true; // remembered, so the page loads its data once the person is registered
     return `<div class="page locked-page">
       <div class="locked-preview" aria-hidden="true"><div class="locked-blur"><h2>Player profile</h2><p>Games played · Wins · Rating</p><div class="locked-rows"><span></span><span></span><span></span></div></div></div>
       <div class="locked-cta" role="region" aria-label="Create an account">
