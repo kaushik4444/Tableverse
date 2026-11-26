@@ -115,11 +115,12 @@ assert.equal(r.kFor(r.NEW_GAMES), r.K_BASE);
   assert.deepEqual(e.players.map((p) => p.playerId), ['A', 'B']);
 }
 
-// unrated matches: bots, guests, unfinished, too few players
+// unrated matches: unfinished, too few humans (bots and guests are not counted)
 assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'bot', isBot: true }]).reason, 'too-few-players', 'one human is not a rated match');
 assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B' }, { playerId: 'bot', isBot: true }]).reason, null, 'two humans rate even with a bot');
 assert.deepEqual(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B' }, { playerId: 'bot', isBot: true }]).players.map((p) => p.playerId), ['A', 'B'], 'the bot is not rated');
-assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'G', isGuest: true }]).reason, 'guest');
+assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'G', isGuest: true }]).reason, 'too-few-players', 'a guest is not rated, like a bot');
+assert.deepEqual(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B' }, { playerId: 'G', isGuest: true }]).players.map((p) => p.playerId), ['A', 'B'], 'two humans rate with a guest');
 assert.equal(r.eligibility([{ playerId: 'A' }, { playerId: 'B' }], { finished: false }).reason, 'unfinished');
 assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B', leftEarly: true, forfeit: false }]).reason, 'too-few-players');
 assert.equal(r.eligibility([{ playerId: 'A' }, { playerId: 'B' }]).rated, true, 'two humans is rated');

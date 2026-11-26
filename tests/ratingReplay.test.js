@@ -32,11 +32,11 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
   assert.equal(r.events.length, 4, 'one event per player per scope');
 }
 
-// 3. unrated reasons: bots, guests, unfinished, teams, Mind, unverified placings
+// 3. unrated reasons: unfinished, teams, Mind, unverified placings
 {
   const reasonOf = (m) => replay([m]).results[0].reason;
   assert.equal(reasonOf(match('bot', 'chess', T(9), [part('A', { isWinner: true }), part(null, { isBot: true })])), 'too-few-players');
-  assert.equal(reasonOf(match('guest', 'chess', T(9), [part('A', { isWinner: true }), part(null)])), 'guest');
+  assert.equal(reasonOf(match('guest', 'chess', T(9), [part('A', { isWinner: true }), part(null)])), 'too-few-players');
   assert.equal(reasonOf(match('open', 'chess', T(9), [part('A'), part('B')], { completed: false })), 'unfinished');
   assert.equal(reasonOf(match('team', 'twentynine', T(9), [part('A1'), part('A2'), part('B1'), part('B2')])), REASON.TEAM);
   assert.equal(reasonOf(match('mind', 'themind', T(9), [part('A', { isWinner: true }), part('B', { isWinner: true })])), REASON.COOPERATIVE);
