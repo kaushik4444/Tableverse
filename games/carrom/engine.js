@@ -234,7 +234,7 @@ function viewFor(g, playerId) {
     shots: g.shots,
     seq: g.seq,
     shot: g.shot,
-    log: g.log.slice(-8),
+    log: g.log.slice(-60).map((text) => ({ card: text })), // the table's Log sheet reads { by, card } entries; the shot lines carry their own names
     winner: g.phase === 'gameOver' ? g.winner : null,
     winnerNames: g.phase === 'gameOver' && g.winner ? teamName(g, g.winner) : null,
     finisher: g.phase === 'gameOver' ? g.finisher : null,
