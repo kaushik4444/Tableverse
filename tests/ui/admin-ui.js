@@ -730,6 +730,41 @@ const api = (role) => ({
     } finally { await s.close(); }
   });
 
+  await test('guest plays: the checkbox limits guests, 1 to 9 with 3 by default, and the saved limit can be changed or removed', async () => {
+    const s = await open('owner');
+    const games = [{ id: 'wizard', name: 'Wizard', access: 'on', trialLimit: null }, { id: 'ludo', name: 'Ludo', access: 'on', trialLimit: 5 }];
+    const requests = [];
+    await s.page.route('**/api/admin/game-flags', (route) => route.fulfill({ json: { ok: true, modes: ['on', 'owner'], games: games.map((g) => ({ ...g })) } }));
+    await s.page.route('**/api/admin/game-trials', (route) => {
+      const body = route.request().postDataJSON();
+      requests.push(body);
+      const g = games.find((x) => x.id === body.gameId);
+      if (g) g.trialLimit = body.limit;
+      return route.fulfill({ json: { ok: true, gameId: body.gameId, limit: body.limit } });
+    });
+    try {
+      await tab(s.page, 'games');
+      await s.page.waitForSelector('[data-gtrial-on="ludo"]');
+      assert.equal(await s.page.isChecked('[data-gtrial-on="wizard"]'), false);
+      assert.equal(await s.page.isDisabled('[data-gtrial-n="wizard"]'), true, 'no limit: the dropdown is off');
+      assert.equal(await s.page.isChecked('[data-gtrial-on="ludo"]'), true);
+      assert.equal(await s.page.inputValue('[data-gtrial-n="ludo"]'), '5');
+      assert.deepEqual(await s.page.$$eval('[data-gtrial-n="wizard"] option', (o) => o.map((x) => x.value)), ['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+      assert.equal(await s.page.inputValue('[data-gtrial-n="wizard"]'), '3', 'the first choice shows 3');
+      await s.page.check('[data-gtrial-on="wizard"]');
+      await until(() => requests.length === 1, 'limit saved on check');
+      assert.deepEqual(requests[0], { gameId: 'wizard', limit: 3 });
+      await until(() => s.page.isChecked('[data-gtrial-on="wizard"]'), 'checked after save');
+      await s.page.selectOption('[data-gtrial-n="ludo"]', '7');
+      await until(() => requests.length === 2, 'limit changed');
+      assert.deepEqual(requests[1], { gameId: 'ludo', limit: 7 });
+      await s.page.uncheck('[data-gtrial-on="ludo"]');
+      await until(() => requests.length === 3, 'limit removed');
+      assert.deepEqual(requests[2], { gameId: 'ludo', limit: null });
+      await until(() => s.page.isChecked('[data-gtrial-on="ludo"]').then((c) => c === false), 'unchecked after save');
+    } finally { await s.close(); }
+  });
+
   await browser.close();
   console.log(`\n${passed} admin UI tests passed${failed ? `, ${failed} FAILED` : ''}`);
   if (failed) process.exit(1);
