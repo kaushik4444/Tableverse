@@ -6,7 +6,7 @@
 (() => {
   'use strict';
   const { esc, pt } = window.CardTable;
-  const ui = { ctx: null, latest: null, root: null, sel: -1, refocus: false, feeds: new Map(), prev: null };
+  const ui = { ctx: null, latest: null, root: null, sel: -1, refocus: false, feeds: new Map(), prev: null, solo: null, soloState: 'idle' };
   const DIFFICULTY = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
 
   const nameOf = (v, i) => (i === v.me ? 'You' : (v.players[i] ? esc(v.players[i].name) : 'Someone'));
@@ -79,10 +79,35 @@
   }
 
   /** Lives and undo, above the number pad. */
+  /** Your own solo rating for this table's difficulty, from the server. Loaded when a solo game is shown and again when it ends. */
+  let soloLoad = 0; // each load has a number; only the latest one may write the rating, so an older answer cannot win
+  function loadSolo() {
+    const mine = ++soloLoad;
+    ui.soloState = 'loading';
+    fetch('/api/ratings/solo', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : { ok: false, signedOut: r.status === 401 }))
+      .then((j) => {
+        if (mine !== soloLoad) return;
+        ui.solo = j;
+        // signed out: check again after 10 seconds, even if nothing redraws the table, so signing in shows the rating
+        if (j && j.signedOut) setTimeout(() => { if (showing() && ui.solo && ui.solo.signedOut) loadSolo(); }, 10000);
+      })
+      .catch(() => { if (mine === soloLoad) ui.solo = { enabled: false }; })
+      .finally(() => { if (mine === soloLoad) { ui.soloState = 'done'; draw(); } });
+  }
+  function soloText(v) {
+    if (!ui.solo) return '';
+    if (ui.solo.signedOut) return 'Sign in to keep a solo rating';
+    if (!ui.solo.enabled) return '';
+    const r = ui.solo.ratings && ui.solo.ratings[v.options.difficulty];
+    return r ? `Solo rating ${Math.round(r.rating)}` : 'Solo rating: set after your first solved game';
+  }
+
   function toolsHTML(v) {
     if (v.me < 0 || v.phase !== 'playing') return '';
     const undo = `<button type="button" class="btn ghost small su-undo" data-su="undo" ${v.canUndo ? '' : 'disabled'} aria-label="Undo your last move, ${plural(v.undos, 'undo')} left">↶ Undo (${v.undos})</button>`;
-    return `<div class="su-tools"><span class="su-hearts" role="img" aria-label="${v.lives} of ${v.maxLives} lives left">${hearts(v.lives, v.maxLives)}</span>${undo}</div>`;
+    const solo = v.solo && soloText(v) ? `<span class="su-solo">${esc(soloText(v))}</span>` : '';
+    return `<div class="su-tools"><span class="su-hearts" role="img" aria-label="${v.lives} of ${v.maxLives} lives left">${hearts(v.lives, v.maxLives)}</span>${solo}${undo}</div>`;
   }
 
   /** Whether the selected square can take a number: you are still in, it is empty or holds a wrong number, and it is not a given one. */
@@ -115,6 +140,7 @@
     const again = ui.ctx.isHost ? '<button class="btn" data-su="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>';
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
       <p class="hint" style="text-align:left">${hint}</p>
+      ${v.solo && soloText(v) ? `<p class="su-solo-result">${esc(soloText(v))}</p>` : ''}
       <ul class="su-final">${rows}</ul>
       <div class="row" style="margin-top:12px">${again}<button class="btn ghost" data-su="leave">Leave table</button></div></div></div>`;
   }
@@ -134,8 +160,10 @@
     ui.prev = now;
   }
 
+  // the table is on screen only while its own screen is in the page; after the player leaves, nothing may draw it again
+  const showing = () => Boolean(ui.root && ui.root.querySelector('.wz.su'));
   function draw() {
-    if (ui.root && ui.latest && ui.ctx) render(ui.root, ui.latest, ui.ctx);
+    if (showing() && ui.latest && ui.ctx) render(ui.root, ui.latest, ui.ctx);
   }
 
   function render(root, v, ctx) {
@@ -144,9 +172,14 @@
     ui.root = root;
     feedSync(v);
     react(v);
+    // a solo game loads its rating when it is first shown, and again when the phase changes (the game ends)
+    if (ui.soloPhase !== v.phase) { ui.soloPhase = v.phase; ui.soloState = 'idle'; }
+    if (v.solo && v.me >= 0 && ui.soloState === 'idle') loadSolo();
     // the redraw replaces the grid, so note whether a grid square had the keyboard before it goes (another control keeps its own)
     const active = document.activeElement;
     const gridFocus = !!active && root.contains(active) && active.matches('.su-c');
+    // another control (Undo, Rules, Leave...) keeps its place by its action, if the redraw still has one
+    const ctlAction = !!active && root.contains(active) && !gridFocus && active.dataset && active.dataset.su ? active.dataset.su : '';
     const status = v.phase === 'playing' && v.me >= 0 && !v.out && !v.wrong.length ? 'mine' : '';
     root.innerHTML = `
     <div class="wz su">
@@ -168,6 +201,9 @@
       ui.refocus = false;
       const cell = root.querySelector('.su-c.su-sel');
       if (cell && typeof cell.focus === 'function') cell.focus({ preventScroll: true });
+    } else if (ctlAction) {
+      const again = [...root.querySelectorAll('[data-su]')].find((b) => b.dataset.su === ctlAction && !b.disabled);
+      if (again) again.focus({ preventScroll: true });
     }
   }
 

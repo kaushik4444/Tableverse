@@ -63,3 +63,7 @@ Tetris, Bullhead Run (the removed working title for what is now Take 5), Beer Po
 1. Decide whether to rename **Wizard** before any commercial launch (code change is small: `name`, `tagline`, docs, tests). **The Mind** is already shown as **Mind** (owner decision, 2026-11-19).
 2. Run a proper trademark search in the target markets for every name in the table.
 3. Re-check this table whenever a game is added (see `docs/PLANNED_GAMES.md`).
+
+## Dots and Boxes
+
+- Dots and Boxes is a classic paper game with no publisher-owned name in common use, so the game keeps it. The rules, board, art and icon are Tableverse's own (`games/dotsboxes/`).

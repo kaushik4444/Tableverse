@@ -155,3 +155,17 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
 }
 
 console.log('rating replay: all tests passed');
+
+// 5. a solo sudoku game is rated in its own scope against par, and moves no other player
+{
+  const solo = (id, t, { isWinner = true, score = 120, difficulty = 'easy', playerId = 'S' } = {}) => match(id, 'sudoku', T(t), [part(playerId, { isWinner, score })], { options: { difficulty } });
+  const r = replay([solo('s1', 9), solo('s2', 10, { isWinner: false, score: 0 })]);
+  const [a, b] = r.results;
+  assert.equal(a.rated, true, 'a solo solve is rated');
+  assert.deepEqual(a.events.map((e) => e.scope), ['solo-easy'], 'in the solo scope only');
+  assert.ok(a.events[0].delta > 0, 'a solve within par moves the rating up');
+  assert.equal(b.rated, true);
+  assert.ok(b.events[0].delta < 0, 'a game over moves it down');
+  assert.equal(r.ratings.filter((x) => x.scope === 'solo-easy' && x.playerId === 'S').length, 1, 'one solo rating row');
+  assert.ok(!r.ratings.some((x) => x.scope === 'lifetime' && x.gameId === 'sudoku'), 'no lifetime race rating from solo play');
+}
