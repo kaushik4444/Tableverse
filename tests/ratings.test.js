@@ -125,6 +125,24 @@ assert.equal(r.eligibility([{ playerId: 'A' }, { playerId: 'B' }], { finished: f
 assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B', leftEarly: true, forfeit: false }]).reason, 'too-few-players');
 assert.equal(r.eligibility([{ playerId: 'A' }, { playerId: 'B' }]).rated, true, 'two humans is rated');
 
+// Mixed tables still need two eligible humans after the leave rules are applied.
+{
+  const active = { playerId: 'A' };
+  const excused = { playerId: 'B', leftEarly: true, forfeit: false };
+  const forfeited = { playerId: 'B', leftEarly: true, forfeit: true };
+  const bot = { playerId: 'bot', isBot: true };
+  const guest = { playerId: 'G', isGuest: true, leftEarly: true, forfeit: true };
+  const tooFew = { rated: false, reason: 'too-few-players', players: [] };
+
+  assert.deepEqual(r.eligibility([bot, guest]), tooFew, 'a table without humans awards no ratings');
+  assert.deepEqual(r.eligibility([bot, active, guest, excused]), tooFew, 'an excused leave leaves only one eligible human');
+  const mixed = [bot, active, guest, forfeited];
+  assert.deepEqual(r.eligibility(mixed), { rated: true, reason: null, players: [active, forfeited] },
+    'a human who forfeits still counts, but a guest who forfeits does not');
+  assert.deepEqual(r.eligibility(mixed, { finished: false }), { rated: false, reason: 'unfinished', players: [] },
+    'even with two eligible humans, an unfinished match awards no ratings');
+}
+
 // pair limit: first 3 in full, 4 and 5 at half, then nothing
 assert.equal(r.pairMultiplier(0), 1);
 assert.equal(r.pairMultiplier(2), 1);

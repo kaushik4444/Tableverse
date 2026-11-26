@@ -136,13 +136,22 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
   assert.equal(rs[4].rated, true, 'the 5th match is still rated (at half)');
 }
 
-console.log('rating replay: all tests passed');
-
-// 4. a match with bots is rated among its humans; the bot seat gets no rating event
+// 12. higher-scoring bot and guest seats do not affect the human rating ledger or totals
 {
-  const r = replay([match('m1', 'chess', T(9), [part('A', { isWinner: true }), part('B'), part('C'), part(null, { isBot: true })])]).results[0];
-  assert.equal(r.rated, true, 'three humans and a bot are rated');
-  assert.ok(!r.events.some((e) => e.playerId === 'guest:' || e.playerId === 'null' || e.playerId === null), 'no event for the bot');
-  assert.deepEqual([...new Set(r.events.map((e) => e.playerId))].sort(), ['A', 'B', 'C'], 'the humans get the events');
-  assert.ok(Math.abs(sumScope(r.events, 'lifetime')) < 1e-9, 'still zero-sum among the humans');
+  const humans = [part('A', { score: 30 }), part('B', { score: 20 }), part('C', { score: 10 })];
+  const bot = part(null, { isBot: true, seat: 0, score: 50 });
+  const guest = part(null, { seat: 1, score: 40 });
+  const humanMatch = match('mixed', 'wizard', T(9), humans);
+  const baseline = replay([humanMatch]);
+  const mixed = replay([{ ...humanMatch, participants: [bot, humans[0], guest, ...humans.slice(1)] }]);
+  const result = mixed.results[0];
+
+  assert.equal(result.rated, true, 'three humans are rated in a match with a bot and a guest');
+  assert.deepEqual(mixed, baseline, 'only the humans contribute to rating changes and receive events and ratings');
+  assert.ok(lifetimeEvent(result, 'A').delta > 0, 'the best human gains even when excluded seats score higher');
+  for (const scope of ['lifetime', '2026-11']) {
+    assert.ok(Math.abs(sumScope(result.events, scope)) < 1e-9, `${scope} remains zero-sum among the humans`);
+  }
 }
+
+console.log('rating replay: all tests passed');
