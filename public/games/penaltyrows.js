@@ -204,7 +204,9 @@
     if (ui.anim && ui.anim.seq === v.seq) {
       items = v.lastTurn.filter((_, j) => ui.anim.firstStep[j] > ui.anim.i).map((e) => playedHTML(v, e.by, e.n, e.p)).join('');
     } else if (v.phase === 'takeRow' && v.pending) {
-      items = playedHTML(v, v.pending.by, v.pending.n, v.pending.p, 'waiting');
+      // the card waiting for a row, then the revealed cards that have not landed yet: the chooser sees the whole turn
+      items = playedHTML(v, v.pending.by, v.pending.n, v.pending.p, 'waiting')
+        + v.reveal.slice(v.resolved + 1).map((r) => playedHTML(v, r.by, r.n, r.p)).join('');
     } else if (v.phase === 'choose') {
       items = v.players.map((p, i) => {
         if (!p.picked) return '';
@@ -215,7 +217,7 @@
         return `<span class="pr-played">${backHTML()}<small>${nameOf(v, i)}</small></span>`;
       }).join('');
     }
-    const label = v.phase === 'takeRow' ? 'Waiting card' : 'Cards on the table this turn, lowest first';
+    const label = v.phase === 'takeRow' ? 'Cards on the table, waiting for a row' : 'Cards on the table this turn, lowest first';
     return `<div class="pr-strip" aria-label="${esc(label)}">${items || `<span class="pr-hint">${v.phase === 'choose' ? 'Cards appear here once everyone has picked' : ''}</span>`}</div>`;
   }
 
