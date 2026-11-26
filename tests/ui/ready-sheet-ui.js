@@ -1,5 +1,5 @@
 'use strict';
-// Regression: the round-end sheet must not replay its entrance fade on every state change (each Ready tap redraws the table),
+// Regression: the round-end sheet animates on arrival and stays still when a Ready update redraws the table,
 // and once everybody is ready the Ready box says the next round is starting instead of just "Everybody is ready".
 const assert = require('node:assert/strict');
 const games = require('../../games');
@@ -24,7 +24,8 @@ function playTo(gameId, done, seed) {
 function messagesFor(g) {
   const def = games.get('wizard');
   const room = { code: 'ABCDEF', gameId: 'wizard', hostId: 'me', status: 'playing', options: {}, visibility: 'public', seats: NAMES.length, min: def.seats.min, max: def.seats.max, seatLabels: null,
-    members: NAMES.map((name, i) => ({ id: i === 0 ? 'me' : 'p' + i, name, bot: i > 0, avatar: '🧙', connected: true, ping: null, username: null })) };
+    gate: { ready: [], waiting: ['me', 'p1', 'p2', 'p3'] },
+    members: NAMES.map((name, i) => ({ id: i === 0 ? 'me' : 'p' + i, name, bot: false, avatar: '🧙', connected: true, ping: null, username: null })) };
   return [welcome({ id: 'me', name: NAMES[0], games: games.list() }), { t: 'state', room, view: g.view('me') }];
 }
 
@@ -37,11 +38,25 @@ function messagesFor(g) {
   assert.ok(g, 'no seed reaches a round end');
   const { server, url } = await serve({ 'GET /api/auth/session': () => sessionOk() });
   const browser = await chromium.launch();
-  const { page, ctx } = await scriptedPage(browser, { messages: messagesFor(g), viewport: { width: 393, height: 852 } });
+  const messages = messagesFor(g);
+  const { page, ctx } = await scriptedPage(browser, { messages, viewport: { width: 393, height: 852 } });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto(url + '/');
-  await page.waitForSelector('.overlay .sheet', { timeout: 8000 });
-  const anim = await page.evaluate(() => getComputedStyle(document.querySelector('.overlay')).animationName);
-  assert.equal(anim, 'none', `the round-end overlay replays an entrance animation (${anim}) on every redraw`);
+  const overlay = page.locator('#app .overlay');
+  const sheet = overlay.locator('.sheet');
+  await sheet.waitFor({ timeout: 8000 });
+  const animation = (locator) => locator.evaluate((el) => getComputedStyle(el).animationName);
+  assert.equal(await animation(sheet), 'rise', 'a newly visible sheet keeps its entrance animation');
+
+  await sheet.locator('[data-act="readyUp"]').click({ timeout: 8000 });
+  assert.equal(await page.evaluate(() => window.__sent.filter((m) => m.t === 'ready').length), 1);
+  const state = messages[1];
+  await page.evaluate((updated) => window.__push(updated), {
+    ...state, room: { ...state.room, gate: { ready: ['me'], waiting: ['p1', 'p2', 'p3'] } },
+  });
+  await sheet.getByText(/You are ready/).waitFor({ timeout: 8000 });
+  assert.equal(await animation(sheet), 'none', 'the round-end sheet stays still after the Ready update');
+  assert.equal(await animation(overlay), 'none', 'the round-end backdrop stays still after the Ready update');
   const copy = await page.evaluate(() => window.CardTable.readyBox({ gate: { seated: true, youReady: true, ready: 4, total: 4, waiting: [] } }));
   assert.match(copy, /next round starts shortly/, 'the all-ready copy does not say what happens next');
   await ctx.close(); await browser.close(); server.close();

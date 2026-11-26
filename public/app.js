@@ -3488,6 +3488,24 @@
     slot.innerHTML = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
   }
 
+  // Games redraw the whole table on every state change. A sheet that was already up (same title) is marked settled, so it does
+  // not replay its entrance: the shared fix for every game, instead of a per-game rule.
+  let shownOverlayTitles = new Set();
+  function markSettledOverlays(root, resultVisible) {
+    if (!resultVisible) {
+      shownOverlayTitles.clear();
+      return;
+    }
+    const titles = new Set();
+    root.querySelectorAll('.overlay').forEach((ov) => {
+      const title = ((ov.querySelector('h2') || ov).textContent || '').trim().slice(0, 120);
+      if (!ov.getClientRects().length) return; // hidden (not on screen yet): its first showing still animates
+      titles.add(title);
+      if (shownOverlayTitles.has(title)) ov.classList.add('settled');
+    });
+    shownOverlayTitles = titles;
+  }
+
   function renderGame() {
     lastAppHtml = null; // the game draws the root itself, so the last home or lobby markup is no longer on screen
     const gameId = S.room.gameId;
@@ -3512,8 +3530,9 @@
     const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
     const r = S.room;
     if (r.status === 'finished' && (!S.endFlow || S.endFlow.code !== r.code)) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0) + Math.max(0, (r.outcome && r.outcome.playMs) || 0), timer: null };
+    const resultVisible = r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS;
     plugin.render($app, S.view, {
-      resultVisible: r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS,
+      resultVisible,
       room: S.room,
       gate: gateInfo(),
       game: gameMeta(S.room.gameId),
@@ -3535,7 +3554,8 @@
     unifyToolbar();
     addSettingsChip();
     refreshVoiceUI();
-    endFlow(focusedResultAction);
+    endFlow(focusedResultAction, resultVisible);
+    markSettledOverlays($app, resultVisible); // endFlow has updated .endhold, so layout reflects what will be shown
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const bar = $app.querySelector('.wz-status');
     if (bar) {
@@ -3589,7 +3609,7 @@
     return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${statusLine}${table}</section>`;
   }
 
-  function endFlow(focusedResultAction) {
+  function endFlow(focusedResultAction, resultVisible) {
     const r = S.room;
     if (!r || r.status !== 'finished') { $app.classList.remove('endhold'); return; }
     const f = S.endFlow;
@@ -3601,7 +3621,7 @@
       scheduleLevelRefresh();
     }
     const t = Date.now() - f.start;
-    const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
+    const stage = resultVisible ? 'result' : t < END_BOARD_MS ? 'board' : 'winner';
     $app.classList.toggle('endhold', stage !== 'result');
     if (stage !== 'result') f.timer = setTimeout(() => { if (S.room && S.room.code === f.code && S.room.status === 'finished') render(); }, (stage === 'board' ? END_BOARD_MS : END_BOARD_MS + END_WINNER_MS) - t + 30);
     // A game that draws its own result sheet already names the winner there: a second "won!" pop-up would announce it twice.

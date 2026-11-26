@@ -27,12 +27,17 @@ function finished(hostId, sinceMs, votes = []) {
   };
 
   await test('a game that just ended: the table, then the result once (no second "won" pop-up over its own result sheet)', async () => {
-    const { page, ctx } = await open(finished('me', 0));
+    const messages = finished('me', 0);
+    const { page, ctx } = await open(messages);
     assert.equal(await page.isVisible('.overlay'), false, 'result is held back while the board is shown');
     await page.waitForSelector('.end-actions', { timeout: 9000 });
     assert.ok(await page.isVisible('.overlay'));
     assert.equal(await page.$('.end-pop'), null, 'the winner is named once, on the result sheet');
     assert.equal(await page.locator('.overlay').count(), 1, 'one result sheet');
+    assert.equal(await page.locator('.overlay.settled').count(), 0, 'the first visible result can animate');
+    messages[1].room.votes = ['p1'];
+    await page.evaluate((m) => window.__push(m), messages[1]);
+    assert.equal(await page.locator('.overlay.settled').count(), 1, 'a redraw of the visible result stays settled');
     await page.click('[data-act="endAgain"]');
     assert.equal((await page.evaluate(() => window.__sent.filter((m) => m.t === 'rematch'))).length, 1);
     await ctx.close();
