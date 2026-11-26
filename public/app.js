@@ -2131,6 +2131,7 @@
     if (S.isGuest || S.room || !S.guestLockedView) return; // only a page that was actually shown locked
     S.guestLockedView = false;
     if (S.page === 'profile') loadProfile();
+    else if (S.page === 'friends') loadSocial({ quiet: true });
     else if (S.page === 'player') { const r = routeFromHash(); if (r.page === 'player') loadPlayer(r.username); }
   }
   /** A page a guest cannot use yet: shown blurred, with one button that opens the account dialog. The server still refuses it. */

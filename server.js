@@ -1716,8 +1716,9 @@ function start(opts = {}) {
       if (!def) return sendError(p, 'Unknown game');
       if (refuseGame(p, msg.gameId)) return;
       if (msg.visibility === 'private' && guestLocked(p, 'private_tables')) return;
+      const socketAtStart = p.ws;
       if (await trialBlockedAtEntry(p, msg.gameId)) return;
-      if (!p.ws) return; // the connection ended during the check: do not seat or create for a socket that is gone
+      if (!p.ws || p.ws !== socketAtStart) return; // a new or ended connection must not act for the one that asked // the connection ended during the check: do not seat or create for a socket that is gone
       if (refuseGame(p, msg.gameId)) return; // the game may have been restricted while the check ran
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
@@ -1761,9 +1762,10 @@ function start(opts = {}) {
       if (!room) return sendJoinError(p, code, `No table with code ${code || '?'}`);
       if (refuseGame(p, room.gameId, code)) return;
       const alreadyHere = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
+      const socketAtStart = p.ws;
       const reclaiming = Boolean(room.guestLeavers && room.guestLeavers.has(p.id)); // their own seat again: already paid for
       if (!alreadyHere && !reclaiming && await trialBlockedAtEntry(p, room.gameId, code)) return;
-      if (!p.ws) return; // the connection ended during the check: do not seat a socket that is gone
+      if (!p.ws || p.ws !== socketAtStart) return; // the connection ended or was replaced during the check: do not seat it
       if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin', code)) return;
       if (room.removed && room.removed.has(p.id)) return sendJoinError(p, code, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
