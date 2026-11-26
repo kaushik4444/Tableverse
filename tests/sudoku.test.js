@@ -238,9 +238,9 @@ test("everybody sees the others' lives but never their numbers", () => {
 });
 
 test('a solo game moves no skill either way, win or lose', () => {
-  const { RULES } = require('../lib/gameSkill');
-  assert.deepEqual(RULES.sudoku([{ playerId: 'a', isWinner: true, isDraw: false }]), { a: 0 });
-  assert.deepEqual(RULES.sudoku([{ playerId: 'a', isWinner: false, isDraw: false }]), { a: 0 });
+  const { gameSkillPoints } = require('../lib/gameSkill');
+  assert.deepEqual(gameSkillPoints('sudoku', [{ playerId: 'a', score: 40, isWinner: true, isDraw: false }]), { a: 0 });
+  assert.deepEqual(gameSkillPoints('sudoku', [{ playerId: 'a', score: 0, isWinner: false, isDraw: false }]), { a: 0 });
 });
 
 console.log(`\n${passed} sudoku tests passed`);
