@@ -185,7 +185,7 @@ async function adminMarks() {
     let output = '';
     const context = {
       window: available ? window : {},
-      state: { gen: 1 }, gameFlagPending: new Map(), gameFlagError: null, orderBusy: false,
+      state: { gen: 1 }, gameFlagPending: new Map(), gameTrialPending: new Map(), gameFlagError: null, orderBusy: false,
       api: async () => ({ modes: ['on'], games: [
         { id: 'ludo', name: 'Ludo', icon: '🎲', access: 'on' },
         { id: 'unknown', name: '<Unknown>', icon: '<img src=x>', access: 'on' },
