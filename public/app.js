@@ -2844,6 +2844,9 @@
     });
   }
 
+  /** What a control is, for finding its replacement after a redraw: tag, action, label and text. */
+  const focusSignature = (el) => `${el.tagName}|${el.getAttribute('data-act') || ''}|${el.getAttribute('aria-label') || ''}|${(el.textContent || '').trim().slice(0, 40)}`;
+
   /** Settings: the choices a player makes for this device, and the list of recent tables. Account security and deletion stay on the profile's Account tab. */
   function openSettingsDialog() {
     const appearance = () => `<div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-modal-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>`;
@@ -2871,7 +2874,15 @@
       modalActions.setTheme = (el) => { chooseTheme(el.dataset.theme); redraw(el); };
       modalActions.toggleSound = (el) => { CardTable.sound.toggle(); redraw(el); };
       modalActions.clearRecent = async (el) => {
-        try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(el); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
+        try {
+          await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {}));
+          S.recentTables = []; redraw(el);
+          // the player may have moved to a control outside Settings while this waited: the home redraw must not drop their place
+          const outside = document.activeElement;
+          const sig = outside && outside !== document.body && !o.contains(outside) ? focusSignature(outside) : '';
+          render();
+          if (sig) { const again = [...document.querySelectorAll(outside.tagName)].find((b) => focusSignature(b) === sig && !b.disabled); if (again) again.focus({ preventScroll: true }); }
+        } catch (err) { toast(err.message || 'Could not clear recent tables'); }
       };
     });
   }
