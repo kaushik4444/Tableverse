@@ -178,6 +178,40 @@ const firstEmpty = (view) => view.puzzle.findIndex((v) => !v);
     await ctx.close();
   });
 
+  await test('a redraw keeps keyboard focus on the grid square you are typing in', async () => {
+    let G = null;
+    const msgs = table((g) => { G = g; });
+    const k = firstEmpty(msgs[1].view);
+    const r = Math.floor(k / 9); const c = k % 9;
+    const wrong = G.solution[k] === 7 ? 8 : 7; // a wrong number keeps the square open for another try
+    const { page, ctx } = await open(msgs);
+    await page.locator(`button.su-c[data-k="${k}"]`).click();
+    await page.keyboard.press(String(wrong));
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'place', r, c, v: wrong });
+    // the server's reply: the grid is redrawn with the number in it
+    E.applyAction(G, 'me', { type: 'place', r, c, v: wrong });
+    await page.evaluate((m) => window.__push(m), { t: 'state', room: msgs[1].room, view: E.viewFor(G, 'me') });
+    await page.waitForFunction(() => document.querySelector('.su-board .su-c.su-bad'));
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-k')), String(k), 'focus is back on the square');
+    await page.keyboard.press('Backspace');
+    assert.deepEqual((await sent(page)).at(-1).action, { type: 'erase', r, c }, 'the keyboard still works after the redraw');
+    await ctx.close();
+  });
+
+  await test('a redraw does not move focus off another control, such as the number pad', async () => {
+    let G = null;
+    const msgs = table((g) => { G = g; });
+    const k = firstEmpty(msgs[1].view);
+    const { page, ctx } = await open(msgs);
+    await page.locator(`button.su-c[data-k="${k}"]`).click();
+    await page.click('[data-su="num"][data-v="5"]');
+    E.applyAction(G, 'me', { type: 'place', r: Math.floor(k / 9), c: k % 9, v: 5 });
+    await page.evaluate((m) => window.__push(m), { t: 'state', room: msgs[1].room, view: E.viewFor(G, 'me') });
+    await page.waitForTimeout(50);
+    assert.equal(await page.evaluate(() => document.activeElement.classList.contains('su-c')), false, 'focus is not pulled onto the grid');
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\nsudoku UI: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

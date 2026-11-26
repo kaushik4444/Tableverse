@@ -144,6 +144,9 @@
     ui.root = root;
     feedSync(v);
     react(v);
+    // the redraw replaces the grid, so note whether a grid square had the keyboard before it goes (another control keeps its own)
+    const active = document.activeElement;
+    const gridFocus = !!active && root.contains(active) && active.matches('.su-c');
     const status = v.phase === 'playing' && v.me >= 0 && !v.out && !v.wrong.length ? 'mine' : '';
     root.innerHTML = `
     <div class="wz su">
@@ -160,8 +163,8 @@
     </div>`;
     root.onclick = onClick;
     root.onkeydown = onKey;
-    // a redraw replaces the grid, so keep keyboard focus on the square the player picked
-    if (ui.refocus) {
+    // a redraw replaces the grid, so keep keyboard focus on the square the player picked (after a tap, or while typing)
+    if (ui.refocus || gridFocus) {
       ui.refocus = false;
       const cell = root.querySelector('.su-c.su-sel');
       if (cell && typeof cell.focus === 'function') cell.focus({ preventScroll: true });
