@@ -166,6 +166,18 @@
     () => felt(sudokuGrid(Array.from({ length: 81 }, (_, k) => ({ n: ANSWER[k], given: PUZZLE[k] !== '0' })), 115, 10, 10) + T(160, 102, '🏆', 16, '#fff')),
   ]);
 
+  // Dots and Boxes: a 3x3 box grid of dots; a line, a closed box that keeps the turn, and the boxes each seat won
+  const DB = { x0: 115, y0: 10, cell: 30, n: 3 };
+  const dbDots = () => { let o = ''; for (let r = 0; r <= DB.n; r++) for (let c = 0; c <= DB.n; c++) o += `<circle cx="${DB.x0 + c * DB.cell}" cy="${DB.y0 + r * DB.cell}" r="2.6" fill="#fff"/>`; return o; };
+  const dbH = (r, c, col = '#74b9ff') => `<line x1="${DB.x0 + c * DB.cell}" y1="${DB.y0 + r * DB.cell}" x2="${DB.x0 + (c + 1) * DB.cell}" y2="${DB.y0 + r * DB.cell}" stroke="${col}" stroke-width="5" stroke-linecap="round"/>`;
+  const dbV = (r, c, col = '#74b9ff') => `<line x1="${DB.x0 + c * DB.cell}" y1="${DB.y0 + r * DB.cell}" x2="${DB.x0 + c * DB.cell}" y2="${DB.y0 + (r + 1) * DB.cell}" stroke="${col}" stroke-width="5" stroke-linecap="round"/>`;
+  const dbBox = (r, c, col, letter) => `<rect x="${DB.x0 + c * DB.cell + 3}" y="${DB.y0 + r * DB.cell + 3}" width="${DB.cell - 6}" height="${DB.cell - 6}" rx="3" fill="${col}" opacity=".4"/>` + T(DB.x0 + c * DB.cell + DB.cell / 2, DB.y0 + r * DB.cell + DB.cell / 2, letter, 13, col);
+  A.dotsboxes = pick([
+    () => felt(dbDots() + dbH(0, 0) + T(160, 116, 'Draw a line between two dots', 10, '#fff')),
+    () => felt(dbDots() + dbH(0, 0) + dbV(0, 0) + dbH(1, 0) + dbV(0, 1) + dbBox(0, 0, '#74b9ff', 'B') + dbH(1, 1, '#ff7675') + dbV(1, 2, '#ff7675') + T(160, 116, 'A closed box is yours: move again', 10, '#fff')),
+    () => felt(dbDots() + dbBox(0, 0, '#74b9ff', 'B') + dbBox(0, 1, '#ff7675', 'R') + dbBox(1, 0, '#74b9ff', 'B') + T(160, 116, '🏆 The most boxes wins', 10, '#fff')),
+  ]);
+
   A.gofish = pick([
     () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('3', 'c'), pc('J', 'd'), pc('9', 's')], 66, 44)),
     () => felt(T(160, 55, '“Got any 7s?”', 20, '#fff') + arrow(110, 90, 210, 90)),
