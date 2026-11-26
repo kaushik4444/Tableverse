@@ -1717,6 +1717,7 @@ function start(opts = {}) {
       if (refuseGame(p, msg.gameId)) return;
       if (msg.visibility === 'private' && guestLocked(p, 'private_tables')) return;
       if (await trialBlockedAtEntry(p, msg.gameId)) return;
+      if (!p.ws) return; // the connection ended during the check: do not seat or create for a socket that is gone
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
@@ -1761,6 +1762,7 @@ function start(opts = {}) {
       const alreadyHere = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       const reclaiming = Boolean(room.guestLeavers && room.guestLeavers.has(p.id)); // their own seat again: already paid for
       if (!alreadyHere && !reclaiming && await trialBlockedAtEntry(p, room.gameId, code)) return;
+      if (!p.ws) return; // the connection ended during the check: do not seat a socket that is gone
       if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin', code)) return;
       if (room.removed && room.removed.has(p.id)) return sendJoinError(p, code, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);

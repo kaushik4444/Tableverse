@@ -1446,12 +1446,7 @@
         if (m.username) { S.username = m.username; store.set('ct_username', S.username); }
         if (!S.isGuest) toast('Your account is confirmed. Your games and history are yours.');
         render();
-        // a page that was locked for this guest loads its data now (nothing was fetched while locked)
-        if (!S.isGuest && !S.room) {
-          if (S.page === 'profile') loadProfile();
-          else if (S.page === 'friends') loadSocial({ quiet: true });
-          else if (S.page === 'player') { const r = routeFromHash(); if (r.page === 'player') loadPlayer(r.username); }
-        }
+        loadLockedPageData();
         break;
       }
       case 'welcome': {
@@ -1484,6 +1479,7 @@
         render();
         loadRecent();
         loadSocial({ quiet: true });
+        loadLockedPageData(); // a guest who confirmed their account while disconnected reconnects as registered
         if (!S.routed) { S.routed = true; applyRoute(); } // open #profile or #u/<name> if that is where the person came in
         const queue = S.pending;
         S.pending = [];
@@ -2129,6 +2125,12 @@
     if (r.page === 'player') return void openPage('player', r.username, true);
     S.page = 'home';
     render();
+  }
+  /** A page that was locked for a guest loads its data once the person is registered (nothing was fetched while locked). */
+  function loadLockedPageData() {
+    if (S.isGuest || S.room) return;
+    if (S.page === 'profile') loadProfile();
+    else if (S.page === 'player') { const r = routeFromHash(); if (r.page === 'player') loadPlayer(r.username); }
   }
   /** A page a guest cannot use yet: shown blurred, with one button that opens the account dialog. The server still refuses it. */
   function lockedPageHTML(feature, what) {
