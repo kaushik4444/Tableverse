@@ -56,3 +56,4 @@ button.su-c:focus-visible { outline: 3px solid var(--gold); outline-offset: -3px
   .su .su-hearts { font-size: 17px; }
   .su .su-pad { width: min(100%, 296px); margin-top: 4px; }
 }
+.su .su-solo { font-size: 12px; color: var(--muted); }
