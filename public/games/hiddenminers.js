@@ -138,7 +138,7 @@
     const hit = c && c.k === 'break' ? new Set((v.targets[c.id] || []).map((s) => s)) : new Set();
     const fix = c && c.k === 'repair' ? v.targets[c.id] || [] : [];
     // the most points leads; no crown while everyone is level (the start) or after the game
-    const lead = v.phase !== 'gameOver' ? window.CardTable.pt.leaderOf(v.players.length, (k) => v.players[k].score, -Infinity) : -1;
+    const lead = v.phase !== 'gameOver' ? (window.CardTable && window.CardTable.pt ? window.CardTable.pt.leaderOf : () => -1)(v.players.length, (k) => v.players[k].score, -Infinity) : -1; // the table helpers may be absent (a bare render)
     return `<ul class="hm-players">${v.players.map((p, i) => {
       const tools = Object.keys(TOOLS).map((t) => {
         const broken = p.broken.includes(t);
