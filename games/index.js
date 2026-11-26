@@ -16,6 +16,7 @@ const registry = {
   carrom: require('./carrom'),
   colorclash: require('./colorclash'),
   bingo: require('./bingo'),
+  sudoku: require('./sudoku'),
   // Tic-Tac-Toe and Four in a Row (four or five) share one engine
   ...Object.fromEntries(require('./linegames').map((game) => [game.id, game])),
 };

@@ -5,6 +5,7 @@
  */
 module.exports = {
   wizard: ['The deck', 'Trump', 'Predict, then play', 'Winning a trick', 'Scoring'],
+  sudoku: ['The grid', 'Filling in', 'Mistakes', 'Undo', 'Winning', 'Bots'],
   twentynine: ['Teams and cards', 'Card points', 'The deal and the bid', 'Trump', 'Playing tricks', 'Marriage', 'Scoring'],
   poker: ['The game', 'Blinds', 'Betting rounds', 'All-in', 'Showdown', 'Hand ranking', 'Winning'],
   themind: ['The cards', 'No talking', 'Mistakes', 'Throwing star', 'Levels and lives', 'Winning', 'About Mind'],
