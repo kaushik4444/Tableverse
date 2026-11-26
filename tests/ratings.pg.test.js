@@ -55,14 +55,14 @@ async function test(name, fn) {
       VALUES ('BOT1', 'chess', 2, gen_random_uuid(), NOW(), NOW(), TRUE) RETURNING id`);
     await q(`INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner, is_bot) VALUES ($1, $2, 'Ann', 0, TRUE, FALSE), ($1, NULL, 'Robot', 1, FALSE, TRUE)`, [bot.id, A]);
 
-    await test('the rebuild rates the matches, keeps every change zero-sum, and marks the bot match unrated', async () => {
+    await test('the rebuild rates the matches, keeps every change zero-sum, and leaves a one-human bot match unrated', async () => {
       const done = await ratings.rebuildRatings();
       assert.equal(done.matches, 11);
       const sum = (await q("SELECT COALESCE(SUM(delta), 0) AS s FROM rating_events WHERE scope = 'lifetime'"))[0].s;
       assert.ok(Math.abs(Number(sum)) < 0.5, `lifetime changes add up to 0 (got ${sum})`);
       const b = (await q('SELECT rated, unrated_reason FROM matches WHERE id = $1', [bot.id]))[0];
       assert.equal(b.rated, false);
-      assert.equal(b.unrated_reason, 'bot');
+      assert.equal(b.unrated_reason, 'too-few-players', 'a bot is not counted, so one human left is not enough to rate');
     });
 
     await test('the rebuild is idempotent: running it again gives the same ratings', async () => {
