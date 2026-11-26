@@ -115,12 +115,33 @@ assert.equal(r.kFor(r.NEW_GAMES), r.K_BASE);
   assert.deepEqual(e.players.map((p) => p.playerId), ['A', 'B']);
 }
 
-// unrated matches: bots, guests, unfinished, too few players
-assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'bot', isBot: true }]).reason, 'bot');
-assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'G', isGuest: true }]).reason, 'guest');
+// unrated matches: unfinished, too few humans (bots and guests are not counted)
+assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'bot', isBot: true }]).reason, 'too-few-players', 'one human is not a rated match');
+assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B' }, { playerId: 'bot', isBot: true }]).reason, null, 'two humans rate even with a bot');
+assert.deepEqual(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B' }, { playerId: 'bot', isBot: true }]).players.map((p) => p.playerId), ['A', 'B'], 'the bot is not rated');
+assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'G', isGuest: true }]).reason, 'too-few-players', 'a guest is not rated, like a bot');
+assert.deepEqual(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B' }, { playerId: 'G', isGuest: true }]).players.map((p) => p.playerId), ['A', 'B'], 'two humans rate with a guest');
 assert.equal(r.eligibility([{ playerId: 'A' }, { playerId: 'B' }], { finished: false }).reason, 'unfinished');
 assert.equal(r.eligibility([{ playerId: 'A', isWinner: true }, { playerId: 'B', leftEarly: true, forfeit: false }]).reason, 'too-few-players');
 assert.equal(r.eligibility([{ playerId: 'A' }, { playerId: 'B' }]).rated, true, 'two humans is rated');
+
+// Mixed tables still need two eligible humans after the leave rules are applied.
+{
+  const active = { playerId: 'A' };
+  const excused = { playerId: 'B', leftEarly: true, forfeit: false };
+  const forfeited = { playerId: 'B', leftEarly: true, forfeit: true };
+  const bot = { playerId: 'bot', isBot: true };
+  const guest = { playerId: 'G', isGuest: true, leftEarly: true, forfeit: true };
+  const tooFew = { rated: false, reason: 'too-few-players', players: [] };
+
+  assert.deepEqual(r.eligibility([bot, guest]), tooFew, 'a table without humans awards no ratings');
+  assert.deepEqual(r.eligibility([bot, active, guest, excused]), tooFew, 'an excused leave leaves only one eligible human');
+  const mixed = [bot, active, guest, forfeited];
+  assert.deepEqual(r.eligibility(mixed), { rated: true, reason: null, players: [active, forfeited] },
+    'a human who forfeits still counts, but a guest who forfeits does not');
+  assert.deepEqual(r.eligibility(mixed, { finished: false }), { rated: false, reason: 'unfinished', players: [] },
+    'even with two eligible humans, an unfinished match awards no ratings');
+}
 
 // pair limit: first 3 in full, 4 and 5 at half, then nothing
 assert.equal(r.pairMultiplier(0), 1);

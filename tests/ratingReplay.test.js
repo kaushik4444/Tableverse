@@ -32,11 +32,11 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
   assert.equal(r.events.length, 4, 'one event per player per scope');
 }
 
-// 3. unrated reasons: bots, guests, unfinished, teams, Mind, unverified placings
+// 3. unrated reasons: unfinished, teams, Mind, unverified placings
 {
   const reasonOf = (m) => replay([m]).results[0].reason;
-  assert.equal(reasonOf(match('bot', 'chess', T(9), [part('A', { isWinner: true }), part(null, { isBot: true })])), 'bot');
-  assert.equal(reasonOf(match('guest', 'chess', T(9), [part('A', { isWinner: true }), part(null)])), 'guest');
+  assert.equal(reasonOf(match('bot', 'chess', T(9), [part('A', { isWinner: true }), part(null, { isBot: true })])), 'too-few-players');
+  assert.equal(reasonOf(match('guest', 'chess', T(9), [part('A', { isWinner: true }), part(null)])), 'too-few-players');
   assert.equal(reasonOf(match('open', 'chess', T(9), [part('A'), part('B')], { completed: false })), 'unfinished');
   assert.equal(reasonOf(match('team', 'twentynine', T(9), [part('A1'), part('A2'), part('B1'), part('B2')])), REASON.TEAM);
   assert.equal(reasonOf(match('mind', 'themind', T(9), [part('A', { isWinner: true }), part('B', { isWinner: true })])), REASON.COOPERATIVE);
@@ -136,6 +136,24 @@ const T = (h) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
   assert.equal(rs[4].rated, true, 'the 5th match is still rated (at half)');
 }
 
+// 12. higher-scoring bot and guest seats do not affect the human rating ledger or totals
+{
+  const humans = [part('A', { score: 30 }), part('B', { score: 20 }), part('C', { score: 10 })];
+  const bot = part(null, { isBot: true, seat: 0, score: 50 });
+  const guest = part(null, { seat: 1, score: 40 });
+  const humanMatch = match('mixed', 'wizard', T(9), humans);
+  const baseline = replay([humanMatch]);
+  const mixed = replay([{ ...humanMatch, participants: [bot, humans[0], guest, ...humans.slice(1)] }]);
+  const result = mixed.results[0];
+
+  assert.equal(result.rated, true, 'three humans are rated in a match with a bot and a guest');
+  assert.deepEqual(mixed, baseline, 'only the humans contribute to rating changes and receive events and ratings');
+  assert.ok(lifetimeEvent(result, 'A').delta > 0, 'the best human gains even when excluded seats score higher');
+  for (const scope of ['lifetime', '2026-11']) {
+    assert.ok(Math.abs(sumScope(result.events, scope)) < 1e-9, `${scope} remains zero-sum among the humans`);
+  }
+}
+
 console.log('rating replay: all tests passed');
 
 // 5. a solo sudoku game is rated in its own scope against par, and moves no other player
@@ -150,4 +168,18 @@ console.log('rating replay: all tests passed');
   assert.ok(b.events[0].delta < 0, 'a game over moves it down');
   assert.equal(r.ratings.filter((x) => x.scope === 'solo-easy' && x.playerId === 'S').length, 1, 'one solo rating row');
   assert.ok(!r.ratings.some((x) => x.scope === 'lifetime' && x.gameId === 'sudoku'), 'no lifetime race rating from solo play');
+}
+
+// A match processed before humans rated each other in bot matches stays unrated, and the others replay as before.
+{
+  const old = match('old', 'chess', T(9), [part('A', { isWinner: true }), part('B'), part('bot', { isBot: true })], { frozen: true });
+  const later = match('later', 'chess', T(10), [part('A'), part('B', { isWinner: true })]);
+  const r = replay([old, later]);
+  const oldRes = r.results.find((x) => x.id === 'old');
+  assert.equal(oldRes.rated, false, 'a frozen match is not rated again');
+  assert.equal(oldRes.reason, 'bot', 'and keeps its stored reason');
+  assert.deepEqual(oldRes.events, [], 'and writes no rating events');
+  const laterRes = r.results.find((x) => x.id === 'later');
+  assert.equal(laterRes.rated, true, 'a later match between the same humans is rated normally');
+  assert.equal(r.ratings.filter((x) => x.playerId === 'A' && x.scope === 'lifetime').length, 1, 'the frozen match does not change ratings');
 }
