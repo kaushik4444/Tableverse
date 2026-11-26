@@ -68,35 +68,35 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
-  await test('the board and the Fire button keep their size and place when the turn passes', async () => {
+  await test('the board and the striker track keep their size and place when the turn passes', async () => {
     const measure = async (viewer) => {
       const { page, ctx } = await open(msgsFor(fresh(), viewer));
       const board = await box(page, '.cb-svg');
-      const fire = await box(page, '.cb-fire');
+      const track = await box(page, '.cb-slider');
       await ctx.close();
-      return { board, fire };
+      return { board, track };
     };
     const mine = await measure('p0');
     const theirs = await measure('p1');
     assert.equal(Math.round(mine.board.width), Math.round(theirs.board.width), 'the board keeps its width');
     assert.equal(Math.round(mine.board.height), Math.round(theirs.board.height), 'the board keeps its height');
-    assert.equal(Math.round(mine.fire.y), Math.round(theirs.fire.y), 'the Fire button stays in place');
+    assert.equal(Math.round(mine.track.y), Math.round(theirs.track.y), 'the striker track stays in place');
   });
 
-  await test('on one page, the board and the Fire button do not move when a shot passes the turn', async () => {
+  await test('on one page, the board and the striker track do not move when a shot passes the turn', async () => {
     const g = fresh();
     const opening = JSON.parse(JSON.stringify(g));
     const { page: before, ctx: beforeCtx } = await open(msgsFor(opening, 'p0'));
-    const first = { board: await box(before, '.cb-svg'), fire: await box(before, '.cb-fire') };
+    const first = { board: await box(before, '.cb-svg'), track: await box(before, '.cb-slider') };
     await beforeCtx.close();
     const res = E.applyAction(g, 'p0', { type: 'flick', x: 0.5, angle: 0, power: 0.6, seq: g.seq });
     assert.equal(res.ok, true, `the shot should be legal: ${res.error || ''}`);
     const { page, ctx } = await open(msgsFor(JSON.parse(JSON.stringify(opening)), 'p0', [g]));
     await page.waitForFunction(() => !(document.querySelector('.cb-seat.turn') || { textContent: '' }).textContent.includes('Ann'), null, { timeout: 8000 });
-    const after = { board: await box(page, '.cb-svg'), fire: await box(page, '.cb-fire') };
+    const after = { board: await box(page, '.cb-svg'), track: await box(page, '.cb-slider') };
     assert.equal(Math.round(after.board.width), Math.round(first.board.width), 'the board keeps its width');
     assert.equal(Math.round(after.board.height), Math.round(first.board.height), 'the board keeps its height');
-    assert.equal(Math.round(after.fire.y), Math.round(first.fire.y), 'the Fire button stays in place');
+    assert.equal(Math.round(after.track.y), Math.round(first.track.y), 'the striker track stays in place');
     await ctx.close();
   });
 
@@ -203,7 +203,8 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
       view.shot.events = [];
       await page.evaluate((next) => window.__push(next), { t: 'state', room: msgsFor(g)[1].room, view });
       const read = (id) => page.evaluate((id) => {
-        const info = (el) => ({ x: +el.getAttribute('cx'), y: +el.getAttribute('cy'), opacity: +getComputedStyle(el).opacity, display: getComputedStyle(el).display });
+        // the disc group is rebuilt each frame, so a disc that has left the board is absent (null)
+        const info = (el) => (el ? { x: +el.getAttribute('cx'), y: +el.getAttribute('cy'), opacity: +getComputedStyle(el).opacity } : null);
         return [info(document.querySelector(`.cb-svg [data-id="${id}"]`)), info(document.querySelector(`.cb-svg [data-shade-for="${id}"]`))];
       }, id);
       await page.clock.runFor(100);
@@ -219,7 +220,7 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
       assert.ok(Math.abs(shade.opacity - disc.opacity * 0.45) < 0.001, 'the shade fades from its normal opacity');
       assert.ok(Math.abs(shade.x - disc.x - 0.004) < 0.0001 && Math.abs(shade.y - disc.y - 0.008) < 0.0001, 'the shade keeps its offset after moving');
       await page.clock.runFor(330);
-      assert.deepEqual((await read('c1')).map((p) => p.display), ['none', 'none']);
+      assert.deepEqual(await read('c1'), [null, null], 'the faded coin is gone from the board');
     } finally { await ctx.close(); }
   });
 
@@ -398,6 +399,21 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     assert.ok(Math.abs(r.bAlpha - 0.5) < 1e-9, 'a disc that is pocketed fades out over the interval: ' + r.bAlpha);
     assert.deepEqual(r.start, ['a', 0, 0, 1]);
     assert.deepEqual(r.end, ['a', 1, 0, 1]);
+    await ctx.close();
+  });
+
+  await test('the table does not scroll, and the shot log is in the More menu, not on the page', async () => {
+    const g = fresh();
+    E.applyAction(g, 'p0', { seq: g.seq, type: 'flick', x: 0.5, angle: 0, power: 0.05 });
+    const { page, ctx } = await open(msgsFor(g, 'p0'), { width: 393, height: 654 });
+    const fit = await page.evaluate(() => ({ scrolls: document.documentElement.scrollHeight > innerHeight + 1, fire: !!document.querySelector('.cb-fire'), moves: !!document.querySelector('.cb-moves') }));
+    assert.equal(fit.scrolls, false, 'the page fits the window');
+    assert.equal(fit.fire, false, 'there is no Fire button: a drag or Enter on the striker flicks');
+    assert.equal(fit.moves, false, 'no Shots panel on the page');
+    await page.click('.tb-more-btn');
+    await page.click('[data-act="activityLog"]');
+    await page.waitForSelector('.activity-sheet', { timeout: 4000 });
+    assert.match(await page.textContent('.activity-sheet'), /Ann/, 'the log in the More menu lists the shot');
     await ctx.close();
   });
 
