@@ -1045,9 +1045,12 @@
     } catch { /* offline: the list simply stays as it was */ }
   }
 
+  // the incoming requests and invitations seen at the last load, by id: a new id is a new item even if another left
+  let socialKeys = null;
   async function loadSocial({ quiet = false } = {}) {
     if (!S.ready || S.guest) return;
     let before = -1;
+    let latestKeys = null;
     if (!quiet) { S.socialLoading = true; S.socialError = ''; }
     try {
       const paths = [
@@ -1069,12 +1072,17 @@
       S.friendRequests = { incoming: results[1].requests || [], outgoing: results[2].requests || [] };
       S.invitations = { incoming: results[3].invitations || [], outgoing: results[4].invitations || [] };
       S.socialError = '';
+      latestKeys = [...(results[1].requests || []).map((r) => 'f:' + (r.id ?? r.username ?? JSON.stringify(r))), ...(results[3].invitations || []).map((r) => 'i:' + (r.id ?? r.code ?? JSON.stringify(r)))];
     } catch (error) {
       S.socialError = error.message || 'Could not load friends.';
     } finally {
       S.socialLoading = false;
       const after = (S.friendRequests.incoming || []).length + (S.invitations.incoming || []).length;
-      if (before >= 0 && after > before && CardTable.sound) CardTable.sound.play('notify'); // a new friend request or invitation
+      if (latestKeys) {
+        const fresh = socialKeys && latestKeys.some((k) => !socialKeys.includes(k));
+        if (fresh && CardTable.sound) CardTable.sound.play('notify'); // a new friend request or invitation
+        socialKeys = latestKeys;
+      }
       if (!S.room || S.room.status === 'lobby' || after !== before) render(); // in a running game only redraw when the bell count changed
     }
   }
@@ -2165,9 +2173,7 @@
     const k = 'ct_level_seen_' + S.username;
     const seen = store.get(k);
     if (seen === null) { S.levelUp = null; store.set(k, String(S.account.level)); return; }
-    const hadLevelUp = !!S.levelUp;
     S.levelUp = S.account.level > Number(seen) ? { username: S.username, from: Number(seen), to: S.account.level } : null;
-    if (S.levelUp && !hadLevelUp && CardTable.sound) CardTable.sound.play('fanfare'); // once, when the note first appears
   }
   /**
    * The level-up dialog: shown once, on the next menu (home) visit after a new level. The level is remembered on this
@@ -2180,6 +2186,7 @@
     store.set('ct_level_seen_' + n.username, String(n.to));
     S.levelUp = null;
     const left = S.account ? Math.max(0, Number(S.account.need) - Number(S.account.into)) : null;
+    if (CardTable.sound) CardTable.sound.play('fanfare'); // when the dialog shows, not while a table holds it back
     openModal('Level up', `<p>Congratulations on reaching level ${Number(n.to)}!</p>${left !== null ? `<p class="hint">Next level in ${left} min of play.</p>` : ''}<div class="row" style="margin-top:12px"><button class="btn" type="button" data-modal-close="1">OK</button></div>`);
   }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
