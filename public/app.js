@@ -2860,8 +2860,10 @@
         // move focus only if the player is still in this dialog (or nowhere): a busy wait can end after they moved elsewhere
         const active = document.activeElement;
         const keepFocus = !active || active === document.body || o.contains(active);
+        const onVolume = Boolean(active && active.matches && active.matches('[data-volume]'));
         o.querySelector('.modal-body').innerHTML = body();
         if (!keepFocus) return;
+        if (onVolume) { const slider = o.querySelector('[data-volume]'); if (slider) { slider.focus(); return; } }
         const again = k && [...o.querySelectorAll('[data-modal-act]')].find((b) => key(b) === k && !b.disabled);
         if (again) again.focus();
         else { const close = o.querySelector('[data-modal-close]'); if (close) close.focus(); } // e.g. Clear disables itself once the list is empty
