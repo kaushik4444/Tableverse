@@ -276,6 +276,17 @@ test('a taken-over seat is marked and claims Bingo automatically', () => {
   assert.deepEqual(g.winners, [0]);
 });
 
+test('a bot takeover marks the numbers already called on that card, and a reclaim keeps them', () => {
+  const g = E.createGame(people(2), { pattern: 'line', autoMark: false }, mulberry32(17));
+  rigCard(g, 0, [1, 2, 3, 4, 5, 16, 17, 18, 19, 20, 31, 32, 0, 34, 35, 46, 47, 48, 49, 50, 61, 62, 63, 64, 65]);
+  g.called = [1, 2, 3, 16];
+  E.setSeatBot(g, 'p0', true); // p0 left after those calls
+  assert.deepEqual([...g.marks[0]].sort((a, b) => a - b), [1, 2, 3, 16], 'the called numbers on the card are marked');
+  assert.ok(!g.marks[0].has(4), 'a number not yet called is not marked');
+  E.setSeatBot(g, 'p0', false);
+  assert.deepEqual([...g.marks[0]].sort((a, b) => a - b), [1, 2, 3, 16], 'the reclaimed seat keeps its marks');
+});
+
 test('after a reclaim the person marks by hand again and the seat does not claim on its own', () => {
   const g = E.createGame(people(2), { pattern: 'line', autoMark: false }, mulberry32(15));
   rigCard(g, 0, [1, 2, 3, 4, 5, 16, 17, 18, 19, 20, 31, 32, 0, 34, 35, 46, 47, 48, 49, 50, 61, 62, 63, 64, 65]);

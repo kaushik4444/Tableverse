@@ -122,6 +122,10 @@ function setSeatBot(g, playerId, bot) {
   const i = g.players.findIndex((p) => p.id === playerId);
   if (i < 0) return false;
   g.players[i].bot = bot === true;
+  if (g.players[i].bot) {
+    // numbers called before the takeover are marked too, or the bot could never complete its card
+    for (const n of g.called) if (g.cards[i].includes(n)) g.marks[i].add(n);
+  }
   return true;
 }
 

@@ -139,6 +139,7 @@
     return window.CardTable.pt.seatHTML({
       pid: p.id,
       badges: lead ? '<span class="bdg l" title="Leading: fewest points">👑 Lead</span>' : '',
+      status: lead ? 'leading' : '',
       name: p.name + (i === v.me ? ' (you)' : ''),
       avatar: window.CardTable.pt.avatarOf(ctx.room, p.id),
       turn: i === v.turn && v.phase !== 'gameOver',

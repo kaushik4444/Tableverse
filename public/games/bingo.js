@@ -139,7 +139,7 @@
     const won = v.winners.includes(v.me);
     const title = v.me >= 0 && won ? 'You called Bingo! 🎉' : 'Game over';
     const hint = !v.winners.length ? 'Every number was called and nobody called Bingo.'
-      : v.winners.length > 1 ? 'Two players called Bingo on the same number.'
+      : v.winners.length > 1 ? `${v.winners.length} players called Bingo on the same number.`
       : `${esc(v.players[v.winners[0]].name)} called Bingo first.`;
     const order = v.players.map((p, i) => i).sort((a, b) => (v.winners.includes(b) ? 1 : 0) - (v.winners.includes(a) ? 1 : 0));
     const rows = order.map((i) => {
@@ -162,6 +162,10 @@
     if (snd) {
       if (v.called.length > ui.called) snd.play('card');
       if (over && !ui.over) snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
+    }
+    // screen-reader players hear each new number once (the ball is only read on navigation)
+    if (v.called.length > ui.called && v.lastCall && window.CardTable.announceStatus) {
+      window.CardTable.announceStatus(`${letterOf(v.lastCall)} ${v.lastCall} called`);
     }
     ui.called = v.called.length;
     ui.over = over;
@@ -193,6 +197,10 @@
     if (focusKey) { // the same control again, if it is still there and can take focus
       const again = root.querySelector(focusKey.startsWith('n:') ? `[data-n="${focusKey.slice(2)}"]` : `[data-bg="${focusKey.slice(3)}"]`);
       if (again && !again.disabled) again.focus({ preventScroll: true });
+      else { // the control is gone or disabled: move focus to the enabled Bingo button, or to a remaining mark
+        const next = root.querySelector('[data-bg="claim"]:not([disabled])') || root.querySelector('[data-bg="mark"]');
+        if (next) next.focus({ preventScroll: true });
+      }
     }
     root.onclick = onClick;
   }
