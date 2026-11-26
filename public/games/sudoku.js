@@ -178,6 +178,8 @@
     // the redraw replaces the grid, so note whether a grid square had the keyboard before it goes (another control keeps its own)
     const active = document.activeElement;
     const gridFocus = !!active && root.contains(active) && active.matches('.su-c');
+    // another control (Undo, Rules, Leave...) keeps its place by its action, if the redraw still has one
+    const ctlAction = !!active && root.contains(active) && !gridFocus && active.dataset && active.dataset.su ? active.dataset.su : '';
     const status = v.phase === 'playing' && v.me >= 0 && !v.out && !v.wrong.length ? 'mine' : '';
     root.innerHTML = `
     <div class="wz su">
@@ -199,6 +201,9 @@
       ui.refocus = false;
       const cell = root.querySelector('.su-c.su-sel');
       if (cell && typeof cell.focus === 'function') cell.focus({ preventScroll: true });
+    } else if (ctlAction) {
+      const again = [...root.querySelectorAll('[data-su]')].find((b) => b.dataset.su === ctlAction && !b.disabled);
+      if (again) again.focus({ preventScroll: true });
     }
   }
 
