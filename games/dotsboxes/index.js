@@ -28,7 +28,8 @@ module.exports = {
     const g = engine.createGame(players, options);
     return {
       view: (playerId) => engine.viewFor(g, playerId),
-      scrub: (names, to) => scrubDeep([g, players], names, to),
+      // the phase is an internal value, never a name: keep it through the scrub
+      scrub: (names, to) => { const phase = g.phase; scrubDeep([g, players], names, to); g.phase = phase; },
       act: (playerId, action) => { try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; } },
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId, rng),

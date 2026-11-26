@@ -14,8 +14,8 @@
     }
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} to move`;
     if (!v.myTurn) return `${esc(v.players[v.turn].name)} is thinking…`;
-    if (v.pending !== null) return 'Now turn over a second card';
-    if (v.event && v.event.type === 'match' && v.event.by === v.me) return 'A pair! Play again';
+    if (v.pending !== null) return `You turned over ${esc(v.board[v.pending].symbol)}. Now turn over a second card`;
+    if (v.event && v.event.type === 'match' && v.event.by === v.me) return `A pair of ${esc(v.event.symbol)}! Play again`;
     return 'Your move: turn over a card';
   }
 
@@ -30,7 +30,10 @@
       if (c.owner !== null) return `<span class="mm-card matched s${c.owner}" aria-label="Row ${r}, column ${col}, ${esc(c.symbol)}, pair of ${esc(v.players[c.owner].name)}">${esc(c.symbol)}</span>`;
       if (c.symbol !== null) {
         const cls = ['mm-card', 'up', v.last === k ? 'last' : ''].filter(Boolean).join(' ');
-        return `<span class="${cls}" aria-label="Row ${r}, column ${col}, ${esc(c.symbol)}, face up">${esc(c.symbol)}</span>`;
+        const label = `Row ${r}, column ${col}, ${esc(c.symbol)}, face up`;
+        // a missed card stays selectable for the next player; the card in play is not
+        if (v.myTurn && v.pending !== k) return `<button type="button" class="${cls}" data-card="${k}" aria-label="${label}">${esc(c.symbol)}</button>`;
+        return `<span class="${cls}" aria-label="${label}">${esc(c.symbol)}</span>`;
       }
       const can = v.myTurn && v.pending !== k;
       return `<button type="button" class="mm-card down" data-card="${k}" aria-label="Row ${r}, column ${col}, face down" ${can ? '' : 'disabled'}><span class="mm-back" aria-hidden="true">✦</span></button>`;

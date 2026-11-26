@@ -198,7 +198,7 @@
   ]);
 
   // Memory Match: face-down cards; two turned over, a matched pair in a seat colour, and the most pairs at the end
-  const MM = { w: 44, h: 52, gap: 10 };
+  const MM = { w: 40, h: 46, gap: 8 };
   const mmCard = (c, r, face, fill = '#f8fafc', ink = '#111827', opacity = 1) => {
     const x = 118 + c * (MM.w + MM.gap), y = 14 + r * (MM.h + MM.gap);
     return `<rect x="${x}" y="${y}" width="${MM.w}" height="${MM.h}" rx="7" fill="${fill}" opacity="${opacity}"/>` + (face ? T(x + MM.w / 2, y + MM.h / 2, face, 20, ink) : T(x + MM.w / 2, y + MM.h / 2, '✦', 14, 'rgba(255,255,255,.5)'));
