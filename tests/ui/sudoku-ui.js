@@ -102,6 +102,23 @@ const firstEmpty = (view) => view.puzzle.findIndex((v) => !v);
     await ctx.close();
   });
 
+  await test('the result sheet can step aside to read the grid, and comes back with Show result', async () => {
+    const msgs = table((g) => {
+      const empties = g.puzzle.map((v, k) => (v ? -1 : k)).filter((k) => k >= 0);
+      clock.t += 61000;
+      for (const k of empties) E.applyAction(g, 'p1', { type: 'place', r: Math.floor(k / 9), c: k % 9, v: g.solution[k] });
+    });
+    const { page, ctx } = await open(msgs);
+    assert.equal(await page.locator('.overlay').count(), 1);
+    await page.click('[data-su="peek"]');
+    assert.equal(await page.locator('.overlay').count(), 0, 'the sheet steps aside');
+    assert.equal(await page.locator('.su-board').isVisible(), true, 'the grid is readable');
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.su), 'result', 'focus moves to Show result');
+    await page.click('[data-su="result"]');
+    assert.equal(await page.locator('.overlay .sheet h2').count(), 1, 'the result comes back');
+    await ctx.close();
+  });
+
   await test('when the game is over the winner is named, the answer appears in gold, and Play again is for the host', async () => {
     const msgs = table((g) => {
       const empties = g.puzzle.map((v, k) => (v ? -1 : k)).filter((k) => k >= 0);

@@ -75,6 +75,8 @@
   function render(root, v, ctx) {
     const active = root.ownerDocument.activeElement;
     const focusedLine = root.contains(active) && active.matches('.db-line[data-line]') ? active.dataset.line : null;
+    // focus on Rules (where it went while every line was waiting) or nowhere: a free line takes it back
+    const focusParked = root.contains(active) && active.dataset && active.dataset.db === 'rules' || !active || active === root.ownerDocument.body;
     ui.ctx = ctx; ui.v = v; react(v);
     root.innerHTML = `<div class="wz db" data-game="dotsboxes">
       <div class="wz-top"><div class="wz-round"><b>Dots and Boxes</b><span class="label"> · ${v.n} × ${v.n} · ${v.remaining} lines left</span></div>
@@ -86,7 +88,12 @@
     if (focusedLine !== null) {
       const next = root.querySelector(`.db-line[data-line="${focusedLine}"]:enabled`)
         || root.querySelector('.db-line:enabled');
-      next?.focus({ preventScroll: true });
+      if (next) next.focus({ preventScroll: true });
+      else { ui.parkedFocus = true; root.querySelector('[data-db="rules"]')?.focus({ preventScroll: true }); } // every line is waiting: keep focus in the controls
+    } else if (ui.parkedFocus && focusParked) {
+      // the next player's turn has come back: a playable line takes the focus again (unless the person has moved it elsewhere)
+      const next = root.querySelector('.db-line:enabled');
+      if (next) { ui.parkedFocus = false; next.focus({ preventScroll: true }); }
     }
     root.onclick = onClick;
   }

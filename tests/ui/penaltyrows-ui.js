@@ -163,6 +163,17 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('the crown counts the penalty points taken this round, not only the totals', async () => {
+    const msgs = tableMessages('penaltyrows', four);
+    const v = msgs[1].view;
+    v.players.forEach((p) => { p.total = 50; p.penalty = 0; });
+    v.players[0].total = 0; v.players[0].penalty = 10; // Aarav has 10 points taken this round, so Bo (5) leads
+    v.players[1].total = 5;
+    const { page, ctx } = await open(msgs);
+    assert.equal(await page.locator('.pr-chips li.lead .pr-chip-name').textContent(), 'Bo');
+    await ctx.close();
+  });
+
   await test('someone else must take a row: you only watch', async () => {
     const msgs = tableMessages('penaltyrows', four);
     const v = msgs[1].view; v.phase = 'takeRow'; v.pending = { by: 1, n: 3, p: 1 }; v.myTurn = false;
