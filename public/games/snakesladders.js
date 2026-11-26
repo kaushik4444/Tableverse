@@ -180,9 +180,10 @@
     for (let n = e.from + 1; n <= (e.landed || e.from); n++) path.push({ n, ms: STEP_MS });
     if (e.landed !== undefined && e.to !== e.landed) path.push({ n: e.to, ms: JUMP_MS });
     stopAnimation();
+    const snd = window.CardTable.sound;
+    if (snd) snd.play('dice'); // the die is thrown even when the token cannot move (an overshoot at the end)
     if (!path.length) return;
     ui.animating = true; ui.shown[e.by] = e.from;
-    const snd = window.CardTable.sound;
     const next = () => {
       const step = path.shift();
       // finish through the app's rerender, so the app-level chrome (settings chip, toolbar) is rebuilt too
