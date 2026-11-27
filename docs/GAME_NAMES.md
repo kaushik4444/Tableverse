@@ -72,3 +72,6 @@ Tetris, Bullhead Run (the removed working title for what is now Take 5), Beer Po
 
 - "Battleship" is a registered trademark of Hasbro. The game does not use it: the name is Sea Battle, and the sea, ships, markers and screens are Tableverse's own (`games/seabattle/`, `public/games/seabattle.*`).
 - A name check is still needed before any release, as for every name in this table. "Sea Battle" is a generic phrase, but check it in the target markets.
+## Memory Match
+
+- Memory Match is a generic name for a card-pair game, so the game keeps it. The cards use generic fruit, plant and creature symbols drawn from standard emoji, and the card back and layout are Tableverse's own (`games/memorymatch/`).

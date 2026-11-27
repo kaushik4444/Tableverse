@@ -25,6 +25,7 @@ Nineteen games are open to every player. Carrom is in admin testing and is not o
 - **Hidden Miners** (3–8): secretly a Digger or a Saboteur, build a tunnel toward the gold, break and repair tools, scout chambers and collapse pieces. Scored over 1, 3 or 5 rounds.
 - **Color Clash** (2–8): match the colour or number, use Stop, Flip, Take 2 and Wild cards, and be first to empty your hand. Round points add up to a target.
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
+- **Memory Match** (2–4): turn two cards over to find pairs. A match keeps your turn; the most pairs wins. Pick 4×4, 4×6 or 6×6 cards.
 - **Dots and Boxes** (2–4): draw lines between the dots to close boxes. A box you close is yours and you move again. Pick a 3×3, 4×4 or 5×5 board; the most boxes wins.
 - **Sea Battle** (2): hide five ships in your 10 × 10 sea and fire at the other player’s. The first to sink the whole fleet wins.
 - **Bingo** (2–8): every player has a 5×5 card and numbers are called one at a time. Mark your called numbers and shout Bingo first. Choose *Winning pattern* (any line or the full card), *Pace*, and *Mark for me*. Bots mark and call Bingo themselves.

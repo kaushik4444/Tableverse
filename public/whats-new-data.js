@@ -31,6 +31,12 @@
         text: 'Hide five ships in your sea and fire at the other player’s. Hits and sinkings are shown to both of you; the first to sink the whole fleet wins.'
       },
       {
+        level: 'minor',
+        ico: '🃏',
+        title: 'Memory Match for 2 to 4 players',
+        text: 'Turn two cards over to find the pairs. A match keeps your turn, and the most pairs wins. Pick 4×4, 4×6 or 6×6 cards.'
+      },
+      {
         level: 'major',
         ico: '🔊',
         title: 'Sounds for more moments',

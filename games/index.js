@@ -19,6 +19,7 @@ const registry = {
   sudoku: require('./sudoku'),
   dotsboxes: require('./dotsboxes'),
   seabattle: require('./seabattle'),
+  memorymatch: require('./memorymatch'),
   // Tic-Tac-Toe and Four in a Row (four or five) share one engine
   ...Object.fromEntries(require('./linegames').map((game) => [game.id, game])),
 };

@@ -126,6 +126,19 @@ async function test(name, fn) {
       assert.equal((await ratings.rebuildRatingsIncremental()).mode, 'incremental', 'anonymized matches no longer force full rebuilds');
     });
 
+    await test('a waiting match that already has rating events forces a full rebuild, which removes them', async () => {
+      await ratings.rebuildRatings();
+      const [waiting] = await q(
+        `INSERT INTO matches (room_code, game_id, seats, match_key, started_at, finished_at, completed, rating_processed)
+         VALUES ('LATE3', 'chess', 2, gen_random_uuid(), NOW() + INTERVAL '3 days', NOW() + INTERVAL '3 days', TRUE, FALSE) RETURNING id`,
+      );
+      await q(`INSERT INTO match_participants (match_id, player_id, player_name, seat, is_winner) VALUES ($1, $2, 'Ann', 0, TRUE), ($1, $3, 'Cy', 1, FALSE)`, [waiting.id, A, C]);
+      // a stale ledger row left for the waiting match: an incremental insert would keep it (ON CONFLICT DO NOTHING)
+      await q(`INSERT INTO rating_events (match_id, player_id, game_id, scope, delta, rating_before, rating_after) VALUES ($1, $2, 'chess', 'lifetime', 99, 1000, 1099)`, [waiting.id, A]);
+      assert.equal((await ratings.rebuildRatingsIncremental()).mode, 'full', 'the stale rows need the full rebuild');
+      assert.equal((await q('SELECT COUNT(*)::int AS n FROM rating_events WHERE match_id = $1 AND delta = 99', [waiting.id]))[0].n, 0, 'the stale row is gone');
+    });
+
     console.log(`\n${passed} rating PostgreSQL tests passed`);
   } finally {
     if (db && db.close) await db.close().catch(() => {});
