@@ -24,7 +24,8 @@ const def = games.get(GAME);
 if (!def) throw new Error('unknown game ' + GAME);
 const NAMES = ['Aarav', 'Bo', 'Cy', 'Di', 'Ed', 'Fi', 'Gu', 'Hi'];
 const AVATARS = ['🧙', '🦊', '🐼', '🦉', '🐉', '🐸', '🦁', '🐙'];
-const n = def.seats.default;
+// --seats=1 shows a solo table (for a card about playing alone); the default is the game's usual seat count
+const n = flags.seats ? Number(flags.seats) : def.seats.default;
 const players = Array.from({ length: n }, (_, i) => ({ id: i ? 'p' + i : 'me', name: NAMES[i], avatar: AVATARS[i] }));
 const opts = Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default]));
 let a = Number(SEED);
