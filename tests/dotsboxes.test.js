@@ -97,7 +97,7 @@ test('what a seat sees is the public board: no field is hidden from anyone', () 
 test('the plugin: 2 to 4 seats, a board option, and the rules have a title for each', () => {
   assert.deepEqual(game.seats, { min: 2, max: 4, default: 2 });
   assert.equal(game.options[0].key, 'size');
-  assert.deepEqual(game.options[0].choices.map((c) => c.value), ['3', '4', '5']);
+  assert.deepEqual(game.options[0].choices.map((c) => c.value), ['3', '4', '5', '6']);
   const inst = game.create(P(3), { size: '3' }, Math.random);
   assert.equal(inst.awaiting()[0], 'p0');
   assert.equal(inst.act('p0', { type: 'line', index: 0 }).ok, true);

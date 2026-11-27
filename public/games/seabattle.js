@@ -1,11 +1,11 @@
 /* Sea Battle. Placing: pick a ship, tap where it goes, Rotate to turn it, Random to let the game place them, Ready when all five
  * are on the sea. Then two boards: Attack shows the other player's sea and your shots; My fleet shows your ships (drawn as hulls)
- * and their shots. On a phone you switch between them; on a wide screen both show. Pick a square, then Fire, so a stray tap
- * cannot waste a shot. Watchers see both seas' shots. Styles in seabattle.css. */
+ * and their shots. On a phone you switch between them; on a wide screen both show. Tap a square to fire: a bomb falls on it,
+ * a hit bursts and a miss shows an X. Drag a placed ship to move it. Watchers see both seas' shots. Styles in seabattle.css. */
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { root: null, ctx: null, v: null, seq: null, tab: 'attack', sel: null, table: null, pick: null, vert: false };
+  const ui = { root: null, ctx: null, v: null, seq: null, tab: 'attack', table: null, pick: null, vert: false, drag: null, fx: undefined, freshNow: null };
   const SEAT_NAMES = ['Blue', 'Red'];
   const LETTERS = 'ABCDEFGHIJ';
   const square = (k, n) => `${LETTERS[k % n]}${Math.floor(k / n) + 1}`;
@@ -45,18 +45,23 @@
         return `${moving ? 'Move' : 'Place'} your ${v.lengths[ui.pick]}-square ${NAMES[ui.pick].toLowerCase()} (${ui.vert ? 'down' : 'across'}): tap a square${moving ? ' for it' : ''}, or Rotate to turn it${moving ? ' in place' : ''}`;
       }
       if (v.placed && v.placed.every(Boolean)) return 'All five ships are on the sea. Ready when you are, or pick one up to move it';
-      return 'Pick a ship, then tap where it goes. Tap a ship on your sea to move it';
+      return 'Pick a ship, then tap where it goes. Drag a ship on your sea to move it';
     }
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} is aiming`;
     if (!v.myTurn) return `${esc(v.players[1 - v.me].name)} is aiming…`;
-    if (ui.sel !== null) return `Fire at ${square(ui.sel, v.N)}? Tap Fire to confirm`;
-    return 'Your shot: pick a square on their sea';
+    return 'Your shot: tap a square on their sea to fire';
   }
 
   function seatsHTML(v) {
     return `<div class="sb-seats">${v.players.map((p, i) => `<div class="sb-seat s${i} ${i === v.turn && v.phase === 'playing' ? 'turn' : ''} ${v.phase === 'gameOver' && v.winner === i ? 'won' : ''}">
       <span class="sb-swatch" aria-hidden="true"></span><span class="sb-who"><b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b>
       <small>${SEAT_NAMES[i]} · ${v.phase === 'placing' ? (p.ready ? 'ready' : 'placing') : `sunk <span class="sb-sunk">${p.sunk}</span> · ${p.left} left`}</small></span></div>`).join('')}</div>`;
+  }
+
+  /** The class that makes a new shot animate: a bomb falls on the square, once, when the shot first arrives. */
+  function freshCls(v, target, k) {
+    const e = ui.freshNow;
+    return e && e.k === k && e.by === 1 - target && ['hit', 'miss', 'sunk'].includes(e.type) ? ' fresh' : '';
   }
 
   /** A sea with the shots fired at it. For a player's attack board the open squares are buttons on their turn. */
@@ -67,9 +72,9 @@
       const st = sea[k];
       const label = `${square(k, v.N)}, ${st || 'not fired at'}`;
       if (st || !interactive) {
-        cells.push(`<span class="sb-cell ${st || 'open'}" role="img" aria-label="${label}"></span>`);
+        cells.push(`<span class="sb-cell ${st || 'open'}${freshCls(v, target, k)}" role="img" aria-label="${label}"></span>`);
       } else {
-        cells.push(`<button type="button" class="sb-cell open${ui.sel === k ? ' sel' : ''}" data-sb="sq" data-k="${k}" aria-label="${label}" ${v.myTurn ? '' : 'disabled'}></button>`);
+        cells.push(`<button type="button" class="sb-cell open" data-sb="sq" data-k="${k}" aria-label="${label}" ${v.myTurn ? '' : 'disabled'}></button>`);
       }
     }
     return `<div class="sb-board attack" role="group" aria-label="${title}"><div class="sb-grid" style="--n:${v.N}">${cells.join('')}</div></div>`;
@@ -89,7 +94,7 @@
   /** My fleet: my ships (drawn as hulls, hit or not) and the shots the other player has taken at my sea. */
   function fleetHTML(v) {
     const N = v.N;
-    const cells = v.fleet.map((st, k) => `<span class="sb-cell ${st || 'water'}" style="grid-row:${Math.floor(k / N) + 1};grid-column:${(k % N) + 1}" role="img" aria-label="${square(k, N)}, ${st || 'water'}"></span>`).join('');
+    const cells = v.fleet.map((st, k) => `<span class="sb-cell ${st || 'water'}${freshCls(v, v.me, k)}" style="grid-row:${Math.floor(k / N) + 1};grid-column:${(k % N) + 1}" role="img" aria-label="${square(k, N)}, ${st || 'water'}"></span>`).join('');
     const hulls = v.ships ? hullsHTML(v, v.ships) : '';
     return `<div class="sb-board mine" role="group" aria-label="Your fleet"><div class="sb-grid" style="--n:${N}">${cells}${hulls}</div></div>`;
   }
@@ -113,9 +118,9 @@
       const first = s.cells[0], len = s.cells.length, vertical = p2v(s.cells, N);
       const r = Math.floor(first / N) + 1, c = (first % N) + 1;
       const pos = vertical ? `grid-row:${r} / span ${len};grid-column:${c}` : `grid-row:${r};grid-column:${c} / span ${len}`;
-      return `<div class="sb-hull${vertical ? ' v' : ''}${ui.pick === s.slot ? ' picked' : ''}" style="${pos}" aria-hidden="true" data-ship="${esc(NAMES[s.slot])}"></div>`;
+      return `<div class="sb-hull${vertical ? ' v' : ''}${ui.pick === s.slot ? ' picked' : ''}" style="${pos}" aria-hidden="true" data-ship="${esc(NAMES[s.slot])}" data-slot="${s.slot}"></div>`;
     }).join('');
-    return `<div class="sb-board mine" role="group" aria-label="Your sea: place your ships"><div class="sb-grid" style="--n:${N}">${cells.join('')}${hulls}</div></div>`;
+    return `<div class="sb-board mine" role="group" aria-label="Your sea: place your ships"><div class="sb-grid placing" style="--n:${N}">${cells.join('')}${hulls}</div></div>`;
   }
   const p2v = (cells, N) => cells.length > 1 && cells[1] - cells[0] === N;
   /** Whether I have pressed Ready (watchers never have). */
@@ -147,13 +152,6 @@
       return seaHTML(v, 0, { interactive: false, title: 'Blue’s sea' }) + seaHTML(v, 1, { interactive: false, title: 'Red’s sea' });
     }
     return seaHTML(v, 1 - v.me, { interactive: true, title: 'Their sea: your shots' }) + fleetHTML(v);
-  }
-
-  function controlsHTML(v) {
-    const can = v.myTurn && ui.sel !== null && !v.shots[1 - v.me][ui.sel];
-    return `<div class="sb-controls">
-      <button type="button" class="btn ghost" data-sb="clear" ${ui.sel === null ? 'disabled' : ''}>Clear</button>
-      <button type="button" class="btn" data-sb="fire" ${can ? '' : 'disabled'}>Fire</button></div>`;
   }
 
   function tabsHTML() {
@@ -190,9 +188,12 @@
     // a selection belongs to one table, one turn, and a square that is still open
     // the selection, the phone tab and the placement belong to one table: a new table starts clean
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
-    if (ui.table !== tableKey) { ui.sel = null; ui.tab = 'attack'; ui.pick = null; ui.vert = false; ui.table = tableKey; }
-    const me = v.me < 0 ? 0 : v.me;
-    if (ui.sel !== null && (!v.myTurn || v.shots[1 - me][ui.sel])) ui.sel = null;
+    if (ui.table !== tableKey) { ui.tab = 'attack'; ui.pick = null; ui.vert = false; ui.drag = null; ui.table = tableKey; }
+    // a shot animates once: the first render that sees its event; the first render of a table does not replay the last shot
+    const ev = v.event && v.event.seq !== undefined ? v.event : null;
+    if (ui.fx === undefined) ui.fx = ev ? ev.seq : -1;
+    ui.freshNow = ev && ev.seq !== ui.fx ? ev : null;
+    if (ev) ui.fx = ev.seq;
     // a placed or picked ship that is no longer in the setup (after Clear or a redraw) is put down
     if (ui.pick !== null && v.phase !== 'placing') ui.pick = null;
     ui.root = root; ui.ctx = ctx; ui.v = v; react(v);
@@ -206,7 +207,6 @@
       ${v.me >= 0 && !placing ? tabsHTML() : ''}
       <div class="sb-boards">${boardsHTML(v)}</div>
       ${v.me >= 0 && placing ? placeControlsHTML(v) : ''}
-      ${v.me >= 0 && !placing ? controlsHTML(v) : ''}
       <div class="wz-status ${v.myTurn || (placing && v.me >= 0 && !v.players[v.me].ready) ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
     if (focus) {
@@ -215,6 +215,9 @@
       (el && !el.disabled ? el : root.querySelector('[data-sb]:enabled'))?.focus({ preventScroll: true });
     }
     root.onclick = onClick;
+    root.onpointerdown = onDown;
+    root.onpointerup = onUp;
+    root.onpointercancel = () => { ui.drag = null; };
   }
 
   /** Places (or moves) the picked ship with its first square on k. The whole setup is sent, so the server checks it all. */
@@ -235,6 +238,56 @@
     ctx.act({ type: 'place', ships: setup });
   }
 
+  /** The square under a pointer on the placing sea, or -1 when it is off the sea. */
+  function gridK(grid, e, N) {
+    const rect = grid.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return -1;
+    const c = Math.min(N - 1, Math.floor(x / (rect.width / N)));
+    const r = Math.min(N - 1, Math.floor(y / (rect.height / N)));
+    return r * N + c;
+  }
+
+  /** Pressing a placed ship picks it up: it is then dragged, or tapped and the next square is where it goes. */
+  function onDown(e) {
+    const v = ui.v;
+    const hull = e.target.closest && e.target.closest('.sb-grid.placing .sb-hull[data-slot]');
+    if (!hull || !v || v.phase !== 'placing' || myReady(v) || e.button > 0) return;
+    const N = v.N, slot = Number(hull.dataset.slot);
+    const p = (ui.setup || v.setup || [])[slot];
+    if (!p) return;
+    const k = gridK(hull.closest('.sb-grid'), e, N);
+    const j = cellsOf(v.lengths[slot], p, N).indexOf(k);
+    ui.drag = { slot, j: Math.max(0, j), x: e.clientX, y: e.clientY };
+    ui.pick = slot;
+    ui.vert = p.vertical;
+    try { hull.setPointerCapture(e.pointerId); } catch (_) { /* a browser without capture still drags on the sea */ }
+    render(ui.root, v, ui.ctx);
+  }
+
+  /** Releasing a dragged ship puts it where the grabbed square is; a tap leaves it picked up for the next square. */
+  function onUp(e) {
+    const d = ui.drag;
+    ui.drag = null;
+    const v = ui.v, ctx = ui.ctx;
+    if (!d || !v || !ctx) return;
+    if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) <= 6) return;
+    const grid = ui.root.querySelector('.sb-grid.placing');
+    const k = grid ? gridK(grid, e, v.N) : -1;
+    if (k < 0) return; // dropped off the sea: it stays picked up
+    const N = v.N, vertical = ui.vert;
+    const r = Math.floor(k / N) - (vertical ? d.j : 0), c = (k % N) - (vertical ? 0 : d.j);
+    const base = ui.setup || v.setup || Array(v.lengths.length).fill(null);
+    const p = { r, c, vertical };
+    if (!canPlace({ ...v, setup: base }, d.slot, p)) {
+      ui.root.querySelector('.wz-status span').textContent = 'That ship would run off the sea or touch another ship. Try another square, or Rotate.';
+      return;
+    }
+    ui.setup = base.map((q, i) => (i === d.slot ? p : q));
+    ui.pick = null;
+    ctx.act({ type: 'place', ships: ui.setup });
+  }
+
   function onClick(e) {
     const el = e.target.closest('[data-sb], [data-sb-act]');
     const ctx = ui.ctx, v = ui.v;
@@ -245,19 +298,14 @@
       else if (el.dataset.sbAct === 'rules') ctx.showRules();
       return;
     }
-    if (el.dataset.sb === 'fire') {
-      if (v && v.myTurn && ui.sel !== null) {
-        const k = ui.sel;
-        ui.sel = null;
-        ctx.act({ type: 'fire', r: Math.floor(k / v.N), c: k % v.N });
-      }
-      return;
-    }
     switch (el.dataset.sb) {
       case 'tab-attack': ui.tab = 'attack'; break;
       case 'tab-mine': ui.tab = 'mine'; break;
-      case 'sq': if (v && v.myTurn) ui.sel = Number(el.dataset.k); break;
-      case 'clear': ui.sel = null; break;
+      case 'sq': {
+        const k = Number(el.dataset.k);
+        if (v && v.myTurn && !v.shots[1 - v.me][k]) ctx.act({ type: 'fire', r: Math.floor(k / v.N), c: k % v.N });
+        return;
+      }
       case 'pick': {
         const slot = Number(el.dataset.slot);
         if (ui.pick === slot) { ui.pick = null; break; }

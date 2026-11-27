@@ -8,6 +8,7 @@ const SIZE = { key: 'size', type: 'select', label: 'Board', default: '4', choice
   { value: '3', label: '3 × 3 boxes', desc: 'A small board, quick to finish.' },
   { value: '4', label: '4 × 4 boxes', desc: 'The classic board.' },
   { value: '5', label: '5 × 5 boxes', desc: 'A bigger board with more boxes to fight over.' },
+  { value: '6', label: '6 × 6 boxes', desc: 'The biggest board: a long game with many boxes to fight over.' },
 ] };
 const COLOURS = ['Blue', 'Red', 'Green', 'Gold'];
 

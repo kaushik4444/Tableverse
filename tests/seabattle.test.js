@@ -53,12 +53,16 @@ test('a miss passes the turn; the square cannot be fired at again', () => {
   assert.equal(fire(g, 'a', 90).ok, false, 'the same square again');
 });
 
-test('a hit passes the turn too, and is public', () => {
+test('a hit keeps the turn, so the shooter fires again; a miss then passes it; a hit is public', () => {
   const g = known();
   assert.equal(fire(g, 'a', 0).ok, true);
   assert.equal(g.shots[1][0], 'hit');
-  assert.equal(g.turn, 1, 'each player fires once per turn');
+  assert.equal(g.turn, 0, 'a hit keeps the turn with a');
   assert.equal(g.event.type, 'hit');
+  assert.equal(fire(g, 'b', 99).ok, false, 'b cannot fire while a still has the turn');
+  assert.equal(fire(g, 'a', 99).ok, true, 'a fires again');
+  assert.equal(g.shots[1][99], 'miss');
+  assert.equal(g.turn, 1, 'a miss passes the turn to b');
 });
 
 test('invalid moves are refused: not your turn, a square off the sea, an unknown action, a player not in the game', () => {
@@ -72,8 +76,8 @@ test('invalid moves are refused: not your turn, a square off the sea, an unknown
 
 test('sinking a ship shows it to everybody and counts for the shooter', () => {
   const g = known();
-  fire(g, 'a', 0); fire(g, 'b', 99);   // a hits b's ship at 0; b misses
-  fire(g, 'a', 1);
+  fire(g, 'a', 0);   // a hits b's ship at 0 and keeps the turn
+  fire(g, 'a', 1);   // the second square sinks it
   assert.equal(g.event.type, 'sunk');
   assert.equal(g.event.length, 2);
   assert.equal(g.shots[1][0], 'sunk');
@@ -84,7 +88,7 @@ test('sinking a ship shows it to everybody and counts for the shooter', () => {
 test('sinking the last ship wins the game, and nothing else can be played', () => {
   const g = known();
   g.fleets[1] = [{ cells: [0, 1], hits: 0 }];
-  fire(g, 'a', 0); fire(g, 'b', 99); fire(g, 'a', 1);
+  fire(g, 'a', 0); fire(g, 'a', 1);   // the hit keeps a's turn, so the second shot sinks the last ship
   assert.equal(g.phase, 'gameOver');
   assert.equal(g.winner, 0);
   assert.deepEqual(E.awaiting(g), []);

@@ -8,10 +8,10 @@
  *
  * Lines are numbered 0..L-1. Horizontal line (r, c) joins dots (r,c)-(r,c+1) and touches boxes (r-1,c) and (r,c).
  * Vertical line (r, c) joins dots (r,c)-(r+1,c) and touches boxes (r,c-1) and (r,c). Boxes are numbered r*n + c.
- * Option `size`: '3', '4' (default) or '5' boxes per side.
+ * Option `size`: '3', '4' (default), '5' or '6' boxes per side.
  */
 
-const SIZES = ['3', '4', '5'];
+const SIZES = ['3', '4', '5', '6'];
 
 /** The line table for an n x n board: the lines, and the boxes each line touches. */
 function boardFor(n) {
