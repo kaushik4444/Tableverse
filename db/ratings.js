@@ -139,6 +139,10 @@ async function incrementalInTx(client) {
   if (!pending.rows.length) return { mode: 'incremental', matches: 0, ratings: 0, events: 0 };
   if (pending.rows.some((r) => new Date(r.finished_at).getTime() <= watermark)) return null;
   const pendingIds = new Set(pending.rows.map((r) => r.id));
+  // A waiting match that already has rating events (left by an earlier replay, before its eligibility changed) cannot be
+  // added on top of them: the insert keeps the old rows. Only the full rebuild removes them.
+  const staleEvents = await client.query('SELECT 1 FROM rating_events WHERE match_id = ANY($1::uuid[]) LIMIT 1', [[...pendingIds]]);
+  if (staleEvents.rows.length) return null;
 
   // The window starts a day before the oldest waiting match (the pair limit looks back a day), or at the start of its UTC day
   // (the daily cap), whichever is earlier. Everything before it is summed up in the seeds below.
