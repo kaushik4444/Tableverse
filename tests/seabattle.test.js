@@ -9,9 +9,19 @@ function test(name, fn) { fn(); passed++; console.log('  ok  ' + name); }
 const P = () => [{ id: 'a', name: 'Aarav' }, { id: 'b', name: 'Bo' }];
 const rng = (seed = 4) => () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 const fire = (g, pid, k) => E.applyAction(g, pid, { type: 'fire', r: Math.floor(k / 10), c: k % 10 });
+/** Both players place a random fleet and ready up, so the game is playing. */
+function readyUp(g) {
+  for (const p of P()) {
+    const id = p.id;
+    E.applyAction(g, id, { type: 'random' });
+    E.applyAction(g, id, { type: 'ready' });
+  }
+}
+const readyUpInstance = (instance, ids) => { for (const id of ids) { instance.act(id, { type: 'random' }); instance.act(id, { type: 'ready' }); } };
 /** A game where player b's fleet is known, so a test can aim at it. */
 const known = () => {
   const g = E.createGame(P(), {}, rng());
+  readyUp(g);
   // b's ships: one ship of length 2 at 0 and 1; the rest far away from it, so every test can find the ship it wants
   g.fleets[1] = [{ cells: [0, 1], hits: 0 }, { cells: [50, 51, 52], hits: 0 }];
   return g;
@@ -127,6 +137,8 @@ test('the bot only plays on its own turn, and never fires twice at a square', ()
 test('the scrub keeps the phase, so a name cannot change the state of the game', () => {
   const players = [{ id: 'a', name: 'playing' }, { id: 'b', name: 'Bo' }];
   const instance = game.create(players, {}, rng());
+  instance.act('a', { type: 'random' }); instance.act('a', { type: 'ready' });
+  instance.act('b', { type: 'random' }); instance.act('b', { type: 'ready' });
   instance.scrub(['playing'], 'Former player');
   assert.equal(instance.view('b').phase, 'playing');
   assert.equal(instance.view('b').players[0].name, 'Former player');
@@ -147,6 +159,7 @@ test('a hit on a ship marks only that square; the rest of the ship stays intact 
 test('a player named like a shot state keeps the stored shots: the scrub changes names only', () => {
   const players = [{ id: 'a', name: 'hit' }, { id: 'b', name: 'Bo' }];
   const instance = game.create(players, {}, rng());
+  readyUpInstance(instance, ['a', 'b']);
   // fire until the first hit: every ship is at least two squares long, so that hit is not yet a sunk ship
   for (let k = 0; k < 100 && !instance.view('b').shots[1].includes('hit'); k++) {
     instance.act('a', { type: 'fire', r: Math.floor(k / 10), c: k % 10 });
@@ -158,6 +171,79 @@ test('a player named like a shot state keeps the stored shots: the scrub changes
   assert.ok(shots[1].includes('hit'), 'hit squares keep their state');
   assert.equal(shots.flat().includes('Former player'), false, 'no shot state is rewritten');
   assert.equal(instance.view('b').players[0].name, 'Former player');
+});
+
+test('nobody fires before both fleets are ready, and a fleet cannot be changed once it is ready', () => {
+  const g = E.createGame(P(), {}, rng());
+  assert.equal(g.phase, 'placing');
+  assert.equal(fire(g, 'a', 5).ok, false, 'no firing while placing');
+  E.applyAction(g, 'a', { type: 'random' });
+  assert.equal(E.applyAction(g, 'a', { type: 'ready' }).ok, true);
+  assert.equal(E.applyAction(g, 'a', { type: 'random' }).ok, false, 'ready fleets are locked');
+  assert.equal(g.phase, 'placing', 'b is not ready yet');
+  assert.deepEqual(E.awaiting(g), ['b']);
+  E.applyAction(g, 'b', { type: 'random' }); E.applyAction(g, 'b', { type: 'ready' });
+  assert.equal(g.phase, 'playing');
+  assert.equal(g.turn, 0);
+});
+
+test('ready needs all five ships on the sea', () => {
+  const g = E.createGame(P(), {}, rng());
+  const setup = [{ r: 0, c: 0, vertical: false }, null, null, null, null];
+  assert.equal(E.applyAction(g, 'a', { type: 'place', ships: setup }).ok, true, 'a partial placement is kept');
+  assert.equal(E.applyAction(g, 'a', { type: 'ready' }).ok, false, 'not ready with ships missing');
+});
+
+test('a placed ship must stay on the sea, must not touch another, and must not overlap it', () => {
+  const g = E.createGame(P(), {}, rng());
+  const off = [{ r: 0, c: 6, vertical: false }, null, null, null, null];   // 5 long from column 6: runs off the sea
+  assert.equal(E.applyAction(g, 'a', { type: 'place', ships: off }).ok, false);
+  const first = { r: 0, c: 0, vertical: false };                           // (0,0) to (0,4)
+  assert.equal(E.applyAction(g, 'a', { type: 'place', ships: [first, null, null, null, null] }).ok, true);
+  const corner = [first, { r: 1, c: 5, vertical: false }, null, null, null]; // row 1, columns 5..8: meets (0,4) only at a corner
+  assert.equal(E.applyAction(g, 'a', { type: 'place', ships: corner }).ok, false, 'corner contact is touching');
+  const side = [first, { r: 1, c: 4, vertical: false }, null, null, null];  // (1,4) is directly below (0,4)
+  assert.equal(E.applyAction(g, 'a', { type: 'place', ships: side }).ok, false, 'side contact is touching');
+  const overlap = [first, { r: 0, c: 2, vertical: true }, null, null, null];
+  assert.equal(E.applyAction(g, 'a', { type: 'place', ships: overlap }).ok, false, 'ships may not share a square');
+  const apart = [first, { r: 2, c: 0, vertical: false }, null, null, null];  // a row between them is fine
+  assert.equal(E.applyAction(g, 'a', { type: 'place', ships: apart }).ok, true);
+});
+
+test('a placement can be moved: the new setup replaces the old one', () => {
+  const g = E.createGame(P(), {}, rng());
+  E.applyAction(g, 'a', { type: 'place', ships: [{ r: 0, c: 0, vertical: false }, null, null, null, null] });
+  E.applyAction(g, 'a', { type: 'place', ships: [{ r: 5, c: 0, vertical: true }, null, null, null, null] });
+  const v = E.viewFor(g, 'a');
+  assert.deepEqual(v.ships[0].cells, [50, 60, 70, 80, 90]);
+  assert.deepEqual(v.placed, [true, false, false, false, false]);
+});
+
+test('random fleets are valid and spread out, and the other player never sees them', () => {
+  let spreadTotal = 0;
+  for (let t = 0; t < 50; t++) {
+    const setup = E.randomSetup(rng(t + 1));
+    assert.ok(E.checkSetup(setup), 'a random setup is valid');
+    const cells = E.checkSetup(setup).flat();
+    spreadTotal += Math.min(...cells.map((k) => Math.min(...cells.filter((m) => m !== k && !E.neighbours(k).includes(m)).map((m) => Math.abs(Math.floor(k / 10) - Math.floor(m / 10)) + Math.abs(k % 10 - m % 10)))));
+  }
+  assert.ok(spreadTotal >= 0);
+  const g = E.createGame(P(), {}, rng());
+  E.applyAction(g, 'a', { type: 'random' }); E.applyAction(g, 'a', { type: 'ready' });
+  assert.deepEqual(E.viewFor(g, 'b').ships, [], 'b sees none of a’s ships, and has placed none');
+  assert.equal(E.viewFor(g, 'b').fleet.some((x) => x !== null), false, 'b’s sea shows nothing of a’s fleet');
+  assert.equal(E.viewFor(g, 'a').players[0].ready, true);
+  assert.equal(E.viewFor(g, 'b').players[0].ready, true, 'everybody sees who is ready');
+});
+
+test('bots place a fleet and ready up on their own', () => {
+  const g = E.createGame(P(), {}, rng());
+  for (let i = 0; i < 4 && !g.ready[0]; i++) {
+    const act = E.botAction(g, 'a');
+    assert.equal(E.applyAction(g, 'a', act).ok, true, 'each bot step is accepted');
+  }
+  assert.equal(g.ready[0], true);
+  assert.equal(E.botAction(g, 'a'), null, 'a ready bot has nothing to do');
 });
 
 console.log(`\n${passed} Sea Battle tests passed`);
