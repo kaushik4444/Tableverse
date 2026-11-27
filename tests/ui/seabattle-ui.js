@@ -117,7 +117,7 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     assert.equal(await page.locator('.sb-board.attack').isVisible(), false);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(scroll <= 360, `page is ${scroll}px wide`);
-    for (const sel of ['[data-sb="reset"]', '[data-sb="ready"]']) {
+    for (const sel of ['[data-sb="tab-attack"]', '[data-sb="tab-mine"]']) {
       const box = await page.locator(sel).boundingBox();
       assert.ok(box.height >= 44, `${sel} is ${box.height}px tall`);
     }

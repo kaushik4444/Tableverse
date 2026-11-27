@@ -216,8 +216,6 @@
     }
     root.onclick = onClick;
     root.onpointerdown = onDown;
-    root.onpointerup = onUp;
-    root.onpointercancel = () => { ui.drag = null; };
   }
 
   /** Places (or moves) the picked ship with its first square on k. The whole setup is sent, so the server checks it all. */
@@ -261,8 +259,12 @@
     ui.drag = { slot, j: Math.max(0, j), x: e.clientX, y: e.clientY };
     ui.pick = slot;
     ui.vert = p.vertical;
-    try { hull.setPointerCapture(e.pointerId); } catch (_) { /* a browser without capture still drags on the sea */ }
     render(ui.root, v, ui.ctx);
+    // the release is listened for on the window: the re-render above replaces the pressed hull, so it cannot hold the pointer
+    const up = (ev) => { window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); onUp(ev); };
+    const cancel = () => { window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); ui.drag = null; };
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
   }
 
   /** Releasing a dragged ship puts it where the grabbed square is; a tap leaves it picked up for the next square. */
