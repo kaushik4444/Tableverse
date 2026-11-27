@@ -10,11 +10,18 @@ async function scenario(olderFails) {
   const requests = []; const timers = new Map(); let timerId = 0; let click;
   const select = { dataset: { gaccess: 'ludo' }, value: 'off' };
   const retry = {};
+  const save = {};
+  // The game-switch box is repainted after each change, so its fake exposes the same controls every time.
+  const switches = {
+    innerHTML: '',
+    querySelector: (selector) => selector === '[data-gsave]' ? save : null,
+    querySelectorAll: (selector) => selector === '[data-gaccess]' ? [select] : [],
+  };
   const main = {
     innerHTML: '',
     querySelector: (selector) => selector === '[data-loading]' ? (main.innerHTML.includes('data-loading') ? {} : null)
-      : selector === '[data-retry]' ? retry : null,
-    querySelectorAll: (selector) => selector === '[data-gaccess]' ? [select] : [],
+      : selector === '[data-retry]' ? retry : selector === '#gameSwitches' ? switches : null,
+    querySelectorAll: () => [],
     insertAdjacentHTML: (_, html) => { main.innerHTML += html; },
   };
   const tabs = { querySelectorAll: () => [], querySelector: () => null, addEventListener: (_, fn) => { click = fn; } };
@@ -40,7 +47,9 @@ async function scenario(olderFails) {
   await answer('/api/admin/games?days=30', games);
   await answer('/api/admin/game-flags', { modes: ['on', 'off'], games: [{ id: 'ludo', name: 'Ludo', access: 'on' }] });
   assert.equal(timers.size, 0, 'completed render cancels its watchdog');
-  select.onchange(); await flush();
+  select.onchange(); await flush(); // a change only fills the draft; nothing is sent yet
+  assert.equal(requests.length, 0, 'editing the draft sends no request');
+  save.onclick(); await flush(); // Save sends the draft
   await answer('/api/auth/csrf', { csrfToken: 'synthetic' });
   await tab('health');
   await tab('games'); // re-enter while the save is pending
