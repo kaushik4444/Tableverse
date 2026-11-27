@@ -65,6 +65,14 @@ test('a game needs 1 to 8 players and falls back to the defaults', () => {
   assert.equal(g.options.pace, 'normal');
 });
 
+test('an inherited property is not a pace: bot timings stay finite', () => {
+  for (const pace of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+    const g = E.createGame([{ id: 'h', name: 'Human' }, { id: 'b', name: 'Bot', bot: true }], { difficulty: 'easy', pace }, mulberry32(3));
+    assert.equal(g.options.pace, 'normal', pace);
+    assert.ok(Number.isFinite(E.botDelayMs(g, 1)), 'bot delay is a number for ' + pace);
+  }
+});
+
 test('a right number counts, a wrong number is shown and counted, and erase clears it', () => {
   const g = E.createGame(people(2), { difficulty: 'easy' }, mulberry32(4), clock().now);
   const k = g.puzzle.findIndex((v) => !v);
