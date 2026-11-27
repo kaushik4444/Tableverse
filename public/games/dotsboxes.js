@@ -91,11 +91,15 @@
       if (next) next.focus({ preventScroll: true });
       else { ui.parkedFocus = true; root.querySelector('[data-db="rules"]')?.focus({ preventScroll: true }); } // every line is waiting: keep focus in the controls
     } else if (ui.parkedFocus && focusParked) {
-      // the next player's turn has come back: a playable line takes the focus again (unless the person has moved it elsewhere)
+      // the next player's turn has come back: a playable line takes the focus again (unless the person has moved it elsewhere);
+      // until then the focus stays on Rules, so a redraw does not drop it
       const next = root.querySelector('.db-line:enabled');
       if (next) { ui.parkedFocus = false; next.focus({ preventScroll: true }); }
+      else root.querySelector('[data-db="rules"]')?.focus({ preventScroll: true });
     }
     root.onclick = onClick;
+    // focus leaving the table (or the board) gives up the parked place: the next line must not take focus the person has moved
+    root.onfocusout = (e) => { if (!e.relatedTarget || !root.contains(e.relatedTarget)) ui.parkedFocus = false; };
   }
 
   // Tap bands overlap near dots. Pick the closest visible line within its band instead of using paint order.

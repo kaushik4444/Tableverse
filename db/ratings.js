@@ -24,10 +24,9 @@ async function loadMatches(client = db, { since = null, before = null } = {}) {
   const { rows } = await client.query(
     `SELECT m.id, m.game_id, m.match_key, m.finished_at, m.completed, m.rated, m.unrated_reason, m.rating_processed, m.options,
             mp.player_id, mp.seat, mp.is_bot, mp.left_early, mp.forfeit, mp.is_winner, mp.is_draw, mp.place, mp.score,
-            (gp.is_anonymous IS TRUE) AS is_guest
+            mp.is_guest
        FROM matches m
        JOIN match_participants mp ON mp.match_id = m.id
-       LEFT JOIN players gp ON gp.id = mp.player_id
       WHERE ($1::timestamptz IS NULL OR m.finished_at >= $1::timestamptz)
         AND ($2::timestamptz IS NULL OR m.finished_at < $2::timestamptz)
       ORDER BY m.finished_at, m.id, mp.seat`,

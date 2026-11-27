@@ -2158,7 +2158,9 @@
   }
   /** A page that was locked for a guest loads its data once the person is registered (nothing was fetched while locked). */
   function loadLockedPageData() {
-    if (S.isGuest || S.room || !S.guestLockedView) return; // only a page that was actually shown locked
+    if (S.room || !S.guestLockedView) return; // only a page that was actually shown locked
+    // still locked for this guest: nothing is fetched. An owner who unlocked the page (e.g. after a reconnect) gets its data.
+    if (S.page === 'friends' ? guestLockedHere('friends') : guestLockedHere('profiles')) return;
     S.guestLockedView = false;
     if (S.page === 'profile') loadProfile();
     else if (S.page === 'friends') loadSocial({ quiet: true });

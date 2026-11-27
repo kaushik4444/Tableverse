@@ -180,7 +180,9 @@
     const gridFocus = !!active && root.contains(active) && active.matches('.su-c');
     // another control (Undo, Rules, Leave...) keeps its place by its action, if the redraw still has one
     const ctlAction = !!active && root.contains(active) && !gridFocus && active.dataset && active.dataset.su ? active.dataset.su : '';
-    if (ui.peekPhase !== v.phase) { ui.peekPhase = v.phase; ui.peek = false; } // a new phase shows its own result sheet
+    // a new finished table (or a new phase) shows its own result sheet; the same table keeps the person's choice
+    const peekKey = [ctx.room && ctx.room.code, v.phase, v.event && v.event.seq].join('|');
+    if (ui.peekKey !== peekKey) { ui.peekKey = peekKey; ui.peek = false; }
     const finished = v.phase === 'gameOver';
     const status = v.phase === 'playing' && v.me >= 0 && !v.out && !v.wrong.length ? 'mine' : '';
     root.innerHTML = `

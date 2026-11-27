@@ -1801,6 +1801,7 @@ function start(opts = {}) {
       if (!p.connected) return;
       // the reclaim exemption only holds while its window is open: if the window closed during the admission check, the trial check applies again
       if (reclaiming && !alreadyHere && !rejoinDecision(room, p.id, Date.now()).seat && await trialBlockedAtEntry(p, room.gameId, code)) return;
+      if (!p.connected || p.ws !== socketAtStart) return; // the connection ended during that lookup: do not seat it
       // The owner may restrict the game while the admission check was waiting: refuse again before any seat changes
       if (refuseGame(p, room.gameId, code)) return;
       // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss

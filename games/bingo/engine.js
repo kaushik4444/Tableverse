@@ -116,7 +116,7 @@ function callNext(g) {
   }
   // before the last call, a bot that completes its card claims at once
   const bots = g.players.map((_, i) => i).filter((i) => g.players[i].bot && hasBingo(g, i));
-  if (bots.length) finish(g, bots, bots[0]);
+  if (bots.length && g.deck.length) finish(g, bots, bots[0]); // the last call is followed by the claim interval (above)
   return { ok: true };
 }
 

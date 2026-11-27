@@ -130,11 +130,12 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
       }
       const gone = isUuid(p.playerId) && !accountId && !p.isBot;
       await client.query(
-        `INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot, left_early, is_draw, forfeit, place, seconds_played)
+        `INSERT INTO match_participants (match_id, player_id, player_name, seat, score, is_winner, is_bot, left_early, is_draw, forfeit, place, seconds_played, is_guest)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
                  CASE WHEN $12::integer IS NOT NULL THEN LEAST(21600, GREATEST(0, $12::integer))
                       WHEN $8 OR $7 THEN 0
-                      ELSE LEAST(21600, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (SELECT finished_at - started_at FROM matches WHERE id = $1)))::INTEGER)) END)`,
+                      ELSE LEAST(21600, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (SELECT finished_at - started_at FROM matches WHERE id = $1)))::INTEGER)) END,
+                 $13)`,
         [
           matchId,
           accountId,
@@ -148,6 +149,7 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
           Boolean(p.forfeit),
           Number.isInteger(p.place) && p.place >= 1 && p.place <= 32767 ? p.place : null,
           Number.isInteger(p.secondsPlayed) && p.secondsPlayed >= 0 ? p.secondsPlayed : null,
+          Boolean(p.isGuest) && !p.isBot,
         ]
       );
     }
