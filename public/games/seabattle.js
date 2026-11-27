@@ -169,7 +169,7 @@
       <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-sb-act="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-sb-act="leave">Leave table</button></div></div></div>`;
   }
 
-  /** A splash for a miss, a bang for a hit, and a longer one for a sunk ship. The first look plays nothing. */
+  /** A splash for a miss, a boom for a hit, a sinking sound and a chime for a sunk ship. The first look plays nothing. */
   function react(v) {
     const e = v.event, snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
@@ -178,8 +178,8 @@
     if (!snd) return;
     if (e.type === 'start') { snd.play('place'); return; }
     if (e.type === 'over') { snd.play('place'); setTimeout(() => snd.play(v.winner === v.me ? 'win' : v.me < 0 ? 'round' : 'lose'), 260); return; }
-    if (e.type === 'sunk') { snd.play('land'); setTimeout(() => snd.play('round'), 180); return; }
-    snd.play(e.type === 'hit' ? 'land' : 'place');
+    if (e.type === 'sunk') { snd.play('sink'); setTimeout(() => snd.play('round'), 420); return; }
+    snd.play(e.type === 'hit' ? 'boom' : 'splash');
   }
 
   function render(root, v, ctx) {

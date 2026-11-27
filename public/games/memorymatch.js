@@ -61,8 +61,8 @@
     ui.seq = e.seq;
     if (!snd) return;
     if (e.type === 'flip') { snd.play('place'); return; }
-    if (e.type === 'match') { snd.play('land'); return; }
-    if (e.type === 'miss') { snd.play('fall'); return; }
+    if (e.type === 'match') { snd.play('match'); return; }
+    if (e.type === 'miss') { snd.play('mismatch'); return; }
     if (e.type === 'over') setTimeout(() => snd.play(v.draw ? 'round' : v.winner === v.me ? 'win' : 'lose'), 200);
   }
 
