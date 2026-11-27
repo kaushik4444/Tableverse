@@ -14,7 +14,8 @@
 const N = 10;
 const LENGTHS = [5, 4, 3, 3, 2];
 const CELLS = N * N;
-const PACE_MS = { slow: 3000, normal: 2000, quick: 1200 };
+// the time between a bot's shots: long enough to read the last shot before the next one
+const PACE_MS = { slow: 4000, normal: 3000, quick: 2000 };
 
 const neighbours = (k) => {
   const r = Math.floor(k / N), c = k % N, out = [];
@@ -54,7 +55,7 @@ const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
 
 function createGame(players, options = {}, rng = Math.random, now = Date.now) {
   if (players.length !== 2) throw new Error('Sea Battle is for two players');
-  const pace = PACE_MS[options.pace] ? options.pace : 'normal';
+  const pace = PACE_MS[options.pace] ? options.pace : 'slow';
   return {
     game: 'seabattle',
     players: players.map((p) => ({ id: p.id, name: p.name })),
