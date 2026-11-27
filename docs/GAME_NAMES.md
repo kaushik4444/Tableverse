@@ -75,3 +75,8 @@ Tetris, Bullhead Run (the removed working title for what is now Take 5), Beer Po
 ## Memory Match
 
 - Memory Match is a generic name for a card-pair game, so the game keeps it. The cards use generic fruit, plant and creature symbols drawn from standard emoji, and the card back and layout are Tableverse's own (`games/memorymatch/`).
+## Falling Blocks
+
+- The owner named the game Falling Blocks (2026-11-27). A final name check is still needed before any release, as for every name in this table.
+- Tetris is a registered trademark. The game uses no Tetris name, logo or art. Its wells, colours, garbage rules and screens are Tableverse's own (`games/fallingblocks/`, `public/games/fallingblocks.*`).
+- Owner to confirm: the seven block shapes are the standard free-form set (I, O, T, S, Z, J, L). They are not Tetris artwork, but the piece set is the part of this idea that the planned list asks to keep distinct.
