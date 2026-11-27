@@ -98,7 +98,8 @@
   function placingHTML(v) {
     const N = v.N;
     const placed = [];
-    (v.setup || []).forEach((p, i) => { if (p) placed.push({ slot: i, cells: cellsOf(v.lengths[i], p, N) }); });
+    // the working setup (a Rotate or a move not yet confirmed by the server) is what the sea shows
+    (ui.setup || v.setup || []).forEach((p, i) => { if (p) placed.push({ slot: i, cells: cellsOf(v.lengths[i], p, N) }); });
     // a square under a ship is named by the ship and its place, so a screen reader can find the fleet
     const under = new Map();
     placed.forEach((s) => s.cells.forEach((k) => under.set(k, s)));
@@ -279,6 +280,7 @@
         }
         ui.vert = turned.vertical;
         ui.setup = base.map((q, i) => (i === ui.pick ? turned : q));
+        render(ui.root, ui.v, ui.ctx); // show the turn now, before the server's view arrives
         ctx.act({ type: 'place', ships: ui.setup });
         return;
       }
@@ -287,8 +289,9 @@
         const N = v.N;
         if (ui.pick === null) {
           // tap a placed ship to pick it up
-          const slot = (v.setup || []).findIndex((q, i) => q && cellsOf(v.lengths[i], q, N).includes(k));
-          if (slot >= 0) { ui.pick = slot; ui.vert = v.setup[slot].vertical; }
+          const working = ui.setup || v.setup || [];
+          const slot = working.findIndex((q, i) => q && cellsOf(v.lengths[i], q, N).includes(k));
+          if (slot >= 0) { ui.pick = slot; ui.vert = working[slot].vertical; }
           else { ui.root.querySelector('.wz-status span').textContent = 'Pick a ship first, then tap where it goes'; return; }
           break;
         }
