@@ -1,0 +1,43 @@
+/* Sea Battle. Builds on table.css and the wz frame. Seat colours come from --c, as in the other games. The sea is a 10 x 10 grid. */
+.sb { --sb-sea: rgba(56, 189, 248, .14); --sb-ship: #94a3b8; --sb-hit: #ef4444; --sb-sunk: #7f1d1d; --sb-0: #74b9ff; --sb-1: #ff7675; }
+.sb .s0 { --c: var(--sb-0); } .sb .s1 { --c: var(--sb-1); }
+.sb .sb-seats { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.sb .sb-seat { flex: 1 1 calc(50% - 6px); display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 2px solid transparent; min-width: 0; }
+.sb .sb-seat.turn { border-color: var(--gold, #f2c14e); }
+.sb .sb-seat.won { background: rgba(242, 193, 78, .2); }
+.sb .sb-swatch { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; background: var(--c); }
+.sb .sb-who { display: grid; min-width: 0; }
+.sb .sb-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb .sb-who small { opacity: .75; }
+.sb .sb-tabs { display: flex; gap: 8px; justify-content: center; margin: 6px 0; }
+.sb .sb-tabs .btn.on { background: rgba(255, 255, 255, .18); }
+.sb .sb-boards { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 6px; }
+.sb .sb-board { display: flex; flex-direction: column; align-items: center; }
+.sb .sb-grid { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 2px; width: min(78vw, 300px); aspect-ratio: 1; padding: 4px; box-sizing: border-box; background: rgba(0, 0, 0, .25); border-radius: 10px; }
+.sb .sb-cell { display: block; min-width: 0; min-height: 0; border: 0; padding: 0; margin: 0; border-radius: 3px; background: var(--sb-sea); position: relative; }
+.sb .sb-cell.open { cursor: pointer; }
+.sb .sb-cell:disabled { cursor: default; }
+.sb .sb-cell.open:not(:disabled):hover, .sb .sb-cell.open:not(:disabled):focus-visible { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); }
+.sb .sb-cell.sel { box-shadow: inset 0 0 0 3px var(--gold, #f2c14e); }
+.sb .sb-cell.open:focus-visible { outline: 3px solid var(--gold, #f2c14e); outline-offset: 1px; }
+.sb .sb-cell.ship { background: var(--sb-ship); }
+.sb .sb-cell.hit, .sb .sb-cell.sunk { background: var(--sb-hit); }
+.sb .sb-cell.sunk { background: var(--sb-sunk); }
+.sb .sb-cell.miss::after, .sb .sb-cell.water.miss::after { content: ''; position: absolute; inset: 40%; border-radius: 50%; background: rgba(255, 255, 255, .7); }
+.sb .sb-cell.hit::after, .sb .sb-cell.sunk::after { content: '✕'; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font: 800 clamp(10px, 3vw, 14px) system-ui, sans-serif; }
+.sb .sb-controls { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.sb .sb-controls .btn { min-width: 88px; min-height: 44px; }
+.sb .sb-controls .btn:disabled { opacity: .45; }
+/* a phone shows one sea at a time; a wide screen shows both */
+.sb[data-tab="attack"] .sb-board.mine { display: none; }
+.sb[data-tab="mine"] .sb-board.attack { display: none; }
+@media (min-width: 700px) {
+  .sb .sb-tabs { display: none; }
+  .sb .sb-boards { flex-direction: row; justify-content: center; align-items: flex-start; gap: 28px; }
+  .sb .sb-board { display: flex !important; }
+  .sb .sb-grid { width: min(38vw, 300px); }
+}
+@media (max-height: 700px) {
+  .sb .sb-grid { width: min(70vw, 250px); }
+  .sb .sb-seat { padding: 4px 6px; }
+}
