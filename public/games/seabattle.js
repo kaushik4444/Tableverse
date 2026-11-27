@@ -296,7 +296,14 @@
         return;
       }
       case 'random': ctx.act({ type: 'random' }); ui.pick = null; return;
-      case 'reset': ctx.act({ type: 'place', ships: Array(v.lengths.length).fill(null) }); ui.pick = null; return;
+      case 'reset': {
+        // the working setup is cleared too, so a Rotate before the cleared view arrives has no ship to turn back into the fleet
+        const empty = Array(v.lengths.length).fill(null);
+        ui.setup = empty;
+        ui.pick = null;
+        ctx.act({ type: 'place', ships: empty });
+        return;
+      }
       case 'ready': ctx.act({ type: 'ready' }); return;
       default: return;
     }
