@@ -56,7 +56,7 @@ function applyAction(g, playerId, action) {
   if (g.matched[i]) return { ok: false, error: 'That card is already matched' };
   if (g.pending === i) return { ok: false, error: 'That card is already face up' };
 
-  g.peek = null; g.last = i; g.version++;
+  g.last = i; g.version++; // a missed pair stays face up until the next turn's second card is turned (see below)
   g.known.set(i, g.cards[i]);
   if (g.pending === null) {
     g.pending = i;
@@ -66,6 +66,7 @@ function applyAction(g, playerId, action) {
 
   const a = g.pending;
   g.pending = null;
+  g.peek = null; // the missed pair has been seen by the players who turned the next pair
   if (g.cards[a] === g.cards[i]) {
     g.matched[a] = g.matched[i] = true; g.owner[a] = g.owner[i] = who;
     g.pairs[who]++; g.matchedCount += 2;

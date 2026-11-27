@@ -20,7 +20,7 @@
   }
 
   function seatsHTML(v) {
-    return `<div class="mm-seats">${v.players.map((p, i) => `<div class="mm-seat s${i} ${i === v.turn && v.phase === 'playing' ? 'turn' : ''} ${v.phase === 'gameOver' && v.winner === i ? 'won' : ''}">
+    return `<div class="mm-seats">${v.players.map((p, i) => `<div class="mm-seat s${i} ${i === v.turn && v.phase === 'playing' ? 'turn' : ''} ${v.phase === 'gameOver' && v.winner === i ? 'won' : ''}" data-pid="${esc(p.id)}">
       <span class="mm-swatch" aria-hidden="true"></span><span class="mm-who"><b>${esc(p.name)}${i === v.me ? ' (you)' : ''}</b><small>${COLOURS[i]} · <span class="mm-count">${p.pairs}</span> ${p.pairs === 1 ? 'pair' : 'pairs'}</small></span></div>`).join('')}</div>`;
   }
 
@@ -68,6 +68,9 @@
 
   function render(root, v, ctx) {
     ui.ctx = ctx; ui.v = v; react(v);
+    // a card turned over replaces the board: keep the keyboard place on the card the person used
+    const active = root.ownerDocument.activeElement;
+    const cardKey = active && root.contains(active) && active.dataset && active.dataset.card !== undefined ? active.dataset.card : null;
     root.innerHTML = `<div class="wz mm" data-game="memorymatch">
       <div class="wz-top"><div class="wz-round"><b>Memory Match</b><span class="label"> · ${v.rows} × ${v.cols} · ${v.left} cards left</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-mm="rules">Rules</button>', 'mm')}</div>
@@ -76,6 +79,10 @@
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
     root.onclick = onClick;
+    if (cardKey !== null) {
+      const again = root.querySelector(`[data-card="${cardKey}"]:not([disabled])`) || root.querySelector('[data-mm="rules"]');
+      if (again) again.focus({ preventScroll: true });
+    }
   }
 
   function onClick(e) {
