@@ -48,7 +48,8 @@
 .ri .ri-discard { margin-top: 8px; display: grid; gap: 6px; }
 .ri .ri-step { display: flex; align-items: center; gap: 6px; }
 .ri .ri-step span { min-width: 100px; }
-.ri .ri-log { margin: 8px 0 0; padding-left: 18px; font-size: 13px; opacity: .85; }
+.ri .ri-log { margin: 8px 0 0; padding-left: 0; list-style: none; font-size: 13px; opacity: .85; display: grid; gap: 2px; }
+.ri .ri-die-empty { background: rgba(255, 255, 255, .15); color: rgba(255, 255, 255, .6); }
 @media (max-height: 700px) {
   .ri .ri-seat { padding: 4px 6px; }
   .ri .ri-main { width: min(100%, 320px); }

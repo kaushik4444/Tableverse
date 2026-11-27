@@ -610,12 +610,15 @@ function botAction(g, playerId, rng) {
       if (legal.road.length && canAfford(g, seat, COST.road) && countOf(g, seat).roads < PIECES.road) {
         return { type: 'buildRoad', edge: legal.road[Math.floor(rng() * legal.road.length)] };
       }
-      // stuck for a card: trade a surplus card with the bank for one the next build needs
-      const need = RESOURCES.find((r) => g.hand[seat][r] === 0 && (COST.road[r] || COST.settlement[r]));
-      if (need && legal.road.length) {
-        const give = RESOURCES.filter((r) => r !== need && g.hand[seat][r] >= bankRate(g, seat, r))
+      // short of cards for the next build: trade a card that is spare (beyond that build's cost) for one it lacks
+      const want = [['city', COST.city, legal.city.length], ['settlement', COST.settlement, legal.settle.length], ['road', COST.road, legal.road.length]];
+      for (const [, cost, possible] of want) {
+        if (!possible) continue;
+        const lacks = RESOURCES.find((r) => g.hand[seat][r] < (cost[r] || 0));
+        if (!lacks) continue;
+        const give = RESOURCES.filter((r) => (g.hand[seat][r] - (cost[r] || 0)) >= bankRate(g, seat, r))
           .sort((a, b) => g.hand[seat][b] - g.hand[seat][a])[0];
-        if (give) return { type: 'trade', give, get: need };
+        if (give) return { type: 'trade', give, get: lacks };
       }
       return { type: 'endTurn' };
     }

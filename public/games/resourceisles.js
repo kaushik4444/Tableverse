@@ -108,7 +108,7 @@
   }
 
   function dieHTML(v) {
-    if (!v.dice) return '<div class="ri-dice" aria-label="No roll yet"><span class="ri-die">–</span><span class="ri-die">–</span></div>';
+    if (!v.dice) return '<div class="ri-dice" aria-label="No roll yet"><span class="ri-die ri-die-empty" aria-hidden="true">?</span><span class="ri-die ri-die-empty" aria-hidden="true">?</span></div>';
     const face = (n) => `<span class="ri-die" aria-label="${n}">${n}</span>`;
     return `<div class="ri-dice" aria-label="Dice: ${v.dice[0]} and ${v.dice[1]}">${face(v.dice[0])}${face(v.dice[1])}</div>`;
   }
@@ -153,7 +153,7 @@
       const txt = { settle: 'built a settlement', road: 'built a road', city: 'built a city', roll: `rolled ${e.n}`, discard: `discarded ${e.n}`, robber: 'moved the robber', steal: 'took a card', trade: 'traded with the bank', end: 'ended the turn' }[e.kind] || '';
       return `<li>${who} ${txt}</li>`;
     }).join('');
-    return `<ol class="ri-log" aria-label="Recent moves">${lines}</ol>`;
+    return `<ul class="ri-log" aria-label="Recent moves">${lines}</ul>`;
   }
 
   function overlayHTML(v) {
