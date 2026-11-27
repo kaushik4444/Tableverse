@@ -91,7 +91,7 @@
 
   function overlayHTML(v) {
     if (v.phase !== 'gameOver') return '';
-    const title = v.draw ? 'A draw' : v.winner === null ? 'Game over' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
+    const title = v.draw ? 'A draw' : v.winner === null || v.players.length === 1 ? 'Game over' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     const score = v.players.map((p) => `${esc(p.name)} ${p.lines} ${p.lines === 1 ? 'row' : 'rows'}`).join(' · ');
     return `<div class="overlay" role="dialog" aria-labelledby="fb-over-title"><div class="sheet"><h2 id="fb-over-title" tabindex="-1">${title}</h2>
       <p class="hint" style="text-align:left">${score}</p>

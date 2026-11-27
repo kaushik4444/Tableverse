@@ -131,6 +131,10 @@
     if (v.winner < 0) {
       title = v.solo ? 'Out of lives: game over' : 'Everybody is out of lives';
       hint = `You made ${v.maxLives} mistakes. ${v.solo ? 'Try again' : 'Nobody filled the grid'}, and the answer is filled in gold on your grid.`;
+    } else if (v.solo) {
+      // alone there is no opponent: the end is Game over, and the time is the result
+      title = 'Game over';
+      hint = `Grid filled in ${plural(e.seconds || 0, 'second')}.`;
     } else {
       title = v.winner === v.me ? 'You filled the grid first!' : `${nameOf(v, v.winner)} filled the grid first`;
       hint = `The first grid with every number right wins. It took ${plural(e.seconds || 0, 'second')}.`;

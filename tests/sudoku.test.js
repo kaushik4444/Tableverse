@@ -137,6 +137,7 @@ test('bots fill squares, and a bot can win; a bot makes only a few mistakes, sin
   let steps = 0, wrong = 0;
   while (g.phase === 'playing' && steps < 200) {
     const a = E.botAction(g, 'b');
+    if (!a || (E.viewFor(g, 'b').lives ?? 1) <= 0) break; // out of lives: the bot has no more squares to fill
     if (a.v !== g.solution[a.r * 9 + a.c]) wrong++;
     must(g, 'b', a);
     steps++;

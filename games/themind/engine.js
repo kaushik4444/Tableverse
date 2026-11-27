@@ -1,7 +1,5 @@
 'use strict';
-const { slips } = require('../botSkill');
-// A slip here is a wasted throwing star, and stars are scarce, so it is much rarer than a slip elsewhere.
-const STAR_SLIP = 0.02;
+const { slips, STAR_SLIP } = require('../botSkill');
 /**
  * Mind: pure rules engine (no timers, no sockets). Real-time cooperative game: there are no turns.
  * Every player holds some numbers from 1-100; together the team must play them all onto one pile in ascending

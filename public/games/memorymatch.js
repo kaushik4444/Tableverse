@@ -47,7 +47,8 @@
     const key = v.event ? v.event.seq : null;
     const settled = ui.resultSeen === key;
     if (ui.ctx.resultVisible !== false) ui.resultSeen = key;
-    const title = v.draw ? 'A draw' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
+    // alone there is no opponent to beat: the end is just Game over, and the turns say how it went
+    const title = v.solo ? 'Game over' : v.draw ? 'A draw' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     const score = v.solo ? `Every pair found in ${v.turns} ${v.turns === 1 ? 'turn' : 'turns'}` : v.players.map((p) => `${esc(p.name)} ${p.pairs} ${p.pairs === 1 ? 'pair' : 'pairs'}`).join(' · ');
     return `<div class="overlay${settled ? ' settled' : ''}"><div class="sheet"><h2>${title}</h2>
       <p class="hint" style="text-align:left">${score}</p>
