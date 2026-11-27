@@ -14,7 +14,7 @@ module.exports = {
   seats: { min: 2, max: 4, default: 2 },
   seatLabel: (i) => COLOURS[i],
   // rows cleared is shown as the score; the stat is the most rows cleared in a game you won
-  stats: { kind: 'none', bestLabel: null, bestOf: null },
+  stats: { kind: 'none', bestLabel: 'Most rows cleared in a win', bestOf: (row) => (row.isWinner && Number.isFinite(row.score) ? row.score : null) },
   options: [
     // no TIME_LIMIT_OPTION: everybody builds at once, so nobody waits for a turn. Bots are timed by Bot speed.
     { key: 'pace', type: 'select', label: 'Bot speed', default: 'slow', choices: [
