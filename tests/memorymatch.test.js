@@ -23,8 +23,8 @@ test('the deal has every symbol exactly twice, for each board size', () => {
   }
 });
 
-test('2 to 4 players only; the default is 4x4; an unknown size falls back to it', () => {
-  assert.throws(() => E.createGame(P(1)));
+test('1 to 4 players; the default is 4x4; an unknown size falls back to it', () => {
+  assert.throws(() => E.createGame(P(0)));
   assert.throws(() => E.createGame(P(5)));
   assert.equal(E.createGame(P(2), {}).total, 16);
   assert.equal(E.createGame(P(2), { size: '9x9' }).total, 16);
@@ -107,8 +107,8 @@ test('a seat sees only the matched cards and the cards in play; the rest stay hi
   assert.equal(E.viewFor(g, 'nobody').myTurn, false);
 });
 
-test('the plugin: 2 to 4 seats, a size option, and the rules have a title for each', () => {
-  assert.deepEqual(game.seats, { min: 2, max: 4, default: 2 });
+test('the plugin: 1 to 4 seats, a size option, and the rules have a title for each', () => {
+  assert.deepEqual(game.seats, { min: 1, max: 4, default: 2 });
   assert.deepEqual(game.options[0].choices.map((c) => c.value), ['4x4', '4x6', '6x6']);
   const inst = game.create(P(3), { size: '4x4' }, rng(17));
   assert.equal(inst.awaiting()[0], 'p0');
@@ -123,6 +123,20 @@ test('a scrubbed player name leaves the engine-owned player list and the log', (
   inst.scrub([name], 'Removed player');
   assert.equal(JSON.stringify(inst.view('p0')).includes(name), false);
   assert.equal(JSON.stringify(inst.view('p1')).includes(name), false);
+});
+
+test('alone, the score is the turns it took to find every pair, and the player wins', () => {
+  const g = E.createGame(P(1), { size: '4x4' }, rng(11));
+  let guard = 0;
+  while (g.phase !== 'gameOver' && guard++ < 500) E.applyAction(g, 'p0', E.botAction(g, 'p0', rng(guard)));
+  assert.equal(g.phase, 'gameOver');
+  assert.equal(g.winner, 0);
+  assert.ok(g.turns >= g.total / 2, 'at least one turn per pair');
+  assert.deepEqual(E.results(g), [{ score: g.turns, winner: true, draw: false }]);
+  const { bestOf, bestLabel } = game.stats;
+  assert.equal(bestLabel, 'Fewest turns alone');
+  assert.equal(bestOf({ seats: 1, isWinner: true, score: 12 }), -12);
+  assert.equal(bestOf({ seats: 2, isWinner: true, score: 6 }), null, 'a versus game does not count');
 });
 
 console.log(`\n${passed} memory match tests passed`);

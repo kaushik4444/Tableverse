@@ -1,6 +1,7 @@
 'use strict';
 /**
- * Falling Blocks (2 to 4 players), rules only: no sockets, no timers.
+ * Falling Blocks (1 to 4 players), rules only: no sockets, no timers. Alone, there is nobody to send garbage to: the game
+ * ends when your well tops out, and your score is the rows you cleared.
  *
  * Everybody builds in their own 10 x 20 well and gets the same piece sequence (seven-bag, from the game's random source).
  * Nobody takes turns: each player places their own piece whenever they like. A move is a drop: choose a rotation and a
@@ -100,7 +101,7 @@ const peekPiece = (g, n) => (n < g.pieces.length ? g.pieces[n] : null);
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
 
 function createGame(players, options = {}, rng = Math.random, now = Date.now) {
-  if (players.length < 2 || players.length > MAX_PLAYERS) throw new Error('Falling Blocks is for 2 to 4 players');
+  if (players.length < 1 || players.length > MAX_PLAYERS) throw new Error('Falling Blocks is for 1 to 4 players');
   const pace = Object.hasOwn(PACE_MS, options.pace) ? options.pace : 'slow';
   const startedAt = now();
   const g = {

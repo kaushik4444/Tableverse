@@ -1,5 +1,5 @@
 'use strict';
-/** Memory Match: 2 to 4 players turn over two cards a turn to find pairs. The most pairs wins. */
+/** Memory Match: 1 to 4 players turn over two cards a turn to find pairs. The most pairs wins; alone, the fewest turns is best. */
 const engine = require('./engine');
 const { scrubDeep } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
@@ -16,13 +16,15 @@ module.exports = {
   tagline: 'Turn two cards over and find the pairs. Remember where they are, and keep going while you match.',
   rules: [
     'Every card is face down. On your turn, turn over two cards.',
+    'Playing alone, there is nobody to beat: find every pair, and your score is the number of turns it took. Fewer turns is better, and there is no clock.',
     'If they match, you keep the pair and play again. If not, they turn back over and the turn passes.',
     'Every card turned over stays known to the table, so remember where the pairs are.',
     'When all pairs are found, the player with the most pairs wins. A tie for the most is a draw.',
   ],
-  seats: { min: 2, max: 4, default: 2 },
+  seats: { min: 1, max: 4, default: 2 },
   seatLabel: (i) => COLOURS[i],
-  stats: { kind: 'none', bestLabel: null, bestOf: null },
+  // alone, the fewest turns to find every pair (a solo game, seats === 1, is the only one that has a turn count)
+  stats: { kind: 'none', bestLabel: 'Fewest turns alone', bestOf: (row) => (row.seats === 1 && row.isWinner && Number.isFinite(row.score) ? -row.score : null), formatBest: (v) => `${-v} turns` },
   options: [SIZE, TIME_LIMIT_OPTION],
   create(players, options, rng) {
     const g = engine.createGame(players, options, rng);

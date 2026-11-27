@@ -1,6 +1,7 @@
 'use strict';
 /**
- * Memory Match (2 to 4 players), rules only: no sockets, no timers.
+ * Memory Match (1 to 4 players), rules only: no sockets, no timers. One player is a solo game: no opponents, and the
+ * score is the number of turns it takes to find every pair (fewer is better).
  *
  * Cards are dealt face down in pairs. On your turn you turn over two cards. If they match you keep the pair and play
  * again; if not, they turn back over and the turn passes to the next seat. When every pair is found, the player with the
@@ -25,7 +26,7 @@ function shuffle(arr, rng) {
 }
 
 function createGame(players, options = {}, rng = Math.random) {
-  if (players.length < 2 || players.length > 4) throw new Error('Memory Match is for 2 to 4 players');
+  if (players.length < 1 || players.length > 4) throw new Error('Memory Match is for 1 to 4 players');
   const size = Object.prototype.hasOwnProperty.call(SIZES, options.size) ? options.size : '4x4';
   const [rows, cols] = SIZES[size];
   const total = rows * cols;
@@ -39,7 +40,7 @@ function createGame(players, options = {}, rng = Math.random) {
     known: new Map(), // index -> symbol, for every card the table has seen (bots use only this)
     pending: null, // the first card of this turn, while the second is still to come
     peek: null, // a missed pair, shown face up until the next move
-    pairs: Array(players.length).fill(0), matchedCount: 0,
+    pairs: Array(players.length).fill(0), matchedCount: 0, turns: 0, // turns: second cards turned over (every turn that ends a pair attempt)
     turn: 0, phase: 'playing', winner: null, draw: false,
     last: null, event: null, log: [], seq: 0, version: 0,
   };
@@ -67,6 +68,7 @@ function applyAction(g, playerId, action) {
   const a = g.pending;
   g.pending = null;
   g.peek = null; // the missed pair has been seen by the players who turned the next pair
+  g.turns++;
   if (g.cards[a] === g.cards[i]) {
     g.matched[a] = g.matched[i] = true; g.owner[a] = g.owner[i] = who;
     g.pairs[who]++; g.matchedCount += 2;
@@ -92,8 +94,9 @@ function applyAction(g, playerId, action) {
 
 const awaiting = (g) => (g.phase === 'gameOver' ? [] : [g.players[g.turn].id]);
 
-/** Results: score is the number of pairs; the top scorer wins, a tie is a draw. */
+/** Results: score is the number of pairs; the top scorer wins, a tie is a draw. Alone, the score is the turns taken (fewer is better) and the player wins. */
 function results(g) {
+  if (g.players.length === 1) return [{ score: g.turns, winner: g.winner === 0, draw: false }];
   const top = Math.max(...g.pairs);
   return g.players.map((_, s) => ({ score: g.pairs[s], winner: g.winner === s, draw: g.draw && g.pairs[s] === top }));
 }
@@ -139,7 +142,7 @@ function viewFor(g, playerId) {
     turn: g.turn, myTurn: me >= 0 && me === g.turn && g.phase === 'playing',
     pending: g.pending, board, last: g.last,
     left: g.total - g.matchedCount,
-    winner: g.winner, draw: g.draw,
+    winner: g.winner, draw: g.draw, solo: g.players.length === 1, turns: g.turns,
     event: g.event ? { ...g.event } : null,
     log: g.log.slice(-30),
   };

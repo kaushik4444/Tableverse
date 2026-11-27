@@ -16,6 +16,7 @@
     if (!v.myTurn) return `${esc(v.players[v.turn].name)} is thinking…`;
     if (v.pending !== null) return `You turned over ${esc(v.board[v.pending].symbol)}. Now turn over a second card`;
     if (v.event && v.event.type === 'match' && v.event.by === v.me) return `A pair of ${esc(v.event.symbol)}! Play again`;
+    if (v.solo) return `Your move: turn over a card · ${v.turns} ${v.turns === 1 ? 'turn' : 'turns'} so far`;
     return 'Your move: turn over a card';
   }
 
@@ -47,7 +48,7 @@
     const settled = ui.resultSeen === key;
     if (ui.ctx.resultVisible !== false) ui.resultSeen = key;
     const title = v.draw ? 'A draw' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
-    const score = v.players.map((p) => `${esc(p.name)} ${p.pairs} ${p.pairs === 1 ? 'pair' : 'pairs'}`).join(' · ');
+    const score = v.solo ? `Every pair found in ${v.turns} ${v.turns === 1 ? 'turn' : 'turns'}` : v.players.map((p) => `${esc(p.name)} ${p.pairs} ${p.pairs === 1 ? 'pair' : 'pairs'}`).join(' · ');
     return `<div class="overlay${settled ? ' settled' : ''}"><div class="sheet"><h2>${title}</h2>
       <p class="hint" style="text-align:left">${score}</p>
       <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-mm="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-mm="leave">Leave table</button></div></div></div>`;
