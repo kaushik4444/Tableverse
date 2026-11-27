@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
-- New game: Sea Battle (two players). Each has a 10×10 sea with five ships placed at random, never touching. Turns alternate after every shot; hits, misses and sunk ships are shown to both players. The first to sink the whole fleet wins. Bots hunt next to unsunk hits; the turn time limit applies. Bot speed defaults to Slow (about four seconds a shot) so each result can be read.
+- New game: Sea Battle (two players). Each has a 10×10 sea with five ships, never touching. Players place their own fleet first: tap a ship, then a square; Rotate turns it; Random spreads the fleet out; Ready starts the battle. Ships are drawn as hulls. Turns alternate after every shot; hits, misses and sunk ships are shown to both players. The first to sink the whole fleet wins. Bots hunt next to unsunk hits; the turn time limit applies. Bot speed defaults to Slow (about four seconds a shot) so each result can be read.
 - New game: Memory Match (2–4 players). Turn two cards over to find the pairs; a match keeps the turn, a miss passes it. Cards of 4×4, 4×6 or 6×6. Cards you have seen stay known to the table.
 - New game: Dots and Boxes (2–4 players). Draw lines between the dots; closing a box claims it and keeps the turn. Board size 3×3, 4×4 or 5×5. The most boxes wins; a tie is a draw.
 - Sudoku solo rating: a solo game gives a rating per difficulty (solo-easy, solo-medium, solo-hard), separate from race play. It is an Elo-style rating against a fixed par rating: a solve within par is a win, a slower solve half, a game over a loss. Shown on the table beside the lives. Par times are placeholders to tune from real solve times.

@@ -2,13 +2,14 @@
 /**
  * Sea Battle (two players), rules only: no sockets, no timers.
  *
- * Each player has a 10 x 10 sea with a fleet of five ships (lengths 5, 4, 3, 3 and 2). The fleets are placed at random when
- * the game starts and nobody sees the other fleet. Players take turns firing at one square of the other sea. A hit or a
- * miss is public; a ship that is hit on every square is sunk, and its squares are shown to everyone. The first player to
- * sink every enemy ship wins. Ships never touch, including at corners.
+ * Each player has a 10 x 10 sea and a fleet of five ships (lengths 5, 4, 3, 3 and 2). In the placing phase every player puts
+ * their ships on their own sea, by hand or with Random, and marks themselves ready. When both are ready, the first player
+ * fires. Players take turns firing at one square of the other sea. A hit or a miss is public; a ship that is hit on every
+ * square is sunk, and its squares are shown to everyone. The first player to sink every enemy ship wins. Ships never touch,
+ * including at corners, and nobody sees the other fleet.
  *
  * Cells are numbered r * 10 + c. Shots are stored per target sea: 'miss', 'hit' or 'sunk' (a sunk ship's squares are 'sunk').
- * A view shows both seas' shots, and only the viewer's own fleet.
+ * A setup is one entry per ship, in LENGTHS order: null (not placed yet) or { r, c, vertical }.
  */
 
 const N = 10;
@@ -26,29 +27,84 @@ const neighbours = (k) => {
   return out;
 };
 
-/** Places the five ships at random without touching. A rare dead end starts the fleet again. */
-function placeFleet(rng) {
+const shipCells = (len, p) => Array.from({ length: len }, (_, i) => (p.vertical ? (p.r + i) * N + p.c : p.r * N + p.c + i));
+const inside = (len, p) => Number.isInteger(p.r) && Number.isInteger(p.c) && p.r >= 0 && p.c >= 0 && p.r < N && p.c < N
+  && (p.vertical ? p.r + len <= N : p.c + len <= N);
+
+/** Checks a whole setup (one entry per ship; null entries are not placed yet). Returns the placed ships' cells, or null. */
+function checkSetup(setup) {
+  if (!Array.isArray(setup) || setup.length !== LENGTHS.length) return null;
+  const taken = new Set();
+  const cellsOf = [];
+  for (let i = 0; i < LENGTHS.length; i++) {
+    const p = setup[i];
+    if (p === null || p === undefined) { cellsOf.push(null); continue; }
+    if (typeof p !== 'object' || typeof p.vertical !== 'boolean' || !inside(LENGTHS[i], p)) return null;
+    const cells = shipCells(LENGTHS[i], p);
+    if (cells.some((k) => taken.has(k) || neighbours(k).some((n) => taken.has(n)))) return null;
+    cells.forEach((k) => taken.add(k));
+    cellsOf.push(cells);
+  }
+  return cellsOf;
+}
+
+/** Candidate placements for one ship that do not touch the ships already placed. */
+function candidatesFor(len, taken) {
+  const out = [];
+  for (const vertical of [false, true]) {
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const p = { r, c, vertical };
+      if (!inside(len, p)) continue;
+      const cells = shipCells(len, p);
+      if (cells.some((k) => taken.has(k) || neighbours(k).some((n) => taken.has(n)))) continue;
+      out.push({ p, cells });
+    }
+  }
+  return out;
+}
+
+/**
+ * A realistic random fleet: ships are spread over the whole sea rather than bunched up. Each ship is put where it is as far
+ * from the others as a sample of the open squares allows, with a random pick among the best. A rare dead end starts again.
+ */
+function randomSetup(rng) {
   for (;;) {
     const taken = new Set();
-    const ships = [];
+    const centres = [];
+    const setup = [];
     let ok = true;
     for (const len of LENGTHS) {
-      let placed = false;
-      for (let tries = 0; tries < 200 && !placed; tries++) {
-        const horizontal = rng() < 0.5;
-        const r = Math.floor(rng() * (horizontal ? N : N - len + 1));
-        const c = Math.floor(rng() * (horizontal ? N - len + 1 : N));
-        const cells = Array.from({ length: len }, (_, i) => (horizontal ? r * N + c + i : (r + i) * N + c));
-        const touching = cells.some((k) => taken.has(k) || neighbours(k).some((n) => taken.has(n)));
-        if (touching) continue;
-        cells.forEach((k) => taken.add(k));
-        ships.push({ cells, hits: 0 });
-        placed = true;
+      const options = candidatesFor(len, taken);
+      if (!options.length) { ok = false; break; }
+      const sample = [];
+      for (let i = 0; i < 40 && i < options.length * 3; i++) sample.push(options[Math.floor(rng() * options.length)]);
+      const spread = (o) => {
+        const cr = o.cells.reduce((s, k) => s + Math.floor(k / N), 0) / o.cells.length;
+        const cc = o.cells.reduce((s, k) => s + (k % N), 0) / o.cells.length;
+        return centres.length ? Math.min(...centres.map(([r, c]) => Math.abs(r - cr) + Math.abs(c - cc))) : 99;
+      };
+      let best = -1; let pool = [];
+      for (const o of sample) {
+        const s = spread(o);
+        if (s > best) { best = s; pool = [o]; } else if (s === best) pool.push(o);
       }
-      if (!placed) { ok = false; break; }
+      const pick = pool[Math.floor(rng() * pool.length)];
+      pick.cells.forEach((k) => taken.add(k));
+      centres.push([pick.cells.reduce((s, k) => s + Math.floor(k / N), 0) / pick.cells.length, pick.cells.reduce((s, k) => s + (k % N), 0) / pick.cells.length]);
+      setup.push(pick.p);
     }
-    if (ok) return ships;
+    if (ok) return setup;
   }
+}
+
+/** Places the five ships at random, spread out. Kept for tests and bots. */
+function placeFleet(rng) {
+  return buildFleet(randomSetup(rng));
+}
+
+function buildFleet(setup) {
+  const cellsOf = checkSetup(setup);
+  return cellsOf.map((cells) => ({ cells, hits: 0 }));
 }
 
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
@@ -60,11 +116,13 @@ function createGame(players, options = {}, rng = Math.random, now = Date.now) {
     game: 'seabattle',
     players: players.map((p) => ({ id: p.id, name: p.name })),
     options: { pace },
-    fleets: [placeFleet(rng), placeFleet(rng)],   // fleets[i] is player i's ships; only the owner's view shows them
+    phase: 'placing', // placing | playing | gameOver
+    setup: [Array(LENGTHS.length).fill(null), Array(LENGTHS.length).fill(null)], // each player's ships until both are ready
+    ready: [false, false],
+    fleets: [null, null],                         // built when a player is ready; only the owner's view shows them
     shots: [Array(CELLS).fill(null), Array(CELLS).fill(null)], // shots[i]: the sea of player i, as fired at
     sunk: [0, 0],                                 // ships each player has sunk
     turn: 0,
-    phase: 'playing', // playing | gameOver
     winner: null,
     event: null, log: [], seq: 0, version: 0,
     rng, now,
@@ -75,10 +133,35 @@ function createGame(players, options = {}, rng = Math.random, now = Date.now) {
 
 const fail = (error) => ({ ok: false, error });
 
+function placingAction(g, who, action) {
+  if (!action || typeof action !== 'object') return fail('Unknown action');
+  if (action.type === 'ready') {
+    if (g.ready[who]) return fail('Your fleet is already ready');
+    if (g.setup[who].some((p) => p === null)) return fail('Place all five ships first');
+    g.ready[who] = true;
+    g.fleets[who] = buildFleet(g.setup[who]);
+    g.version++;
+    if (g.ready[0] && g.ready[1]) { g.phase = 'playing'; g.turn = 0; emit(g, { type: 'start' }); }
+    return { ok: true };
+  }
+  if (g.ready[who]) return fail('Your fleet is ready');
+  if (action.type === 'random') { g.setup[who] = randomSetup(g.rng); g.version++; return { ok: true }; }
+  if (action.type === 'place') {
+    if (!Array.isArray(action.ships)) return fail('Unknown action');
+    const candidate = action.ships.map((p) => (p === null || p === undefined ? null : p));
+    if (!checkSetup(candidate)) return fail('Ships must stay on the sea and must not touch');
+    g.setup[who] = candidate;
+    g.version++;
+    return { ok: true };
+  }
+  return fail('Place your fleet first');
+}
+
 function applyAction(g, playerId, action) {
   const who = g.players.findIndex((p) => p.id === playerId);
   if (who < 0) return fail('You are not a player in this game');
   if (g.phase === 'gameOver') return fail('The game is over');
+  if (g.phase === 'placing') return placingAction(g, who, action);
   if (g.turn !== who) return fail('Not your turn');
   if (!action || typeof action !== 'object' || action.type !== 'fire') return fail('Unknown action');
   const { r, c } = action;
@@ -116,14 +199,23 @@ function applyAction(g, playerId, action) {
   return { ok: true };
 }
 
-const awaiting = (g) => (g.phase === 'gameOver' ? [] : [g.players[g.turn].id]);
+const awaiting = (g) => {
+  if (g.phase === 'gameOver') return [];
+  if (g.phase === 'placing') return g.players.filter((_, i) => !g.ready[i]).map((p) => p.id);
+  return [g.players[g.turn].id];
+};
 
 // ------------------------------------------------------------------------------------------------ bots (public information only)
 
-/** Hunt and target: squares next to a hit that is not yet sunk come first; otherwise a random square of a chequerboard. */
+/** Bots place a random fleet, then ready up; in play they hunt next to unsunk hits, otherwise a chequerboard square. */
 function botAction(g, playerId, rng = g.rng) {
   const who = g.players.findIndex((p) => p.id === playerId);
-  if (who < 0 || g.phase === 'gameOver' || g.turn !== who) return null;
+  if (who < 0 || g.phase === 'gameOver') return null;
+  if (g.phase === 'placing') {
+    if (g.ready[who]) return null;
+    return g.setup[who].some((p) => p === null) ? { type: 'random' } : { type: 'ready' };
+  }
+  if (g.turn !== who) return null;
   const sea = g.shots[1 - who];
   const open = [];
   for (let k = 0; k < CELLS; k++) if (!sea[k]) open.push(k);
@@ -136,31 +228,44 @@ function botAction(g, playerId, rng = g.rng) {
   return { type: 'fire', r: Math.floor(k / N), c: k % N };
 }
 
-/** The delay before a bot fires (bots are timed by Bot speed). */
+/** The delay before a bot acts (bots are timed by Bot speed). */
 function botDelayMs(g) {
   return Math.round(PACE_MS[g.options.pace] * (0.75 + g.rng() * 0.5));
 }
 
-/** What a player sees: both seas' shots (public), and only their own fleet. */
+/** What a player sees: both seas' shots (public), and only their own ships. */
 function viewFor(g, playerId) {
   const me = g.players.findIndex((p) => p.id === playerId);
   const fleet = me >= 0 ? Array(CELLS).fill(null) : null;
+  let ships = null;
+  let placed = null;
   if (me >= 0) {
-    // each square shows its own state: a ship's intact squares stay 'ship' until they are fired at
-    g.fleets[me].forEach((s) => {
-      const sunk = s.hits === s.cells.length;
-      s.cells.forEach((k) => { fleet[k] = sunk ? 'sunk' : g.shots[me][k] === 'hit' ? 'hit' : 'ship'; });
-    });
+    if (g.fleets[me]) {
+      // each square shows its own state: a ship's intact squares stay 'ship' until they are fired at
+      g.fleets[me].forEach((s) => {
+        const sunk = s.hits === s.cells.length;
+        s.cells.forEach((k) => { fleet[k] = sunk ? 'sunk' : g.shots[me][k] === 'hit' ? 'hit' : 'ship'; });
+      });
+      ships = g.fleets[me].map((s) => ({ cells: s.cells.slice(), sunk: s.hits === s.cells.length, hit: s.cells.filter((k) => g.shots[me][k] === 'hit') }));
+    } else {
+      // still placing: your own setup, drawn the same way, with nothing fired yet
+      ships = g.setup[me].map((p, i) => (p ? { cells: shipCells(LENGTHS[i], p), sunk: false, hit: [] } : null)).filter(Boolean);
+      placed = g.setup[me].map((p) => p !== null);
+    }
     // the shots the enemy has fired at my sea: a miss on water shows as a miss
     g.shots[me].forEach((state, k) => { if (state === 'miss' && !fleet[k]) fleet[k] = 'miss'; });
   }
   return {
-    me, phase: g.phase, options: { ...g.options }, N,
+    me, phase: g.phase, options: { ...g.options }, N, lengths: LENGTHS.slice(),
     players: g.players.map((p, i) => ({
-      id: p.id, name: p.name, sunk: g.sunk[i], left: g.fleets[i].filter((s) => s.hits < s.cells.length).length,
+      id: p.id, name: p.name, sunk: g.sunk[i], left: g.fleets[i] ? g.fleets[i].filter((s) => s.hits < s.cells.length).length : LENGTHS.length,
+      ready: g.ready[i],
     })),
     shots: g.shots.map((sea) => sea.slice()),   // shots[i]: fired at player i's sea
     fleet,                                       // my sea, with my ships and the shots I have taken
+    ships,                                       // my ships as cell lists (null while placing: see placed)
+    placed,                                      // while placing: which of my five ships are on the sea
+    setup: me >= 0 && g.phase === 'placing' ? g.setup[me].map((p) => (p ? { r: p.r, c: p.c, vertical: p.vertical } : null)) : null,
     turn: g.turn,
     myTurn: me >= 0 && me === g.turn && g.phase === 'playing',
     winner: g.winner,
@@ -173,4 +278,4 @@ function results(g) {
   return g.players.map((_, i) => ({ score: g.sunk[i], winner: g.winner === i, draw: false }));
 }
 
-module.exports = { N, LENGTHS, PACE_MS, createGame, applyAction, awaiting, botAction, botDelayMs, viewFor, results, placeFleet, neighbours };
+module.exports = { N, LENGTHS, PACE_MS, createGame, applyAction, awaiting, botAction, botDelayMs, viewFor, results, placeFleet, randomSetup, checkSetup, neighbours };
