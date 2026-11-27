@@ -14,7 +14,7 @@
 .sb .sb-boards { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 6px; }
 .sb .sb-board { display: flex; flex-direction: column; align-items: center; }
 /* placing: the chooser and the controls sit under the sea, so the sea is smaller to fit a phone screen */
-.sb[data-placing="1"] .sb-grid { width: min(88vw, 400px); }
+.sb[data-placing="1"] .sb-grid { width: min(84vw, 380px, 36vh); }
 .sb .sb-grid { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 2px; width: min(78vw, 300px); aspect-ratio: 1; padding: 4px; box-sizing: border-box; background: rgba(0, 0, 0, .25); border-radius: 10px; }
 .sb .sb-cell { display: block; min-width: 0; min-height: 0; border: 0; padding: 0; margin: 0; border-radius: 3px; background: var(--sb-sea); position: relative; }
 .sb .sb-cell.open { cursor: pointer; }
@@ -60,11 +60,11 @@
 @media (max-height: 700px) {
   .sb .sb-grid { width: min(70vw, 250px); }
   /* placing on a short phone: the chooser, controls and status need the room, so the sea is smaller (CI fonts run taller) */
-  .sb[data-placing="1"] .sb-grid { width: min(50vh, 420px); }
+  .sb[data-placing="1"] .sb-grid { width: min(36vh, 420px); }
   /* the ship chooser fits two rows on a short phone, even with a wide system font (44px tall still) */
   .sb .sb-chips { gap: 4px; }
   .sb .sb-chip { font-size: 13px; padding-left: 7px; padding-right: 7px; }
   /* placing on a short phone: the fleet grid is smaller so the status line and the bottom bar stay on screen */
-  .sb[data-placing="1"] .sb-grid { width: min(88vw, 380px); }
+  .sb[data-placing="1"] .sb-grid { width: min(84vw, 340px, 36vh); }
   .sb .sb-seat { padding: 4px 6px; }
 }
