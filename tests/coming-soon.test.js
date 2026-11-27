@@ -13,9 +13,10 @@ const ui = window.TVHomeUI({
   pendingSocial: () => 0,
 });
 const html = ui.comingSoonHTML();
-const buildOrder = ['Cup Pong', 'Falling Blocks', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
+const buildOrder = ['Cup Pong', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players'];
 const additional = ['Secret Clues'];
-assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 5);
+assert.equal((html.match(/class="soon-card[ "]/g) || []).length, 4);
+assert.ok(!html.includes('Falling Blocks'), 'Falling Blocks has shipped and is not coming soon');
 assert.ok(!html.includes('Sea Battle') && !html.includes('Bingo'), 'shipped games are not listed as coming soon');
 assert.ok(!html.includes('Sudoku'), 'Sudoku is playable now and must not show as coming soon');
 let previous = -1;
@@ -28,11 +29,11 @@ for (const protectedBrand of ['Monopoly', 'Saboteur', 'Tetris', 'Bullhead', '6 n
   assert.ok(!html.includes(protectedBrand), `protected commercial title should not be displayed: ${protectedBrand}`);
 }
 assert.match(html, /Development order/);
-assert.equal((html.match(/>In development</g) || []).length, 1, 'only Falling Blocks is in development');
+assert.equal((html.match(/>In development</g) || []).length, 0, 'nothing is in development now');
 assert.ok(!html.includes('Hidden Miners'), 'Hidden Miners is playable, so it is no longer listed');
 assert.equal((html.match(/>Planned</g) || []).length, 4, 'the other games are planned');
 assert.match(html, /Also on the list/);
-assert.match(html, /5 planned/);
+assert.match(html, /4 planned/);
 assert.match(html, /original artwork and presentation/);
 // What's new: the release history is public/whats-new-data.js; the home page shows the newest release's first three items.
 const releaseSource = fs.readFileSync(require.resolve('../public/whats-new-data.js'), 'utf8');
