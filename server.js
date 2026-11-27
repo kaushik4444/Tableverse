@@ -20,6 +20,7 @@ const { startPlay, stopPlay, stopAllPlay } = require('./lib/playTime');
 const idlePolicy = require('./lib/idlePolicy');
 const readyGate = require('./lib/readyGate'); // everybody presses Ready before a round starts // three bot turns in a row for one person: removed with a penalty
 const dbPlayers = require('./db/players');
+const dbGuestTrials = require('./db/guestTrials');
 const dbAuth = require('./db/auth');
 const dbMatches = require('./db/matches');
 const dbRatings = require('./db/ratings');
@@ -675,6 +676,54 @@ function start(opts = {}) {
     else sendError(p, 'That game is not available right now.');
     return true;
   };
+  /** The ids of the guests (not bots, not registered players) at a table, sorted. */
+  const guestIdsAt = (room) => room.members
+    .filter((m) => { if (m.bot) return false; const mp = players.get(m.id); return Boolean(mp) && roleOf(mp) === 'guest'; })
+    .map((m) => m.id).sort();
+  const trialRefusedTo = (ws, gameId, tableCode) => { if (ws) send(ws, { t: 'error', code: 'guest_locked', feature: 'trial', gameId, tableCode, message: 'Create a free account to keep playing.' }); };
+  const trialRefused = (p, gameId, tableCode) => trialRefusedTo(p.ws, gameId, tableCode);
+  /**
+   * Guest game limits (Games tab): when a game starts (or rematches) every guest at the table uses one play of it, all or
+   * nothing. Returns { refused, charged }: refused is the guest whose device is at its limit (or null), charged the device
+   * keys whose play was reserved (given back if the start is cancelled). Registered players and games
+   * with no limit are not counted. A guest with no device key (made before keys existed) is not counted either.
+   */
+  const trialGate = async (room) => {
+    const limit = gameFlags.trialLimitOf(room.gameId);
+    if (limit === null) return { refused: null, charged: [], guestIds: null }; // no limit: nothing to check or count
+    const guests = guestIdsAt(room).map((id) => room.members.find((m) => m.id === id));
+    if (!guests.length) return { refused: null, charged: [], guestIds: [] };
+    const guestIds = guests.map((m) => m.id);
+    const keys = await dbGuestTrials.trialKeysFor(guestIds);
+    const byKey = new Map();
+    for (const m of guests) { const k = keys.get(m.id); if (k) byKey.set(k, m); }
+    if (!byKey.size) return { refused: null, charged: [], guestIds };
+    const charged = [...byKey.keys()];
+    // the limit may have changed while the keys were looked up: the reservation must use the limit as it is now
+    if (gameFlags.trialLimitOf(room.gameId) !== limit) return { refused: null, charged: [], guestIds, stale: true };
+    const r = await dbGuestTrials.reservePlays({ gameId: room.gameId, limit, trialKeys: charged });
+    if (!r.ok) return { refused: byKey.get(r.trialKey) || null, charged: [], guestIds };
+    // the limit may also change while the plays are reserved: give them back and ask for the start again
+    if (gameFlags.trialLimitOf(room.gameId) !== limit) {
+      await dbGuestTrials.releasePlays({ gameId: room.gameId, trialKeys: charged }).catch((e) => console.error('[games] could not give back guest plays: ' + e.message));
+      return { refused: null, charged: [], guestIds, stale: true };
+    }
+    return { refused: null, charged, guestIds };
+  };
+  /**
+   * A guest whose device has used every play of the game is told when they create or join a table, not only at the start.
+   * Read only: nothing is counted here (the start check is the exact one). True when refused.
+   */
+  const trialBlockedAtEntry = async (p, gameId, tableCode) => {
+    const limit = gameFlags.trialLimitOf(gameId);
+    if (limit === null || roleOf(p) !== 'guest') return false;
+    const asked = p.ws; // the socket that asked: the answer goes there, even if the connection is replaced during the checks
+    const key = (await dbGuestTrials.trialKeysFor([p.id])).get(p.id);
+    if (!key) return false;
+    if ((await dbGuestTrials.playsOf(key, gameId)) < limit) return false;
+    trialRefusedTo(asked, gameId, tableCode);
+    return true;
+  };
   /**
    * Human seats at a table whose current role may not play its game. Each person is judged by their live role (a demoted
    * admin or a guest who upgraded is judged as they are now). A person with no live record is treated as not allowed.
@@ -1080,6 +1129,11 @@ function start(opts = {}) {
     schedule(room);
   }
 
+  /** A running game keeps its own copy of each seat's bot flag (Bingo plays bot seats itself): pass a seat change on to it. */
+  function syncSeatBot(room, m) {
+    if (room.game && typeof room.game.setSeatBot === 'function') room.game.setSeatBot(m.id, m.bot === true);
+  }
+
   /** A bot has played this person's turn (they are away, or ran out of the table's time). After three in a row they are removed. */
   function noteBotTurnFor(room, m) {
     if (!m || m.bot || !room.members.includes(m)) return;
@@ -1093,6 +1147,7 @@ function start(opts = {}) {
       return;
     }
     const out = idlePolicy.kickIdle(room, m, Date.now());
+    syncSeatBot(room, m);
     if (room.hostId === m.id) ensureHost(room, { leaving: m.id }); // the removed person was the host: someone else takes it, so the table keeps its host controls
     if (q) {
       q.room = null;
@@ -1118,11 +1173,15 @@ function start(opts = {}) {
 
   /** Decide whether the server must act soon (bot turn, absent human, forced play, timeout, between rounds) and set one timer for it. */
   function schedule(room) {
+    // a game whose timed call runs on its own clock (Bingo) keeps its pending call: a player's move does not push it back
+    if (room.timer && room.game && typeof room.game.keepsAutoClock === 'function' && room.game.keepsAutoClock() && humans(room).some(isConnected)) return;
     clearTimeout(room.timer);
     room.timer = null;
     if (shuttingDown) return; // no bot or auto-play moves while the server stops
     const g = room.game;
     if (!g || room.status !== 'playing' || g.isOver()) return;
+    // a game that paces its bots by seat (Sudoku) learns which seats are bots now, so a seat that a person left is paced too
+    if (typeof g.syncBots === 'function') g.syncBots(room.members.filter((m) => m.bot).map((m) => m.id));
     if (!humans(room).some(isConnected)) return; // nobody watching: pause
     // Ready-up: the first round, and each round boundary (the game waits only for its "continue"), wait until everybody has pressed Ready.
     const boundaryAuto = typeof g.autoAction === 'function' ? g.autoAction() : null;
@@ -1322,6 +1381,7 @@ function start(opts = {}) {
       // The window starts at the first departure only: later leaves keep its deadline, so the refresh is scheduled once.
       const firstLeave = !(room.leaveDeadlines && room.leaveDeadlines.has(room.members[i].id));
       voluntaryLeave(room, room.members[i], Date.now(), rejoinWindowMs); // a bot takes over the seat; the player can take it back in time
+      syncSeatBot(room, room.members[i]);
       if (firstLeave) scheduleRejoinExpiryRefresh(); // when the window closes, the home screens drop the "take your seat back" offer
       sys(room, `🚪 ${p.name} left the game. A bot took over the seat.`);
     } else {
@@ -1547,12 +1607,15 @@ function start(opts = {}) {
       const now = Date.now();
       if (now - (p.lastEmote || 0) < 700) return;
       p.lastEmote = now;
-      // A spectator has no seat, so the reaction says who sent it: everyone sees the name and the 👁 mark.
+      // Every reaction says who sent it: a player's name, or a spectator's name with the 👁 mark (a spectator has no seat).
       const spectator = isSpec(room, p.id);
+      // the name the table shows for this person: the seat's name during a game (a rename mid-game does not change it), else the current name
+      const shown = spectator ? room.spectators.find((s) => s.id === p.id) : room.members.find((m) => m.id === p.id && !m.bot);
+      const who = String((shown && shown.name) || p.name || (spectator ? 'Spectator' : 'Player')).slice(0, 32);
       for (const m of viewers(room)) {
         if (m.id !== p.id && pairBlocked(p.id, m.id)) continue; // a blocked pair does not see each other's reactions
         const q = players.get(m.id);
-        if (q && q.connected) send(q.ws, { t: 'emote', id: p.id, e: msg.e, spectator, name: spectator ? String(p.name || 'Spectator').slice(0, 32) : undefined });
+        if (q && q.connected) send(q.ws, { t: 'emote', id: p.id, e: msg.e, spectator, name: who });
       }
     },
 
@@ -1672,11 +1735,15 @@ function start(opts = {}) {
       }, ({ id }) => writeUnblock(p, id));
     },
 
-    create(p, msg) {
+    async create(p, msg) {
       const def = games.get(msg.gameId);
       if (!def) return sendError(p, 'Unknown game');
       if (refuseGame(p, msg.gameId)) return;
       if (msg.visibility === 'private' && guestLocked(p, 'private_tables')) return;
+      const socketAtStart = p.ws;
+      if (await trialBlockedAtEntry(p, msg.gameId)) return;
+      if (!p.ws || p.ws !== socketAtStart) return; // a new or ended connection must not act for the one that asked // the connection ended during the check: do not seat or create for a socket that is gone
+      if (refuseGame(p, msg.gameId)) return; // the game may have been restricted while the check ran
       if (shuttingDown) return sendError(p, 'The server is restarting. Please try again in a minute.');
       if (rooms.size >= MAX_ROOMS) return sendError(p, 'Server is full, try again later');
       applyProfile(p, msg);
@@ -1718,12 +1785,23 @@ function start(opts = {}) {
       applyProfile(p, msg);
       if (!room) return sendJoinError(p, code, `No table with code ${code || '?'}`);
       if (refuseGame(p, room.gameId, code)) return;
+      const alreadyHere = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
+      const socketAtStart = p.ws;
+      // their own seat again in the game being played, which was already paid for (not a lobby or spectator departure),
+      // and only while the reclaim window is still open: after it closes they are checked like any other guest
+      const reclaiming = room.status === 'playing' && Boolean(room.paidGuests && room.paidGuests.has(p.id) && room.guestLeavers && room.guestLeavers.has(p.id))
+        && rejoinDecision(room, p.id, Date.now()).seat;
+      if (!alreadyHere && !reclaiming && await trialBlockedAtEntry(p, room.gameId, code)) return;
+      if (!p.ws || p.ws !== socketAtStart) return; // the connection ended or was replaced during the check: do not seat it
       if (room.guestLeavers && room.guestLeavers.has(p.id) && guestLocked(p, 'rejoin', code)) return;
       if (room.removed && room.removed.has(p.id)) return sendJoinError(p, code, 'The host removed you from this table.');
       const here = room.members.some((m) => m.id === p.id && !m.bot) || isSpec(room, p.id);
       if (!await canEnterRoom(p, room, { present: here })) return sendJoinError(p, code, 'This private table requires an accepted invitation.');
       // The socket may have closed while we waited: an offline person must not take a seat or start a play-time clock.
       if (!p.connected) return;
+      // the reclaim exemption only holds while its window is open: if the window closed during the admission check, the trial check applies again
+      if (reclaiming && !alreadyHere && !rejoinDecision(room, p.id, Date.now()).seat && await trialBlockedAtEntry(p, room.gameId, code)) return;
+      if (!p.connected || p.ws !== socketAtStart) return; // the connection ended during that lookup: do not seat it
       // The owner may restrict the game while the admission check was waiting: refuse again before any seat changes
       if (refuseGame(p, room.gameId, code)) return;
       // Checked after the await: a join that resumes after the shutdown snapshot must not take a seat or clear a pending loss
@@ -1754,6 +1832,7 @@ function start(opts = {}) {
         const si = room.spectators.findIndex((s) => s.id === p.id);
         if (si >= 0) room.spectators.splice(si, 1);
         reclaimSeat(room, seat, now); // back in time: the bot gives the seat back, no loss, play resumes
+        syncSeatBot(room, seat);
         seat.avatar = p.avatar;
         p.room = room.code;
         sys(room, `🔄 ${p.name} is back and took the seat from the bot`);
@@ -2003,12 +2082,39 @@ function start(opts = {}) {
       broadcast(room);
     },
 
-    start(p) {
+    async start(p) {
       const room = hostRoom(p, 'lobby');
       if (!room) return;
       const def = games.get(room.gameId);
       if (refuseGame(p, room.gameId)) return;
       if (ineligibleHumans(room).length) return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.');
+      if (room.starting) return; // a start is already being checked
+      room.starting = true;
+      let gate;
+      const hostSocket = p.ws; // the host's connection when the start was asked for
+      try { gate = await trialGate(room); } catch (e) {
+        room.starting = false;
+        console.error('[games] guest play limit check failed: ' + e.message);
+        return sendError(p, 'The game could not start right now. Try again.');
+      }
+      room.starting = false;
+      if (gate.stale) return sendError(p, 'The guest play limit changed while the game was starting. Start again.');
+      // a start that is cancelled from here gives back the plays it reserved
+      const giveBack = () => dbGuestTrials.releasePlays({ gameId: room.gameId, trialKeys: gate.charged }).catch((e) => console.error('[games] could not give back guest plays: ' + e.message));
+      // the table may have changed while the plays were checked: look again before anything starts
+      if (shuttingDown) { await giveBack(); return sendError(p, 'The server is restarting. Please try again in a minute.'); }
+      if (rooms.get(room.code) !== room || room.status !== 'lobby' || room.hostId !== p.id) { await giveBack(); return; }
+      if (!p.connected || p.ws !== hostSocket) { await giveBack(); return; } // the host's connection ended while the plays were checked
+      if (refuseGame(p, room.gameId)) { await giveBack(); return; }
+      if (ineligibleHumans(room).length) { await giveBack(); return sendError(p, 'Some players at this table cannot play this game right now. Ask them to leave, then start again.'); }
+      // only the guests whose plays were reserved may be seated: a guest who joined or left meanwhile means the check is stale
+      if (gate.guestIds !== null && gate.guestIds.join() !== guestIdsAt(room).join()) { await giveBack(); return sendError(p, 'The table changed while the game was starting. Start again.'); }
+      if (gate.refused) {
+        const mp = players.get(gate.refused.id);
+        if (mp) trialRefused(mp, room.gameId, room.code);
+        return sendError(p, 'A guest at this table has used their free plays of this game.');
+      }
+      room.paidGuests = new Set(gate.charged.length ? gate.guestIds : []); // the guests this game was paid for
       while (room.members.length < room.seats) addBotTo(room); // empty seats are filled with bots
       // Players sit in the order they joined, unless the host turned on the game's shuffle option.
       const offered = def.options.some((o) => o.key === 'shuffleSeats');
@@ -2021,6 +2127,8 @@ function start(opts = {}) {
       // Who is a registered account, decided once at the start: a leaver becomes a bot seat, and a player may be evicted
       // from the player map, so neither can be read back from the members when the game ends.
       room.registered = new Set(room.seated.filter((m) => !m.bot && usernameOf(m)).map((m) => m.id));
+      // the guests at the start: a guest who leaves becomes a bot seat, but is still a guest in the record
+      room.guestSeats = new Set(room.seated.filter((m) => !m.bot && !usernameOf(m)).map((m) => m.id));
       if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
       else pacing.setScale(room.game, botScale);
       room.status = 'playing';

@@ -17,8 +17,9 @@ function client() {
     location: { hash: '' },
     getJson: async () => ({ stats: { progress: { account: { level: 3, into: 10, need: 140 } } } }),
     hashCode: () => '', policyRequiresVerification: () => false,
+    CardTable: { sound: { play: () => {} } }, // sound.js loads before app.js in the page; the level-up dialog plays the fanfare
   });
-  for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
+  for (const name of ['render', 'hideBusy', 'closeModal', 'loadBanners', 'loadStaffHint', 'noteTurnStatus', 'scheduleIceRefresh', 'loadRecent', 'loadSocial', 'loadLockedPageData', 'closeOverlay', 'beginSignIn', 'connect']) c[name] = () => {};
   for (const name of ['adoptPlayer', 'finishSignIn', 'clearClientSession', 'setAccount', 'noteLevelUp', 'applyWelcome', 'refreshLevel', 'loadProfile', 'applyLegal', 'onMessage']) {
     const match = source.match(new RegExp('^  (?:async )?function ' + name + '\\([^]*?^  }', 'm'));
     assert.ok(match, name);
@@ -138,6 +139,7 @@ test('the level-up dialog waits for a menu visit, shows once, and counts as seen
     store: { get: (k) => values.get(k) ?? null, set: (k, v) => values.set(k, v) },
     document: { getElementById: () => null },
     openModal: (title, body) => opened.push({ title, body }),
+    CardTable: { sound: { play: () => {} } }, // the dialog plays the fanfare when it shows
   });
   const match = source.match(/^  function showLevelUpDialog\([^]*?^  }/m);
   assert.ok(match, 'showLevelUpDialog');

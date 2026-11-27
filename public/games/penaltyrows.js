@@ -45,6 +45,17 @@
     return same && steps.length > 1 ? { steps, marks, durs, firstStep } : null;
   }
 
+  /** One sound per replayed step: a card landing or restarting a row, and a row taken (a penalty for you is the lower sound). */
+  function playStep(anim, mark) {
+    const snd = window.CardTable.sound;
+    if (!snd || !mark) return;
+    if (mark.phase === 'place' || mark.phase === 'add' || mark.phase === 'restart') snd.play('card');
+    else if (mark.phase === 'collect') {
+      const e = anim.events && anim.events[mark.j];
+      snd.play(e && e.by === anim.me && e.took ? 'lose' : 'collect');
+    }
+  }
+
   /** The table this renderer is showing (the room code), so playback for one table never plays on another. */
   const tableOf = () => (ui.ctx && ui.ctx.room ? ui.ctx.room.code : null);
 
@@ -62,6 +73,7 @@
         glide(from);
         const mark = anim.marks[anim.i];
         if (mark && mark.phase === 'collect') stashRow(anim, mark, paceK);
+        playStep(anim, mark);
         scheduleStep(anim, paceK);
         return;
       }
@@ -192,7 +204,9 @@
     if (ui.anim && ui.anim.seq === v.seq) {
       items = v.lastTurn.filter((_, j) => ui.anim.firstStep[j] > ui.anim.i).map((e) => playedHTML(v, e.by, e.n, e.p)).join('');
     } else if (v.phase === 'takeRow' && v.pending) {
-      items = playedHTML(v, v.pending.by, v.pending.n, v.pending.p, 'waiting');
+      // the card waiting for a row, then the revealed cards that have not landed yet: the chooser sees the whole turn
+      items = playedHTML(v, v.pending.by, v.pending.n, v.pending.p, 'waiting')
+        + v.reveal.slice(v.resolved + 1).map((r) => playedHTML(v, r.by, r.n, r.p)).join('');
     } else if (v.phase === 'choose') {
       items = v.players.map((p, i) => {
         if (!p.picked) return '';
@@ -203,7 +217,7 @@
         return `<span class="pr-played">${backHTML()}<small>${nameOf(v, i)}</small></span>`;
       }).join('');
     }
-    const label = v.phase === 'takeRow' ? 'Waiting card' : 'Cards on the table this turn, lowest first';
+    const label = v.phase === 'takeRow' ? 'Cards on the table, waiting for a row' : 'Cards on the table this turn, lowest first';
     return `<div class="pr-strip" aria-label="${esc(label)}">${items || `<span class="pr-hint">${v.phase === 'choose' ? 'Cards appear here once everyone has picked' : ''}</span>`}</div>`;
   }
 
@@ -255,10 +269,18 @@
    * the target (race), so there is a reference without going to the Scores tab. */
   function chipsHTML(v) {
     const what = v.countdown ? 'points left' : 'penalty points';
+    // the leader is who would win now: most points left (countdown) or fewest penalty points (race); no crown while tied or after the game
+    // during a round the penalty points taken so far count too (the totals only change when the round ends, and roundEnd has already added them)
+    const sofar = (k) => (v.phase === 'roundEnd' ? 0 : v.players[k].penalty);
+    // countdown: the points left, clamped at zero as shown; race: the fewest penalty points
+    const scoreOf = (k) => (v.countdown ? Math.max(0, v.players[k].left - sofar(k)) : -(v.players[k].total + sofar(k)));
+    let lead = v.phase !== 'gameOver' ? window.CardTable.pt.leaderOf(v.players.length, scoreOf, -Infinity) : -1;
+    if (v.countdown && lead >= 0 && scoreOf(lead) <= 0) lead = -1; // nobody has points left to lead with
     return `<ul class="pr-chips" aria-label="Scores, ${what} out of ${v.target}">${v.players.map((p, i) => {
       const num = v.countdown ? p.left : p.total;
       const out = v.losers && v.losers.includes(i) ? ' out' : '';
-      return `<li class="${i === v.me ? 'me' : ''}${out}" data-pid="${esc(p.id)}"><span class="pr-chip-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><b class="pr-chip-n" title="${what}">${num}<small>/${v.target}</small></b></li>`;
+      const crown = i === lead ? '<span class="pr-lead" title="Leading" aria-label="Leading">👑</span>' : '';
+      return `<li class="${i === v.me ? 'me' : ''}${out}${i === lead ? ' lead' : ''}" data-pid="${esc(p.id)}">${crown}<span class="pr-chip-name">${esc(p.name)}${i === v.me ? ' (you)' : ''}</span><b class="pr-chip-n" title="${what}">${num}<small>/${v.target}</small></b></li>`;
     }).join('')}</ul>`;
   }
 
@@ -343,11 +365,12 @@
     if (v.seq === ui.seq) return;
     ui.seq = v.seq;
     const steps = replaySteps(v);
-    ui.anim = steps ? { seq: v.seq, ...steps, i: 0, table: tableOf(), events: v.lastTurn } : null;
+    ui.anim = steps ? { seq: v.seq, ...steps, i: 0, table: tableOf(), events: v.lastTurn, me: v.me } : null;
     if (ui.anim) scheduleStep(ui.anim, v.paceK);
     else if (window.GameFeed) window.GameFeed.add(tableOf(), v.lastTurn.map((e, idx) => feedItem(v, e, fid(`t${v.seq}-${idx}`)))); // no replay: the feed still gets the turn
     if (!snd) return;
     if (v.phase === 'gameOver') snd.play(v.winners.includes(v.me) ? 'win' : 'lose');
+    else if (ui.anim) return; // the replay plays a sound for each card and row as it lands
     else if (v.lastTurn.some((e) => e.by === v.me && e.took)) snd.play('lose');
     else snd.play('card');
   }

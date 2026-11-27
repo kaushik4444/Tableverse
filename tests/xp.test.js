@@ -92,6 +92,15 @@ test('Line Games (the real ids): a win and a loss, also when the opponent forfei
   }
 });
 
+test('a human against a bot keeps the result (win +20, loss -10); only a match with one participant is solo', () => {
+  const bot = p('bot', 0, { isBot: true });
+  assert.equal(gameSkillPoints('sudoku', [w('A'), bot]).A, WIN, 'sudoku win against a bot');
+  assert.equal(gameSkillPoints('sudoku', [l('A'), bot]).A, LOSS, 'sudoku loss against a bot');
+  assert.equal(gameSkillPoints('chess', [l('A'), bot]).A, LOSS, 'chess loss against a bot');
+  assert.equal(gameSkillPoints('sudoku', [w('A')]).A, 0, 'solo sudoku win moves no skill');
+  assert.equal(gameSkillPoints('sudoku', [l('A')]).A, 0, 'solo sudoku loss moves no skill');
+});
+
 test('a penalised leave costs the same in every game and is worse than losing', () => {
   for (const gameId of Object.keys(RULES)) {
     const pts = gameSkillPoints(gameId, [w('A'), l('B'), p('C', 0, { leftEarly: true, forfeit: true })]);

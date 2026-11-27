@@ -619,7 +619,9 @@
     profiles: 'Create a free account to see player profiles and stats.',
     blocking: 'Create a free account to block players.',
     reports: 'Create a free account to report players or messages.',
+    trial: 'You have used your free plays of this game. Create a free account to keep playing.',
   };
+  const DEV_OFF_TEXT = 'In development and testing: currently disabled.';
   const guestLockedHere = (feature) => !!S.isGuest && Array.isArray(S.guestLocked) && S.guestLocked.includes(feature);
   /** Marks a control as locked for this guest (styled by [data-guest-lock]). Empty when the area is open. */
   const lockAttr = (feature) => guestLockedHere(feature) ? ` data-guest-lock="${feature}" aria-disabled="true"` : '';
@@ -1045,9 +1047,12 @@
     } catch { /* offline: the list simply stays as it was */ }
   }
 
+  // the incoming requests and invitations seen at the last load, by id: a new id is a new item even if another left
+  let socialKeys = null;
   async function loadSocial({ quiet = false } = {}) {
     if (!S.ready || S.guest) return;
     let before = -1;
+    let latestKeys = null;
     if (!quiet) { S.socialLoading = true; S.socialError = ''; }
     try {
       const paths = [
@@ -1069,11 +1074,17 @@
       S.friendRequests = { incoming: results[1].requests || [], outgoing: results[2].requests || [] };
       S.invitations = { incoming: results[3].invitations || [], outgoing: results[4].invitations || [] };
       S.socialError = '';
+      latestKeys = [...(results[1].requests || []).map((r) => 'f:' + (r.id ?? r.username ?? JSON.stringify(r))), ...(results[3].invitations || []).map((r) => 'i:' + (r.id ?? r.code ?? JSON.stringify(r)))];
     } catch (error) {
       S.socialError = error.message || 'Could not load friends.';
     } finally {
       S.socialLoading = false;
       const after = (S.friendRequests.incoming || []).length + (S.invitations.incoming || []).length;
+      if (latestKeys) {
+        const fresh = socialKeys && latestKeys.some((k) => !socialKeys.includes(k));
+        if (fresh && CardTable.sound) CardTable.sound.play('notify'); // a new friend request or invitation
+        socialKeys = latestKeys;
+      }
       if (!S.room || S.room.status === 'lobby' || after !== before) render(); // in a running game only redraw when the bell count changed
     }
   }
@@ -1444,6 +1455,7 @@
         if (m.username) { S.username = m.username; store.set('ct_username', S.username); }
         if (!S.isGuest) toast('Your account is confirmed. Your games and history are yours.');
         render();
+        loadLockedPageData();
         break;
       }
       case 'welcome': {
@@ -1476,6 +1488,7 @@
         render();
         loadRecent();
         loadSocial({ quiet: true });
+        loadLockedPageData(); // a guest who confirmed their account while disconnected reconnects as registered
         if (!S.routed) { S.routed = true; applyRoute(); } // open #profile or #u/<name> if that is where the person came in
         const queue = S.pending;
         S.pending = [];
@@ -1567,6 +1580,7 @@
         const stateKey = JSON.stringify([stable, m.view]);
         const same = stateKey === S.stateKey && S.room;
         S.stateKey = stateKey;
+        prevRoom = S.room;
         S.room = m.room;
         S.view = m.view;
         // a seat change is confirmed when the table shows a new order; an error or the fallback timeout also ends the wait
@@ -1574,6 +1588,7 @@
         S.skew = (m.room.now || Date.now()) - Date.now();
         if (same) break; // identical to what is on screen (a presence or ping tick): keep the DOM, the focus and any animation
         setHash(m.room.code);
+        roomSoundsFor(prevRoom, m.room);
         soundsFor(prevView, m.view);
         prevView = m.view;
         const mine = !!(m.view && m.view.myTurn);
@@ -1765,10 +1780,28 @@
   const avatar = (m, cls = '') => `<span class="avatar${cls ? ' ' + cls : ''}" style="background:${avatarColor(m.name)}">${m.avatar ? esc(m.avatar) : initial(m.name)}</span>`;
 
   let prevView = null;
+  let prevRoom = null; // the room as it was before the last state message
   const bidSig = (v) => JSON.stringify(v.bids || (v.players || []).map((p) => (p.bid !== undefined && p.bid !== null ? p.bid : p.hasBid ? 1 : null)));
   /** Play a sound for whatever changed between two game views. Only the trick-taking games (Wizard, 29) have the
    *  `trick`/`lastTrick`/`bids` fields this looks at; every other game plays its own sounds, including its final
    *  result (a plain "gameOver" check here could not tell a winner from a loser without knowing each game's shape). */
+  /** Room-level cues: the game starts, a person sits down at the table or leaves it. Bots are not announced. */
+  function roomSoundsFor(a, b) {
+    const snd = CardTable.sound;
+    if (!snd || !a || !b || a.code !== b.code) return;
+    if (a.status === 'lobby' && b.status === 'playing') snd.play('start');
+    const humans = (r) => new Set((r.members || []).filter((x) => !x.bot).map((x) => x.id));
+    const was = humans(a); const now = humans(b);
+    if ([...now].some((id) => !was.has(id))) snd.play('join');
+    else if ([...was].some((id) => !now.has(id))) snd.play('leave');
+  }
+  // a soft tap on the app's own buttons (menus, tabs, dialogs, the table's controls); the game board has its own sounds
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('button, .menu-item') : null;
+    if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true' || b.closest('[data-no-tap]')) return;
+    if (b.matches('[data-act="sound"], [data-modal-act="toggleSound"]')) return; // these already play their own sound
+    if (CardTable.sound) CardTable.sound.play('tap');
+  }, true);
   function soundsFor(a, b) {
     const snd = CardTable.sound;
     if (!b || !snd) return;
@@ -1785,13 +1818,14 @@
   }
 
   function showEmote(id, e, who) {
-    const seat = document.querySelector(`[data-pid="${CSS.escape(id)}"] .av`);
+    // a seat has an avatar; a Take 5 chip or a spectator has none, so fall back to the element that carries the player's id
+    const seat = document.querySelector(`[data-pid="${CSS.escape(id)}"] .av`) || document.querySelector(`[data-pid="${CSS.escape(id)}"]`);
     const r = seat ? seat.getBoundingClientRect() : { left: innerWidth / 2, top: 80, width: 0, height: 0 };
     const el = document.createElement('div');
     el.className = 'emote-pop';
     el.textContent = e;
-    // A spectator has no seat: the reaction names them, so the table knows it came from someone watching.
-    if (who && who.spectator) { const tag = document.createElement('div'); tag.className = 'emote-tag'; tag.textContent = '👁 ' + (who.name || 'Spectator'); el.appendChild(tag); }
+    // Every reaction names who sent it. A spectator has no seat, so their name gets the 👁 mark.
+    if (who && who.name) { const tag = document.createElement('div'); tag.className = 'emote-tag'; tag.textContent = (who.spectator ? '👁 ' : '') + who.name; el.appendChild(tag); }
     el.style.left = r.left + r.width / 2 + 'px';
     el.style.top = r.top + r.height / 2 + 'px';
     document.body.appendChild(el);
@@ -2122,12 +2156,35 @@
     S.page = 'home';
     render();
   }
+  /** A page that was locked for a guest loads its data once the person is registered (nothing was fetched while locked). */
+  function loadLockedPageData() {
+    if (S.room || !S.guestLockedView) return; // only a page that was actually shown locked
+    // still locked for this guest: nothing is fetched. An owner who unlocked the page (e.g. after a reconnect) gets its data.
+    if (S.page === 'friends' ? guestLockedHere('friends') : guestLockedHere('profiles')) return;
+    S.guestLockedView = false;
+    if (S.page === 'profile') loadProfile();
+    else if (S.page === 'friends') loadSocial({ quiet: true });
+    else if (S.page === 'player') { const r = routeFromHash(); if (r.page === 'player') loadPlayer(r.username); }
+  }
+  /** A page a guest cannot use yet: shown blurred, with one button that opens the account dialog. The server still refuses it. */
+  function lockedPageHTML(feature, what) {
+    S.guestLockedView = true; // remembered, so the page loads its data once the person is registered
+    return `<div class="page locked-page">
+      <div class="locked-preview" aria-hidden="true"><div class="locked-blur"><h2>Player profile</h2><p>Games played · Wins · Rating</p><div class="locked-rows"><span></span><span></span><span></span></div></div></div>
+      <div class="locked-cta" role="region" aria-label="Create an account">
+        <h2>Create a free account</h2>
+        <p>${esc(GUEST_LOCK_TEXT[feature] || what)}</p>
+        <button type="button" class="btn" data-act="showRegister">Create account</button>
+      </div>
+    </div>`;
+  }
   function openPage(page, arg, fromHash) {
     S.menuOpen = false; S.bellOpen = false;
     S.page = page;
     if (!fromHash) { try { history.pushState(null, '', page === 'profile' ? '#profile' : page === 'friends' ? '#friends' : page === 'player' ? '#u/' + arg : location.pathname + location.search); } catch { /* ignore */ } }
     window.scrollTo(0, 0);
-    if (page === 'profile') loadProfile(); else if (page === 'player') loadPlayer(arg); else if (page === 'friends') { render(); loadSocial({ quiet: true }); } else render();
+    // a guest sees these pages locked (lockedPageHTML): nothing is fetched for them
+    if (page === 'profile') { if (guestLockedHere('profiles')) render(); else loadProfile(); } else if (page === 'player') { if (guestLockedHere('profiles')) render(); else loadPlayer(arg); } else if (page === 'friends') { render(); if (!S.isGuest) loadSocial({ quiet: true }); } else render();
   }
 
   /** Overall level (time played) shown beside the avatar. Null when the progress is missing. */
@@ -2157,6 +2214,7 @@
     store.set('ct_level_seen_' + n.username, String(n.to));
     S.levelUp = null;
     const left = S.account ? Math.max(0, Number(S.account.need) - Number(S.account.into)) : null;
+    if (CardTable.sound) CardTable.sound.play('fanfare'); // when the dialog shows, not while a table holds it back
     openModal('Level up', `<p>Congratulations on reaching level ${Number(n.to)}!</p>${left !== null ? `<p class="hint">Next level in ${left} min of play.</p>` : ''}<div class="row" style="margin-top:12px"><button class="btn" type="button" data-modal-close="1">OK</button></div>`);
   }
   /** Refreshes the overall level. Silent on failure: the badge just stays as it was. Redraws when progress or its notice changes. */
@@ -2342,11 +2400,9 @@
       const panel = tab === 'history' ? historyHTML(P.history)
         : tab === 'account' ? `<div class="account-list">
             ${blockedHTML()}
-            <div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
-            <div class="setting-row"><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
-            <div class="setting-row"><div><b>Sessions</b><small>Sign out of this device, or of every device you are logged in on.</small></div><span class="row" style="gap:6px"><button type="button" class="btn ghost small" data-act="logout">Log out</button><button type="button" class="btn ghost small" data-act="logoutAll">Everywhere</button></span></div>
-            <div class="danger-zone"><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
+            <div class="setting-row"${S.isGuest ? ' hidden style="display:none"' : ''}><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
+            <div class="danger-zone"${S.isGuest ? ' hidden style="display:none"' : ''}><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
           </div>`
         : P.game ? gameDetailHTML(P) : statsHTML(P.data.stats);
       inner = `<header class="pp-head">
@@ -2791,17 +2847,46 @@
     });
   }
 
+  /** What a control is, for finding its replacement after a redraw: tag, action, label and text. */
+  const focusSignature = (el) => `${el.tagName}|${el.getAttribute('data-act') || ''}|${el.getAttribute('aria-label') || ''}|${(el.textContent || '').trim().slice(0, 40)}`;
+
+  /** Settings: the choices a player makes for this device, and the list of recent tables. Account security and deletion stay on the profile's Account tab. */
   function openSettingsDialog() {
-    const body = () => `<div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
-      <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} saved on your account.` : 'Nothing saved yet.'}</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>
-      <div class="setting-row"><div><b>Account</b><small>Profile, history and account deletion are on your profile page.</small></div><button type="button" class="btn ghost small" data-modal-act="openProfileFromSettings">Open</button></div>`;
+    const appearance = () => `<div class="setting-row"><div><b>Appearance</b><small>Dark, light, or whatever your device uses. Saved on this device.</small></div><span class="row" style="gap:6px" role="group" aria-label="Appearance">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([m, l]) => `<button type="button" class="btn ${themeMode() === m ? '' : 'ghost'} small" aria-pressed="${themeMode() === m}" data-modal-act="setTheme" data-theme="${m}">${l}</button>`).join('')}</span></div>`;
+    const body = () => `${appearance()}
+      <div class="setting-row"><div><b>Sound effects</b><small>Card sounds, turn alerts, taps and fanfares. Saved on this device.</small></div><button type="button" class="btn ${CardTable.sound.isMuted() ? 'ghost' : ''} small" data-modal-act="toggleSound" aria-pressed="${!CardTable.sound.isMuted()}">${CardTable.sound.isMuted() ? 'Off' : 'On'}</button></div>
+      <div class="setting-row"><div><b>Volume</b><small>How loud the sound effects are. Saved on this device.</small></div><input type="range" min="0" max="100" step="5" value="${CardTable.sound.volume()}" data-volume aria-label="Sound effects volume" style="width:150px"></div>
+      <div class="setting-row"><div><b>Recent tables</b><small>${S.recentTables.length ? `${S.recentTables.length} still open, that you sat at or watched.` : 'Tables you sit at or watch show here while they stay open. A table closes when everyone leaves.'} Clearing removes them from this list; a table you sit at again is added back.</small></div><button type="button" class="btn ghost small" data-modal-act="clearRecent" ${S.recentTables.length ? '' : 'disabled'}>Clear</button></div>`;
     openModal('Settings', body(), (o) => {
-      const redraw = () => { o.querySelector('.modal-body').innerHTML = body(); };
-      modalActions.toggleSound = () => { CardTable.sound.toggle(); redraw(); };
-      modalActions.clearRecent = async () => {
-        try { await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {})); S.recentTables = []; redraw(); render(); } catch (err) { toast(err.message || 'Could not clear recent tables'); }
+      o.addEventListener('input', (e) => { if (e.target.matches && e.target.matches('[data-volume]')) CardTable.sound.setVolume(e.target.value); });
+      // a redraw replaces the buttons; keep focus on the replacement of the button the player used (keyboard users keep their place)
+      const redraw = (used) => {
+        const key = (b) => `${b.dataset.modalAct}:${b.dataset.theme || ''}`;
+        const k = used && used.dataset ? key(used) : '';
+        // move focus only if the player is still in this dialog (or nowhere): a busy wait can end after they moved elsewhere
+        const active = document.activeElement;
+        const keepFocus = !active || active === document.body || o.contains(active);
+        const onVolume = Boolean(active && active.matches && active.matches('[data-volume]'));
+        o.querySelector('.modal-body').innerHTML = body();
+        if (!keepFocus) return;
+        if (onVolume) { const slider = o.querySelector('[data-volume]'); if (slider) { slider.focus(); return; } }
+        const again = k && [...o.querySelectorAll('[data-modal-act]')].find((b) => key(b) === k && !b.disabled);
+        if (again) again.focus();
+        else { const close = o.querySelector('[data-modal-close]'); if (close) close.focus(); } // e.g. Clear disables itself once the list is empty
       };
-      modalActions.openProfileFromSettings = () => { closeModal(); openPage('profile'); };
+      modalActions.setTheme = (el) => { chooseTheme(el.dataset.theme); redraw(el); };
+      modalActions.toggleSound = (el) => { CardTable.sound.toggle(); redraw(el); };
+      modalActions.clearRecent = async (el) => {
+        try {
+          await withBusy('Clearing…', () => postJson('/api/me/recent/clear', {}));
+          S.recentTables = []; redraw(el);
+          // the player may have moved to a control outside Settings while this waited: the home redraw must not drop their place
+          const outside = document.activeElement;
+          const sig = outside && outside !== document.body && !o.contains(outside) ? focusSignature(outside) : '';
+          render();
+          if (sig) { const again = [...document.querySelectorAll(outside.tagName)].find((b) => focusSignature(b) === sig && !b.disabled); if (again) again.focus({ preventScroll: true }); }
+        } catch (err) { toast(err.message || 'Could not clear recent tables'); }
+      };
     });
   }
 
@@ -2875,6 +2960,8 @@
     if (themeChoice) return themeChoice;
     try { const m = localStorage.getItem('tv_theme'); return m === 'light' || m === 'system' ? m : 'dark'; } catch { return 'dark'; }
   }
+  /** Saves the Appearance choice on this device and applies it at once. */
+  function chooseTheme(m) { themeChoice = m; try { localStorage.setItem('tv_theme', m); } catch { /* not kept after this visit, but applied now */ } applyTheme(); render(); }
   function applyTheme() {
     const m = themeMode();
     const light = m === 'light' || (m === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
@@ -2913,7 +3000,10 @@
     if (!S.room || S.room.status !== 'finished') S.endFlow = null;
     if (!S.ready && !S.guest && !S.room) {
       paintApp('<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle class="seat-halo" cx="128" cy="216" r="27" fill="#fbbf24" fill-opacity=".25"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>');
-    } else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
+    } else if (!S.room && S.page === 'profile' && guestLockedHere('profiles')) paintApp(topbarHTML() + lockedPageHTML('profiles', 'See player profiles and stats.'));
+    else if (!S.room && S.page === 'player' && guestLockedHere('profiles')) paintApp(topbarHTML() + lockedPageHTML('profiles', 'See player profiles and stats.'));
+    else if (!S.room && S.page === 'friends' && S.isGuest) paintApp(topbarHTML() + lockedPageHTML('friends', 'Use friends and table invitations.'));
+    else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
     else if (!S.room && S.page === 'player') renderPlayerPage();
     else if (!S.room && S.page === 'friends' && !S.guest) paintApp(topbarHTML() + friendsPageHTML());
     else if (!S.room) renderHome();
@@ -2968,10 +3058,12 @@
 
   function renderHome() {
     loadWelcome();
-    const tiles = S.games.map((g) => {
+    // A game only the owner may play is not shown to anybody else (the server still refuses it).
+    const tiles = S.games.filter((g) => !(g.access === 'owner' && S.role !== 'owner')).map((g) => {
       const open = gameOpenFor(g);
       const guestLocked = guestLockedFor(g); // a tap opens the account prompt (the button stays enabled)
-      const note = open ? '' : guestLocked && window.TvGuest ? window.TvGuest.lockedLabel(g.name) : '<p class="game-off" role="status">Unavailable right now.</p>';
+      const devOff = !open && !guestLocked && g.access === 'admins'; // hover or tap says it is in development and testing
+      const note = open ? '' : guestLocked && window.TvGuest ? window.TvGuest.lockedLabel(g.name) : devOff ? `<p class="game-off" role="status">${DEV_OFF_TEXT}</p>` : '<p class="game-off" role="status">Unavailable right now.</p>';
       return `
       <article class="game-card${open ? '' : ' is-locked'}" style="--accent:${esc(g.accent || '#7b4bd0')}">
         <div class="game-art" aria-hidden="true">${gameMark(g)}</div>
@@ -2979,7 +3071,7 @@
           <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
           <p>${esc(g.tagline)}</p>${note}
           <div class="row game-actions">
-            <button class="btn small" type="button" data-act="create" data-game="${esc(g.id)}" ${open || guestLocked ? '' : 'disabled aria-disabled="true"'}>Create table</button>
+            <button class="btn small${devOff ? ' is-off' : ''}" type="button" data-act="create" data-game="${esc(g.id)}"${open || guestLocked ? '' : ' aria-disabled="true"'}${devOff ? ` title="${DEV_OFF_TEXT}"` : ''}>Create table</button>
             <button class="btn ghost small" type="button" data-act="rules" data-game="${esc(g.id)}">Rules</button>
           </div>
           ${g.id === 'wizard' ? `<p class="game-extra">${S.guest ? '<button type="button" class="linklike" data-act="showLogin">Log in for the offline scorecard</button>' : '<a href="/scorecard.html?game=wizard">Offline scorecard</a>'}</p>` : ''}
@@ -2993,7 +3085,7 @@
     ${topbarHTML()}
     <main class="page wide home">
       <section class="home-hero">
-        <div class="hero-fan" aria-hidden="true"><i class="hc c1"><b>A</b>♠</i><i class="hc c2 red"><b>K</b>♥</i><i class="hc c3"><b>Q</b>♣</i><i class="hc c4 red"><b>J</b>♦</i></div>
+        <div class="hero-dice" aria-hidden="true"><div class="hd d1" style="--r:-12deg"><i style="grid-area:1/1"></i><i style="grid-area:1/3"></i><i style="grid-area:2/2"></i><i style="grid-area:3/1"></i><i style="grid-area:3/3"></i></div><div class="hd d2" style="--r:10deg"><i style="grid-area:1/1"></i><i style="grid-area:2/2"></i><i style="grid-area:3/3"></i></div></div>
         <div class="home-intro">
           ${name && !S.guest ? `<small class="eyebrow">${dayPart()}</small>` : ''}
           <h1>${name ? `Hi, ${esc(name)}` : 'Your friends. Your games. One table.'}</h1>
@@ -3399,13 +3491,31 @@
     slot.innerHTML = CardTable.readyBox({ gate }, { title: 'Ready to continue?' }).replace('data-ready-here', 'data-ready-here data-ready-placed');
   }
 
+  // Games redraw the whole table on every state change. A sheet that was already up (same title) is marked settled, so it does
+  // not replay its entrance: the shared fix for every game, instead of a per-game rule.
+  let shownOverlayTitles = new Set();
+  function markSettledOverlays(root, resultVisible) {
+    if (!resultVisible) {
+      shownOverlayTitles.clear();
+      return;
+    }
+    const titles = new Set();
+    root.querySelectorAll('.overlay').forEach((ov) => {
+      const title = ((ov.querySelector('h2') || ov).textContent || '').trim().slice(0, 120);
+      if (!ov.getClientRects().length) return; // hidden (not on screen yet): its first showing still animates
+      titles.add(title);
+      if (shownOverlayTitles.has(title)) ov.classList.add('settled');
+    });
+    shownOverlayTitles = titles;
+  }
+
   function renderGame() {
     lastAppHtml = null; // the game draws the root itself, so the last home or lobby markup is no longer on screen
     const gameId = S.room.gameId;
     const unavailable = '<div class="page"><p>This game is not available in your browser version. Reload the page.</p></div>';
     // games load the first time their table opens (public/game-loader.js); draw the table again once the script is in
     if (window.TvGames && window.TvGames.knows(gameId) && !window.TvGames.isLoaded(gameId)) {
-      paintApp('<div class="page"><p class="hint">Loading the game…</p></div>');
+      paintApp('<div class="page load-die"><div class="hd-mini" aria-hidden="true"><i style="grid-area:1/1"></i><i style="grid-area:2/2"></i><i style="grid-area:3/3"></i></div><p class="hint">Loading the game…</p></div>');
       // a callback only draws if this table is still on screen with its view
       const tableCode = S.room.code;
       const stillHere = () => S.room && S.room.code === tableCode && S.room.gameId === gameId && S.view;
@@ -3423,8 +3533,9 @@
     const focusedResultAction = document.activeElement?.closest('.end-actions button, .end-bar button')?.dataset.act;
     const r = S.room;
     if (r.status === 'finished' && (!S.endFlow || S.endFlow.code !== r.code)) S.endFlow = { code: r.code, start: Date.now() - Math.max(0, (r.outcome && r.outcome.sinceMs) || 0) + Math.max(0, (r.outcome && r.outcome.playMs) || 0), timer: null };
+    const resultVisible = r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS;
     plugin.render($app, S.view, {
-      resultVisible: r.status !== 'finished' || Date.now() - S.endFlow.start >= END_BOARD_MS + END_WINNER_MS,
+      resultVisible,
       room: S.room,
       gate: gateInfo(),
       game: gameMeta(S.room.gameId),
@@ -3446,7 +3557,8 @@
     unifyToolbar();
     addSettingsChip();
     refreshVoiceUI();
-    endFlow(focusedResultAction);
+    endFlow(focusedResultAction, resultVisible);
+    markSettledOverlays($app, resultVisible); // endFlow has updated .endhold, so layout reflects what will be shown
     if (CardTable.feed) CardTable.feed.sync($app, S.room.gameId, S.view, S.room.code);
     const bar = $app.querySelector('.wz-status');
     if (bar) {
@@ -3500,7 +3612,7 @@
     return `<section class="end-xp" aria-label="${game} ratings for this game">${note}${statusLine}${table}</section>`;
   }
 
-  function endFlow(focusedResultAction) {
+  function endFlow(focusedResultAction, resultVisible) {
     const r = S.room;
     if (!r || r.status !== 'finished') { $app.classList.remove('endhold'); return; }
     const f = S.endFlow;
@@ -3512,7 +3624,7 @@
       scheduleLevelRefresh();
     }
     const t = Date.now() - f.start;
-    const stage = t < END_BOARD_MS ? 'board' : t < END_BOARD_MS + END_WINNER_MS ? 'winner' : 'result';
+    const stage = resultVisible ? 'result' : t < END_BOARD_MS ? 'board' : 'winner';
     $app.classList.toggle('endhold', stage !== 'result');
     if (stage !== 'result') f.timer = setTimeout(() => { if (S.room && S.room.code === f.code && S.room.status === 'finished') render(); }, (stage === 'board' ? END_BOARD_MS : END_BOARD_MS + END_WINNER_MS) - t + 30);
     // A game that draws its own result sheet already names the winner there: a second "won!" pop-up would announce it twice.
@@ -3669,7 +3781,6 @@
       // the redraw replaces the period button, so give keyboard focus back to the same period
       document.querySelector(`[data-act="ratingScope"][data-scope="${P.ratingScope}"]`)?.focus({ preventScroll: true });
     },
-    setTheme: (el) => { themeChoice = el.dataset.theme; try { localStorage.setItem('tv_theme', themeChoice); } catch { /* not kept after this visit, but applied now */ } applyTheme(); render(); },
     profileTab: (el) => { if (S.profile) { S.profile.tab = el.dataset.tab; S.profile.game = null; if (el.dataset.tab === 'account') send({ t: 'blocks' }); render(); } },
     // another player's page: the server finds the account from the username, so no id is needed here
     playerBlock: () => {
@@ -3772,11 +3883,14 @@
     voiceSpeaker: () => voice.toggleSpeaker(),
     sound: () => { CardTable.sound.toggle(); render(); },
     create: (el) => {
-      if (!authed()) return gateLogin(() => actions.create(el));
       const game = el.dataset.game;
       const meta = gameMeta(game);
+      // an admin-only game says why first, before any login prompt
+      if (meta && meta.access === 'admins' && !gameOpenFor(meta)) return toast(DEV_OFF_TEXT);
+      if (!authed()) return gateLogin(() => actions.create(el));
       if (meta && !gameOpenFor(meta)) {
         if (guestLockedFor(meta)) return openAuthSheet('register', `Create a free account to play ${meta.name}.`);
+        if (meta.access === 'admins') return toast(DEV_OFF_TEXT);
         return toast('That game is unavailable right now.');
       }
       // New tables are public by default. The host can make the table private from the table screen (Make private).

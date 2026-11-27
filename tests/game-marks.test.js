@@ -181,11 +181,15 @@ async function adminMarks() {
   const start = admin.indexOf('  async function gameSwitches()');
   const end = admin.indexOf('  // ---------------------------------------------------------------- chat reports', start);
   assert.ok(start >= 0 && end > start, 'admin game-switch renderer exists');
+  // the draft state and its helpers sit above gameSwitches; the renderer needs them too
+  const draftState = admin.slice(admin.indexOf('  let gameDraft'), admin.indexOf('  let generation'));
+  const draftCode = admin.slice(admin.indexOf('  // ---- owner draft for the game switches'), start);
+  assert.ok(draftState.length > 0 && draftCode.length > 0, 'admin game draft exists');
   for (const available of [true, false]) {
     let output = '';
     const context = {
       window: available ? window : {},
-      state: { gen: 1 }, gameFlagPending: new Map(), gameFlagError: null, orderBusy: false,
+      state: { gen: 1 }, gameFlagPending: new Map(), gameTrialPending: new Map(), gameFlagError: null, orderBusy: false,
       api: async () => ({ modes: ['on'], games: [
         { id: 'ludo', name: 'Ludo', icon: '🎲', access: 'on' },
         { id: 'unknown', name: '<Unknown>', icon: '<img src=x>', access: 'on' },
@@ -193,13 +197,14 @@ async function adminMarks() {
       main: {
         insertAdjacentHTML: (_position, markup) => { output += markup; },
         querySelectorAll: () => [],
-        querySelector: () => null, // no tables section yet: the switches are appended
+        // the rows are painted into #gameSwitches after the heading is appended
+        querySelector: (selector) => (selector === '#gameSwitches' ? { set innerHTML(v) { output += v; }, get innerHTML() { return ''; }, querySelectorAll: () => [], querySelector: () => null } : null),
       },
     };
     vm.createContext(context);
     vm.runInContext(
       admin.slice(admin.indexOf('  const esc ='), admin.indexOf('  const countryName =')) +
-      admin.slice(start, end) + '\nglobalThis.run = gameSwitches;', context);
+      draftState + draftCode + admin.slice(start, end) + '\nglobalThis.run = gameSwitches;', context);
     await context.run();
     assert.ok(output.includes(available ? html('ludo') : '🎲'));
     assert.ok(output.includes('&lt;img src=x&gt;'));

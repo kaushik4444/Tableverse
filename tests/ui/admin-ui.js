@@ -674,7 +674,7 @@ const api = (role) => ({
     await a.close();
   });
 
-  await test('home order swaps adjacent games, locks moves during save, and preserves access', async () => {
+  await test('home order: moves are a draft until Save changes; one save sends the order, locks the moves, and keeps access', async () => {
     const s = await open('owner');
     const entries = [
       { id: 'wizard', name: 'Wizard', access: 'on' },
@@ -697,20 +697,30 @@ const api = (role) => ({
       assert.equal(await s.page.isDisabled('[data-gid="wizard"][data-gmove="up"]'), true);
       assert.equal(await s.page.isDisabled('[data-gid="poker"][data-gmove="down"]'), true);
       await s.page.click('[data-gid="ludo"][data-gmove="up"]');
+      await s.page.waitForSelector('[data-gsave]');
+      assert.equal(requests.length, 0, 'a move alone sends nothing');
+      assert.equal(await s.page.locator('[data-gmove="up"]').evaluateAll((buttons) => buttons.map((b) => b.dataset.gid).join(',')), 'ludo,wizard,poker', 'the draft shows the new order');
+      await s.page.click('[data-gid="poker"][data-gmove="up"]');
+      await s.page.click('[data-gid="poker"][data-gmove="down"]');
+      assert.equal(await s.page.locator('[data-gmove="up"]').evaluateAll((buttons) => buttons.map((b) => b.dataset.gid).join(',')), 'ludo,wizard,poker');
+      await s.page.click('[data-gsave]');
       await until(() => requests.length === 1, 'order POST');
-      await until(() => s.page.locator('[data-gmove]:disabled').count().then((n) => n === 6), 'all moves locked');
+      await until(() => s.page.locator('[data-gmove]:disabled').count().then((n) => n === 6), 'all moves locked during save');
       assert.deepEqual(requests, [{ order: ['ludo', 'wizard', 'poker'] }]);
       finish();
       await until(() => s.page.locator('[data-gmove="up"]').evaluateAll((buttons) => buttons.map((b) => b.dataset.gid).join(',')).then((ids) => ids === 'ludo,wizard,poker'), 'saved order');
+      await until(() => s.page.locator('[data-gsave]').count().then((n) => n === 0), 'draft cleared after save');
       assert.equal(await s.page.inputValue('[data-gaccess="ludo"]'), 'owner');
       assert.equal(await s.page.isDisabled('[data-gid="wizard"][data-gmove="up"]'), false);
       await s.page.click('[data-gid="ludo"][data-gmove="down"]');
-      await until(() => requests.length === 2, 'downward move');
+      assert.equal(requests.length, 1, 'a second move is again only a draft');
+      await s.page.click('[data-gsave]');
+      await until(() => requests.length === 2, 'downward move saved');
       assert.deepEqual(requests[1], { order: ['wizard', 'ludo', 'poker'] });
     } finally { finish(); await s.close(); }
   });
 
-  await test('a rejected home order shows the error and unlocks controls for retry', async () => {
+  await test('a rejected home order shows the error, keeps the draft, and Save can be retried', async () => {
     const s = await open('owner');
     const entries = [{ id: 'wizard', name: 'Wizard', access: 'on' }, { id: 'ludo', name: 'Ludo', access: 'owner' }];
     let attempts = 0;
@@ -722,11 +732,52 @@ const api = (role) => ({
     try {
       await tab(s.page, 'games');
       await s.page.click('[data-gid="ludo"][data-gmove="up"]');
+      await s.page.click('[data-gsave]');
       await until(() => s.page.textContent('#gMsg').then((text) => text.includes('Order could not be saved')), 'save error');
-      assert.equal(await s.page.isDisabled('[data-gid="ludo"][data-gmove="up"]'), false);
-      assert.deepEqual(await s.page.locator('[data-gmove="up"]').evaluateAll((buttons) => buttons.map((b) => b.dataset.gid)), ['wizard', 'ludo']);
-      await s.page.click('[data-gid="ludo"][data-gmove="up"]');
+      assert.equal(await s.page.isDisabled('[data-gid="wizard"][data-gmove="up"]'), false, 'controls unlock after a failed save');
+      assert.deepEqual(await s.page.locator('[data-gmove="up"]').evaluateAll((buttons) => buttons.map((b) => b.dataset.gid)), ['ludo', 'wizard'], 'the draft order is still shown');
+      assert.equal(await s.page.locator('[data-gsave]').count(), 1, 'the draft is still there to retry');
+      await s.page.click('[data-gsave]');
       await until(() => attempts === 2, 'retry');
+    } finally { await s.close(); }
+  });
+
+  await test('guest plays: the checkbox limits guests, 1 to 9 with 3 by default, and the saved limit can be changed or removed', async () => {
+    const s = await open('owner');
+    const games = [{ id: 'wizard', name: 'Wizard', access: 'on', trialLimit: null }, { id: 'ludo', name: 'Ludo', access: 'on', trialLimit: 5 }];
+    const requests = [];
+    await s.page.route('**/api/admin/game-flags', (route) => route.fulfill({ json: { ok: true, modes: ['on', 'owner'], games: games.map((g) => ({ ...g })) } }));
+    await s.page.route('**/api/admin/game-trials', (route) => {
+      const body = route.request().postDataJSON();
+      requests.push(body);
+      const g = games.find((x) => x.id === body.gameId);
+      if (g) g.trialLimit = body.limit;
+      return route.fulfill({ json: { ok: true, gameId: body.gameId, limit: body.limit } });
+    });
+    try {
+      await tab(s.page, 'games');
+      await s.page.waitForSelector('[data-gtrial-on="ludo"]');
+      assert.equal(await s.page.isChecked('[data-gtrial-on="wizard"]'), false);
+      assert.equal(await s.page.isDisabled('[data-gtrial-n="wizard"]'), true, 'no limit: the dropdown is off');
+      assert.equal(await s.page.isChecked('[data-gtrial-on="ludo"]'), true);
+      assert.equal(await s.page.inputValue('[data-gtrial-n="ludo"]'), '5');
+      assert.deepEqual(await s.page.$$eval('[data-gtrial-n="wizard"] option', (o) => o.map((x) => x.value)), ['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+      assert.equal(await s.page.inputValue('[data-gtrial-n="wizard"]'), '3', 'the first choice shows 3');
+      await s.page.check('[data-gtrial-on="wizard"]');
+      assert.equal(requests.length, 0, 'a change alone sends nothing');
+      await s.page.click('[data-gsave]');
+      await until(() => requests.length === 1, 'limit saved on Save');
+      assert.deepEqual(requests[0], { gameId: 'wizard', limit: 3 });
+      await until(() => s.page.isChecked('[data-gtrial-on="wizard"]'), 'checked after save');
+      await s.page.selectOption('[data-gtrial-n="ludo"]', '7');
+      await s.page.click('[data-gsave]');
+      await until(() => requests.length === 2, 'limit changed');
+      assert.deepEqual(requests[1], { gameId: 'ludo', limit: 7 });
+      await s.page.uncheck('[data-gtrial-on="ludo"]');
+      await s.page.click('[data-gsave]');
+      await until(() => requests.length === 3, 'limit removed');
+      assert.deepEqual(requests[2], { gameId: 'ludo', limit: null });
+      await until(() => s.page.isChecked('[data-gtrial-on="ludo"]').then((c) => c === false), 'unchecked after save');
     } finally { await s.close(); }
   });
 

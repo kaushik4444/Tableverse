@@ -10,6 +10,53 @@
 (function () {
   window.TV_RELEASES = [
   {
+    date: '2026-11-26',
+    items: [
+      {
+        level: 'major',
+        ico: '🔢',
+        title: 'Sudoku: race to fill the grid',
+        text: 'Play alone like a puzzle book, or race friends on the same puzzle. You get 3 lives and 3 undos: the third wrong number takes you out, and the first full grid wins.'
+      },
+      {
+        level: 'minor',
+        ico: '🔲',
+        title: 'Dots and Boxes for 2 to 4 players',
+        text: 'Draw lines between the dots and close boxes to claim them. Close a box and you move again. Pick a 3×3, 4×4 or 5×5 board.'
+      },
+      {
+        level: 'minor',
+        ico: '🚢',
+        title: 'Sea Battle for two',
+        text: 'Hide five ships in your sea and fire at the other player’s. Hits and sinkings are shown to both of you; the first to sink the whole fleet wins.'
+      },
+      {
+        level: 'minor',
+        ico: '🃏',
+        title: 'Memory Match for 2 to 4 players',
+        text: 'Turn two cards over to find the pairs. A match keeps your turn, and the most pairs wins. Pick 4×4, 4×6 or 6×6 cards.'
+      },
+      {
+        level: 'minor',
+        ico: '🧱',
+        title: 'Falling Blocks for 2 to 4 players',
+        text: 'Everybody builds in their own well from the same blocks. Clear rows to send garbage to rivals; the last one still building wins.'
+      },
+      {
+        level: 'major',
+        ico: '🔊',
+        title: 'Sounds for more moments',
+        text: 'Dice rolls, captures and checks, a game starting, someone sitting down or leaving your table, and new friend requests and invitations now have their own sounds. Turn them off in Settings.'
+      },
+      {
+        level: 'minor',
+        ico: '🎉',
+        title: 'A fanfare when you reach a new level',
+        text: 'The level-up note now plays a short fanfare when it appears.'
+      }
+    ]
+  },
+  {
     date: '2026-11-25',
     items: [
       {

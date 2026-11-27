@@ -492,14 +492,17 @@ li .standin { margin-left: 6px; vertical-align: middle; flex: 0 0 auto; font-siz
 
 /* how-to-play cards (shared by every game) */
 /* One fixed box for every card of a game, so it does not change size between pages; long text scrolls inside it. */
-.ht-sheet { --ht-h: min(540px, 86vh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
-@supports (height: 1dvh) { .ht-sheet { --ht-h: min(540px, 86dvh); } } /* custom properties do not fall back, so the dvh value sits in a feature query */
+.ht-sheet { --ht-h: min(640px, 94vh); text-align: center; width: min(380px, calc(100vw - 32px)); height: var(--ht-h); min-height: var(--ht-h); max-height: var(--ht-h); flex: 0 0 auto; max-width: none; display: flex; flex-direction: column; overflow-y: auto; scrollbar-gutter: stable; box-sizing: border-box; }
+@supports (height: 1dvh) { .ht-sheet { --ht-h: min(640px, 94dvh); } } /* custom properties do not fall back, so the dvh value sits in a feature query */
 .ht-sheet > .row.ht-actions { margin-top: auto; padding-top: 12px; }
 .ht-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
 .ht-sheet h2 { margin: 0 0 10px; }
-.ht-art { display: grid; place-items: center; margin: 6px 0 12px; min-height: 64px; }
+.ht-art { display: flex; justify-content: center; align-items: center; margin: 6px 0 12px; min-height: 64px; }
 .ht-art svg.ht-svg { width: min(100%, 300px); height: auto; max-height: 190px; border-radius: 14px; }
 .ht-art svg.cb-svg { width: min(100%, 250px); height: auto; border-radius: 14px; }
+/* real-footage pictures: a phone-shaped screenshot, scaled so the card text still fits on short phones */
+.ht-art { flex: 0 0 auto; }
+.ht-art img.ht-photo { display: block; flex: 0 0 auto; width: auto; height: min(34vh, 270px); max-width: 100%; border-radius: 16px; object-fit: contain; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
 .ht-mark { font-size: 64px; line-height: 1; display: inline-block; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .35)); }
 .ht-sheet .rule { text-align: left; margin: 0 0 6px; }
 .ht-sheet .variants { text-align: left; }

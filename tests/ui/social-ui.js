@@ -142,9 +142,11 @@ let incomingReq = []; let incomingInv = []; let outgoing = []; let friendList = 
     assert.equal(await page.$('#friends-panel'), null, 'no full friends panel on home');
     assert.match(await page.textContent('.friends-strip'), /friends online|none online|Add friends/);
     const soon = await page.textContent('.coming-roadmap');
-    for (const n of ['Bingo', 'Cup Pong', 'Sudoku', 'Falling Blocks', 'Sea Battle', 'Resource Isles', 'Secret Clues']) assert.ok(soon.includes(n), `missing roadmap game: ${n}`);
+    for (const n of ['Cup Pong', 'Resource Isles', 'Secret Clues']) assert.ok(soon.includes(n), `missing roadmap game: ${n}`);
+    for (const n of ['Bingo', 'Sea Battle', 'Falling Blocks']) assert.ok(!soon.includes(n), `${n} has shipped and is not coming soon`);
     assert.equal(await page.$('.soon-card button'), null, 'coming-soon cards are not playable');
-    assert.equal(await page.locator('.soon-card').count(), 8, 'only the eight remaining planned games are listed (Color Clash, Go Fish, Snakes and Ladders, Property Rivals and the line games are playable now)');
+    assert.equal(await page.locator('.soon-card').count(), 4, 'only the four remaining planned games are listed (the shipped games are playable now)');
+    assert.deepEqual(await page.locator('.soon-card b').allTextContents(), ['Cup Pong', 'Resource Isles — 4 players', 'Resource Isles — 5–6 players', 'Secret Clues'], 'the rendered titles are exactly the four planned games');
     await page.click('.friends-strip [data-act="openFriendsPage"]');
     await page.waitForSelector('#friends-panel');
     assert.equal(new URL(page.url()).hash, '#friends');

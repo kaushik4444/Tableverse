@@ -36,7 +36,7 @@
 .cb-striker:focus-visible { outline: none; stroke: #fff; stroke-width: 0.008; }
 .cb-aim.idle { visibility: hidden; }
 .cb-aim { stroke: #ffffff; stroke-width: 0.008; stroke-dasharray: 0.03 0.02; stroke-linecap: round; opacity: .9; }
-.cb-controls { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 7.6em; }
+.cb-controls { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .cb-controls .cb-tip { min-height: 3.6em; margin: 12px 0 0; text-align: center; }
 .carrom-game .wz-status { min-height: 3.4em; }
 
@@ -46,11 +46,8 @@
 @media (max-width: 600px) {
   .cb-board-wrap { margin: 0 -8px; }
 }
-.cb-moves { margin-top: 12px; max-width: 520px; margin-left: auto; margin-right: auto; }
-.cb-log { margin: 6px 0 0; padding-left: 20px; }
 
 
-.cb-fire[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
 
 /* score pills */
 .cb-score { display: flex; justify-content: center; gap: 10px; margin: 0 0 10px; }
@@ -76,3 +73,36 @@
 @media (prefers-reduced-motion: reduce) { .cb-ring { animation: none; } }
 .cb-aim.dashed { stroke-dasharray: 0.02 0.016; }
 .cb-cross line { stroke: #e0442f; stroke-width: 0.018; stroke-linecap: round; }
+
+/* Fit the window when possible; scroll the page when the rows and minimum board height need more room.
+   The shot log is in the table's More menu (Log). */
+.carrom-game { box-sizing: border-box; height: 100vh; height: 100dvh; min-height: min-content; display: flex; flex-direction: column; gap: 6px; padding: calc(6px + env(safe-area-inset-top)) 10px calc(6px + env(safe-area-inset-bottom)); overflow: hidden; }
+.carrom-game > * { flex: none; }
+/* Keep the SVG's intrinsic size out of the table's minimum height calculation. */
+.carrom-game .cb-board-wrap { flex: 1 1 0; min-height: 120px; contain: size; align-items: center; }
+.carrom-game .cb-svg { width: auto; max-width: 100%; height: 100%; max-height: 100%; }
+/* Reserve the usual text space so the board stays steady between turns, and grow if the text wraps further. */
+.carrom-game .cb-controls { min-height: 3.6em; }
+.carrom-game .cb-controls .cb-tip { margin: 0; }
+.carrom-game .wz-status { min-height: 3.4em; box-sizing: border-box; }
+.carrom-game .cb-seats { margin: 0; gap: 6px; }
+.carrom-game .cb-seat { padding: 6px 8px; }
+.carrom-game .cb-score { margin: 0; }
+.carrom-game .cb-pill { min-width: 0; padding: 3px 12px; }
+.carrom-game .cb-pill b { font-size: 18px; }
+.carrom-game .cb-slider { height: 46px; margin-top: 0; }
+@media (max-width: 600px) {
+  .carrom-game { gap: 4px; padding: calc(4px + env(safe-area-inset-top)) 8px calc(4px + env(safe-area-inset-bottom)); }
+  .carrom-game .cb-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .carrom-game .cb-seat { flex: none; padding: 5px 8px; min-width: 0; }
+  .carrom-game .cb-who { min-width: 0; }
+  .carrom-game .cb-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .carrom-game .cb-who small { display: none; }
+  .carrom-game .cb-pill { padding: 2px 10px; gap: 6px; min-width: 0; }
+  .carrom-game .cb-pill b { font-size: 16px; }
+  .carrom-game .cb-pill small { font-size: 12px; }
+  .carrom-game .cb-slider { height: 40px; }
+  .carrom-game .wz-status { padding: 4px 8px; min-height: 52px; }
+  .carrom-game .cb-controls { min-height: 52px; }
+  .carrom-game .cb-tip { font-size: 13px; line-height: 1.3; }
+}

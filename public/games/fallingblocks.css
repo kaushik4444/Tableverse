@@ -1,0 +1,33 @@
+/* Falling Blocks. Builds on table.css and the wz frame. Each well is a CSS grid of cells sized by --w and --h; the piece colours
+ * are the usual ones for each kind. Seat colours come from --c, as in the other games. */
+.fb { --fb-I: #00cec9; --fb-O: #fdcb6e; --fb-T: #a29bfe; --fb-S: #55efc4; --fb-Z: #ff7675; --fb-J: #74b9ff; --fb-L: #e17055; --fb-G: #636e72; --fb-0: #74b9ff; --fb-1: #ff7675; --fb-2: #55efc4; --fb-3: #f2c14e; }
+.fb .s0 { --c: var(--fb-0); } .fb .s1 { --c: var(--fb-1); } .fb .s2 { --c: var(--fb-2); } .fb .s3 { --c: var(--fb-3); }
+.fb .fb-seats { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.fb .fb-seat { flex: 1 1 calc(50% - 6px); display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 2px solid transparent; min-width: 0; }
+.fb .fb-seat.won { background: rgba(242, 193, 78, .2); }
+.fb .fb-seat.out { opacity: .55; }
+.fb .fb-swatch { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; background: var(--c); }
+.fb .fb-who { display: grid; min-width: 0; }
+.fb .fb-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb .fb-who small { opacity: .75; }
+.fb .fb-stage { display: flex; gap: 14px; align-items: flex-start; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
+.fb .fb-mine { width: min(210px, 56vw); }
+.fb .fb-others { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: flex-start; max-width: 260px; }
+.fb .fb-well { display: grid; grid-template-columns: repeat(var(--w), 1fr); grid-template-rows: repeat(var(--h), 1fr); aspect-ratio: var(--w) / var(--h); background: rgba(0, 0, 0, .28); border-radius: 8px; padding: 3px; gap: 1px; box-sizing: border-box; border: 2px solid color-mix(in srgb, var(--c) 45%, transparent); }
+.fb .fb-well.mini { width: 46px; padding: 2px; gap: 0; border-radius: 6px; }
+.fb .fb-well.mini .fb-cell { border-radius: 0; box-shadow: none; }
+.fb .fb-cell { display: block; min-width: 0; min-height: 0; border-radius: 2px; background: rgba(255, 255, 255, .04); }
+.fb .fb-cell.k-I { background: var(--fb-I); } .fb .fb-cell.k-O { background: var(--fb-O); } .fb .fb-cell.k-T { background: var(--fb-T); }
+.fb .fb-cell.k-S { background: var(--fb-S); } .fb .fb-cell.k-Z { background: var(--fb-Z); } .fb .fb-cell.k-J { background: var(--fb-J); }
+.fb .fb-cell.k-L { background: var(--fb-L); } .fb .fb-cell.g { background: var(--fb-G); }
+.fb .fb-cell.ghost { background: transparent; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); }
+.fb .fb-next { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.fb .fb-pv { display: grid; grid-template-columns: repeat(4, 10px); grid-template-rows: repeat(2, 10px); gap: 2px; }
+.fb .fb-pv .fb-cell { width: 10px; height: 10px; }
+.fb .fb-controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.fb .fb-controls .btn { min-width: 56px; min-height: 44px; }
+.fb .fb-controls .btn:disabled { opacity: .45; }
+@media (max-height: 700px) {
+  .fb .fb-mine { width: min(128px, 40vw); }
+  .fb .fb-seat { padding: 4px 6px; }
+}

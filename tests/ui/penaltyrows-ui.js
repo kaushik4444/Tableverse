@@ -149,6 +149,31 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
     await ctx.close();
   });
 
+  await test('while a row is chosen, every card still on the table shows, not only the waiting one', async () => {
+    const msgs = tableMessages('penaltyrows', four);
+    const v = msgs[1].view;
+    v.phase = 'takeRow'; v.myTurn = false;
+    v.reveal = [{ by: 2, n: 7, p: 1 }, { by: 1, n: 3, p: 1 }, { by: 0, n: 12, p: 2 }, { by: 3, n: 40, p: 3 }];
+    v.resolved = 1; v.pending = { by: 1, n: 3, p: 1 };
+    const { page, ctx } = await open(msgs);
+    const strip = page.locator('.pr-strip .pr-played');
+    assert.equal(await strip.count(), 3, 'the waiting card and the two cards still to land');
+    assert.deepEqual(await page.locator('.pr-strip .pr-played small').allTextContents(), ['Bo', 'You', 'Dmitri']);
+    assert.equal(await page.locator('.pr-strip .pr-played.waiting').count(), 1, 'only the waiting card is marked');
+    await ctx.close();
+  });
+
+  await test('the crown counts the penalty points taken this round, not only the totals', async () => {
+    const msgs = tableMessages('penaltyrows', four);
+    const v = msgs[1].view;
+    v.players.forEach((p) => { p.total = 50; p.penalty = 0; });
+    v.players[0].total = 0; v.players[0].penalty = 10; // Aarav has 10 points taken this round, so Bo (5) leads
+    v.players[1].total = 5;
+    const { page, ctx } = await open(msgs);
+    assert.equal(await page.locator('.pr-chips li.lead .pr-chip-name').textContent(), 'Bo');
+    await ctx.close();
+  });
+
   await test('someone else must take a row: you only watch', async () => {
     const msgs = tableMessages('penaltyrows', four);
     const v = msgs[1].view; v.phase = 'takeRow'; v.pending = { by: 1, n: 3, p: 1 }; v.myTurn = false;

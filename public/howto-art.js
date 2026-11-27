@@ -117,7 +117,7 @@
     () => felt(T(160, 40, 'Bid 16', 26, '#fff') + T(160, 82, '4 cards, then 4 more', 14, C.mint)),
     () => felt(card(160, 65, '♠', C.ink, { sub: 'trump', w: 52, h: 70, bg: C.gold })),
     () => felt(fan([pc('A', 'c'), pc('10', 'c'), pc('K', 'c')]) + arrow(160, 118, 160, 100)),
-    () => felt(card(120, 65, 'K', '#dc2626', { sub: '♥' }) + card(200, 65, 'Q', '#dc2626', { sub: '♥' }) + T(160, 24, 'Marriage', 14, C.gold)),
+    () => felt(card(120, 65, 'K', '#dc2626', { sub: '♥' }) + card(200, 65, 'Q', '#dc2626', { sub: '♥' }) + T(160, 24, 'Declare K–Q (+4)', 14, C.gold)),
   ]);
   A.poker = pick([
     () => felt(fan([pc('A', 's'), pc('K', 's')], 66, 56) + T(160, 20, 'your hand', 12, C.mint)),
@@ -136,11 +136,95 @@
     () => felt(T(160, 50, 'Level 3', 22, '#fff') + T(160, 86, '❤️ ❤️ ❤️', 22, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
+  // ---------------------------------------------------------------- bingo
+  const bingoCard = (x0, y0, cell, marked, lineRow) => {
+    const nums = [[4, 19, 33, 52, 70], [9, 22, 38, 47, 64], [2, 30, 0, 59, 61], [13, 26, 41, 58, 75], [1, 18, 35, 55, 68]];
+    let g = '';
+    nums.forEach((row, r) => row.forEach((n, c) => {
+      const x = x0 + c * cell, y = y0 + r * cell;
+      const on = n === 0 || marked.includes(n);
+      g += `<rect x="${x + 2}" y="${y + 2}" width="${cell - 4}" height="${cell - 4}" rx="5" fill="${on ? C.green : 'rgba(255,255,255,.14)'}"/>`
+        + T(x + cell / 2, y + cell / 2, n === 0 ? '★' : n, 13, on ? C.ink : C.paper);
+    }));
+    if (lineRow !== undefined) g += `<rect x="${x0}" y="${y0 + lineRow * cell}" width="${cell * 5}" height="${cell}" rx="6" fill="none" stroke="${C.gold}" stroke-width="3"/>`;
+    return g;
+  };
+  A.bingo = pick([
+    () => felt(bingoCard(60, 14, 24, [4, 19, 33, 52, 70], 0) + T(160, 138, 'A full line wins', 15, '#fff'), 150),
+    () => felt(`<circle cx="160" cy="62" r="34" fill="${C.paper}"/>` + T(160, 52, 'B', 11, '#9a3412') + T(160, 74, '4', 24, C.ink)
+      + arrow(200, 62, 236, 62) + bingoCard(244, 36, 13, [4], undefined) + T(160, 128, 'Mark it once it is called', 14, '#fff'), 140),
+    () => felt(T(160, 60, 'BINGO!', 38, C.gold) + T(160, 98, 'Shout it when your line is full', 15, '#fff'), 130),
+  ]);
+  // Sudoku: a 9x9 grid with thicker lines between the boxes; the picture shows givens, the player's right and wrong numbers
+  const PUZZLE = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
+  const ANSWER = '534678912672195348198342567859761423426853791713924856961537284287419635345286179';
+  function sudokuGrid(cells, x0, y0, cell) {
+    let out = '';
+    for (let k = 0; k < 81; k++) {
+      const r = Math.floor(k / 9), c = k % 9;
+      const x = x0 + c * cell, y = y0 + r * cell;
+      const given = cells[k] && cells[k].given;
+      out += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${cells[k] && cells[k].wrong ? 'rgba(239,68,68,.45)' : 'transparent'}" stroke="rgba(255,255,255,.25)" stroke-width="0.6"/>`;
+      if (cells[k]) out += `<text x="${x + cell / 2}" y="${y + cell * 0.72}" text-anchor="middle" font-size="${cell * 0.8}" font-weight="${given ? 800 : 600}" fill="${given ? '#fff' : C.gold}">${cells[k].n}</text>`;
+    }
+    for (let b = 0; b <= 9; b += 3) {
+      out += `<line x1="${x0 + b * cell}" y1="${y0}" x2="${x0 + b * cell}" y2="${y0 + 9 * cell}" stroke="#fff" stroke-width="1.6"/>`;
+      out += `<line x1="${x0}" y1="${y0 + b * cell}" x2="${x0 + 9 * cell}" y2="${y0 + b * cell}" stroke="#fff" stroke-width="1.6"/>`;
+    }
+    return out;
+  }
+  const givensOnly = () => Array.from({ length: 81 }, (_, k) => (PUZZLE[k] !== '0' ? { n: PUZZLE[k], given: true } : null));
+  A.sudoku = pick([
+    () => felt(sudokuGrid(givensOnly(), 115, 10, 10)),
+    () => felt(sudokuGrid(Array.from({ length: 81 }, (_, k) => {
+      if (PUZZLE[k] !== '0') return { n: PUZZLE[k], given: true };
+      if (k === 2) return { n: 7, wrong: true };
+      if (k === 3) return { n: ANSWER[k] };
+      return null;
+    }), 115, 10, 10) + T(160, 102, 'Red is wrong, gold is yours', 9, '#fff')),
+    () => felt(sudokuGrid(Array.from({ length: 81 }, (_, k) => ({ n: ANSWER[k], given: PUZZLE[k] !== '0' })), 115, 10, 10) + T(160, 102, '🏆', 16, '#fff')),
+  ]);
+
+  // Dots and Boxes: a 3x3 box grid of dots; a line, a closed box that keeps the turn, and the boxes each seat won
+  const DB = { x0: 115, y0: 10, cell: 30, n: 3 };
+  const dbDots = () => { let o = ''; for (let r = 0; r <= DB.n; r++) for (let c = 0; c <= DB.n; c++) o += `<circle cx="${DB.x0 + c * DB.cell}" cy="${DB.y0 + r * DB.cell}" r="2.6" fill="#fff"/>`; return o; };
+  const dbH = (r, c, col = '#74b9ff') => `<line x1="${DB.x0 + c * DB.cell}" y1="${DB.y0 + r * DB.cell}" x2="${DB.x0 + (c + 1) * DB.cell}" y2="${DB.y0 + r * DB.cell}" stroke="${col}" stroke-width="5" stroke-linecap="round"/>`;
+  const dbV = (r, c, col = '#74b9ff') => `<line x1="${DB.x0 + c * DB.cell}" y1="${DB.y0 + r * DB.cell}" x2="${DB.x0 + c * DB.cell}" y2="${DB.y0 + (r + 1) * DB.cell}" stroke="${col}" stroke-width="5" stroke-linecap="round"/>`;
+  const dbBox = (r, c, col, letter) => `<rect x="${DB.x0 + c * DB.cell + 3}" y="${DB.y0 + r * DB.cell + 3}" width="${DB.cell - 6}" height="${DB.cell - 6}" rx="3" fill="${col}" opacity=".4"/>` + T(DB.x0 + c * DB.cell + DB.cell / 2, DB.y0 + r * DB.cell + DB.cell / 2, letter, 13, col);
+  A.dotsboxes = pick([
+    () => felt(dbDots() + dbH(0, 0) + T(160, 116, 'Draw a line between two dots', 10, '#fff')),
+    () => felt(dbDots() + dbH(0, 0) + dbV(0, 0) + dbH(1, 0) + dbV(0, 1) + dbBox(0, 0, '#74b9ff', 'B') + dbH(1, 1, '#ff7675') + dbV(1, 2, '#ff7675') + T(160, 116, 'A closed box is yours: move again', 10, '#fff')),
+    () => felt(dbDots() + dbBox(0, 0, '#74b9ff', 'B') + dbBox(0, 1, '#ff7675', 'R') + dbBox(1, 0, '#74b9ff', 'B') + T(160, 116, 'The most boxes wins', 10, '#fff')),
+  ]);
+
+  // Sea Battle: a sea of squares, a hit and a miss, and a sunk ship
+  const SB = { x0: 118, y0: 14, cell: 17 };
+  const sbCell = (c, r, fill, mark = '') => `<rect x="${SB.x0 + c * SB.cell}" y="${SB.y0 + r * SB.cell}" width="${SB.cell - 2}" height="${SB.cell - 2}" rx="2" fill="${fill}"/>${mark}`;
+  const sbSea = (f) => { let o = ''; for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) o += f(c, r); return o; };
+  A.seabattle = pick([
+    () => felt(sbSea((c, r) => sbCell(c, r, 'rgba(56,189,248,.25)')) + [0, 1, 2].map((i) => sbCell(1 + i, 2, '#94a3b8')).join('') + T(160, 116, 'Hide your ships and fire at the other sea', 10, '#fff')),
+    () => felt(sbSea((c, r) => sbCell(c, r, 'rgba(56,189,248,.25)')) + sbCell(2, 2, '#ef4444', T(SB.x0 + 2 * SB.cell + SB.cell / 2 - 1, SB.y0 + 2 * SB.cell + SB.cell / 2, '✕', 9, '#fff')) + sbCell(4, 4, 'rgba(255,255,255,.7)') + T(160, 116, 'A hit is red, a miss is white', 10, '#fff')),
+    () => felt(sbSea((c, r) => sbCell(c, r, 'rgba(56,189,248,.25)')) + [0, 1].map((i) => sbCell(1 + i, 1, '#7f1d1d')).join('') + T(160, 116, 'A sunk ship is shown to everyone', 10, '#fff')),
+  ]);
+  // Memory Match: face-down cards; two turned over, a matched pair in a seat colour, and the most pairs at the end
+  const MM = { w: 40, h: 46, gap: 8 };
+  const mmCard = (c, r, face, fill = '#f8fafc', ink = '#111827', opacity = 1) => {
+    const x = 118 + c * (MM.w + MM.gap), y = 14 + r * (MM.h + MM.gap);
+    return `<rect x="${x}" y="${y}" width="${MM.w}" height="${MM.h}" rx="7" fill="${fill}" opacity="${opacity}"/>` + (face ? T(x + MM.w / 2, y + MM.h / 2, face, 20, ink) : T(x + MM.w / 2, y + MM.h / 2, '✦', 14, 'rgba(255,255,255,.5)'));
+  };
+  const mmGrid = (cells) => cells.map((cell, i) => (cell ? mmCard(i % 4, Math.floor(i / 4), cell.face, cell.fill, cell.ink, cell.opacity) : '')).join('');
+  const facedown = () => Array.from({ length: 8 }, () => ({ face: null }));
+  A.memorymatch = pick([
+    () => felt(mmGrid(facedown().map((c, i) => (i === 1 || i === 6 ? { face: '⭐', fill: '#f8fafc' } : c))) + T(160, 122, 'Turn two cards over to find a pair', 10, '#fff')),
+    () => felt(mmGrid(facedown().map((c, i) => (i === 1 || i === 6 ? { face: '⭐', fill: '#74b9ff' } : i === 0 ? { face: '🍎', fill: '#ff7675' } : c))) + T(160, 122, 'A pair is yours: play again', 10, '#fff')),
+    () => felt(mmGrid(Array.from({ length: 8 }, (_, i) => ({ face: ['⭐', '🍎', '🌙', '🍀'][i % 4], fill: i < 4 ? '#74b9ff' : '#ff7675', opacity: 0.8 }))) + T(160, 122, '🏆 The most pairs wins', 10, '#fff')),
+  ]);
+
   A.gofish = pick([
     () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('3', 'c'), pc('J', 'd'), pc('9', 's')], 66, 44)),
-    () => felt(T(160, 55, '“Got any 7s?”', 20, '#fff') + arrow(110, 90, 210, 90)),
-    () => felt(T(160, 65, '🎣', 48, '#fff')),
-    () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('7', 'd'), pc('7', 'c')], 66, 44) + T(160, 20, 'a book', 12, C.gold)),
+    () => felt(T(160, 55, 'Ask for 7s', 20, '#fff') + arrow(110, 90, 210, 90)),
+    () => felt(T(160, 65, '🐟', 48, '#fff')),
+    () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('7', 'd'), pc('7', 'c')], 66, 44) + T(160, 20, '📚 7s complete!', 12, C.gold)),
     () => felt(T(160, 65, 'sit out', 22, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
@@ -150,13 +234,13 @@
     () => felt(cc(100, '7', 'r', -6) + cc(160, '2', 'b') + cc(220, '9', 'g', 6)),
     () => felt(cc(120, '5', 'r') + arrow(150, 65, 175, 65) + cc(210, '8', 'r')),
     () => felt(cc(100, '⊘', 'g') + cc(160, '⇄', 'b') + cc(220, '+2', 'y')),
-    () => felt(T(160, 65, 'One card left — everyone can see it', 16, '#fff')),
+    () => felt(T(160, 65, 'One card left!', 16, '#fff')),
     () => felt(T(160, 55, 'winner scores other hands', 18, '#fff') + T(160, 85, 'highest total wins', 14, C.mint)),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
   A.stagerummy = pick([
     () => felt(T(160, 65, 'Stage 1 → 10', 26, '#fff')),
-    () => felt(card(60, 65, '8', '#dc2626', { sub: '♥', w: 34, h: 48 }) + card(98, 65, '8', C.ink, { sub: '♠', w: 34, h: 48 }) + card(136, 65, '8', C.ink, { sub: '♣', w: 34, h: 48 }) + [4, 5, 6, 7].map((n, k) => card(190 + k * 34, 65, n, '#fff', { bg: C.blue, w: 34, h: 48 })).join('') + T(98, 108, 'set', 12, C.mint) + T(253, 108, 'run', 12, C.mint), 130),
+    () => felt(card(60, 65, '8', '#dc2626', { sub: '●', w: 34, h: 48 }) + card(98, 65, '8', C.ink, { sub: '■', w: 34, h: 48 }) + card(136, 65, '8', C.ink, { sub: '▲', w: 34, h: 48 }) + [4, 5, 6, 7].map((n, k) => card(190 + k * 34, 65, n, '#fff', { bg: C.blue, w: 34, h: 48 })).join('') + T(98, 108, 'set', 12, C.mint) + T(253, 108, 'run', 12, C.mint), 130),
     () => felt(T(160, 50, 'draw one', 18, '#fff') + T(160, 82, 'discard one', 18, C.gold)),
     () => felt(card(160, 65, '⊘', '#fff', { bg: C.red, w: 48, h: 66 })),
     () => felt(T(160, 65, 'out of cards = out!', 20, '#fff')),
@@ -165,28 +249,49 @@
   ]);
   const penRows = (rows, hand, extra = '') => felt(rows.map((row, r) => row.map((n, c) => card(46 + c * 34, 22 + r * 26, n, C.ink, { w: 30, h: 22 })).join('')).join('') + hand.map((h, k) => card(230 + (k % 2) * 40, 40 + Math.floor(k / 2) * 52, h[0], h[1], { w: 34, h: 46 })).join('') + extra, 130);
   A.penaltyrows = pick([
-    () => felt(T(160, 65, 'fewest 🐮 wins', 22, '#fff')),
+    () => felt(T(160, 65, 'fewest 💣 wins', 22, '#fff')),
     () => penRows([[12, 15], [31], [48, 50], [77, 80]], [[23, C.ink], [58, C.ink], [64, C.ink]]),
     () => penRows([[12, 15, 19], [31], [48, 50], [77, 80, 83]], [[23, C.ink]], arrow(176, 52, 214, 52)),
-    () => felt(card(120, 65, '4', C.ink, { sub: 'low' }) + T(210, 65, '→ take a row', 14, C.gold)),
+    () => felt(card(120, 65, '4', C.ink) + T(210, 65, 'fits no row: take one', 12, C.gold)),
     () => felt(T(160, 65, '6th card takes the row', 18, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
   A.hiddenminers = pick([
-    () => felt(T(160, 65, '⛏️  🕵️', 38, '#fff')),
-    () => svg(320, 130, `<rect x="6" y="6" width="308" height="118" rx="20" fill="#3b2a1d"/>${[0, 1, 2, 3, 4].map((c) => `<rect x="${44 + c * 46}" y="42" width="40" height="46" rx="6" fill="${c === 4 ? C.gold : '#7c5a3a'}"/>`).join('')}${T(266, 65, '💎', 26, '#fff')}`),
-    () => felt(fan([['⛏', C.ink], ['🗺', C.ink], ['💥', C.red]], 66, 56)),
-    () => felt(T(160, 65, '🔨 → 🪓 broken', 22, '#fff')),
+    () => felt(T(160, 65, '⛏️  🕳️', 38, '#fff')),
+    () => svg(320, 130, `<rect x="6" y="6" width="308" height="118" rx="20" fill="#3b2a1d"/>${[0, 1, 2, 3, 4].map((c) => `<rect x="${44 + c * 46}" y="42" width="40" height="46" rx="6" fill="${c === 4 ? C.gold : '#7c5a3a'}"/>`).join('')}${T(266, 65, '🪙', 26, '#fff')}`),
+    () => felt(fan([['⛏️', C.ink], ['🔭', C.ink], ['💥', C.red]], 66, 56)),
+    () => felt(T(160, 65, '⛏️ ✖ broken', 22, '#fff')),
     () => felt(T(160, 65, '3 rounds', 26, '#fff')),
     () => felt(T(160, 65, 'move log', 24, '#fff')),
     () => felt(T(160, 65, '🏆', 44, '#fff')),
   ]);
   A.propertyrivals = pick([
-    () => svg(320, 150, `<rect x="30" y="8" width="260" height="134" rx="14" fill="${C.felt}"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<rect x="${42 + i * 30}" y="16" width="26" height="26" rx="4" fill="${[C.red, C.blue, C.green, C.yellow][i % 4]}"/><rect x="${42 + i * 30}" y="108" width="26" height="26" rx="4" fill="${[C.blue, C.yellow, C.red, C.green][i % 4]}"/>`).join('')}${T(160, 75, '🌍', 36, '#fff')}`),
+    () => svg(320, 150, `<rect x="30" y="8" width="260" height="134" rx="14" fill="${C.felt}"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<rect x="${42 + i * 30}" y="16" width="26" height="26" rx="4" fill="${[C.red, C.blue, C.green, C.yellow][i % 4]}"/><rect x="${42 + i * 30}" y="108" width="26" height="26" rx="4" fill="${[C.blue, C.yellow, C.red, C.green][i % 4]}"/>`).join('')}${T(160, 75, '🎲', 36, '#fff')}`),
     () => felt(T(160, 50, 'Buy it', 22, '#fff') + T(160, 86, 'others pay you rent', 14, C.mint)),
     () => felt(T(160, 65, '🏠 → 🏨', 32, '#fff')),
-    () => felt(card(110, 65, '?', C.ink, { bg: C.gold }) + card(210, 65, '$', C.ink, { bg: C.paper })),
+    () => felt(card(110, 65, '❓', C.ink, { bg: C.gold }) + card(210, 65, '💰', C.ink, { bg: C.paper })),
     () => felt(T(160, 65, 'mortgage for cash', 20, '#fff')),
-    () => felt(T(160, 65, '💸 → out', 26, '#fff')),
+    () => felt(T(160, 65, '💸 → 💀', 26, '#fff')),
   ]);
+  // Real-footage pictures (public/howto/<game>/<card>.jpg, listed in howto/index.js) replace the drawn picture wherever one exists.
+  const photoOf = (game, i) => (((window.CardTable.howtoImages || {})[game] || []).includes(i)
+    ? `<img class="ht-photo" src="/howto/${game}/${i}.jpg" alt="" width="390" height="693" loading="lazy" decoding="async">` : '');
+  // Falling Blocks: a block dropped where it fits, a full row clearing, and garbage sent to a rival's well
+  const FB = { x0: 115, y0: 10, cell: 9 };
+  const fbCell = (c, r, col, op = 1) => `<rect x="${FB.x0 + c * FB.cell}" y="${FB.y0 + r * FB.cell}" width="${FB.cell - 2}" height="${FB.cell - 2}" rx="2" fill="${col}" opacity="${op}"/>`;
+  const fbWell = (inner) => `<rect x="${FB.x0 - 3}" y="${FB.y0 - 3}" width="${10 * FB.cell + 4}" height="${10 * FB.cell + 4}" rx="4" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/>${inner}`;
+  const fbPics = [
+
+    () => felt(fbWell([[3, 0], [4, 0], [5, 0], [4, 1]].map(([c, r]) => fbCell(c, r, '#a29bfe')).join('') + [[3, 8], [4, 8], [5, 8], [4, 9]].map(([c, r]) => fbCell(c, r, '#a29bfe', 0.3)).join('') + T(160, 116, 'Drop a block where it fits', 10, '#fff'))),
+    () => felt(fbWell([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => fbCell(c, 9, '#55efc4')).join('') + [0, 1].map((c) => fbCell(c, 8, '#fdcb6e')).join('') + T(160, 116, 'A full row clears', 10, '#fff'))),
+    () => felt(fbWell([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => (c === 5 ? '' : fbCell(c, 9, '#636e72'))).join('') + T(160, 116, 'Two rows at once send garbage', 10, '#fff'))),
+  ];
+  // a stack that has reached the top of the well: grey rows up to the top, with the top row marked red
+  const fbTop = () => felt(fbWell([0, 1, 2, 3].flatMap((r) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => (c === 4 && r === 0 ? '' : fbCell(c, r, '#636e72')))).join('') + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => (c === 4 ? '' : fbCell(c, 0, '#d63031', 0.9))).join('') + T(160, 116, 'Stack at the top: out', 10, '#fff')));
+  // one picture per rule card: the well and dropping, clearing, topping out, then garbage and bot speed
+  A.fallingblocks = pick([fbPics[0], fbPics[0], fbPics[1], fbTop, fbPics[2]]);
+  for (const game of Object.keys(window.CardTable.howtoImages || {})) {
+    const drawn = A[game];
+    A[game] = (i, g) => photoOf(game, i) || (drawn ? drawn(i, g) : '');
+  }
 })();
