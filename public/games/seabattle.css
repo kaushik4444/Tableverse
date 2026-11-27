@@ -59,5 +59,7 @@
 }
 @media (max-height: 700px) {
   .sb .sb-grid { width: min(70vw, 250px); }
+  /* placing on a short phone: the fleet grid is smaller so the status line and the bottom bar stay on screen */
+  .sb[data-placing="1"] .sb-grid { width: min(58vw, 210px); }
   .sb .sb-seat { padding: 4px 6px; }
 }
