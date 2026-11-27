@@ -28,6 +28,8 @@ const AVATARS = ['🧙', '🦊', '🐼', '🦉', '🐉', '🐸', '🦁', '🐙']
 const n = flags.seats ? Number(flags.seats) : def.seats.default;
 const players = Array.from({ length: n }, (_, i) => ({ id: i ? 'p' + i : 'me', name: NAMES[i], avatar: AVATARS[i] }));
 const opts = Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default]));
+// --opt.<key>=<value> sets a game option, e.g. --opt.size=6
+for (const [k, v] of Object.entries(flags)) if (k.startsWith('opt.')) opts[k.slice(4)] = v;
 let a = Number(SEED);
 const rng = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 // the engine needs the bot flags too (a bot seat plays itself, e.g. Bingo's automatic claims): the same as the room's members
