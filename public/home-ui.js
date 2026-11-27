@@ -72,10 +72,7 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
   }
 
   const COMING_SOON = [
-    ['🎱', 'Bingo', 'Mark off the numbers as they are called and shout when your card is full.', 'Your build order'],
     ['🥤', 'Cup Pong', 'Take turns tossing balls into the opposing cups.', 'Your build order'],
-    ['🧱', 'Falling Blocks', 'Stack falling shapes into complete lines before the pile reaches the top.', 'Your build order'],
-    ['🚢', 'Sea Battle', 'Hide your fleet, call your shots and sink the opposing ships.', 'Your build order'],
     ['🌾', 'Resource Isles — 4 players', 'Gather resources, trade and build settlements and roads.', 'Your build order'],
     ['🌾', 'Resource Isles — 5–6 players', 'Bring the larger-group expansion to the island.', 'Your build order'],
     ['🕵️', 'Secret Clues', 'Give clever clues so your team finds the right words.', 'Additional games'],

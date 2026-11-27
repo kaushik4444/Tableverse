@@ -37,6 +37,12 @@
         text: 'Turn two cards over to find the pairs. A match keeps your turn, and the most pairs wins. Pick 4×4, 4×6 or 6×6 cards.'
       },
       {
+        level: 'minor',
+        ico: '🧱',
+        title: 'Falling Blocks for 2 to 4 players',
+        text: 'Everybody builds in their own well from the same blocks. Clear rows to send garbage to rivals; the last one still building wins.'
+      },
+      {
         level: 'major',
         ico: '🔊',
         title: 'Sounds for more moments',
