@@ -284,9 +284,14 @@
   const FB = { x0: 115, y0: 10, cell: 9 };
   const fbCell = (c, r, col, op = 1) => `<rect x="${FB.x0 + c * FB.cell}" y="${FB.y0 + r * FB.cell}" width="${FB.cell - 2}" height="${FB.cell - 2}" rx="2" fill="${col}" opacity="${op}"/>`;
   const fbWell = (inner) => `<rect x="${FB.x0 - 3}" y="${FB.y0 - 3}" width="${10 * FB.cell + 4}" height="${10 * FB.cell + 4}" rx="4" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/>${inner}`;
-  A.fallingblocks = pick([
+  const fbPics = [
+
     () => felt(fbWell([[3, 0], [4, 0], [5, 0], [4, 1]].map(([c, r]) => fbCell(c, r, '#a29bfe')).join('') + [[3, 8], [4, 8], [5, 8], [4, 9]].map(([c, r]) => fbCell(c, r, '#a29bfe', 0.3)).join('') + T(160, 116, 'Drop a block where it fits', 10, '#fff'))),
     () => felt(fbWell([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => fbCell(c, 9, '#55efc4')).join('') + [0, 1].map((c) => fbCell(c, 8, '#fdcb6e')).join('') + T(160, 116, 'A full row clears', 10, '#fff'))),
     () => felt(fbWell([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((c) => [7, 8, 9].map((r) => (c === [3, 5, 7][r - 7] ? '' : fbCell(c, r, '#636e72')))).join('') + T(160, 116, 'Two rows at once send garbage', 10, '#fff'))),
-  ]);
+  ];
+  // a stack that has reached the top of the well: grey rows up to the top, with the top row marked red
+  const fbTop = () => felt(fbWell([0, 1, 2, 3].flatMap((r) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => (c === 4 && r === 0 ? '' : fbCell(c, r, '#636e72')))).join('') + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => (c === 4 ? '' : fbCell(c, 0, '#d63031', 0.9))).join('') + T(160, 116, 'Stack at the top: out', 10, '#fff')));
+  // one picture per rule card: the well and dropping, clearing, topping out, then garbage and bot speed
+  A.fallingblocks = pick([fbPics[0], fbPics[0], fbPics[1], fbTop, fbPics[2]]);
 })();

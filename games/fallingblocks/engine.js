@@ -93,7 +93,7 @@ const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
 
 function createGame(players, options = {}, rng = Math.random, now = Date.now) {
   if (players.length < 2 || players.length > MAX_PLAYERS) throw new Error('Falling Blocks is for 2 to 4 players');
-  const pace = PACE_MS[options.pace] ? options.pace : 'slow';
+  const pace = Object.hasOwn(PACE_MS, options.pace) ? options.pace : 'slow';
   const startedAt = now();
   const g = {
     game: 'fallingblocks',

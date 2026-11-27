@@ -4,7 +4,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { root: null, ctx: null, v: null, seq: null, tab: 'attack', sel: null };
+  const ui = { root: null, ctx: null, v: null, seq: null, tab: 'attack', sel: null, table: null };
   const SEAT_NAMES = ['Blue', 'Red'];
   const LETTERS = 'ABCDEFGHIJ';
   const square = (k, n) => `${LETTERS[k % n]}${Math.floor(k / n) + 1}`;
@@ -92,8 +92,9 @@
 
   function render(root, v, ctx) {
     // a selection belongs to one table, one turn, and a square that is still open
+    // the selection and the phone tab belong to one table: a new table starts clean
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
-    if (ui.table !== tableKey) { ui.sel = null; ui.table = tableKey; }
+    if (ui.table !== tableKey) { ui.sel = null; ui.tab = 'attack'; ui.table = tableKey; }
     const me = v.me < 0 ? 0 : v.me;
     if (ui.sel !== null && (!v.myTurn || v.shots[1 - me][ui.sel])) ui.sel = null;
     ui.root = root; ui.ctx = ctx; ui.v = v; react(v);

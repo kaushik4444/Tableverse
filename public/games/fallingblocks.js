@@ -112,7 +112,7 @@
 
   function render(root, v, ctx) {
     const active = root.ownerDocument.activeElement;
-    const focused = root.contains(active) && active.dataset.fb ? active.dataset.fb : null;
+    const focused = root.contains(active) ? (active.dataset.fb ? `[data-fb="${active.dataset.fb}"]` : active.dataset.fbAct ? `[data-fb-act="${active.dataset.fbAct}"]` : null) : null;
     // a new piece for me: reset the column and turn
     const count = v.me >= 0 ? v.players[v.me].pieces : -1;
     if (count !== ui.piece) { ui.piece = count; ui.x = v.spawnX; ui.rot = 0; }
@@ -131,7 +131,7 @@
       ${v.me >= 0 && v.current ? controlsHTML(v) : ''}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
-    if (focused) root.querySelector(`[data-fb="${focused}"]:enabled`)?.focus({ preventScroll: true });
+    if (focused) root.querySelector(`${focused}:enabled`)?.focus({ preventScroll: true });
     root.onclick = onClick;
   }
 
