@@ -35,13 +35,13 @@ function boardFor(n) {
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
 const say = (g, by, text, kind = 'info') => { g.log.push({ by: g.players[by].name, card: text, kind }); if (g.log.length > 60) g.log.shift(); };
 
-function createGame(players, options = {}) {
+function createGame(players, options = {}, rng = Math.random) {
   if (players.length < 2 || players.length > 4) throw new Error('Dots and Boxes is for 2 to 4 players');
   const size = SIZES.includes(String(options.size)) ? String(options.size) : '4';
   const n = Number(size);
   const lines = boardFor(n);
   return {
-    game: 'dotsboxes', n, lines, options: { size },
+    game: 'dotsboxes', n, lines, options: { size }, rng, // the table's random source: the bot's slips and ties use it
     players: players.map((p) => ({ id: p.id, name: p.name })),
     drawn: Array(lines.length).fill(false), lineBy: Array(lines.length).fill(null),
     sides: Array(n * n).fill(0), owner: Array(n * n).fill(null), boxes: Array(players.length).fill(0),
@@ -112,7 +112,7 @@ function threeSidedAfter(g, i) {
 }
 
 /** Take a completed box if there is one; otherwise draw a line that does not leave a box with three sides; otherwise the line that gives away fewest boxes. */
-function botAction(g, playerId, rng = Math.random) {
+function botAction(g, playerId, rng = g.rng) {
   const open = [];
   for (let i = 0; i < g.lines.length; i++) if (!g.drawn[i]) open.push(i);
   // a slip: the bot draws any open line, so it can miss a box it could have taken

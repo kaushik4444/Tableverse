@@ -80,7 +80,8 @@ test('playing to the end: every line is drawn, one result, and the game is over'
 test('a bot takes a box it can close, and otherwise does not give one away', () => {
   const g = E.createGame(P(2), { size: '3' });
   play(g, 'p0', 'h', 0, 0); play(g, 'p1', 'h', 1, 0); play(g, 'p0', 'v', 0, 0);
-  assert.equal(E.botAction(g, 'p1').index, lineAt(g, 'v', 0, 1), 'the box that can be closed');
+  // an rng that never slips (a slip plays any open line): the bot must take the box it can close
+  assert.equal(E.botAction(g, 'p1', () => 0.99).index, lineAt(g, 'v', 0, 1), 'the box that can be closed');
 });
 
 test('what a seat sees is the public board: no field is hidden from anyone', () => {

@@ -10,7 +10,7 @@
  */
 
 const LEVELS = {
-  //          slip: random legal move   forget: a seen card   sudoku: wrong digit   star: a wasted star (The Mind)
+  //          slip: random legal move   forget: a seen card   sudoku: wrong digit   star: a wasted star (Mind)
   low:    { slip: 0.35, forget: 0.4, sudoku: 0.03, star: 0.04 },
   normal: { slip: 0.25, forget: 0.3, sudoku: 0.02, star: 0.02 },
   high:   { slip: 0.12, forget: 0.15, sudoku: 0.005, star: 0.01 },
@@ -24,7 +24,7 @@ const SLIP = LEVEL.slip;
 const FORGET = LEVEL.forget;
 /** Sudoku writes a wrong number this often (each one costs a life). */
 const SUDOKU_SLIP = LEVEL.sudoku;
-/** The Mind throws a star for no reason this often (stars are scarce). */
+/** Mind throws a star for no reason this often (stars are scarce). */
 const STAR_SLIP = LEVEL.star;
 
 /** True when the bot slips on this turn. */

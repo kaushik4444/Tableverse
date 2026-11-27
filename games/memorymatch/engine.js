@@ -111,7 +111,7 @@ function faceDown(g) {
   return out;
 }
 
-function botAction(g, playerId, rng = Math.random) {
+function botAction(g, playerId, rng = g.rng) {
   const down = faceDown(g);
   // a bot forgets some of the cards it has seen: each one is remembered only most of the time
   const known = new Map([...g.known].filter(() => rng() >= FORGET));
