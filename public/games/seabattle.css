@@ -58,7 +58,9 @@
   .sb .sb-grid { width: min(38vw, 300px); }
 }
 @media (max-height: 700px) {
-  .sb .sb-grid { width: min(62vw, 220px); } /* leaves room for the phone's own font metrics (CI measured 25px taller) */
+  .sb .sb-grid { width: min(70vw, 250px); }
+  /* placing on a short phone: the chooser, controls and status need the room, so the sea is smaller (CI fonts run taller) */
+  .sb[data-placing="1"] .sb-grid { width: min(56vw, 200px); }
   /* placing on a short phone: the fleet grid is smaller so the status line and the bottom bar stay on screen */
   .sb[data-placing="1"] .sb-grid { width: min(58vw, 210px); }
   .sb .sb-seat { padding: 4px 6px; }
