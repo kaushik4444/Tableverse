@@ -201,6 +201,16 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     await ctx.close();
   });
 
+  await test('two Rotate taps before the next view turn the ship there and back', async () => {
+    const { page, ctx } = await open(table(undefined, { placed: true }));
+    await page.locator('[data-sb="pick"][data-slot="4"]').click();
+    await page.locator('[data-sb="rotate"]').click();
+    await page.locator('[data-sb="rotate"]').click();
+    const act = (await sent(page)).at(-1).action;
+    assert.equal(act.ships[4].vertical, false, 'the second turn returns the destroyer to across');
+    await ctx.close();
+  });
+
   await test('the ✕ in the table toolbar opens the leave prompt (it used to be ignored)', async () => {
     const { page, ctx } = await open(table());
     await page.locator('[data-act="leave"]').click();

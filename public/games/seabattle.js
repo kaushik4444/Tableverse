@@ -267,10 +267,11 @@
         break;
       }
       case 'rotate': {
-        const placed = ui.pick !== null && v && v.setup && v.setup[ui.pick];
+        // the working setup, so a second Rotate before the next server view turns the ship back
+        const base = ui.setup || (v && v.setup);
+        const placed = ui.pick !== null && base && base[ui.pick];
         if (!placed) { ui.vert = !ui.vert; break; }
         // a placed ship turns where it is: the new direction is sent if it fits, and the ship stays picked up to move
-        const base = ui.setup || v.setup;
         const turned = { r: placed.r, c: placed.c, vertical: !placed.vertical };
         if (!canPlace({ ...v, setup: base }, ui.pick, turned)) {
           ui.root.querySelector('.wz-status span').textContent = 'No room to turn it here. Move it to a square with space, then Rotate.';

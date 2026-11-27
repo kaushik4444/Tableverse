@@ -59,12 +59,11 @@
 }
 @media (max-height: 700px) {
   .sb .sb-grid { width: min(70vw, 250px); }
-  /* placing on a short phone: the chooser, controls and status need the room, so the sea is smaller (CI fonts run taller) */
-  .sb[data-placing="1"] .sb-grid { width: min(36vh, 420px); }
+  /* placing on a short phone: the chooser, controls and status need the room, so the sea is smaller (CI fonts run taller).
+     Below about 400 px of height the page scrolls to reach the controls. */
+  .sb[data-placing="1"] .sb-grid { width: min(84vw, 340px, 36vh); }
   /* the ship chooser fits two rows on a short phone, even with a wide system font (44px tall still) */
   .sb .sb-chips { gap: 4px; }
   .sb .sb-chip { font-size: 13px; padding-left: 7px; padding-right: 7px; }
-  /* placing on a short phone: the fleet grid is smaller so the status line and the bottom bar stay on screen */
-  .sb[data-placing="1"] .sb-grid { width: min(84vw, 340px, 36vh); }
   .sb .sb-seat { padding: 4px 6px; }
 }
