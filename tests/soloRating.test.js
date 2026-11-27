@@ -41,3 +41,15 @@ test('a win moves the rating up, a loss moves it down, and a par-rated start is 
 });
 
 console.log(`\n${passed} solo rating tests passed`);
+
+// a guest seat (an anonymous account) is not rated, even though it has a stored player id
+{
+  const SR = require('../lib/soloRating');
+  const difficulty = Object.keys(SR.PAR_SECONDS)[0];
+  const base = { completed: true, options: { difficulty }, participants: [{ playerId: 'guest-uuid', isBot: false, isWinner: true, score: 1, isGuest: true }] };
+  const r = SR.soloResult(base);
+  if (r.rated !== false || r.reason !== 'guest') throw new Error('a guest solo win must not be rated: ' + JSON.stringify(r));
+  const reg = { ...base, participants: [{ ...base.participants[0], isGuest: false }] };
+  if (SR.soloResult(reg).rated !== true) throw new Error('a registered solo win is still rated');
+  console.log('  ok  a guest solo win is not rated');
+}

@@ -270,7 +270,12 @@
   function chipsHTML(v) {
     const what = v.countdown ? 'points left' : 'penalty points';
     // the leader is who would win now: most points left (countdown) or fewest penalty points (race); no crown while tied or after the game
-    const lead = v.phase !== 'gameOver' ? window.CardTable.pt.leaderOf(v.players.length, (k) => (v.countdown ? v.players[k].left : -v.players[k].total), -Infinity) : -1;
+    // during a round the penalty points taken so far count too (the totals only change when the round ends, and roundEnd has already added them)
+    const sofar = (k) => (v.phase === 'roundEnd' ? 0 : v.players[k].penalty);
+    // countdown: the points left, clamped at zero as shown; race: the fewest penalty points
+    const scoreOf = (k) => (v.countdown ? Math.max(0, v.players[k].left - sofar(k)) : -(v.players[k].total + sofar(k)));
+    let lead = v.phase !== 'gameOver' ? window.CardTable.pt.leaderOf(v.players.length, scoreOf, -Infinity) : -1;
+    if (v.countdown && lead >= 0 && scoreOf(lead) <= 0) lead = -1; // nobody has points left to lead with
     return `<ul class="pr-chips" aria-label="Scores, ${what} out of ${v.target}">${v.players.map((p, i) => {
       const num = v.countdown ? p.left : p.total;
       const out = v.losers && v.losers.includes(i) ? ' out' : '';

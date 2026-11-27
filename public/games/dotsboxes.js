@@ -75,7 +75,10 @@
   function render(root, v, ctx) {
     const active = root.ownerDocument.activeElement;
     const focusedLine = root.contains(active) && active.matches('.db-line[data-line]') ? active.dataset.line : null;
+    // focus on Rules (where it went while every line was waiting) or nowhere: a free line takes it back
+    const focusParked = root.contains(active) && active.dataset && active.dataset.db === 'rules' || !active || active === root.ownerDocument.body;
     ui.ctx = ctx; ui.v = v; react(v);
+    ui.redrawing = true; // Chromium reports the focus loss of the removed Rules button as a focusout: that is not the person leaving
     root.innerHTML = `<div class="wz db" data-game="dotsboxes">
       <div class="wz-top"><div class="wz-round"><b>Dots and Boxes</b><span class="label"> · ${v.n} × ${v.n} · ${v.remaining} lines left</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-db="rules">Rules</button>', 'db')}</div>
@@ -83,12 +86,22 @@
       ${boardHTML(v)}
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
+    ui.redrawing = false;
     if (focusedLine !== null) {
       const next = root.querySelector(`.db-line[data-line="${focusedLine}"]:enabled`)
         || root.querySelector('.db-line:enabled');
-      next?.focus({ preventScroll: true });
+      if (next) next.focus({ preventScroll: true });
+      else { ui.parkedFocus = true; root.querySelector('[data-db="rules"]')?.focus({ preventScroll: true }); } // every line is waiting: keep focus in the controls
+    } else if (ui.parkedFocus && focusParked) {
+      // the next player's turn has come back: a playable line takes the focus again (unless the person has moved it elsewhere);
+      // until then the focus stays on Rules, so a redraw does not drop it
+      const next = root.querySelector('.db-line:enabled');
+      if (next) { ui.parkedFocus = false; next.focus({ preventScroll: true }); }
+      else root.querySelector('[data-db="rules"]')?.focus({ preventScroll: true });
     }
     root.onclick = onClick;
+    // focus leaving the table (or the board) gives up the parked place: the next line must not take focus the person has moved
+    root.onfocusout = (e) => { if (!ui.redrawing && (!e.relatedTarget || !root.contains(e.relatedTarget))) ui.parkedFocus = false; };
   }
 
   // Tap bands overlap near dots. Pick the closest visible line within its band instead of using paint order.

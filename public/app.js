@@ -2158,7 +2158,9 @@
   }
   /** A page that was locked for a guest loads its data once the person is registered (nothing was fetched while locked). */
   function loadLockedPageData() {
-    if (S.isGuest || S.room || !S.guestLockedView) return; // only a page that was actually shown locked
+    if (S.room || !S.guestLockedView) return; // only a page that was actually shown locked
+    // still locked for this guest: nothing is fetched. An owner who unlocked the page (e.g. after a reconnect) gets its data.
+    if (S.page === 'friends' ? guestLockedHere('friends') : guestLockedHere('profiles')) return;
     S.guestLockedView = false;
     if (S.page === 'profile') loadProfile();
     else if (S.page === 'friends') loadSocial({ quiet: true });
@@ -2182,7 +2184,7 @@
     if (!fromHash) { try { history.pushState(null, '', page === 'profile' ? '#profile' : page === 'friends' ? '#friends' : page === 'player' ? '#u/' + arg : location.pathname + location.search); } catch { /* ignore */ } }
     window.scrollTo(0, 0);
     // a guest sees these pages locked (lockedPageHTML): nothing is fetched for them
-    if (page === 'profile') { if (S.isGuest) render(); else loadProfile(); } else if (page === 'player') { if (S.isGuest) render(); else loadPlayer(arg); } else if (page === 'friends') { render(); if (!S.isGuest) loadSocial({ quiet: true }); } else render();
+    if (page === 'profile') { if (guestLockedHere('profiles')) render(); else loadProfile(); } else if (page === 'player') { if (guestLockedHere('profiles')) render(); else loadPlayer(arg); } else if (page === 'friends') { render(); if (!S.isGuest) loadSocial({ quiet: true }); } else render();
   }
 
   /** Overall level (time played) shown beside the avatar. Null when the progress is missing. */
@@ -2399,8 +2401,8 @@
         : tab === 'account' ? `<div class="account-list">
             ${blockedHTML()}
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
-            <div class="setting-row"><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
-            <div class="danger-zone"><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
+            <div class="setting-row"${S.isGuest ? ' hidden style="display:none"' : ''}><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
+            <div class="danger-zone"${S.isGuest ? ' hidden style="display:none"' : ''}><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
           </div>`
         : P.game ? gameDetailHTML(P) : statsHTML(P.data.stats);
       inner = `<header class="pp-head">
@@ -2998,8 +3000,8 @@
     if (!S.room || S.room.status !== 'finished') S.endFlow = null;
     if (!S.ready && !S.guest && !S.room) {
       paintApp('<div class="page"><div class="brand"><svg class="brand-seat" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><ellipse cx="128" cy="126" rx="84" ry="58" fill="#153228" stroke="#86efac" stroke-opacity=".65" stroke-width="5"/><circle cx="128" cy="32" r="21" fill="#86efac"/><circle cx="24" cy="126" r="21" fill="#86efac"/><circle cx="232" cy="126" r="21" fill="#86efac"/><circle class="seat-halo" cx="128" cy="216" r="27" fill="#fbbf24" fill-opacity=".25"/><circle cx="128" cy="216" r="27" fill="#fbbf24"/></svg><h1>Tableverse</h1><p>Connecting…</p></div></div>');
-    } else if (!S.room && S.page === 'profile' && S.isGuest) paintApp(topbarHTML() + lockedPageHTML('profiles', 'See player profiles and stats.'));
-    else if (!S.room && S.page === 'player' && S.isGuest) paintApp(topbarHTML() + lockedPageHTML('profiles', 'See player profiles and stats.'));
+    } else if (!S.room && S.page === 'profile' && guestLockedHere('profiles')) paintApp(topbarHTML() + lockedPageHTML('profiles', 'See player profiles and stats.'));
+    else if (!S.room && S.page === 'player' && guestLockedHere('profiles')) paintApp(topbarHTML() + lockedPageHTML('profiles', 'See player profiles and stats.'));
     else if (!S.room && S.page === 'friends' && S.isGuest) paintApp(topbarHTML() + lockedPageHTML('friends', 'Use friends and table invitations.'));
     else if (!S.room && S.page === 'profile' && !S.guest) renderProfilePage();
     else if (!S.room && S.page === 'player') renderPlayerPage();

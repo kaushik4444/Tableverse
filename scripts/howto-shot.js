@@ -29,7 +29,8 @@ const players = Array.from({ length: n }, (_, i) => ({ id: i ? 'p' + i : 'me', n
 const opts = Object.fromEntries((def.options || []).filter((o) => o.default !== undefined).map((o) => [o.key, o.default]));
 let a = Number(SEED);
 const rng = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-const g = def.create(players, { ...opts }, rng);
+// the engine needs the bot flags too (a bot seat plays itself, e.g. Bingo's automatic claims): the same as the room's members
+const g = def.create(players.map((p) => ({ ...p, bot: p.id !== 'me' })), { ...opts }, rng);
 
 // play the engine forward: every seat that is waiting takes its bot move, as a table of bots would
 let moves = 0;

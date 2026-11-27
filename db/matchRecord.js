@@ -19,6 +19,9 @@ function tableShape(room) {
  * room.seated is the member in each seat of the game (the seat order may be shuffled); without it, room.members is in seat
  * order. A member who left mid-game is flagged `bot` (a bot finished their seat) and listed in room.leftEarly; they stay in the record but are not counted in stats.
  */
+// A human seat is a guest when the room did not know it as an account at the start (room.registered, set when the game starts)
+const isGuestSeat = (room, m) => Boolean(room.guestSeats && room.guestSeats.has(m.id));
+
 function buildMatchRecord(room, game) {
   // A leave is only a loss if the game is finished without a second leaver. In an abandoned game nobody is penalised.
   // An abandoned game penalises nobody, except a third leave, which is final (lib/leavePolicy.js).
@@ -57,6 +60,7 @@ function buildMatchRecord(room, game) {
           isWinner: leftEarly ? false : Boolean(r.winner),
           isDraw: leftEarly ? false : Boolean(r.draw),
           isBot: Boolean(m.bot) && !leftEarly,
+          isGuest: isGuestSeat(room, m),
           leftEarly,
           forfeit,
           // active playing time (null when the room has no play-time record: the stored rule then applies)
@@ -100,6 +104,7 @@ function buildForfeitRecord(room) {
         isWinner: false,
         isDraw: false,
         isBot: false,
+        isGuest: isGuestSeat(room, m),
         leftEarly: true,
         forfeit: true,
         secondsPlayed: secondsPlayed(room, m.id),
