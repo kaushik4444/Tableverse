@@ -59,7 +59,8 @@ const POST_ACCOUNT = [
       const b = new Browser(srv.port);
       await b.get('/api/auth/csrf');
       const res = await fetch(`http://127.0.0.1:${srv.port}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: b.cookieHeader, 'x-csrf-token': b.cookies.get('ct_csrf') }, body: '{not json' });
-      assert.ok(res.status >= 400 && res.status < 500, `expected a client error, got ${res.status}`);
+      // exactly 400: the JSON parser's refusal, not a 401/403/429 from somewhere else
+      assert.equal(res.status, 400, `expected the invalid JSON refusal (400), got ${res.status}`);
     });
     await test('an unknown account route is 404, not a crash', async () => {
       const r = await new Browser(srv.port).get('/api/me/does-not-exist');
