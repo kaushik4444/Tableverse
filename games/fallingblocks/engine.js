@@ -235,7 +235,7 @@ function viewFor(g, playerId) {
   const me = g.players.findIndex((p) => p.id === playerId);
   const current = me >= 0 && !g.out[me] && g.phase === 'playing' ? pieceAt(g, g.count[me]) : null;
   return {
-    me, phase: g.phase, options: { ...g.options }, W, H, spawnX: SPAWN_X,
+    me, phase: g.phase, options: { ...g.options }, W, H, spawnX: SPAWN_X, shapes: ROTATIONS,
     players: g.players.map((p, i) => ({ id: p.id, name: p.name, lines: g.lines[i], out: g.out[i], pieces: g.count[i] })),
     boards: g.boards.map((b) => b.slice()),
     current,
