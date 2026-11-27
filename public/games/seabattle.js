@@ -70,8 +70,7 @@
   }
 
   function overlayHTML(v) {
-    // the result sheet waits for the table's end animation, as the other games do
-    if (v.phase !== 'gameOver' || ui.ctx?.resultVisible === false) return '';
+    if (v.phase !== 'gameOver') return '';
     const title = v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     const score = v.players.map((p) => `${esc(p.name)} sank ${p.sunk}`).join(' · ');
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
