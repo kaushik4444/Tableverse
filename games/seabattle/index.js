@@ -15,10 +15,10 @@ module.exports = {
   stats: { kind: 'none', bestLabel: null, bestOf: null },
   options: [
     TIME_LIMIT_OPTION,
-    { key: 'pace', type: 'select', label: 'Bot speed', default: 'normal', choices: [
-      { value: 'slow', label: 'Slow', desc: 'Bots fire about every three seconds.' },
-      { value: 'normal', label: 'Normal', desc: 'Bots fire about every two seconds.' },
-      { value: 'quick', label: 'Quick', desc: 'Bots fire about every one and a bit seconds.' },
+    { key: 'pace', type: 'select', label: 'Bot speed', default: 'slow', choices: [
+      { value: 'slow', label: 'Slow', desc: 'Bots fire about every four seconds.' },
+      { value: 'normal', label: 'Normal', desc: 'Bots fire about every three seconds.' },
+      { value: 'quick', label: 'Quick', desc: 'Bots fire about every two seconds.' },
     ] },
   ],
   rules: [
