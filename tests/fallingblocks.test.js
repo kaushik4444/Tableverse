@@ -182,4 +182,14 @@ test('the scrub keeps the phase, so a name cannot change the state of the game',
   assert.equal(instance.view('p1').players[0].name, 'Former player');
 });
 
+test('a name that is also a piece letter changes only the name, not the shared pieces or the boards', () => {
+  const players = [{ id: 'p0', name: 'I' }, { id: 'p1', name: 'Bo' }];
+  const instance = game.create(players, {}, rng());
+  for (let i = 0; i < 6; i++) instance.act('p0', { type: 'drop', x: 3, rot: 0 });
+  const before = JSON.stringify(instance.view('p1'));
+  instance.scrub(['I'], 'Former player');
+  const after = JSON.stringify(instance.view('p1'));
+  assert.equal(after, before.replace('"name":"I"', '"name":"Former player"'));
+});
+
 console.log(`\n${passed} Falling Blocks tests passed`);

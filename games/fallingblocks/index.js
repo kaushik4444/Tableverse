@@ -36,7 +36,8 @@ module.exports = {
     return {
       view: (playerId) => engine.viewFor(g, playerId),
       // an account was deleted: its name is rewritten everywhere in the state. Phase is kept, so a name cannot change it.
-      scrub: (names, to) => { const phase = g.phase; scrubDeep([g, players], names, to); g.phase = phase; },
+      // only the names are rewritten: piece letters and board cells are game data, and a name like "I" must not change them
+      scrub: (names, to) => scrubDeep([g.players, players], names, to),
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },

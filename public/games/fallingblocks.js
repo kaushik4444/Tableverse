@@ -61,8 +61,10 @@
       const preview = ghost.has(k) ? ' ghost' : '';
       cells.push(`<span class="fb-cell ${cls}${preview}"></span>`);
     }
+    const top = board.findIndex(Boolean);
+    const stack = top < 0 ? 0 : v.H - Math.floor(top / v.W); // rows the stack reaches from the bottom
     const label = mine ? 'Your well' : `${esc(v.players[i].name)}'s well`;
-    return `<div class="fb-well ${mine ? 'mine' : 'mini'} s${i}" style="--w:${v.W};--h:${v.H}" role="img" aria-label="${label}, ${v.players[i].lines} rows cleared${v.players[i].out ? ', out' : ''}">${cells.join('')}</div>`;
+    return `<div class="fb-well ${mine ? 'mine' : 'mini'} s${i}" style="--w:${v.W};--h:${v.H}" role="img" aria-label="${label}, stack ${stack} of ${v.H} rows high, ${v.players[i].lines} rows cleared${v.players[i].out ? ', out' : ''}">${cells.join('')}</div>`;
   }
 
   function controlsHTML(v) {
@@ -88,7 +90,8 @@
   }
 
   function overlayHTML(v) {
-    if (v.phase !== 'gameOver') return '';
+    // the result sheet waits for the table's end animation, as the other games do
+    if (v.phase !== 'gameOver' || ui.ctx?.resultVisible === false) return '';
     const title = v.draw ? 'A draw' : v.winner === null ? 'Game over' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     const score = v.players.map((p) => `${esc(p.name)} ${p.lines} ${p.lines === 1 ? 'row' : 'rows'}`).join(' · ');
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
