@@ -154,8 +154,9 @@
     }
     if (!v || !v.myTurn) return;
     switch (el.dataset.fb) {
-      case 'left': place(ui.x - 1, ui.rot) || place(ui.x - 2, ui.rot); break;
-      case 'right': place(ui.x + 1, ui.rot) || place(ui.x + 2, ui.rot); break;
+      // step to the nearest column the piece fits in that direction, so no valid column is skipped
+      case 'left': for (let d = 1; d <= 10; d++) if (place(ui.x - d, ui.rot)) break; break;
+      case 'right': for (let d = 1; d <= 10; d++) if (place(ui.x + d, ui.rot)) break; break;
       case 'rotate': {
         const next = (ui.rot + 1) % 4;
         // turning next to a wall or a stack shifts the piece back into the well
