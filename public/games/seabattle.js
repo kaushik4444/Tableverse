@@ -4,7 +4,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { root: null, ctx: null, v: null, seq: null, tab: 'attack', sel: null };
+  const ui = { root: null, ctx: null, v: null, seq: null, tab: 'attack', sel: null, table: null };
   const SEAT_NAMES = ['Blue', 'Red'];
   const LETTERS = 'ABCDEFGHIJ';
   const square = (k, n) => `${LETTERS[k % n]}${Math.floor(k / n) + 1}`;
@@ -70,7 +70,8 @@
   }
 
   function overlayHTML(v) {
-    if (v.phase !== 'gameOver') return '';
+    // the result sheet waits for the table's end animation, as the other games do
+    if (v.phase !== 'gameOver' || ui.ctx?.resultVisible === false) return '';
     const title = v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     const score = v.players.map((p) => `${esc(p.name)} sank ${p.sunk}`).join(' · ');
     return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
@@ -96,6 +97,9 @@
     if (ui.table !== tableKey) { ui.sel = null; ui.table = tableKey; }
     const me = v.me < 0 ? 0 : v.me;
     if (ui.sel !== null && (!v.myTurn || v.shots[1 - me][ui.sel])) ui.sel = null;
+    // the selection and the phone tab belong to one table: a new table starts clean
+    const table = ctx && ctx.room ? ctx.room.code : null;
+    if (table !== ui.table) { ui.table = table; ui.sel = null; ui.tab = 'attack'; }
     ui.root = root; ui.ctx = ctx; ui.v = v; react(v);
     const active = root.ownerDocument.activeElement;
     const focus = root.contains(active) && active.dataset.sb ? { sb: active.dataset.sb, k: active.dataset.k } : null;
