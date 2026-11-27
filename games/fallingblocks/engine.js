@@ -157,6 +157,9 @@ function addGarbage(g, i, rows) {
     const gap = Math.floor(g.rng() * W);
     for (let c = 0; c < W; c++) board.push(c === gap ? null : 'G');
   }
+  // the piece already in hand must still be able to appear at the top, the same rule a drop applies; otherwise
+  // the player could be stuck with no legal move and never be topped out
+  if (!g.out[i] && !fits(board, ROTATIONS[pieceAt(g, g.count[i])][0], SPAWN_X, 0)) topOut(g, i);
 }
 
 function applyAction(g, playerId, action) {
@@ -267,5 +270,5 @@ function results(g) {
 module.exports = {
   W, H, SPAWN_X, KINDS, GARBAGE, PACE_MS, ROTATIONS,
   createGame, applyAction, awaiting, botAction, botDelayMs, viewFor, results, ensurePieces,
-  fits, landingY, clearRows,
+  fits, landingY, clearRows, addGarbage,
 };
