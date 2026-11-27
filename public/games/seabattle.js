@@ -256,7 +256,8 @@
     if (!p) return;
     const k = gridK(hull.closest('.sb-grid'), e, N);
     const j = cellsOf(v.lengths[slot], p, N).indexOf(k);
-    ui.drag = { slot, j: Math.max(0, j), x: e.clientX, y: e.clientY };
+    // a press on a ship that is already picked up is the tap that says where it goes (see onUp)
+    ui.drag = { slot, j: Math.max(0, j), x: e.clientX, y: e.clientY, wasPicked: ui.pick === slot };
     ui.pick = slot;
     ui.vert = p.vertical;
     render(ui.root, v, ui.ctx);
@@ -273,7 +274,15 @@
     ui.drag = null;
     const v = ui.v, ctx = ui.ctx;
     if (!d || !v || !ctx) return;
-    if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) <= 6) return;
+    if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) <= 6) {
+      // a tap on a square covered by the picked ship: the ship goes there, as a tap on any other square would
+      if (d.wasPicked) {
+        const grid = ui.root.querySelector('.sb-grid.placing');
+        const k = grid ? gridK(grid, e, v.N) : -1;
+        if (k >= 0) placeAt(k);
+      }
+      return;
+    }
     const grid = ui.root.querySelector('.sb-grid.placing');
     const k = grid ? gridK(grid, e, v.N) : -1;
     if (k < 0) return; // dropped off the sea: it stays picked up

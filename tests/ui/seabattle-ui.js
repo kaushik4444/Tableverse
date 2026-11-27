@@ -249,6 +249,18 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     await ctx.close();
   });
 
+  await test('a picked ship moves when its own covered square is tapped', async () => {
+    const { page, ctx } = await open(table(undefined, { placed: true }));
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="0"]').click();   // pick up the carrier (A1-E1)
+    const grid = await page.locator('.sb-grid.placing').boundingBox();
+    const cell = grid.width / 10;
+    await page.mouse.click(grid.x + cell * 1.5, grid.y + cell * 0.5);          // B1, under the carrier's own hull
+    const act = (await sent(page)).at(-1).action;
+    assert.equal(act.type, 'place');
+    assert.deepEqual(act.ships[0], { r: 0, c: 1, vertical: false }, 'the carrier now sits B1-F1');
+    await ctx.close();
+  });
+
   await test('the ✕ in the table toolbar opens the leave prompt (it used to be ignored)', async () => {
     const { page, ctx } = await open(table());
     await page.locator('[data-act="leave"]').click();
