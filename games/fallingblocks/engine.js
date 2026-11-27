@@ -76,8 +76,11 @@ function clearRows(board) {
   return cleared;
 }
 
-/** The seven-bag: each bag holds every kind once, shuffled. Every player gets the same sequence. */
-function pieceAt(g, n) {
+/**
+ * The seven-bag: each bag holds every kind once, shuffled. Every player gets the same sequence.
+ * It is made ahead of play (at the start and after each accepted drop), so reading a view never draws from the shared RNG.
+ */
+function ensurePieces(g, n) {
   while (g.pieces.length <= n) {
     const bag = KINDS.slice();
     for (let i = bag.length - 1; i > 0; i--) {
@@ -86,8 +89,13 @@ function pieceAt(g, n) {
     }
     g.pieces.push(...bag);
   }
+}
+function pieceAt(g, n) {
+  ensurePieces(g, n);
   return g.pieces[n];
 }
+/** The piece at n if it has been made, otherwise null. Used by views, which must not draw from the RNG. */
+const peekPiece = (g, n) => (n < g.pieces.length ? g.pieces[n] : null);
 
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
 
@@ -113,6 +121,7 @@ function createGame(players, options = {}, rng = Math.random, now = Date.now) {
     event: null, seq: 0, version: 0,
   };
   g.due = players.map((_, i) => startedAt + botGap(g, i));
+  ensurePieces(g, 3); // the piece in hand and the next two
   return g;
 }
 
@@ -158,6 +167,8 @@ function applyAction(g, playerId, action) {
   if (!action || typeof action !== 'object' || action.type !== 'drop') return { ok: false, error: 'Unknown action' };
   const { x, rot } = action;
   if (!Number.isInteger(x) || !Number.isInteger(rot) || rot < 0 || rot > 3) return { ok: false, error: 'Invalid drop' };
+  // the drop names the piece the client showed; a drop aimed at an earlier piece is refused, never placed on the next one
+  if (action.piece !== g.count[who]) return { ok: false, error: 'That block has already been placed. Drop the one in hand' };
 
   const board = g.boards[who];
   const kind = pieceAt(g, g.count[who]);
@@ -169,6 +180,7 @@ function applyAction(g, playerId, action) {
   const cleared = clearRows(board);
   g.lines[who] += cleared;
   g.count[who]++;
+  ensurePieces(g, g.count[who] + 3);
   g.version++;
   const sent = GARBAGE[cleared] || 0;
 
@@ -228,19 +240,19 @@ function botAction(g, playerId) {
       if (!best || score > best.score) best = { score, x, rot };
     }
   }
-  return best ? { type: 'drop', x: best.x, rot: best.rot } : null;
+  return best ? { type: 'drop', piece: g.count[who], x: best.x, rot: best.rot } : null;
 }
 
 /** What a seat sees: every well (they are public, like the other boards), and the piece in hand for the viewer. */
 function viewFor(g, playerId) {
   const me = g.players.findIndex((p) => p.id === playerId);
-  const current = me >= 0 && !g.out[me] && g.phase === 'playing' ? pieceAt(g, g.count[me]) : null;
+  const current = me >= 0 && !g.out[me] && g.phase === 'playing' ? peekPiece(g, g.count[me]) : null;
   return {
     me, phase: g.phase, options: { ...g.options }, W, H, spawnX: SPAWN_X, shapes: ROTATIONS,
     players: g.players.map((p, i) => ({ id: p.id, name: p.name, lines: g.lines[i], out: g.out[i], pieces: g.count[i] })),
     boards: g.boards.map((b) => b.slice()),
     current,
-    next: me >= 0 ? [pieceAt(g, g.count[me] + 1), pieceAt(g, g.count[me] + 2)] : [],
+    next: me >= 0 ? [peekPiece(g, g.count[me] + 1), peekPiece(g, g.count[me] + 2)] : [],
     myTurn: current !== null,
     winner: g.winner,
     event: g.event ? { ...g.event } : null,
@@ -254,6 +266,6 @@ function results(g) {
 
 module.exports = {
   W, H, SPAWN_X, KINDS, GARBAGE, PACE_MS, ROTATIONS,
-  createGame, applyAction, awaiting, botAction, botDelayMs, viewFor, results,
+  createGame, applyAction, awaiting, botAction, botDelayMs, viewFor, results, ensurePieces,
   fits, landingY, clearRows,
 };

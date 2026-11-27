@@ -3,7 +3,7 @@
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { root: null, ctx: null, v: null, seq: null, piece: -1, x: 3, rot: 0 };
+  const ui = { root: null, ctx: null, v: null, seq: null, piece: -1, x: 3, rot: 0, dropFor: null, overShown: false };
   const COLOURS = ['Blue', 'Red', 'Green', 'Gold'];
 
   /** Whether the piece fits with its top-left at (x, y) in a board (same rules as the server). */
@@ -84,7 +84,7 @@
       const set = new Set(v.shapes[kind][0].map(([r, c]) => r * 4 + c));
       let html = '';
       for (let k = 0; k < 8; k++) html += `<span class="fb-cell ${set.has(k) ? `k-${kind}` : ''}"></span>`;
-      return `<span class="fb-pv" aria-label="${kind}">${html}</span>`;
+      return `<span class="fb-pv" role="img" aria-label="${kind} block">${html}</span>`;
     };
     return `<div class="fb-next"><span class="label">Now</span> ${preview(v.current)}<span class="label">Next</span> ${v.next.map(preview).join('')}</div>`;
   }
@@ -93,7 +93,7 @@
     if (v.phase !== 'gameOver') return '';
     const title = v.draw ? 'A draw' : v.winner === null ? 'Game over' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     const score = v.players.map((p) => `${esc(p.name)} ${p.lines} ${p.lines === 1 ? 'row' : 'rows'}`).join(' · ');
-    return `<div class="overlay"><div class="sheet"><h2>${title}</h2>
+    return `<div class="overlay" role="dialog" aria-labelledby="fb-over-title"><div class="sheet"><h2 id="fb-over-title" tabindex="-1">${title}</h2>
       <p class="hint" style="text-align:left">${score}</p>
       <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-fb-act="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-fb-act="leave">Leave table</button></div></div></div>`;
   }
@@ -132,6 +132,9 @@
       <div class="wz-status ${v.myTurn ? 'mine' : ''}"><span>${guidance(v)}</span></div>
       ${overlayHTML(v)}</div>`;
     if (focused) root.querySelector(`${focused}:enabled`)?.focus({ preventScroll: true });
+    // when play ends, focus moves to the result so a keyboard player is not left on a removed control
+    if (v.phase === 'gameOver' && !ui.overShown) { ui.overShown = true; root.querySelector('#fb-over-title')?.focus({ preventScroll: true }); }
+    if (v.phase !== 'gameOver') ui.overShown = false;
     root.onclick = onClick;
   }
 
@@ -166,7 +169,11 @@
         break;
       }
       case 'drop':
-        if (landingY(v.boards[v.me], v.shapes[v.current][ui.rot], ui.x, v) >= 0) ctx.act({ type: 'drop', x: ui.x, rot: ui.rot });
+        // one drop per view: a second activation before the next view is ignored, and the drop names the piece shown
+        if (v && ui.dropFor !== v && landingY(v.boards[v.me], v.shapes[v.current][ui.rot], ui.x, v) >= 0) {
+          ui.dropFor = v;
+          ctx.act({ type: 'drop', piece: v.players[v.me].pieces, x: ui.x, rot: ui.rot });
+        }
         break;
     }
     // redraw so the landing preview and the disabled states match the new position

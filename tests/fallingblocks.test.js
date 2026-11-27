@@ -40,7 +40,7 @@ test('every piece has four cells, and four rotations that keep four cells', () =
 
 test('a drop falls as far as it can and locks in the well', () => {
   const g = withPieces(E.createGame(P(2), {}, rng()), ['O', 'O']);
-  assert.equal(E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 0 }).ok, true);
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 }).ok, true);
   assert.equal(cellsOf(g, 0, 19, 0), 'O');
   assert.equal(cellsOf(g, 0, 19, 1), 'O');
   assert.equal(cellsOf(g, 0, 18, 0), 'O');
@@ -50,25 +50,25 @@ test('a drop falls as far as it can and locks in the well', () => {
 
 test('invalid drops are refused: a bad column, a bad rotation, a piece that does not fit, an unknown action', () => {
   const g = withPieces(E.createGame(P(2), {}, rng()), ['I', 'I']);
-  assert.equal(E.applyAction(g, 'p0', { type: 'drop', x: 9, rot: 0 }).ok, false, 'an I piece flat at column 9 runs off the well');
-  assert.equal(E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 4 }).ok, false);
-  assert.equal(E.applyAction(g, 'p0', { type: 'drop', x: 0.5, rot: 0 }).ok, false);
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 9, rot: 0 }).ok, false, 'an I piece flat at column 9 runs off the well');
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 4 }).ok, false);
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0.5, rot: 0 }).ok, false);
   assert.equal(E.applyAction(g, 'p0', { type: 'spin' }).ok, false);
-  assert.equal(E.applyAction(g, 'nobody', { type: 'drop', x: 0, rot: 0 }).ok, false);
+  assert.equal(E.applyAction(g, 'nobody', { type: 'drop', piece: 0, x: 0, rot: 0 }).ok, false);
   assert.equal(g.count[0], 0, 'refused moves place nothing');
 });
 
 test('there is no turn: both players can drop at once, in any order', () => {
   const g = withPieces(E.createGame(P(3), {}, rng()), ['T', 'T', 'T']);
   assert.deepEqual(E.awaiting(g), ['p0', 'p1', 'p2']);
-  assert.equal(E.applyAction(g, 'p2', { type: 'drop', x: 3, rot: 0 }).ok, true);
-  assert.equal(E.applyAction(g, 'p0', { type: 'drop', x: 3, rot: 0 }).ok, true);
+  assert.equal(E.applyAction(g, 'p2', { type: 'drop', piece: 0, x: 3, rot: 0 }).ok, true);
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 3, rot: 0 }).ok, true);
 });
 
 test('a full row clears and counts for its player', () => {
   const g = withPieces(E.createGame(P(2), {}, rng()), ['O', 'I']);
   fillRows(g.boards[0], [19], [0, 1]);
-  E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 0 });
+  E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 });
   assert.equal(g.lines[0], 1);
   assert.equal(g.lines[1], 0);
   assert.equal(cellsOf(g, 0, 19, 0), 'O', 'the O piece that sat one row up has fallen into the cleared row');
@@ -78,7 +78,7 @@ test('a full row clears and counts for its player', () => {
 test('clearing two rows sends one garbage row to each other player, with one gap', () => {
   const g = withPieces(E.createGame(P(2), {}, rng()), ['O', 'T']);
   fillRows(g.boards[0], [18, 19], [0, 1]);
-  E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 0 });
+  E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 });
   assert.equal(g.lines[0], 2);
   const bottom = g.boards[1].slice(19 * E.W);
   assert.equal(bottom.filter((v) => v === 'G').length, E.W - 1, 'one gap in the garbage row');
@@ -88,7 +88,7 @@ test('clearing two rows sends one garbage row to each other player, with one gap
 test('clearing four rows at once sends four garbage rows', () => {
   const g = withPieces(E.createGame(P(2), {}, rng()), ['I', 'T']);
   fillRows(g.boards[0], [16, 17, 18, 19], [0]);
-  E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 1 });
+  E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 1 });
   assert.equal(g.lines[0], 4);
   const garbageRows = [...Array(E.H).keys()].filter((r) => g.boards[1].slice(r * E.W, r * E.W + E.W).filter((v) => v === 'G').length === E.W - 1);
   assert.equal(garbageRows.length, 4);
@@ -98,7 +98,7 @@ test('a block pushed past the top by garbage tops that player out, and the game 
   const g = withPieces(E.createGame(P(2), {}, rng()), ['O', 'T']);
   fillRows(g.boards[0], [18, 19], [0, 1]);
   g.boards[1][0] = 'X'; // a block at the very top of player 1's well
-  E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 0 });
+  E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 });
   assert.equal(g.out[1], true);
   assert.equal(g.phase, 'gameOver');
   assert.equal(g.winner, 0);
@@ -109,29 +109,30 @@ test('a piece that cannot appear at the top tops the player out; with three play
   const g = withPieces(E.createGame(P(3), {}, rng()), ['O', 'T', 'O']);
   // the spawn area of player 0's well is blocked (not full rows, which would clear)
   for (const r of [0, 1]) for (let c = 3; c <= 6; c++) g.boards[0][r * E.W + c] = 'X';
-  assert.equal(E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 0 }).ok, true);
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 }).ok, true);
   // the next piece cannot fit at the spawn point, so player 0 is out
   assert.equal(g.out[0], true);
   assert.equal(g.phase, 'playing', 'two players are still building');
   assert.deepEqual(E.awaiting(g), ['p1', 'p2']);
-  assert.equal(E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 0 }).ok, false, 'an out player cannot play');
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 }).ok, false, 'an out player cannot play');
 });
 
 test('the last player still building wins; once the game is over nothing else can be played', () => {
   const g = withPieces(E.createGame(P(2), {}, rng()), ['O', 'O']);
   for (const r of [0, 1]) for (let c = 3; c <= 6; c++) g.boards[0][r * E.W + c] = 'X';
-  E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 0 });
+  E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 });
   assert.equal(g.phase, 'gameOver');
   assert.equal(g.winner, 1);
   assert.deepEqual(E.awaiting(g), []);
-  assert.equal(E.applyAction(g, 'p1', { type: 'drop', x: 0, rot: 0 }).ok, false);
+  assert.equal(E.applyAction(g, 'p1', { type: 'drop', piece: 0, x: 0, rot: 0 }).ok, false);
 });
 
 test('the pieces are the same sequence for everybody (a shared seven-bag)', () => {
   const g = E.createGame(P(3), {}, rng(11));
   const first = [0, 1, 2].map((i) => E.viewFor(g, 'p' + i).current);
   assert.equal(new Set(first).size, 1, 'the first piece is the same for each seat');
-  const sequence = Array.from({ length: 14 }, (_, n) => { const copy = g.count; g.count = [n, n, n]; const k = E.viewFor(g, 'p0').current; g.count = copy; return k; });
+  E.ensurePieces(g, 13);
+  const sequence = g.pieces.slice(0, 14);
   for (let b = 0; b < 2; b++) assert.equal(new Set(sequence.slice(b * 7, b * 7 + 7)).size, 7, 'each bag holds all seven kinds once');
 });
 
@@ -185,11 +186,35 @@ test('the scrub keeps the phase, so a name cannot change the state of the game',
 test('a name that is also a piece letter changes only the name, not the shared pieces or the boards', () => {
   const players = [{ id: 'p0', name: 'I' }, { id: 'p1', name: 'Bo' }];
   const instance = game.create(players, {}, rng());
-  for (let i = 0; i < 6; i++) instance.act('p0', { type: 'drop', x: 3, rot: 0 });
+  for (let i = 0; i < 6; i++) instance.act('p0', { type: 'drop', piece: instance.view('p0').players[0].pieces, x: 3, rot: 0 });
   const before = JSON.stringify(instance.view('p1'));
   instance.scrub(['I'], 'Former player');
   const after = JSON.stringify(instance.view('p1'));
   assert.equal(after, before.replace('"name":"I"', '"name":"Former player"'));
+});
+
+test('looking at the table does not change what happens: views never draw from the shared random source', () => {
+  const quiet = E.createGame(P(2), {}, rng(21));
+  const looked = E.createGame(P(2), {}, rng(21));
+  for (let k = 0; k < 8; k++) { E.viewFor(looked, 'p0'); E.viewFor(looked, 'p1'); }
+  for (let k = 0; k < 6; k++) {
+    for (const g of [quiet, looked]) {
+      E.applyAction(g, 'p0', { type: 'drop', piece: g.count[0], x: k % 2 === 0 ? 0 : 5, rot: 0 });
+      E.applyAction(g, 'p1', { type: 'drop', piece: g.count[1], x: 3, rot: 0 });
+    }
+  }
+  assert.deepEqual(looked.boards, quiet.boards, 'the same drops give the same wells, however often the table was viewed');
+  assert.deepEqual(looked.pieces, quiet.pieces);
+});
+
+test('a drop that names an earlier piece is refused and places nothing', () => {
+  const g = withPieces(E.createGame(P(2), {}, rng(22)), ['O', 'T', 'L']);
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 }).ok, true);
+  const before = g.boards[0].slice();
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 0, x: 0, rot: 0 }).ok, false, 'the same block cannot be placed twice');
+  assert.deepEqual(g.boards[0], before, 'nothing is placed');
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', x: 0, rot: 0 }).ok, false, 'a drop without a piece is refused');
+  assert.equal(E.applyAction(g, 'p0', { type: 'drop', piece: 1, x: 0, rot: 0 }).ok, true, 'the block in hand can be dropped');
 });
 
 console.log(`\n${passed} Falling Blocks tests passed`);
