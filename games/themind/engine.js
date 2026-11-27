@@ -1,4 +1,7 @@
 'use strict';
+const { slips } = require('../botSkill');
+// A slip here is a wasted throwing star, and stars are scarce, so it is much rarer than a slip elsewhere.
+const STAR_SLIP = 0.02;
 /**
  * Mind: pure rules engine (no timers, no sockets). Real-time cooperative game: there are no turns.
  * Every player holds some numbers from 1-100; together the team must play them all onto one pile in ascending
@@ -281,6 +284,8 @@ function botAction(g, playerId) {
   if (g.phase === 'ready' || g.phase === 'levelEnd') return { type: 'ready' };
   if (g.phase === 'playing' && g.starPaused) return { type: 'ready' };
   if (g.phase === 'playing' && g.votes.size && g.stars > 0 && who >= 0 && !g.votes.has(who) && g.hands[who].length) return { type: 'shuriken' };
+  // a slip: a throwing star thrown for no reason (stars are scarce, so this is rare)
+  if (g.phase === 'playing' && !g.starPaused && g.stars > 0 && who >= 0 && g.hands[who].length && g.options.shurikens && slips(g.rng, STAR_SLIP)) return { type: 'shuriken' };
   return { type: 'play' };
 }
 

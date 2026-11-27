@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Line games: Tic-Tac-Toe and Four in a Row (with a Five in a Row option) on one engine (rules only, no sockets, no timers).
  * Two players take turns putting a piece on a rows x cols grid; the first to get `win` in a straight line (across, down
@@ -155,6 +156,8 @@ function botAction(g, playerId) {
   if (me < 0 || g.phase === 'gameOver' || g.turn !== me) return null;
   const cells = legalCells(g);
   const act = (k) => (g.v.gravity ? { type: 'drop', col: k % g.v.cols } : { type: 'place', cell: k });
+  // a slip: any legal cell, so the bot can miss a win or a block
+  if (slips(g.rng)) return act(pickOne(g.rng, cells));
   const board = g.board.slice();
   // 1. win now, 2. block their win
   for (const who of [me, 1 - me]) for (const k of cells) { board[k] = who; const hit = lineThrough(board, g.v, k).length; board[k] = null; if (hit) return act(k); }

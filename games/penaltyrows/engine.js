@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 const pacing = require('../pacing');
 /**
  * Take 5: the rules only (no sockets, no timers; the walk-time holds go through games/pacing.js).
@@ -266,9 +267,13 @@ function botAction(g, playerId) {
   if (g.phase === 'takeRow' && g.pending && g.pending.by === i) {
     let row = 0;
     for (let k = 1; k < g.rows.length; k++) if (sum(g.rows[k]) < sum(g.rows[row])) row = k;
+    // a slip: a random row, not the cheapest one
+    if (slips(g.rng)) row = pickOne(g.rng, g.rows.map((_, k) => k));
     return { type: 'takeRow', row };
   }
   if (g.phase !== 'choose' || g.picks[i] !== null || !g.hands[i].length) return null;
+  // a slip: a random card from the hand, not the cheapest one
+  if (slips(g.rng)) return { type: 'pick', card: pickOne(g.rng, g.hands[i]).n };
   let bestCard = g.hands[i][0]; let bestCost = Infinity;
   for (const c of g.hands[i]) {
     const cost = costOf(g, c.n) + g.rng() * 0.6; // a little noise so bots are not all identical

@@ -12,6 +12,8 @@
  * Cards are numbered row by row, 0..N-1.
  */
 
+const { FORGET } = require('../botSkill');
+
 const SIZES = { '4x4': [4, 4], '4x6': [4, 6], '6x6': [6, 6] };
 // Generic fruit, plants and creatures (not a brand, not a character): one symbol per pair.
 const SYMBOLS = ['🍎', '🍐', '🍊', '🍋', '🍉', '🍇', '🍓', '🍒', '🍑', '🥝', '🌽', '🥕', '🍄', '🌵', '🌻', '🍀', '🌙', '⭐', '🐸', '🦋', '🐢', '🐙', '🦊', '🐝'];
@@ -111,19 +113,21 @@ function faceDown(g) {
 
 function botAction(g, playerId, rng = Math.random) {
   const down = faceDown(g);
+  // a bot forgets some of the cards it has seen: each one is remembered only most of the time
+  const known = new Map([...g.known].filter(() => rng() >= FORGET));
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   if (g.pending !== null) {
     // second card: its known partner if the table has seen it, otherwise an unseen card
-    const partner = down.find((k) => g.known.has(k) && g.known.get(k) === g.cards[g.pending]);
+    const partner = down.find((k) => known.has(k) && known.get(k) === g.cards[g.pending]);
     if (partner !== undefined) return { type: 'flip', index: partner };
-    const unseen = down.filter((k) => !g.known.has(k));
+    const unseen = down.filter((k) => !known.has(k));
     return { type: 'flip', index: pick(unseen.length ? unseen : down) };
   }
   // first card: a known pair on the table, otherwise an unseen card
   const bySymbol = new Map();
-  for (const k of down) if (g.known.has(k)) { const s = g.known.get(k); if (!bySymbol.has(s)) bySymbol.set(s, []); bySymbol.get(s).push(k); }
+  for (const k of down) if (known.has(k)) { const s = known.get(k); if (!bySymbol.has(s)) bySymbol.set(s, []); bySymbol.get(s).push(k); }
   for (const list of bySymbol.values()) if (list.length >= 2) return { type: 'flip', index: list[0] };
-  const unseen = down.filter((k) => !g.known.has(k));
+  const unseen = down.filter((k) => !known.has(k));
   return { type: 'flip', index: pick(unseen.length ? unseen : down) };
 }
 

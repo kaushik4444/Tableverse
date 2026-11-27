@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Dots and Boxes (2 to 4 players), rules only: no sockets, no timers.
  *
@@ -114,6 +115,8 @@ function threeSidedAfter(g, i) {
 function botAction(g, playerId, rng = Math.random) {
   const open = [];
   for (let i = 0; i < g.lines.length; i++) if (!g.drawn[i]) open.push(i);
+  // a slip: the bot draws any open line, so it can miss a box it could have taken
+  if (slips(rng)) return { type: 'line', index: pickOne(rng, open) };
   const completing = open.filter((i) => g.lines[i].boxes.some((b) => g.sides[b] === 3));
   if (completing.length) return { type: 'line', index: completing[0] };
   const safe = open.filter((i) => threeSidedAfter(g, i) === 0);

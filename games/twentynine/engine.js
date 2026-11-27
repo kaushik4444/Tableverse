@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * 29 (Twenty-Nine) — pure rules engine.
  *
@@ -442,6 +443,7 @@ function botAction(g, playerId) {
   const seat = g.players.findIndex((p) => p.id === playerId);
   const hand = g.players[seat].hand;
   if (g.phase === 'bidding') {
+    if (slips(g.rng) && canPass(g)) return { type: 'bid', pass: true }; // a slip: gives up a bid it could have made
     const want = 14 + handStrength(hand);
     const min = minBid(g);
     if (want >= min) return { type: 'bid', amount: Math.min(want, Math.max(min, Math.min(MAX_BID, 20))) };
@@ -464,6 +466,8 @@ function botAction(g, playerId) {
   const partner = (seat + 2) % 4;
   const lowest = (cs) => cs.reduce((a, b) => (b.pts < a.pts || (b.pts === a.pts && b.ord < a.ord) ? b : a));
   const value = (c) => c.pts * 10 + c.ord;
+  // a slip: any legal card
+  if (slips(g.rng)) return { type: 'play', cardId: pickOne(g.rng, legal).id };
 
   if (!g.trick.length) {
     const nonTrump = legal.filter((c) => c.suit !== trump);

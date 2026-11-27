@@ -130,17 +130,18 @@ test('a running game keeps the answer and other grids to itself; the finished ga
   assert.deepEqual(E.viewFor(g, 'p0').solution, g.solution);
 });
 
-test('bots fill squares with the right numbers, and a bot can win', () => {
+test('bots fill squares, and a bot can win; a bot makes only a few mistakes, since each one costs a life', () => {
   const g = E.createGame([{ id: 'h', name: 'Human' }, { id: 'b', name: 'Bot', bot: true }], { difficulty: 'easy', pace: 'quick' }, mulberry32(8), clock().now);
   assert.deepEqual(E.awaiting(g), ['h', 'b'], 'everybody still filling in is awaited');
   assert.ok(E.botDelayMs(g, 'b') >= 0);
-  let steps = 0;
+  let steps = 0, wrong = 0;
   while (g.phase === 'playing' && steps < 200) {
     const a = E.botAction(g, 'b');
-    assert.equal(a.v, g.solution[a.r * 9 + a.c], 'a bot places the right number');
+    if (a.v !== g.solution[a.r * 9 + a.c]) wrong++;
     must(g, 'b', a);
     steps++;
   }
+  assert.ok(wrong <= 3, `a bot makes only a few wrong numbers (made ${wrong})`);
   assert.equal(g.winner, 1);
   assert.deepEqual(E.awaiting(g), [], 'nobody is awaited after the game');
   assert.equal(E.botAction(g, 'b'), null);

@@ -122,7 +122,8 @@ test('a bot hunts next to a hit that is not yet sunk', () => {
   const g = known();
   g.shots[1][44] = 'hit';   // a hit in b’s sea, not sunk, with open squares around it
   g.turn = 0;
-  const pick = E.botAction(g, 'a', () => 0.0);
+  // a fixed rng that never slips (a slip fires at any open square) and picks the first hunting square
+  const pick = E.botAction(g, 'a', () => 0.9);
   const k = pick.r * 10 + pick.c;
   assert.ok(E.neighbours(44).includes(k), `the bot fired at ${k}, next to 44`);
 });

@@ -1,4 +1,5 @@
 'use strict';
+const { slips } = require('../botSkill');
 /**
  * Falling Blocks (1 to 4 players), rules only: no sockets, no timers. Alone, there is nobody to send garbage to: the game
  * ends when your well tops out, and your score is the rows you cleared.
@@ -235,16 +236,21 @@ function botAction(g, playerId) {
   const board = g.boards[who];
   const kind = pieceAt(g, g.count[who]);
   let best = null;
+  const options = [];
   for (let rot = 0; rot < 4; rot++) {
     const cells = ROTATIONS[kind][rot];
     for (let x = 0; x < W; x++) {
       const y = landingY(board, cells, x);
       if (y < 0) continue;
+      options.push({ x, rot });
       const score = scoreAfter(board, cells, x, y);
       if (!best || score > best.score) best = { score, x, rot };
     }
   }
-  return best ? { type: 'drop', piece: g.count[who], x: best.x, rot: best.rot } : null;
+  if (!best) return null;
+  // a slip: the bot drops the piece where it fits, not where it would score best
+  const pick = slips(g.rng) ? options[Math.floor(g.rng() * options.length)] : best;
+  return { type: 'drop', piece: g.count[who], x: pick.x, rot: pick.rot };
 }
 
 /** What a seat sees: every well (they are public, like the other boards), and the piece in hand for the viewer. */

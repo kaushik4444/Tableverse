@@ -1,4 +1,5 @@
 'use strict';
+const { slips } = require('../botSkill');
 /**
  * Sea Battle (two players), rules only: no sockets, no timers.
  *
@@ -223,7 +224,8 @@ function botAction(g, playerId, rng = g.rng) {
   const hunting = [];
   for (let k = 0; k < CELLS; k++) if (sea[k] === 'hit') for (const n of neighbours(k)) if (!sea[n]) hunting.push(n);
   const pool = hunting.length ? hunting : open.filter((k) => ((Math.floor(k / N) + (k % N)) % 2) === 0);
-  const choices = pool.length ? pool : open;
+  // a slip: the bot fires at any open square, not just where it is hunting
+  const choices = slips(rng) || !pool.length ? open : pool;
   const k = choices[Math.floor(rng() * choices.length)];
   return { type: 'fire', r: Math.floor(k / N), c: k % N };
 }
