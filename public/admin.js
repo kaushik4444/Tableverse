@@ -485,7 +485,20 @@
   }
 
   // ---------------------------------------------------------------- games (counts and averages only)
-  const redrawGames = () => { state.gen += 1; return renderView('games', () => gamesTab(state.gamesDays || 30)); };
+  // After a save the tab is read again. The switches stay on screen with their draft: a slow read shows a marker (so the
+  // watchdog can offer Retry), and a failed read keeps the controls and the save error instead of replacing the view.
+  const redrawGames = () => {
+    state.gen += 1;
+    const gen = state.gen;
+    main.insertAdjacentHTML('afterbegin', '<p class="ad-muted" data-loading>Refreshing…</p>');
+    return renderView('games', () => gamesTab(state.gamesDays || 30).catch((e) => {
+      if (e && e.name === 'AbortError') return;
+      if (gen !== state.gen || !main.querySelector('#gameSwitches')) throw e;
+      main.querySelector('[data-loading]')?.remove();
+      gameSaveError = `The games could not be refreshed (${e.message}). Your changes are still here.`;
+      paintGameSwitches();
+    }));
+  };
   async function gamesTab(days = 30) {
     state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
     const gen = state.gen;
@@ -548,7 +561,10 @@
   function reconcileDraft(o) {
     if (!gameDraft) return;
     const byId = new Map(o.games.map((g) => [g.id, g]));
-    if (gameDraft.order && sameOrder(gameDraft.order, o.games.map((g) => g.id))) gameDraft.order = null;
+    // the order draft is for the games on screen; if the list changed underneath it (a game added or removed), it is dropped
+    const ids = o.games.map((g) => g.id);
+    if (gameDraft.order && (gameDraft.order.length !== ids.length || !ids.every((id) => gameDraft.order.includes(id)))) gameDraft.order = null;
+    if (gameDraft.order && sameOrder(gameDraft.order, ids)) gameDraft.order = null;
     for (const [id, mode] of [...gameDraft.access]) if (!byId.has(id) || byId.get(id).access === mode) gameDraft.access.delete(id);
     for (const [id, limit] of [...gameDraft.trial]) if (!byId.has(id) || (byId.get(id).trialLimit ?? null) === limit) gameDraft.trial.delete(id);
     if (!draftCount()) gameDraft = null;
@@ -648,6 +664,7 @@
     gameSaving = false;
     if (failed) gameSaveError = `Some changes were not saved (${failed.message}). The saved ones are in place; the rest are still here to retry.`;
     else { gameDraft = null; gameSaveNote = 'Saved.'; }
+    paintGameSwitches(); // the controls are usable again at once, not after the read-back
     if (state.tab === 'games') redrawGames(); // the server's state is read back and the draft is reconciled with it
   }
   async function gameSwitches() {
