@@ -246,7 +246,7 @@
   function react(v, ctx) {
     // playback belongs to one table: another table (or a fresh join) starts from its own state, never from this table's frames
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
-    if (ui.animTable !== tableKey) { ui.animTable = tableKey; ui.anim = null; ui.seq = null; }
+    if (ui.animTable !== tableKey) { ui.animTable = tableKey; ui.anim = null; ui.seq = null; ui.launch = null; }
     const e = v.shot, snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
     if (!e) { ui.anim = null; ui.seq = 0; return; } // a fresh match (Play again) has no shot yet: drop the old playback
@@ -328,7 +328,7 @@
    */
   function updateDiscs(group, pose, a) {
     const key = pose.map((p) => p[0]).join('|');
-    if (a.discKey !== key || !a.discNodes) {
+    if (a.discKey !== key || a.discGroup !== group || !a.discNodes) {
       group.innerHTML = pose.map(([id, x, y, alpha]) => {
         const k = ui.known.get(id) || { kind: 'coin', colour: 'w', r: 0.022 };
         return discHTML(ui.v, { id, kind: k.kind, colour: k.colour, x, y, r: k.r }, alpha);
@@ -341,6 +341,7 @@
         });
       }
       a.discKey = key;
+      a.discGroup = group;
     }
     for (const [id, x, y, alpha] of pose) {
       const n = a.discNodes.get(id);
@@ -601,7 +602,11 @@
     if (!v || !ctx || !v.myTurn || ui.anim || ui.aim.power <= 0) return;
     const rad = (ui.aim.angle * Math.PI) / 180;
     // the striker leaves at once on release; the server's shot takes over when it arrives (see react and drawFrame)
-    ui.launch = { t0: performance.now(), p0: [ui.aim.x / 100, BASE_Y], d: [Math.sin(rad), Math.cos(rad)], dist: 0.06 + 0.3 * (ui.aim.power / 100), seat: v.me, ticking: false };
+    // the aim is in the viewer's display frame; the keyframes are in the table's bottom frame, so the glide is converted to it
+    const k = viewSide(v);
+    let d = [Math.sin(rad), Math.cos(rad)];
+    for (let i = 0; i < k; i++) d = [-d[1], d[0]];
+    ui.launch = { t0: performance.now(), p0: rotP([ui.aim.x / 100, BASE_Y], k), d, dist: 0.06 + 0.3 * (ui.aim.power / 100), seat: v.me, ticking: false };
     // the flick names the board it was aimed at, so a duplicate sent after a shot is rejected by the server
     ctx.act({ type: 'flick', x: ui.aim.x / 100, angle: rad, power: ui.aim.power / 100, seq: v.seq });
     startLaunchTicker();
@@ -623,7 +628,7 @@
   function moveStriker(x, y) {
     const svg = ui.root && ui.root.querySelector('.cb-svg');
     if (!svg) return;
-    const [X, Y] = dispToSvg([x, y]);
+    const [X, Y] = toSvg(ui.v, [x, y]);
     const striker = svg.querySelector('[data-id="striker"]');
     if (striker) { striker.setAttribute('cx', X); striker.setAttribute('cy', Y); }
     const ring = svg.querySelector('.cb-ring');
