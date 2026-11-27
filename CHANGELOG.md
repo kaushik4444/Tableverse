@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- New game: Memory Match (2–4 players). Turn two cards over to find the pairs; a match keeps the turn, a miss passes it. Cards of 4×4, 4×6 or 6×6. Cards you have seen stay known to the table.
 - New game: Dots and Boxes (2–4 players). Draw lines between the dots; closing a box claims it and keeps the turn. Board size 3×3, 4×4 or 5×5. The most boxes wins; a tie is a draw.
 - Sudoku solo rating: a solo game gives a rating per difficulty (solo-easy, solo-medium, solo-hard), separate from race play. It is an Elo-style rating against a fixed par rating: a solve within par is a win, a slower solve half, a game over a loss. Shown on the table beside the lives. Par times are placeholders to tune from real solve times.
 - New game: Bingo (2–8 players). Each player has a 5×5 card; numbers are called one at a time and the first valid Bingo wins. Options: any line or the full card, pace, and Mark for me. Bots mark and call Bingo on their own. A table's seat list now marks bots (`bot: true`) so a game can tell them from people; other games ignore the flag.

@@ -197,6 +197,20 @@
     () => felt(dbDots() + dbBox(0, 0, '#74b9ff', 'B') + dbBox(0, 1, '#ff7675', 'R') + dbBox(1, 0, '#74b9ff', 'B') + T(160, 116, 'The most boxes wins', 10, '#fff')),
   ]);
 
+  // Memory Match: face-down cards; two turned over, a matched pair in a seat colour, and the most pairs at the end
+  const MM = { w: 40, h: 46, gap: 8 };
+  const mmCard = (c, r, face, fill = '#f8fafc', ink = '#111827', opacity = 1) => {
+    const x = 118 + c * (MM.w + MM.gap), y = 14 + r * (MM.h + MM.gap);
+    return `<rect x="${x}" y="${y}" width="${MM.w}" height="${MM.h}" rx="7" fill="${fill}" opacity="${opacity}"/>` + (face ? T(x + MM.w / 2, y + MM.h / 2, face, 20, ink) : T(x + MM.w / 2, y + MM.h / 2, '✦', 14, 'rgba(255,255,255,.5)'));
+  };
+  const mmGrid = (cells) => cells.map((cell, i) => (cell ? mmCard(i % 4, Math.floor(i / 4), cell.face, cell.fill, cell.ink, cell.opacity) : '')).join('');
+  const facedown = () => Array.from({ length: 8 }, () => ({ face: null }));
+  A.memorymatch = pick([
+    () => felt(mmGrid(facedown().map((c, i) => (i === 1 || i === 6 ? { face: '⭐', fill: '#f8fafc' } : c))) + T(160, 122, 'Turn two cards over to find a pair', 10, '#fff')),
+    () => felt(mmGrid(facedown().map((c, i) => (i === 1 || i === 6 ? { face: '⭐', fill: '#74b9ff' } : i === 0 ? { face: '🍎', fill: '#ff7675' } : c))) + T(160, 122, 'A pair is yours: play again', 10, '#fff')),
+    () => felt(mmGrid(Array.from({ length: 8 }, (_, i) => ({ face: ['⭐', '🍎', '🌙', '🍀'][i % 4], fill: i < 4 ? '#74b9ff' : '#ff7675', opacity: 0.8 }))) + T(160, 122, '🏆 The most pairs wins', 10, '#fff')),
+  ]);
+
   A.gofish = pick([
     () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('3', 'c'), pc('J', 'd'), pc('9', 's')], 66, 44)),
     () => felt(T(160, 55, 'Ask for 7s', 20, '#fff') + arrow(110, 90, 210, 90)),

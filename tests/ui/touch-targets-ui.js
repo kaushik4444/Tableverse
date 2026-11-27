@@ -76,7 +76,7 @@ async function check(name, fn) {
     }
 
     // Every game's table toolbar, including the sub-360 px wrap case (iPhone SE) that the touch-target rules depend on.
-    for (const [gameId, n] of [['sudoku', 4], ['bingo', 4], ['dotsboxes', 4], ['wizard', 4], ['gofish', 4], ['penaltyrows', 4], ['stagerummy', 4], ['colorclash', 4], ['hiddenminers', 4], ['tictactoe', 2], ['poker', 4], ['ludo', 4]]) {
+    for (const [gameId, n] of [['sudoku', 4], ['bingo', 4], ['dotsboxes', 4], ['memorymatch', 4], ['wizard', 4], ['gofish', 4], ['penaltyrows', 4], ['stagerummy', 4], ['colorclash', 4], ['hiddenminers', 4], ['tictactoe', 2], ['poker', 4], ['ludo', 4]]) {
       for (const [label, width, height] of [['iPhone SE', 320, 568], ['Android 360', 360, 740], ['iPhone 14', 390, 844], ['tablet', 768, 1024]]) {
         await check(`table toolbar, ${gameId} on ${label} ${width}x${height}: no horizontal scroll, toolbar >= 44 px`, async () => {
           const names = ['Aarav', 'Bo', 'Cy', 'Di'].slice(0, n).map((name) => ({ name }));

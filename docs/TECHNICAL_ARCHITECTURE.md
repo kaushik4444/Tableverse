@@ -36,7 +36,7 @@ Related documents: `docs/LOCAL_DEVELOPMENT.md`, `docs/RELEASES.md`, `docs/OPERAT
 | Release automation | `.github/workflows/*.yml`, `scripts/release/promote.js` | CI on pull requests, the daily promotion from `development` to `main`, and the guarded cleanup job. |
 
 Game ids in the registry (`games/index.js`): `wizard`, `twentynine`, `poker`, `themind`, `ludo`, `gofish`, `snakesladders`,
-`propertyrivals`, `colorclash`, `hiddenminers`, `sudoku`, `dotsboxes`, plus two engines from `games/linegames`: Tic-Tac-Toe and Four in a Row (four or five in a row).
+`propertyrivals`, `colorclash`, `hiddenminers`, `sudoku`, `dotsboxes`, `memorymatch`, plus two engines from `games/linegames`: Tic-Tac-Toe and Four in a Row (four or five in a row).
 
 ### A.2 Request flows
 
