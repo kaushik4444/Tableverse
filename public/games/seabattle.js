@@ -92,13 +92,11 @@
 
   function render(root, v, ctx) {
     // a selection belongs to one table, one turn, and a square that is still open
+    // the selection and the phone tab belong to one table: a new table starts clean
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
-    if (ui.table !== tableKey) { ui.sel = null; ui.table = tableKey; }
+    if (ui.table !== tableKey) { ui.sel = null; ui.tab = 'attack'; ui.table = tableKey; }
     const me = v.me < 0 ? 0 : v.me;
     if (ui.sel !== null && (!v.myTurn || v.shots[1 - me][ui.sel])) ui.sel = null;
-    // the selection and the phone tab belong to one table: a new table starts clean
-    const table = ctx && ctx.room ? ctx.room.code : null;
-    if (table !== ui.table) { ui.table = table; ui.sel = null; ui.tab = 'attack'; }
     ui.root = root; ui.ctx = ctx; ui.v = v; react(v);
     const active = root.ownerDocument.activeElement;
     const focus = root.contains(active) && active.dataset.sb ? { sb: active.dataset.sb, k: active.dataset.k } : null;
