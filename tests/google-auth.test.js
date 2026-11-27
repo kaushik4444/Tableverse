@@ -6,7 +6,19 @@ const crypto = require('node:crypto');
 const { createVerifier, nonceFor, GoogleAuthError, cspFor } = require('../lib/googleAuth');
 
 let passed = 0; let failed = 0;
-async function test(name, fn) { try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + e.stack); } }
+// Watchdog: if this file makes no progress for 60 seconds, name the test that stalled and what keeps the process alive, then exit, instead of hanging until the CI timeout.
+let lastProgress = Date.now(); let current = '(none)';
+const diag = setInterval(() => {
+  if (Date.now() - lastProgress < 60000) return;
+  // stdout to a pipe can be queued; give the lines a bounded time to flush before forcing the exit
+  const lines = ['DIAG stalled in: ' + current + ' | resources: ' + JSON.stringify(process.getActiveResourcesInfo())];
+  for (const h of process._getActiveHandles()) lines.push('DIAG handle: ' + h.constructor.name + (h.remoteAddress ? ' ' + h.remoteAddress : '') + (h._idleTimeout !== undefined ? ' timeout=' + h._idleTimeout : ''));
+  const exit = () => process.exit(3);
+  process.stdout.write(lines.join('\n') + '\n', exit);
+  setTimeout(exit, 2000);
+}, 5000);
+diag.unref();
+async function test(name, fn) { current = name; lastProgress = Date.now(); try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + e.stack); } lastProgress = Date.now(); }
 
 const CLIENT = 'client-123.apps.googleusercontent.com';
 const NOW = 1800000000000;
