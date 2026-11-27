@@ -23,7 +23,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 async function loadMatches(client = db, { since = null, before = null } = {}) {
   const { rows } = await client.query(
     `SELECT m.id, m.game_id, m.match_key, m.finished_at, m.completed, m.rated, m.unrated_reason, m.rating_processed, m.options,
-            mp.player_id, mp.seat, mp.is_bot, mp.left_early, mp.forfeit, mp.is_winner, mp.is_draw, mp.place, mp.score
+            mp.player_id, mp.seat, mp.is_bot, mp.left_early, mp.forfeit, mp.is_winner, mp.is_draw, mp.place, mp.score,
+            mp.is_guest
        FROM matches m
        JOIN match_participants mp ON mp.match_id = m.id
       WHERE ($1::timestamptz IS NULL OR m.finished_at >= $1::timestamptz)
@@ -44,6 +45,7 @@ async function loadMatches(client = db, { since = null, before = null } = {}) {
     byId.get(r.id).participants.push({
       playerId: r.player_id, seat: r.seat, isBot: r.is_bot, leftEarly: r.left_early, forfeit: r.forfeit,
       isWinner: r.is_winner, isDraw: r.is_draw, place: r.place, score: r.score,
+      isGuest: Boolean(r.is_guest), // a guest account (anonymous): not rated, like a bot seat
     });
   }
   return [...byId.values()];
@@ -99,6 +101,8 @@ async function fullRebuildInTx(client) {
   for (const r of results) {
     await client.query('UPDATE matches SET rated = $2, unrated_reason = $3, rating_processed = TRUE WHERE id = $1', [r.id, r.rated, r.reason]);
   }
+  // every deleted seat has now been replayed: the stored ratings reflect it, so later incremental rebuilds need not replay it again
+  await client.query('UPDATE match_participants SET deletion_applied = TRUE WHERE player_id IS NULL AND NOT is_bot AND NOT deletion_applied');
   return { mode: 'full', matches: results.length, ratings: ratings.length, events: events.length };
 }
 
@@ -121,7 +125,7 @@ async function incrementalInTx(client) {
   // include the old match, even outside the replay window. Pair-limited matches also contribute to pair history.
   const invalidated = await client.query(
     `SELECT 1 FROM match_participants mp JOIN matches m ON m.id = mp.match_id
-      WHERE mp.player_id IS NULL AND NOT mp.is_bot AND m.rating_processed
+      WHERE mp.player_id IS NULL AND NOT mp.is_bot AND NOT mp.deletion_applied AND m.rating_processed
         AND (m.rated OR m.unrated_reason = $1)
       LIMIT 1`,
     [REASON.PAIR_LIMIT],

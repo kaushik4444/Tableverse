@@ -142,7 +142,7 @@
       <p class="hint" style="text-align:left">${hint}</p>
       ${v.solo && soloText(v) ? `<p class="su-solo-result">${esc(soloText(v))}</p>` : ''}
       <ul class="su-final">${rows}</ul>
-      <div class="row" style="margin-top:12px">${again}<button class="btn ghost" data-su="leave">Leave table</button></div></div></div>`;
+      <div class="row" style="margin-top:12px">${again}<button class="btn ghost" data-su="peek">View the board</button><button class="btn ghost" data-su="leave">Leave table</button></div></div></div>`;
   }
 
   /** A chime for each right number, a low note for each mistake, and win, lose or out when something happens to you. The first render plays nothing. */
@@ -180,6 +180,10 @@
     const gridFocus = !!active && root.contains(active) && active.matches('.su-c');
     // another control (Undo, Rules, Leave...) keeps its place by its action, if the redraw still has one
     const ctlAction = !!active && root.contains(active) && !gridFocus && active.dataset && active.dataset.su ? active.dataset.su : '';
+    // a new finished table (or a new phase) shows its own result sheet; the same table keeps the person's choice
+    const peekKey = [ctx.room && ctx.room.code, v.phase, v.event && v.event.seq].join('|');
+    if (ui.peekKey !== peekKey) { ui.peekKey = peekKey; ui.peek = false; }
+    const finished = v.phase === 'gameOver';
     const status = v.phase === 'playing' && v.me >= 0 && !v.out && !v.wrong.length ? 'mine' : '';
     root.innerHTML = `
     <div class="wz su">
@@ -192,7 +196,8 @@
       ${boardHTML(v)}
       ${toolsHTML(v)}
       ${padHTML(v)}
-      ${overlayHTML(v)}
+      ${finished && ui.peek ? '<div class="su-peek row"><button class="btn small" type="button" data-su="result">Show result</button></div>' : ''}
+      ${finished && !ui.peek ? overlayHTML(v) : ''}
     </div>`;
     root.onclick = onClick;
     root.onkeydown = onKey;
@@ -202,9 +207,15 @@
       const cell = root.querySelector('.su-c.su-sel');
       if (cell && typeof cell.focus === 'function') cell.focus({ preventScroll: true });
     } else if (ctlAction) {
-      const again = [...root.querySelectorAll('[data-su]')].find((b) => b.dataset.su === ctlAction && !b.disabled);
+      // the same control if it is still there and enabled; a number pad that is now disabled (the square is filled) hands focus to Rules, so it stays in the controls
+      const again = [...root.querySelectorAll('[data-su]')].find((b) => b.dataset.su === ctlAction && !b.disabled) || root.querySelector('[data-su="rules"]');
       if (again) again.focus({ preventScroll: true });
     }
+  }
+
+  function focusOn(sel) {
+    const b = ui.root && ui.root.querySelector(sel);
+    if (b) b.focus({ preventScroll: true });
   }
 
   function onClick(e) {
@@ -220,6 +231,8 @@
       case 'undo': if (v.canUndo) ctx.act({ type: 'undo' }); break;
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
+      case 'peek': ui.peek = true; draw(); focusOn('[data-su="result"]'); break; // the sheet steps aside so the grid can be read
+      case 'result': ui.peek = false; draw(); focusOn('[data-su="peek"]'); break;
       case 'leave': ctx.leave(); break;
     }
   }

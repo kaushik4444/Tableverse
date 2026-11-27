@@ -93,6 +93,12 @@ function finish(g, winners, by = null) {
 /** Call the next number. Bots mark it and call Bingo the moment they can. */
 function callNext(g) {
   if (g.phase !== 'playing') return { ok: false, error: 'The game is over' };
+  if (!g.deck.length) {
+    // the claim interval after the last call has passed: whoever has a full card now wins (see below)
+    const winners = g.players.map((_, i) => i).filter((i) => hasBingo(g, i));
+    finish(g, winners, winners[0] ?? null);
+    return { ok: true };
+  }
   const n = g.deck.pop();
   g.called.push(n);
   g.seq++;
@@ -100,16 +106,17 @@ function callNext(g) {
   g.players.forEach((p, i) => {
     if ((p.bot || g.options.autoMark) && g.cards[i].includes(n)) g.marks[i].add(n);
   });
-  if (!g.deck.length) {
-    // every number is out: whoever has a full card now wins, bots and people alike (an automatic table gets no later
-    // chance to claim); nobody is a draw
+  // every number is out. At an automatic table (or one with only bots) the game ends now. At a manual table people still
+  // mark and claim after the last call: the game ends on the next call, after one interval
+  if (!g.deck.length && (g.options.autoMark || g.players.every((p) => p.bot))) {
+    // whoever has a full card now wins, bots and people alike; nobody is a draw
     const winners = g.players.map((_, i) => i).filter((i) => hasBingo(g, i));
     finish(g, winners, winners[0] ?? null);
     return { ok: true };
   }
   // before the last call, a bot that completes its card claims at once
   const bots = g.players.map((_, i) => i).filter((i) => g.players[i].bot && hasBingo(g, i));
-  if (bots.length) finish(g, bots, bots[0]);
+  if (bots.length && g.deck.length) finish(g, bots, bots[0]); // the last call is followed by the claim interval (above)
   return { ok: true };
 }
 
