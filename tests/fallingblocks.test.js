@@ -218,3 +218,11 @@ test('a drop that names an earlier piece is refused and places nothing', () => {
 });
 
 console.log(`\n${passed} Falling Blocks tests passed`);
+
+test('the profile best is the most rows cleared in a game you won, and nothing for a game you lost', () => {
+  const { bestOf, bestLabel } = game.stats;
+  assert.equal(bestLabel, 'Most rows cleared in a win');
+  assert.equal(bestOf({ isWinner: true, score: 7 }), 7);
+  assert.equal(bestOf({ isWinner: false, score: 9 }), null);
+  assert.equal(bestOf({ isWinner: true, score: undefined }), null);
+});
