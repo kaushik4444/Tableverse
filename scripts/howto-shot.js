@@ -3,7 +3,7 @@
  * Takes a screenshot of the REAL table for a how-to-play card: the real front end (public/) shows the real engine's state
  * after a number of real engine steps (every seat plays through the engine's own bot logic, as in a bot-filled table).
  *
- * Usage: node scripts/howto-shot.js <gameId> <steps> <out.jpg> [seed] [--viewer=me]
+ * Usage: node scripts/howto-shot.js <gameId> <steps> <out.jpg> [seed] [--viewer=me] [--no-sheet]
  *   steps   how many engine moves to play forward before the screenshot (0 = the table as it opens)
  *   out     where to write the JPEG (1x phone width, 390 CSS px, 2x device pixels)
  *   seed    picks the deal (same seed, same game)
@@ -68,6 +68,14 @@ const stateMsg = { t: 'state', room, view: JSON.parse(JSON.stringify(g.view(flag
   await page.goto(url + '/');
   await page.waitForTimeout(2500);
   fs.mkdirSync(path.dirname(path.resolve(OUT)), { recursive: true });
+  // --no-sheet: the finished table without its result sheet, so a card can show the final board (the sheet covers it)
+  if ('no-sheet' in flags) {
+    // the end animation redraws the table a few seconds after the game is over, so wait for it to settle, then remove the sheet
+    await page.waitForTimeout(5000);
+    // a style rule, not removal: the table redraws the sheet, and the rule hides it on every redraw
+    await page.addStyleTag({ content: '.overlay { display: none !important; }' });
+    await page.waitForTimeout(300);
+  }
   await page.screenshot({ path: OUT, type: 'jpeg', quality: 72 });
   console.log(`${GAME} steps=${moves} over=${g.isOver()} -> ${OUT}`);
   await ctx.close(); await browser.close(); server.close();

@@ -394,9 +394,9 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
-  await test('the table toolbar Leave button is wired to the plugin (data-cb, not a dead data-carrom key)', async () => {
+  await test('the table toolbar Leave button is the shared one (data-act=leave), not a dead data-carrom key', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
-    assert.equal(await page.locator('[data-cb="leave"]').count(), 1);
+    assert.equal(await page.locator('[data-table-tools] [data-act="leave"]').count(), 1);
     assert.equal(await page.locator('[data-carrom]').count(), 0);
     await ctx.close();
   });

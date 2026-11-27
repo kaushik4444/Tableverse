@@ -28,7 +28,7 @@ function messagesFor(humanIds) {
       try {
         await page.goto(url + '/');
         await page.waitForSelector('.wz-top', { timeout: 8000 });
-        await page.evaluate(() => document.querySelector('[data-t9="leave"]').click());
+        await page.evaluate(() => document.querySelector('[data-table-tools] [data-act="leave"]').click());
         await page.waitForSelector('.overlay .sheet', { timeout: 4000 });
         const text = await page.evaluate(() => document.querySelector('.overlay .sheet').innerText);
         assert.ok(text.includes('Leave game?'), 'the question is shown');
@@ -47,7 +47,7 @@ function messagesFor(humanIds) {
         try {
           await page.goto(url + '/');
           await page.waitForSelector('.wz-top', { timeout: 8000 });
-          await page.evaluate(() => document.querySelector('[data-t9="leave"]').click());
+          await page.evaluate(() => document.querySelector('[data-table-tools] [data-act="leave"]').click());
           await page.waitForSelector('.overlay .sheet', { timeout: 4000 });
           const text = await page.locator('.overlay .sheet').innerText();
           assert.ok(text.includes('non-final penalties are removed; final penalties still count'));
@@ -64,7 +64,7 @@ function messagesFor(humanIds) {
       try {
         await page.goto(url + '/');
         await page.waitForSelector('.wz-top', { timeout: 8000 });
-        await page.evaluate(() => document.querySelector('[data-t9="leave"]').click());
+        await page.evaluate(() => document.querySelector('[data-table-tools] [data-act="leave"]').click());
         await page.waitForFunction(() => window.__sent.some((m) => m.t === 'leave'), null, { timeout: 4000 });
         assert.equal(await page.evaluate(() => document.querySelector('.overlay .sheet') ? 1 : 0), 0, 'no question is shown');
       } finally { await ctx.close(); }

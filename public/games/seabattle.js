@@ -40,7 +40,10 @@
       if (v.me < 0) return `Watching: ${esc(v.players.map((p) => p.name).join(' and '))} are placing their fleets`;
       const me = v.players[v.me];
       if (me.ready) return `Ready. Waiting for ${esc(v.players[1 - v.me].name)} to place their fleet…`;
-      if (ui.pick !== null) return `Tap a square for your ${v.lengths[ui.pick]}-square ${NAMES[ui.pick].toLowerCase()} (${ui.vert ? 'down' : 'across'}); Rotate turns it`;
+      if (ui.pick !== null) {
+        const moving = !!(v.setup && v.setup[ui.pick]);
+        return `${moving ? 'Move' : 'Place'} your ${v.lengths[ui.pick]}-square ${NAMES[ui.pick].toLowerCase()} (${ui.vert ? 'down' : 'across'}): tap a square${moving ? ' for it' : ''}, or Rotate to turn it${moving ? ' in place' : ''}`;
+      }
       if (v.placed && v.placed.every(Boolean)) return 'All five ships are on the sea. Ready when you are, or pick one up to move it';
       return 'Pick a ship, then tap where it goes. Tap a ship on your sea to move it';
     }
@@ -95,7 +98,8 @@
   function placingHTML(v) {
     const N = v.N;
     const placed = [];
-    (v.setup || []).forEach((p, i) => { if (p) placed.push({ slot: i, cells: cellsOf(v.lengths[i], p, N) }); });
+    // the working setup (a Rotate or a move not yet confirmed by the server) is what the sea shows
+    (ui.setup || v.setup || []).forEach((p, i) => { if (p) placed.push({ slot: i, cells: cellsOf(v.lengths[i], p, N) }); });
     // a square under a ship is named by the ship and its place, so a screen reader can find the fleet
     const under = new Map();
     placed.forEach((s) => s.cells.forEach((k) => under.set(k, s)));
@@ -263,14 +267,31 @@
         if (q) ui.vert = q.vertical;
         break;
       }
-      case 'rotate': ui.vert = !ui.vert; break;
+      case 'rotate': {
+        // the working setup, so a second Rotate before the next server view turns the ship back
+        const base = ui.setup || (v && v.setup);
+        const placed = ui.pick !== null && base && base[ui.pick];
+        if (!placed) { ui.vert = !ui.vert; break; }
+        // a placed ship turns where it is: the new direction is sent if it fits, and the ship stays picked up to move
+        const turned = { r: placed.r, c: placed.c, vertical: !placed.vertical };
+        if (!canPlace({ ...v, setup: base }, ui.pick, turned)) {
+          ui.root.querySelector('.wz-status span').textContent = 'No room to turn it here. Move it to a square with space, then Rotate.';
+          return;
+        }
+        ui.vert = turned.vertical;
+        ui.setup = base.map((q, i) => (i === ui.pick ? turned : q));
+        render(ui.root, ui.v, ui.ctx); // show the turn now, before the server's view arrives
+        ctx.act({ type: 'place', ships: ui.setup });
+        return;
+      }
       case 'cell': {
         const k = Number(el.dataset.k);
         const N = v.N;
         if (ui.pick === null) {
           // tap a placed ship to pick it up
-          const slot = (v.setup || []).findIndex((q, i) => q && cellsOf(v.lengths[i], q, N).includes(k));
-          if (slot >= 0) { ui.pick = slot; ui.vert = v.setup[slot].vertical; }
+          const working = ui.setup || v.setup || [];
+          const slot = working.findIndex((q, i) => q && cellsOf(v.lengths[i], q, N).includes(k));
+          if (slot >= 0) { ui.pick = slot; ui.vert = working[slot].vertical; }
           else { ui.root.querySelector('.wz-status span').textContent = 'Pick a ship first, then tap where it goes'; return; }
           break;
         }
@@ -278,7 +299,14 @@
         return;
       }
       case 'random': ctx.act({ type: 'random' }); ui.pick = null; return;
-      case 'reset': ctx.act({ type: 'place', ships: Array(v.lengths.length).fill(null) }); ui.pick = null; return;
+      case 'reset': {
+        // the working setup is cleared too, so a Rotate before the cleared view arrives has no ship to turn back into the fleet
+        const empty = Array(v.lengths.length).fill(null);
+        ui.setup = empty;
+        ui.pick = null;
+        ctx.act({ type: 'place', ships: empty });
+        return;
+      }
       case 'ready': ctx.act({ type: 'ready' }); return;
       default: return;
     }
