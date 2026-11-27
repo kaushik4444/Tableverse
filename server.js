@@ -2127,6 +2127,8 @@ function start(opts = {}) {
       // Who is a registered account, decided once at the start: a leaver becomes a bot seat, and a player may be evicted
       // from the player map, so neither can be read back from the members when the game ends.
       room.registered = new Set(room.seated.filter((m) => !m.bot && usernameOf(m)).map((m) => m.id));
+      // the guests at the start: a guest who leaves becomes a bot seat, but is still a guest in the record
+      room.guestSeats = new Set(room.seated.filter((m) => !m.bot && !usernameOf(m)).map((m) => m.id));
       if (typeof room.game.setPacingScale === 'function') room.game.setPacingScale(botScale);
       else pacing.setScale(room.game, botScale);
       room.status = 'playing';

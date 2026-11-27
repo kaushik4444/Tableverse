@@ -125,8 +125,11 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
       // WITHOUT the account and WITHOUT the real name, so a game that finishes after the account was deleted can never
       // bring the name back. Bots have no account and keep their name.
       let accountId = null;
+      let guestFallback = false;
       if (isUuid(p.playerId)) {
-        accountId = (await client.query('SELECT id FROM players WHERE id = $1 FOR SHARE', [p.playerId])).rows[0]?.id || null;
+        const acct = (await client.query('SELECT id, is_anonymous FROM players WHERE id = $1 FOR SHARE', [p.playerId])).rows[0] || null;
+        accountId = acct ? acct.id : null;
+        guestFallback = acct ? Boolean(acct.is_anonymous) : false; // used only by a record from before the guest flag existed
       }
       const gone = isUuid(p.playerId) && !accountId && !p.isBot;
       await client.query(
@@ -149,7 +152,7 @@ async function recordMatch({ matchKey, roomCode, gameId, seats, options, started
           Boolean(p.forfeit),
           Number.isInteger(p.place) && p.place >= 1 && p.place <= 32767 ? p.place : null,
           Number.isInteger(p.secondsPlayed) && p.secondsPlayed >= 0 ? p.secondsPlayed : null,
-          Boolean(p.isGuest) && !p.isBot,
+          !p.isBot && (typeof p.isGuest === 'boolean' ? p.isGuest : guestFallback),
         ]
       );
     }
