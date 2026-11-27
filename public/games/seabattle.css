@@ -13,6 +13,8 @@
 .sb .sb-tabs .btn.on { background: rgba(255, 255, 255, .18); }
 .sb .sb-boards { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 6px; }
 .sb .sb-board { display: flex; flex-direction: column; align-items: center; }
+/* placing: the chooser and the controls sit under the sea, so the sea is smaller to fit a phone screen */
+.sb[data-placing="1"] .sb-grid { width: min(66vw, 240px); }
 .sb .sb-grid { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 2px; width: min(78vw, 300px); aspect-ratio: 1; padding: 4px; box-sizing: border-box; background: rgba(0, 0, 0, .25); border-radius: 10px; }
 .sb .sb-cell { display: block; min-width: 0; min-height: 0; border: 0; padding: 0; margin: 0; border-radius: 3px; background: var(--sb-sea); position: relative; }
 .sb .sb-cell.open { cursor: pointer; }

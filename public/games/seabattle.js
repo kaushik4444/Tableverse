@@ -94,12 +94,17 @@
   /** While placing: my sea, every square a button; the placed ships as hulls; the picked ship is shown dashed. */
   function placingHTML(v) {
     const N = v.N;
-    const cells = [];
-    for (let k = 0; k < N * N; k++) {
-      cells.push(`<button type="button" class="sb-cell water" style="grid-row:${Math.floor(k / N) + 1};grid-column:${(k % N) + 1}" data-sb="cell" data-k="${k}" aria-label="${square(k, N)}"${myReady(v) ? ' disabled' : ''}></button>`);
-    }
     const placed = [];
     (v.setup || []).forEach((p, i) => { if (p) placed.push({ slot: i, cells: cellsOf(v.lengths[i], p, N) }); });
+    // a square under a ship is named by the ship and its place, so a screen reader can find the fleet
+    const under = new Map();
+    placed.forEach((s) => s.cells.forEach((k) => under.set(k, s)));
+    const cells = [];
+    for (let k = 0; k < N * N; k++) {
+      const s = under.get(k);
+      const label = s ? `${square(k, N)}, ${NAMES[s.slot]}, ${s.cells.length} squares, ${p2v(s.cells, N) ? 'down' : 'across'}` : square(k, N);
+      cells.push(`<button type="button" class="sb-cell water" style="grid-row:${Math.floor(k / N) + 1};grid-column:${(k % N) + 1}" data-sb="cell" data-k="${k}" aria-label="${label}"${myReady(v) ? ' disabled' : ''}></button>`);
+    }
     const hulls = placed.map((s) => {
       const first = s.cells[0], len = s.cells.length, vertical = p2v(s.cells, N);
       const r = Math.floor(first / N) + 1, c = (first % N) + 1;
@@ -176,6 +181,8 @@
   }
 
   function render(root, v, ctx) {
+    // a new server view replaces the working copy of the setup; local redraws keep it
+    if (ui.setupFrom !== v) { ui.setupFrom = v; ui.setup = null; }
     // a selection belongs to one table, one turn, and a square that is still open
     // the selection, the phone tab and the placement belong to one table: a new table starts clean
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
@@ -188,7 +195,7 @@
     const active = root.ownerDocument.activeElement;
     const focus = root.contains(active) && active.dataset.sb ? { sb: active.dataset.sb, k: active.dataset.k, slot: active.dataset.slot } : null;
     const placing = v.phase === 'placing';
-    root.innerHTML = `<div class="wz sb" data-game="seabattle" data-tab="${v.me < 0 ? 'both' : placing ? 'mine' : ui.tab}">
+    root.innerHTML = `<div class="wz sb" data-game="seabattle" data-placing="${placing ? 1 : 0}" data-tab="${v.me < 0 ? 'both' : placing ? 'mine' : ui.tab}">
       <div class="wz-top"><div class="wz-round"><b>Sea Battle</b><span class="label"> · 10 × 10 seas</span></div>
         ${CardTable.toolbarSeed('<button class="btn ghost small" data-sb-act="rules">Rules</button>', 'sb')}</div>
       ${seatsHTML(v)}
@@ -212,11 +219,14 @@
     if (!v || !ctx || ui.pick === null) return;
     const N = v.N, r = Math.floor(k / N), c = k % N;
     const p = { r, c, vertical: ui.vert };
-    if (!canPlace(v, ui.pick, p)) {
+    // the working copy includes ships sent since the last server view, so two quick placements both stay
+    const base = ui.setup || v.setup || Array(v.lengths.length).fill(null);
+    if (!canPlace({ ...v, setup: base }, ui.pick, p)) {
       ui.root.querySelector('.wz-status span').textContent = 'That ship would run off the sea or touch another ship. Try another square, or Rotate.';
       return;
     }
-    const setup = (v.setup || Array(v.lengths.length).fill(null)).map((q, i) => (i === ui.pick ? { r, c, vertical: ui.vert } : q));
+    const setup = base.map((q, i) => (i === ui.pick ? { r, c, vertical: ui.vert } : q));
+    ui.setup = setup;
     ui.pick = null;
     ctx.act({ type: 'place', ships: setup });
   }
