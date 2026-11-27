@@ -1,0 +1,55 @@
+/* Resource Isles. Builds on table.css and the wz frame. Seat colours come from --c; the island is one SVG. */
+.ri { --ri-0: #2563eb; --ri-1: #dc2626; --ri-2: #ea580c; --ri-3: #1f2937; }
+.ri .s0 { --c: var(--ri-0); } .ri .s1 { --c: var(--ri-1); } .ri .s2 { --c: var(--ri-2); } .ri .s3 { --c: var(--ri-3); }
+.ri .ri-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 6px 0; }
+.ri .ri-seat { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 12px; background: rgba(255, 255, 255, .07); border: 2px solid transparent; min-width: 0; }
+.ri .ri-seat.turn { border-color: var(--gold, #f2c14e); }
+.ri .ri-seat.won { background: rgba(242, 193, 78, .2); }
+.ri .ri-swatch { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; background: var(--c); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .25); }
+.ri .ri-who { display: grid; min-width: 0; flex: 1 1 auto; }
+.ri .ri-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.ri .ri-who small { opacity: .75; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ri .ri-vp { font-size: 20px; font-weight: 700; }
+.ri .ri-vp small { font-size: 11px; opacity: .6; font-weight: 400; }
+.ri .ri-main { margin: 6px auto 0; width: min(100%, 380px); }
+.ri .ri-board { display: block; width: 100%; height: auto; touch-action: manipulation; }
+.ri .ri-sea { fill: #2d6aa0; }
+.ri .ri-land { stroke: #fff8e7; stroke-width: .04; stroke-linejoin: round; }
+.ri .ri-token { fill: #fbf6e9; stroke: #6b5a3a; stroke-width: .03; }
+.ri .ri-token.hot { fill: #fff1e6; }
+.ri .ri-num { font: 700 .32px system-ui, sans-serif; text-anchor: middle; fill: #1f2937; }
+.ri .ri-token.hot + .ri-num { fill: #b91c1c; }
+.ri .ri-pips { font-size: .13px; text-anchor: middle; fill: #7c6a4a; }
+.ri .ri-robber { fill: #111827; stroke: #fff; stroke-width: .03; }
+.ri .ri-road { stroke-width: .14; stroke-linecap: round; }
+.ri .ri-settle { stroke: #111827; stroke-width: .03; }
+.ri .ri-city { stroke: #111827; stroke-width: .03; }
+.ri .ri-harbor circle { fill: #fbf6e9; stroke: #6b5a3a; stroke-width: .03; }
+.ri .ri-harbor text { font: 700 .17px system-ui, sans-serif; text-anchor: middle; fill: #1f2937; }
+.ri .ri-spot { fill: rgba(255, 255, 255, .35); stroke: var(--gold, #f2c14e); stroke-width: .05; cursor: pointer; }
+.ri .ri-spot:hover, .ri .ri-spot:focus-visible { fill: rgba(242, 193, 78, .7); }
+.ri .ri-spot:focus-visible, .ri .ri-edge-hit:focus-visible, .ri .ri-hex-hit:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.ri .ri-edge-hit { stroke: rgba(242, 193, 78, .85); stroke-width: .22; stroke-linecap: round; cursor: pointer; }
+.ri .ri-edge-hit:hover, .ri .ri-edge-hit:focus-visible { stroke: #fff; }
+.ri .ri-hex-hit { fill: rgba(242, 193, 78, .35); stroke: var(--gold, #f2c14e); stroke-width: .06; cursor: pointer; }
+.ri .ri-hex-hit:focus-visible { fill: rgba(242, 193, 78, .6); }
+.ri .ri-bottom { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.ri .ri-dice { display: flex; gap: 4px; }
+.ri .ri-die { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: #f8fafc; color: #111827; font-weight: 700; font-size: 18px; }
+.ri .ri-hand { display: flex; gap: 6px; flex: 1 1 auto; justify-content: flex-end; flex-wrap: wrap; }
+.ri .ri-card { display: grid; justify-items: center; gap: 1px; min-width: 46px; padding: 4px 4px; border-radius: 8px; background: rgba(255, 255, 255, .08); font-size: 12px; }
+.ri .ri-chip { width: 14px; height: 14px; border-radius: 4px; display: block; }
+.ri .ri-card b { font-size: 15px; }
+.ri .ri-card small { opacity: .75; font-size: 10px; }
+.ri .ri-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.ri .ri-actions .btn.on { outline: 3px solid var(--gold, #f2c14e); outline-offset: 1px; }
+.ri .ri-trade { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 13px; }
+.ri .ri-trade select { min-height: 36px; }
+.ri .ri-discard { margin-top: 8px; display: grid; gap: 6px; }
+.ri .ri-step { display: flex; align-items: center; gap: 6px; }
+.ri .ri-step span { min-width: 100px; }
+.ri .ri-log { margin: 8px 0 0; padding-left: 18px; font-size: 13px; opacity: .85; }
+@media (max-height: 700px) {
+  .ri .ri-seat { padding: 4px 6px; }
+  .ri .ri-main { width: min(100%, 320px); }
+}

@@ -113,7 +113,7 @@ function buildTopology() {
 }
 
 /** Resources and number tokens. A 6 and an 8 never sit on touching hexes (retried a few times, then accepted). */
-function layoutTiles(rng, count, hexNbrs) {
+function layoutTiles(rng, hexNbrs) {
   let out = null;
   for (let attempt = 0; attempt < 200; attempt++) {
     const res = shuffle(TILE_BAG, rng);
@@ -124,7 +124,6 @@ function layoutTiles(rng, count, hexNbrs) {
     out = { res, num };
     const hot = (n) => n === 6 || n === 8;
     const clash = hexNbrs.some((ns, i) => hot(num[i]) && ns.some((j) => hot(num[j])));
-    if (!clash || count !== hexNbrs.length) break;
     if (!clash) break;
   }
   return out;
@@ -132,7 +131,7 @@ function layoutTiles(rng, count, hexNbrs) {
 
 function buildBoard(rng) {
   const { hexes, verts, edges, hexNbrs } = buildTopology();
-  const tiles = layoutTiles(rng, hexes.length, hexNbrs);
+  const tiles = layoutTiles(rng, hexNbrs);
   hexes.forEach((h, i) => { h.res = tiles.res[i]; h.num = tiles.num[i]; });
   // harbours sit on the coast, spread evenly round the island, starting at a random point
   const coast = edges

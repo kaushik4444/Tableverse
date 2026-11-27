@@ -9,6 +9,7 @@ module.exports = {
   dotsboxes: ['Turns', 'Closing a box', 'Passing the turn', 'Winning'],
   seabattle: ['The seas', 'Firing', 'Hits and sinking', 'Turns', 'Winning'],
   memorymatch: ['Turns', 'A pair', 'A miss', 'Winning'],
+  resourceisles: ['Setting up', 'Rolling', 'A seven', 'Building', 'Trading', 'Points', 'Draft version'],
   fallingblocks: ['The well', 'Dropping a block', 'Clearing rows and garbage', 'Topping out and winning', 'Bot speed'],
   twentynine: ['Teams and cards', 'Card points', 'The deal and the bid', 'Trump', 'Playing tricks', 'Marriage', 'Scoring'],
   poker: ['The game', 'Blinds', 'Betting rounds', 'All-in', 'Showdown', 'Hand ranking', 'Winning'],

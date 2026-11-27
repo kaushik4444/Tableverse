@@ -73,7 +73,6 @@ window.TVHomeUI = function TVHomeUI({ S, esc, gameMeta, pingBadge, pendingSocial
 
   const COMING_SOON = [
     ['🥤', 'Cup Pong', 'Take turns tossing balls into the opposing cups.', 'Your build order'],
-    ['🌾', 'Resource Isles — 4 players', 'Gather resources, trade and build settlements and roads.', 'Your build order'],
     ['🌾', 'Resource Isles — 5–6 players', 'Bring the larger-group expansion to the island.', 'Your build order'],
     ['🕵️', 'Secret Clues', 'Give clever clues so your team finds the right words.', 'Additional games'],
   ];
