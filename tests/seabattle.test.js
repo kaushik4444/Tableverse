@@ -247,3 +247,19 @@ test('bots place a fleet and ready up on their own', () => {
 });
 
 console.log(`\n${passed} Sea Battle tests passed`);
+
+test('placing time limit: when the clock runs out a bot finishes a partly placed fleet and readies it, and the other player still places', () => {
+  const g = E.createGame(P(), {}, rng());
+  const partial = [{ r: 0, c: 0, vertical: false }, null, null, null, null];
+  assert.equal(E.applyAction(g, 'a', { type: 'place', ships: partial }).ok, true);
+  // the server plays the bot's action for the waiting player until that player is no longer awaited
+  for (let i = 0; i < 6 && E.awaiting(g).includes('a'); i++) {
+    const act = E.botAction(g, 'a');
+    assert.ok(act, 'the bot has an action while the fleet is not ready');
+    assert.equal(E.applyAction(g, 'a', act).ok, true, 'the bot action is accepted');
+  }
+  assert.equal(g.ready[0], true, 'a is ready');
+  assert.ok(g.setup[0].every((p) => p !== null), 'all five ships are on the sea');
+  assert.equal(g.phase, 'placing', 'b has not placed yet');
+  assert.deepEqual(E.awaiting(g), ['b']);
+});
