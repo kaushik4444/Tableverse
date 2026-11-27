@@ -8,6 +8,7 @@
  * Bots never count as a player.
  */
 const db = require('./pool');
+const { UNSCORED_SQL } = require('../lib/unscoredRuns');
 
 const PAGE = 25;
 const ZONES = ['UTC', 'Europe/Berlin', 'Asia/Kolkata'];
@@ -43,8 +44,9 @@ const orderBy = (key, dir) => `${SORTS[key].by} ${dir} NULLS LAST, p.username`;
 // A game has a RATED result for a player only if the player stayed to the end and the match was recorded with results.
 // Same rule as the player's own history and stats (db/matches.js): a bot that took over a seat can carry a win on the
 // departed player's row, and matches written before results were reported (match_key IS NULL) have unknown winners.
-// Neither may count as a win, a draw or a loss. They still count as games played and as games left early.
-const RATED = '(NOT mp.left_early AND m.match_key IS NOT NULL)';
+// Neither may count as a win, a draw or a loss. A solo Falling Blocks run has no winner, so it is not rated either (lib/unscoredRuns.js).
+// They still count as games played and as games left early.
+const RATED = `(NOT mp.left_early AND m.match_key IS NOT NULL AND NOT ${UNSCORED_SQL})`;
 const COUNTS = `
   COUNT(*)::int AS games,
   COUNT(*) FILTER (WHERE ${RATED})::int AS rated,
