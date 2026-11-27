@@ -176,12 +176,12 @@
   }
 
   function render(root, v, ctx) {
-    // a selection belongs to one turn, and to a square that is still open
+    // a selection belongs to one table, one turn, and a square that is still open
+    // the selection, the phone tab and the placement belong to one table: a new table starts clean
+    const tableKey = ctx && ctx.room ? ctx.room.code : '';
+    if (ui.table !== tableKey) { ui.sel = null; ui.tab = 'attack'; ui.pick = null; ui.vert = false; ui.table = tableKey; }
     const me = v.me < 0 ? 0 : v.me;
     if (ui.sel !== null && (!v.myTurn || v.shots[1 - me][ui.sel])) ui.sel = null;
-    // the selection and the phone tab belong to one table: a new table starts clean
-    const table = ctx && ctx.room ? ctx.room.code : null;
-    if (table !== ui.table) { ui.table = table; ui.sel = null; ui.tab = 'attack'; ui.pick = null; ui.vert = false; }
     // a placed or picked ship that is no longer in the setup (after Clear or a redraw) is put down
     if (ui.pick !== null && v.phase !== 'placing') ui.pick = null;
     ui.root = root; ui.ctx = ctx; ui.v = v; react(v);
