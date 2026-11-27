@@ -17,10 +17,10 @@ module.exports = {
   stats: { kind: 'none', bestLabel: null, bestOf: null },
   options: [
     // no TIME_LIMIT_OPTION: everybody builds at once, so nobody waits for a turn. Bots are timed by Bot speed.
-    { key: 'pace', type: 'select', label: 'Bot speed', default: 'normal', choices: [
-      { value: 'slow', label: 'Slow', desc: 'Bots drop a piece about every three seconds.' },
-      { value: 'normal', label: 'Normal', desc: 'Bots drop a piece about every two seconds.' },
-      { value: 'quick', label: 'Quick', desc: 'Bots drop a piece about every one and a bit seconds.' },
+    { key: 'pace', type: 'select', label: 'Bot speed', default: 'slow', choices: [
+      { value: 'slow', label: 'Slow', desc: 'Bots drop a piece about every four seconds.' },
+      { value: 'normal', label: 'Normal', desc: 'Bots drop a piece about every three seconds.' },
+      { value: 'quick', label: 'Quick', desc: 'Bots drop a piece about every two seconds.' },
     ] },
   ],
   rules: [

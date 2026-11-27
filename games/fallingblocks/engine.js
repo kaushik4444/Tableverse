@@ -19,7 +19,8 @@ const H = 20;
 const SPAWN_X = 3;
 const KINDS = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
 const GARBAGE = { 2: 1, 3: 2, 4: 4 };       // rows cleared at once -> garbage rows sent to each other player
-const PACE_MS = { slow: 3000, normal: 2000, quick: 1200 };
+// the time between a bot's drops: long enough to follow every well, so a person can read the table
+const PACE_MS = { slow: 4000, normal: 3000, quick: 2000 };
 const MAX_PLAYERS = 4;
 
 const BASE = {
@@ -92,7 +93,7 @@ const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
 
 function createGame(players, options = {}, rng = Math.random, now = Date.now) {
   if (players.length < 2 || players.length > MAX_PLAYERS) throw new Error('Falling Blocks is for 2 to 4 players');
-  const pace = PACE_MS[options.pace] ? options.pace : 'normal';
+  const pace = PACE_MS[options.pace] ? options.pace : 'slow';
   const startedAt = now();
   const g = {
     game: 'fallingblocks',

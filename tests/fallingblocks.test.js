@@ -156,7 +156,7 @@ test('bots play every game to a winner, and each bot move is one the engine acce
 test('bot pace is set by the option, and a bot waits for its own next move', () => {
   const g = E.createGame(P(2), { pace: 'slow' }, rng(5), () => 0);
   assert.ok(E.botDelayMs(g, 'p0') > 0);
-  assert.ok(E.botDelayMs(g, 'p0') <= 3000 * 1.15 * 1.25 + 1, 'at most a little over the slow pace');
+  assert.ok(E.botDelayMs(g, 'p0') <= E.PACE_MS.slow * 1.15 * 1.25 + 1, 'at most a little over the slow pace');
   assert.equal(E.botDelayMs(g, 'nobody'), 0);
 });
 
