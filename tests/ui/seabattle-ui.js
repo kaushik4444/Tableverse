@@ -211,6 +211,16 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     await ctx.close();
   });
 
+  await test('a Rotate shows at once on the sea and on the button, before the server view arrives', async () => {
+    const { page, ctx } = await open(table(undefined, { placed: true }));
+    await page.locator('[data-sb="pick"][data-slot="4"]').click();
+    const hullsBefore = await page.locator('.sb-hull.v').count();
+    await page.locator('[data-sb="rotate"]').click();
+    assert.equal(await page.locator('.sb-hull.v').count(), hullsBefore + 1, 'the destroyer is drawn down at once');
+    assert.match(await page.locator('[data-sb="rotate"]').innerText(), /Down/, 'the button says Down');
+    await ctx.close();
+  });
+
   await test('Clear, then Rotate before the cleared view arrives, does not send the old fleet back', async () => {
     const { page, ctx } = await open(table(undefined, { placed: true }));
     await page.locator('[data-sb="reset"]').click();
