@@ -8,7 +8,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 
 ## Current games
 
-Eighteen games are open to every player. Carrom is in admin testing and is not open to players yet.
+Nineteen games are open to every player. Carrom is in admin testing and is not open to players yet.
 
 - **Wizard** (3–6): plus/minus one, hidden/secret prediction, foresight, short game.
 - **29** (4): team-based trick play with secret trump and 3/6/9 match length options.
@@ -27,6 +27,7 @@ Eighteen games are open to every player. Carrom is in admin testing and is not o
 - **Go Fish** (2–6): ask for a rank, collect four of a kind and make the most books. Optional “Fish your wish” (draw the card you asked for and go again).
 - **Memory Match** (2–4): turn two cards over to find pairs. A match keeps your turn; the most pairs wins. Pick 4×4, 4×6 or 6×6 cards.
 - **Dots and Boxes** (2–4): draw lines between the dots to close boxes. A box you close is yours and you move again. Pick a 3×3, 4×4 or 5×5 board; the most boxes wins.
+- **Sea Battle** (2): hide five ships in your 10 × 10 sea and fire at the other player’s. The first to sink the whole fleet wins.
 - **Bingo** (2–8): every player has a 5×5 card and numbers are called one at a time. Mark your called numbers and shout Bingo first. Choose *Winning pattern* (any line or the full card), *Pace*, and *Mark for me*. Bots mark and call Bingo themselves.
 - **Sudoku** (1–8): everybody gets the same puzzle on their own grid; the first grid filled in correctly wins. Each player has 3 lives: a wrong number shows red at once and costs one, and the third takes you out of the race (alone, it is game over). Each player has 3 undos, and each one takes back only the last move. Playing alone also gives a solo rating per difficulty, separate from race play (a solve within par moves it up; a game over moves it down). Easy, medium or hard, bots fill at a chosen speed, and you see only how many squares each player has right and their lives.
 
