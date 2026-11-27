@@ -197,6 +197,16 @@
     () => felt(dbDots() + dbBox(0, 0, '#74b9ff', 'B') + dbBox(0, 1, '#ff7675', 'R') + dbBox(1, 0, '#74b9ff', 'B') + T(160, 116, 'The most boxes wins', 10, '#fff')),
   ]);
 
+  // Sea Battle: a sea of squares, a hit and a miss, and a sunk ship
+  const SB = { x0: 118, y0: 14, cell: 17 };
+  const sbCell = (c, r, fill, mark = '') => `<rect x="${SB.x0 + c * SB.cell}" y="${SB.y0 + r * SB.cell}" width="${SB.cell - 2}" height="${SB.cell - 2}" rx="2" fill="${fill}"/>${mark}`;
+  const sbSea = (f) => { let o = ''; for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) o += f(c, r); return o; };
+  A.seabattle = pick([
+    () => felt(sbSea((c, r) => sbCell(c, r, 'rgba(56,189,248,.25)')) + [0, 1, 2].map((i) => sbCell(1 + i, 2, '#94a3b8')).join('') + T(160, 116, 'Hide your ships and fire at the other sea', 10, '#fff')),
+    () => felt(sbSea((c, r) => sbCell(c, r, 'rgba(56,189,248,.25)')) + sbCell(2, 2, '#ef4444', T(SB.x0 + 2 * SB.cell + SB.cell / 2 - 1, SB.y0 + 2 * SB.cell + SB.cell / 2, '✕', 9, '#fff')) + sbCell(4, 4, 'rgba(255,255,255,.7)') + T(160, 116, 'A hit is red, a miss is white', 10, '#fff')),
+    () => felt(sbSea((c, r) => sbCell(c, r, 'rgba(56,189,248,.25)')) + [0, 1].map((i) => sbCell(1 + i, 1, '#7f1d1d')).join('') + T(160, 116, 'A sunk ship is shown to everyone', 10, '#fff')),
+  ]);
+
   A.gofish = pick([
     () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('3', 'c'), pc('J', 'd'), pc('9', 's')], 66, 44)),
     () => felt(T(160, 55, 'Ask for 7s', 20, '#fff') + arrow(110, 90, 210, 90)),

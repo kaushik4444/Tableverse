@@ -67,3 +67,8 @@ Tetris, Bullhead Run (the removed working title for what is now Take 5), Beer Po
 ## Dots and Boxes
 
 - Dots and Boxes is a classic paper game with no publisher-owned name in common use, so the game keeps it. The rules, board, art and icon are Tableverse's own (`games/dotsboxes/`).
+
+## Sea Battle
+
+- "Battleship" is a registered trademark of Hasbro. The game does not use it: the name is Sea Battle, and the sea, ships, markers and screens are Tableverse's own (`games/seabattle/`, `public/games/seabattle.*`).
+- A name check is still needed before any release, as for every name in this table. "Sea Battle" is a generic phrase, but check it in the target markets.

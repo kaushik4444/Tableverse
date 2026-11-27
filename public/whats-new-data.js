@@ -25,6 +25,12 @@
         text: 'Draw lines between the dots and close boxes to claim them. Close a box and you move again. Pick a 3×3, 4×4 or 5×5 board.'
       },
       {
+        level: 'minor',
+        ico: '🚢',
+        title: 'Sea Battle for two',
+        text: 'Hide five ships in your sea and fire at the other player’s. Hits and sinkings are shown to both of you; the first to sink the whole fleet wins.'
+      },
+      {
         level: 'major',
         ico: '🔊',
         title: 'Sounds for more moments',
