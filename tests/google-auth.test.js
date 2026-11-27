@@ -6,7 +6,16 @@ const crypto = require('node:crypto');
 const { createVerifier, nonceFor, GoogleAuthError, cspFor } = require('../lib/googleAuth');
 
 let passed = 0; let failed = 0;
-async function test(name, fn) { try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + e.stack); } }
+// DIAGNOSTIC (temporary, to be reverted): if this file makes no progress for 60 seconds, print what keeps the process alive
+let lastProgress = Date.now(); let current = '(none)';
+const diag = setInterval(() => {
+  if (Date.now() - lastProgress < 60000) return;
+  console.log('DIAG stalled in: ' + current + ' | resources: ' + JSON.stringify(process.getActiveResourcesInfo()));
+  for (const h of process._getActiveHandles()) console.log('DIAG handle: ' + h.constructor.name + (h.remoteAddress ? ' ' + h.remoteAddress : '') + (h._idleTimeout !== undefined ? ' timeout=' + h._idleTimeout : ''));
+  process.exit(3);
+}, 5000);
+diag.unref();
+async function test(name, fn) { current = name; lastProgress = Date.now(); try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + e.stack); } lastProgress = Date.now(); }
 
 const CLIENT = 'client-123.apps.googleusercontent.com';
 const NOW = 1800000000000;
