@@ -62,7 +62,7 @@ const ids = ['me', 'p1', 'p2', 'p3'];
     const { page, ctx } = await open('penaltyrows');
     await page.locator('.pr-hand .pr-card').first().click({ force: true });
     assert.equal(await sent(page, 'act'), 0, 'no pick is sent before Ready');
-    await page.locator('[data-table-tools] [data-pr="leave"]').first().click();
+    await page.locator('[data-table-tools] [data-act="leave"]').first().click();
     await leaveAsks(page);
     await ctx.close();
   });

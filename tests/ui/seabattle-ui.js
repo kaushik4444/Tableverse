@@ -190,6 +190,24 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     await ctx.close();
   });
 
+  await test('a placed ship is picked up and Rotate turns it where it is; the turned ship is sent and stays picked up', async () => {
+    const { page, ctx } = await open(table(undefined, { placed: true }));
+    await page.locator('[data-sb="pick"][data-slot="4"]').click();
+    await page.locator('[data-sb="rotate"]').click();
+    const act = (await sent(page)).at(-1).action;
+    assert.equal(act.type, 'place');
+    assert.deepEqual(act.ships[4], { r: 8, c: 0, vertical: true }, 'the destroyer turns down from its square');
+    assert.equal(act.ships[0].vertical, false, 'the other ships are not moved');
+    await ctx.close();
+  });
+
+  await test('the ✕ in the table toolbar opens the leave prompt (it used to be ignored)', async () => {
+    const { page, ctx } = await open(table());
+    await page.locator('[data-act="leave"]').click();
+    await page.waitForSelector('text=Leave game?', { timeout: 3000 });
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\nsea battle UI: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

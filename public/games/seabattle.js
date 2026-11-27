@@ -40,7 +40,10 @@
       if (v.me < 0) return `Watching: ${esc(v.players.map((p) => p.name).join(' and '))} are placing their fleets`;
       const me = v.players[v.me];
       if (me.ready) return `Ready. Waiting for ${esc(v.players[1 - v.me].name)} to place their fleet…`;
-      if (ui.pick !== null) return `Tap a square for your ${v.lengths[ui.pick]}-square ${NAMES[ui.pick].toLowerCase()} (${ui.vert ? 'down' : 'across'}); Rotate turns it`;
+      if (ui.pick !== null) {
+        const moving = !!(v.setup && v.setup[ui.pick]);
+        return `${moving ? 'Move' : 'Place'} your ${v.lengths[ui.pick]}-square ${NAMES[ui.pick].toLowerCase()} (${ui.vert ? 'down' : 'across'}): tap a square${moving ? ' for it' : ''}, or Rotate to turn it${moving ? ' in place' : ''}`;
+      }
       if (v.placed && v.placed.every(Boolean)) return 'All five ships are on the sea. Ready when you are, or pick one up to move it';
       return 'Pick a ship, then tap where it goes. Tap a ship on your sea to move it';
     }
@@ -263,7 +266,21 @@
         if (q) ui.vert = q.vertical;
         break;
       }
-      case 'rotate': ui.vert = !ui.vert; break;
+      case 'rotate': {
+        const placed = ui.pick !== null && v && v.setup && v.setup[ui.pick];
+        if (!placed) { ui.vert = !ui.vert; break; }
+        // a placed ship turns where it is: the new direction is sent if it fits, and the ship stays picked up to move
+        const base = ui.setup || v.setup;
+        const turned = { r: placed.r, c: placed.c, vertical: !placed.vertical };
+        if (!canPlace({ ...v, setup: base }, ui.pick, turned)) {
+          ui.root.querySelector('.wz-status span').textContent = 'No room to turn it here. Move it to a square with space, then Rotate.';
+          return;
+        }
+        ui.vert = turned.vertical;
+        ui.setup = base.map((q, i) => (i === ui.pick ? turned : q));
+        ctx.act({ type: 'place', ships: ui.setup });
+        return;
+      }
       case 'cell': {
         const k = Number(el.dataset.k);
         const N = v.N;
