@@ -30,7 +30,7 @@ module.exports = {
       view: (playerId) => engine.viewFor(g, playerId),
       // the phase is an internal value, never a name: keep it through the scrub
       // only names and log text: the card symbols (and what the bots have seen) are game content, not names
-      scrub: (names, to) => scrubDeep([players, g.log], names, to),
+      scrub: (names, to) => scrubDeep([g.players, g.log], names, to),
       act: (playerId, action) => { try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; } },
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId, rng),

@@ -115,4 +115,14 @@ test('the plugin: 2 to 4 seats, a size option, and the rules have a title for ea
   assert.equal(inst.act('p0', { type: 'flip', index: 0 }).ok, true);
 });
 
+test('a scrubbed player name leaves the engine-owned player list and the log', () => {
+  const players = P(2);
+  const inst = game.create(players, { size: '4x4' }, rng(23));
+  const name = players[1].name;
+  assert.ok(JSON.stringify(inst.view('p0')).includes(name), 'the name is on the table before the scrub');
+  inst.scrub([name], 'Removed player');
+  assert.equal(JSON.stringify(inst.view('p0')).includes(name), false);
+  assert.equal(JSON.stringify(inst.view('p1')).includes(name), false);
+});
+
 console.log(`\n${passed} memory match tests passed`);
