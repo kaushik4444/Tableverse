@@ -35,7 +35,7 @@
 .sb[data-tab="attack"] .sb-board.mine { display: none; }
 .sb[data-tab="mine"] .sb-board.attack { display: none; }
 /* my sea: squares sit above the hulls, so a hit or a miss is drawn over the ship it lands on */
-.sb .sb-board.mine .sb-cell { position: relative; z-index: 1; }
+.sb .sb-board.mine .sb-cell { position: relative; z-index: 3; }
 .sb .sb-board.mine .sb-cell.ship { background: transparent; }
 .sb .sb-board.mine .sb-cell.water:not(:disabled):hover, .sb .sb-board.mine .sb-cell.water:not(:disabled):focus-visible { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); }
 /* a ship is one hull across its squares, with a bow at the right (or the bottom) and a deck line */
@@ -61,7 +61,7 @@
   .sb .sb-grid { width: min(70vw, 250px); }
   /* placing on a short phone: the chooser, controls and status need the room, so the sea is smaller (CI fonts run taller).
      Below about 400 px of height the page scrolls to reach the controls. */
-  .sb[data-placing="1"] .sb-grid { width: min(84vw, 340px, 36vh); }
+  .sb[data-placing="1"] .sb-grid { width: min(84vw, 340px, max(36vh, 220px)); }
   /* the ship chooser fits two rows on a short phone, even with a wide system font (44px tall still) */
   .sb .sb-chips { gap: 4px; }
   .sb .sb-chip { font-size: 13px; padding-left: 7px; padding-right: 7px; }
