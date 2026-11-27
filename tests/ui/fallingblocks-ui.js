@@ -110,6 +110,13 @@ function table(setup = () => {}, { viewer = 'me', pieces = ['T', 'O', 'L', 'S'] 
     await ctx.close();
   });
 
+  await test('the ✕ in the table toolbar opens the leave prompt (it used to be ignored)', async () => {
+    const { page, ctx } = await open(table());
+    await page.locator('[data-act="leave"]').click();
+    await page.waitForSelector('text=Leave game?', { timeout: 3000 });
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\nfalling blocks UI: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

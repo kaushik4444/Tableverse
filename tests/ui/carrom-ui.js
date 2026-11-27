@@ -68,6 +68,29 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
+  await test('a release moves the striker at once, before the server answers; with no answer it goes back to its spot', async () => {
+    const { page, ctx } = await open(msgsFor(fresh()));
+    const s = await box(page, '.cb-striker');
+    const sx = s.x + s.width / 2, sy = s.y + s.height / 2;
+    const at = () => page.evaluate(() => { const e = document.querySelector('.cb-svg [data-id="striker"]:not([role="slider"]), .cb-svg [data-id="striker"]'); return e ? [Number(e.getAttribute('cx')), Number(e.getAttribute('cy'))] : null; });
+    await page.mouse.move(sx - 20, sy + 40);
+    await page.mouse.down();
+    await page.mouse.move(sx - 60, sy + 95, { steps: 6 });
+    const before = await at();
+    await page.mouse.up();
+    // no reply from the server in this test: the striker glides off the spot straight away
+    await page.waitForTimeout(120);
+    const moved = await at();
+    assert.ok(before && moved, 'the striker is on the board');
+    assert.ok(Math.hypot(moved[0] - before[0], moved[1] - before[1]) > 0.01, `the striker moves at release (${before} -> ${moved})`);
+    assert.equal((await sent(page)).length, 1, 'the flick is still sent');
+    // the server never answers: the glide is dropped and the striker is shown at its aim spot again
+    await page.waitForTimeout(2800);
+    const back = await at();
+    assert.ok(back && Math.hypot(back[0] - before[0], back[1] - before[1]) < 0.01, `the striker returns to its spot (${back} vs ${before})`);
+    await ctx.close();
+  });
+
   await test('the board and the striker track keep their size and place when the turn passes', async () => {
     const measure = async (viewer) => {
       const { page, ctx } = await open(msgsFor(fresh(), viewer));
@@ -394,9 +417,9 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await ctx.close();
   });
 
-  await test('the table toolbar Leave button is wired to the plugin (data-cb, not a dead data-carrom key)', async () => {
+  await test('the table toolbar Leave button is the shared one (data-act=leave), not a dead data-carrom key', async () => {
     const { page, ctx } = await open(msgsFor(fresh()));
-    assert.equal(await page.locator('[data-cb="leave"]').count(), 1);
+    assert.equal(await page.locator('[data-table-tools] [data-act="leave"]').count(), 1);
     assert.equal(await page.locator('[data-carrom]').count(), 0);
     await ctx.close();
   });

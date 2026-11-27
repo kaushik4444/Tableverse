@@ -105,6 +105,24 @@ test('a block pushed past the top by garbage tops that player out, and the game 
   assert.deepEqual(E.results(g).map((r) => r.winner), [true, false]);
 });
 
+test('garbage that leaves the piece in hand with no room to appear tops the player out (it used to stall the game)', () => {
+  // the top row is clear, so the garbage does not top out directly; but the row under it is full, and after the rows
+  // move up the spawn area is blocked, so the player could never drop the piece in hand
+  const g = E.createGame(P(2), {}, rng());
+  for (let c = 0; c < E.W; c++) g.boards[1][E.W + c] = 'X';
+  E.addGarbage(g, 1, 1);
+  assert.equal(g.out[1], true, 'the player with no room is out');
+  assert.equal(g.phase, 'gameOver', 'the last player still building wins');
+  assert.equal(g.winner, 0);
+});
+
+test('garbage on an empty well does not top anyone out', () => {
+  const g = E.createGame(P(2), {}, rng());
+  E.addGarbage(g, 1, 2);
+  assert.equal(g.out[1], false);
+  assert.equal(g.phase, 'playing');
+});
+
 test('a piece that cannot appear at the top tops the player out; with three players the game goes on', () => {
   const g = withPieces(E.createGame(P(3), {}, rng()), ['O', 'T', 'O']);
   // the spawn area of player 0's well is blocked (not full rows, which would clear)
