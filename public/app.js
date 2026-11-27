@@ -2402,7 +2402,7 @@
             ${blockedHTML()}
             <div class="setting-row"><div><b>Email</b><small>${esc(me.email || 'No email on this account')}${me.email ? (me.emailVerified ? ' · verified' : ' · not verified') : ''}. Only you can see this.</small></div></div>
             <div class="setting-row"${S.isGuest ? ' hidden style="display:none"' : ''}><div><b>Public profile</b><small>Anyone with the link can see your username, display name, avatar, join date and win totals.</small></div><button type="button" class="btn ghost small" data-act="copyProfileLink">Copy link</button></div>
-            <div class="danger-zone"><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
+            <div class="danger-zone"${S.isGuest ? ' hidden style="display:none"' : ''}><div><b>Delete account</b><small>Permanently removes your account and sign-in. This cannot be undone.</small></div><button type="button" class="btn danger small" data-act="openDeleteAccount">Delete account…</button></div>
           </div>`
         : P.game ? gameDetailHTML(P) : statsHTML(P.data.stats);
       inner = `<header class="pp-head">
