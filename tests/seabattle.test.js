@@ -132,4 +132,32 @@ test('the scrub keeps the phase, so a name cannot change the state of the game',
   assert.equal(instance.view('b').players[0].name, 'Former player');
 });
 
+test('a hit on a ship marks only that square; the rest of the ship stays intact until it is fired at', () => {
+  const g = known();                    // b's ship of length 2 at squares 0 and 1
+  fire(g, 'a', 0);                      // a hits square 0 of b's sea
+  const theirs = E.viewFor(g, 'b');
+  assert.equal(theirs.fleet[0], 'hit');
+  assert.equal(theirs.fleet[1], 'ship', 'the square not fired at is still an intact ship');
+  fire(g, 'b', 5);                      // b misses a's sea; then a sinks the ship
+  fire(g, 'a', 1);
+  assert.equal(E.viewFor(g, 'b').fleet[0], 'sunk');
+  assert.equal(E.viewFor(g, 'b').fleet[1], 'sunk');
+});
+
+test('a player named like a shot state keeps the stored shots: the scrub changes names only', () => {
+  const players = [{ id: 'a', name: 'hit' }, { id: 'b', name: 'Bo' }];
+  const instance = game.create(players, {}, rng());
+  // fire until the first hit: every ship is at least two squares long, so that hit is not yet a sunk ship
+  for (let k = 0; k < 100 && !instance.view('b').shots[1].includes('hit'); k++) {
+    instance.act('a', { type: 'fire', r: Math.floor(k / 10), c: k % 10 });
+    instance.act('b', { type: 'fire', r: Math.floor(k / 10), c: k % 10 });
+  }
+  assert.ok(instance.view('b').shots[1].includes('hit'), 'the table has a hit before the scrub');
+  instance.scrub(['hit'], 'Former player');
+  const shots = instance.view('b').shots;
+  assert.ok(shots[1].includes('hit'), 'hit squares keep their state');
+  assert.equal(shots.flat().includes('Former player'), false, 'no shot state is rewritten');
+  assert.equal(instance.view('b').players[0].name, 'Former player');
+});
+
 console.log(`\n${passed} Sea Battle tests passed`);

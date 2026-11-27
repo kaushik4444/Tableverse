@@ -34,7 +34,7 @@
       const st = sea[k];
       const label = `${square(k, v.N)}, ${st || 'not fired at'}`;
       if (st || !interactive) {
-        cells.push(`<span class="sb-cell ${st || 'open'}" aria-label="${label}"></span>`);
+        cells.push(`<span class="sb-cell ${st || 'open'}" role="img" aria-label="${label}"></span>`);
       } else {
         cells.push(`<button type="button" class="sb-cell open${ui.sel === k ? ' sel' : ''}" data-sb="sq" data-k="${k}" aria-label="${label}" ${v.myTurn ? '' : 'disabled'}></button>`);
       }
@@ -44,7 +44,7 @@
 
   /** My fleet: my ships (hit or not) and the shots the other player has taken at my sea. */
   function fleetHTML(v) {
-    const cells = v.fleet.map((st, k) => `<span class="sb-cell ${st || 'water'}" aria-label="${square(k, v.N)}, ${st || 'water'}"></span>`).join('');
+    const cells = v.fleet.map((st, k) => `<span class="sb-cell ${st || 'water'}" role="img" aria-label="${square(k, v.N)}, ${st || 'water'}"></span>`).join('');
     return `<div class="sb-board mine" role="group" aria-label="Your fleet"><div class="sb-grid" style="--n:${v.N}">${cells}</div></div>`;
   }
 
@@ -91,7 +91,9 @@
   }
 
   function render(root, v, ctx) {
-    // a selection belongs to one turn, and to a square that is still open
+    // a selection belongs to one table, one turn, and a square that is still open
+    const tableKey = ctx && ctx.room ? ctx.room.code : '';
+    if (ui.table !== tableKey) { ui.sel = null; ui.table = tableKey; }
     const me = v.me < 0 ? 0 : v.me;
     if (ui.sel !== null && (!v.myTurn || v.shots[1 - me][ui.sel])) ui.sel = null;
     ui.root = root; ui.ctx = ctx; ui.v = v; react(v);

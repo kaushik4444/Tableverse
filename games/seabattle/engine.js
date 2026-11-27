@@ -145,7 +145,11 @@ function viewFor(g, playerId) {
   const me = g.players.findIndex((p) => p.id === playerId);
   const fleet = me >= 0 ? Array(CELLS).fill(null) : null;
   if (me >= 0) {
-    g.fleets[me].forEach((s) => s.cells.forEach((k) => { fleet[k] = s.hits === s.cells.length ? 'sunk' : s.hits ? 'hit' : 'ship'; }));
+    // each square shows its own state: a ship's intact squares stay 'ship' until they are fired at
+    g.fleets[me].forEach((s) => {
+      const sunk = s.hits === s.cells.length;
+      s.cells.forEach((k) => { fleet[k] = sunk ? 'sunk' : g.shots[me][k] === 'hit' ? 'hit' : 'ship'; });
+    });
     // the shots the enemy has fired at my sea: a miss on water shows as a miss
     g.shots[me].forEach((state, k) => { if (state === 'miss' && !fleet[k]) fleet[k] = 'miss'; });
   }

@@ -1,7 +1,7 @@
 'use strict';
 /** Sea Battle: adapts the two-player rules to the server's game interface. Turns are timed by the table's time limit. */
 const engine = require('./engine');
-const { scrubDeep } = require('../scrub');
+const { scrubText, scrubDeep } = require('../scrub');
 const { TIME_LIMIT_OPTION } = require('../common');
 
 module.exports = {
@@ -34,7 +34,11 @@ module.exports = {
     return {
       view: (playerId) => engine.viewFor(g, playerId),
       // an account was deleted: its name is rewritten everywhere in the state. Phase is kept, so a name cannot change it.
-      scrub: (names, to) => { const phase = g.phase; scrubDeep([g, players], names, to); g.phase = phase; },
+      // an account was deleted: only the name fields and log text change. Shot states are game content, not names.
+      scrub: (names, to) => {
+        for (const p of [...g.players, ...players]) if (typeof p.name === 'string') p.name = scrubText(p.name, names, to);
+        scrubDeep([g.log], names, to);
+      },
       act: (playerId, action) => {
         try { return engine.applyAction(g, playerId, action); } catch (e) { return { ok: false, error: 'Invalid action' }; }
       },
