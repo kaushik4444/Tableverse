@@ -69,7 +69,7 @@ test('an inherited property is not a pace: bot timings stay finite', () => {
   for (const pace of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
     const g = E.createGame([{ id: 'h', name: 'Human' }, { id: 'b', name: 'Bot', bot: true }], { difficulty: 'easy', pace }, mulberry32(3));
     assert.equal(g.options.pace, 'normal', pace);
-    assert.ok(Number.isFinite(E.botDelayMs(g, 1)), 'bot delay is a number for ' + pace);
+    assert.ok(Number.isFinite(E.botDelayMs(g, 'b')), 'bot delay is a number for ' + pace);
   }
 });
 
