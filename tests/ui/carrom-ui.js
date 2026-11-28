@@ -78,16 +78,12 @@ const box = (page, sel) => page.locator(sel).first().boundingBox();
     await page.mouse.move(sx - 60, sy + 95, { steps: 6 });
     const before = await at();
     await page.mouse.up();
-    // no reply from the server in this test: the striker glides off the spot straight away
+    // no reply from the server in this test: the striker stays on its aim spot until a shot arrives (no predicted glide)
     await page.waitForTimeout(120);
     const moved = await at();
     assert.ok(before && moved, 'the striker is on the board');
-    assert.ok(Math.hypot(moved[0] - before[0], moved[1] - before[1]) > 0.01, `the striker moves at release (${before} -> ${moved})`);
+    assert.ok(Math.hypot(moved[0] - before[0], moved[1] - before[1]) < 0.01, `the striker waits for the server (${before} -> ${moved})`);
     assert.equal((await sent(page)).length, 1, 'the flick is still sent');
-    // the server never answers: the glide is dropped and the striker is shown at its aim spot again
-    await page.waitForTimeout(2800);
-    const back = await at();
-    assert.ok(back && Math.hypot(back[0] - before[0], back[1] - before[1]) < 0.01, `the striker returns to its spot (${back} vs ${before})`);
     await ctx.close();
   });
 
