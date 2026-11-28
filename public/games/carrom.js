@@ -322,43 +322,6 @@
   }
   if (typeof window !== 'undefined') window.CarromPlayback = { poseAt }; // for the browser tests
 
-  /**
-   * Shows a frame's discs. The discs are built once for a shot and then only moved and faded: rebuilding the markup on every
-   * frame made the board repaint in full, which stutters on phones and can leave stale paint behind.
-   */
-  function updateDiscs(group, pose, a) {
-    const key = pose.map((p) => p[0]).join('|');
-    if (a.discKey !== key || a.discGroup !== group || !a.discNodes) {
-      group.innerHTML = pose.map(([id, x, y, alpha]) => {
-        const k = ui.known.get(id) || { kind: 'coin', colour: 'w', r: 0.022 };
-        return discHTML(ui.v, { id, kind: k.kind, colour: k.colour, x, y, r: k.r }, alpha);
-      }).join('');
-      a.discNodes = new Map();
-      for (const [id] of pose) {
-        a.discNodes.set(id, {
-          disc: group.querySelector(`[data-id="${CSS.escape(id)}"]`),
-          shade: group.querySelector(`[data-shade-for="${CSS.escape(id)}"]`),
-        });
-      }
-      a.discKey = key;
-      a.discGroup = group;
-    }
-    for (const [id, x, y, alpha] of pose) {
-      const n = a.discNodes.get(id);
-      if (!n || !n.disc) continue;
-      const [X, Y] = toSvg(ui.v, [x, y]);
-      const hidden = alpha <= 0;
-      n.disc.setAttribute('cx', X.toFixed(4)); n.disc.setAttribute('cy', Y.toFixed(4));
-      n.disc.style.display = hidden ? 'none' : '';
-      if (alpha < 1) n.disc.setAttribute('opacity', Math.max(0, alpha).toFixed(3)); else n.disc.removeAttribute('opacity');
-      if (n.shade) {
-        n.shade.setAttribute('cx', (X + SHADE_X).toFixed(4)); n.shade.setAttribute('cy', (Y + SHADE_Y).toFixed(4));
-        n.shade.setAttribute('opacity', (SHADE_ALPHA * Math.max(0, alpha)).toFixed(3));
-        n.shade.style.display = hidden ? 'none' : '';
-      }
-    }
-  }
-
   function drawFrame(now, a) {
     // the table left the page (the player went elsewhere): stop the shot instead of drawing into a detached tree
     if (!ui.root.isConnected) { ui.anim = null; return; }
@@ -395,7 +358,13 @@
     // Each frame rebuilds the disc group from the pose, rather than moving every element in place.
     const svg = ui.root.querySelector('.cb-svg');
     const group = svg && svg.querySelector('[data-shadow]');
-    if (group) updateDiscs(group, pose, a);
+    // the discs are rebuilt from each frame's pose: the markup is what the board showed before the in-place update
+    if (group) {
+      group.innerHTML = pose.filter(([, , , alpha]) => alpha > 0).map(([id, x, y, alpha]) => {
+        const k = ui.known.get(id) || { kind: 'coin', colour: 'w', r: 0.022 };
+        return discHTML(ui.v, { id, kind: k.kind, colour: k.colour, x, y, r: k.r }, alpha);
+      }).join('');
+    }
     // the app redraws the table (with its turn timer and toolbar) from the current state
     if (!inSetup && (t >= a.end + 0.25 || t > 25)) { ui.anim = null; ui.ctx.rerender(); return; }
     requestAnimationFrame((next) => { if (ui.anim === a) drawFrame(next, a); });

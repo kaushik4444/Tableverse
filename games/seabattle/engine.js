@@ -3,7 +3,8 @@ const { slips } = require('../botSkill');
 /**
  * Sea Battle (two players), rules only: no sockets, no timers.
  *
- * Each player has a 10 x 10 sea and a fleet of five ships (lengths 5, 4, 3, 3 and 2). In the placing phase every player puts
+ * Each player has a 10 x 10 sea and a fleet of five ships: a carrier that is 6 squares long and 2 rows wide, and ships of 4, 3, 3
+ * and 2 squares, one row wide. In the placing phase every player puts
  * their ships on their own sea, by hand or with Random, and marks themselves ready. When both are ready, the first player
  * fires. Players take turns firing at one square of the other sea. A hit or a sinking keeps the turn, so the shooter fires again;
  * a miss passes it. A hit or a miss is public; a ship that is hit on every
@@ -11,11 +12,13 @@ const { slips } = require('../botSkill');
  * including at corners, and nobody sees the other fleet.
  *
  * Cells are numbered r * 10 + c. Shots are stored per target sea: 'miss', 'hit' or 'sunk' (a sunk ship's squares are 'sunk').
- * A setup is one entry per ship, in LENGTHS order: null (not placed yet) or { r, c, vertical }.
+ * A setup is one entry per ship, in LENGTHS order: null (not placed yet) or { r, c, vertical }. (r, c) is the top-left square.
+ * A horizontal ship is LENGTHS[i] squares across and WIDTHS[i] rows deep; a vertical one is LENGTHS[i] down and WIDTHS[i] wide.
  */
 
 const N = 10;
-const LENGTHS = [5, 4, 3, 3, 2];
+const LENGTHS = [6, 4, 3, 3, 2];
+const WIDTHS = [2, 1, 1, 1, 1]; // the carrier is two rows deep (2 x 6); the others are one row
 const CELLS = N * N;
 // the time between a bot's shots: long enough to read the last shot before the next one
 const PACE_MS = { slow: 4000, normal: 3000, quick: 2000 };
@@ -29,9 +32,15 @@ const neighbours = (k) => {
   return out;
 };
 
-const shipCells = (len, p) => Array.from({ length: len }, (_, i) => (p.vertical ? (p.r + i) * N + p.c : p.r * N + p.c + i));
-const inside = (len, p) => Number.isInteger(p.r) && Number.isInteger(p.c) && p.r >= 0 && p.c >= 0 && p.r < N && p.c < N
-  && (p.vertical ? p.r + len <= N : p.c + len <= N);
+/** The squares of a ship of `len` long and `wide` deep at p, row by row. */
+const shipCells = (len, p, wide = 1) => {
+  const rows = p.vertical ? len : wide, cols = p.vertical ? wide : len;
+  const out = [];
+  for (let dr = 0; dr < rows; dr++) for (let dc = 0; dc < cols; dc++) out.push((p.r + dr) * N + p.c + dc);
+  return out;
+};
+const inside = (len, p, wide = 1) => Number.isInteger(p.r) && Number.isInteger(p.c) && p.r >= 0 && p.c >= 0
+  && p.r + (p.vertical ? len : wide) <= N && p.c + (p.vertical ? wide : len) <= N;
 
 /** Checks a whole setup (one entry per ship; null entries are not placed yet). Returns the placed ships' cells, or null. */
 function checkSetup(setup) {
@@ -41,8 +50,8 @@ function checkSetup(setup) {
   for (let i = 0; i < LENGTHS.length; i++) {
     const p = setup[i];
     if (p === null || p === undefined) { cellsOf.push(null); continue; }
-    if (typeof p !== 'object' || typeof p.vertical !== 'boolean' || !inside(LENGTHS[i], p)) return null;
-    const cells = shipCells(LENGTHS[i], p);
+    if (typeof p !== 'object' || typeof p.vertical !== 'boolean' || !inside(LENGTHS[i], p, WIDTHS[i])) return null;
+    const cells = shipCells(LENGTHS[i], p, WIDTHS[i]);
     if (cells.some((k) => taken.has(k) || neighbours(k).some((n) => taken.has(n)))) return null;
     cells.forEach((k) => taken.add(k));
     cellsOf.push(cells);
@@ -51,13 +60,13 @@ function checkSetup(setup) {
 }
 
 /** Candidate placements for one ship that do not touch the ships already placed. */
-function candidatesFor(len, taken) {
+function candidatesFor(len, wide, taken) {
   const out = [];
   for (const vertical of [false, true]) {
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
       const p = { r, c, vertical };
-      if (!inside(len, p)) continue;
-      const cells = shipCells(len, p);
+      if (!inside(len, p, wide)) continue;
+      const cells = shipCells(len, p, wide);
       if (cells.some((k) => taken.has(k) || neighbours(k).some((n) => taken.has(n)))) continue;
       out.push({ p, cells });
     }
@@ -75,8 +84,8 @@ function randomSetup(rng) {
     const centres = [];
     const setup = [];
     let ok = true;
-    for (const len of LENGTHS) {
-      const options = candidatesFor(len, taken);
+    for (let i = 0; i < LENGTHS.length; i++) {
+      const options = candidatesFor(LENGTHS[i], WIDTHS[i], taken);
       if (!options.length) { ok = false; break; }
       const sample = [];
       for (let i = 0; i < 40 && i < options.length * 3; i++) sample.push(options[Math.floor(rng() * options.length)]);
@@ -106,7 +115,7 @@ function placeFleet(rng) {
 
 function buildFleet(setup) {
   const cellsOf = checkSetup(setup);
-  return cellsOf.map((cells) => ({ cells, hits: 0 }));
+  return cellsOf.map((cells, i) => ({ cells, hits: 0, vertical: setup[i].vertical, wide: WIDTHS[i] }));
 }
 
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
@@ -119,7 +128,7 @@ function createGame(players, options = {}, rng = Math.random, now = Date.now) {
     players: players.map((p) => ({ id: p.id, name: p.name })),
     options: { pace },
     phase: 'placing', // placing | playing | gameOver
-    setup: [Array(LENGTHS.length).fill(null), Array(LENGTHS.length).fill(null)], // each player's ships until both are ready
+    setup: [randomSetup(rng), randomSetup(rng)], // each player's ships until both are ready: the fleets start placed at random, and can be moved or re-rolled
     ready: [false, false],
     fleets: [null, null],                         // built when a player is ready; only the owner's view shows them
     shots: [Array(CELLS).fill(null), Array(CELLS).fill(null)], // shots[i]: the sea of player i, as fired at
@@ -248,17 +257,17 @@ function viewFor(g, playerId) {
         const sunk = s.hits === s.cells.length;
         s.cells.forEach((k) => { fleet[k] = sunk ? 'sunk' : g.shots[me][k] === 'hit' ? 'hit' : 'ship'; });
       });
-      ships = g.fleets[me].map((s) => ({ cells: s.cells.slice(), sunk: s.hits === s.cells.length, hit: s.cells.filter((k) => g.shots[me][k] === 'hit') }));
+      ships = g.fleets[me].map((s) => ({ cells: s.cells.slice(), vertical: s.vertical, wide: s.wide, sunk: s.hits === s.cells.length, hit: s.cells.filter((k) => g.shots[me][k] === 'hit') }));
     } else {
       // still placing: your own setup, drawn the same way, with nothing fired yet
-      ships = g.setup[me].map((p, i) => (p ? { cells: shipCells(LENGTHS[i], p), sunk: false, hit: [] } : null)).filter(Boolean);
+      ships = g.setup[me].map((p, i) => (p ? { cells: shipCells(LENGTHS[i], p, WIDTHS[i]), vertical: p.vertical, wide: WIDTHS[i], sunk: false, hit: [] } : null)).filter(Boolean);
       placed = g.setup[me].map((p) => p !== null);
     }
     // the shots the enemy has fired at my sea: a miss on water shows as a miss
     g.shots[me].forEach((state, k) => { if (state === 'miss' && !fleet[k]) fleet[k] = 'miss'; });
   }
   return {
-    me, phase: g.phase, options: { ...g.options }, N, lengths: LENGTHS.slice(),
+    me, phase: g.phase, options: { ...g.options }, N, lengths: LENGTHS.slice(), widths: WIDTHS.slice(),
     players: g.players.map((p, i) => ({
       id: p.id, name: p.name, sunk: g.sunk[i], left: g.fleets[i] ? g.fleets[i].filter((s) => s.hits < s.cells.length).length : LENGTHS.length,
       ready: g.ready[i],
@@ -280,4 +289,4 @@ function results(g) {
   return g.players.map((_, i) => ({ score: g.sunk[i], winner: g.winner === i, draw: false }));
 }
 
-module.exports = { N, LENGTHS, PACE_MS, createGame, applyAction, awaiting, botAction, botDelayMs, viewFor, results, placeFleet, randomSetup, checkSetup, neighbours };
+module.exports = { N, LENGTHS, WIDTHS, PACE_MS, createGame, applyAction, awaiting, botAction, botDelayMs, viewFor, results, placeFleet, randomSetup, checkSetup, neighbours };

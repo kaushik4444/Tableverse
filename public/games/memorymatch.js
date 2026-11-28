@@ -1,9 +1,10 @@
 /* Memory Match: a grid of face-down cards. Turn over two a turn; a match stays on the table in the colour of the seat that
- * found it. A missed pair stays face up for a moment so everyone sees it. Styles in memorymatch.css. */
+ * found it. A missed pair is shown face up for a moment, then turned back at once. Styles in memorymatch.css. */
 (() => {
   'use strict';
   const { esc } = window.CardTable;
-  const ui = { ctx: null, v: null, seq: null, resultSeen: null };
+  const ui = { ctx: null, v: null, root: null, seq: null, resultSeen: null, hold: null, holdTimer: null };
+  const HOLD_MS = 1200; // how long a missed pair stays face up before it is turned back
   const COLOURS = ['Blue', 'Red', 'Green', 'Gold'];
   const nameOf = (v, i) => (i === v.me ? 'You' : esc(v.players[i].name));
 
@@ -32,9 +33,12 @@
       if (c.symbol !== null) {
         const cls = ['mm-card', 'up', v.last === k ? 'last' : ''].filter(Boolean).join(' ');
         const label = `Row ${r}, column ${col}, ${esc(c.symbol)}, face up`;
-        // a missed card stays selectable for the next player; the card in play is not
         if (v.myTurn && v.pending !== k) return `<button type="button" class="${cls}" data-card="${k}" aria-label="${label}">${esc(c.symbol)}</button>`;
         return `<span class="${cls}" aria-label="${label}">${esc(c.symbol)}</span>`;
+      }
+      if (ui.hold && (k === ui.hold.a || k === ui.hold.b)) {
+        const sym = k === ui.hold.a ? ui.hold.sa : ui.hold.sb;
+        return `<span class="mm-card up" aria-label="Row ${r}, column ${col}, ${esc(sym)}, face up for a moment">${esc(sym)}</span>`;
       }
       const can = v.myTurn && v.pending !== k;
       return `<button type="button" class="mm-card down" data-card="${k}" aria-label="Row ${r}, column ${col}, face down" ${can ? '' : 'disabled'}><span class="mm-back" aria-hidden="true">✦</span></button>`;
@@ -64,12 +68,23 @@
     if (!snd) return;
     if (e.type === 'flip') { snd.play('place'); return; }
     if (e.type === 'match') { snd.play('match'); return; }
-    if (e.type === 'miss') { snd.play('mismatch'); return; }
+    if (e.type === 'miss') {
+      snd.play('mismatch');
+      // the two cards show face up for a moment, then close, whoever's turn it is; taps wait for them to close
+      ui.hold = { a: e.a, b: e.b, sa: e.sa, sb: e.sb };
+      clearTimeout(ui.holdTimer);
+      ui.holdTimer = setTimeout(() => {
+        ui.hold = null;
+        // only while this board is still on screen: after a leave the lobby or another game owns the page
+        if (ui.root && ui.root.querySelector('.wz.mm') && ui.v) render(ui.root, ui.v, ui.ctx);
+      }, HOLD_MS);
+      return;
+    }
     if (e.type === 'over') setTimeout(() => snd.play(v.draw ? 'round' : v.winner === v.me ? 'win' : 'lose'), 200);
   }
 
   function render(root, v, ctx) {
-    ui.ctx = ctx; ui.v = v; react(v);
+    ui.ctx = ctx; ui.v = v; ui.root = root; react(v);
     // a card turned over replaces the board: keep the keyboard place on the card the person used
     const active = root.ownerDocument.activeElement;
     const cardKey = active && root.contains(active) && active.dataset && active.dataset.card !== undefined ? active.dataset.card : null;
@@ -90,7 +105,7 @@
   function onClick(e) {
     const el = e.target.closest('[data-card],[data-mm]'); const v = ui.v, ctx = ui.ctx;
     if (!el || !v || !ctx || el.disabled) return;
-    if (el.dataset.card !== undefined) { if (v.myTurn) ctx.act({ type: 'flip', index: Number(el.dataset.card) }); return; }
+    if (el.dataset.card !== undefined) { if (v.myTurn && !ui.hold) ctx.act({ type: 'flip', index: Number(el.dataset.card) }); return; }
     switch (el.dataset.mm) {
       case 'rules': ctx.showRules(); break;
       case 'again': ctx.rematch(); break;
