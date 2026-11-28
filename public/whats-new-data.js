@@ -28,7 +28,7 @@
         level: 'major',
         ico: '👋',
         title: 'Try it as a guest',
-        text: 'Visitors can play open games from the home page without creating an account. A guest who later signs up keeps the games played. Private tables, friend requests and profiles need an account.'
+        text: 'When the owner turns guest play on, visitors can play open games from the home page without creating an account. A guest who later signs up keeps the games played. Private tables, friend requests and profiles need an account.'
       }
     ]
   },
