@@ -66,6 +66,7 @@ function viewFor(g, playerId) {
     check,                            // index of the king in check, or null
     last: g.last,
     log: g.log.slice(),
+    playLog: g.log.map((card, k) => ({ by: k % 2 ? 'Black' : 'White', card, kind: 'move' })), // the Log sheet's lines: { by, card }
     taken: { w: g.taken.w.slice(), b: g.taken.b.slice() },
     winner: g.phase === 'gameOver' ? g.winner : null,
     draw: g.phase === 'gameOver' && g.draw,

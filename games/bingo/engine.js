@@ -54,6 +54,7 @@ function createGame(players, options, rng = Math.random) {
   const o = options || {};
   const g = {
     game: 'bingo',
+    log: [], // public play-by-play: { by, card, kind } entries, read by the table's Log sheet
     n,
     players: players.map((p) => ({ id: p.id, name: p.name, bot: p.bot === true })),
     rng,
@@ -83,11 +84,15 @@ function hasBingo(g, i) {
   return LINES.some((line) => line.every((k) => isMarked(g, i, k)));
 }
 
+const say = (g, by, card, kind) => { g.log.push({ by, card, kind }); if (g.log.length > 60) g.log.shift(); };
+
 function finish(g, winners, by = null) {
   g.phase = 'gameOver';
   g.winners = winners;
   g.seq++;
   g.event = { type: 'over', winners: winners.slice(), by, calls: g.called.length, seq: g.seq };
+  if (winners.length) winners.forEach((i) => say(g, g.players[i].name, 'got Bingo', 'bingo'));
+  else say(g, 'Table', 'nobody got Bingo', 'over');
 }
 
 /** Call the next number. Bots mark it and call Bingo the moment they can. */
@@ -103,6 +108,7 @@ function callNext(g) {
   g.called.push(n);
   g.seq++;
   g.event = { type: 'call', n, seq: g.seq };
+  say(g, 'Table', `${letterOf(n)}${n} called`, 'call');
   g.players.forEach((p, i) => {
     if ((p.bot || g.options.autoMark) && g.cards[i].includes(n)) g.marks[i].add(n);
   });
@@ -210,6 +216,7 @@ function viewFor(g, playerId) {
     canClaim: !over && me >= 0 && hasBingo(g, me),
     winners: over ? g.winners.slice() : [],
     event: g.event ? { ...g.event } : null,
+    log: g.log.slice(),
   };
 }
 

@@ -126,6 +126,7 @@ function createGame(players, options = {}, rng = Math.random, now = Date.now) {
   return {
     game: 'seabattle',
     players: players.map((p) => ({ id: p.id, name: p.name })),
+    log: [], // every shot, public: { by, card, kind }
     options: { pace },
     phase: 'placing', // placing | playing | gameOver
     setup: [randomSetup(rng), randomSetup(rng)], // each player's ships until both are ready: the fleets start placed at random, and can be moved or re-rolled
@@ -168,6 +169,9 @@ function placingAction(g, who, action) {
   return fail('Place your fleet first');
 }
 
+const squareOf = (k) => `${String.fromCharCode(65 + (k % N))}${Math.floor(k / N) + 1}`;
+const say = (g, by, card, kind) => { g.log.push({ by, card, kind }); if (g.log.length > 80) g.log.shift(); };
+
 function applyAction(g, playerId, action) {
   const who = g.players.findIndex((p) => p.id === playerId);
   if (who < 0) return fail('You are not a player in this game');
@@ -186,6 +190,7 @@ function applyAction(g, playerId, action) {
     g.shots[target][k] = 'miss';
     g.turn = target;
     g.version++;
+    say(g, g.players[who].name, `fired at ${squareOf(k)}: miss`, 'miss');
     emit(g, { type: 'miss', by: who, k });
     return { ok: true };
   }
@@ -197,12 +202,15 @@ function applyAction(g, playerId, action) {
     if (g.fleets[target].every((s) => s.hits === s.cells.length)) {
       g.phase = 'gameOver';
       g.winner = who;
+      say(g, g.players[who].name, `fired at ${squareOf(k)}: sunk the last ship`, 'sunk');
       emit(g, { type: 'over', by: who, k, length: ship.cells.length, winner: who });
       return { ok: true };
     }
+    say(g, g.players[who].name, `fired at ${squareOf(k)}: sunk`, 'sunk');
     emit(g, { type: 'sunk', by: who, k, length: ship.cells.length, cells: ship.cells.slice() });
   } else {
     g.shots[target][k] = 'hit';
+    say(g, g.players[who].name, `fired at ${squareOf(k)}: hit`, 'hit');
     emit(g, { type: 'hit', by: who, k });
   }
   // a hit or a sinking keeps the turn: the shooter fires again until a shot misses
@@ -281,6 +289,7 @@ function viewFor(g, playerId) {
     myTurn: me >= 0 && me === g.turn && g.phase === 'playing',
     winner: g.winner,
     event: g.event ? { ...g.event } : null,
+    log: g.log.slice(-40),
   };
 }
 
