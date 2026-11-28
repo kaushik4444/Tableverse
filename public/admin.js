@@ -629,7 +629,7 @@
       draftFor().order = sameOrder(ids, serverOrder) ? null : ids;
       changed();
     }; });
-    // Beta saves at once (one switch, owner only) and then reloads the table from the server
+    // Beta saves at once (one switch, owner only) and then redraws the Games tab from the server
     box.querySelectorAll('[data-gbeta]').forEach((cb) => { cb.onchange = async () => {
       try {
         await api('/api/admin/game-beta', { gameId: cb.dataset.gbeta, beta: cb.checked }, false, true);
@@ -637,7 +637,7 @@
       } catch (e) {
         gameSaveError = `The Beta mark could not be saved (${e.message}).`;
       }
-      await gameSwitches();
+      redrawGames(); // replaces the Games tab from the server's state (gameSwitches() would append another section)
     }; });
     box.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
       const id = sel.dataset.gaccess; const server = o.games.find((g) => g.id === id);
