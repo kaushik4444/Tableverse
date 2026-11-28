@@ -177,6 +177,15 @@ function emit(g, type, seat, extra = {}) {
   g.event = { seq: g.event.seq + 1, type, seat, ...extra };
 }
 
+/** One readable line for the shared Log sheet, e.g. "Aarav built a road". */
+const LOG_VERB = { settle: 'built a settlement', road: 'built a road', city: 'built a city', roll: 'rolled', discard: 'discarded', robber: 'moved the robber', steal: 'took a card', trade: 'traded with the bank', end: 'ended the turn' };
+function logLine(g, e) {
+  const who = (g.players[e.seat] && g.players[e.seat].name) || 'A player';
+  const verb = LOG_VERB[e.kind] || '';
+  const extra = e.kind === 'roll' || e.kind === 'discard' ? ` ${e.n}` : '';
+  return `${who} ${verb}${extra}`.trim();
+}
+
 function note(g, seat, kind, n = 0) {
   g.log.push({ seat, kind, n });
   if (g.log.length > 60) g.log.splice(0, g.log.length - 60);
@@ -569,6 +578,7 @@ function viewFor(g, playerId) {
     legal: myTurn || (g.phase === 'setup' && me >= 0 && awaitingSeats(g).includes(me)) ? legalFor(g, me) : null,
     setupVertex: g.setupVertex,
     log: g.log.slice(-14),
+    playLog: g.log.slice(-14).map((e) => logLine(g, e)),
     event: g.event,
     winner: g.winner,
   };
