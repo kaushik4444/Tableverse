@@ -1,4 +1,5 @@
 'use strict';
+const { SUDOKU_SLIP, slips } = require('../botSkill');
 /**
  * Sudoku rules (pure). Everybody gets the same puzzle and fills in their own grid. A wrong number shows red at once and costs
  * one of three lives; the third mistake takes you out (in a race you watch the others; alone the game is over). Each player
@@ -145,7 +146,14 @@ function botAction(g, playerId) {
   if (i < 0 || g.phase !== 'playing') return null;
   const k = g.boards[i].findIndex((v, idx) => !g.puzzle[idx] && v !== g.solution[idx]);
   if (k < 0) return null;
-  return { type: 'place', r: Math.floor(k / 9), c: k % 9, v: g.solution[k] };
+  const r = Math.floor(k / 9), c = k % 9;
+  if (slips(g.rng, SUDOKU_SLIP)) {
+    // a wrong digit: any of the other eight, so the square is wrong and costs the bot a life
+    let d = 1 + Math.floor(g.rng() * 8);
+    if (d >= g.solution[k]) d++;
+    return { type: 'place', r, c, v: d };
+  }
+  return { type: 'place', r, c, v: g.solution[k] };
 }
 
 /** What one player may see. Their own board, lives and undos in full; everybody else's only as a count of right squares and lives. */

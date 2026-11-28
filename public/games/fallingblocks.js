@@ -91,14 +91,14 @@
 
   function overlayHTML(v) {
     if (v.phase !== 'gameOver') return '';
-    const title = v.draw ? 'A draw' : v.winner === null ? 'Game over' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
+    const title = v.draw ? 'A draw' : v.winner === null || v.players.length === 1 ? 'Game over' : v.me < 0 ? `${esc(v.players[v.winner].name)} wins` : v.winner === v.me ? 'You won! 🎉' : `${esc(v.players[v.winner].name)} wins`;
     const score = v.players.map((p) => `${esc(p.name)} ${p.lines} ${p.lines === 1 ? 'row' : 'rows'}`).join(' · ');
     return `<div class="overlay" role="dialog" aria-labelledby="fb-over-title"><div class="sheet"><h2 id="fb-over-title" tabindex="-1">${title}</h2>
       <p class="hint" style="text-align:left">${score}</p>
       <div class="row" style="margin-top:12px">${ui.ctx.isHost ? '<button class="btn" data-fb-act="again">Play again</button>' : '<span class="hint">Waiting for the host to start another game</span>'}<button class="btn ghost" data-fb-act="leave">Leave table</button></div></div></div>`;
   }
 
-  /** A soft click for a locked piece, a thud for garbage sent to you, and the result when the game ends. */
+  /** A click for a locked piece, a chime for rows you cleared, a rumble for garbage sent to you, and the result when the game ends. */
   function react(v) {
     const e = v.event, snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
@@ -107,7 +107,9 @@
     if (!snd) return;
     if (e.type === 'over') { snd.play('place'); setTimeout(() => snd.play(v.winner === v.me ? 'win' : v.me < 0 || v.winner === null ? 'round' : 'lose'), 260); return; }
     if (e.type === 'out') { snd.play(e.by === v.me ? 'lose' : 'land'); return; }
-    snd.play(e.sent && e.by !== v.me ? 'land' : 'place');
+    if (e.by === v.me && e.cleared) { snd.play('clear'); return; }
+    if (e.sent && e.by !== v.me) { snd.play('garbage'); return; }
+    snd.play('lock');
   }
 
   function render(root, v, ctx) {

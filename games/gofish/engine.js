@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Go Fish: the rules only (no sockets, no timers).
  * 2-6 players, a standard 52-card deck. Two players get 7 cards each, three to six get 5.
@@ -185,6 +186,8 @@ function botAction(g, playerId) {
   if (!targets.length) return { type: 'draw' };
   const count = (r) => g.hands[who].filter((c) => c.rank === r).length;
   const mine = [...new Set(g.hands[who].map((c) => c.rank))];
+  // a slip: a random rank from a random opponent, so the bot can ask for a card nobody holds
+  if (slips(g.rng)) return { type: 'ask', target: g.players[pickOne(g.rng, targets)].id, rank: pickOne(g.rng, mine) };
   let best = null;
   for (const r of mine) for (const t of targets) {
     const score = (g.holds[t].has(r) ? 10 : 0) + count(r) * 2 + g.rng();

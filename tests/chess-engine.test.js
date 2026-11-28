@@ -172,6 +172,7 @@ test('bot: prefers taking a queen over a pawn', () => {
   const g = E.createGame(two, { colour: 'host' }, mulberry32(9));
   // Black rook on g1 can take the white queen on d1 (or the pawn-free file); the queen is the far better capture.
   g.pos = require('../games/chess/rules').fromFEN('k7/8/8/8/8/3p4/8/K2Q2r1 b - - 0 1');
+  g.rng = () => 0.99; // a rng that never slips: this checks the bot's choice, not its occasional mistake
   const a = E.botAction(g);
   assert.deepEqual(a, { type: 'move', from: sq('g1'), to: sq('d1'), promo: null });
 });

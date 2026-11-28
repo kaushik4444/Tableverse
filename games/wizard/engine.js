@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Wizard — pure rules engine (no I/O, no timers).
  *
@@ -342,11 +343,12 @@ function botAction(g, playerId) {
     case 'chooseTrump': {
       const counts = { R: 0, Y: 0, G: 0, B: 0 };
       for (const c of p.hand) if (c.type === 'num') counts[c.suit]++;
-      const suit = SUITS.reduce((a, b) => (counts[b] > counts[a] ? b : a), SUITS[Math.floor(g.rng() * 4)]);
+      const suit = slips(g.rng) ? pickOne(g.rng, SUITS) : SUITS.reduce((a, b) => (counts[b] > counts[a] ? b : a), SUITS[Math.floor(g.rng() * 4)]);
       return { type: 'chooseTrump', suit };
     }
     case 'bidding': {
-      let amount = foresightActive(g) ? foresightBid(g, idx) : estimateBid(g, p);
+      // a slip: a random bid from 0 to the round's cards
+      let amount = slips(g.rng) ? Math.floor(g.rng() * (g.round + 1)) : foresightActive(g) ? foresightBid(g, idx) : estimateBid(g, p);
       if (amount === forbiddenBid(g)) amount = amount + 1 <= g.round ? amount + 1 : amount - 1;
       return { type: 'bid', amount };
     }
@@ -365,6 +367,8 @@ function botAction(g, playerId) {
         if (needWin) pick = winners.length ? winners[0] : losers[0];
         else pick = losers.length ? losers[losers.length - 1] : winners[0];
       }
+      // a slip: any legal card
+      if (slips(g.rng)) pick = pickOne(g.rng, legal);
       return { type: 'play', cardId: pick.id };
     }
     default:
