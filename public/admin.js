@@ -600,7 +600,7 @@
     const serverGame = (id) => o.games.find((g) => g.id === id);
     const rows = games.map((g, i) => {
       const unsaved = !!gameDraft && (gameDraft.access.has(g.id) || gameDraft.trial.has(g.id) || (gameDraft.order && serverOrder[i] !== g.id));
-      return `<tr${unsaved ? ' class="ad-draft"' : ''}><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || busy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || busy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}${unsaved ? ' <span class="ad-pill warn">unsaved</span>' : ''}</td><td data-l="Changed">${serverGame(g.id)?.updatedAt ? esc(when(serverGame(g.id).updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${busy ? ' disabled aria-disabled="true"' : ''}>${opts(g.access)}</select></td><td data-l="Guest plays">${trialControls(g)}</td><td data-l="Beta"><label><input type="checkbox" data-gbeta="${esc(g.id)}"${g.beta ? ' checked' : ''}${busy || betaSaving || !(state.me && state.me.isOwner) ? ' disabled' : ''}> Beta</label></td></tr>`;
+      return `<tr${unsaved ? ' class="ad-draft"' : ''}><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || busy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || busy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}${unsaved ? ' <span class="ad-pill warn">unsaved</span>' : ''}</td><td data-l="Changed">${serverGame(g.id)?.updatedAt ? esc(when(serverGame(g.id).updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${busy ? ' disabled aria-disabled="true"' : ''}>${opts(g.access)}</select></td><td data-l="Guest plays">${trialControls(g)}</td><td data-l="Beta"><label><input type="checkbox" data-gbeta="${esc(g.id)}" aria-label="Beta for ${esc(g.name)}"${g.beta ? ' checked' : ''}${busy || betaSaving || !(state.me && state.me.isOwner) ? ' disabled' : ''}> Beta</label></td></tr>`;
     }).join('');
     const n = draftCount();
     const bar = n
@@ -636,6 +636,9 @@
       betaSaving = true; cb.disabled = true;
       try {
         await api('/api/admin/game-beta', { gameId: cb.dataset.gbeta, beta: cb.checked }, false, true);
+        // the confirmed value, so a failed refresh after this still shows what the server holds
+        const saved = gameSwitchData && gameSwitchData.games.find((g) => g.id === cb.dataset.gbeta);
+        if (saved) saved.beta = cb.checked;
         gameSaveError = ''; gameSaveNote = 'Beta saved.';
       } catch (e) {
         gameSaveError = `The Beta mark could not be saved (${e.message}).`;
