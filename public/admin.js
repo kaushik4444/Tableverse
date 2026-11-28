@@ -65,10 +65,11 @@
   // Owner draft of the game switches: moves, who-may-play and guest-limit choices wait here until "Save changes".
   // The draft is dropped when the owner leaves the Games tab.
   let gameDraft = null; // { order: [ids] | null, access: Map gameId -> mode, trial: Map gameId -> limit (null = no limit) } or null
-  let gameSwitchData = null; // the server's game-flags answer as last read
+  let gameSwitchData = null; // the last game-flags answer plus confirmed Beta saves
   let gameSaveError = ''; // shown after a failed save, until the next change or save
   let gameSaveNote = ''; // "Saved." after a full save
   let gameSaving = false;
+  let betaSaving = false; // one Beta save at a time, so the server keeps the owner's last choice
   let generation = 0; // counts tab switches: an answer that arrives for an earlier tab is dropped, even without AbortController
   const cancelled = () => { const e = new Error('cancelled'); e.name = 'AbortError'; return e; };
   // keep: the request finishes even if the owner leaves the tab (a save that the server has already accepted must be seen)
@@ -491,19 +492,23 @@
     state.gen += 1;
     const gen = state.gen;
     main.insertAdjacentHTML('afterbegin', '<p class="ad-muted" data-loading>Refreshing…</p>');
-    return renderView('games', () => gamesTab(state.gamesDays || 30).catch((e) => {
+    return renderView('games', () => gamesTab(state.gamesDays || 30, true).catch((e) => {
       if (e && e.name === 'AbortError') return;
       if (gen !== state.gen || !main.querySelector('#gameSwitches')) throw e;
       main.querySelector('[data-loading]')?.remove();
-      gameSaveError = `The games could not be refreshed (${e.message}). Your changes are still here.`;
+      const saveStatus = gameSaveError || gameSaveNote;
+      gameSaveError = `The games could not be refreshed (${e.message}). ${saveStatus || 'Your changes are still here.'}`;
       paintGameSwitches();
     }));
   };
-  async function gamesTab(days = 30) {
+  async function gamesTab(days = 30, refreshing = false) {
     state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
     const gen = state.gen;
     const o = await api(`/api/admin/games?days=${days}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    // Keep the existing switches until both refresh reads succeed.
+    const switches = refreshing && state.me.isOwner ? await api('/api/admin/game-flags') : null;
+    if (gen !== state.gen) return;
     const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(gname(g.gameId))}</td><td data-l="Finished">${g.finished}</td><td data-l="Last 7 days">${g.finished7d}</td><td data-l="Signed-in players">${g.signedInPlayers}</td><td data-l="Player-games">${g.playerGames}</td><td data-l="Avg minutes each">${g.avgMinutes}</td><td data-l="Penalised leaves">${g.penalisedLeaves}</td><td data-l="Penalised leave rate">${pctText(g.penalisedLeaves, g.playerGames)}</td><td data-l="Left, no penalty">${g.leftWithoutPenalty}</td></tr>`).join('');
     main.innerHTML = `<h2>Games <small class="ad-muted">last ${rangeLabel(o.days)}</small></h2>
       <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${RANGES.map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${rangeLabel(d)}</button>`).join('')}</div>
@@ -516,7 +521,7 @@
       <p><button class="ad-btn" id="tablesMore" hidden>Load older tables</button></p></div>`);
     loadTables(gen, null).catch(() => {}); // not awaited: owner game switches must not wait for the table history
     if (gen !== state.gen) return;
-    if (state.me.isOwner) await gameSwitches();
+    if (state.me.isOwner) await gameSwitches(switches);
   }
 
   // one page of tables hosted; the next page is asked for with the cursor the server gave (the list keeps growing down the page)
@@ -599,7 +604,7 @@
     const serverGame = (id) => o.games.find((g) => g.id === id);
     const rows = games.map((g, i) => {
       const unsaved = !!gameDraft && (gameDraft.access.has(g.id) || gameDraft.trial.has(g.id) || (gameDraft.order && serverOrder[i] !== g.id));
-      return `<tr${unsaved ? ' class="ad-draft"' : ''}><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || busy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || busy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}${unsaved ? ' <span class="ad-pill warn">unsaved</span>' : ''}</td><td data-l="Changed">${serverGame(g.id)?.updatedAt ? esc(when(serverGame(g.id).updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${busy ? ' disabled aria-disabled="true"' : ''}>${opts(g.access)}</select></td><td data-l="Guest plays">${trialControls(g)}</td></tr>`;
+      return `<tr${unsaved ? ' class="ad-draft"' : ''}><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || busy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || busy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}${unsaved ? ' <span class="ad-pill warn">unsaved</span>' : ''}</td><td data-l="Changed">${serverGame(g.id)?.updatedAt ? esc(when(serverGame(g.id).updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${busy ? ' disabled aria-disabled="true"' : ''}>${opts(g.access)}</select></td><td data-l="Guest plays">${trialControls(g)}</td><td data-l="Beta"><label><input type="checkbox" data-gbeta="${esc(g.id)}" aria-label="Beta for ${esc(g.name)}"${g.beta ? ' checked' : ''}${busy || betaSaving || !(state.me && state.me.isOwner) ? ' disabled' : ''}> Beta</label></td></tr>`;
     }).join('');
     const n = draftCount();
     const bar = n
@@ -607,7 +612,7 @@
       : '';
     const msg = gameSaveError ? `<p id="gMsg" class="ad-msg err" role="alert">${esc(gameSaveError)}</p>`
       : `<p id="gMsg" class="ad-msg" role="status">${esc(gameSaveNote)}</p>`;
-    return `${msg}${bar}<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th><th>Guest plays</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `${msg}${bar}<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th><th>Guest plays</th><th>Beta</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
   function paintGameSwitches() {
     const box = main.querySelector('#gameSwitches');
@@ -628,6 +633,23 @@
       [ids[at], ids[to]] = [ids[to], ids[at]];
       draftFor().order = sameOrder(ids, serverOrder) ? null : ids;
       changed();
+    }; });
+    // Beta saves at once (one switch, owner only) and then redraws the Games tab from the server
+    box.querySelectorAll('[data-gbeta]').forEach((cb) => { cb.onchange = async () => {
+      if (betaSaving) { cb.checked = !cb.checked; return; } // one at a time: the tab redraws from the server after each save
+      betaSaving = true; cb.disabled = true;
+      try {
+        await api('/api/admin/game-beta', { gameId: cb.dataset.gbeta, beta: cb.checked }, false, true);
+        // the confirmed value, so a failed refresh after this still shows what the server holds
+        const saved = gameSwitchData && gameSwitchData.games.find((g) => g.id === cb.dataset.gbeta);
+        if (saved) saved.beta = cb.checked;
+        gameSaveError = ''; gameSaveNote = 'Beta saved.';
+      } catch (e) {
+        gameSaveError = `The Beta mark could not be saved (${e.message}).`;
+      } finally {
+        betaSaving = false;
+      }
+      if (state.tab === 'games') redrawGames();
     }; });
     box.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
       const id = sel.dataset.gaccess; const server = o.games.find((g) => g.id === id);
@@ -667,14 +689,14 @@
     paintGameSwitches(); // the controls are usable again at once, not after the read-back
     if (state.tab === 'games') redrawGames(); // the server's state is read back and the draft is reconciled with it
   }
-  async function gameSwitches() {
+  async function gameSwitches(data = null) {
     const gen = state.gen;
-    const o = await api('/api/admin/game-flags');
+    const o = data || await api('/api/admin/game-flags');
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     gameSwitchData = o;
     reconcileDraft(o);
     const switchesHTML = `<h3 style="margin-top:24px">Game switches</h3>
-      <p class="ad-muted">Home order: move a game up or down to change where it appears in the home menu. Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players in and keeps guests out. Guest plays limits a guest device to a number of games in that game. Changes are kept until you press Save changes; Discard drops them.</p>
+      <p class="ad-muted">Home order: move a game up or down to change where it appears in the home menu. Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players in and keeps guests out. Guest plays limits a guest device to a number of games in that game. Beta marks a game as experimental: it shows a Beta tag on the home menu and changes nothing else (the owner ticks it, and it saves at once). Changes are kept until you press Save changes; Discard drops them.</p>
       <div id="gameSwitches"></div>`;
     // placed above Tables hosted: the order on screen is last 30 days, game switches, then tables hosted
     const anchor = main.querySelector('#tablesSection');
