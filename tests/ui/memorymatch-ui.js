@@ -55,6 +55,22 @@ function table(setup = () => {}, { viewer = 'me', size = '4x4', seed = 21 } = {}
     await ctx.close();
   });
 
+  await test('a missed pair shows face up for a moment, then closes; no third card stays open', async () => {
+    // a miss is shown only when it arrives after the page has seen the table (a first look replays nothing), so the
+    // page renders the table first and the miss is pushed afterwards
+    const missed = (g) => {
+      E.applyAction(g, 'me', { type: 'flip', index: 0 });
+      const b = g.cards.findIndex((sym, k) => k !== 0 && sym !== g.cards[0]);
+      E.applyAction(g, 'me', { type: 'flip', index: b });
+    };
+    const { page, ctx } = await open(table());
+    await page.evaluate((m) => window.__push(m), table(missed)[1]);
+    await page.waitForFunction(() => document.querySelectorAll('.mm-card.up').length === 2, null, { timeout: 4000 });
+    await page.waitForFunction(() => document.querySelectorAll('.mm-card.up').length === 0, null, { timeout: 4000 });
+    assert.equal(await page.locator('.mm-card.matched').count(), 0);
+    await ctx.close();
+  });
+
   await test('cards face down are never shown: only the cards in play show a symbol', async () => {
     const { page, ctx } = await open(table((g) => { E.applyAction(g, 'me', { type: 'flip', index: 0 }); }));
     const faceUp = await page.locator('.mm-card.up').count();

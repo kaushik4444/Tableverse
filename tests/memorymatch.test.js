@@ -41,7 +41,7 @@ test('a matching pair keeps the turn and gives the pair to the seat that found i
   assert.equal(g.event.type, 'match');
 });
 
-test('a miss turns both cards back and passes the turn; the two stay face up for a moment', () => {
+test('a miss turns both cards back at once and passes the turn; the miss event carries both for the client to show', () => {
   const g = E.createGame(P(3), { size: '4x4' }, rng(7));
   const a = 0, b = notPartner(g, a);
   E.applyAction(g, 'p0', { type: 'flip', index: a });
@@ -49,7 +49,12 @@ test('a miss turns both cards back and passes the turn; the two stay face up for
   assert.equal(g.turn, 1, 'the next seat moves');
   assert.equal(g.matched[a], false);
   assert.equal(g.event.type, 'miss');
-  assert.deepEqual([g.peek.a, g.peek.b], [a, b]);
+  assert.deepEqual([g.event.a, g.event.b], [a, b]);
+  const v = E.viewFor(g, 'p1');
+  assert.equal(v.board[a].symbol, null, 'the first card is face down in the view');
+  assert.equal(v.board[b].symbol, null, 'the second card is face down in the view');
+  E.applyAction(g, 'p1', { type: 'flip', index: 5 });
+  assert.equal(E.viewFor(g, 'p1').board[a].symbol, null, 'no third card can leave the missed pair face up');
 });
 
 test('invalid moves are refused: not your turn, a matched card, the card already face up, no such card, an unknown action', () => {
