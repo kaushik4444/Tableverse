@@ -32,10 +32,12 @@ test('two players only', () => {
   assert.throws(() => E.createGame([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }], {}, rng()));
 });
 
-test('each fleet has five ships of lengths 5, 4, 3, 3 and 2, and no ships touch', () => {
+test('each fleet is five ships: a 2 x 6 carrier (12 squares), then 4, 3, 3 and 2 squares, and no ships touch', () => {
+  assert.deepEqual(E.WIDTHS, [2, 1, 1, 1, 1]);
+  assert.deepEqual(E.LENGTHS, [6, 4, 3, 3, 2]);
   for (let t = 0; t < 100; t++) {
     const fleet = E.placeFleet(rng(t + 1));
-    assert.deepEqual(fleet.map((s) => s.cells.length).sort((a, b) => b - a), [5, 4, 3, 3, 2]);
+    assert.deepEqual(fleet.map((s) => s.cells.length).sort((a, b) => b - a), [12, 4, 3, 3, 2]);
     const all = fleet.flatMap((s) => s.cells);
     assert.equal(new Set(all).size, all.length, 'no overlaps');
     for (const s of fleet) for (const k of s.cells) for (const n of E.neighbours(k)) {
@@ -101,13 +103,13 @@ test('a player sees their own ships, not the other fleet; both seas show the sho
   fire(g, 'a', 99);                    // a misses b's sea
   fire(g, 'b', 0);                     // b hits a ship in a's sea (a's fleet is random: find one)
   const mine = E.viewFor(g, 'a');
-  // all 17 squares of a's own fleet are shown (unhit, hit or sunk), and misses on its water are marked
-  assert.equal(mine.fleet.filter((v) => v === 'ship' || v === 'hit' || v === 'sunk').length, 17, 'all of a’s ships are shown');
+  // all 24 squares of a's own fleet (the 2 x 6 carrier is 12) are shown (unhit, hit or sunk), and misses on its water are marked
+  assert.equal(mine.fleet.filter((v) => v === 'ship' || v === 'hit' || v === 'sunk').length, 24, 'all of a’s ships are shown');
   assert.equal(mine.shots[1][99], 'miss', 'shots are public');
   const theirs = E.viewFor(g, 'b');
   assert.equal(theirs.shots[1][99], 'miss');
   assert.equal(theirs.fleet.filter((v) => v === 'ship' || v === 'hit' || v === 'sunk').length, 5, 'b sees only its own fleet (the known test fleet: 2 + 3 squares)');
-  assert.equal(mine.fleet.filter((v) => v === 'ship' || v === 'hit' || v === 'sunk').length + theirs.fleet.filter((v) => v === 'ship' || v === 'hit' || v === 'sunk').length, 22, 'each player’s fleet is their own');
+  assert.equal(mine.fleet.filter((v) => v === 'ship' || v === 'hit' || v === 'sunk').length + theirs.fleet.filter((v) => v === 'ship' || v === 'hit' || v === 'sunk').length, 29, 'each player’s fleet is their own (24 + 5)');
 });
 
 test('a watcher sees the shots, but no fleet', () => {
@@ -200,27 +202,29 @@ test('ready needs all five ships on the sea', () => {
 });
 
 test('a placed ship must stay on the sea, must not touch another, and must not overlap it', () => {
+  // the carrier is 6 long and 2 deep (rows 0-1); the battleship (slot 1) is 4 long and 1 deep
   const g = E.createGame(P(), {}, rng());
-  const off = [{ r: 0, c: 6, vertical: false }, null, null, null, null];   // 5 long from column 6: runs off the sea
+  const off = [{ r: 0, c: 5, vertical: false }, null, null, null, null];   // 6 long from column 5: runs off the sea
   assert.equal(E.applyAction(g, 'a', { type: 'place', ships: off }).ok, false);
-  const first = { r: 0, c: 0, vertical: false };                           // (0,0) to (0,4)
+  const first = { r: 0, c: 0, vertical: false };                           // the carrier: rows 0-1, columns 0..5
   assert.equal(E.applyAction(g, 'a', { type: 'place', ships: [first, null, null, null, null] }).ok, true);
-  const corner = [first, { r: 1, c: 5, vertical: false }, null, null, null]; // row 1, columns 5..8: meets (0,4) only at a corner
+  const corner = [first, { r: 2, c: 6, vertical: false }, null, null, null]; // row 2, columns 6..9: meets (1,5) only at a corner
   assert.equal(E.applyAction(g, 'a', { type: 'place', ships: corner }).ok, false, 'corner contact is touching');
-  const side = [first, { r: 1, c: 4, vertical: false }, null, null, null];  // (1,4) is directly below (0,4)
+  const side = [first, { r: 2, c: 4, vertical: false }, null, null, null];  // row 2, columns 4..7: directly below the carrier
   assert.equal(E.applyAction(g, 'a', { type: 'place', ships: side }).ok, false, 'side contact is touching');
   const overlap = [first, { r: 0, c: 2, vertical: true }, null, null, null];
   assert.equal(E.applyAction(g, 'a', { type: 'place', ships: overlap }).ok, false, 'ships may not share a square');
-  const apart = [first, { r: 2, c: 0, vertical: false }, null, null, null];  // a row between them is fine
+  const apart = [first, { r: 3, c: 0, vertical: false }, null, null, null];  // rows 2 is clear between them: fine
   assert.equal(E.applyAction(g, 'a', { type: 'place', ships: apart }).ok, true);
 });
 
 test('a placement can be moved: the new setup replaces the old one', () => {
   const g = E.createGame(P(), {}, rng());
   E.applyAction(g, 'a', { type: 'place', ships: [{ r: 0, c: 0, vertical: false }, null, null, null, null] });
-  E.applyAction(g, 'a', { type: 'place', ships: [{ r: 5, c: 0, vertical: true }, null, null, null, null] });
+  E.applyAction(g, 'a', { type: 'place', ships: [{ r: 4, c: 0, vertical: true }, null, null, null, null] });  // down rows 4-9, two columns wide
   const v = E.viewFor(g, 'a');
-  assert.deepEqual(v.ships[0].cells, [50, 60, 70, 80, 90]);
+  assert.deepEqual(v.ships[0].cells, [40, 41, 50, 51, 60, 61, 70, 71, 80, 81, 90, 91]);
+  assert.equal(v.ships[0].vertical, true);
   assert.deepEqual(v.placed, [true, false, false, false, false]);
 });
 
