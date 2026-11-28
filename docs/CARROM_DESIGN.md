@@ -1,6 +1,6 @@
 # Carrom: design note (built)
 
-Status: built and on `development` (merged in #302 and #331). Two to four players in teams, drag-to-aim with a striker slider. Physics, rules, board and tests are in `games/carrom/` and `public/games/carrom.js`.
+Status: built and on `development` (merged in #302 and #331). Owner decision (2026-11-28): open to players for the beta launch; the admin console's Games tab must show it as Enabled. Two to four players in teams, drag-to-aim with a striker slider. Physics, rules, board and tests are in `games/carrom/` and `public/games/carrom.js`.
 
 ## Decisions
 

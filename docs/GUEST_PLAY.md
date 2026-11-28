@@ -1,6 +1,6 @@
 # Guest play
 
-Status: **merged into `development` (PR #235), off by default.** Guest play is approved by the owner (2026-11-18). It stays off in production until the owner sets `GUEST_PLAY_ENABLED=true` in Render. Nothing in this document changes production settings.
+Status: **merged into `development` (PR #235), off by default.** Guest play is approved by the owner (2026-11-18), and the owner has decided to turn it on for the beta launch (2026-11-28). It is **off in production until the owner sets `GUEST_PLAY_ENABLED=true` in Render**. This repository cannot confirm that setting, so check it in Render. Nothing in this document changes production settings.
 
 ## What a guest is
 
