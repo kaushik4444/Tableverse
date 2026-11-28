@@ -70,9 +70,10 @@ What changes for the public beta. Code and docs are in this branch; the settings
 - **22 games** are listed in the app. Carrom opens to players for the beta.
 - **Guest play** is the owner's decision for the beta. Production stays off until the owner sets `GUEST_PLAY_ENABLED=true` in Render. This repository cannot confirm that setting, so check it in Render before posting the launch announcement.
 - **Owner checklist before the announcement:**
-  1. Render: `GUEST_PLAY_ENABLED=true`, then redeploy or restart.
-  2. Admin console, Games tab: Carrom and every game you want open set to Enabled.
-  3. Admin console, Guests tab: confirm the guest limits you want (private tables, profiles and blocking stay locked for guests).
+  1. Before step 2, record the open decisions in `docs/GUEST_PLAY.md`: approve `lib/legal/privacy.md` with every `[OWNER]` and `[LEGAL]` marker resolved, and record approval of the retention behaviour. See the rollout steps in that document.
+  2. Render: `GUEST_PLAY_ENABLED=true`, then redeploy or restart.
+  3. Admin console, Games tab: Carrom and every game you want open set to Enabled.
+  4. Admin console, Guests tab: confirm the guest limits you want (private tables, profiles and blocking stay locked for guests).
 - **What's new** gets the launch items under the date `2026-11-28`.
 
 ## Released 2026-11-25 (on `main`)
