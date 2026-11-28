@@ -544,7 +544,7 @@ function viewFor(g, playerId) {
     target: g.target,
     players: g.players.map((p, i) => {
       const c = countOf(g, i);
-      return { id: p.id, name: p.name, vp: vpOf(g, i), settlements: c.settlements, cities: c.cities, roads: c.roads, cards: total(g.hand[i]), longest: g.longest === i, owed: g.owed[i] };
+      return { id: p.id, name: p.name, vp: vpOf(g, i), settlements: c.settlements, cities: c.cities, roads: c.roads, road: longestRoad(g, i), cards: total(g.hand[i]), longest: g.longest === i, owed: g.owed[i] };
     }),
     board: {
       hexes: g.board.hexes.map((h) => ({ x: h.x, y: h.y, res: h.res, num: h.num, verts: h.verts })),
