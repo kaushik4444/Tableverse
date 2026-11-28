@@ -161,6 +161,7 @@ function createGame(players, options, rng) {
     phase: 'setup', // setup | roll | discard | robber | main | gameOver
     turn: SETUP_ORDER[0],
     step: 0,
+    turnNo: 0, // counts every turn and setup placement; the server restarts the time limit when it changes
     setupVertex: null,
     dice: null,
     owed: Array(SEATS).fill(0),
@@ -307,6 +308,7 @@ function checkWin(g, seat) {
 
 function nextSetup(g) {
   g.step++;
+  g.turnNo++;
   if (g.step >= SETUP_ORDER.length) {
     g.phase = 'roll';
     g.turn = 0;
@@ -459,6 +461,10 @@ function applyMain(g, seat, action) {
       }
       g.phase = 'roll';
       g.turn = (g.turn + 1) % SEATS;
+      g.turnNo++;
+      // points can reach the target on someone else's turn (a rival's settlement cut a road and handed over the longest road):
+      // the win counts when that player's turn comes round
+      checkWin(g, g.turn);
       return { ok: true };
     default:
       return fail('Not a move you can make now');
@@ -539,6 +545,7 @@ function viewFor(g, playerId) {
   return {
     phase: g.phase,
     turn: g.turn,
+    batch: g.turnNo,
     me,
     myTurn,
     target: g.target,

@@ -38,7 +38,8 @@ module.exports = {
       },
       awaiting: () => engine.awaiting(g),
       botAction: (playerId) => engine.botAction(g, playerId, rng),
-      botDelayMs: () => 1100 + rng() * 500,
+      // quick for the many small steps (setup, discards, trades, builds), slower for the dice and the robber so they can be followed
+      botDelayMs: () => ({ setup: 800, roll: 1100, discard: 700, robber: 1000 }[g.phase] || 700) + rng() * 400,
       autoAction: () => null,
       isOver: () => g.phase === 'gameOver',
       results: () => engine.results(g),

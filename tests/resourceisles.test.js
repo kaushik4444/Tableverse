@@ -77,5 +77,46 @@ test('a bot-only game finishes with no rejected moves (short and classic)', () =
   }
 });
 
+// plays the eight setup placements and returns the game in the roll phase
+function setupDone(seed) {
+  const g = newGame(seed);
+  let vtx = 0;
+  for (const seat of [0, 1, 2, 3, 3, 2, 1, 0]) {
+    while (g.vertOwner[vtx] || !E.canSettle(g, vtx)) vtx++;
+    E.applyAction(g, 'p' + seat, { type: 'setupSettlement', vertex: vtx }, rng(9));
+    E.applyAction(g, 'p' + seat, { type: 'setupRoad', edge: g.board.verts[vtx].edges.find((x) => g.edgeOwner[x] === null) }, rng(9));
+    vtx++;
+  }
+  return g;
+}
+
+test('the view\'s batch changes with every turn and setup step (the server restarts the time limit on it)', () => {
+  const g = newGame(4);
+  const seen = new Set([E.viewFor(g, 'p0').batch]);
+  let vtx = 0;
+  for (const seat of [0, 1, 2, 3, 3, 2, 1, 0]) {
+    while (g.vertOwner[vtx] || !E.canSettle(g, vtx)) vtx++;
+    E.applyAction(g, 'p' + seat, { type: 'setupSettlement', vertex: vtx }, rng(9));
+    E.applyAction(g, 'p' + seat, { type: 'setupRoad', edge: g.board.verts[vtx].edges.find((x) => g.edgeOwner[x] === null) }, rng(9));
+    seen.add(E.viewFor(g, 'p0').batch);
+    vtx++;
+  }
+  assert.equal(seen.size, 9, 'a new value after each of the eight placements');
+  g.phase = 'main';
+  const before = E.viewFor(g, 'p0').batch;
+  E.applyAction(g, 'p0', { type: 'endTurn' }, rng(1));
+  assert.notEqual(E.viewFor(g, 'p0').batch, before);
+});
+
+test('a player who reaches the target on someone else\'s turn wins when their own turn comes round', () => {
+  const g = setupDone(6);
+  g.phase = 'main';
+  g.turn = 0;
+  g.target = E.vpOf(g, 1); // seat 1 is already there, as if a rival's build had handed it the longest road
+  assert.equal(E.applyAction(g, 'p0', { type: 'endTurn' }, rng(1)).ok, true);
+  assert.equal(g.phase, 'gameOver');
+  assert.equal(E.viewFor(g, 'p0').winner, 1);
+});
+
 console.log(`${passed} Resource Isles engine tests passed${failed ? `, ${failed} FAILED` : ''}`);
 if (failed) process.exit(1);
