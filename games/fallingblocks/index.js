@@ -11,7 +11,7 @@ module.exports = {
   icon: '🧱',
   accent: '#e17055',
   tagline: 'Drop the same blocks into your own well. Clear rows, send garbage to rivals, and be the last one still building.',
-  seats: { min: 1, max: 4, default: 2 },
+  seats: { min: 1, max: 4, default: 1 },
   seatLabel: (i) => COLOURS[i],
   // rows cleared is shown as the score; the stat is the most rows cleared in a game you won
   // the most rows cleared alone (a solo game, seats === 1); a versus game is not a comparable number

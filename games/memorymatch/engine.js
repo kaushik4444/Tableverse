@@ -41,7 +41,6 @@ function createGame(players, options = {}, rng = Math.random) {
     matched: Array(total).fill(false), owner: Array(total).fill(null),
     known: new Map(), // index -> symbol, for every card the table has seen (bots use only this)
     pending: null, // the first card of this turn, while the second is still to come
-    peek: null, // a missed pair, shown face up until the next move
     pairs: Array(players.length).fill(0), matchedCount: 0, turns: 0, // turns: second cards turned over (every turn that ends a pair attempt)
     turn: 0, phase: 'playing', winner: null, draw: false,
     last: null, event: null, log: [], seq: 0, version: 0,
@@ -59,7 +58,7 @@ function applyAction(g, playerId, action) {
   if (g.matched[i]) return { ok: false, error: 'That card is already matched' };
   if (g.pending === i) return { ok: false, error: 'That card is already face up' };
 
-  g.last = i; g.version++; // a missed pair stays face up until the next turn's second card is turned (see below)
+  g.last = i; g.version++;
   g.known.set(i, g.cards[i]);
   if (g.pending === null) {
     g.pending = i;
@@ -69,7 +68,6 @@ function applyAction(g, playerId, action) {
 
   const a = g.pending;
   g.pending = null;
-  g.peek = null; // the missed pair has been seen by the players who turned the next pair
   g.turns++;
   if (g.cards[a] === g.cards[i]) {
     g.matched[a] = g.matched[i] = true; g.owner[a] = g.owner[i] = who;
@@ -87,8 +85,8 @@ function applyAction(g, playerId, action) {
     }
     return { ok: true };
   }
-  // a miss: both cards stay face up for everyone to see, then the turn passes
-  g.peek = { a, b: i, sa: g.cards[a], sb: g.cards[i] };
+  // a miss: both cards are turned back at once and the turn passes. The miss event carries both symbols so every
+  // client can show them for a moment (public/games/memorymatch.js); the view never keeps them face up.
   g.turn = (who + 1) % g.players.length;
   emit(g, { type: 'miss', by: who, a, b: i, sa: g.cards[a], sb: g.cards[i] });
   return { ok: true };
@@ -131,13 +129,13 @@ function botAction(g, playerId, rng = g.rng) {
   return { type: 'flip', index: pick(unseen.length ? unseen : down) };
 }
 
-/** What a seat sees: matched pairs and the card in play face up; every other card face down, and a missed pair for a moment. */
+/** What a seat sees: matched pairs and the card in play face up; every other card face down. */
 function viewFor(g, playerId) {
   const me = g.players.findIndex((p) => p.id === playerId);
   const board = [];
   for (let k = 0; k < g.total; k++) {
     if (g.matched[k]) board.push({ symbol: g.cards[k], owner: g.owner[k] });
-    else if (g.pending === k || (g.peek && (g.peek.a === k || g.peek.b === k))) board.push({ symbol: g.cards[k], owner: null });
+    else if (g.pending === k) board.push({ symbol: g.cards[k], owner: null });
     else board.push({ symbol: null, owner: null });
   }
   return {

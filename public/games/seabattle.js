@@ -1,5 +1,5 @@
-/* Sea Battle. Placing: pick a ship, tap where it goes, Rotate to turn it, Random to let the game place them, Ready when all five
- * are on the sea. Then two boards: Attack shows the other player's sea and your shots; My fleet shows your ships (drawn as hulls)
+/* Sea Battle. Placing: the fleet starts placed at random. Tap a ship to select it, then tap a square or drag it to move it;
+ * Rotate turns the selected ship, Random places the fleet again, Ready when all five are on the sea. Then two boards: Attack shows the other player's sea and your shots; My fleet shows your ships (drawn as hulls)
  * and their shots. On a phone you switch between them; on a wide screen both show. Tap a square to fire: a bomb falls on it,
  * a hit bursts and a miss shows an X. Drag a placed ship to move it. Watchers see both seas' shots. Styles in seabattle.css. */
 (() => {
@@ -12,8 +12,13 @@
   const NAMES = ['Carrier', 'Battleship', 'Cruiser', 'Submarine', 'Destroyer'];
 
   // ------------------------------------------------------------------------------------------ placement geometry (client copy)
-  const cellsOf = (len, p, N) => Array.from({ length: len }, (_, i) => (p.vertical ? (p.r + i) * N + p.c : p.r * N + p.c + i));
-  const fitsOn = (len, p, N) => p.r >= 0 && p.c >= 0 && p.r < N && p.c < N && (p.vertical ? p.r + len <= N : p.c + len <= N);
+  /** The squares of a ship len long and wide deep at p (its top-left square), row by row. Same rule as the engine. */
+  const cellsOf = (len, p, N, wide = 1) => {
+    const rows = p.vertical ? len : wide, cols = p.vertical ? wide : len, out = [];
+    for (let dr = 0; dr < rows; dr++) for (let dc = 0; dc < cols; dc++) out.push((p.r + dr) * N + p.c + dc);
+    return out;
+  };
+  const fitsOn = (len, p, N, wide = 1) => p.r >= 0 && p.c >= 0 && p.r + (p.vertical ? len : wide) <= N && p.c + (p.vertical ? wide : len) <= N;
   function nearOrOn(k, set, N) {
     const r = Math.floor(k / N), c = k % N;
     for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
@@ -24,11 +29,11 @@
   }
   /** Whether a ship can go at p, given the other placed ships (the server checks the same rule). */
   function canPlace(v, slot, p) {
-    const N = v.N, len = v.lengths[slot];
-    if (!fitsOn(len, p, N)) return false;
+    const N = v.N, len = v.lengths[slot], wide = v.widths[slot];
+    if (!fitsOn(len, p, N, wide)) return false;
     const others = new Set();
-    (v.setup || []).forEach((q, i) => { if (i !== slot && q) cellsOf(v.lengths[i], q, N).forEach((k) => others.add(k)); });
-    return cellsOf(len, p, N).every((k) => !others.has(k) && !nearOrOn(k, others, N));
+    (v.setup || []).forEach((q, i) => { if (i !== slot && q) cellsOf(v.lengths[i], q, N, v.widths[i]).forEach((k) => others.add(k)); });
+    return cellsOf(len, p, N, wide).every((k) => !others.has(k) && !nearOrOn(k, others, N));
   }
 
   function guidance(v) {
@@ -40,12 +45,8 @@
       if (v.me < 0) return `Watching: ${esc(v.players.map((p) => p.name).join(' and '))} are placing their fleets`;
       const me = v.players[v.me];
       if (me.ready) return `Ready. Waiting for ${esc(v.players[1 - v.me].name)} to place their fleet…`;
-      if (ui.pick !== null) {
-        const moving = !!(v.setup && v.setup[ui.pick]);
-        return `${moving ? 'Move' : 'Place'} your ${v.lengths[ui.pick]}-square ${NAMES[ui.pick].toLowerCase()} (${ui.vert ? 'down' : 'across'}): tap a square${moving ? ' for it' : ''}, or Rotate to turn it${moving ? ' in place' : ''}`;
-      }
-      if (v.placed && v.placed.every(Boolean)) return 'All five ships are on the sea. Ready when you are, or pick one up to move it';
-      return 'Pick a ship, then tap where it goes. Drag a ship on your sea to move it';
+      if (ui.pick !== null) return `${NAMES[ui.pick]} selected (${v.lengths[ui.pick]} squares, ${ui.vert ? 'down' : 'across'}): tap a square or drag it to move it, or Rotate to turn it`;
+      return 'Tap a ship to select it, then tap a square or drag it to move it. Rotate turns it, Random places the fleet again';
     }
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} is aiming`;
     if (!v.myTurn) return `${esc(v.players[1 - v.me].name)} is aiming…`;
@@ -80,16 +81,57 @@
     return `<div class="sb-board attack" role="group" aria-label="${title}"><div class="sb-grid" style="--n:${v.N}">${cells.join('')}</div></div>`;
   }
 
+  /**
+   * Top-down art for each ship, drawn bow to the right in units of one square (x along the ship, y across it).
+   * A vertical ship reuses the same drawing, turned by a reflection matrix, so the art is written once.
+   */
+  const STEEL = { hull: '#8b98a8', deck: '#b7c2cf', edge: '#334155', gun: '#1e293b', glass: '#0f172a' };
+  const turret = (x, y) => `<g class="gun"><circle cx="${x}" cy="${y - 0.14}" r="0.17" fill="${STEEL.gun}"/><circle cx="${x}" cy="${y + 0.14}" r="0.17" fill="${STEEL.gun}"/><rect x="${x}" y="${y - 0.2}" width="0.5" height="0.07" fill="${STEEL.gun}"/><rect x="${x}" y="${y + 0.13}" width="0.5" height="0.07" fill="${STEEL.gun}"/></g>`;
+  const single = (x, y) => `<g class="gun"><circle cx="${x}" cy="${y}" r="0.2" fill="${STEEL.gun}"/><rect x="${x}" y="${y - 0.04}" width="0.45" height="0.08" fill="${STEEL.gun}"/></g>`;
+  const jet = (x) => `<path class="jet" d="M${x + 0.36} 0.5 L${x + 0.05} 0.44 L${x - 0.24} 0.1 L${x - 0.14} 0.1 L${x - 0.04} 0.42 L${x - 0.36} 0.42 L${x - 0.36} 0.58 L${x - 0.04} 0.58 L${x - 0.14} 0.9 L${x - 0.24} 0.9 L${x + 0.05} 0.56 Z" fill="#e2e8f0" stroke="${STEEL.edge}" stroke-width="0.03" stroke-linejoin="round"/>`;
+  const SHIP_ART = {
+    Carrier: (L) => `<path d="M0.1 0.2 L${L - 0.5} 0.16 L${L} 0.5 L${L - 0.5} 0.84 L0.1 0.8 Q0 0.5 0.1 0.2 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <path d="M0.3 0.3 L${L - 0.6} 0.28 L${L - 0.6} 0.72 L0.3 0.7 Z" fill="${STEEL.deck}"/>
+      <path d="M0.4 0.5 H${L - 0.8}" stroke="#fde68a" stroke-width="0.03" stroke-dasharray="0.18 0.14" opacity=".8"/>
+      ${jet(1.1)}${jet(2.2)}${jet(3.3)}
+      <rect class="island" x="${L - 1.3}" y="0.6" width="0.55" height="0.2" rx="0.04" fill="${STEEL.edge}"/>`,
+    Battleship: (L) => `<path d="M0.1 0.22 L${L - 0.45} 0.2 L${L} 0.5 L${L - 0.45} 0.8 L0.1 0.78 Q0 0.5 0.1 0.22 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <rect x="1.45" y="0.4" width="0.7" height="0.2" rx="0.05" fill="${STEEL.deck}"/>
+      ${turret(0.6, 0.5)}${turret(L - 1.05, 0.5)}`,
+    Cruiser: (L) => `<path d="M0.1 0.24 L${L - 0.4} 0.22 L${L} 0.5 L${L - 0.4} 0.78 L0.1 0.76 Q0 0.5 0.1 0.24 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <rect x="1.0" y="0.42" width="0.6" height="0.16" rx="0.04" fill="${STEEL.deck}"/>
+      ${single(0.55, 0.5)}${turret(L - 0.95, 0.5)}`,
+    Submarine: (L) => `<path d="M0.15 0.34 L${L - 0.35} 0.34 Q${L} 0.5 ${L - 0.35} 0.66 L0.15 0.66 Q0 0.5 0.15 0.34 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <rect x="1.0" y="0.4" width="0.55" height="0.2" rx="0.1" fill="${STEEL.deck}" stroke="${STEEL.edge}" stroke-width="0.03"/>
+      <path d="M1.3 0.4 V0.18 M1.42 0.4 V0.2" stroke="${STEEL.edge}" stroke-width="0.05"/>`,
+    Destroyer: (L) => `<path d="M0.1 0.3 L${L - 0.35} 0.28 L${L} 0.5 L${L - 0.35} 0.72 L0.1 0.7 Q0 0.5 0.1 0.3 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <rect x="0.45" y="0.42" width="0.4" height="0.16" rx="0.04" fill="${STEEL.deck}"/>
+      ${single(L - 0.75, 0.5)}`,
+  };
+  /** The hull markup for one ship: positioned on the grid, drawn as its top-down art. */
+  function hullHTML({ name, len, wide = 1, vertical, pos, cls = '', slot }) {
+    const art = (SHIP_ART[name] || SHIP_ART.Destroyer)(len);
+    const view = vertical ? `0 0 ${wide} ${len}` : `0 0 ${len} ${wide}`;
+    // the art is drawn one row deep; a two-row ship stretches it to two rows
+    const body = wide === 1 ? art : `<g transform="scale(1 ${wide})">${art}</g>`;
+    const turn = vertical ? ` transform="matrix(0 -1 -1 0 ${wide} ${len})"` : '';
+    const slotAttr = slot !== undefined ? ` data-slot="${slot}"` : '';
+    return `<div class="sb-hull${cls}${vertical ? ' v' : ''}" style="${pos}" aria-hidden="true" data-ship="${esc(name)}"${slotAttr}><svg viewBox="${view}" preserveAspectRatio="none"><g${turn}>${body}</g></svg></div>`;
+  }
+
   /** A ship drawn as one hull across its squares. Positioned on the grid's own tracks, above the water. */
   function hullsHTML(v, ships) {
     return ships.map((s, i) => {
-      const first = s.cells[0], len = s.cells.length, vertical = len > 1 && s.cells[1] - first === v.N;
+      const first = s.cells[0], len = v.lengths[i], wide = v.widths[i], vertical = !!s.vertical;
       const r = Math.floor(first / v.N) + 1, c = (first % v.N) + 1;
-      const pos = vertical ? `grid-row:${r} / span ${len};grid-column:${c}` : `grid-row:${r};grid-column:${c} / span ${len}`;
-      const name = NAMES[i];
-      return `<div class="sb-hull${s.sunk ? ' sunk' : ''}${vertical ? ' v' : ''}" style="${pos}" aria-hidden="true" data-ship="${esc(name)}"></div>`;
+      const pos = placementPos(r, c, len, wide, vertical);
+      return hullHTML({ name: NAMES[i], len, wide, vertical, pos, cls: s.sunk ? ' sunk' : '' });
     }).join('');
   }
+  /** Where a ship sits on the grid tracks: its top-left square, then its length and its depth. */
+  const placementPos = (r, c, len, wide, vertical) => (vertical
+    ? `grid-row:${r} / span ${len};grid-column:${c} / span ${wide}`
+    : `grid-row:${r} / span ${wide};grid-column:${c} / span ${len}`);
 
   /** My fleet: my ships (drawn as hulls, hit or not) and the shots the other player has taken at my sea. */
   function fleetHTML(v) {
@@ -104,41 +146,32 @@
     const N = v.N;
     const placed = [];
     // the working setup (a Rotate or a move not yet confirmed by the server) is what the sea shows
-    (ui.setup || v.setup || []).forEach((p, i) => { if (p) placed.push({ slot: i, cells: cellsOf(v.lengths[i], p, N) }); });
+    (ui.setup || v.setup || []).forEach((p, i) => { if (p) placed.push({ slot: i, vertical: p.vertical, len: v.lengths[i], wide: v.widths[i], cells: cellsOf(v.lengths[i], p, N, v.widths[i]) }); });
     // a square under a ship is named by the ship and its place, so a screen reader can find the fleet
     const under = new Map();
     placed.forEach((s) => s.cells.forEach((k) => under.set(k, s)));
     const cells = [];
     for (let k = 0; k < N * N; k++) {
       const s = under.get(k);
-      const label = s ? `${square(k, N)}, ${NAMES[s.slot]}, ${s.cells.length} squares, ${p2v(s.cells, N) ? 'down' : 'across'}` : square(k, N);
+      const label = s ? `${square(k, N)}, ${NAMES[s.slot]}, ${s.len} squares, ${s.vertical ? 'down' : 'across'}` : square(k, N);
       cells.push(`<button type="button" class="sb-cell water" style="grid-row:${Math.floor(k / N) + 1};grid-column:${(k % N) + 1}" data-sb="cell" data-k="${k}" aria-label="${label}"${myReady(v) ? ' disabled' : ''}></button>`);
     }
     const hulls = placed.map((s) => {
-      const first = s.cells[0], len = s.cells.length, vertical = p2v(s.cells, N);
-      const r = Math.floor(first / N) + 1, c = (first % N) + 1;
-      const pos = vertical ? `grid-row:${r} / span ${len};grid-column:${c}` : `grid-row:${r};grid-column:${c} / span ${len}`;
-      return `<div class="sb-hull${vertical ? ' v' : ''}${ui.pick === s.slot ? ' picked' : ''}" style="${pos}" aria-hidden="true" data-ship="${esc(NAMES[s.slot])}" data-slot="${s.slot}"></div>`;
+      const first = s.cells[0], r = Math.floor(first / N) + 1, c = (first % N) + 1;
+      const pos = placementPos(r, c, s.len, s.wide, s.vertical);
+      return hullHTML({ name: NAMES[s.slot], len: s.len, wide: s.wide, vertical: s.vertical, pos, cls: ui.pick === s.slot ? ' picked' : '', slot: s.slot });
     }).join('');
     return `<div class="sb-board mine" role="group" aria-label="Your sea: place your ships"><div class="sb-grid placing" style="--n:${N}">${cells.join('')}${hulls}</div></div>`;
   }
-  const p2v = (cells, N) => cells.length > 1 && cells[1] - cells[0] === N;
   /** Whether I have pressed Ready (watchers never have). */
   const myReady = (v) => v.me >= 0 && !!v.players[v.me].ready;
 
-  /** The ship chooser and the placement buttons. */
+  /** The placement buttons: Rotate turns the selected ship, Random places the fleet again, Ready starts the battle. */
   function placeControlsHTML(v) {
-    const chips = v.lengths.map((len, i) => {
-      const on = v.placed && v.placed[i];
-      const picked = ui.pick === i;
-      return `<button type="button" class="btn ghost small sb-chip${on ? ' on' : ''}${picked ? ' picked' : ''}" data-sb="pick" data-slot="${i}" aria-pressed="${picked}" ${myReady(v) ? 'disabled' : ''}>${NAMES[i]} · ${len}${on ? ' ✓' : ''}</button>`;
-    }).join('');
     const allPlaced = v.placed && v.placed.every(Boolean);
-    return `<div class="sb-chips" role="group" aria-label="Ships">${chips}</div>
-      <div class="sb-controls">
+    return `<div class="sb-controls">
         <button type="button" class="btn ghost" data-sb="rotate" ${myReady(v) ? 'disabled' : ''}>${ui.vert ? 'Down' : 'Across'} · Rotate</button>
         <button type="button" class="btn ghost" data-sb="random" ${myReady(v) ? 'disabled' : ''}>Random</button>
-        <button type="button" class="btn ghost" data-sb="reset" ${myReady(v) || !(v.placed && v.placed.some(Boolean)) ? 'disabled' : ''}>Clear</button>
         <button type="button" class="btn" data-sb="ready" ${!myReady(v) && allPlaced ? '' : 'disabled'}>Ready</button></div>`;
   }
 
@@ -194,7 +227,7 @@
     if (ui.fx === undefined) ui.fx = ev ? ev.seq : -1;
     ui.freshNow = ev && ev.seq !== ui.fx ? ev : null;
     if (ev) ui.fx = ev.seq;
-    // a placed or picked ship that is no longer in the setup (after Clear or a redraw) is put down
+    // a picked ship that is no longer in the setup (after a redraw) is put down
     if (ui.pick !== null && v.phase !== 'placing') ui.pick = null;
     ui.root = root; ui.ctx = ctx; ui.v = v; react(v);
     const active = root.ownerDocument.activeElement;
@@ -255,10 +288,10 @@
     const p = (ui.setup || v.setup || [])[slot];
     if (!p) return;
     const k = gridK(hull.closest('.sb-grid'), e, N);
-    const j = cellsOf(v.lengths[slot], p, N).indexOf(k);
+    const grabR = Math.floor(k / N) - p.r, grabC = (k % N) - p.c; // the grabbed square's offset from the ship's top-left
     // a press on a ship that is already picked up is the tap that says where it goes (see onUp)
     const pointerId = e.pointerId;
-    ui.drag = { slot, j: Math.max(0, j), x: e.clientX, y: e.clientY, wasPicked: ui.pick === slot, pointerId };
+    ui.drag = { slot, grabR: Math.max(0, grabR), grabC: Math.max(0, grabC), vertical: p.vertical, x: e.clientX, y: e.clientY, wasPicked: ui.pick === slot, pointerId };
     ui.pick = slot;
     ui.vert = p.vertical;
     render(ui.root, v, ui.ctx);
@@ -288,8 +321,8 @@
     const grid = ui.root.querySelector('.sb-grid.placing');
     const k = grid ? gridK(grid, e, v.N) : -1;
     if (k < 0) return; // dropped off the sea: it stays picked up
-    const N = v.N, vertical = ui.vert;
-    const r = Math.floor(k / N) - (vertical ? d.j : 0), c = (k % N) - (vertical ? 0 : d.j);
+    const N = v.N, vertical = d.vertical;
+    const r = Math.floor(k / N) - d.grabR, c = (k % N) - d.grabC;
     const base = ui.setup || v.setup || Array(v.lengths.length).fill(null);
     const p = { r, c, vertical };
     if (!canPlace({ ...v, setup: base }, d.slot, p)) {
@@ -320,20 +353,14 @@
         if (v && v.myTurn && !v.shots[1 - v.me][k]) ctx.act({ type: 'fire', r: Math.floor(k / v.N), c: k % v.N });
         return;
       }
-      case 'pick': {
-        const slot = Number(el.dataset.slot);
-        if (ui.pick === slot) { ui.pick = null; break; }
-        ui.pick = slot;
-        // a placed ship keeps its direction when it is picked up
-        const q = v && v.setup && v.setup[slot];
-        if (q) ui.vert = q.vertical;
-        break;
-      }
       case 'rotate': {
         // the working setup, so a second Rotate before the next server view turns the ship back
         const base = ui.setup || (v && v.setup);
         const placed = ui.pick !== null && base && base[ui.pick];
-        if (!placed) { ui.vert = !ui.vert; break; }
+        if (!placed) {
+          ui.root.querySelector('.wz-status span').textContent = 'Tap a ship to select it, then Rotate it';
+          return;
+        }
         // a placed ship turns where it is: the new direction is sent if it fits, and the ship stays picked up to move
         const turned = { r: placed.r, c: placed.c, vertical: !placed.vertical };
         if (!canPlace({ ...v, setup: base }, ui.pick, turned)) {
@@ -352,23 +379,15 @@
         if (ui.pick === null) {
           // tap a placed ship to pick it up
           const working = ui.setup || v.setup || [];
-          const slot = working.findIndex((q, i) => q && cellsOf(v.lengths[i], q, N).includes(k));
+          const slot = working.findIndex((q, i) => q && cellsOf(v.lengths[i], q, N, v.widths[i]).includes(k));
           if (slot >= 0) { ui.pick = slot; ui.vert = working[slot].vertical; }
-          else { ui.root.querySelector('.wz-status span').textContent = 'Pick a ship first, then tap where it goes'; return; }
+          else { ui.root.querySelector('.wz-status span').textContent = 'Tap a ship to select it first, then tap a square'; return; }
           break;
         }
         placeAt(k);
         return;
       }
       case 'random': ctx.act({ type: 'random' }); ui.pick = null; return;
-      case 'reset': {
-        // the working setup is cleared too, so a Rotate before the cleared view arrives has no ship to turn back into the fleet
-        const empty = Array(v.lengths.length).fill(null);
-        ui.setup = empty;
-        ui.pick = null;
-        ctx.act({ type: 'place', ships: empty });
-        return;
-      }
       case 'ready': ctx.act({ type: 'ready' }); return;
       default: return;
     }
