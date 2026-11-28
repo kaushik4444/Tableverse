@@ -102,6 +102,7 @@
    * ("played 12", "folds", "bids 16"). Showing `card` alone is what dropped the names.
    */
   const logLine = (e) => {
+    if (typeof e === 'string') return e.trim();
     const text = String((e && (e.card || e.text)) || '').trim();
     const by = String((e && e.by) || '').trim();
     if (!by || by === 'System' || by === 'Table' || text.startsWith(by)) return text;
@@ -2607,6 +2608,22 @@
     const bell = document.createElement('span'); bell.innerHTML = S.guest || !pendingSocial() ? '' : bellHTML(); // friend requests and invitations waiting
     bar.replaceChildren(...[chat, emote, ...bell.children, ...vc.children, wrap, leave].filter(Boolean)); // chat, reactions, voice, ⋯, then leave as the last button
   }
+  // A game can redraw its own page between full renders (a timer that turns cards back, a click that shows a move at once).
+  // Those redraws leave the bar as the game drew it, without the ⋯ menu, voice and the shared order. Whenever the bar turns
+  // up without its menu it is tidied again. unifyToolbar leaves a menu behind, so this does not repeat itself.
+  let toolbarWatch = null;
+  function watchToolbar() {
+    if (toolbarWatch || typeof MutationObserver === 'undefined') return;
+    toolbarWatch = new MutationObserver(() => {
+      const bar = $app.querySelector('.wz-top > .row, .ludo-tools');
+      if (bar && !bar.querySelector(':scope > .tb-more-wrap')) {
+        unifyToolbar();
+        // the game's redraw took its Game settings item with the old menu; put it back once (never twice)
+        if (!$app.querySelector('.gs-chip')) addSettingsChip();
+      }
+    });
+    toolbarWatch.observe($app, { childList: true, subtree: true });
+  }
   function setTools(open) {
     S.toolsOpen = open;
     const btn = $app.querySelector('.tb-more-btn'); const pop = $app.querySelector('.tb-pop');
@@ -3383,7 +3400,7 @@
   }
 
   function openActivityLog() {
-    const entries = (S.view && S.view.log) || [];
+    const entries = (S.view && (S.view.playLog || S.view.log)) || []; // playLog: lines written for the sheet (a game's log can be its feed's raw events)
     const overlay = document.createElement('div');
     overlay.className = 'overlay activity-overlay';
     overlay.innerHTML = `<div class="sheet activity-sheet" data-stop="1"><div class="row" style="justify-content:space-between"><h2>Game log</h2><button class="btn ghost small" data-log-close>Close</button></div>${entries.length ? `<ol class="activity-list">${entries.slice(-60).reverse().map((e) => `<li><span>${esc(logLine(e))}</span></li>`).join('')}</ol>` : '<p class="hint">No plays yet.</p>'}</div>`;
@@ -3552,6 +3569,7 @@
     placeReady();
     markStandIns($app);
     watchStandIns();
+    watchToolbar();
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();

@@ -427,6 +427,19 @@ function botAction(g, playerId) {
 
 const pub = (c) => ({ id: c.id, k: c.k, c: c.c, v: c.v, ...(c.as ? { as: c.as } : {}) });
 
+/** The Log sheet's line for one feed event: who did what, in words. The feed keeps the raw events (seat numbers, card ids). */
+function playEntry(g, e) {
+  const name = (i) => (g.players[i] ? g.players[i].name : 'Table');
+  const text = e.type === 'draw' ? (e.from === 'discard' ? `drew ${e.label}` : 'drew from the stock')
+    : e.type === 'lay' ? 'laid down a stage'
+    : e.type === 'hit' ? `added ${e.label} to ${name(e.owner)}'s group`
+    : e.type === 'discard' ? `discarded ${e.label}`
+    : e.type === 'skip' ? `skipped ${name(e.who)}`
+    : e.type === 'roundEnd' ? 'went out, the round is over'
+    : String(e.type);
+  return { by: e.by === undefined || e.by === null ? 'Table' : name(e.by), card: text, kind: e.type };
+}
+
 function viewFor(g, playerId) {
   const me = indexOf(g, playerId);
   const over = g.phase === 'gameOver';
@@ -447,6 +460,7 @@ function viewFor(g, playerId) {
     discardCount: g.discard.length, stockCount: g.stock.length,
     event: g.event ? { ...g.event } : null,
     log: g.log.slice(-20).map((e) => ({ ...e })),
+    playLog: g.log.slice(-40).map((e) => playEntry(g, e)), // the Log sheet's lines, in words
     matchId: g.matchId,
     lastRound: g.lastRound ? { ...g.lastRound, points: g.lastRound.points.slice(), laid: g.lastRound.laid.slice(), stages: g.lastRound.stages.slice() } : null,
     winners: g.winners.slice(),

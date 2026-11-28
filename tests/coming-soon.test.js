@@ -57,7 +57,11 @@ assert.match(majors('2026-11-18'), /Play without an account/, 'the guest play re
 assert.ok(releases[0].items.filter((i) => i.level === 'major').slice(0, 3).length <= 3, 'the home highlights are at most three');
 // Customer copy only: no admin-only work and no game that is not open to players yet
 const customerText = JSON.stringify(releases);
-assert.doesNotMatch(customerText, /Carrom/i, 'Carrom is not in the customer release notes yet');
+// Carrom went to players by owner decision on 2026-11-28: it is named in the customer notes only from that release on
+const carromDates = releases.filter((r) => /Carrom/i.test(JSON.stringify(r.items))).map((r) => r.date);
+const carromOpeningDate = '2026-11-28';
+assert.ok(carromDates.includes(carromOpeningDate), 'Carrom is in the customer release notes on its opening date');
+assert.ok(carromDates.every((date) => date >= carromOpeningDate), 'Carrom is not in the customer release notes before its opening date');
 assert.doesNotMatch(customerText, /admin/i, 'admin-console work is not in the customer release notes');
 assert.match(JSON.stringify(byDate('2026-11-18').items), /Some games need an account/);
 assert.match(JSON.stringify(byDate('2026-11-18').items), /Quiet reminders/);

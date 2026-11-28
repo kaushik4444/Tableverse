@@ -8,7 +8,7 @@ Tableverse is a browser-based multiplayer game arena for quick social sessions w
 
 ## Current games
 
-Nineteen games are open to every player. Carrom is in admin testing and is not open to players yet.
+Twenty-two games are open to players, Carrom included. Guests can play open games when guest play is switched on (see [Accounts and verification](#accounts-and-verification)).
 
 - **Wizard** (3–6): plus/minus one, hidden/secret prediction, foresight, short game.
 - **29** (4): team-based trick play with secret trump and 3/6/9 match length options.
@@ -29,6 +29,7 @@ Nineteen games are open to every player. Carrom is in admin testing and is not o
 - **Dots and Boxes** (2–4): draw lines between the dots to close boxes. A box you close is yours and you move again. Pick a 3×3, 4×4 or 5×5 board; the most boxes wins.
 - **Sea Battle** (2): hide five ships in your 10 × 10 sea and fire at the other player’s. The first to sink the whole fleet wins.
 - **Falling Blocks** (2–4): everybody builds in their own well from the same blocks. Clear rows to send garbage to rivals; the last one still building wins.
+- **Carrom** (2–4): flick the striker to pocket your coins and the queen. Two players, or two teams of partners when there are four.
 - **Bingo** (2–8): every player has a 5×5 card and numbers are called one at a time. Mark your called numbers and shout Bingo first. Choose *Winning pattern* (any line or the full card), *Pace*, and *Mark for me*. Bots mark and call Bingo themselves.
 - **Sudoku** (1–8): everybody gets the same puzzle on their own grid; the first grid filled in correctly wins. Each player has 3 lives: a wrong number shows red at once and costs one, and the third takes you out of the race (alone, it is game over). Each player has 3 undos, and each one takes back only the last move. Playing alone also gives a solo rating per difficulty, separate from race play (a solve within par moves it up; a game over moves it down). Easy, medium or hard, bots fill at a chosen speed, and you see only how many squares each player has right and their lives.
 
@@ -36,7 +37,7 @@ Bots can fill open seats so tables can start quickly.
 
 ## Accounts and verification
 
-Tableverse is open to players, with all fifteen games available.
+Tableverse is open to players, with all twenty-two games available.
 
 - Playing needs an account, or a guest visit when guest play is switched on (`GUEST_PLAY_ENABLED=true`; see `docs/GUEST_PLAY.md`).
 - A registered account must verify its email before it can join a table. There is no switch for this.
@@ -62,6 +63,19 @@ Tableverse is open to players, with all fifteen games available.
 - **Blocking**: a block hides the other player's table chat and voice, and stops invitations between you. A block never removes anyone from a table, so you can still share one.
 - Cookie-based auth (`HttpOnly` session cookie), CSRF double-submit protection, rate limits, one active session per account.
 
+## Beta launch (on `development`, 2026-11-28)
+
+What changes for the public beta. Code and docs are in this branch; the settings below live outside the repository and must be checked by the owner.
+
+- **22 games** are listed in the app. Carrom opens to players for the beta.
+- **Guest play** is the owner's decision for the beta. Production stays off until the owner sets `GUEST_PLAY_ENABLED=true` in Render. This repository cannot confirm that setting, so check it in Render before posting the launch announcement.
+- **Owner checklist before the announcement:**
+  1. Before step 2, record the open decisions in `docs/GUEST_PLAY.md`: approve `lib/legal/privacy.md` with every `[OWNER]` and `[LEGAL]` marker resolved, and record approval of the retention behaviour. See the rollout steps in that document.
+  2. Render: `GUEST_PLAY_ENABLED=true`, then redeploy or restart.
+  3. Admin console, Games tab: Carrom and every game you want open set to Enabled.
+  4. Admin console, Guests tab: confirm the guest limits you want (private tables, profiles and blocking stay locked for guests).
+- **What's new** gets the launch items under the date `2026-11-28`.
+
 ## Released 2026-11-25 (on `main`)
 
 This is the release record for the day. It is wider than what players see: the in-app **What's new** and **Version history** are a separate, player-facing selection in `public/whats-new-data.js`, grouped by date with major updates first and minor updates folded under "Show minor updates". Items such as Carrom (admin testing), owner tools, database migrations and environment flags appear here only.
@@ -72,7 +86,7 @@ This is the release record for the day. It is wider than what players see: the i
 - **Game over.** The result card appears sooner and updates in place. If the connection was down when the game ended, the ratings are asked for again once it is back, and the card says so if they stay unavailable.
 - **No loading that never ends.** A home page with no games open, or a game list that failed to load, says so. A profile opened right after another shows the right person even if the first answer arrives late.
 
-- **Carrom** is in admin testing (2–4 players, in teams of partners when there are four). It is not open to players yet.
+- **Carrom** was available only for admin testing (2–4 players, in teams of partners when there are four). It was not open to players yet.
 - **Guest play controls.** Guests can read and send table chat and play open games. Private tables, rejoining after leaving on purpose, player profiles and stats, blocking and reports are locked for guests until the owner or an admin opens them in the admin console (**Guests** tab). A locked control shows a lock and opens the account reminder. Friend requests stay account-only. Connecting after a dropped connection always works.
 - **Owner redeploy.** The owner can ask Render to redeploy the app from the admin console's Logs tab, after typing `REDEPLOY`. It needs `RENDER_API_KEY` with deploy rights and `RENDER_SERVICE_ID`, and has a five-minute cooldown.
 - **Guest play (off by default).** With `GUEST_PLAY_ENABLED=true` a visitor can play without registering. A guest is a temporary account that lasts `GUEST_SESSION_TTL_HOURS` (default 72) and can later become a full account in place, keeping its games. The owner chooses per game who may play (enabled, disabled for non-admins, disabled for guests only, or disabled for all). See [docs/GUEST_PLAY.md](docs/GUEST_PLAY.md).

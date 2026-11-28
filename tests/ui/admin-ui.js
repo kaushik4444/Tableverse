@@ -711,7 +711,8 @@ const api = (role) => ({
       await until(() => s.page.locator('[data-gmove="up"]').evaluateAll((buttons) => buttons.map((b) => b.dataset.gid).join(',')).then((ids) => ids === 'ludo,wizard,poker'), 'saved order');
       await until(() => s.page.locator('[data-gsave]').count().then((n) => n === 0), 'draft cleared after save');
       assert.equal(await s.page.inputValue('[data-gaccess="ludo"]'), 'owner');
-      assert.equal(await s.page.isDisabled('[data-gid="wizard"][data-gmove="up"]'), false);
+      // the moves unlock when the tab has redrawn from the server, which can finish after the draft has cleared
+      await until(() => s.page.isDisabled('[data-gid="wizard"][data-gmove="up"]').then((d) => !d), 'moves unlocked after save');
       await s.page.click('[data-gid="ludo"][data-gmove="down"]');
       assert.equal(requests.length, 1, 'a second move is again only a draft');
       await s.page.click('[data-gsave]');

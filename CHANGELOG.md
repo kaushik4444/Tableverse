@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased (on `development`, not yet on `main`)
+- Beta launch: 22 games are listed to players, including Carrom (2–4 players, teams of partners with four). Carrom moves from admin testing to open play, by owner decision.
+- Guest play is the owner's decision for the beta launch. Production stays off until `GUEST_PLAY_ENABLED=true` is set in Render; not verified in this repository.
+- Docs: README game count and Carrom status, GUEST_PLAY status, PLANNED_GAMES, CARROM_DESIGN and TECHNICAL_ARCHITECTURE updated for the launch; a beta-launch section and owner checklist added to the README.
 - New game: Sea Battle (two players). Each has a 10×10 sea with five ships, never touching. Players place their own fleet first: tap a ship, then a square; Rotate turns it; Random spreads the fleet out; Ready starts the battle. Ships are drawn as hulls. Turns alternate after every shot; hits, misses and sunk ships are shown to both players. The first to sink the whole fleet wins. Bots hunt next to unsunk hits; the turn time limit applies. Bot speed defaults to Slow (about four seconds a shot) so each result can be read.
 - New game: Memory Match (2–4 players). Turn two cards over to find the pairs; a match keeps the turn, a miss passes it. Cards of 4×4, 4×6 or 6×6. Cards you have seen stay known to the table.
 - New game: Falling Blocks (2–4 players). Everybody builds in their own 10×20 well from the same blocks, and drops a block by choosing its turn and column. Clearing 2, 3 or 4 rows sends 1, 2 or 4 garbage rows to each rival. A block that cannot appear tops you out; the last one still building wins. Bots are paced by Bot speed, which defaults to Slow (about four seconds a drop) so every well can be followed.
