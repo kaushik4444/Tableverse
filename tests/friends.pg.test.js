@@ -34,7 +34,10 @@ const PW = 'TestPass123!';
     process.env.DATABASE_URL = t.url;
     const dbPool = require('../db/pool');
     const { start } = require('../server');
-    const srv = await start({ port: 0, trustProxy: false, matchLog: quiet() });
+    const growthStore = { counters: [], active: [], addCounters: async (rows) => { growthStore.counters.push(...rows); }, addActive: async () => {} }; // what analytics would write (see tests/growth-analytics.test.js)
+    const counted = (metric) => growthStore.counters.filter((r) => r.metric === metric).reduce((a, r) => a + r.count, 0);
+    const settle = () => new Promise((r) => setTimeout(r, 250));
+    const srv = await start({ port: 0, trustProxy: false, matchLog: quiet(), analyticsStore: growthStore, analyticsFlushMs: 50 });
     try {
       const x = await t.client();
       const q = async (sql, params) => (await x.query(sql, params)).rows;
@@ -137,6 +140,24 @@ const PW = 'TestPass123!';
         const expired = await q("INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, created_at, expires_at) VALUES ($1, $2, 'wizard', 'MNOPQR', NOW() - INTERVAL '2 minutes', NOW() - INTERVAL '1 minute') RETURNING id", [a.id, b.id]);
         assert.equal((await b.browser.post('/api/me/table-invitations/accept', { invitationId: expired[0].id })).status, 404);
         assert.equal((await b.browser.get('/api/me/table-invitations')).json.invitations.some((i) => i.id === expired[0].id), false);
+      });
+
+      await test('invite_created counts each new invitation once: a renewal, a refusal and a non-friend count nothing, and the answer carries no counter field', async () => {
+        const expiry = () => new Date(Date.now() + 3600000).toISOString();
+        await settle();
+        const before = counted('invite_created');
+        const body = { username: b.username, gameId: 'wizard', roomCode: privateRoomCode, expiresAt: expiry() };
+        const first = await a.browser.post('/api/me/table-invitations', body);
+        assert.equal(first.status, 201, JSON.stringify(first.json));
+        assert.equal(Object.hasOwn(first.json.invitation, 'inserted'), false, 'the internal flag is not sent to the page');
+        const again = await a.browser.post('/api/me/table-invitations', { ...body, expiresAt: expiry() }); // the same pending invitation, renewed
+        assert.equal(again.status, 201);
+        assert.equal(again.json.invitation.id, first.json.invitation.id, 'renewed, not a second row');
+        assert.equal((await a.browser.post('/api/me/table-invitations', { ...body, username: c.username })).status, 404, 'not a friend');
+        assert.equal((await a.browser.post('/api/me/table-invitations', { ...body, gameId: 'saboteur' })).status, 400, 'invalid');
+        await settle();
+        assert.equal(counted('invite_created') - before, 1);
+        assert.ok(growthStore.counters.filter((r) => r.metric === 'invite_created').every((r) => r.dim === 'friend'));
       });
 
       await test('removal winning the pair lock prevents concurrent invitation acceptance', async () => {

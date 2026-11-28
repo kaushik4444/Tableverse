@@ -247,12 +247,13 @@ async function createInvitation(actorId, inviteeUsername, game, code, expiresAt,
     const friends = await client.query('SELECT 1 FROM friendships WHERE player_a_id = $1 AND player_b_id = $2 FOR SHARE', [playerA, playerB]);
     if (!friends.rows.length) throw new AuthError('Player not found.', 404);
     try {
+      // `inserted` (xmax = 0) is true for a new row and false when a pending invitation was renewed; the route uses it for the counter
       const r = await client.query(
         `INSERT INTO private_table_invitations (inviter_id, invitee_id, game_id, room_code, expires_at)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (inviter_id, invitee_id, room_code) WHERE status = 'pending'
          DO UPDATE SET game_id = EXCLUDED.game_id, expires_at = EXCLUDED.expires_at, updated_at = NOW()
-         RETURNING id, game_id, room_code, status, created_at, expires_at`,
+         RETURNING id, game_id, room_code, status, created_at, expires_at, (xmax = 0) AS inserted`,
         [actorId, target.rows[0].id, gameId, roomCode, expires]
       );
       return { ...r.rows[0], playerId: target.rows[0].id };

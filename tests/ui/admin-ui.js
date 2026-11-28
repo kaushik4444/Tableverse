@@ -59,7 +59,7 @@ const api = (role) => ({
     hourly: { UTC: Array.from({ length: 24 }, (_, h) => (h === 19 ? 9 : 0)), 'Europe/Berlin': Array.from({ length: 24 }, (_, h) => (h === 20 ? 9 : 0)), 'Asia/Kolkata': Array.from({ length: 24 }, (_, h) => (h === 0 ? 9 : 0)) },
     recent: [{ gameId: 'ludo', at: '2026-11-08T08:00:00Z', seats: 4, won: true, draw: false, leftEarly: false, unknown: false, minutes: 22 },
       { gameId: 'ludo', at: '2026-11-07T08:00:00Z', seats: 4, won: false, draw: false, leftEarly: false, unknown: true, minutes: 18 }] }),
-  'GET /api/admin/overview?days=30': () => ({ ok: true, days: 30, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { error: [0, 2, 1], session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
+  'GET /api/admin/overview?days=30': () => ({ ok: true, days: 30, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { error: [0, 2, 1], session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1, invite_created: 6, invite_joined: 4, share_clicked: 9, guest_created: 20, guest_upgraded: 5 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], invitesJoinedBy: [{ name: 'link', total: 3 }, { name: 'friend', total: 1 }], sharedBy: [{ name: 'whatsapp', total: 7 }, { name: '<b>x</b>', total: 2 }], retention: { activeDays: 35, dailyDays: 400 } }),
   'GET /api/admin/overview?days=7': () => ({ ok: true, days: 7, labels: ['2026-11-08', '2026-11-09', '2026-11-10'], activeDaily: [3, 7, 5], series: { error: [0, 2, 1], session: [1, 5, 2], game_finished: [0, 2, 1], registration: [0, 1, 0] }, totals: { registration: 4, session: 8, game_finished: 3, error: 1 }, active: { dau: 2, wau: 5, mau: 9 }, accounts: { registered: 12, registered_24h: 1, staff: 2 }, popularGames: [{ name: 'wizard', total: 3 }], startedGames: [], errors: [{ name: 'ws_handler', total: 1 }], retention: { activeDays: 35, dailyDays: 400 } }),
   'GET /api/admin/users?q=&page=1': () => ({ ok: true, total: 3, pageSize: 25, users: [U({ id: 'u1', display_name: EVIL }), U({ id: 'u2', username: 'bob', display_name: 'Bob', role: 'admin' }), U({ id: 'u3', username: 'own', display_name: 'Owner', role: 'owner' })] }),
   'GET /api/admin/feedback?status=&page=1': () => ({ ok: true, total: 1, pageSize: 25, items: [{ id: 'f1', category: 'bug', status: 'new', message: EVIL, created_at: '2026-11-08T08:00:00Z', username: null }] }),
@@ -150,6 +150,18 @@ const api = (role) => ({
       await tab(s.page, name);
       await until(async () => text.test(await s.page.textContent('#adMain')), name);
     }
+    assert.deepEqual(s.errors, []);
+    await s.close();
+  });
+  await test('the overview shows invites, sharing and guest conversion: counts, labelled dimensions, and stored text as text', async () => {
+    const s = await open('admin');
+    await s.page.waitForSelector('#growthTiles');
+    const tiles = await s.page.textContent('#growthTiles');
+    for (const [n, label] of [['6', 'invitations sent'], ['4', 'joined through'], ['9', 'share buttons'], ['20', 'guest sessions'], ['5', 'guests who made an account'], ['25%', 'share']]) assert.ok(new RegExp(n.replace('%', '%') + '[\\s\\S]*' + label).test(tiles), n + ' ' + label);
+    const main = await s.page.textContent('#adMain');
+    assert.match(main, /Table link/); assert.match(main, /Friend invitation/); assert.match(main, /WhatsApp/);
+    assert.ok(main.includes('<b>x</b>'), 'an odd dimension is shown as text');
+    assert.equal(await s.page.locator('#adMain b:text-is("x")').count(), 0, 'and does not become markup');
     assert.deepEqual(s.errors, []);
     await s.close();
   });

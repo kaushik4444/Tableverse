@@ -37,11 +37,25 @@ Handing ownership to someone else is deliberately not an API feature. It is an o
 
 Privacy-conscious by construction:
 
-- **Counters only**: per day, per metric (`registration`, `login`, `session`, `game_started`, `game_finished`, `error`, `feedback`) and a short dimension such as a game id or an error kind. There is no per-event log.
+- **Counters only**: per day, per metric (`registration`, `login`, `session`, `game_started`, `game_finished`, `error`, `feedback`, and the five growth counters below) and a short dimension such as a game id or an error kind. There is no per-event log.
 - **No** IP address, user agent, name, e-mail, chat or table content is recorded. Dimensions are lowercased and limited to `a-z 0-9 _ . : -` and 48 characters.
 - **Active users** are distinct accounts per day stored as `HMAC-SHA256(salt, account id)` cut to 32 hex characters, never as an id. The salt is server-side (`analytics_meta`). Guests are not counted as active users.
 - **Non-blocking**: `track()` only adds to an in-memory buffer; a timer writes it in batches every 15 s. If the database is slow or down the buffer is kept (bounded: 2000 counters, 5000 active accounts), retried, and past the bound new counts are **dropped and counted**, never queued without limit. Every write carries a random batch key, recorded in `analytics_batches` in the same transaction as the write. A write that hangs times out after 5 s; a timed-out or failed batch is sent again **with the same key**, so a write that did land is ignored and nothing is counted twice. A flush that is called while another runs waits for it, so counts added in the meantime are written too. Shutdown waits at most 2 s for a final write, and a stuck write never holds the process open. Analytics failures are visible on the Health tab and never affect a request.
 - Turn it off with `ANALYTICS_ENABLED=0`.
+
+### Invites, sharing and guests (five counters)
+
+Counters of the same kind (day, metric, short dimension, count; no names, table codes, addresses or per-event rows). They are shown in the Overview under "Invites, sharing and guests". No migration: `analytics_daily` takes any metric name.
+
+| Metric | Dimension | Counted when | Not counted |
+|---|---|---|---|
+| `invite_created` | `friend` | A signed-in player sends a **new** friend table invitation (`POST /api/me/table-invitations` succeeds and inserts a row). | Sending the same pending invitation again (it is renewed), a refused or invalid request. |
+| `invite_joined` | `link` or `friend` | A person is newly added to a table (seat or spectator) and the page says they arrived through a shared table link (`#CODE`, `link`) or an accepted invitation (`friend`). | A reconnect, a seat taken back, a second join of someone already at the table, a failed join, a join from the open-tables list or the code box (no `via`), any other `via` value. |
+| `share_clicked` | `copy`, `whatsapp` or `native` | The page reports a tap on Copy link, WhatsApp or the share sheet while the person is at a table. One count per tap; taps closer than 1 second apart count once. | Anything else; the link and the table code are never sent. It does not prove that anyone opened the link. |
+| `guest_created` | none | A guest session is made (`POST /api/auth/guest` succeeds). | A refused request (guest play off, no CSRF token, rate limit). |
+| `guest_upgraded` | none | A guest confirms the e-mail link and becomes an account. | Asking for the link, a second use of the link. |
+
+Limits: `invite_joined` trusts what the page says about how someone arrived (a script can send `via` too), so it is a measure, not proof. A guest who confirms days later is counted on the day of confirmation, so "guests who made an account" divided by "guest sessions" is a rough ratio, not a cohort. `registration` still counts a guest's confirmation as it did before, so registrations include upgrades.
 
 ### Retention and deletion
 

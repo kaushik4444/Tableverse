@@ -34,7 +34,10 @@ const until = async (fn, ms = 3000) => { const end = Date.now() + ms; while (Dat
     const x = await t.client();
     const q = async (sql, params) => (await x.query(sql, params)).rows;
     const fast = { port: 0, trustProxy: false, botDelay: [0, 3], autoAdvanceMs: 20, trickPauseMs: 0, forcedMs: 0, timeScale: 0.01, absentMs: 60000, maxMsgsPerSec: Infinity, matchRetryDelays: [20, 40, 80], matchLog: quiet() };
-    const srv = await start(fast);
+    const growthStore = { counters: [], active: [], addCounters: async (rows) => { growthStore.counters.push(...rows); }, addActive: async () => {} }; // what analytics would write (see tests/growth-analytics.test.js)
+    const counted = (metric) => growthStore.counters.filter((r) => r.metric === metric).reduce((a, r) => a + r.count, 0);
+    const settle = () => new Promise((r) => setTimeout(r, 250));
+    const srv = await start({ ...fast, analyticsStore: growthStore, analyticsFlushMs: 50 });
     assert.equal(srv.database.mode, 'postgres');
     const record = (over) => dbMatches.recordMatch({ matchKey: crypto.randomUUID(), roomCode: 'GUEST1', gameId: 'ludo', seats: 2, options: {}, ...over });
     const part = (id, name, o = {}) => ({ playerId: id, name, seat: 0, score: 10, isWinner: false, isBot: false, leftEarly: false, ...o });
@@ -120,6 +123,19 @@ const until = async (fn, ms = 3000) => { const end = Date.now() + ms; while (Dat
       assert.equal(s.player.id, g.id, 'same player');
       assert.equal(s.player.username !== null, true);
       assert.equal(s.emailVerified, true);
+    });
+
+    await test('guest_upgraded counts once when the link is used, not when it is asked for or used again', async () => {
+      await settle();
+      const before = counted('guest_upgraded');
+      const g = await newGuest('Counted');
+      const r = await requestUpgrade(g, `counted.${seq}@test.local`, `counted${seq++}`);
+      await settle();
+      assert.equal(counted('guest_upgraded'), before, 'asking for the link is not an upgrade');
+      assert.equal((await useLink(r.json.debug.verifyToken)).status, 200);
+      assert.notEqual((await useLink(r.json.debug.verifyToken)).status, 200, 'the second use is refused');
+      await settle();
+      assert.equal(counted('guest_upgraded') - before, 1);
     });
 
     await test('a link can be used once', async () => {

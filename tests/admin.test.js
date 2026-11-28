@@ -464,6 +464,13 @@ const ADMIN_POSTS = [
       assert.equal(r.status, 200);
       assert.equal(r.json.series.error.length, r.json.labels.length);
     });
+    await test('overview: the growth series and their breakdowns exist even before anything is recorded', async () => {
+      const r = await admin.b.get('/api/admin/overview?days=7');
+      assert.equal(r.status, 200);
+      for (const m of ['invite_created', 'invite_joined', 'share_clicked', 'guest_created', 'guest_upgraded']) assert.deepEqual(r.json.series[m], r.json.labels.map(() => 0), m);
+      assert.deepEqual(r.json.invitesJoinedBy, []);
+      assert.deepEqual(r.json.sharedBy, []);
+    });
     await test('seat-order check: staff only, the days are passed on, and the answer names no player', async () => {
       assert.equal((await user.b.get('/api/admin/seat-balance')).status, 403);
       const r = await admin.b.get('/api/admin/seat-balance?days=14');

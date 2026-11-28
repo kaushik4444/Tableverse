@@ -600,6 +600,15 @@ const OWNER_EMAIL = 'boss.admin@test.local';
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM announcements WHERE message = 'ended long ago'"))[0].n, 0, 'removed 90 days after the early end');
       assert.equal((await q("SELECT COUNT(*)::int AS n FROM announcements WHERE message = 'ended today'"))[0].n, 1, 'kept: ended today');
     });
+    await test('the overview returns the growth counters with their dimensions', async () => {
+      await q("INSERT INTO analytics_daily (day, metric, dim, total) VALUES (CURRENT_DATE, 'invite_joined', 'link', 3), (CURRENT_DATE, 'share_clicked', 'whatsapp', 2), (CURRENT_DATE, 'guest_created', '', 5), (CURRENT_DATE, 'guest_upgraded', '', 1) ON CONFLICT (day, metric, dim) DO UPDATE SET total = EXCLUDED.total");
+      const r = await boss().browser.get('/api/admin/overview?days=7');
+      assert.equal(r.status, 200);
+      assert.ok(r.json.totals.invite_joined >= 3 && r.json.totals.share_clicked >= 2 && r.json.totals.guest_created >= 5 && r.json.totals.guest_upgraded >= 1);
+      for (const m of ['invite_created', 'invite_joined', 'share_clicked', 'guest_created', 'guest_upgraded']) assert.equal(r.json.series[m].length, r.json.labels.length, m + ' has one value per day');
+      assert.ok(r.json.invitesJoinedBy.some((d) => d.name === 'link' && d.total >= 3));
+      assert.ok(r.json.sharedBy.some((d) => d.name === 'whatsapp' && d.total >= 2));
+    });
     await test('the overview reads the counters and active hashes', async () => {
       const r = await boss().browser.get('/api/admin/overview?days=30');
       assert.equal(r.status, 200);
