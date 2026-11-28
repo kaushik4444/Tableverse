@@ -81,13 +81,18 @@
 
   function seatsHTML(v) {
     const pt = window.CardTable.pt;
+    // the one player strictly ahead on points (three or more) wears the shared crown
+    const lead = pt && pt.leaderOf ? pt.leaderOf(v.players.length, (i) => v.players[i].vp, 3) : -1;
     return `<div class="ri-seats">${v.players.map((p, i) => {
       const label = seatLabel(v, i);
       const face = (pt && pt.avatarOf && pt.avatarOf(ui.ctx.room, p.id)) || ([...p.name][0] || '?').toUpperCase();
-      return `<div class="ri-seat s${i} ${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${v.winner === i ? 'won' : ''}" data-pid="${esc(p.id)}" role="group"
+      const bg = (pt && pt.avatarColor && pt.avatarColor(p.name)) || '#555';
+      // .pseat + a direct .av child: the page marks stand-in bots and speaking voice players on these
+      return `<div class="pseat ri-seat s${i} ${i === v.me ? 'me' : ''} ${i === v.turn && v.phase !== 'gameOver' ? 'turn' : ''} ${v.winner === i ? 'won' : ''}" data-pid="${esc(p.id)}" role="group"
         aria-label="${esc(p.name)}, ${SEAT[i]}: ${p.vp} points, ${p.cards} cards, longest road ${p.road}${p.longest ? ' (holds the longest road)' : ''}">
         <span class="ri-vpbadge" aria-hidden="true">${p.vp}</span>
-        <span class="ri-tab"><span class="ri-av" aria-hidden="true">${esc(face)}</span><b>${nameOf(v, i)}</b></span>
+        <span class="av" style="--av:26px;--avbg:${bg}" aria-hidden="true"><span class="face">${esc(face)}</span></span>
+        <span class="ri-tab">${lead === i ? '<span class="crown" aria-hidden="true">👑</span>' : ''}<b>${nameOf(v, i)}</b></span>
         <span class="ri-body">
           <span class="ri-stat" title="Cards in hand">${glyph('cards', 'ri-glyph sm')}<b>${p.cards}</b></span>
           <span class="ri-stat ${p.longest ? 'gold' : ''}" title="Longest road">${glyph('road', 'ri-glyph sm')}<b>${p.road}</b></span>
@@ -284,13 +289,20 @@
   }
 
   function render(root, v, ctx) {
+    const room = ctx && ctx.room && ctx.room.code;
+    // another room, or a new game in this one (the event counter starts over): forget picks and notices from the last game
+    if ((ui.room && room && ui.room !== room) || (ui.seq !== null && v.event && v.event.seq < ui.seq)) {
+      Object.assign(ui, { mode: null, tray: null, victim: null, cards: null, owedKey: null, seq: null, glowSeq: null, rollSeq: null, logOpen: false, resultSeen: null });
+    }
+    ui.room = room || ui.room;
     ui.root = root; ui.ctx = ctx; ui.v = v;
     const fresh = react(v);
     // the dice tumble, and the lands that paid out glow, once per roll (a re-render for a tap must not replay it)
     const rolled = fresh && fresh.type === 'roll' ? fresh : null;
     if (rolled) ui.rollSeq = rolled.seq;
     const glowSum = rolled && rolled.sum !== 7 ? rolled.sum : null;
-    if (!v.myTurn || v.phase !== 'main' || v.phase === 'gameOver') { ui.mode = null; ui.tray = null; }
+    if (!v.myTurn || v.phase !== 'main') { ui.mode = null; ui.tray = null; }
+    if (v.phase !== 'robber') ui.victim = null;
     const active = root.ownerDocument.activeElement;
     const focusKey = active && root.contains(active) && active.getAttribute ? (active.getAttribute('data-ra') || active.getAttribute('data-mode') || active.getAttribute('data-tr') || null) : null;
     root.innerHTML = `<div class="wz ri" data-game="resourceisles">
@@ -311,7 +323,14 @@
     }
   }
 
-  function send(action) { if (ui.ctx) ui.ctx.act(action); }
+  let lastSend = 0;
+  /** A fast double tap must not send the same move twice. */
+  function send(action) {
+    const now = Date.now();
+    if (now - lastSend < 250) return;
+    lastSend = now;
+    if (ui.ctx) ui.ctx.act(action);
+  }
 
   function onClick(e) {
     const el = e.target.closest('[data-v],[data-e],[data-h],[data-ra],[data-mode],[data-tr],[data-dc],[data-ri]'); const v = ui.v;
@@ -371,7 +390,7 @@
     if (el && el.getAttribute && el.getAttribute('role') === 'button' && !el.disabled) { e.preventDefault(); el.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
   }
 
-  function rerender() { if (ui.v && ui.ctx && ui.root) render(ui.root, ui.v, ui.ctx); }
+  function rerender() { if (ui.ctx && ui.ctx.rerender) ui.ctx.rerender(); else if (ui.v && ui.ctx && ui.root) render(ui.root, ui.v, ui.ctx); }
 
   window.CardTable.register('resourceisles', { render });
 })();

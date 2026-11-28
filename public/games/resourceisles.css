@@ -9,9 +9,13 @@
 .ri .ri-seat { position: relative; min-width: 0; display: grid; border-radius: 10px; background: var(--panel); border: 2px solid transparent; padding-bottom: 4px; box-shadow: 0 2px 0 rgba(0, 0, 0, .25); }
 .ri .ri-seat.turn { border-color: var(--gold); }
 .ri .ri-seat.won { background: #4a3d12; border-color: var(--gold); }
-.ri .ri-tab { display: flex; align-items: center; gap: 4px; background: var(--c); padding: 4px 4px 4px 22px; border-radius: 8px 8px 0 0; min-width: 0; }
+.ri .ri-seat .av { position: absolute; right: -6px; top: -9px; z-index: 1; border-width: 2px; box-shadow: 0 2px 4px rgba(0, 0, 0, .4); }
+.ri .ri-seat.turn .av { animation: none; }
+.ri .ri-seat.speaking .av { box-shadow: 0 0 0 3px #43c07a, 0 0 12px 3px rgba(67, 192, 122, .7); }
+.ri .ri-seat[data-voice]::before { top: auto; bottom: 14px; right: -4px; }
+.ri .ri-seat .standin { right: -4px; bottom: -4px; }
+.ri .ri-tab { display: flex; align-items: center; gap: 4px; background: var(--c); padding: 4px 18px 4px 22px; border-radius: 8px 8px 0 0; min-width: 0; }
 .ri .ri-tab b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: #fff; min-width: 0; text-shadow: 0 1px 0 rgba(0, 0, 0, .35); }
-.ri .ri-av { flex: 0 0 auto; font-size: 13px; line-height: 1; }
 .ri .ri-vpbadge { position: absolute; left: -7px; top: -8px; z-index: 1; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--c); border: 2px solid #fff; font-weight: 800; font-size: 15px; box-shadow: 0 2px 4px rgba(0, 0, 0, .4); }
 .ri .ri-body { display: flex; justify-content: center; gap: 10px; padding: 5px 2px 1px; }
 .ri .ri-stat { display: inline-flex; align-items: center; gap: 3px; font-size: 14px; }
