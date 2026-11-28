@@ -3384,7 +3384,7 @@
   }
 
   function openActivityLog() {
-    const entries = (S.view && (S.view.playLog || S.view.log)) || []; // playLog: lines written for the sheet (Stage Rummy's log is its feed's events)
+    const entries = (S.view && (S.view.playLog || S.view.log)) || []; // playLog: lines written for the sheet (a game's log can be its feed's raw events)
     const overlay = document.createElement('div');
     overlay.className = 'overlay activity-overlay';
     overlay.innerHTML = `<div class="sheet activity-sheet" data-stop="1"><div class="row" style="justify-content:space-between"><h2>Game log</h2><button class="btn ghost small" data-log-close>Close</button></div>${entries.length ? `<ol class="activity-list">${entries.slice(-60).reverse().map((e) => `<li><span>${esc(logLine(e))}</span></li>`).join('')}</ol>` : '<p class="hint">No plays yet.</p>'}</div>`;

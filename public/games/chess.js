@@ -96,7 +96,7 @@
     if (!v.log.length) return '<p class="hint ch-log-empty">No moves yet.</p>';
     const rows = [];
     for (let k = 0; k < v.log.length; k += 2) {
-      rows.push(`<li><span class="ch-n">${k / 2 + 1}.</span><span class="ch-w">${esc(v.log[k].card)}</span><span class="ch-b">${esc(v.log[k + 1] ? v.log[k + 1].card : '')}</span></li>`);
+      rows.push(`<li><span class="ch-n">${k / 2 + 1}.</span><span class="ch-w">${esc(v.log[k])}</span><span class="ch-b">${esc(v.log[k + 1] || '')}</span></li>`);
     }
     return `<ol class="ch-log">${rows.join('')}</ol>`;
   }
