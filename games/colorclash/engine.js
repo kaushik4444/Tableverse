@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Color Clash: the rules only (no sockets, no timers). An original shedding game for 2-8 players.
  *
@@ -241,7 +242,8 @@ function botAction(g, playerId) {
   const next = step(g, who);
   const threat = g.hands[next].length <= 2;
   const score = (c) => (c.k === 'wild' || c.k === 'take4' ? (threat ? 25 : -5) : c.k === 'n' ? c.v : threat && c.k !== 'flip' ? 40 : 18) + g.rng();
-  const card = fits.slice().sort((a, b) => score(b) - score(a))[0];
+  // a slip: any card that fits, not the one it would like best
+  const card = slips(g.rng) ? pickOne(g.rng, fits) : fits.slice().sort((a, b) => score(b) - score(a))[0];
   const action = { type: 'play', card: card.id };
   if (card.k === 'wild' || card.k === 'take4') {
     const count = (col) => hand.filter((c) => c.c === col).length;

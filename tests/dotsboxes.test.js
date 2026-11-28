@@ -80,7 +80,8 @@ test('playing to the end: every line is drawn, one result, and the game is over'
 test('a bot takes a box it can close, and otherwise does not give one away', () => {
   const g = E.createGame(P(2), { size: '3' });
   play(g, 'p0', 'h', 0, 0); play(g, 'p1', 'h', 1, 0); play(g, 'p0', 'v', 0, 0);
-  assert.equal(E.botAction(g, 'p1').index, lineAt(g, 'v', 0, 1), 'the box that can be closed');
+  // an rng that never slips (a slip plays any open line): the bot must take the box it can close
+  assert.equal(E.botAction(g, 'p1', () => 0.99).index, lineAt(g, 'v', 0, 1), 'the box that can be closed');
 });
 
 test('what a seat sees is the public board: no field is hidden from anyone', () => {
@@ -97,7 +98,7 @@ test('what a seat sees is the public board: no field is hidden from anyone', () 
 test('the plugin: 2 to 4 seats, a board option, and the rules have a title for each', () => {
   assert.deepEqual(game.seats, { min: 2, max: 4, default: 2 });
   assert.equal(game.options[0].key, 'size');
-  assert.deepEqual(game.options[0].choices.map((c) => c.value), ['3', '4', '5']);
+  assert.deepEqual(game.options[0].choices.map((c) => c.value), ['3', '4', '5', '6']);
   const inst = game.create(P(3), { size: '3' }, Math.random);
   assert.equal(inst.awaiting()[0], 'p0');
   assert.equal(inst.act('p0', { type: 'line', index: 0 }).ok, true);

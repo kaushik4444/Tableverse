@@ -1044,6 +1044,7 @@ function start(opts = {}) {
 
   // ------------------------------------------------------------ turn timer
   const limitMs = (room) => {
+    if (room.seats === 1) return 0; // a table of one has nobody to wait for: no turn clock
     const s = Number(room.options && room.options.timeLimit);
     return Number.isFinite(s) && s > 0 ? s * 1000 * timeScale : 0;
   };

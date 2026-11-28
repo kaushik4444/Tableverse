@@ -25,8 +25,18 @@
 .sb .sb-cell.ship { background: var(--sb-ship); }
 .sb .sb-cell.hit, .sb .sb-cell.sunk { background: var(--sb-hit); }
 .sb .sb-cell.sunk { background: var(--sb-sunk); }
-.sb .sb-cell.miss::after, .sb .sb-cell.water.miss::after { content: ''; position: absolute; inset: 40%; border-radius: 50%; background: rgba(255, 255, 255, .7); }
-.sb .sb-cell.hit::after, .sb .sb-cell.sunk::after { content: '✕'; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font: 800 clamp(10px, 3vw, 14px) system-ui, sans-serif; }
+.sb .sb-cell.miss::after, .sb .sb-cell.water.miss::after { content: '✕'; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 255, 255, .9); font: 800 clamp(11px, 3.4vw, 16px) system-ui, sans-serif; }
+/* a hit or a sunk square: the bomb burst (take-5 style) */
+.sb .sb-cell.hit::after, .sb .sb-cell.sunk::after { content: '💥'; position: absolute; inset: 0; display: grid; place-items: center; font-size: clamp(11px, 3.4vw, 16px); line-height: 1; }
+/* a new shot: the bomb falls onto the square once; a miss's X and a hit's burst then appear */
+.sb .sb-cell.fresh::before { content: '💣'; position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; font-size: clamp(11px, 3.4vw, 16px); line-height: 1; animation: sb-bomb .45s cubic-bezier(.4, 1.5, .6, 1) both; }
+.sb .sb-cell.fresh.miss::after, .sb .sb-cell.fresh.hit::after, .sb .sb-cell.fresh.sunk::after { animation: sb-mark .25s ease-out .45s both; }
+@keyframes sb-bomb { 0% { transform: translateY(-160%); opacity: 1; } 75% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(0); opacity: 0; } }
+@keyframes sb-mark { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .sb .sb-cell.fresh::before { display: none; } .sb .sb-cell.fresh.miss::after, .sb .sb-cell.fresh.hit::after, .sb .sb-cell.fresh.sunk::after { animation: none; } }
+/* while placing, a placed ship takes the press so it can be dragged; no page scroll while dragging */
+.sb .sb-grid.placing .sb-hull { pointer-events: auto; cursor: grab; touch-action: none; z-index: 4; }
+.sb .sb-grid.placing .sb-hull.picked { cursor: grabbing; }
 .sb .sb-controls { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
 .sb .sb-controls .btn { min-width: 88px; min-height: 44px; }
 .sb .sb-controls .btn:disabled { opacity: .45; }

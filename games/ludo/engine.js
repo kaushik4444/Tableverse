@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 // Ludo — pure rules engine (no I/O, no timers).
 // 2-6 players, 4 tokens each. Roll a 6 to bring a token out; move clockwise around the board,
 // send opponents back to their yard by landing on them (not on safe squares), then climb your home column
@@ -335,6 +336,8 @@ function botAction(g, playerId) {
   if (g.phase === 'moving') {
     const moves = legalMoves(g, who);
     if (moves.length) {
+      // a slip: a random legal move, not the best-scoring one
+      if (slips(g.rng)) return { type: 'move', token: pickOne(g.rng, moves).token };
       let best = moves[0];
       let bestScore = -Infinity;
       for (const m of moves) { const sc = scoreMove(g, who, m); if (sc > bestScore) { best = m; bestScore = sc; } }

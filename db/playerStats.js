@@ -8,6 +8,7 @@
  * Bots never count as a player.
  */
 const db = require('./pool');
+const { UNSCORED_SQL } = require('../lib/unscoredRuns');
 
 const PAGE = 25;
 const ZONES = ['UTC', 'Europe/Berlin', 'Asia/Kolkata'];
@@ -43,8 +44,9 @@ const orderBy = (key, dir) => `${SORTS[key].by} ${dir} NULLS LAST, p.username`;
 // A game has a RATED result for a player only if the player stayed to the end and the match was recorded with results.
 // Same rule as the player's own history and stats (db/matches.js): a bot that took over a seat can carry a win on the
 // departed player's row, and matches written before results were reported (match_key IS NULL) have unknown winners.
-// Neither may count as a win, a draw or a loss. They still count as games played and as games left early.
-const RATED = '(NOT mp.left_early AND m.match_key IS NOT NULL)';
+// Neither may count as a win, a draw or a loss. A solo Falling Blocks run has no winner, so it is not rated either (lib/unscoredRuns.js).
+// They still count as games played and as games left early.
+const RATED = `(NOT mp.left_early AND m.match_key IS NOT NULL AND NOT ${UNSCORED_SQL})`;
 const COUNTS = `
   COUNT(*)::int AS games,
   COUNT(*) FILTER (WHERE ${RATED})::int AS rated,
@@ -112,7 +114,7 @@ async function playerProfile({ username, actorId }) {
       c.query(`SELECT m.game_id, ${COUNTS}
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot
                 GROUP BY m.game_id ORDER BY games DESC, m.game_id`, [id]),
-      c.query(`SELECT m.game_id, m.finished_at, m.seats, (${RATED} AND mp.is_winner) AS is_winner, (${RATED} AND mp.is_draw) AS is_draw, mp.left_early, (m.match_key IS NULL) AS unknown,
+      c.query(`SELECT m.game_id, m.finished_at, m.seats, (${RATED} AND mp.is_winner) AS is_winner, (${RATED} AND mp.is_draw) AS is_draw, mp.left_early, (m.match_key IS NULL) AS unknown, ${UNSCORED_SQL} AS unscored,
                       (EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) / 60.0)::float AS minutes
                  FROM match_participants mp JOIN matches m ON m.id = mp.match_id WHERE mp.player_id = $1 AND NOT mp.is_bot
                 ORDER BY m.finished_at DESC, m.id LIMIT 15`, [id]),
@@ -142,7 +144,7 @@ async function playerProfile({ username, actorId }) {
       },
       perGame: perGame.rows.map((r) => ({ gameId: r.game_id, games: r.games, rated: r.rated, wins: r.wins, draws: r.draws, leftEarly: r.left_early, minutes: round1(r.minutes) })),
       hourly,
-      recent: recent.rows.map((r) => ({ gameId: r.game_id, at: r.finished_at, seats: r.seats, won: r.is_winner, draw: r.is_draw, leftEarly: r.left_early, unknown: Boolean(r.unknown), minutes: round1(r.minutes) })),
+      recent: recent.rows.map((r) => ({ gameId: r.game_id, at: r.finished_at, seats: r.seats, won: r.is_winner, draw: r.is_draw, leftEarly: r.left_early, unknown: Boolean(r.unknown), unscored: Boolean(r.unscored), minutes: round1(r.minutes) })),
     };
   });
   if (!profile.player) return profile;

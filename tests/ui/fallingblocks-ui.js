@@ -117,6 +117,20 @@ function table(setup = () => {}, { viewer = 'me', pieces = ['T', 'O', 'L', 'S'] 
     await ctx.close();
   });
 
+  await test('a solo run ends on Game over, not on a winner', async () => {
+    const solo = () => {
+      const players = [{ id: 'me', name: 'Aarav', bot: false }];
+      const g = E.createGame(players, { pace: 'slow' }, () => 0.5, () => 0);
+      g.phase = 'gameOver'; g.winner = null;   // a solo run has no winner: it ends when the stack tops out
+      const room = { code: 'ABCDEF', gameId: 'fallingblocks', hostId: 'me', status: 'playing', options: { pace: 'slow' }, visibility: 'public', seats: 1, min: 1, max: 8, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
+        members: [{ id: 'me', name: 'Aarav', bot: false, avatar: '🧙', connected: true, ping: null, username: null }] };
+      return [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room, view: E.viewFor(g, 'me') }];
+    };
+    const { page, ctx } = await open(solo());
+    assert.equal(await page.locator('.overlay h2').innerText(), 'Game over');
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\nfalling blocks UI: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

@@ -12,6 +12,7 @@ const { AuthError } = dbAuth;
 const RECENT_LIMIT = 6;
 const HISTORY_PAGE_SIZE = 10;
 const { DELETED_NAME } = require('./matches');
+const { UNSCORED_SQL } = require('../lib/unscoredRuns');
 
 /** The same rules the lobby uses for a name: printable, no angle brackets, 2-20 characters. */
 function cleanDisplayName(input) {
@@ -100,6 +101,7 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE, ga
   const r = await db.query(
     `SELECT * FROM (
        SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.seats, mp.score, mp.is_winner, mp.is_draw, mp.left_early, mp.forfeit,
+         ${UNSCORED_SQL} AS unscored,
          COALESCE(m.table_humans, (SELECT COUNT(*)::int FROM match_participants x WHERE x.match_id = m.id AND x.is_bot = FALSE)) AS humans
        FROM match_participants mp JOIN matches m ON m.id = mp.match_id
        WHERE mp.player_id = $1 AND mp.is_bot = FALSE AND m.match_key IS NOT NULL${gameSql}
@@ -110,8 +112,9 @@ async function getHistory(playerId, { page = 1, pageSize = HISTORY_PAGE_SIZE, ga
     items: r.rows.map((x) => ({
       gameId: x.game_id, finishedAt: iso(x.finished_at), seats: x.seats, humans: x.humans, score: x.score,
       // 'forfeit': left with others still playing, a loss in the statistics. 'left': left with no penalty (bots only, or an
-      // abandoned game), not counted in the statistics. A draw is neither a win nor a loss.
-      result: x.forfeit ? 'forfeit' : x.left_early ? 'left' : x.is_draw ? 'draw' : x.is_winner ? 'won' : 'lost',
+      // abandoned game), not counted in the statistics. A draw is neither a win nor a loss. 'unscored': a solo Falling Blocks
+      // run, which has no winner and is neither a win nor a loss (lib/unscoredRuns.js).
+      result: x.forfeit ? 'forfeit' : x.left_early ? 'left' : x.unscored ? 'unscored' : x.is_draw ? 'draw' : x.is_winner ? 'won' : 'lost',
     })),
   };
 }

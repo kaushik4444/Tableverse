@@ -1,6 +1,8 @@
 'use strict';
+const { slips } = require('../botSkill');
 /**
- * Falling Blocks (2 to 4 players), rules only: no sockets, no timers.
+ * Falling Blocks (1 to 4 players), rules only: no sockets, no timers. Alone, there is nobody to send garbage to: the game
+ * ends when your well tops out, and your score is the rows you cleared.
  *
  * Everybody builds in their own 10 x 20 well and gets the same piece sequence (seven-bag, from the game's random source).
  * Nobody takes turns: each player places their own piece whenever they like. A move is a drop: choose a rotation and a
@@ -100,7 +102,7 @@ const peekPiece = (g, n) => (n < g.pieces.length ? g.pieces[n] : null);
 const emit = (g, e) => { g.event = { seq: ++g.seq, ...e }; };
 
 function createGame(players, options = {}, rng = Math.random, now = Date.now) {
-  if (players.length < 2 || players.length > MAX_PLAYERS) throw new Error('Falling Blocks is for 2 to 4 players');
+  if (players.length < 1 || players.length > MAX_PLAYERS) throw new Error('Falling Blocks is for 1 to 4 players');
   const pace = Object.hasOwn(PACE_MS, options.pace) ? options.pace : 'slow';
   const startedAt = now();
   const g = {
@@ -234,16 +236,21 @@ function botAction(g, playerId) {
   const board = g.boards[who];
   const kind = pieceAt(g, g.count[who]);
   let best = null;
+  const options = [];
   for (let rot = 0; rot < 4; rot++) {
     const cells = ROTATIONS[kind][rot];
     for (let x = 0; x < W; x++) {
       const y = landingY(board, cells, x);
       if (y < 0) continue;
+      options.push({ x, rot });
       const score = scoreAfter(board, cells, x, y);
       if (!best || score > best.score) best = { score, x, rot };
     }
   }
-  return best ? { type: 'drop', piece: g.count[who], x: best.x, rot: best.rot } : null;
+  if (!best) return null;
+  // a slip: the bot drops the piece where it fits, not where it would score best
+  const pick = slips(g.rng) ? options[Math.floor(g.rng() * options.length)] : best;
+  return { type: 'drop', piece: g.count[who], x: pick.x, rot: pick.rot };
 }
 
 /** What a seat sees: every well (they are public, like the other boards), and the piece in hand for the viewer. */

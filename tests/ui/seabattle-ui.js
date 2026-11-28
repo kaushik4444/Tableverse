@@ -1,5 +1,5 @@
 'use strict';
-// Sea Battle in a real browser: the attack and fleet boards, selecting a square and confirming with Fire, turns, the phone
+// Sea Battle in a real browser: the attack and fleet boards, tapping a square to fire, turns, the phone
 // tabs, shots shown on both seas, the result sheet, and watchers.
 const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, welcome, sessionOk } = require('./harness');
@@ -49,24 +49,40 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     await ctx.close();
   });
 
-  await test('a square is selected by a tap, Fire stays off until then, and Fire sends that square', async () => {
+  await test('a tap on an open square fires at once, and sends that square', async () => {
     const { page, ctx } = await open(table());
-    assert.equal(await page.locator('[data-sb="fire"]').isDisabled(), true);
     await page.locator('button.sb-cell.open').nth(42).click();
-    assert.equal(await page.locator('[data-sb="fire"]').isDisabled(), false);
-    assert.match(await page.locator('.wz-status').innerText(), /Fire at/);
-    await page.locator('[data-sb="fire"]').click();
     const act = (await sent(page)).at(-1).action;
     assert.deepEqual(act, { type: 'fire', r: 4, c: 2 });
     await ctx.close();
   });
 
-  await test('Clear drops the selection without firing', async () => {
+  await test('there is no Clear or Fire button in the game: a tap is the shot', async () => {
     const { page, ctx } = await open(table());
-    await page.locator('button.sb-cell.open').nth(7).click();
-    await page.locator('[data-sb="clear"]').click();
-    assert.equal(await page.locator('[data-sb="fire"]').isDisabled(), true);
-    assert.equal((await sent(page)).length, 0);
+    assert.equal(await page.locator('[data-sb="fire"], [data-sb="clear"]').count(), 0);
+    await ctx.close();
+  });
+
+  await test('the first view of a table does not replay its last shot', async () => {
+    const msgs = table((g) => { g.shots[1][42] = 'miss'; g.event = { seq: 7, type: 'miss', by: 0, k: 42 }; });
+    const { page, ctx } = await open(msgs);
+    // the first view of a table does not replay the last shot: it is marked only when a later view brings it
+    assert.equal(await page.locator('.sb-cell.fresh').count(), 0, 'no replay on load');
+    await ctx.close();
+  });
+
+  await test('dragging a placed ship moves it: the grabbed square goes where the pointer is released', async () => {
+    const { page, ctx } = await open(table(undefined, { placed: true }));
+    const hull = await page.locator('.sb-grid.placing .sb-hull[data-slot="4"]').boundingBox();
+    const grid = await page.locator('.sb-grid.placing').boundingBox();
+    const cell = grid.width / 10;
+    await page.mouse.move(hull.x + 4, hull.y + hull.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grid.x + cell * 5.5, grid.y + cell * 5.5, { steps: 6 });
+    await page.mouse.up();
+    const act = (await sent(page)).at(-1).action;
+    assert.equal(act.type, 'place');
+    assert.deepEqual(act.ships[4], { r: 5, c: 5, vertical: false }, 'the destroyer is now on F6-G6');
     await ctx.close();
   });
 
@@ -101,7 +117,7 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     assert.equal(await page.locator('.sb-board.attack').isVisible(), false);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(scroll <= 360, `page is ${scroll}px wide`);
-    for (const sel of ['[data-sb="clear"]', '[data-sb="fire"]']) {
+    for (const sel of ['[data-sb="tab-attack"]', '[data-sb="tab-mine"]']) {
       const box = await page.locator(sel).boundingBox();
       assert.ok(box.height >= 44, `${sel} is ${box.height}px tall`);
     }
@@ -119,7 +135,7 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
   await test('a watcher sees both seas and has no controls', async () => {
     const { page, ctx } = await open(table(undefined, { viewer: 'nobody' }));
     assert.equal(await page.locator('.sb-board').count(), 2);
-    assert.equal(await page.locator('[data-sb="fire"], .sb-tabs').count(), 0);
+    assert.equal(await page.locator('[data-sb="fire"], [data-sb="clear"], .sb-tabs').count(), 0);
     assert.match(await page.locator('.wz-status').innerText(), /Watching/);
     await ctx.close();
   });
@@ -230,6 +246,18 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     const after = await sent(page);
     assert.equal(after.length, before, 'nothing more is sent: the cleared ship has no place to turn');
     assert.deepEqual(after.at(-1).action, { type: 'place', ships: Array(5).fill(null) });
+    await ctx.close();
+  });
+
+  await test('a picked ship moves when its own covered square is tapped', async () => {
+    const { page, ctx } = await open(table(undefined, { placed: true }));
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="0"]').click();   // pick up the carrier (A1-E1)
+    const grid = await page.locator('.sb-grid.placing').boundingBox();
+    const cell = grid.width / 10;
+    await page.mouse.click(grid.x + cell * 1.5, grid.y + cell * 0.5);          // B1, under the carrier's own hull
+    const act = (await sent(page)).at(-1).action;
+    assert.equal(act.type, 'place');
+    assert.deepEqual(act.ships[0], { r: 0, c: 1, vertical: false }, 'the carrier now sits B1-F1');
     await ctx.close();
   });
 

@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Texas Hold'em, pure rules (no sockets, no timers). 2-8 players, chips, blinds that can rise, side pots.
  * Actions: {type:'fold'} {type:'check'} {type:'call'} {type:'raise', to} {type:'allin'} {type:'continue'}
@@ -580,6 +581,12 @@ function botAction(g, playerId) {
     const final = Math.min(maxTo(p), Math.max(minTo(g, p), to));
     return final >= maxTo(p) ? { type: 'allin' } : { type: 'raise', to: final };
   };
+  // a slip: a random one of the plays a careless player makes (fold, call or check, or a small raise), so chips still move
+  // and a game between bots still ends: a table that only calls and checks would never bust anyone
+  if (slips(r)) {
+    const small = raiseTo(g.currentBet + Math.max(bb * 2, pot * 0.5));
+    return pickOne(r, toCall > 0 ? [{ type: 'fold' }, { type: 'call' }, small] : [{ type: 'check' }, small]);
+  }
   if (toCall <= 0) {
     if (s > 0.82) return raiseTo(g.currentBet + Math.max(bb * 2, pot * (0.6 + r() * 0.5)));
     if (s > 0.6 && r() < 0.65) return raiseTo(g.currentBet + Math.max(bb * 2, pot * (0.35 + r() * 0.3)));
