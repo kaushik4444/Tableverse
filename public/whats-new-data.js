@@ -10,6 +10,29 @@
 (function () {
   window.TV_RELEASES = [
   {
+    date: '2026-11-28',
+    items: [
+      {
+        level: 'major',
+        ico: '🎯',
+        title: 'Carrom is open to play',
+        text: 'Flick the striker to pocket your coins and the queen. Two players, or two teams of partners when there are four.'
+      },
+      {
+        level: 'major',
+        ico: '🎲',
+        title: '22 games at one table',
+        text: 'From Wizard and Chess to Sea Battle, Sudoku and Bingo, the games are all in one place. Pick one from the home page and invite your friends.'
+      },
+      {
+        level: 'major',
+        ico: '👋',
+        title: 'Try it as a guest',
+        text: 'Visitors can play open games from the home page without creating an account. A guest who later signs up keeps the games played. Private tables, friend requests and profiles need an account.'
+      }
+    ]
+  },
+  {
     date: '2026-11-26',
     items: [
       {
