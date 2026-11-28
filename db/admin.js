@@ -557,7 +557,7 @@ async function purge() {
 // ---------------------------------------------------------------- game switches (owner)
 /** Every explicit switch: { game_id, access, enabled, updated_at }. A game without a row is on for everyone (lib/gameFlags.js). */
 async function listGameFlags() {
-  return (await db.query('SELECT game_id, access, enabled, updated_at, sort_order, guest_trial_limit FROM game_flags')).rows;
+  return (await db.query('SELECT game_id, access, enabled, updated_at, sort_order, guest_trial_limit, beta FROM game_flags')).rows;
 }
 
 /**
@@ -623,6 +623,20 @@ async function setGameTrialLimit({ actorId, gameId, limit }) {
   });
 }
 
+/** Marks one game as Beta (experimental, shown with a Beta tag) or clears it. Only a real change is written and audited. */
+async function setGameBeta({ actorId, gameId, beta }) {
+  await db.withTransaction(async (c) => {
+    const r = await c.query(
+      `INSERT INTO game_flags (game_id, enabled, access, beta, updated_at, updated_by) VALUES ($1, TRUE, 'on', $2, NOW(), $3)
+       ON CONFLICT (game_id) DO UPDATE SET beta = EXCLUDED.beta, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+       WHERE game_flags.beta IS DISTINCT FROM EXCLUDED.beta
+       RETURNING game_id`,
+      [gameId, beta === true, actorId]
+    );
+    if (r.rows.length) await audit(c, { actorId, action: 'game.beta', targetType: 'game', targetId: gameId, detail: { beta: beta === true } });
+  });
+}
+
 async function setGameOrder({ actorId, order }) {
   await db.withTransaction(async (c) => {
     await lockStaff(c, actorId);
@@ -648,7 +662,7 @@ async function setGameOrder({ actorId, order }) {
 module.exports = {
   RETENTION, PAGE,
   getRole, claimOwnerIfConfigured, bootstrapOwner, setRole, listUsers, signOutUser, authorizeVerifyResend, suspendUser, unsuspendUser, deleteUser, lookupUser, isOwner,
-  addCounters, addActive, forgetActor, overview, health, gameStats, matchHistory, listGameFlags, setGameFlag, setGameOrder, setGameTrialLimit, listGuestFeatures, setGuestFeature, recordAudit,
+  addCounters, addActive, forgetActor, overview, health, gameStats, matchHistory, listGameFlags, setGameFlag, setGameOrder, setGameTrialLimit, setGameBeta, listGuestFeatures, setGuestFeature, recordAudit,
   insights: (opts) => require('./insights').insights(opts), // read-only usage figures for the Insights tab
   countryEngagement: (opts) => require('./countryStats').countryEngagement(opts), // per-country play figures (minimum sample applied)
   sessionStats: (opts) => require('./sessionStats').sessionStats(opts), // connections by hour and visit length (aggregate counters)

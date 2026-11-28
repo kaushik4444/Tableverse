@@ -355,4 +355,30 @@ test('no limit is reported before the first complete read', () => {
   assert.equal(flags.trialLimitOf(ids[0]), null);
 });
 
+test('a Beta mark shows on that game only, and changes nothing about who may play it', () => {
+  flags.reset();
+  flags.apply([{ game_id: ids[0], access: 'on', enabled: true, beta: true }]);
+  const list = flags.withFlags(games.list());
+  assert.equal(list.find((g) => g.id === ids[0]).beta, true);
+  assert.equal(list.find((g) => g.id === ids[1]).beta, false);
+  assert.equal(flags.isEnabled(ids[0]), true, 'a beta game is still playable');
+  flags.reset();
+});
+
+test('a Beta change this process writes shows at once, and clearing it removes the tag', () => {
+  flags.reset();
+  flags.apply([]);
+  assert.equal(flags.setBeta(ids[2], true), true);
+  assert.equal(flags.withFlags(games.list()).find((g) => g.id === ids[2]).beta, true);
+  assert.equal(flags.setBeta(ids[2], false), true);
+  assert.equal(flags.withFlags(games.list()).find((g) => g.id === ids[2]).beta, false);
+  flags.reset();
+});
+
+test('before the first read no game shows Beta, and an unknown game cannot be marked', () => {
+  flags.reset();
+  assert.equal(flags.withFlags(games.list()).some((g) => g.beta), false);
+  assert.equal(flags.setBeta('no-such-game', true), false);
+});
+
 console.log(`\n${passed} passed`);

@@ -3068,7 +3068,7 @@
       <article class="game-card${open ? '' : ' is-locked'}" style="--accent:${esc(g.accent || '#7b4bd0')}">
         <div class="game-art" aria-hidden="true">${gameMark(g)}</div>
         <div class="game-body">
-          <h3>${esc(g.name)} <small>${range(g.seats)}</small></h3>
+          <h3>${esc(g.name)} ${g.beta ? '<span class="beta-tag" title="Experimental: still being improved">Beta</span> ' : ''}<small>${range(g.seats)}</small></h3>
           <p>${esc(g.tagline)}</p>${note}
           <div class="row game-actions">
             <button class="btn small${devOff ? ' is-off' : ''}" type="button" data-act="create" data-game="${esc(g.id)}"${open || guestLocked ? '' : ' aria-disabled="true"'}${devOff ? ` title="${DEV_OFF_TEXT}"` : ''}>Create table</button>
