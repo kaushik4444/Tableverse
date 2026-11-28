@@ -46,7 +46,7 @@ class MemoryMatchStore {
         played++;
         if (part.isWinner) wins++;
         if (part.isDraw) draws++;
-        if (isUnscoredRun(m.gameId, m.seats)) unscored++;
+        if (isUnscoredRun(m.gameId, m.tableHumans)) unscored++;
       }
     }
     return { played, wins, draws, losses: played - wins - draws - unscored };
@@ -79,7 +79,7 @@ class MemoryMatchStore {
     const rows = [];
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
-      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: new Date(this.completionMs(m)), isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats, unscored: isUnscoredRun(m.gameId, m.seats) });
+      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: new Date(this.completionMs(m)), isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats, unscored: isUnscoredRun(m.gameId, m.tableHumans) });
     }
     return rows.sort((a, b) => b.finishedAt - a.finishedAt);
   }

@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { isUnscoredRun, UNSCORED_SQL } = require('../lib/unscoredRuns');
 const { computeProfile } = require('../db/stats');
 
-test('only a one-seat Falling Blocks run is unscored', () => {
+test('only a one-human Falling Blocks run is unscored', () => {
   assert.equal(isUnscoredRun('fallingblocks', 1), true);
   assert.equal(isUnscoredRun('fallingblocks', '1'), true);
   assert.equal(isUnscoredRun('fallingblocks', 2), false);
@@ -13,9 +13,24 @@ test('only a one-seat Falling Blocks run is unscored', () => {
   assert.equal(isUnscoredRun('memorymatch', 1), false);
 });
 
+test('one human at a table with bots is still a solo run (capacity is not used)', () => {
+  // a 4-seat table where three seats were filled with bots: the record stores table_humans = 1
+  assert.equal(isUnscoredRun('fallingblocks', 1), true);
+  assert.match(UNSCORED_SQL, /m\.table_humans = 1/);
+});
+
+test('two humans are a real game, even at a 1-seat capacity record', () => {
+  assert.equal(isUnscoredRun('fallingblocks', 2), false);
+});
+
+test('a record without a stored human count is scored (unknown, not assumed solo)', () => {
+  assert.equal(isUnscoredRun('fallingblocks', null), false);
+  assert.equal(isUnscoredRun('fallingblocks', undefined), false);
+});
+
 test('the SQL twin names the same rule', () => {
   assert.match(UNSCORED_SQL, /m\.game_id = 'fallingblocks'/);
-  assert.match(UNSCORED_SQL, /m\.seats = 1/);
+  assert.match(UNSCORED_SQL, /m\.table_humans = 1/);
 });
 
 test('an unscored run is not a loss and does not dilute the win rate', () => {
