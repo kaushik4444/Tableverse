@@ -280,6 +280,7 @@ function viewFor(g, playerId) {
     event: g.event ? { ...g.event } : null,
     myDraw: draw ? { seq: draw.seq, card: pub(draw.card) } : null,
     roundResult: g.roundResult ? { ...g.roundResult } : null,
+    log: g.log.slice(-40),
     winners: over ? g.winners.slice() : [],
   };
 }

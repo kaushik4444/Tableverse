@@ -410,6 +410,7 @@ function viewFor(g, playerId) {
     spots,
     targets,
     event: g.event ? { ...g.event, revealed: g.event.revealed ? g.event.revealed.slice() : undefined } : null,
+    log: g.log.slice(-40),
     roundResult,
     winners: over ? g.winners.slice() : [],
     // public to everyone: every move this round and what each miner has done this round, so the table can track who is digging

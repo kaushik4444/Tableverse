@@ -107,6 +107,7 @@ function createGame(players, options = {}, rng = Math.random, now = Date.now) {
   const startedAt = now();
   const g = {
     game: 'fallingblocks',
+    log: [], // public: { by, card, kind }
     players: players.map((p) => ({ id: p.id, name: p.name })),
     options: { pace },
     rng, now,
@@ -135,10 +136,14 @@ function botGap(g, i) {
 const alive = (g) => g.players.map((_, i) => i).filter((i) => !g.out[i]);
 
 /** Ends the game with the one player still building as the winner. */
+const say = (g, i, card, kind) => { g.log.push({ by: i === null ? 'Table' : g.players[i].name, card, kind }); if (g.log.length > 60) g.log.shift(); };
+
 function finish(g) {
   const still = alive(g);
   g.phase = 'gameOver';
   g.winner = still.length === 1 ? still[0] : null;
+  if (g.winner === null) say(g, null, 'nobody is left standing', 'over');
+  else say(g, g.winner, 'is the last one standing', 'over');
   emit(g, { type: 'over', winner: g.winner });
 }
 
@@ -146,6 +151,7 @@ function finish(g) {
 function topOut(g, i) {
   if (g.out[i]) return;
   g.out[i] = true;
+  say(g, i, 'topped out', 'out');
   if (alive(g).length <= 1) finish(g);
   else emit(g, { type: 'out', by: i });
 }
@@ -184,6 +190,7 @@ function applyAction(g, playerId, action) {
   for (const [r, c] of cells) board[(y + r) * W + x + c] = kind;
   const cleared = clearRows(board);
   g.lines[who] += cleared;
+  if (cleared) say(g, who, `cleared ${cleared} line${cleared > 1 ? 's' : ''}`, 'lines');
   g.count[who]++;
   ensurePieces(g, g.count[who] + 3);
   g.version++;
@@ -266,6 +273,7 @@ function viewFor(g, playerId) {
     myTurn: current !== null,
     winner: g.winner,
     event: g.event ? { ...g.event } : null,
+    log: g.log.slice(-40),
   };
 }
 

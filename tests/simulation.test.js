@@ -34,6 +34,12 @@ function checkViews(def, g, players, label) {
     const v = g.view(players[i].id);
     const json = JSON.stringify(v);
     assert.ok(json && json.length < 400000, `${label}: view for seat ${i} is bounded (${json.length} bytes)`);
+    // the table's Log sheet: every game but Go Fish (which has its own sheet) exposes a log, and each entry says what happened
+    const sheet = v && (v.playLog || v.log);
+    if (def.id !== 'gofish') assert.ok(Array.isArray(sheet), `${label}: seat ${i} view has a log`);
+    if (v && Array.isArray(sheet)) {
+      sheet.forEach((e) => assert.ok(typeof e === 'string' ? e.trim().length > 0 : (e && typeof e.card === 'string' && e.card.trim().length > 0), `${label}: a log entry has no text: ${JSON.stringify(e)}`));
+    }
     // another seat's private hand must never be in the view (a public `cards` list on a showdown is not a "hand")
     if (v && Array.isArray(v.players) && !g.isOver()) {
       v.players.forEach((p, j) => { if (j !== i && p && Array.isArray(p.hand) && p.hand.length) assert.fail(`${label}: seat ${i} is sent seat ${j}'s hand`); });

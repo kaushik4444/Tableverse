@@ -48,6 +48,7 @@ function createGame(players, options, rng, now = Date.now) {
   const startedAt = now();
   const g = {
     players: players.map((p) => ({ id: p.id, name: p.name, bot: !!p.bot })),
+    log: [], // public events only (the boards are private): { by, card, kind }
     options: { difficulty, pace },
     puzzle, solution, now, rng,
     solo: players.length === 1,
@@ -63,6 +64,8 @@ function createGame(players, options, rng, now = Date.now) {
   g.players.forEach((p, i) => { if (p.bot) g.due[i] = startedAt + botGap(g, i); });
   return g;
 }
+
+const say = (g, by, card, kind) => { g.log.push({ by, card, kind }); if (g.log.length > 60) g.log.shift(); };
 
 function applyAction(g, playerId, action) {
   if (g.phase !== 'playing') return fail('The game is over.');
@@ -93,7 +96,7 @@ function applyAction(g, playerId, action) {
     board[k] = action.v;
     if (action.v !== g.solution[k]) {
       g.mistakes[i]++;
-      if (g.mistakes[i] >= LIVES) g.out[i] = true;
+      if (g.mistakes[i] >= LIVES) { g.out[i] = true; say(g, g.players[i].name, 'is out of lives', 'out'); }
     }
   } else {
     return fail('Invalid action');
@@ -105,6 +108,7 @@ function applyAction(g, playerId, action) {
   } else if (rightOf(g, i) === emptyCount(g)) {
     g.phase = 'gameOver';
     g.winner = i;
+    say(g, g.players[i].name, 'finished the puzzle', 'done');
     const seconds = Math.max(1, Math.round((g.now() - g.startedAt) / 1000));
     g.event = { type: 'over', winner: i, seconds, seq: ++g.seq };
   }
@@ -171,6 +175,7 @@ function viewFor(g, playerId) {
     options: { ...g.options },
     solo: g.solo,
     puzzle: g.puzzle.slice(),
+    log: g.log.slice(),
     empties,
     board: me >= 0 ? g.boards[me].slice() : null,
     wrong,

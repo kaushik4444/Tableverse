@@ -102,6 +102,7 @@
    * ("played 12", "folds", "bids 16"). Showing `card` alone is what dropped the names.
    */
   const logLine = (e) => {
+    if (typeof e === 'string') return e.trim();
     const text = String((e && (e.card || e.text)) || '').trim();
     const by = String((e && e.by) || '').trim();
     if (!by || by === 'System' || by === 'Table' || text.startsWith(by)) return text;
@@ -3383,7 +3384,7 @@
   }
 
   function openActivityLog() {
-    const entries = (S.view && S.view.log) || [];
+    const entries = (S.view && (S.view.playLog || S.view.log)) || []; // playLog: lines written for the sheet (Stage Rummy's log is its feed's events)
     const overlay = document.createElement('div');
     overlay.className = 'overlay activity-overlay';
     overlay.innerHTML = `<div class="sheet activity-sheet" data-stop="1"><div class="row" style="justify-content:space-between"><h2>Game log</h2><button class="btn ghost small" data-log-close>Close</button></div>${entries.length ? `<ol class="activity-list">${entries.slice(-60).reverse().map((e) => `<li><span>${esc(logLine(e))}</span></li>`).join('')}</ol>` : '<p class="hint">No plays yet.</p>'}</div>`;
