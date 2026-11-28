@@ -1,5 +1,5 @@
-/* Sea Battle. Placing: pick a ship, tap where it goes, Rotate to turn it, Random to let the game place them, Ready when all five
- * are on the sea. Then two boards: Attack shows the other player's sea and your shots; My fleet shows your ships (drawn as hulls)
+/* Sea Battle. Placing: the fleet starts placed at random. Tap a ship to select it, then tap a square or drag it to move it;
+ * Rotate turns the selected ship, Random places the fleet again, Ready when all five are on the sea. Then two boards: Attack shows the other player's sea and your shots; My fleet shows your ships (drawn as hulls)
  * and their shots. On a phone you switch between them; on a wide screen both show. Tap a square to fire: a bomb falls on it,
  * a hit bursts and a miss shows an X. Drag a placed ship to move it. Watchers see both seas' shots. Styles in seabattle.css. */
 (() => {
@@ -40,12 +40,8 @@
       if (v.me < 0) return `Watching: ${esc(v.players.map((p) => p.name).join(' and '))} are placing their fleets`;
       const me = v.players[v.me];
       if (me.ready) return `Ready. Waiting for ${esc(v.players[1 - v.me].name)} to place their fleet…`;
-      if (ui.pick !== null) {
-        const moving = !!(v.setup && v.setup[ui.pick]);
-        return `${moving ? 'Move' : 'Place'} your ${v.lengths[ui.pick]}-square ${NAMES[ui.pick].toLowerCase()} (${ui.vert ? 'down' : 'across'}): tap a square${moving ? ' for it' : ''}, or Rotate to turn it${moving ? ' in place' : ''}`;
-      }
-      if (v.placed && v.placed.every(Boolean)) return 'All five ships are on the sea. Ready when you are, or pick one up to move it';
-      return 'Pick a ship, then tap where it goes. Drag a ship on your sea to move it';
+      if (ui.pick !== null) return `${NAMES[ui.pick]} selected (${v.lengths[ui.pick]} squares, ${ui.vert ? 'down' : 'across'}): tap a square or drag it to move it, or Rotate to turn it`;
+      return 'Tap a ship to select it, then tap a square or drag it to move it. Rotate turns it, Random places the fleet again';
     }
     if (v.me < 0) return `Watching: ${esc(v.players[v.turn].name)} is aiming`;
     if (!v.myTurn) return `${esc(v.players[1 - v.me].name)} is aiming…`;
@@ -126,19 +122,12 @@
   /** Whether I have pressed Ready (watchers never have). */
   const myReady = (v) => v.me >= 0 && !!v.players[v.me].ready;
 
-  /** The ship chooser and the placement buttons. */
+  /** The placement buttons: Rotate turns the selected ship, Random places the fleet again, Ready starts the battle. */
   function placeControlsHTML(v) {
-    const chips = v.lengths.map((len, i) => {
-      const on = v.placed && v.placed[i];
-      const picked = ui.pick === i;
-      return `<button type="button" class="btn ghost small sb-chip${on ? ' on' : ''}${picked ? ' picked' : ''}" data-sb="pick" data-slot="${i}" aria-pressed="${picked}" ${myReady(v) ? 'disabled' : ''}>${NAMES[i]} · ${len}${on ? ' ✓' : ''}</button>`;
-    }).join('');
     const allPlaced = v.placed && v.placed.every(Boolean);
-    return `<div class="sb-chips" role="group" aria-label="Ships">${chips}</div>
-      <div class="sb-controls">
+    return `<div class="sb-controls">
         <button type="button" class="btn ghost" data-sb="rotate" ${myReady(v) ? 'disabled' : ''}>${ui.vert ? 'Down' : 'Across'} · Rotate</button>
         <button type="button" class="btn ghost" data-sb="random" ${myReady(v) ? 'disabled' : ''}>Random</button>
-        <button type="button" class="btn ghost" data-sb="reset" ${myReady(v) || !(v.placed && v.placed.some(Boolean)) ? 'disabled' : ''}>Clear</button>
         <button type="button" class="btn" data-sb="ready" ${!myReady(v) && allPlaced ? '' : 'disabled'}>Ready</button></div>`;
   }
 
@@ -194,7 +183,7 @@
     if (ui.fx === undefined) ui.fx = ev ? ev.seq : -1;
     ui.freshNow = ev && ev.seq !== ui.fx ? ev : null;
     if (ev) ui.fx = ev.seq;
-    // a placed or picked ship that is no longer in the setup (after Clear or a redraw) is put down
+    // a picked ship that is no longer in the setup (after a redraw) is put down
     if (ui.pick !== null && v.phase !== 'placing') ui.pick = null;
     ui.root = root; ui.ctx = ctx; ui.v = v; react(v);
     const active = root.ownerDocument.activeElement;
@@ -320,20 +309,14 @@
         if (v && v.myTurn && !v.shots[1 - v.me][k]) ctx.act({ type: 'fire', r: Math.floor(k / v.N), c: k % v.N });
         return;
       }
-      case 'pick': {
-        const slot = Number(el.dataset.slot);
-        if (ui.pick === slot) { ui.pick = null; break; }
-        ui.pick = slot;
-        // a placed ship keeps its direction when it is picked up
-        const q = v && v.setup && v.setup[slot];
-        if (q) ui.vert = q.vertical;
-        break;
-      }
       case 'rotate': {
         // the working setup, so a second Rotate before the next server view turns the ship back
         const base = ui.setup || (v && v.setup);
         const placed = ui.pick !== null && base && base[ui.pick];
-        if (!placed) { ui.vert = !ui.vert; break; }
+        if (!placed) {
+          ui.root.querySelector('.wz-status span').textContent = 'Tap a ship to select it, then Rotate it';
+          return;
+        }
         // a placed ship turns where it is: the new direction is sent if it fits, and the ship stays picked up to move
         const turned = { r: placed.r, c: placed.c, vertical: !placed.vertical };
         if (!canPlace({ ...v, setup: base }, ui.pick, turned)) {
@@ -354,21 +337,13 @@
           const working = ui.setup || v.setup || [];
           const slot = working.findIndex((q, i) => q && cellsOf(v.lengths[i], q, N).includes(k));
           if (slot >= 0) { ui.pick = slot; ui.vert = working[slot].vertical; }
-          else { ui.root.querySelector('.wz-status span').textContent = 'Pick a ship first, then tap where it goes'; return; }
+          else { ui.root.querySelector('.wz-status span').textContent = 'Tap a ship to select it first, then tap a square'; return; }
           break;
         }
         placeAt(k);
         return;
       }
       case 'random': ctx.act({ type: 'random' }); ui.pick = null; return;
-      case 'reset': {
-        // the working setup is cleared too, so a Rotate before the cleared view arrives has no ship to turn back into the fleet
-        const empty = Array(v.lengths.length).fill(null);
-        ui.setup = empty;
-        ui.pick = null;
-        ctx.act({ type: 'place', ships: empty });
-        return;
-      }
       case 'ready': ctx.act({ type: 'ready' }); return;
       default: return;
     }

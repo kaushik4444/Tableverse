@@ -119,7 +119,7 @@ function createGame(players, options = {}, rng = Math.random, now = Date.now) {
     players: players.map((p) => ({ id: p.id, name: p.name })),
     options: { pace },
     phase: 'placing', // placing | playing | gameOver
-    setup: [Array(LENGTHS.length).fill(null), Array(LENGTHS.length).fill(null)], // each player's ships until both are ready
+    setup: [randomSetup(rng), randomSetup(rng)], // each player's ships until both are ready: the fleets start placed at random, and can be moved or re-rolled
     ready: [false, false],
     fleets: [null, null],                         // built when a player is ready; only the owner's view shows them
     shots: [Array(CELLS).fill(null), Array(CELLS).fill(null)], // shots[i]: the sea of player i, as fired at

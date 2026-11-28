@@ -235,7 +235,11 @@ test('random fleets are valid and spread out, and the other player never sees th
   assert.ok(spreadTotal >= 0);
   const g = E.createGame(P(), {}, rng());
   E.applyAction(g, 'a', { type: 'random' }); E.applyAction(g, 'a', { type: 'ready' });
-  assert.deepEqual(E.viewFor(g, 'b').ships, [], 'b sees none of a’s ships, and has placed none');
+  // b's sea starts with b's own random fleet; a's fleet is never shown to b
+  const bShips = E.viewFor(g, 'b').ships.map((s) => s.cells.join(','));
+  const aShips = E.viewFor(g, 'a').ships.map((s) => s.cells.join(','));
+  assert.equal(bShips.length, 5, 'b sees its own five ships');
+  assert.ok(bShips.every((c) => !aShips.includes(c)), 'b sees none of a’s ships');
   assert.equal(E.viewFor(g, 'b').fleet.some((x) => x !== null), false, 'b’s sea shows nothing of a’s fleet');
   assert.equal(E.viewFor(g, 'a').players[0].ready, true);
   assert.equal(E.viewFor(g, 'b').players[0].ready, true, 'everybody sees who is ready');

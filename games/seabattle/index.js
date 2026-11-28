@@ -22,7 +22,7 @@ module.exports = {
     ] },
   ],
   rules: [
-    'Two players. Each has a 10 × 10 sea with five ships: lengths 5, 4, 3, 3 and 2. Place them by hand, or let Random spread them out. Ships never touch, and then press Ready.',
+    'Two players. Each has a 10 × 10 sea with five ships: lengths 5, 4, 3, 3 and 2. The fleet starts placed at random: tap a ship to select it, then tap a square or drag it to move it. Rotate turns the selected ship, Random places them again. Ships never touch. Press Ready when you are set.',
     'Take turns firing at one square of the other sea. A hit or a miss is shown to both players.',
     'A ship is sunk when every one of its squares is hit. Its squares are then shown to everybody.',
     'A hit keeps your turn: fire again until a shot misses. A miss passes the turn.',
