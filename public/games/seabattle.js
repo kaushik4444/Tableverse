@@ -305,6 +305,7 @@
     const el = e.target.closest('[data-sb], [data-sb-act]');
     const ctx = ui.ctx, v = ui.v;
     if (!el || !ctx || el.disabled) return;
+    if (ui.drag) return; // a ship is being dragged by another pointer: its clicks do not place anything
     if (el.dataset.sbAct) {
       if (el.dataset.sbAct === 'again') ctx.rematch();
       else if (el.dataset.sbAct === 'leave') ctx.leave();
