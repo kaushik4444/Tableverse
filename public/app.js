@@ -2608,6 +2608,18 @@
     const bell = document.createElement('span'); bell.innerHTML = S.guest || !pendingSocial() ? '' : bellHTML(); // friend requests and invitations waiting
     bar.replaceChildren(...[chat, emote, ...bell.children, ...vc.children, wrap, leave].filter(Boolean)); // chat, reactions, voice, ⋯, then leave as the last button
   }
+  // A game can redraw its own page between full renders (a timer that turns cards back, a click that shows a move at once).
+  // Those redraws leave the bar as the game drew it, without the ⋯ menu, voice and the shared order. Whenever the bar turns
+  // up without its menu it is tidied again. unifyToolbar leaves a menu behind, so this does not repeat itself.
+  let toolbarWatch = null;
+  function watchToolbar() {
+    if (toolbarWatch || typeof MutationObserver === 'undefined') return;
+    toolbarWatch = new MutationObserver(() => {
+      const bar = $app.querySelector('.wz-top > .row, .ludo-tools');
+      if (bar && !bar.querySelector(':scope > .tb-more-wrap')) unifyToolbar();
+    });
+    toolbarWatch.observe($app, { childList: true, subtree: true });
+  }
   function setTools(open) {
     S.toolsOpen = open;
     const btn = $app.querySelector('.tb-more-btn'); const pop = $app.querySelector('.tb-pop');
@@ -3553,6 +3565,7 @@
     placeReady();
     markStandIns($app);
     watchStandIns();
+    watchToolbar();
     const statusText = $app.querySelector('.ludo-status b, .tm-status-guidance, .wz-status > span');
     announceStatus(statusText ? statusText.textContent : '');
     unifyToolbar();

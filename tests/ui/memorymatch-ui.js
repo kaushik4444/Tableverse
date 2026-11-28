@@ -68,6 +68,8 @@ function table(setup = () => {}, { viewer = 'me', size = '4x4', seed = 21 } = {}
     await page.waitForFunction(() => document.querySelectorAll('.mm-card.up').length === 2, null, { timeout: 4000 });
     await page.waitForFunction(() => document.querySelectorAll('.mm-card.up').length === 0, null, { timeout: 4000 });
     assert.equal(await page.locator('.mm-card.matched').count(), 0);
+    // the turned-back cards redraw the game's own page: the ⋯ menu must still be in the top bar
+    assert.equal(await page.locator('.tb-more-btn').count(), 1, 'the ⋯ menu is still there after the miss closes');
     await ctx.close();
   });
 
