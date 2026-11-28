@@ -75,7 +75,8 @@
       clearTimeout(ui.holdTimer);
       ui.holdTimer = setTimeout(() => {
         ui.hold = null;
-        if (ui.root && ui.v) render(ui.root, ui.v, ui.ctx);
+        // only while this board is still on screen: after a leave the lobby or another game owns the page
+        if (ui.root && ui.root.querySelector('.wz.mm') && ui.v) render(ui.root, ui.v, ui.ctx);
       }, HOLD_MS);
       return;
     }
