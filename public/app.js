@@ -1125,7 +1125,7 @@
     toast(`Joining ${(game && game.name) || 'private'} table…`);
     const code = invitation.room_code || invitation.roomCode;
     if (!code) { hideBusy(); return toast('This invitation has no table code. Ask the host to invite you again.'); }
-    joinTable(code, 'join');
+    joinTable(code, 'join', 'friend');
   }
 
   function recentTablesHTML() {
@@ -1366,9 +1366,9 @@
   }
 
   /** Joining any table (directory, recent, code box or invite link) goes through the same gate: guests are asked to log in first. */
-  function askJoinMode(code, t) {
-    if (!authed()) return gateLogin(() => askJoinMode(code, tableByCode(code)));
-    openJoinModeDialog(code, t, (mode) => joinTable(code, mode));
+  function askJoinMode(code, t, via) {
+    if (!authed()) return gateLogin(() => askJoinMode(code, tableByCode(code), via));
+    openJoinModeDialog(code, t, (mode) => joinTable(code, mode, via));
   }
 
   function publicTableAction(t) {
@@ -1388,10 +1388,12 @@
     return `<section class="home-section public-tables-panel"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 class="section">Open tables <span class="session-count">${count}</span></h2></div><button class="btn ghost small" data-act="toggleSessions" aria-expanded="${S.sessionListOpen}">${S.sessionListOpen ? 'Hide' : 'Show'}</button></div>${S.sessionListOpen ? count ? `<div class="public-tables">${rows}</div>` : emptyState('🪑', 'No open tables', 'Create a table and make it public, and it appears here for everyone.') : ''}</section>`;
   }
 
-  function joinTable(code, mode) {
+  /** `via` says how the person arrived, for the invite counter only: 'link' (a shared table link) or 'friend' (an accepted invitation). */
+  function joinTable(code, mode, via) {
     if (!S.named || !S.name) return toast('Choose your player name first');
     const msg = { t: 'join', code, name: S.name, avatar: S.avatar || undefined };
     if (mode === 'spectate') msg.spectate = true;
+    if (via === 'link' || via === 'friend') msg.via = via;
     send(msg);
   }
 
@@ -1499,7 +1501,7 @@
         const code = hashCode();
         if (code && !S.room && !queue.length) {
           const t = tableByCode(code);
-          askJoinMode(code, t);
+          askJoinMode(code, t, 'link'); // arrived through a table link (#CODE)
         }
         break;
       }
@@ -3996,6 +3998,7 @@
     logout: () => { S.menuOpen = false; doLogout(); },
     logoutAll: () => { S.menuOpen = false; doLogoutAll(); },
     copyLink: async () => {
+      send({ t: 'share', channel: 'copy' }); // counter only
       const url = safeTableUrl();
       try {
         await navigator.clipboard.writeText(url);
@@ -4005,6 +4008,7 @@
       }
     },
     whatsapp: () => {
+      send({ t: 'share', channel: 'whatsapp' });
       const g = gameMeta(S.room.gameId);
       const url = safeTableUrl();
       const text = S.room.visibility === 'public'
@@ -4013,6 +4017,7 @@
       window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
     },
     share: () => {
+      send({ t: 'share', channel: 'native' });
       const url = safeTableUrl();
       const text = S.room.visibility === 'public' ? `Join my table (code ${S.room.code})` : 'I will send you a private table invitation in the app.';
       navigator.share({ title: 'Tableverse', text, url }).catch(() => {});

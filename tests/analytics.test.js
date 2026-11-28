@@ -3,7 +3,7 @@
 // analytics store can never break a request.
 require('./helpers/env');
 const assert = require('node:assert/strict');
-const { createAnalytics, cleanDim } = require('../lib/analytics');
+const { createAnalytics, cleanDim, METRICS } = require('../lib/analytics');
 
 let passed = 0;
 async function test(name, fn) {
@@ -30,6 +30,21 @@ const total = (rows, metric, dim = '') => rows.filter((r) => r.metric === metric
     a.track('registration'); a.track('password'); a.track('email'); a.track('');
     await a.flush();
     assert.deepEqual([...new Set(st.counters.map((r) => r.metric))], ['registration']);
+  });
+  await test('the growth counters are known metrics; their dimensions are short and clean, and no extra field is kept', async () => {
+    const st = memStore(); const a = createAnalytics({ store: st, log: quiet });
+    for (const m of ['invite_created', 'invite_joined', 'share_clicked', 'guest_created', 'guest_upgraded']) { assert.ok(METRICS.includes(m), m); assert.ok(m.length <= 32, m + ' fits the metric column'); }
+    a.track('invite_created', 'friend'); a.track('invite_joined', 'link'); a.track('invite_joined', 'link');
+    a.track('share_clicked', 'WhatsApp'); a.track('guest_created'); a.track('guest_upgraded');
+    a.track('invite_joined', 'ABCDEF <img src=x> jane@example.com');
+    await a.flush();
+    assert.equal(total(st.counters, 'invite_joined', 'link'), 2);
+    assert.equal(total(st.counters, 'share_clicked', 'whatsapp'), 1, 'lower-cased');
+    assert.equal(total(st.counters, 'guest_created'), 1);
+    assert.equal(total(st.counters, 'guest_upgraded'), 1);
+    const odd = st.counters.find((r) => r.metric === 'invite_joined' && r.dim !== 'link').dim;
+    assert.ok(!/[@ <>]/.test(odd), odd);
+    for (const r of st.counters) assert.deepEqual(Object.keys(r).sort(), ['count', 'day', 'dim', 'metric']);
   });
   await test('a counter row holds a day, a metric, a short sanitised dimension and a count, and nothing else', async () => {
     const st = memStore(); const a = createAnalytics({ store: st, log: quiet });

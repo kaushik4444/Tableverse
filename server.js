@@ -355,7 +355,8 @@ function start(opts = {}) {
       revokeSocket(ws, elsewhere ? 4002 : 4001, elsewhere ? 'signed in elsewhere' : 'signed out');
     }
   };
-  const analytics = createAnalytics({ store: dbAdmin, enabled: env.ANALYTICS_ENABLED !== '0', log: opts.log || console });
+  const analytics = createAnalytics({ store: opts.analyticsStore || dbAdmin, enabled: env.ANALYTICS_ENABLED !== '0', flushMs: opts.analyticsFlushMs || 15000, log: opts.log || console }); // opts.analyticsStore / analyticsFlushMs: tests only
+  if (opts.analyticsStore) analytics.start(); // a test store has no database block to start the timer (start is safe to call twice)
   // A registered account counts as active once per UTC day: at its first authenticated message of that day, not only at login,
   // so a session that stays open across midnight is counted for the new day too.
   const markActive = (p, ws) => {
@@ -642,6 +643,14 @@ function start(opts = {}) {
   const send = (ws, obj) => sendBounded(ws, obj, maxBufferedBytes);
   const sendError = (p, message) => send(p.ws, { t: 'error', message });
   const joinCode = (msg) => typeof msg.code === 'string' ? msg.code.trim().toUpperCase() : '';
+  /**
+   * invite_joined: someone newly took a seat or a place as spectator at a table after arriving through a table link
+   * ("link") or an accepted friend invitation ("friend"). The page says how they arrived (msg.via); anything else is not
+   * counted. Called only where a person is added to the table, never for a reconnect, a seat taken back or a join of
+   * someone who is already there, so one arrival is one count.
+   */
+  const INVITE_VIA = new Set(['link', 'friend']);
+  const trackInviteJoin = (msg) => { if (msg && INVITE_VIA.has(msg.via)) analytics.track('invite_joined', msg.via); };
   const sendJoinError = (p, tableCode, message) => send(p.ws, { t: 'error', code: 'join_failed', tableCode, message });
   // Guest play policy (lib/guestPolicy.js): a guest who taps a locked game gets a code the page turns into an account dialog.
   /** The role that decides which games this player may use (public/game-access.js): owner, admin, user or guest. */
@@ -1851,6 +1860,7 @@ function start(opts = {}) {
         if (room.spectators.length >= MAX_SPECTATORS) return sendJoinError(p, code, 'Too many spectators at that table');
         if (p.room && p.room !== room.code) leaveByChoice(p);
         addSpectator(room, p);
+        trackInviteJoin(msg);
         sys(room, `👁 ${p.name} is watching`);
         notifyOthers(room, p.id, `👁 ${p.name} is watching the game`);
         broadcast(room);
@@ -1861,6 +1871,7 @@ function start(opts = {}) {
         if (room.spectators.length >= MAX_SPECTATORS) return sendJoinError(p, code, 'Too many spectators at that table');
         if (p.room && p.room !== room.code) leaveByChoice(p);
         addSpectator(room, p);
+        trackInviteJoin(msg);
         sys(room, `👁 ${p.name} is watching`);
         notifyOthers(room, p.id, `👁 ${p.name} is watching the lobby`);
         broadcast(room);
@@ -1870,10 +1881,20 @@ function start(opts = {}) {
       if (room.members.length >= room.seats) return sendJoinError(p, code, 'That table is full');
       if (p.room) leaveByChoice(p);
       addMember(room, p);
+      trackInviteJoin(msg);
       sys(room, `🙋 ${p.name} joined the table`);
       notifyOthers(room, p.id, `🙋 ${p.name} joined the table`);
       broadcast(room);
       sendChatLog(p, room);
+    },
+
+    /** The page reports a tap on a share button (copy link, WhatsApp, share sheet). A counter only: the table code and the link are not sent or stored. */
+    share(p, msg) {
+      if (!p.room || !['copy', 'whatsapp', 'native'].includes(msg.channel)) return;
+      const now = Date.now();
+      if (p.lastShareAt && now - p.lastShareAt < 1000) return; // a double tap counts once, and a script cannot inflate the counter
+      p.lastShareAt = now;
+      analytics.track('share_clicked', msg.channel);
     },
 
     async sit(p) {
