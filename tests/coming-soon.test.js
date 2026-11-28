@@ -59,7 +59,9 @@ assert.ok(releases[0].items.filter((i) => i.level === 'major').slice(0, 3).lengt
 const customerText = JSON.stringify(releases);
 // Carrom went to players by owner decision on 2026-11-28: it is named in the customer notes only from that release on
 const carromDates = releases.filter((r) => /Carrom/i.test(JSON.stringify(r.items))).map((r) => r.date);
-assert.equal(JSON.stringify(carromDates), JSON.stringify(['2026-11-28']), 'Carrom is in the customer release notes only from its opening release');
+const carromOpeningDate = '2026-11-28';
+assert.ok(carromDates.includes(carromOpeningDate), 'Carrom is in the customer release notes on its opening date');
+assert.ok(carromDates.every((date) => date >= carromOpeningDate), 'Carrom is not in the customer release notes before its opening date');
 assert.doesNotMatch(customerText, /admin/i, 'admin-console work is not in the customer release notes');
 assert.match(JSON.stringify(byDate('2026-11-18').items), /Some games need an account/);
 assert.match(JSON.stringify(byDate('2026-11-18').items), /Quiet reminders/);

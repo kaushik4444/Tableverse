@@ -67,7 +67,7 @@ Tableverse is open to players, with all twenty-two games available.
 
 What changes for the public beta. Code and docs are in this branch; the settings below live outside the repository and must be checked by the owner.
 
-- **22 games** are listed in the app, Carrom included.
+- **22 games** are listed in the app. Carrom opens to players for the beta.
 - **Guest play** is the owner's decision for the beta. Production stays off until the owner sets `GUEST_PLAY_ENABLED=true` in Render. This repository cannot confirm that setting, so check it in Render before posting the launch announcement.
 - **Owner checklist before the announcement:**
   1. Render: `GUEST_PLAY_ENABLED=true`, then redeploy or restart.
@@ -85,7 +85,7 @@ This is the release record for the day. It is wider than what players see: the i
 - **Game over.** The result card appears sooner and updates in place. If the connection was down when the game ended, the ratings are asked for again once it is back, and the card says so if they stay unavailable.
 - **No loading that never ends.** A home page with no games open, or a game list that failed to load, says so. A profile opened right after another shows the right person even if the first answer arrives late.
 
-- **Carrom** is open to players (2–4 players, in teams of partners when there are four). Owner step: the admin console's Games tab must show Carrom as Enabled.
+- **Carrom** was available only for admin testing (2–4 players, in teams of partners when there are four). It was not open to players yet.
 - **Guest play controls.** Guests can read and send table chat and play open games. Private tables, rejoining after leaving on purpose, player profiles and stats, blocking and reports are locked for guests until the owner or an admin opens them in the admin console (**Guests** tab). A locked control shows a lock and opens the account reminder. Friend requests stay account-only. Connecting after a dropped connection always works.
 - **Owner redeploy.** The owner can ask Render to redeploy the app from the admin console's Logs tab, after typing `REDEPLOY`. It needs `RENDER_API_KEY` with deploy rights and `RENDER_SERVICE_ID`, and has a five-minute cooldown.
 - **Guest play (off by default).** With `GUEST_PLAY_ENABLED=true` a visitor can play without registering. A guest is a temporary account that lasts `GUEST_SESSION_TTL_HOURS` (default 72) and can later become a full account in place, keeping its games. The owner chooses per game who may play (enabled, disabled for non-admins, disabled for guests only, or disabled for all). See [docs/GUEST_PLAY.md](docs/GUEST_PLAY.md).
