@@ -1,6 +1,6 @@
 /* Resource Isles. Builds on table.css and the wz frame. Seat colours come from --c; the island is one SVG drawn in the script. */
-.ri { --sea-a: #3b7fba; --sea-b: #1f5489; --panel: #12315a; --panel-line: rgba(255, 255, 255, .14); --gold: #f6c453;
-  background: radial-gradient(120% 70% at 50% 28%, var(--sea-a), var(--sea-b) 62%, #173f6b); border-radius: 18px; padding: 8px; gap: 8px; color: #fff; }
+.ri { --sea-a: #1c4a3c; --sea-b: #0f2a22; --panel: #0e241d; --panel-line: rgba(240, 253, 244, .12); --gold: #fbbf24;
+  background: radial-gradient(120% 70% at 50% 28%, var(--sea-a), var(--sea-b) 62%, #071510); border-radius: 18px; padding: 8px; gap: 8px; color: #f0fdf4; }
 .ri .s0 { --c: #2f6fe4; } .ri .s1 { --c: #c92f27; } .ri .s2 { --c: #f08224; } .ri .s3 { --c: #2b3445; }
 .ri .s2 .ri-tab b, .ri .s2 .ri-vpbadge { color: #1b1100; text-shadow: none; }
 
@@ -32,7 +32,7 @@
 /* the island */
 .ri .ri-main { width: 100%; max-width: 560px; margin: 0 auto; }
 .ri .ri-board { display: block; width: 100%; height: auto; touch-action: manipulation; overflow: visible; }
-.ri .ri-shallow { fill: rgba(146, 214, 240, .30); }
+.ri .ri-shallow { fill: rgba(134, 239, 172, .22); }
 .ri .ri-sand { fill: #f3e3b0; stroke: #f3e3b0; stroke-width: .04; stroke-linejoin: round; }
 .ri .ri-land { stroke: rgba(255, 252, 236, .8); stroke-width: .04; stroke-linejoin: round; }
 .ri .ri-token { fill: #fbf4df; stroke: #8a7447; stroke-width: .03; filter: drop-shadow(0 .03px .03px rgba(0, 0, 0, .5)); }
