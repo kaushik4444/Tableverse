@@ -229,6 +229,13 @@ const firstEmpty = (view) => view.puzzle.findIndex((v) => !v);
     await ctx.close();
   });
 
+  await test('a solo grid filled in ends on Game over, with the time', async () => {
+    const { page, ctx } = await open(table((g) => { g.winner = 0; g.event = { type: 'over', winner: 0, seconds: 42, seq: 1 }; g.phase = 'gameOver'; }, { count: 1 }));
+    assert.equal(await page.locator('.overlay h2').innerText(), 'Game over');
+    assert.match(await page.locator('.overlay').innerText(), /Grid filled in 42 seconds/);
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\nsudoku UI: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

@@ -214,7 +214,8 @@ test('400 games with imperfect timing always finish; bots only ever act legally'
       }
       const right = holder(g, lowest(g));
       const pick = rng() < 0.93 ? right : withCards[Math.floor(rng() * withCards.length)].id;
-      if (g.stars > 0 && rng() < 0.03) { for (const p of withCards) must(g, p.id, { type: 'shuriken' }); continue; }
+      // everybody throws in turn; once the star has landed the rest of the table has nothing more to throw this time
+      if (g.stars > 0 && rng() < 0.03) { for (const p of withCards) { if (g.starPaused || g.phase !== 'playing') break; must(g, p.id, { type: 'shuriken' }); } continue; }
       const a = E.botAction(g, pick);
       const r = E.applyAction(g, pick, a);
       assert.ok(r.ok, `seed ${seed}: ${JSON.stringify(a)} ${r.error}`);

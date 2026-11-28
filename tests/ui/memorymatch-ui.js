@@ -111,6 +111,21 @@ function table(setup = () => {}, { viewer = 'me', size = '4x4', seed = 21 } = {}
     await ctx.close();
   });
 
+  await test('a solo game ends on Game over, not on a winner', async () => {
+    // the engine ends a solo game with the one player as the winner (they lead every pair), so the view has one
+    const solo = () => {
+      const players = [{ id: 'me', name: 'Aarav', bot: false }];
+      const g = E.createGame(players, { size: '4x4' }, rng(21));
+      g.phase = 'gameOver'; g.winner = 0; g.pairs[0] = g.total / 2; g.matchedCount = g.total;
+      const room = { code: 'ABCDEF', gameId: 'memorymatch', hostId: 'me', status: 'playing', options: { size: '4x4' }, visibility: 'public', seats: 1, min: 1, max: 8, seatLabels: null, deadline: null, now: Date.now(), spectators: [],
+        members: [{ id: 'me', name: 'Aarav', bot: false, avatar: '🧙', connected: true, ping: null, username: null }] };
+      return [welcome({ id: 'me', name: 'Aarav', games: games.list() }), { t: 'state', room, view: E.viewFor(g, 'me') }];
+    };
+    const { page, ctx } = await open(solo());
+    assert.equal(await page.locator('.overlay h2').innerText(), 'Game over');
+    await ctx.close();
+  });
+
   await browser.close(); server.close();
   console.log(`\nmemory match UI: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

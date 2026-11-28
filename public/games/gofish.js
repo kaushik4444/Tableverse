@@ -129,7 +129,8 @@
 
   function handHTML(v, z) {
     if (v.me < 0) return '';
-    if (!v.hand.length) return '<div class="gf-empty">You have no cards. You draw one on your turn.</div>';
+    // an empty hand is only waiting when the game goes on: at game over there is nothing to draw
+    if (!v.hand.length) return v.phase === 'gameOver' ? '' : '<div class="gf-empty">You have no cards. You draw one on your turn.</div>';
     const fresh = ui.prevHand;
     const can = new Set(v.askRanks);
     return `<div class="hand"><div class="hand-in" style="--cw:${z.cw}px">${v.hand.map((c, i) => {

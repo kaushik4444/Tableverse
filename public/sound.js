@@ -167,6 +167,17 @@
       swish(0.02, 0.1, { vol: 0.1, f0: 1200, f1: 400, q: 0.8 });
       tone(95, 0.1, 0.09, { type: 'triangle', vol: 0.14 });
     },
+    // Sea Battle: a shot that falls into the water, a hit, and a ship going down
+    splash: () => { swish(0, 0.32, { vol: 0.16, f0: 2600, f1: 500, q: 0.8 }); tone(900, 0.12, 0.12, { type: 'sine', vol: 0.06, slide: 0.5 }); },
+    boom: () => { noise(0, 0.28, 0.22, 200); tone(120, 0, 0.3, { type: 'sine', vol: 0.22, slide: 0.4 }); },
+    sink: () => { tone(160, 0, 0.9, { type: 'sawtooth', vol: 0.08, slide: 0.25 }); noise(0.15, 0.7, 0.12, 120); },
+    // Falling Blocks: a piece locking, junk rows arriving, a row cleared
+    lock: () => { tone(260, 0, 0.07, { type: 'triangle', vol: 0.16, slide: 0.6 }); swish(0, 0.05, { vol: 0.08, f0: 1400, f1: 500, q: 1 }); },
+    garbage: () => { noise(0, 0.35, 0.2, 80); tone(90, 0, 0.35, { type: 'square', vol: 0.06, slide: 0.7 }); },
+    clear: () => { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, i * 0.05, 0.16, { type: 'triangle', vol: 0.12 })); },
+    // Memory Match: a pair found, and two cards that do not match
+    match: () => { tone(1046.5, 0, 0.12, { type: 'sine', vol: 0.12 }); tone(1568, 0.07, 0.18, { type: 'sine', vol: 0.1 }); },
+    mismatch: () => { tone(196, 0, 0.14, { type: 'square', vol: 0.06, slide: 0.9 }); tone(174.6, 0.16, 0.16, { type: 'square', vol: 0.05, slide: 0.9 }); },
   };
 
   window.CardTable = window.CardTable || {};

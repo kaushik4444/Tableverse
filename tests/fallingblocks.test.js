@@ -16,8 +16,8 @@ const fillRows = (board, rows, emptyCols) => {
   for (const r of rows) for (let c = 0; c < E.W; c++) if (!emptyCols.includes(c)) board[r * E.W + c] = 'X';
 };
 
-test('2 to 4 players only', () => {
-  assert.throws(() => E.createGame(P(1), {}));
+test('1 to 4 players: one player alone is a solo game, and zero or five are refused', () => {
+  assert.throws(() => E.createGame(P(0), {}));
   assert.throws(() => E.createGame(P(5), {}));
   assert.equal(E.createGame(P(2), {}).boards.length, 2);
   assert.equal(E.createGame(P(4), {}).boards.length, 4);
@@ -237,10 +237,23 @@ test('a drop that names an earlier piece is refused and places nothing', () => {
 
 console.log(`\n${passed} Falling Blocks tests passed`);
 
-test('the profile best is the most rows cleared in a game you won, and nothing for a game you lost', () => {
+test('the profile best is the most rows cleared alone; a versus game does not count', () => {
   const { bestOf, bestLabel } = game.stats;
-  assert.equal(bestLabel, 'Most rows cleared in a win');
-  assert.equal(bestOf({ isWinner: true, score: 7 }), 7);
-  assert.equal(bestOf({ isWinner: false, score: 9 }), null);
-  assert.equal(bestOf({ isWinner: true, score: undefined }), null);
+  assert.equal(bestLabel, 'Most rows cleared alone');
+  assert.equal(bestOf({ seats: 1, isWinner: false, score: 7 }), 7);
+  assert.equal(bestOf({ seats: 2, isWinner: true, score: 9 }), null);
+  assert.equal(bestOf({ seats: 1, isWinner: false, score: undefined }), null);
+});
+
+test('alone, the well ends when it tops out: no winner, and the rows cleared are the score', () => {
+  const g = E.createGame(P(1), {}, rng(5));
+  let guard = 0;
+  while (g.phase !== 'gameOver' && guard++ < 500) {
+    const pid = g.players[0].id;
+    // every piece in the middle column: the well fills up until the next piece cannot spawn
+    E.applyAction(g, pid, { type: 'drop', piece: g.count[0], x: 3, rot: 0 });
+  }
+  assert.equal(g.phase, 'gameOver');
+  assert.equal(g.winner, null, 'nobody is left to win a solo game');
+  assert.deepEqual(E.results(g), [{ score: g.lines[0], winner: false, draw: false }]);
 });

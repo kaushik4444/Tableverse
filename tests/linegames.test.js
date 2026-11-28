@@ -130,7 +130,7 @@ test('bots win in one, block in one, and never make an illegal move', () => {
   assert.equal(E.botAction(E.createGame('tictactoe', two, { starter: 'host' }, mulberry32(1)), 'a').type, 'place');
 });
 
-test('bot against bot: tic-tac-toe is always a draw, and every game and line length finish with consistent results', () => {
+test('bot against bot: every game and line length finishes with consistent results (bots slip now, so tic-tac-toe is not always a draw)', () => {
   for (const [id, opts] of [['tictactoe', {}], ['fourinarow', {}], ['fourinarow', { line: '5' }]]) for (let seed = 1; seed <= 6; seed++) {
     const g = E.createGame(id, two, opts, mulberry32(seed * 7)); let steps = 0;
     while (g.phase !== 'gameOver') {
@@ -140,7 +140,6 @@ test('bot against bot: tic-tac-toe is always a draw, and every game and line len
     }
     const filled = g.board.filter((x) => x !== null).length; assert.equal(filled, g.moves);
     if (g.winner !== null) assert.ok(g.line.length >= g.v.win && g.line.every((k) => g.board[k] === g.winner));
-    if (id === 'tictactoe') assert.equal(g.winner, null, 'two perfect players draw');
   }
 });
 

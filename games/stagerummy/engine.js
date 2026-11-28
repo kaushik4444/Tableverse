@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 const pacing = require('../pacing');
 const { randomUUID } = require('crypto');
 /**
@@ -401,6 +402,8 @@ function botAction(g, playerId) {
   if (!g.laid[i]) {
     const groups = solve(hand, req);
     if (groups) return { type: 'lay', groups };
+    // a slip: a random card to discard, not the worst one for the stage
+    if (slips(g.rng)) return { type: 'discard', card: pickOne(g.rng, hand).id };
     return { type: 'discard', card: worstCard(hand, req, g.rng).id };
   }
   for (const c of hand) {
