@@ -10,6 +10,7 @@ module.exports = {
   seabattle: ['The seas', 'Firing', 'Hits and sinking', 'Turns', 'Winning'],
   memorymatch: ['Turns', 'Playing alone', 'A pair', 'A miss', 'Winning'],
   fallingblocks: ['The well', 'Playing alone', 'Dropping a block', 'Clearing rows and garbage', 'Topping out and winning', 'Bot speed'],
+  resourceisles: ['Setting up', 'Rolling', 'A seven', 'Building', 'Trading', 'Points', 'Draft version'],
   twentynine: ['Teams and cards', 'Card points', 'The deal and the bid', 'Trump', 'Playing tricks', 'Marriage', 'Scoring'],
   poker: ['The game', 'Blinds', 'Betting rounds', 'All-in', 'Showdown', 'Hand ranking', 'Winning'],
   themind: ['The cards', 'No talking', 'Mistakes', 'Throwing star', 'Levels and lives', 'Winning', 'About Mind'],

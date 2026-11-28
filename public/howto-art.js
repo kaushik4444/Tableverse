@@ -220,6 +220,16 @@
     () => felt(mmGrid(Array.from({ length: 8 }, (_, i) => ({ face: ['⭐', '🍎', '🌙', '🍀'][i % 4], fill: i < 4 ? '#74b9ff' : '#ff7675', opacity: 0.8 }))) + T(160, 122, '🏆 The most pairs wins', 10, '#fff')),
   ]);
 
+  // Resource Isles: a few hexes of land on the sea, a settlement, a road and a city in the seat colours
+  const hexPts = (cx, cy, r = 22) => Array.from({ length: 6 }, (_, k) => { const a = ((60 * k + 30) * Math.PI) / 180; return `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`; }).join(' ');
+  const hexAt = (cx, cy, fill) => `<polygon points="${hexPts(cx, cy)}" fill="${fill}" stroke="#fff8e7" stroke-width="2"/>`;
+  const island = () => hexAt(120, 60, '#3f7d3a') + hexAt(154, 80, '#e9b949') + hexAt(120, 100, '#a7d26a') + hexAt(154, 120, '#9aa3ab');
+  A.resourceisles = pick([
+    () => felt(island() + '<circle cx="120" cy="38" r="6" fill="#2563eb"/>' + T(160, 150, 'Settle on a corner of two lands', 10, '#fff')),
+    () => felt(island() + '<line x1="120" y1="38" x2="154" y2="58" stroke="#dc2626" stroke-width="5" stroke-linecap="round"/>' + T(160, 150, 'Roads join your settlements', 10, '#fff')),
+    () => felt(island() + '<rect x="148" y="70" width="12" height="12" rx="2" fill="#ea580c"/>' + T(160, 150, '🌾 Cities score two points', 10, '#fff')),
+  ]);
+
   A.gofish = pick([
     () => felt(fan([pc('7', 's'), pc('7', 'h'), pc('3', 'c'), pc('J', 'd'), pc('9', 's')], 66, 44)),
     () => felt(T(160, 55, 'Ask for 7s', 20, '#fff') + arrow(110, 90, 210, 90)),

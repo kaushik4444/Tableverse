@@ -75,6 +75,12 @@ Tetris, Bullhead Run (the removed working title for what is now Take 5), Beer Po
 ## Memory Match
 
 - Memory Match is a generic name for a card-pair game, so the game keeps it. The cards use generic fruit, plant and creature symbols drawn from standard emoji, and the card back and layout are Tableverse's own (`games/memorymatch/`).
+## Resource Isles
+
+- "Resource Isles" is Tableverse's working name for its own four-player hex-island game (`games/resourceisles/`, `public/games/resourceisles.*`). The name is a descriptive phrase, not a brand. "Catan" is on the never-use list, and it is not used anywhere in the game, its art or its rules text.
+- The board is drawn in code (SVG). Tile names (Timber, Clay, Wool, Grain, Stone) and the rules text are Tableverse's own. Trading with a bank at harbour rates and building roads, settlements and cities are game mechanics, which copyright and trademark do not protect. Patents on any unusual mechanic would still need a check before launch.
+- Not verified: a trademark search for the name in the target markets, before any public release.
+
 ## Falling Blocks
 
 - The owner named the game Falling Blocks (2026-11-27). A final name check is still needed before any release, as for every name in this table.

@@ -30,6 +30,7 @@
     seabattle: ['#0284c7', `<path d="M8 30h32l-5 8H13z" fill="${INK}"/><rect x="22" y="14" width="4" height="16" fill="${INK}"/><path d="M26 14h8l-8 5z" fill="${INK}"/><path d="M10 24h9M30 24h8" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/>`],
     memorymatch: ['#e84393', `<rect x="9" y="9" width="16" height="22" rx="3" fill="${INK}" opacity=".5"/><rect x="23" y="17" width="16" height="22" rx="3" fill="${INK}"/><path d="M31 24l1.6 3.4 3.7.5-2.7 2.6.7 3.7-3.3-1.8-3.3 1.8.7-3.7-2.7-2.6 3.7-.5z" fill="#e84393"/>`],
     fallingblocks: ['#e17055', `<g fill="${INK}"><rect x="8" y="30" width="8" height="8" rx="1.5"/><rect x="17" y="30" width="8" height="8" rx="1.5"/><rect x="26" y="30" width="8" height="8" rx="1.5"/><rect x="17" y="21" width="8" height="8" rx="1.5"/></g>`],
+    resourceisles: ['#e9b949', `<path d="M8 30 L16 22 L24 30 L32 22 L40 30 L40 38 L8 38Z" fill="${INK}" opacity=".55"/><path d="M24 8 L30 18 L18 18Z" fill="#3f7d3a"/><rect x="20" y="20" width="8" height="8" rx="1.5" fill="#e9b949"/>`],
     chess: ['#8b5e3c', `<g fill="${INK}"><path d="M14 38h20v3H14z"/><path d="M17 36l2-16h10l2 16z"/><rect x="14" y="14" width="20" height="4" rx="1"/><path d="M17 14v-5h3v2h2v-2h4v2h2v-2h3v5z"/></g>`],
     carrom: ['#a16207', `<circle cx="24" cy="24" r="14" fill="none" stroke="${INK}" stroke-width="3"/><circle cx="24" cy="24" r="5" fill="${INK}"/><circle cx="38" cy="14" r="3" fill="${INK}"/>`],
   };
