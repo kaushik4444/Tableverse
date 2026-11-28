@@ -3346,7 +3346,7 @@
         ${tile('Played', g.played)}
         ${tile('Wins', g.wins, 'good')}
         ${tile('Losses', g.losses)}
-        ${tile('Win rate', g.winRate + '%')}
+        ${tile('Win rate', g.winRate === null ? '–' : g.winRate + '%')}
         <!-- The raw per-match score ("Highest score") is the legacy scoring and is not shown. The skill rating replaces it once it is live (design/scoring-skill-ratings.md). -->
       </div>
       ${ratingBoardHTML(P, meta)}
@@ -3361,16 +3361,16 @@
     const games = s.perGame.map((g) => {
       const meta = statsGame(g.gameId);
       const tag = interactive ? 'button' : 'div';
-      return `<${tag} class="stat-game${interactive ? ' stat-game-btn' : ''}"${interactive ? ` type="button" data-act="openGameStats" data-game="${esc(g.gameId)}" aria-label="${esc(meta.name)}: details"` : ''}><span class="stat-game-name">${gameMark(meta)} ${esc(meta.name)}${KIND_NOTE[g.kind] ? ` <small class="stat-kind" title="${esc(KIND_NOTE[g.kind])}">${g.kind === 'coop' ? 'co-op' : 'teams'}</small>` : ''}</span><span class="stat-game-rec">${g.wins}W · ${g.losses}L</span><span class="stat-bar" aria-hidden="true"><i style="width:${g.winRate || 0}%"></i></span><span class="stat-game-pct">${g.winRate}%</span>${g.best !== null && g.bestLabel ? `<span class="stat-game-best">${esc(g.bestLabel)}: <b>${esc(g.bestText)}</b></span>` : ''}</${tag}>`;
+      return `<${tag} class="stat-game${interactive ? ' stat-game-btn' : ''}"${interactive ? ` type="button" data-act="openGameStats" data-game="${esc(g.gameId)}" aria-label="${esc(meta.name)}: details"` : ''}><span class="stat-game-name">${gameMark(meta)} ${esc(meta.name)}${KIND_NOTE[g.kind] ? ` <small class="stat-kind" title="${esc(KIND_NOTE[g.kind])}">${g.kind === 'coop' ? 'co-op' : 'teams'}</small>` : ''}</span><span class="stat-game-rec">${g.wins}W · ${g.losses}L</span><span class="stat-bar" aria-hidden="true"><i style="width:${g.winRate || 0}%"></i></span><span class="stat-game-pct">${g.winRate === null ? '–' : g.winRate + '%'}</span>${g.best !== null && g.bestLabel ? `<span class="stat-game-best">${esc(g.bestLabel)}: <b>${esc(g.bestText)}</b></span>` : ''}</${tag}>`;
     }).join('');
-    const recent = s.recent.map((r) => `<span class="stat-chip ${r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}">${gameMark({ id: r.gameId, icon: statsGame(r.gameId).icon })}<b>${r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
+    const recent = s.recent.map((r) => `<span class="stat-chip ${r.unscored ? '' : r.draw ? 'd' : r.won ? 'w' : 'l'}" title="${esc(statsGame(r.gameId).name)} · ${esc(fmtDate(r.finishedAt))}${r.unscored ? ' · solo run, no result' : ''}">${gameMark({ id: r.gameId, icon: statsGame(r.gameId).icon })}<b>${r.unscored ? '–' : r.draw ? 'D' : r.won ? 'W' : 'L'}</b></span>`).join('');
     return `
       ${progressHTML(s.progress, interactive)}
       <div class="stat-grid">
         ${tile('Games played', s.played)}
         ${tile('Wins', s.wins, 'good')}
         ${tile('Losses', s.losses)}
-        ${tile('Win rate', s.winRate + '%')}
+        ${tile('Win rate', s.winRate === null ? '–' : s.winRate + '%')}
         ${tile('Favourite game', fav ? `${gameMark(fav)} ${esc(fav.name)}` : '–', 'wide')}
         ${tile('Win streak', s.streak.current)}
         ${tile('Best streak', s.streak.best)}
