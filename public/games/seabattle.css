@@ -33,7 +33,7 @@
 .sb .sb-cell.fresh.miss::after, .sb .sb-cell.fresh.hit::after, .sb .sb-cell.fresh.sunk::after { animation: sb-mark .25s ease-out .45s both; }
 @keyframes sb-bomb { 0% { transform: translateY(-160%); opacity: 1; } 75% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(0); opacity: 0; } }
 @keyframes sb-mark { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .sb .sb-cell.fresh::before { display: none; } .sb .sb-cell.fresh::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .sb .sb-cell.fresh::before { display: none; } .sb .sb-cell.fresh.miss::after, .sb .sb-cell.fresh.hit::after, .sb .sb-cell.fresh.sunk::after { animation: none; } }
 /* while placing, a placed ship takes the press so it can be dragged; no page scroll while dragging */
 .sb .sb-grid.placing .sb-hull { pointer-events: auto; cursor: grab; touch-action: none; z-index: 4; }
 .sb .sb-grid.placing .sb-hull.picked { cursor: grabbing; }

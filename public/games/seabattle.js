@@ -250,20 +250,22 @@
   function onDown(e) {
     const v = ui.v;
     const hull = e.target.closest && e.target.closest('.sb-grid.placing .sb-hull[data-slot]');
-    if (!hull || !v || v.phase !== 'placing' || myReady(v) || e.button > 0) return;
+    if (!hull || !v || v.phase !== 'placing' || myReady(v) || e.button > 0 || ui.drag) return; // one drag at a time
     const N = v.N, slot = Number(hull.dataset.slot);
     const p = (ui.setup || v.setup || [])[slot];
     if (!p) return;
     const k = gridK(hull.closest('.sb-grid'), e, N);
     const j = cellsOf(v.lengths[slot], p, N).indexOf(k);
     // a press on a ship that is already picked up is the tap that says where it goes (see onUp)
-    ui.drag = { slot, j: Math.max(0, j), x: e.clientX, y: e.clientY, wasPicked: ui.pick === slot };
+    const pointerId = e.pointerId;
+    ui.drag = { slot, j: Math.max(0, j), x: e.clientX, y: e.clientY, wasPicked: ui.pick === slot, pointerId };
     ui.pick = slot;
     ui.vert = p.vertical;
     render(ui.root, v, ui.ctx);
     // the release is listened for on the window: the re-render above replaces the pressed hull, so it cannot hold the pointer
-    const up = (ev) => { window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); onUp(ev); };
-    const cancel = () => { window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); ui.drag = null; };
+    // only the pointer that pressed the ship can release or cancel it: another finger never places or cancels this drag
+    const up = (ev) => { if (ev.pointerId !== pointerId) return; window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); onUp(ev); };
+    const cancel = (ev) => { if (ev.pointerId !== pointerId) return; window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); ui.drag = null; };
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', cancel);
   }
@@ -303,6 +305,7 @@
     const el = e.target.closest('[data-sb], [data-sb-act]');
     const ctx = ui.ctx, v = ui.v;
     if (!el || !ctx || el.disabled) return;
+    if (ui.drag) return; // a ship is being dragged by another pointer: its clicks do not place anything
     if (el.dataset.sbAct) {
       if (el.dataset.sbAct === 'again') ctx.rematch();
       else if (el.dataset.sbAct === 'leave') ctx.leave();
