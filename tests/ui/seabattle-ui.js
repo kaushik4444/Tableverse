@@ -14,7 +14,9 @@ const sent = (page) => page.evaluate(() => window.__sent.filter((m) => m.t === '
 
 /** A real game between you (me) and one other person, and the messages a browser would receive for it. */
 /** A fleet laid out by hand: five ships, none touching. Used for the placed-fleet and hull tests. */
-const SETUP = [{ r: 0, c: 0, vertical: false }, { r: 2, c: 0, vertical: false }, { r: 4, c: 0, vertical: false }, { r: 6, c: 0, vertical: false }, { r: 8, c: 0, vertical: false }];
+// the carrier is 6 across and 2 rows deep (rows 1-2, A-F); the destroyer sits top right (I1-J1) with room to turn down;
+// the others are one row each on the left, with a gap row between ships
+const SETUP = [{ r: 0, c: 0, vertical: false }, { r: 3, c: 0, vertical: false }, { r: 5, c: 0, vertical: false }, { r: 7, c: 0, vertical: false }, { r: 0, c: 8, vertical: false }];
 
 /** A real game between you (me) and one other person, and the messages a browser would receive for it.
  *  opts.placing: the game is still in the placing phase (nobody has placed); opts.placed: only my fleet is placed. */
@@ -140,15 +142,15 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     await ctx.close();
   });
 
-  await test('while placing, my sea is a grid of 100 squares, five ship buttons, and Ready is off until all five are placed', async () => {
+  await test('while placing, my sea is a grid of 100 squares, the fleet starts placed at random, and there are no ship buttons', async () => {
     const { page, ctx } = await open(table(undefined, { placing: true }));
     assert.equal(await page.locator('.sb-board.mine button.sb-cell').count(), 100);
-    assert.equal(await page.locator('.sb-chip').count(), 5);
-    assert.equal(await page.locator('[data-sb="ready"]').isDisabled(), true);
+    assert.equal(await page.locator('.sb-chip').count(), 0, 'no ship buttons: ships are chosen on the sea');
+    assert.equal(await page.locator('.sb-grid.placing .sb-hull').count(), 5, 'the random fleet is drawn at the start');
+    assert.equal(await page.locator('[data-sb="ready"]').isDisabled(), false, 'a full random fleet can be readied at once');
     assert.equal(await page.locator('.sb-tabs').count(), 0, 'no tabs while placing');
     await ctx.close();
   });
-
   await test('Random sends a random placement; Ready sends ready once the fleet is complete', async () => {
     const { page, ctx } = await open(table(undefined, { placing: true }));
     await page.locator('[data-sb="random"]').click();
@@ -160,32 +162,29 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     await full.ctx.close();
   });
 
-  await test('a ship is chosen, then a square sends where its first square goes; a square that touches another ship sends nothing', async () => {
+  await test('a ship is chosen by tapping it, then a square sends where its first square goes; a square that touches another ship sends nothing', async () => {
     const { page, ctx } = await open(table(undefined, { placed: true }));
-    await page.locator('.sb-chip').nth(0).click();   // the first ship is already placed; pick it up and move it along row 0
-    await page.locator('.sb-board.mine button.sb-cell').nth(5).click();
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="4"]').click();   // select the destroyer (I1-J1)
+    await page.locator('.sb-board.mine button.sb-cell').nth(55).click();      // and move it to F6 (row 5, column 5)
     const move = (await sent(page)).at(-1).action;
     assert.equal(move.type, 'place');
-    assert.deepEqual(move.ships[0], { r: 0, c: 5, vertical: false });
+    assert.deepEqual(move.ships[4], { r: 5, c: 5, vertical: false });
     const count = (await sent(page)).length;
-    await page.locator('.sb-chip').nth(1).click();   // the second ship: its first square at (3,2) would touch the ship on row 2
-    await page.locator('.sb-board.mine button.sb-cell').nth(32).click();
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="1"]').click();   // the battleship (A4-D4)
+    await page.locator('.sb-board.mine button.sb-cell').nth(43).click();      // (4,3) would touch the destroyer on row 5
     assert.equal((await sent(page)).length, count, 'a touching square sends nothing');
     assert.match(await page.locator('.wz-status').innerText(), /touch/);
     await ctx.close();
   });
-
-  await test('Rotate changes the direction of the ship being placed', async () => {
-    const { page, ctx } = await open(table(undefined, { placing: true }));
-    await page.locator('.sb-chip').nth(0).click();
+  await test('Rotate turns the selected ship, and the ship is then sent in its new direction', async () => {
+    const { page, ctx } = await open(table(undefined, { placed: true }));
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="4"]').click();  // the destroyer (I1-J1, across)
     const before = await page.locator('[data-sb="rotate"]').innerText();
     await page.locator('[data-sb="rotate"]').click();
     assert.notEqual(await page.locator('[data-sb="rotate"]').innerText(), before);
-    await page.locator('.sb-board.mine button.sb-cell').nth(0).click();
-    assert.equal((await sent(page)).at(-1).action.ships[0].vertical, true, 'the ship is placed down the sea');
+    assert.equal((await sent(page)).at(-1).action.ships[4].vertical, true, 'the destroyer is sent down the sea');
     await ctx.close();
   });
-
   await test('a placed fleet is drawn as five ship hulls on my sea, while placing and in play', async () => {
     const { page, ctx } = await open(table(undefined, { placed: true }));
     assert.equal(await page.locator('.sb-board.mine .sb-hull').count(), 5, 'my own ships show while I place them');
@@ -199,65 +198,55 @@ function table(setup = () => {}, { viewer = 'me', placing = false, placed = fals
     const { page, ctx } = await open(table(undefined, { placing: true }), { width: 360, height: 640 });
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(scroll <= 360, `page is ${scroll}px wide`);
-    for (const sel of ['[data-sb="random"]', '[data-sb="ready"]', '.sb-chip']) {
+    for (const sel of ['[data-sb="random"]', '[data-sb="ready"]', '[data-sb="rotate"]']) {
       const box = await page.locator(sel).first().boundingBox();
       assert.ok(box.height >= 44, `${sel} is ${box.height}px tall`);
     }
     await ctx.close();
   });
-
-  await test('a placed ship is picked up and Rotate turns it where it is; the turned ship is sent and stays picked up', async () => {
+  await test('a placed ship is selected by tapping it and Rotate turns it where it is; the turned ship is sent and stays selected', async () => {
     const { page, ctx } = await open(table(undefined, { placed: true }));
-    await page.locator('[data-sb="pick"][data-slot="4"]').click();
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="4"]').click();
     await page.locator('[data-sb="rotate"]').click();
     const act = (await sent(page)).at(-1).action;
     assert.equal(act.type, 'place');
-    assert.deepEqual(act.ships[4], { r: 8, c: 0, vertical: true }, 'the destroyer turns down from its square');
+    assert.deepEqual(act.ships[4], { r: 0, c: 8, vertical: true }, 'the destroyer turns down from its square');
     assert.equal(act.ships[0].vertical, false, 'the other ships are not moved');
     await ctx.close();
   });
-
   await test('two Rotate taps before the next view turn the ship there and back', async () => {
     const { page, ctx } = await open(table(undefined, { placed: true }));
-    await page.locator('[data-sb="pick"][data-slot="4"]').click();
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="4"]').click();
     await page.locator('[data-sb="rotate"]').click();
     await page.locator('[data-sb="rotate"]').click();
     const act = (await sent(page)).at(-1).action;
     assert.equal(act.ships[4].vertical, false, 'the second turn returns the destroyer to across');
     await ctx.close();
   });
-
   await test('a Rotate shows at once on the sea and on the button, before the server view arrives', async () => {
     const { page, ctx } = await open(table(undefined, { placed: true }));
-    await page.locator('[data-sb="pick"][data-slot="4"]').click();
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="4"]').click();
     const hullsBefore = await page.locator('.sb-hull.v').count();
     await page.locator('[data-sb="rotate"]').click();
     assert.equal(await page.locator('.sb-hull.v').count(), hullsBefore + 1, 'the destroyer is drawn down at once');
     assert.match(await page.locator('[data-sb="rotate"]').innerText(), /Down/, 'the button says Down');
     await ctx.close();
   });
-
-  await test('Clear, then Rotate before the cleared view arrives, does not send the old fleet back', async () => {
+  await test('there is no Clear button: a fleet cannot be emptied, only moved, rotated or re-rolled', async () => {
     const { page, ctx } = await open(table(undefined, { placed: true }));
-    await page.locator('[data-sb="reset"]').click();
-    const before = (await sent(page)).length;
-    await page.locator('[data-sb="pick"][data-slot="4"]').click();
-    await page.locator('[data-sb="rotate"]').click();
-    const after = await sent(page);
-    assert.equal(after.length, before, 'nothing more is sent: the cleared ship has no place to turn');
-    assert.deepEqual(after.at(-1).action, { type: 'place', ships: Array(5).fill(null) });
+    assert.equal(await page.locator('[data-sb="reset"]').count(), 0);
+    assert.equal(await page.locator('[data-sb="random"]').isDisabled(), false, 'Random is still there');
     await ctx.close();
   });
-
   await test('a picked ship moves when its own covered square is tapped', async () => {
     const { page, ctx } = await open(table(undefined, { placed: true }));
-    await page.locator('.sb-grid.placing .sb-hull[data-slot="0"]').click();   // pick up the carrier (A1-E1)
+    await page.locator('.sb-grid.placing .sb-hull[data-slot="0"]').click();   // pick up the carrier (A1-F2)
     const grid = await page.locator('.sb-grid.placing').boundingBox();
     const cell = grid.width / 10;
-    await page.mouse.click(grid.x + cell * 1.5, grid.y + cell * 0.5);          // B1, under the carrier's own hull
+    await page.mouse.click(grid.x + cell * 1.5, grid.y + cell * 0.5);          // B1, under the carrier's own hull (B1-F2)
     const act = (await sent(page)).at(-1).action;
     assert.equal(act.type, 'place');
-    assert.deepEqual(act.ships[0], { r: 0, c: 1, vertical: false }, 'the carrier now sits B1-F1');
+    assert.deepEqual(act.ships[0], { r: 0, c: 1, vertical: false }, 'the carrier now sits B1-G2');
     await ctx.close();
   });
 
