@@ -49,34 +49,12 @@
 .sb .sb-board.mine .sb-cell.ship { background: transparent; }
 .sb .sb-board.mine .sb-cell.water:not(:disabled):hover, .sb .sb-board.mine .sb-cell.water:not(:disabled):focus-visible { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); }
 /* a ship is one hull across its squares, with a bow at the right (or the bottom) and a deck line */
-/* A ship drawn as a fighter-style hull: a pointed bow (right when across, up when down), top-lit steel, a bridge, a
-   deck line and two gun turrets. clip-path cuts the bow, which also cuts any shadow, so the picked state is a filter tint. */
-.sb .sb-hull { position: relative; z-index: 2; pointer-events: none; margin: 2px;
-  clip-path: polygon(0 16%, 84% 16%, 100% 50%, 84% 84%, 0 84%, 0 16%);
-  background:
-    radial-gradient(circle at 78% 50%, #e2e8f0 0 3px, transparent 4px),
-    linear-gradient(180deg, transparent 47%, rgba(15, 23, 42, .55) 47% 53%, transparent 53%),
-    linear-gradient(180deg, #f8fafc 0%, #cbd5e1 22%, #94a3b8 48%, #64748b 74%, #334155 100%);
-}
-/* the bridge and the gun turrets, drawn on the hull itself */
-.sb .sb-hull::before { content: ""; position: absolute; left: 30%; right: 36%; top: 30%; bottom: 30%; border-radius: 3px;
-  background: linear-gradient(180deg, #e2e8f0, #475569); box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .5); }
-.sb .sb-hull::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(circle at 14% 50%, #1e293b 0 2px, transparent 2.6px), radial-gradient(circle at 88% 50%, #1e293b 0 2px, transparent 2.6px); }
-.sb .sb-hull.v { clip-path: polygon(16% 0, 84% 0, 84% 84%, 50% 100%, 16% 84%, 16% 0);
-  background:
-    radial-gradient(circle at 50% 78%, #e2e8f0 0 3px, transparent 4px),
-    linear-gradient(90deg, transparent 47%, rgba(15, 23, 42, .55) 47% 53%, transparent 53%),
-    linear-gradient(90deg, #f8fafc 0%, #cbd5e1 22%, #94a3b8 48%, #64748b 74%, #334155 100%); }
-.sb .sb-hull.v::before { left: 30%; right: 30%; top: 30%; bottom: 36%; }
-.sb .sb-hull.v::after { background: radial-gradient(circle at 50% 14%, #1e293b 0 2px, transparent 2.6px), radial-gradient(circle at 50% 88%, #1e293b 0 2px, transparent 2.6px); }
-.sb .sb-hull.sunk { background:
-    radial-gradient(circle at 78% 50%, #fecaca 0 3px, transparent 4px),
-    linear-gradient(180deg, #7f1d1d 0%, #450a0a 100%); }
-.sb .sb-hull.sunk.v { background:
-    radial-gradient(circle at 50% 78%, #fecaca 0 3px, transparent 4px),
-    linear-gradient(90deg, #7f1d1d 0%, #450a0a 100%); }
-.sb .sb-hull.picked { filter: brightness(1.25) saturate(1.5) sepia(.35); }
+/* A ship is top-down art (SVG, see SHIP_ART in seabattle.js) laid over its squares. A sunk ship is tinted red; the
+   picked ship is tinted gold so it reads as selected. */
+.sb .sb-hull { position: relative; z-index: 2; pointer-events: none; margin: 2px; }
+.sb .sb-hull svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 1.5px rgba(0, 0, 0, .35)); }
+.sb .sb-hull.sunk svg { filter: sepia(1) saturate(5) hue-rotate(-40deg) brightness(.75) drop-shadow(0 2px 1.5px rgba(0, 0, 0, .35)); }
+.sb .sb-hull.picked svg { filter: sepia(.45) saturate(1.6) brightness(1.15) drop-shadow(0 2px 1.5px rgba(0, 0, 0, .35)); }
 /* placing: the ship chooser and the placement buttons */
 .sb .sb-controls .btn:disabled { opacity: .45; }
 @media (min-width: 700px) {

@@ -76,14 +76,49 @@
     return `<div class="sb-board attack" role="group" aria-label="${title}"><div class="sb-grid" style="--n:${v.N}">${cells.join('')}</div></div>`;
   }
 
+  /**
+   * Top-down art for each ship, drawn bow to the right in units of one square (x along the ship, y across it).
+   * A vertical ship reuses the same drawing, turned by a reflection matrix, so the art is written once.
+   */
+  const STEEL = { hull: '#8b98a8', deck: '#b7c2cf', edge: '#334155', gun: '#1e293b', glass: '#0f172a' };
+  const turret = (x, y) => `<g class="gun"><circle cx="${x}" cy="${y - 0.14}" r="0.17" fill="${STEEL.gun}"/><circle cx="${x}" cy="${y + 0.14}" r="0.17" fill="${STEEL.gun}"/><rect x="${x}" y="${y - 0.2}" width="0.5" height="0.07" fill="${STEEL.gun}"/><rect x="${x}" y="${y + 0.13}" width="0.5" height="0.07" fill="${STEEL.gun}"/></g>`;
+  const single = (x, y) => `<g class="gun"><circle cx="${x}" cy="${y}" r="0.2" fill="${STEEL.gun}"/><rect x="${x}" y="${y - 0.04}" width="0.45" height="0.08" fill="${STEEL.gun}"/></g>`;
+  const jet = (x) => `<path class="jet" d="M${x + 0.36} 0.5 L${x + 0.05} 0.44 L${x - 0.24} 0.1 L${x - 0.14} 0.1 L${x - 0.04} 0.42 L${x - 0.36} 0.42 L${x - 0.36} 0.58 L${x - 0.04} 0.58 L${x - 0.14} 0.9 L${x - 0.24} 0.9 L${x + 0.05} 0.56 Z" fill="#e2e8f0" stroke="${STEEL.edge}" stroke-width="0.03" stroke-linejoin="round"/>`;
+  const SHIP_ART = {
+    Carrier: (L) => `<path d="M0.1 0.2 L${L - 0.5} 0.16 L${L} 0.5 L${L - 0.5} 0.84 L0.1 0.8 Q0 0.5 0.1 0.2 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <path d="M0.3 0.3 L${L - 0.6} 0.28 L${L - 0.6} 0.72 L0.3 0.7 Z" fill="${STEEL.deck}"/>
+      <path d="M0.4 0.5 H${L - 0.8}" stroke="#fde68a" stroke-width="0.03" stroke-dasharray="0.18 0.14" opacity=".8"/>
+      ${jet(1.1)}${jet(2.2)}${jet(3.3)}
+      <rect class="island" x="${L - 1.3}" y="0.6" width="0.55" height="0.2" rx="0.04" fill="${STEEL.edge}"/>`,
+    Battleship: (L) => `<path d="M0.1 0.22 L${L - 0.45} 0.2 L${L} 0.5 L${L - 0.45} 0.8 L0.1 0.78 Q0 0.5 0.1 0.22 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <rect x="1.45" y="0.4" width="0.7" height="0.2" rx="0.05" fill="${STEEL.deck}"/>
+      ${turret(0.6, 0.5)}${turret(L - 1.05, 0.5)}`,
+    Cruiser: (L) => `<path d="M0.1 0.24 L${L - 0.4} 0.22 L${L} 0.5 L${L - 0.4} 0.78 L0.1 0.76 Q0 0.5 0.1 0.24 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <rect x="1.0" y="0.42" width="0.6" height="0.16" rx="0.04" fill="${STEEL.deck}"/>
+      ${single(0.55, 0.5)}${turret(L - 0.95, 0.5)}`,
+    Submarine: (L) => `<path d="M0.15 0.34 L${L - 0.35} 0.34 Q${L} 0.5 ${L - 0.35} 0.66 L0.15 0.66 Q0 0.5 0.15 0.34 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <rect x="1.0" y="0.4" width="0.55" height="0.2" rx="0.1" fill="${STEEL.deck}" stroke="${STEEL.edge}" stroke-width="0.03"/>
+      <path d="M1.3 0.4 V0.18 M1.42 0.4 V0.2" stroke="${STEEL.edge}" stroke-width="0.05"/>`,
+    Destroyer: (L) => `<path d="M0.1 0.3 L${L - 0.35} 0.28 L${L} 0.5 L${L - 0.35} 0.72 L0.1 0.7 Q0 0.5 0.1 0.3 Z" fill="${STEEL.hull}" stroke="${STEEL.edge}" stroke-width="0.04"/>
+      <rect x="0.45" y="0.42" width="0.4" height="0.16" rx="0.04" fill="${STEEL.deck}"/>
+      ${single(L - 0.75, 0.5)}`,
+  };
+  /** The hull markup for one ship: positioned on the grid, drawn as its top-down art. */
+  function hullHTML({ name, len, vertical, pos, cls = '', slot }) {
+    const art = (SHIP_ART[name] || SHIP_ART.Destroyer)(len);
+    const view = vertical ? `0 0 1 ${len}` : `0 0 ${len} 1`;
+    const turn = vertical ? ` transform="matrix(0 -1 -1 0 1 ${len})"` : '';
+    const slotAttr = slot !== undefined ? ` data-slot="${slot}"` : '';
+    return `<div class="sb-hull${cls}${vertical ? ' v' : ''}" style="${pos}" aria-hidden="true" data-ship="${esc(name)}"${slotAttr}><svg viewBox="${view}" preserveAspectRatio="none"><g${turn}>${art}</g></svg></div>`;
+  }
+
   /** A ship drawn as one hull across its squares. Positioned on the grid's own tracks, above the water. */
   function hullsHTML(v, ships) {
     return ships.map((s, i) => {
       const first = s.cells[0], len = s.cells.length, vertical = len > 1 && s.cells[1] - first === v.N;
       const r = Math.floor(first / v.N) + 1, c = (first % v.N) + 1;
       const pos = vertical ? `grid-row:${r} / span ${len};grid-column:${c}` : `grid-row:${r};grid-column:${c} / span ${len}`;
-      const name = NAMES[i];
-      return `<div class="sb-hull${s.sunk ? ' sunk' : ''}${vertical ? ' v' : ''}" style="${pos}" aria-hidden="true" data-ship="${esc(name)}"></div>`;
+      return hullHTML({ name: NAMES[i], len, vertical, pos, cls: s.sunk ? ' sunk' : '' });
     }).join('');
   }
 
@@ -114,7 +149,7 @@
       const first = s.cells[0], len = s.cells.length, vertical = p2v(s.cells, N);
       const r = Math.floor(first / N) + 1, c = (first % N) + 1;
       const pos = vertical ? `grid-row:${r} / span ${len};grid-column:${c}` : `grid-row:${r};grid-column:${c} / span ${len}`;
-      return `<div class="sb-hull${vertical ? ' v' : ''}${ui.pick === s.slot ? ' picked' : ''}" style="${pos}" aria-hidden="true" data-ship="${esc(NAMES[s.slot])}" data-slot="${s.slot}"></div>`;
+      return hullHTML({ name: NAMES[s.slot], len, vertical, pos, cls: ui.pick === s.slot ? ' picked' : '', slot: s.slot });
     }).join('');
     return `<div class="sb-board mine" role="group" aria-label="Your sea: place your ships"><div class="sb-grid placing" style="--n:${N}">${cells.join('')}${hulls}</div></div>`;
   }
