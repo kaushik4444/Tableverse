@@ -599,7 +599,7 @@
   /** Sends the current aim as a flick, if it is my turn, nothing is playing and the power is set. */
   function fire() {
     const v = ui.v, ctx = ui.ctx;
-    if (!v || !ctx || !v.myTurn || ui.anim || ui.aim.power <= 0) return;
+    if (!v || !ctx || !v.myTurn || ui.anim || ui.launch || ui.aim.power <= 0) return;
     const rad = (ui.aim.angle * Math.PI) / 180;
     // the striker leaves at once on release; the server's shot takes over when it arrives (see react and drawFrame)
     // the aim is in the viewer's display frame; the keyframes are in the table's bottom frame, so the glide is converted to it
