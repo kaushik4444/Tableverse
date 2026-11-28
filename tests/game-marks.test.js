@@ -178,7 +178,7 @@ test('open tables and rejoin banners keep a known mark when the game is missing 
 // Exercise the admin renderer with synthetic API data and a minimal output sink.
 async function adminMarks() {
   const admin = publicFile('admin.js');
-  const start = admin.indexOf('  async function gameSwitches()');
+  const start = admin.indexOf('  async function gameSwitches(');
   const end = admin.indexOf('  // ---------------------------------------------------------------- chat reports', start);
   assert.ok(start >= 0 && end > start, 'admin game-switch renderer exists');
   // the draft state and its helpers sit above gameSwitches; the renderer needs them too

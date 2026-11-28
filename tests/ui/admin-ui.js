@@ -742,6 +742,52 @@ const api = (role) => ({
     } finally { await s.close(); }
   });
 
+  await test('Beta has a name per game and keeps the saved checkbox state when Games cannot refresh', async () => {
+    const s = await open('owner');
+    const games = [
+      { id: 'wizard', name: 'Wizard & "Friends"', access: 'on', beta: false },
+      { id: 'ludo', name: 'Ludo', access: 'on', beta: true },
+    ];
+    let failRead = '';
+    let rejectSave = false;
+    const readError = (error) => ({ status: 503, json: { ok: false, error } });
+    await s.page.route('**/api/admin/games?days=30', (route) => route.fulfill(
+      failRead === 'games' ? readError('Game counts unavailable') : { json: gamesFixture(30) }));
+    await s.page.route('**/api/admin/game-flags', (route) => route.fulfill(
+      failRead === 'flags' ? readError('Game flags unavailable') : { json: { ok: true, modes: ['on'], games } }));
+    await s.page.route('**/api/admin/game-beta', (route) => {
+      const { gameId, beta } = route.request().postDataJSON();
+      if (rejectSave) return route.fulfill({ status: 503, json: { ok: false, error: 'Save unavailable' } });
+      games.find((g) => g.id === gameId).beta = beta;
+      return route.fulfill({ json: { ok: true, gameId, beta } });
+    });
+    try {
+      await tab(s.page, 'games');
+      const wizard = s.page.getByRole('checkbox', { name: 'Beta for Wizard & "Friends"', exact: true });
+      const ludo = s.page.getByRole('checkbox', { name: 'Beta for Ludo', exact: true });
+      await wizard.waitFor();
+      assert.equal(await wizard.isChecked(), false);
+      assert.equal(await ludo.isChecked(), true);
+
+      failRead = 'games';
+      await wizard.check();
+      await s.page.getByRole('alert').filter({ hasText: /Game counts unavailable.*Beta saved/ }).waitFor();
+      assert.equal(await wizard.isChecked(), true);
+      assert.equal(await ludo.isChecked(), true);
+
+      failRead = 'flags';
+      await ludo.uncheck();
+      await s.page.getByRole('alert').filter({ hasText: /Game flags unavailable.*Beta saved/ }).waitFor();
+      assert.equal(await wizard.isChecked(), true);
+      assert.equal(await ludo.isChecked(), false);
+
+      rejectSave = true;
+      await wizard.click();
+      await s.page.getByRole('alert').filter({ hasText: /could not be refreshed.*Beta mark could not be saved/ }).waitFor();
+      assert.equal(await wizard.isChecked(), true);
+    } finally { await s.close(); }
+  });
+
   await test('guest plays: the checkbox limits guests, 1 to 9 with 3 by default, and the saved limit can be changed or removed', async () => {
     const s = await open('owner');
     const games = [{ id: 'wizard', name: 'Wizard', access: 'on', trialLimit: null }, { id: 'ludo', name: 'Ludo', access: 'on', trialLimit: 5 }];

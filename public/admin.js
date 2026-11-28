@@ -65,7 +65,7 @@
   // Owner draft of the game switches: moves, who-may-play and guest-limit choices wait here until "Save changes".
   // The draft is dropped when the owner leaves the Games tab.
   let gameDraft = null; // { order: [ids] | null, access: Map gameId -> mode, trial: Map gameId -> limit (null = no limit) } or null
-  let gameSwitchData = null; // the server's game-flags answer as last read
+  let gameSwitchData = null; // the last game-flags answer plus confirmed Beta saves
   let gameSaveError = ''; // shown after a failed save, until the next change or save
   let gameSaveNote = ''; // "Saved." after a full save
   let gameSaving = false;
@@ -492,19 +492,23 @@
     state.gen += 1;
     const gen = state.gen;
     main.insertAdjacentHTML('afterbegin', '<p class="ad-muted" data-loading>Refreshing…</p>');
-    return renderView('games', () => gamesTab(state.gamesDays || 30).catch((e) => {
+    return renderView('games', () => gamesTab(state.gamesDays || 30, true).catch((e) => {
       if (e && e.name === 'AbortError') return;
       if (gen !== state.gen || !main.querySelector('#gameSwitches')) throw e;
       main.querySelector('[data-loading]')?.remove();
-      gameSaveError = `The games could not be refreshed (${e.message}). Your changes are still here.`;
+      const saveStatus = gameSaveError || gameSaveNote;
+      gameSaveError = `The games could not be refreshed (${e.message}). ${saveStatus || 'Your changes are still here.'}`;
       paintGameSwitches();
     }));
   };
-  async function gamesTab(days = 30) {
+  async function gamesTab(days = 30, refreshing = false) {
     state.gamesDays = days; // the range on screen, so a redraw after a save keeps it
     const gen = state.gen;
     const o = await api(`/api/admin/games?days=${days}`);
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
+    // Keep the existing switches until both refresh reads succeed.
+    const switches = refreshing && state.me.isOwner ? await api('/api/admin/game-flags') : null;
+    if (gen !== state.gen) return;
     const rows = o.games.map((g) => `<tr><td data-l="Game">${esc(gname(g.gameId))}</td><td data-l="Finished">${g.finished}</td><td data-l="Last 7 days">${g.finished7d}</td><td data-l="Signed-in players">${g.signedInPlayers}</td><td data-l="Player-games">${g.playerGames}</td><td data-l="Avg minutes each">${g.avgMinutes}</td><td data-l="Penalised leaves">${g.penalisedLeaves}</td><td data-l="Penalised leave rate">${pctText(g.penalisedLeaves, g.playerGames)}</td><td data-l="Left, no penalty">${g.leftWithoutPenalty}</td></tr>`).join('');
     main.innerHTML = `<h2>Games <small class="ad-muted">last ${rangeLabel(o.days)}</small></h2>
       <div class="ad-row" role="group" aria-label="Range" style="margin-bottom:12px">${RANGES.map((d) => `<button class="ad-btn ${d === o.days ? 'primary' : ''}" data-gd="${d}" aria-pressed="${d === o.days}">${rangeLabel(d)}</button>`).join('')}</div>
@@ -517,7 +521,7 @@
       <p><button class="ad-btn" id="tablesMore" hidden>Load older tables</button></p></div>`);
     loadTables(gen, null).catch(() => {}); // not awaited: owner game switches must not wait for the table history
     if (gen !== state.gen) return;
-    if (state.me.isOwner) await gameSwitches();
+    if (state.me.isOwner) await gameSwitches(switches);
   }
 
   // one page of tables hosted; the next page is asked for with the cursor the server gave (the list keeps growing down the page)
@@ -645,7 +649,7 @@
       } finally {
         betaSaving = false;
       }
-      redrawGames(); // replaces the Games tab from the server's state (gameSwitches() would append another section)
+      if (state.tab === 'games') redrawGames();
     }; });
     box.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
       const id = sel.dataset.gaccess; const server = o.games.find((g) => g.id === id);
@@ -685,9 +689,9 @@
     paintGameSwitches(); // the controls are usable again at once, not after the read-back
     if (state.tab === 'games') redrawGames(); // the server's state is read back and the draft is reconciled with it
   }
-  async function gameSwitches() {
+  async function gameSwitches(data = null) {
     const gen = state.gen;
-    const o = await api('/api/admin/game-flags');
+    const o = data || await api('/api/admin/game-flags');
     if (gen !== state.gen) return; // the admin has switched tabs since this was asked
     gameSwitchData = o;
     reconcileDraft(o);
