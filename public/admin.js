@@ -143,6 +143,11 @@
       <h3>Popular games</h3>${bars(o.popularGames, 'No finished games yet.')}
       <h3>Errors per day</h3>${lineChart(o.series.error || (o.labels || []).map(() => 0), o.labels || [], 'Errors')}
       <h3>Errors by kind</h3>${bars(o.errors, 'No errors recorded.')}
+      <h3>Invites, sharing and guests</h3>
+      <div class="ad-grid" id="growthTiles">${tile(t('invite_created'), 'invitations sent to friends')}${tile(t('invite_joined'), 'joined through a link or invitation')}${tile(t('share_clicked'), 'share buttons tapped')}${tile(t('guest_created'), 'guest sessions started')}${tile(t('guest_upgraded'), 'guests who made an account')}${tile(pctText(t('guest_upgraded'), t('guest_created')), 'guests made an account (share)')}</div>
+      <h3>Joined by</h3>${bars((o.invitesJoinedBy || []).map((r) => ({ ...r, name: ({ link: 'Table link', friend: 'Friend invitation' })[r.name] || r.name })), 'No one has joined through a link or invitation in this range.')}
+      <h3>Shared by</h3>${bars((o.sharedBy || []).map((r) => ({ ...r, name: ({ copy: 'Copy link', whatsapp: 'WhatsApp', native: 'Share sheet' })[r.name] || r.name })), 'No share button was tapped in this range.')}
+      <p class="ad-muted">Counters per day, no names or table codes. A guest who confirms their account later is counted on the day they confirm, so the share is a rough ratio, not a cohort. A tap on a share button does not prove anyone opened the link. Registrations above include guests who made an account.</p>
       <p class="ad-muted">Counters only: no addresses, names or messages are recorded. Active users are counted from a keyed hash, never an account id. Detail rows are kept ${o.retention ? esc(o.retention.activeDays) : '35'} days, daily totals ${o.retention ? esc(o.retention.dailyDays) : '400'} days.</p>`;
     startLive();
     // a new range makes every answer still on its way out of date: bump the view generation so only the latest one is drawn

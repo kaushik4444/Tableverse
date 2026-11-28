@@ -314,7 +314,7 @@ async function overview({ days = 30 } = {}) {
   const n = Math.min(90, Math.max(1, Math.floor(Number(days)) || 30));
   const [series, dims, active, accounts, activeDaily, queues] = await Promise.all([
     db.query("SELECT day::text AS day, metric, SUM(total)::int AS total FROM analytics_daily WHERE day > (NOW() AT TIME ZONE 'UTC')::date - $1::int GROUP BY day, metric ORDER BY day", [n]),
-    db.query("SELECT metric, dim, SUM(total)::int AS total FROM analytics_daily WHERE day > (NOW() AT TIME ZONE 'UTC')::date - $1::int AND metric IN ('game_started', 'game_finished', 'error') GROUP BY metric, dim ORDER BY total DESC LIMIT 60", [n]),
+    db.query("SELECT metric, dim, SUM(total)::int AS total FROM analytics_daily WHERE day > (NOW() AT TIME ZONE 'UTC')::date - $1::int AND metric IN ('game_started', 'game_finished', 'error', 'invite_created', 'invite_joined', 'share_clicked') GROUP BY metric, dim ORDER BY total DESC LIMIT 90", [n]),
     db.query(`SELECT COUNT(DISTINCT actor) FILTER (WHERE day = (NOW() AT TIME ZONE 'UTC')::date)::int AS dau,
                      COUNT(DISTINCT actor) FILTER (WHERE day > (NOW() AT TIME ZONE 'UTC')::date - 7)::int AS wau,
                      COUNT(DISTINCT actor) FILTER (WHERE day > (NOW() AT TIME ZONE 'UTC')::date - 30)::int AS mau FROM analytics_active`),
