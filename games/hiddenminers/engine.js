@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Hidden Miners: the rules only (no sockets, no timers). An original hidden-role tunnel game for 3-8 players.
  *
@@ -333,6 +334,9 @@ function botAction(g, playerId) {
   const who = indexOf(g, playerId);
   if (g.phase !== 'playing' || who !== g.turn) return null;
   const moves = legalMoves(g, who);
+  if (!moves.length) return null;
+  // a slip: a random legal move, not the best-scoring one
+  if (slips(g.rng)) return pickOne(g.rng, moves);
   const saboteur = g.roles[who] === 'saboteur';
   const goldKnown = g.scouts[who].find((s) => s.gold);
   const rockKnown = new Set(g.scouts[who].filter((s) => !s.gold).map((s) => s.goal));

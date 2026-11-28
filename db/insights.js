@@ -8,6 +8,7 @@
  * Times are UTC: the console converts them to the viewer's chosen zone.
  */
 const db = require('./pool');
+const { UNSCORED_SQL } = require('../lib/unscoredRuns');
 
 const WINDOWS = [1, 7, 30, 90]; // 1 = the last 24 hours
 const clampDays = (d) => { const n = Math.floor(Number(d)); return WINDOWS.includes(n) ? n : 30; };
@@ -21,7 +22,7 @@ const TODAY = "(NOW() AT TIME ZONE 'UTC')::date";
 // one row per human, signed-in player in a finished match that ended inside the window
 const HUMANS = `
   SELECT p.player_id, p.is_winner, p.is_draw, p.left_early, m.id AS match_id, m.game_id, m.started_at,
-         EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) AS secs
+         ${UNSCORED_SQL} AS unscored, EXTRACT(EPOCH FROM (m.finished_at - m.started_at)) AS secs
     FROM match_participants p
     JOIN matches m ON m.id = p.match_id
    WHERE p.player_id IS NOT NULL AND NOT p.is_bot AND ${SIGNED_IN}`;
@@ -102,7 +103,7 @@ async function insights({ days = 30, tz = 'UTC' } = {}) {
          FROM firsts f WHERE f.first_day > ${TODAY} - ($1::int + 30) AND f.first_day <= ${TODAY} - 7`),
     // 7. the most active signed-in players in the window, with the hour (in the chosen zone) they most often start playing
     q(`WITH h AS (${HUMANS} AND ${IN_WINDOW})
-       SELECT pl.username, pl.display_name, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE h.is_winner)::int AS wins,
+       SELECT pl.username, pl.display_name, COUNT(*)::int AS games, COUNT(*) FILTER (WHERE h.is_winner AND NOT h.unscored)::int AS wins,
               (SUM(CASE WHEN h.left_early THEN 0 ELSE h.secs END) / 60.0)::float AS minutes,
               mode() WITHIN GROUP (ORDER BY EXTRACT(HOUR FROM h.started_at AT TIME ZONE $2::text)::int) AS peak_hour
          FROM h JOIN players pl ON pl.id = h.player_id

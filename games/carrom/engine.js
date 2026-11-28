@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Carrom for two to four players. The physics is in physics.js; this file holds the rules and the table state.
  *
@@ -253,13 +254,17 @@ function botAction(g, seat, rng) {
     cands.push({ type: 'flick', x: STRIKER_X[0] + (STRIKER_X[1] - STRIKER_X[0]) * rng(), angle: (rng() * 2 - 1) * 0.9, power: 0.45 + 0.55 * rng(), seq: g.seq });
   }
   let best = null, bestScore = -Infinity;
+  const legal = [];
   for (const a of cands) {
     const p = plan(g, seat, a);
     if (p.error) continue;
+    legal.push(a);
     const other = p.shot.pocketed.filter((x) => x.kind === 'coin' && x.colour !== colourOf(seat)).length;
     const score = p.shot.scored * 10 - (p.shot.foul ? 12 : 0) - other * 4 + (p.winner !== null ? 50 : 0) + rng() * 0.1;
     if (score > bestScore) { bestScore = score; best = a; }
   }
+  // a slip: any of the sampled shots that the rules allow, not the best of them
+  if (legal.length && slips(rng)) return pickOne(rng, legal);
   if (best) return best;
   // a fine grid across the baseline, both ends included: a narrow gap between coins (about 0.0005 wide) is found, and only clear spots go to the rules
   const [lo, hi] = STRIKER_X, steps = 4000;

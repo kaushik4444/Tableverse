@@ -1,4 +1,5 @@
 'use strict';
+const { slips } = require('../botSkill');
 /** Property Rivals: player actions, building and mortgages, trades, auctions, bots and the per-player view. */
 const B = require('./board');
 const E = require('./engine');
@@ -250,6 +251,8 @@ function botAction(g, playerId) {
     const a = g.auction; const s = sq(a.sq);
     const ceiling = Math.min(p.cash - 100, Math.floor(s.price * (worthBuying(g, who, a.sq) ? 1.1 : 0.7)));
     const next = a.high + Math.max(10, Math.round(s.price / 20 / 10) * 10);
+    // a slip: bids the next step whatever it is worth, while it has the cash
+    if (slips(g.rng)) return p.cash >= next ? { type: 'bid', amount: next } : { type: 'passBid' };
     return next <= ceiling ? { type: 'bid', amount: next } : { type: 'passBid' };
   }
   if (g.phase === 'trade' && g.trade && g.trade.to === who) {
@@ -264,7 +267,12 @@ function botAction(g, playerId) {
     }
     return { type: 'roll' };
   }
-  if (g.phase === 'buy') return { type: worthBuying(g, who, p.pos) ? 'buy' : 'decline' };
+  if (g.phase === 'buy') {
+    const worth = worthBuying(g, who, p.pos);
+    // a slip: it leaves a square it should buy, or buys one it should leave (only if it has the cash)
+    const buy = slips(g.rng) ? !worth && p.cash >= sq(p.pos).price : worth;
+    return { type: buy ? 'buy' : 'decline' };
+  }
   if (g.phase === 'debt') {
     if (p.cash >= g.debt.amount) return { type: 'pay' };
     for (const k of E.owned(g, who)) if (!canSell(g, who, k)) return { type: 'sell', square: k };

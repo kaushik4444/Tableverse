@@ -1,10 +1,12 @@
 'use strict';
+const { slips } = require('../botSkill');
 /**
  * Sea Battle (two players), rules only: no sockets, no timers.
  *
  * Each player has a 10 x 10 sea and a fleet of five ships (lengths 5, 4, 3, 3 and 2). In the placing phase every player puts
  * their ships on their own sea, by hand or with Random, and marks themselves ready. When both are ready, the first player
- * fires. Players take turns firing at one square of the other sea. A hit or a miss is public; a ship that is hit on every
+ * fires. Players take turns firing at one square of the other sea. A hit or a sinking keeps the turn, so the shooter fires again;
+ * a miss passes it. A hit or a miss is public; a ship that is hit on every
  * square is sunk, and its squares are shown to everyone. The first player to sink every enemy ship wins. Ships never touch,
  * including at corners, and nobody sees the other fleet.
  *
@@ -194,8 +196,7 @@ function applyAction(g, playerId, action) {
     g.shots[target][k] = 'hit';
     emit(g, { type: 'hit', by: who, k });
   }
-  // a hit or a sinking still passes the turn, as a miss does: each player fires once per turn
-  g.turn = target;
+  // a hit or a sinking keeps the turn: the shooter fires again until a shot misses
   return { ok: true };
 }
 
@@ -223,7 +224,8 @@ function botAction(g, playerId, rng = g.rng) {
   const hunting = [];
   for (let k = 0; k < CELLS; k++) if (sea[k] === 'hit') for (const n of neighbours(k)) if (!sea[n]) hunting.push(n);
   const pool = hunting.length ? hunting : open.filter((k) => ((Math.floor(k / N) + (k % N)) % 2) === 0);
-  const choices = pool.length ? pool : open;
+  // a slip: the bot fires at any open square, not just where it is hunting
+  const choices = slips(rng) || !pool.length ? open : pool;
   const k = choices[Math.floor(rng() * choices.length)];
   return { type: 'fire', r: Math.floor(k / N), c: k % N };
 }

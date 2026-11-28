@@ -1,6 +1,7 @@
 'use strict';
 /**
- * Memory Match (2 to 4 players), rules only: no sockets, no timers.
+ * Memory Match (1 to 4 players), rules only: no sockets, no timers. One player is a solo game: no opponents, and the
+ * score is the number of turns it takes to find every pair (fewer is better).
  *
  * Cards are dealt face down in pairs. On your turn you turn over two cards. If they match you keep the pair and play
  * again; if not, they turn back over and the turn passes to the next seat. When every pair is found, the player with the
@@ -10,6 +11,8 @@
  * is shown to everyone), and the bots only use what the table has seen. Option `size`: '4x4' (default), '4x6' or '6x6'.
  * Cards are numbered row by row, 0..N-1.
  */
+
+const { FORGET } = require('../botSkill');
 
 const SIZES = { '4x4': [4, 4], '4x6': [4, 6], '6x6': [6, 6] };
 // Generic fruit, plants and creatures (not a brand, not a character): one symbol per pair.
@@ -25,7 +28,7 @@ function shuffle(arr, rng) {
 }
 
 function createGame(players, options = {}, rng = Math.random) {
-  if (players.length < 2 || players.length > 4) throw new Error('Memory Match is for 2 to 4 players');
+  if (players.length < 1 || players.length > 4) throw new Error('Memory Match is for 1 to 4 players');
   const size = Object.prototype.hasOwnProperty.call(SIZES, options.size) ? options.size : '4x4';
   const [rows, cols] = SIZES[size];
   const total = rows * cols;
@@ -39,7 +42,7 @@ function createGame(players, options = {}, rng = Math.random) {
     known: new Map(), // index -> symbol, for every card the table has seen (bots use only this)
     pending: null, // the first card of this turn, while the second is still to come
     peek: null, // a missed pair, shown face up until the next move
-    pairs: Array(players.length).fill(0), matchedCount: 0,
+    pairs: Array(players.length).fill(0), matchedCount: 0, turns: 0, // turns: second cards turned over (every turn that ends a pair attempt)
     turn: 0, phase: 'playing', winner: null, draw: false,
     last: null, event: null, log: [], seq: 0, version: 0,
   };
@@ -67,6 +70,7 @@ function applyAction(g, playerId, action) {
   const a = g.pending;
   g.pending = null;
   g.peek = null; // the missed pair has been seen by the players who turned the next pair
+  g.turns++;
   if (g.cards[a] === g.cards[i]) {
     g.matched[a] = g.matched[i] = true; g.owner[a] = g.owner[i] = who;
     g.pairs[who]++; g.matchedCount += 2;
@@ -92,8 +96,9 @@ function applyAction(g, playerId, action) {
 
 const awaiting = (g) => (g.phase === 'gameOver' ? [] : [g.players[g.turn].id]);
 
-/** Results: score is the number of pairs; the top scorer wins, a tie is a draw. */
+/** Results: score is the number of pairs; the top scorer wins, a tie is a draw. Alone, the score is the turns taken (fewer is better) and the player wins. */
 function results(g) {
+  if (g.players.length === 1) return [{ score: g.turns, winner: g.winner === 0, draw: false }];
   const top = Math.max(...g.pairs);
   return g.players.map((_, s) => ({ score: g.pairs[s], winner: g.winner === s, draw: g.draw && g.pairs[s] === top }));
 }
@@ -106,21 +111,23 @@ function faceDown(g) {
   return out;
 }
 
-function botAction(g, playerId, rng = Math.random) {
+function botAction(g, playerId, rng = g.rng) {
   const down = faceDown(g);
+  // a bot forgets some of the cards it has seen: each one is remembered only most of the time
+  const known = new Map([...g.known].filter(() => rng() >= FORGET));
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   if (g.pending !== null) {
     // second card: its known partner if the table has seen it, otherwise an unseen card
-    const partner = down.find((k) => g.known.has(k) && g.known.get(k) === g.cards[g.pending]);
+    const partner = down.find((k) => known.has(k) && known.get(k) === g.cards[g.pending]);
     if (partner !== undefined) return { type: 'flip', index: partner };
-    const unseen = down.filter((k) => !g.known.has(k));
+    const unseen = down.filter((k) => !known.has(k));
     return { type: 'flip', index: pick(unseen.length ? unseen : down) };
   }
   // first card: a known pair on the table, otherwise an unseen card
   const bySymbol = new Map();
-  for (const k of down) if (g.known.has(k)) { const s = g.known.get(k); if (!bySymbol.has(s)) bySymbol.set(s, []); bySymbol.get(s).push(k); }
+  for (const k of down) if (known.has(k)) { const s = known.get(k); if (!bySymbol.has(s)) bySymbol.set(s, []); bySymbol.get(s).push(k); }
   for (const list of bySymbol.values()) if (list.length >= 2) return { type: 'flip', index: list[0] };
-  const unseen = down.filter((k) => !g.known.has(k));
+  const unseen = down.filter((k) => !known.has(k));
   return { type: 'flip', index: pick(unseen.length ? unseen : down) };
 }
 
@@ -139,7 +146,7 @@ function viewFor(g, playerId) {
     turn: g.turn, myTurn: me >= 0 && me === g.turn && g.phase === 'playing',
     pending: g.pending, board, last: g.last,
     left: g.total - g.matchedCount,
-    winner: g.winner, draw: g.draw,
+    winner: g.winner, draw: g.draw, solo: g.players.length === 1, turns: g.turns,
     event: g.event ? { ...g.event } : null,
     log: g.log.slice(-30),
   };

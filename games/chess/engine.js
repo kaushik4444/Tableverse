@@ -1,4 +1,5 @@
 'use strict';
+const { slips, pickOne } = require('../botSkill');
 /**
  * Chess for two players. Rules live in rules.js; this file turns them into a table game: who plays White, what each
  * player may see, which actions are legal now, the end of the game and a simple bot.
@@ -119,6 +120,8 @@ function finish(g, st, eventType) {
 function botAction(g) {
   const legal = rules.legalMoves(g.pos);
   if (legal.length === 0) return { type: 'resign' };
+  // a slip: a random legal move, so the bot can hang a piece
+  if (slips(g.rng)) { const m = pickOne(g.rng, legal); return { type: 'move', from: m.from, to: m.to, promo: m.promo || null }; }
   let best = null, bestScore = -Infinity;
   for (const m of legal) {
     let score = (m.captured ? rules.VALUE[m.captured.toUpperCase()] * 10 : 0) + (m.promo === 'Q' ? 9 : 0);

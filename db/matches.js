@@ -2,6 +2,7 @@
 const db = require('./pool');
 const { liveEnabled, scheduleLiveRebuild } = require('./ratings');
 const { computeProfile } = require('./stats');
+const { isUnscoredRun, UNSCORED_SQL } = require('../lib/unscoredRuns');
 const { isForfeitOnly } = require('./matchRecord');
 
 /** What a seat is called once its account no longer exists (see db/account.js deleteAccount). */
@@ -38,15 +39,17 @@ class MemoryMatchStore {
     let played = 0;
     let wins = 0;
     let draws = 0;
+    let unscored = 0; // solo runs with no winner: neither a win nor a loss
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
       if (part && (!part.leftEarly || part.forfeit) && !part.isBot) {
         played++;
+        if (isUnscoredRun(m.gameId, m.tableHumans)) { unscored++; continue; } // no winner: neither a win nor a draw
         if (part.isWinner) wins++;
         if (part.isDraw) draws++;
       }
     }
-    return { played, wins, draws, losses: played - wins - draws };
+    return { played, wins, draws, losses: played - wins - draws - unscored };
   }
 
   /** When a record's game finished: its own finish time if that is a real date not later than the record time, else the record time. */
@@ -76,7 +79,7 @@ class MemoryMatchStore {
     const rows = [];
     for (const m of this.matches) {
       const part = m.participants.find((p) => p.playerId === playerId);
-      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: new Date(this.completionMs(m)), isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats });
+      if (part && (!part.leftEarly || part.forfeit) && !part.isBot) rows.push({ gameId: m.gameId, finishedAt: new Date(this.completionMs(m)), isWinner: part.isWinner, isDraw: part.isDraw, score: part.score, options: m.options || {}, seats: m.seats, unscored: isUnscoredRun(m.gameId, m.tableHumans) });
     }
     return rows.sort((a, b) => b.finishedAt - a.finishedAt);
   }
@@ -177,9 +180,9 @@ async function getPlayerStats(playerId) {
   const res = await db.query(
     `SELECT
        COUNT(*)::int AS played,
-       COUNT(*) FILTER (WHERE mp.is_winner = TRUE)::int AS wins,
-       COUNT(*) FILTER (WHERE mp.is_winner = FALSE AND mp.is_draw = FALSE)::int AS losses,
-       COUNT(*) FILTER (WHERE mp.is_draw = TRUE)::int AS draws
+       COUNT(*) FILTER (WHERE mp.is_winner = TRUE AND NOT ${UNSCORED_SQL})::int AS wins,
+       COUNT(*) FILTER (WHERE mp.is_winner = FALSE AND mp.is_draw = FALSE AND NOT ${UNSCORED_SQL})::int AS losses,
+       COUNT(*) FILTER (WHERE mp.is_draw = TRUE AND NOT ${UNSCORED_SQL})::int AS draws
      FROM match_participants mp
      JOIN matches m ON m.id = mp.match_id
      WHERE mp.player_id = $1 AND (mp.left_early = FALSE OR mp.forfeit = TRUE) AND mp.is_bot = FALSE AND m.match_key IS NOT NULL`, // match_key IS NULL: written before results were reported, winners are unknown
@@ -232,28 +235,28 @@ async function getPlayerProfile(playerId, { memberSince = null } = {}) {
  */
 async function pgProfile(playerId, memberSince) {
   const base = `WITH mine AS (
-      SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.options, m.seats, mp.is_winner, mp.is_draw, mp.score
+      SELECT DISTINCT ON (m.id) m.id, m.game_id, m.finished_at, m.options, m.seats, mp.is_winner, mp.is_draw, mp.score, ${UNSCORED_SQL} AS unscored
       FROM match_participants mp JOIN matches m ON m.id = mp.match_id
       WHERE mp.player_id = $1 AND (mp.left_early = FALSE OR mp.forfeit = TRUE) AND mp.is_bot = FALSE AND m.match_key IS NOT NULL
       ORDER BY m.id, mp.seat)`;
   const [grouped, recent, streaks] = await Promise.all([
-    db.query(`${base} SELECT game_id, options, seats, is_winner, is_draw, score, COUNT(*)::int AS n FROM mine GROUP BY game_id, options, seats, is_winner, is_draw, score`, [playerId]),
-    db.query(`${base} SELECT game_id, finished_at, is_winner, is_draw, score FROM mine ORDER BY finished_at DESC, id LIMIT 10`, [playerId]),
+    db.query(`${base} SELECT game_id, options, seats, is_winner, is_draw, score, unscored, COUNT(*)::int AS n FROM mine GROUP BY game_id, options, seats, is_winner, is_draw, score, unscored`, [playerId]),
+    db.query(`${base} SELECT game_id, finished_at, is_winner, is_draw, score, unscored FROM mine ORDER BY finished_at DESC, id LIMIT 10`, [playerId]),
     db.query(`${base}, seq AS (
         SELECT is_winner, ROW_NUMBER() OVER (ORDER BY finished_at DESC, id) AS rn,
-               ROW_NUMBER() OVER (PARTITION BY is_winner ORDER BY finished_at DESC, id) AS rk FROM mine)
+               ROW_NUMBER() OVER (PARTITION BY is_winner ORDER BY finished_at DESC, id) AS rk FROM mine WHERE NOT unscored)
       SELECT COALESCE((SELECT MIN(rn) - 1 FROM seq WHERE NOT is_winner), (SELECT COUNT(*) FROM seq), 0)::int AS current,
              COALESCE((SELECT MAX(c) FROM (SELECT COUNT(*) AS c FROM seq WHERE is_winner GROUP BY rn - rk) x), 0)::int AS best,
              (SELECT MAX(finished_at) FROM mine) AS last_played`, [playerId]),
   ]);
-  const rows = grouped.rows.map((r) => ({ gameId: r.game_id, isWinner: r.is_winner, isDraw: r.is_draw, score: r.score, options: r.options || {}, seats: r.seats, n: r.n }));
+  const rows = grouped.rows.map((r) => ({ gameId: r.game_id, isWinner: r.is_winner, isDraw: r.is_draw, score: r.score, options: r.options || {}, seats: r.seats, unscored: r.unscored, n: r.n }));
   const s = streaks.rows[0] || { current: 0, best: 0, last_played: null };
   return computeProfile(rows, {
     memberSince,
     metrics: gameStats,
     streak: { current: s.current, best: s.best },
     lastPlayed: s.last_played,
-    recent: recent.rows.map((r) => ({ gameId: r.game_id, finishedAt: r.finished_at, isWinner: r.is_winner, isDraw: r.is_draw, score: r.score })),
+    recent: recent.rows.map((r) => ({ gameId: r.game_id, finishedAt: r.finished_at, isWinner: r.is_winner && !r.unscored, isDraw: r.is_draw && !r.unscored, unscored: Boolean(r.unscored), score: r.score })),
   });
 }
 

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { serve, scriptedPage, loadPlaywright, welcome, sessionOk } = require('./harness');
 const games = require('../../games');
 const { chromium } = loadPlaywright();
+const roomFor = () => ({ code: 'ABCDEF', gameId: 'carrom', hostId: 'p0', status: 'playing', options: {}, visibility: 'public', seats: 2, min: 2, max: 2, seatLabels: null, deadline: null, now: Date.now(), spectators: [], members: [{ id: 'p0', name: 'A', online: true }, { id: 'p1', name: 'B', online: true }] });
 
 let passed = 0; let failed = 0;
 async function test(name, fn) { try { await fn(); passed++; console.log('  ok  ' + name); } catch (e) { failed++; console.error('FAIL  ' + name + '\n' + e.stack); } }
@@ -19,10 +20,12 @@ async function test(name, fn) { try { await fn(); passed++; console.log('  ok  '
     const before = g.view('p0');
     g.act('p0', { type: 'flick', seq: g.view('p0').seq, x: 0.4, angle: 0, power: 0.6 });
     const after = g.view('p0');
-    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ id: 'p0', name: 'A', games: games.list() }), { t: 'state', room, view: before }, { t: 'state', room, view: after }], viewport: { width: 1280, height: 900 } });
+    const { page, ctx } = await scriptedPage(browser, { messages: [welcome({ id: 'p0', name: 'A', games: games.list() }), { t: 'state', room, view: before }], viewport: { width: 1280, height: 900 } });
     try {
       await page.goto(url + '/');
       await page.waitForSelector('.cb-svg', { timeout: 8000 });
+      // the shot arrives only after the table has drawn the state before it, so it is a change the page plays (not its first look)
+      await page.evaluate(({ room, view }) => window.__push({ t: 'state', room, view }), { room: { ...roomFor() }, view: after });
       // The striker's start on its bar, in SVG coordinates (the viewer is the bottom seat).
       const start = [0.4, 1 - 0.12];
       const { mid, redrawn } = await page.evaluate(({ start, msg }) => new Promise((resolve, reject) => {
