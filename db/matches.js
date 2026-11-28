@@ -44,9 +44,9 @@ class MemoryMatchStore {
       const part = m.participants.find((p) => p.playerId === playerId);
       if (part && (!part.leftEarly || part.forfeit) && !part.isBot) {
         played++;
+        if (isUnscoredRun(m.gameId, m.tableHumans)) { unscored++; continue; } // no winner: neither a win nor a draw
         if (part.isWinner) wins++;
         if (part.isDraw) draws++;
-        if (isUnscoredRun(m.gameId, m.tableHumans)) unscored++;
       }
     }
     return { played, wins, draws, losses: played - wins - draws - unscored };
@@ -180,9 +180,9 @@ async function getPlayerStats(playerId) {
   const res = await db.query(
     `SELECT
        COUNT(*)::int AS played,
-       COUNT(*) FILTER (WHERE mp.is_winner = TRUE)::int AS wins,
+       COUNT(*) FILTER (WHERE mp.is_winner = TRUE AND NOT ${UNSCORED_SQL})::int AS wins,
        COUNT(*) FILTER (WHERE mp.is_winner = FALSE AND mp.is_draw = FALSE AND NOT ${UNSCORED_SQL})::int AS losses,
-       COUNT(*) FILTER (WHERE mp.is_draw = TRUE)::int AS draws
+       COUNT(*) FILTER (WHERE mp.is_draw = TRUE AND NOT ${UNSCORED_SQL})::int AS draws
      FROM match_participants mp
      JOIN matches m ON m.id = mp.match_id
      WHERE mp.player_id = $1 AND (mp.left_early = FALSE OR mp.forfeit = TRUE) AND mp.is_bot = FALSE AND m.match_key IS NOT NULL`, // match_key IS NULL: written before results were reported, winners are unknown
@@ -241,7 +241,7 @@ async function pgProfile(playerId, memberSince) {
       ORDER BY m.id, mp.seat)`;
   const [grouped, recent, streaks] = await Promise.all([
     db.query(`${base} SELECT game_id, options, seats, is_winner, is_draw, score, unscored, COUNT(*)::int AS n FROM mine GROUP BY game_id, options, seats, is_winner, is_draw, score, unscored`, [playerId]),
-    db.query(`${base} SELECT game_id, finished_at, is_winner, is_draw, score FROM mine ORDER BY finished_at DESC, id LIMIT 10`, [playerId]),
+    db.query(`${base} SELECT game_id, finished_at, is_winner, is_draw, score, unscored FROM mine ORDER BY finished_at DESC, id LIMIT 10`, [playerId]),
     db.query(`${base}, seq AS (
         SELECT is_winner, ROW_NUMBER() OVER (ORDER BY finished_at DESC, id) AS rn,
                ROW_NUMBER() OVER (PARTITION BY is_winner ORDER BY finished_at DESC, id) AS rk FROM mine WHERE NOT unscored)
@@ -256,7 +256,7 @@ async function pgProfile(playerId, memberSince) {
     metrics: gameStats,
     streak: { current: s.current, best: s.best },
     lastPlayed: s.last_played,
-    recent: recent.rows.map((r) => ({ gameId: r.game_id, finishedAt: r.finished_at, isWinner: r.is_winner, isDraw: r.is_draw, score: r.score })),
+    recent: recent.rows.map((r) => ({ gameId: r.game_id, finishedAt: r.finished_at, isWinner: r.is_winner && !r.unscored, isDraw: r.is_draw && !r.unscored, unscored: Boolean(r.unscored), score: r.score })),
   });
 }
 

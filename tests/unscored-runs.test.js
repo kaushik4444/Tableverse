@@ -67,3 +67,15 @@ test('a solo-only player has no losses and no win rate', () => {
   assert.equal(p.losses, 0);
   assert.equal(p.winRate, null);
 });
+
+test('a solo run is never a win or a draw, even when the stored flag says so', () => {
+  const p = computeProfile([{ gameId: 'fallingblocks', isWinner: true, isDraw: true, unscored: true }, { gameId: 'sudoku', isWinner: true, isDraw: false, unscored: false }]);
+  assert.equal(p.wins, 1);
+  assert.equal(p.draws, 0);
+  assert.equal(p.losses, 0);
+  assert.equal(p.winRate, 100);
+});
+
+test('a NULL human count keeps the run scored (COALESCE in the SQL twin)', () => {
+  assert.match(UNSCORED_SQL, /^COALESCE\(/);
+});

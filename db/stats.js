@@ -16,9 +16,10 @@ function computeProfile(rows, { memberSince = null, recentCount = 10, metrics = 
   // A row may stand for several identical results (`n`, default 1): the Postgres store sends SQL aggregates, not every game.
   const weight = (r) => (Number.isInteger(r.n) && r.n > 0 ? r.n : 1);
   const played = rows.reduce((a, r) => a + weight(r), 0);
-  const wins = rows.reduce((a, r) => a + (r.isWinner ? weight(r) : 0), 0);
-  const draws = rows.reduce((a, r) => a + (r.isDraw ? weight(r) : 0), 0);
-  // a solo run with no winner (lib/unscoredRuns.js) is neither a win nor a loss
+  // a solo run with no winner (lib/unscoredRuns.js) is neither a win nor a draw, even if the stored flag says so
+  const wins = rows.reduce((a, r) => a + (r.isWinner && !r.unscored ? weight(r) : 0), 0);
+  const draws = rows.reduce((a, r) => a + (r.isDraw && !r.unscored ? weight(r) : 0), 0);
+  // ... and it is neither a loss, so it is taken out of the loss count and the win-rate denominator
   const unscored = rows.reduce((a, r) => a + (r.unscored ? weight(r) : 0), 0);
 
   const byGame = new Map();
@@ -26,9 +27,9 @@ function computeProfile(rows, { memberSince = null, recentCount = 10, metrics = 
     const meta = metrics(r.gameId);
     const g = byGame.get(r.gameId) || { gameId: r.gameId, kind: (meta && meta.kind) || 'solo', played: 0, wins: 0, draws: 0, best: null, bestLabel: (meta && meta.bestLabel) || null, formatBest: meta && meta.formatBest };
     g.played += weight(r);
-    if (r.isWinner) g.wins += weight(r);
-    if (r.isDraw) g.draws += weight(r);
     if (r.unscored) g.unscored = (g.unscored || 0) + weight(r);
+    else if (r.isWinner) g.wins += weight(r);
+    if (!r.unscored && r.isDraw) g.draws += weight(r);
     const v = meta && typeof meta.bestOf === 'function' ? meta.bestOf(r) : null;
     if (Number.isFinite(v) && (g.best === null || v > g.best)) g.best = v;
     byGame.set(r.gameId, g);
@@ -61,7 +62,7 @@ function computeProfile(rows, { memberSince = null, recentCount = 10, metrics = 
     favouriteGame: perGame.length ? perGame[0].gameId : null, // most played; ties go to more wins
     perGame,
     streak: streakIn || { current, best },
-    recent: (recentIn || rows.slice(0, recentCount)).map((r) => ({ gameId: r.gameId, finishedAt: iso(r.finishedAt), won: Boolean(r.isWinner), draw: Boolean(r.isDraw), score: Number.isFinite(r.score) ? r.score : null })),
+    recent: (recentIn || rows.slice(0, recentCount)).map((r) => ({ gameId: r.gameId, finishedAt: iso(r.finishedAt), won: Boolean(r.isWinner) && !r.unscored, draw: Boolean(r.isDraw) && !r.unscored, unscored: Boolean(r.unscored), score: Number.isFinite(r.score) ? r.score : null })),
     lastPlayed: lastIn ? iso(lastIn) : rows.length && rows[0].finishedAt ? iso(rows[0].finishedAt) : null,
     memberSince: iso(memberSince),
   };
