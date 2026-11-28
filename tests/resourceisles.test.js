@@ -108,6 +108,15 @@ test('the view\'s batch changes with every turn and setup step (the server resta
   assert.notEqual(E.viewFor(g, 'p0').batch, before);
 });
 
+test('the Log sheet gets readable lines with player names', () => {
+  const E = require('../games/resourceisles/engine');
+  const g = E.createGame([{ id: 'a', name: 'Aarav' }, { id: 'b', name: 'Bo' }, { id: 'c', name: 'Cy' }, { id: 'd', name: 'Di' }], {}, Math.random);
+  const v = E.viewFor(g, 'a');
+  assert.ok(Array.isArray(v.playLog), 'view has playLog');
+  assert.equal(v.playLog.length, v.log.length, 'one line per log entry');
+  for (const line of v.playLog) assert.match(line, /^(Aarav|Bo|Cy|Di|A player) \S/, 'line starts with a name: ' + line);
+});
+
 test('a player who reaches the target on someone else\'s turn wins when their own turn comes round', () => {
   const g = setupDone(6);
   g.phase = 'main';
