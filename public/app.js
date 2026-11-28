@@ -2616,7 +2616,11 @@
     if (toolbarWatch || typeof MutationObserver === 'undefined') return;
     toolbarWatch = new MutationObserver(() => {
       const bar = $app.querySelector('.wz-top > .row, .ludo-tools');
-      if (bar && !bar.querySelector(':scope > .tb-more-wrap')) unifyToolbar();
+      if (bar && !bar.querySelector(':scope > .tb-more-wrap')) {
+        unifyToolbar();
+        // the game's redraw took its Game settings item with the old menu; put it back once (never twice)
+        if (!$app.querySelector('.gs-chip')) addSettingsChip();
+      }
     });
     toolbarWatch.observe($app, { childList: true, subtree: true });
   }
