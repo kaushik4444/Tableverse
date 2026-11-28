@@ -246,18 +246,14 @@
   function react(v, ctx) {
     // playback belongs to one table: another table (or a fresh join) starts from its own state, never from this table's frames
     const tableKey = ctx && ctx.room ? ctx.room.code : '';
-    if (ui.animTable !== tableKey) { ui.animTable = tableKey; ui.anim = null; ui.seq = null; ui.launch = null; }
+    if (ui.animTable !== tableKey) { ui.animTable = tableKey; ui.anim = null; ui.seq = null; }
     const e = v.shot, snd = window.CardTable.sound;
     if (ui.seq === null) { ui.seq = e ? e.seq : 0; return; }
     if (!e) { ui.anim = null; ui.seq = 0; return; } // a fresh match (Play again) has no shot yet: drop the old playback
     if (e.seq === ui.seq) return;
     ui.seq = e.seq;
-    // our own flick: playback starts from the release, so the striker continues the glide it already made
-    const L = ui.launch && ui.launch.seat === e.seat ? ui.launch : null;
-    ui.launch = null;
-    const arrived = performance.now();
-    const launch = L && arrived - L.t0 <= LAUNCH_WAIT_MS ? { t0: L.t0, p0: L.p0, d: L.d, dist: L.dist, arrived } : null;
-    ui.anim = { seq: e.seq, frames: e.keyframes, events: Array.isArray(e.events) ? e.events : [], nextEvent: 0, t0: launch ? launch.t0 : null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0, setup: setupFor(e, v), launch };
+    // playback starts when the server's shot arrives; the striker waits on its aim spot until then
+    ui.anim = { seq: e.seq, frames: e.keyframes, events: Array.isArray(e.events) ? e.events : [], nextEvent: 0, t0: null, end: e.keyframes.length ? e.keyframes[e.keyframes.length - 1].t : 0, setup: setupFor(e, v) };
     if (snd) snd.play('place');
     if (v.phase === 'gameOver' && snd) {
       const mine = colourOfMe(v);
@@ -283,7 +279,6 @@
   /** The first frame of a shot as it is shown before playback starts: the striker still on its bar. */
   function startFrame(a) {
     const f0 = a.frames[0];
-    if (a.launch) { const [sx, sy] = launchPose(a.launch, performance.now()); return { t: 0, d: f0.d.map(([id, x, y]) => (id === 'striker' ? [id, sx, sy] : [id, x, y])) }; }
     if (!a.setup) return f0;
     return { t: 0, d: f0.d.map(([id, x, y]) => (id === 'striker' ? [id, a.setup.from[0], a.setup.from[1]] : [id, x, y])) };
   }
@@ -337,15 +332,6 @@
       const sx = a.setup.from[0] + (a.setup.to[0] - a.setup.from[0]) * e2, sy = a.setup.from[1] + (a.setup.to[1] - a.setup.from[1]) * e2;
       pose = a.frames[0].d.map(([id, x, y]) => (id === 'striker' ? [id, sx, sy, 1] : [id, x, y, 1]));
     } else pose = poseAt(a.frames, t);
-    // the first moments of the server's shot blend from where the striker was already predicted to be
-    if (a.launch && !inSetup) {
-      const since = now - a.launch.arrived;
-      const striker = pose.find(([id]) => id === 'striker');
-      if (striker && since < LAUNCH_BLEND_MS) {
-        const k = Math.max(0, since / LAUNCH_BLEND_MS), [px, py] = launchPose(a.launch, now);
-        striker[1] = px * (1 - k) + striker[1] * k; striker[2] = py * (1 - k) + striker[2] * k;
-      }
-    }
     // a sound for each impact the server reported, when playback reaches its time
     const snd = window.CardTable.sound;
     while (!inSetup && snd && a.nextEvent < a.events.length && a.events[a.nextEvent][0] <= t) {
@@ -568,54 +554,10 @@
   /** Sends the current aim as a flick, if it is my turn, nothing is playing and the power is set. */
   function fire() {
     const v = ui.v, ctx = ui.ctx;
-    if (!v || !ctx || !v.myTurn || ui.anim || ui.launch || ui.aim.power <= 0) return;
+    if (!v || !ctx || !v.myTurn || ui.anim || ui.aim.power <= 0) return;
     const rad = (ui.aim.angle * Math.PI) / 180;
-    // the striker leaves at once on release; the server's shot takes over when it arrives (see react and drawFrame)
-    // the aim is in the viewer's display frame; the keyframes are in the table's bottom frame, so the glide is converted to it
-    const k = viewSide(v);
-    let d = [Math.sin(rad), Math.cos(rad)];
-    for (let i = 0; i < k; i++) d = [-d[1], d[0]];
-    ui.launch = { t0: performance.now(), p0: rotP([ui.aim.x / 100, BASE_Y], k), d, dist: 0.06 + 0.3 * (ui.aim.power / 100), seat: v.me, ticking: false };
     // the flick names the board it was aimed at, so a duplicate sent after a shot is rejected by the server
     ctx.act({ type: 'flick', x: ui.aim.x / 100, angle: rad, power: ui.aim.power / 100, seq: v.seq });
-    startLaunchTicker();
-  }
-
-  // ---- release: the striker moves at once, before the server's shot arrives ----
-  const LAUNCH_PREDICT_MS = 240;  // the striker's glide after a release
-  const LAUNCH_BLEND_MS = 160;    // how long the predicted striker takes to meet the server's striker
-  const LAUNCH_WAIT_MS = 2500;    // a flick the server never answers is dropped after this
-
-  /** Where the released striker is at time `now`: it eases out along the aim. Bottom-frame points, as the keyframes are. */
-  function launchPose(L, now) {
-    const k = Math.min(1, Math.max(0, (now - L.t0) / LAUNCH_PREDICT_MS));
-    const e = 1 - (1 - k) * (1 - k);
-    return [L.p0[0] + L.d[0] * L.dist * e, L.p0[1] + L.d[1] * L.dist * e];
-  }
-
-  /** Moves the aiming striker (and its ring) to a bottom-frame point, for the viewer's own shot. */
-  function moveStriker(x, y) {
-    const svg = ui.root && ui.root.querySelector('.cb-svg');
-    if (!svg) return;
-    const [X, Y] = toSvg(ui.v, [x, y]);
-    const striker = svg.querySelector('[data-id="striker"]');
-    if (striker) { striker.setAttribute('cx', X); striker.setAttribute('cy', Y); }
-    const ring = svg.querySelector('.cb-ring');
-    if (ring) { ring.setAttribute('cx', X); ring.setAttribute('cy', Y); }
-  }
-
-  function startLaunchTicker() {
-    const L = ui.launch;
-    if (!L || L.ticking) return;
-    L.ticking = true;
-    requestAnimationFrame(function tick(now) {
-      if (ui.launch !== L) return;
-      if (ui.anim) return; // the server's shot has arrived: playback draws the striker from here on
-      if (now - L.t0 > LAUNCH_WAIT_MS) { ui.launch = null; syncAim(); return; }
-      const [x, y] = launchPose(L, now);
-      moveStriker(x, y);
-      requestAnimationFrame(tick);
-    });
   }
 
   /** The striker from the keyboard: Left/Right place it, Shift+Left/Right turn it, Up/Down set the power. */
