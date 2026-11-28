@@ -599,7 +599,7 @@
     const serverGame = (id) => o.games.find((g) => g.id === id);
     const rows = games.map((g, i) => {
       const unsaved = !!gameDraft && (gameDraft.access.has(g.id) || gameDraft.trial.has(g.id) || (gameDraft.order && serverOrder[i] !== g.id));
-      return `<tr${unsaved ? ' class="ad-draft"' : ''}><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || busy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || busy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}${unsaved ? ' <span class="ad-pill warn">unsaved</span>' : ''}</td><td data-l="Changed">${serverGame(g.id)?.updatedAt ? esc(when(serverGame(g.id).updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${busy ? ' disabled aria-disabled="true"' : ''}>${opts(g.access)}</select></td><td data-l="Guest plays">${trialControls(g)}</td></tr>`;
+      return `<tr${unsaved ? ' class="ad-draft"' : ''}><td data-l="Game"><span class="ad-game">${window.GameMarks ? window.GameMarks.html(g.id, g.icon || '') : esc(g.icon || '')}</span> ${esc(g.name)}</td><td data-l="Home order"><button type="button" class="ad-btn" data-gmove="up" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} up"${i === 0 || busy ? ' disabled' : ''}>▲</button> <button type="button" class="ad-btn" data-gmove="down" data-gid="${esc(g.id)}" aria-label="Move ${esc(g.name)} down"${i === last || busy ? ' disabled' : ''}>▼</button> <span class="ad-muted">${i + 1}</span></td><td data-l="Available">${pill(g)}${unsaved ? ' <span class="ad-pill warn">unsaved</span>' : ''}</td><td data-l="Changed">${serverGame(g.id)?.updatedAt ? esc(when(serverGame(g.id).updatedAt)) : '<span class="ad-muted">never</span>'}</td><td data-l="Who may play"><select data-gaccess="${esc(g.id)}" aria-label="Who may play ${esc(g.name)}"${busy ? ' disabled aria-disabled="true"' : ''}>${opts(g.access)}</select></td><td data-l="Guest plays">${trialControls(g)}</td><td data-l="Beta"><label><input type="checkbox" data-gbeta="${esc(g.id)}"${g.beta ? ' checked' : ''}${busy || !(state.me && state.me.isOwner) ? ' disabled' : ''}> Beta</label></td></tr>`;
     }).join('');
     const n = draftCount();
     const bar = n
@@ -607,7 +607,7 @@
       : '';
     const msg = gameSaveError ? `<p id="gMsg" class="ad-msg err" role="alert">${esc(gameSaveError)}</p>`
       : `<p id="gMsg" class="ad-msg" role="status">${esc(gameSaveNote)}</p>`;
-    return `${msg}${bar}<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th><th>Guest plays</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `${msg}${bar}<div class="ad-scroll"><table class="ad-t stack"><thead><tr><th>Game</th><th>Home order</th><th>Available</th><th>Changed</th><th>Who may play</th><th>Guest plays</th><th>Beta</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
   function paintGameSwitches() {
     const box = main.querySelector('#gameSwitches');
@@ -628,6 +628,16 @@
       [ids[at], ids[to]] = [ids[to], ids[at]];
       draftFor().order = sameOrder(ids, serverOrder) ? null : ids;
       changed();
+    }; });
+    // Beta saves at once (one switch, owner only) and then reloads the table from the server
+    box.querySelectorAll('[data-gbeta]').forEach((cb) => { cb.onchange = async () => {
+      try {
+        await api('/api/admin/game-beta', { gameId: cb.dataset.gbeta, beta: cb.checked }, false, true);
+        gameSaveError = ''; gameSaveNote = 'Beta saved.';
+      } catch (e) {
+        gameSaveError = `The Beta mark could not be saved (${e.message}).`;
+      }
+      await gameSwitches();
     }; });
     box.querySelectorAll('[data-gaccess]').forEach((sel) => { sel.onchange = () => {
       const id = sel.dataset.gaccess; const server = o.games.find((g) => g.id === id);
@@ -674,7 +684,7 @@
     gameSwitchData = o;
     reconcileDraft(o);
     const switchesHTML = `<h3 style="margin-top:24px">Game switches</h3>
-      <p class="ad-muted">Home order: move a game up or down to change where it appears in the home menu. Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players in and keeps guests out. Guest plays limits a guest device to a number of games in that game. Changes are kept until you press Save changes; Discard drops them.</p>
+      <p class="ad-muted">Home order: move a game up or down to change where it appears in the home menu. Choose who may play each game. Enabled is the default. "Disabled for non-admins" keeps owner and admins only. "Disabled for guests only" lets registered players in and keeps guests out. Guest plays limits a guest device to a number of games in that game. Beta marks a game as experimental: it shows a Beta tag on the home menu and changes nothing else (the owner ticks it, and it saves at once). Changes are kept until you press Save changes; Discard drops them.</p>
       <div id="gameSwitches"></div>`;
     // placed above Tables hosted: the order on screen is last 30 days, game switches, then tables hosted
     const anchor = main.querySelector('#tablesSection');
