@@ -10,7 +10,7 @@ module.exports = {
   accent: '#0284c7',
   tagline: 'Fill your grid so every row, column and box holds 1 to 9. Alone against the clock, or race friends on the same puzzle.',
   // one seat is allowed: Sudoku is the only game you can play alone
-  seats: { min: 1, max: 8, default: 3 },
+  seats: { min: 1, max: 8, default: 1 },
   // fastest complete grid, in seconds, among the games this player won (lower is better)
   stats: { kind: 'solo', bestLabel: 'Fastest grid', bestOf: (row) => (row.isWinner ? -row.score : null), formatBest: (v) => `${-v} s` },
   options: [

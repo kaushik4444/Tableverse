@@ -113,7 +113,7 @@ test('a seat sees only the matched cards and the cards in play; the rest stay hi
 });
 
 test('the plugin: 1 to 4 seats, a size option, and the rules have a title for each', () => {
-  assert.deepEqual(game.seats, { min: 1, max: 4, default: 2 });
+  assert.deepEqual(game.seats, { min: 1, max: 4, default: 1 }); // a single player is the default
   assert.deepEqual(game.options[0].choices.map((c) => c.value), ['4x4', '4x6', '6x6']);
   const inst = game.create(P(3), { size: '4x4' }, rng(17));
   assert.equal(inst.awaiting()[0], 'p0');

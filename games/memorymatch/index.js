@@ -21,7 +21,7 @@ module.exports = {
     'Every card turned over stays known to the table, so remember where the pairs are.',
     'When all pairs are found, the player with the most pairs wins. A tie for the most is a draw.',
   ],
-  seats: { min: 1, max: 4, default: 2 },
+  seats: { min: 1, max: 4, default: 1 },
   seatLabel: (i) => COLOURS[i],
   // alone, the fewest turns to find every pair (a solo game, seats === 1, is the only one that has a turn count)
   stats: { kind: 'none', bestLabel: 'Fewest turns alone', bestOf: (row) => (row.seats === 1 && row.isWinner && Number.isFinite(row.score) ? -row.score : null), formatBest: (v) => `${-v} turns` },
